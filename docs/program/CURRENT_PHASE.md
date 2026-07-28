@@ -57,7 +57,7 @@ Prior update: 2026-07-19 (F0-008 — ADR Review and Enterprise Foundation Decisi
 **F1 — CI and Test Architecture**
 
 Faz dokümanı: [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_TEST_ARCHITECTURE.md)
-Faz durumu: `IN_PROGRESS` (2026-07-25, F0-014 — phase entered following externally-approved G0; phase entry itself implies no implementation authorization beyond the assigned first task, F1-001, which is itself design/evidence-first). **Update 2026-07-28 (F1-001):** F1-001's design is delivered (`AGENT_COMPLETED`, PR opened, not merged); faz durumu remains `IN_PROGRESS`, exit gate not satisfied, F1-002 not started. **Update 2026-07-28 (F1-002):** F1-002 — Test Inventory Refresh and Ownership Reconciliation — delivered (`AGENT_COMPLETED`, PR opened, not merged — see "Aktif F1 görevi" below); R-072 (test-inventory evidence staleness) remediated and closure proposed; faz durumu remains `IN_PROGRESS`, exit gate not satisfied, F1-003 not started.
+Faz durumu: `IN_PROGRESS` (2026-07-25, F0-014 — phase entered following externally-approved G0; phase entry itself implies no implementation authorization beyond the assigned first task, F1-001, which is itself design/evidence-first). **Update 2026-07-28 (F1-001):** F1-001's design is delivered and subsequently externally reviewed and **`MERGED`** (PR #241, merge commit `94cc4ac58f0487dd186886878c5628627f0b1ce3`, 2026-07-28T07:22:15Z); faz durumu remains `IN_PROGRESS`, exit gate not satisfied by this task alone. **Update 2026-07-28 (F1-002):** F1-002 — Test Inventory Refresh and Ownership Reconciliation — delivered (`AGENT_COMPLETED`, PR #253 opened, not merged); R-072 (test-inventory evidence staleness) remediated and closure proposed. **Update 2026-07-28 (F1-002-R1 — Parallel Evidence Integration and Main Reconciliation):** two parallel evidence subtasks, F1-002-P1 (Test Script Reachability and Runner Reconciliation, PR #255, `MERGED`, merge commit `954168ed4399f572e776fbfd30fa391aad574610`) and F1-002-P2 (Test Runtime Dependency and Disposable Environment Baseline, PR #254, `MERGED`, merge commit `035d4db59cf429777a4bb71a5e72203f6c99b571`), were integrated into `TEST_OWNERSHIP.md` and F1-002's own evidence document; the F1-002 branch (PR #253) was reconciled with `origin/main` via a conflict-free `--no-ff` merge; two numeric inconsistencies were corrected (17, not 16, scripts excluded from the aggregate chain; 6/9, not 7/9, frontend files uncovered by CI) — see "Aktif F1 görevi" below. R-072 remains `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION`, not `CLOSED`. Faz durumu remains `IN_PROGRESS`, exit gate not satisfied, F1-003 not started.
 
 **Prior phase, now closed:** F0 — Baseline, Program Control, and Architecture Validation. Faz dokümanı: [phases/F0_BASELINE_AND_VALIDATION.md](phases/F0_BASELINE_AND_VALIDATION.md). Faz durumu: `COMPLETE` (2026-07-25, F0-014 — G0 externally `APPROVED_WITH_CONDITIONS`, all exit-gate conditions per [phases/F0_BASELINE_AND_VALIDATION.md](phases/F0_BASELINE_AND_VALIDATION.md) §"Exit gate" satisfied).
 
@@ -78,21 +78,30 @@ F1'in kendi kapsamı, [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_T
 
 | Alan | Değer |
 |---|---|
+| ID | F1-002-R1 (integration pass over F1-002 main) |
+| Title | Parallel Evidence Integration and Main Reconciliation |
+| Status | `AGENT_COMPLETED` (2026-07-28) — F1-002-P1/P2 integrated, `origin/main` reconciled (conflict-free `--no-ff` merge), 2 numeric inconsistencies corrected; PR #253 (unchanged branch) still open, not merged. Not `MERGED`; does not by itself satisfy F1's exit gate. |
+| Full definition | [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_TEST_ARCHITECTURE.md) §"F1-002 — Test Inventory Refresh and Ownership Reconciliation" |
+| Dependency | F1-001 (`MERGED`, PR #241). F1-002-P1 (`MERGED`, PR #255) and F1-002-P2 (`MERGED`, PR #254) — both accepted parallel evidence subtasks integrated by this pass. |
+| Deliverables | [TEST_OWNERSHIP.md](TEST_OWNERSHIP.md) (§0.1 added), [evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md](evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md) (§20 added), plus the original [evidence/F1-002_test_inventory.json](evidence/F1-002_test_inventory.json), [evidence/F1-002_test_script_reconciliation.json](evidence/F1-002_test_script_reconciliation.json), [evidence/F1-002_test_ownership_gaps.json](evidence/F1-002_test_ownership_gaps.json), now cross-referenced against [evidence/F1-002-P1_test_script_reconciliation.json](evidence/F1-002-P1_test_script_reconciliation.json), [evidence/F1-002-P1_test_file_reachability.json](evidence/F1-002-P1_test_file_reachability.json), [evidence/F1-002-P2_test_runtime_requirements.json](evidence/F1-002-P2_test_runtime_requirements.json), [evidence/F1-002-P2_disposable_environment_capabilities.json](evidence/F1-002-P2_disposable_environment_capabilities.json) |
+| Risk remediated | R-072 (test-inventory evidence staleness) — closure remains **`CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION`**, not unilaterally declared `CLOSED` — see [RISK_REGISTER.md](RISK_REGISTER.md). Separate implementation/readiness gaps (unscripted tests, chain-excluded scripts, disposable-Postgres/MinIO provisioning, collision avoidance, 1 runtime UNKNOWN) are explicitly **not** resolved by this closure — see the F1-002 evidence doc §16. |
+
+**Prior F1 task (2026-07-28, F1-002 main, before P1/P2 integration):**
+
+| Alan | Değer |
+|---|---|
 | ID | F1-002 |
 | Title | Test Inventory Refresh and Ownership Reconciliation |
-| Status | `AGENT_COMPLETED` (2026-07-28) — refreshed inventory/ownership/script-reconciliation delivered; PR opened, not merged. Not `MERGED`; does not by itself satisfy F1's exit gate. |
-| Full definition | [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_TEST_ARCHITECTURE.md) §"F1-002 — Test Inventory Refresh and Ownership Reconciliation" |
-| Dependency | F1-001 (`AGENT_COMPLETED`, PR opened — provides domain/classification vocabulary this task reuses; F1-002 does not require F1-001 to be `MERGED` first) |
+| Status | `AGENT_COMPLETED` (2026-07-28) — refreshed inventory/ownership/script-reconciliation delivered; PR #253 opened, not merged. Superseded in part by F1-002-R1 above. |
 | Deliverables | [TEST_OWNERSHIP.md](TEST_OWNERSHIP.md) (refreshed), [evidence/F1-002_test_inventory.json](evidence/F1-002_test_inventory.json), [evidence/F1-002_test_script_reconciliation.json](evidence/F1-002_test_script_reconciliation.json), [evidence/F1-002_test_ownership_gaps.json](evidence/F1-002_test_ownership_gaps.json), [evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md](evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md) |
-| Risk remediated | R-072 (test-inventory evidence staleness) — closure **proposed**, not unilaterally declared `CLOSED` — see [RISK_REGISTER.md](RISK_REGISTER.md) |
 
-**Prior F1 task (2026-07-28, F1-001, design/evidence-first):**
+**Prior F1 task (2026-07-28, F1-001, design/evidence-first, now `MERGED`):**
 
 | Alan | Değer |
 |---|---|
 | ID | F1-001 |
 | Title | Impact-Based Test-Selection Architecture and Test-Scope Classification |
-| Status | `AGENT_COMPLETED` (2026-07-28) — design document, classification/rules JSON, and evidence document delivered; PR opened, not merged. Not `MERGED`; does not by itself satisfy F1's exit gate. |
+| Status | `MERGED` (PR #241, merge commit `94cc4ac58f0487dd186886878c5628627f0b1ce3`, 2026-07-28T07:22:15Z — verified by F1-002-R1 via `gh pr view 241`). Does not by itself satisfy F1's exit gate. |
 | Full definition | [phases/F1_CI_AND_TEST_ARCHITECTURE.md](phases/F1_CI_AND_TEST_ARCHITECTURE.md) §"F1-001 — first assigned task" |
 | Dependency | G0 `APPROVED_WITH_CONDITIONS` (satisfied, 2026-07-25); F0-005 test envanteri `MERGED` (satisfied) |
 | Deliverables | [architecture/F1-001_IMPACT_BASED_TEST_SELECTION_ARCHITECTURE.md](architecture/F1-001_IMPACT_BASED_TEST_SELECTION_ARCHITECTURE.md), [architecture/evidence/f1-001-test-scope-classification.json](architecture/evidence/f1-001-test-scope-classification.json), [architecture/evidence/f1-001-impact-selection-rules.json](architecture/evidence/f1-001-impact-selection-rules.json), [evidence/F1-001_IMPACT_TEST_SELECTION_DESIGN_EVIDENCE.md](evidence/F1-001_IMPACT_TEST_SELECTION_DESIGN_EVIDENCE.md) |

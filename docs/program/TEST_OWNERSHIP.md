@@ -1,6 +1,8 @@
 # TEST_OWNERSHIP — Test Mimarisi, Envanteri ve Sahiplik Haritası
 
-Son güncelleme: 2026-07-28 (**F1-002 — Test Inventory Refresh and Ownership Reconciliation**, documentation/evidence-only. Refreshes §3 onward against execution baseline `08f2eaf82a205cf3f997c57e6a295fedd66b142d`, replacing the 2026-07-19 F0-005 snapshot as the current authoritative inventory. See the status note immediately below and [evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md](evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md) for the full process record.)
+Son güncelleme: 2026-07-28 (**F1-002-R1 — Parallel Evidence Integration and Main Reconciliation**, documentation/evidence-only. Integrates F1-002-P1 (Test Script Reachability and Runner Reconciliation, PR #255, `MERGED`) and F1-002-P2 (Test Runtime Dependency and Disposable Environment Baseline, PR #254, `MERGED`) into this document, reconciles F1-002 main's own count/script-chain vocabulary against their independently-derived numbers, and corrects two stale figures (§6, §7). See new §0.1 immediately below and [evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md](evidence/F1-002_TEST_INVENTORY_REFRESH_AND_OWNERSHIP_RECONCILIATION.md) for the full process record.)
+
+Prior update: 2026-07-28 (F1-002 — Test Inventory Refresh and Ownership Reconciliation, refreshed §3 onward against execution baseline `08f2eaf82a205cf3f997c57e6a295fedd66b142d`, replacing the 2026-07-19 F0-005 snapshot as the current authoritative inventory — historical text preserved below except where F1-002-R1 corrected it)
 
 Prior update: 2026-07-19 (F0-005 rebaseline — historical, preserved below for lineage)
 
@@ -12,10 +14,63 @@ Prior update: 2026-07-19 (F0-005 rebaseline — historical, preserved below for 
 > Yapısal/makine-okunur envanter (F1-002, güncel — **yetkili**): [evidence/F1-002_test_inventory.json](evidence/F1-002_test_inventory.json) (137 test/doğrulama hedefi, sahiplik, script-erişilebilirlik, DB/harici-servis gereksinimleri).
 > Script reconciliation (F1-002, güncel): [evidence/F1-002_test_script_reconciliation.json](evidence/F1-002_test_script_reconciliation.json).
 > Sahiplik boşlukları (F1-002, güncel): [evidence/F1-002_test_ownership_gaps.json](evidence/F1-002_test_ownership_gaps.json).
+> Script reachability (F1-002-P1, güncel, `MERGED` PR #255): [evidence/F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md](evidence/F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md), [evidence/F1-002-P1_test_script_reconciliation.json](evidence/F1-002-P1_test_script_reconciliation.json), [evidence/F1-002-P1_test_file_reachability.json](evidence/F1-002-P1_test_file_reachability.json).
+> Runtime dependency baseline (F1-002-P2, güncel, `MERGED` PR #254): [evidence/F1-002-P2_TEST_RUNTIME_DEPENDENCY_BASELINE.md](evidence/F1-002-P2_TEST_RUNTIME_DEPENDENCY_BASELINE.md), [evidence/F1-002-P2_test_runtime_requirements.json](evidence/F1-002-P2_test_runtime_requirements.json), [evidence/F1-002-P2_disposable_environment_capabilities.json](evidence/F1-002-P2_disposable_environment_capabilities.json).
 >
 > **Historical (F0-005, 2026-07-19, superseded but preserved for lineage — not deleted):** [evidence/F0-005_TEST_INVENTORY_AND_RUNTIME_EVIDENCE.md](evidence/F0-005_TEST_INVENTORY_AND_RUNTIME_EVIDENCE.md), [evidence/F0-005_test_inventory.json](evidence/F0-005_test_inventory.json) (100 targets, includes the only runtime pass/fail execution record — F1-002 did not re-run tests, see below), [evidence/F0-005_test_runtime_results.json](evidence/F0-005_test_runtime_results.json).
 >
 > **Kapsam dışı (F1-002'de yapılmadı, F0-005'te olduğu gibi):** test dosyası değişikliği, snapshot güncelleme, assertion gevşetme, skip ekleme, timeout değişikliği, package script ekleme/değiştirme, CI workflow değişikliği, yeni test framework/coverage tool kurulumu, runtime kaynak refactor'u, Prisma şema/migration değişikliği veya deploy'u, production/VPS erişimi, affected-test seçim mekanizmasının implementasyonu, **ve testlerin gerçek çalıştırılması (runtime pass/fail F0-005'in 2026-07-19 kaydında donmuş kalır — bu görev yalnızca envanter/sahiplik/script-erişilebilirliği yeniler, davranışı yeniden doğrulamaz).**
+
+## 0.1 F1-002-P1/P2 entegrasyonu ve terminoloji uzlaştırması (F1-002-R1, 2026-07-28)
+
+F1-002 main (bu doküman) ile paralel yürütülen iki bağımsız kanıt görevi dış incelemeden geçip `MERGED` oldu ve bu görev (F1-002-R1) tarafından burada indekslendi:
+
+- **F1-002-P1 — Test Script Reachability and Runner Reconciliation** (PR #255, merge commit `954168ed4399f572e776fbfd30fa391aad574610`): her test-ilişkili package script'ini (103 script: 8 kök + 95 server) statik olarak ayrıştırdı, hangi dosyaların hangi script(ler) tarafından ulaşılabilir olduğunu (116 dosya: 105 backend + 9 frontend) belirledi.
+- **F1-002-P2 — Test Runtime Dependency and Disposable Environment Baseline** (PR #254, merge commit `035d4db59cf429777a4bb71a5e72203f6c99b571`): 137 hedefin tamamı için runtime-sınıfı (17 grup), disposable-Postgres/MinIO gereksinimlerini ve mevcut provisioning kapasitesini (10 soruluk değerlendirme) belgeledi.
+
+Her iki görev de yalnızca yeni kanıt dosyaları ekledi (paylaşılan hiçbir dosyayı değiştirmedi); F1-002 main ile `--no-ff` merge çakışmasız tamamlandı.
+
+### Sayım terminolojisi — birbirinin yerine geçmez
+
+| Terim | Sayı | Kapsam |
+|---|---|---|
+| Backend test dosyası | **105** | `server/src/tests/**/*.test.ts` |
+| Frontend test dosyası | **9** | `src/**/*.test.ts(x)` |
+| F1-002-P1'in "116 current test-related files" | **116** | 105 backend + 9 frontend + **2 fixture-loader yardımcı modülü** (`whatsappConversationFixtures.ts`, `whatsappSafetyFixtures.ts` — `test:fixtures`/`test:safety` tarafından çağrılan, ama kendileri `*.test.ts` olmayan dosyalar). Yalnızca JS/TS backend+frontend kapsamı; bridge-agent, windows-bridge, manuel script, smoke script'i **dahil değil**. |
+| F1-002 main'in "137 test/verification targets" | **137** | 105 backend + 9 frontend + 9 bridge-agent + 4 windows-bridge .NET projesi + 4 windows-bridge PS1 script'i + 4 manuel disposable-DB doğrulama script'i + 2 smoke/deploy script'i. F1-002-P1'in 116'sından **daha geniş** bir kapsam (bridge-agent/windows-bridge/manuel/smoke dahil), 2 fixture-loader modülünü **saymaz** (onlar `*.test.ts` değil). |
+
+**116 ve 137 aynı şey değildir ve birbirinin yerine kullanılmamalıdır** — biri (116) yalnızca JS/TS test-dosyası+fixture-loader erişilebilirlik kapsamı, diğeri (137) programın tüm test/doğrulama hedefi envanteridir. Backend (105) ve frontend (9) alt-toplamları her iki belgede de birebir aynıdır ve tutarlıdır.
+
+### Script-chain terminolojisi — uzlaştırılmış sayılar
+
+Görev talimatının kontrol etmemizi istediği rakamlar, P1'in JSON kanıtına karşı aşağıdaki şekilde uzlaştırıldı:
+
+| İddia | Önceki metin (F1-002 main, §6) | P1 kanıtıyla uzlaştırılmış sayı | Sonuç |
+|---|---|---|---|
+| `npm run test` (server) zincirinden hariç tutulan script sayısı | "16" (6 orphan + 10 yeni) | **17** ([F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md](evidence/F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md) §4.1: 9 DB-gerekli bilinçli hariç + 8 görünür sebepsiz hariç) | **§6 metni aşağıda 17'ye düzeltildi.** Önceki "16" rakamı, `test:file-backup`'ı ayrı bir "1 istisna" olarak anlatıp toplama dahil etmeyen bir sunum hatasıydı (6+10+1=17 zaten doğruydu, yalnızca üç ayrı cümlede dağınık anlatılmıştı) — üretilen dosya farklı değil, yalnızca sunum P1'in tek-tablo biçimiyle netleştirildi. |
+| Script'lerden hariç, dosya bazında | Örtük | **8 dosya, tümü DB-gerekli** (9 DB-script'i 8 benzersiz dosyaya karşılık gelir — `test:kvkk-high006-db-verification` kendisi 6 alt-script'i zaten zincirleyen bir agregatördür, ayrı bir dosya değildir) | Netleştirildi, çelişki yok. |
+| Unscripted (hiç script'i olmayan) backend dosyası | 8 | **8** (P1 §5.1: `channelConsentGate`, `clinicLegalProfile`, `patientSharedPhone`, `platformBackup`, `treatmentPackagePermissions`, `kvkkHigh006Batch2ClinicScope`, `metaWhatsAppPostBookingHandler`, `planLimitsTargetClinicFix`) | Değişmedi, P1 tarafından bağımsız doğrulandı. |
+| CI tarafından çalıştırılan JS/TS dosya sayısı | "4 backend + 3 frontend" (7/116) | **7/116** (P1 §7, `windows-bridge-pr.yml`, yalnızca imaging path'inde) | Değişmedi, P1 tarafından bağımsız doğrulandı — **109/116 (%94) hiçbir CI kapsamında değil.** |
+| Full-suite-only (yalnızca agregatörle erişilebilen, kendi script'i olmayan) dosya | Örtük | **0** (P1 §5: strict `FULL_SUITE_ONLY` = 0 — zincirlenen her dosyanın kendi bireysel script'i de var) | Yeni netleştirme, F1-002 main'de yoktu. |
+| Multiple-script reachable dosya | Örtük | **89** (kendi leaf script'i + 1 agregatör; 3+ yol yok) | Yeni netleştirme. |
+
+Bu tabloda listelenmeyen tüm §6/§7 rakamları (0 stale script referansı, 77-script'lik `server:test` zinciri, vb.) P1 ile zaten tutarlıydı — değişiklik gerekmedi.
+
+**§7'deki bir sayı hatası düzeltildi:** "7/9 frontend test dosyası CI kapsamında değil" ifadesi yanlıştı (aritmetik: 9 frontend − 3 CI-kapsamlı = **6**, 7 değil). P1'in kendi §7 tablosu frontend CI-kapsamlı 3 dosyayı açıkça adlandırır (`test:dicom-helpers`, `test:onboarding-helpers`, `test:pairing-poller`). **Düzeltilmiş: 6/9 frontend CI kapsamı dışında** (bkz. §7 aşağıda). Backend "101/105" rakamı zaten doğruydu, değişmedi.
+
+### Runtime bağımlılık bulguları (F1-002-P2'den, özet)
+
+Tam detay: [F1-002-P2_TEST_RUNTIME_DEPENDENCY_BASELINE.md](evidence/F1-002-P2_TEST_RUNTIME_DEPENDENCY_BASELINE.md), [F1-002-P2_test_runtime_requirements.json](evidence/F1-002-P2_test_runtime_requirements.json), [F1-002-P2_disposable_environment_capabilities.json](evidence/F1-002-P2_disposable_environment_capabilities.json).
+
+- **22 dosya** disposable Postgres gerektirir (`DATABASE_URL`); **1 ek dosya** (`fileBackupDbIntegration.test.ts`) ayrıca bir **MinIO/S3-uyumlu object-storage emülatörü** gerektirir — bu, programın kanıt tarihindeki **ilk gerçek ağ bağımlılığı olan test**tir (veritabanı bağlantısı dışında).
+- **Depoda commit edilmiş standart bir provisioning mekanizması yok** — desen en az 3 kez ad hoc olarak gösterildi (F0-011-P2, KVKK-HIGH-006, KVKK-HIGH-008 Faz B1) ama hiçbir zaman yeniden kullanılabilir bir script/Compose dosyası olarak paketlenmedi.
+- **Collision-avoidance boşluğu**: paralel-agent güvenliği tasarlanmadı — port/veritabanı-adı çakışmalarını önleyen hiçbir registry veya dinamik tahsis mekanizması yok.
+- **Deterministic-cleanup sınırlaması**: container-seviyesinde temizlik deterministiktir (`--rm`, volume yok) ve test-verisi seviyesinde konvansiyon-deterministiktir (self-truncating fixture'lar), ama depo-genelinde zorunlu kılınan bir mekanizma değildir.
+- **Migration rollback tooling boşluğu — R-070 (hâlâ `OPEN`)**: fiziksel rollback teknik olarak mümkün (bir kez gösterildi) ama Prisma'nın kendi `_prisma_migrations` bookkeeping'i kendiliğinden uzlaşmaz (`P3012` hatası); programın kabul edilen önerisi retain-and-forward-fix, fiziksel rollback değil.
+- **1 UNKNOWN runtime sınıflandırması**: `messagesConsentGate.test.ts`'in `EvolutionWhatsAppProvider` tip import'unun tamamen stub'lanmış bir yolda mı çalıştığı, yoksa satır-satır incelenmemiş bir kod yolunda canlı bir gönderim çağrısına ulaşıp ulaşamayacağı kesin olarak çözülemedi — `MEDIUM` güvenle işaretlendi, ne "evet" ne "hayır" olarak iddia edilmedi.
+- **Sıfır doğrulanmış canlı sağlayıcı/ağ çağrısı**: 105 backend + 9 frontend dosyanın tamamında hiçbir gerçek Meta/Instagram/Evolution/SMS/AI sağlayıcı çağrısı bulunamadı — her biri stub/spy edilmiş.
+
+**Bu bulgular runtime ortamının CI'a hazır olduğu anlamına gelmez** — tam tersi: 5 somut boşluk (provisioning script/Compose dosyası yok, MinIO provisioning yok, collision-avoidance yok, otomatik migration-rollback tooling yok, herhangi bir DB/storage servisi sağlayan CI workflow'u yok) F1-002-P2 tarafından açıkça listelenmiştir ve hiçbiri bu entegrasyon görevi tarafından kapatılmamıştır.
 
 ## 1. Hedef test mimarisi katmanları
 
@@ -170,8 +225,10 @@ Tam kök-neden analizi: evidence doc §9.
 ## 6. Command-map bulguları (F1-002, güncel — programatik olarak ayrıştırıldı)
 
 - `npm run test` (server) artık **77** script çağrısı zincirler (F0-005'te 56/62 idi); tam liste ve her script'in zincir-üyeliği [evidence/F1-002_test_script_reconciliation.json](evidence/F1-002_test_script_reconciliation.json)'da.
-- **6 önceden bilinen orphan `test:*` script'i hâlâ zincire dahil değil, değişmedi:** `test:consent-resume`, `test:meta-template`, `test:outbound`, `test:no-show-follow-up-parity`, `test:overdue-installments`, `test:overdue-receivables`.
-- **+10 yeni "scripted ama zincire dahil değil" script**, hepsi bilinçli olarak DB/harici-servis bağımlılığı nedeniyle hariç tutulmuş (tasarım gereği, boşluk değil): `test:appointment-request-conversion-atomicity`, `test:file-backup-db-integration`, `test:kvkk-high006-db-*` (6 script), `test:platform-admin-password-recovery`. **1 istisna, gerçek bir bulgu:** `test:file-backup` (`fileBackupService.test.ts`) DB-bağımsızdır (kendi dosya başlığına göre) ama yine de zincire eklenmemiştir — muhtemelen gözden kaçmış, DB-bağımlılığı nedeniyle bilinçli hariç tutulan diğerlerinden farklı.
+- **Zincirden hariç tutulan script sayısı: 17** (bkz. §0.1 — F1-002-P1 tarafından bağımsız doğrulandı, önceki metnin dağınık "16" sunumu düzeltildi):
+  - **6 önceden bilinen orphan `test:*` script'i, değişmedi:** `test:consent-resume`, `test:meta-template`, `test:outbound`, `test:no-show-follow-up-parity`, `test:overdue-installments`, `test:overdue-receivables`.
+  - **+10 yeni, bilinçli olarak DB/harici-servis bağımlılığı nedeniyle hariç tutulmuş script** (tasarım gereği, boşluk değil): `test:appointment-request-conversion-atomicity`, `test:file-backup-db-integration`, `test:kvkk-high006-db-*` (6 script), `test:platform-admin-password-recovery`.
+  - **+1 istisna, gerçek bir bulgu:** `test:file-backup` (`fileBackupService.test.ts`) DB-bağımsızdır (kendi dosya başlığına göre, P1 tarafından da teyit edildi) ama yine de zincire eklenmemiştir — muhtemelen gözden kaçmış, DB-bağımlılığı nedeniyle bilinçli hariç tutulan diğerlerinden farklı.
 - **8 backend `.test.ts` dosyasının hiç `package.json` script'i yok** (F0-005'te 6 idi): `channelConsentGate.test.ts`, `clinicLegalProfile.test.ts`, `patientSharedPhone.test.ts`, `platformBackup.test.ts`, `treatmentPackagePermissions.test.ts` (5'i değişmedi), + **3 yeni**: `kvkkHigh006Batch2ClinicScope.test.ts`, `metaWhatsAppPostBookingHandler.test.ts`, `planLimitsTargetClinicFix.test.ts`. `aiPrivacyBoundary.test.ts` bu listeden **çıktı** — artık `test:ai-prompt-privacy` script'i var ve tam zincire dahil.
 - **0 stale/dead script referansı** — her script'in referans verdiği dosya diskte mevcut (programatik `fs.existsSync` kontrolü ile doğrulandı).
 - Frontend (`root/package.json`) hâlâ tüm 7 bireysel `test:*` script'ini zincirleyen bir aggregate'e sahip değil (F0-005'in bulgusu, değişmedi); ayrıca **yeni**: `test:vitest` (vitest run) 2 `*.vitest.test.tsx` dosyasını glob ile kapsıyor, bu da bireysel script gerektirmiyor.
@@ -182,7 +239,7 @@ Tam detay: [evidence/F1-002_test_script_reconciliation.json](evidence/F1-002_tes
 
 ## 7. CI-uygulama boşluğu — merkezi bulgu (F1-002, güncel)
 
-Depoda test çalıştıran **tam olarak bir** GitHub Actions workflow'u var (değişmedi): [`.github/workflows/windows-bridge-pr.yml`](../../.github/workflows/windows-bridge-pr.yml), yalnızca `windows-bridge/**`/imaging path'lerine dokunan PR'larda tetikleniyor. **101/105 backend test dosyası (F0-005'te 68/72), 7/9 frontend test dosyası (F0-005'te 3/6) ve 9/9 bridge-agent test dosyası hiçbir CI kapsamında değil.** `npm run test` (tam 77-script backend zinciri) hiçbir workflow tarafından hiçbir zaman çağrılmıyor. **34 yeni backend + 3 yeni frontend dosyanın hiçbirinin** bu CI path kapsamında olmaması — aynı boşluğun 37 yeni örneği, F0-005'in PR #169 gözlemiyle birebir aynı yapı. §4.1'deki `overdueInstallments.test.ts` bulgusu (2026-07-19'dan beri değişmedi, bu görevde yeniden doğrulanmadı) bu boşluğun hâlâ teorik değil somut olduğunun kanıtı olarak kalır. Tam detay: F0-005 evidence doc §11 (F1-002 bu bulguyu yeniden üretmedi, yalnızca güncel dosya sayılarıyla teyit etti).
+Depoda test çalıştıran **tam olarak bir** GitHub Actions workflow'u var (değişmedi): [`.github/workflows/windows-bridge-pr.yml`](../../.github/workflows/windows-bridge-pr.yml), yalnızca `windows-bridge/**`/imaging path'lerine dokunan PR'larda tetikleniyor. **101/105 backend test dosyası (F0-005'te 68/72), 6/9 frontend test dosyası (F0-005'te 3/6; F1-002-P1 tarafından bağımsız doğrulandı — bu satır önceden "7/9" idi, aritmetik hataydı: 9 − 3 CI-kapsamlı = 6, bkz. §0.1) ve 9/9 bridge-agent test dosyası hiçbir CI kapsamında değil.** `npm run test` (tam 77-script backend zinciri) hiçbir workflow tarafından hiçbir zaman çağrılmıyor. **34 yeni backend + 3 yeni frontend dosyanın hiçbirinin** bu CI path kapsamında olmaması — aynı boşluğun 37 yeni örneği, F0-005'in PR #169 gözlemiyle birebir aynı yapı. §4.1'deki `overdueInstallments.test.ts` bulgusu (2026-07-19'dan beri değişmedi, bu görevde yeniden doğrulanmadı) bu boşluğun hâlâ teorik değil somut olduğunun kanıtı olarak kalır. F1-002-P1'in bağımsız ölçümü: 116 dosyanın (105 backend + 9 frontend + 2 fixture-loader) **109'u (%94) hiçbir CI kapsamında değil** — bkz. §0.1. Tam detay: F0-005 evidence doc §11, [F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md](evidence/F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md) §7.
 
 ## 8. Kapsam boşlukları (özet, F0-005'ten korunmuştur — F1-002 bu analizi yeniden yapmadı)
 

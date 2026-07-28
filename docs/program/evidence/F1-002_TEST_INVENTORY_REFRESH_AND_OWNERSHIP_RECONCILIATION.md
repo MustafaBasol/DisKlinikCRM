@@ -1,6 +1,8 @@
 # F1-002 — Test Inventory Refresh and Ownership Reconciliation
 
-Task ID: F1-002 · Phase: F1 — CI and Test Architecture · Status: `AGENT_COMPLETED` (documentation/evidence-only — see [NORAMEDI_MASTER_TRACKER.md §2.2](../NORAMEDI_MASTER_TRACKER.md) for task-status vocabulary). Not `MERGED` — requires external review and an actual merged PR.
+Task ID: F1-002 · Phase: F1 — CI and Test Architecture · Status: `AGENT_COMPLETED` (documentation/evidence-only — see [NORAMEDI_MASTER_TRACKER.md §2.2](../NORAMEDI_MASTER_TRACKER.md) for task-status vocabulary). PR #253 open, not `MERGED` — requires external review and an actual merge.
+
+**2026-07-28 update (F1-002-R1 — Parallel Evidence Integration and Main Reconciliation):** this document and its companion JSON files were updated in place to integrate two accepted parallel evidence subtasks, both externally reviewed and `MERGED` before this update: **F1-002-P1** (Test Script Reachability and Runner Reconciliation, PR #255, merge commit `954168ed4399f572e776fbfd30fa391aad574610`) and **F1-002-P2** (Test Runtime Dependency and Disposable Environment Baseline, PR #254, merge commit `035d4db59cf429777a4bb71a5e72203f6c99b571`). The F1-002 branch was merged (`--no-ff`, no conflicts) with `origin/main` at `035d4db59cf429777a4bb71a5e72203f6c99b571`. See §20 below for the full integration record, and `TEST_OWNERSHIP.md` §0.1 for the reconciled count/script-chain vocabulary. **This update corrected one numeric inconsistency** (§14: "16 backend files have a script but are not in the full-suite aggregate chain" is corrected to **17**, matching F1-002-P1's independently-derived count — see §14 and §20.2 for the reconciliation). No other finding in §1–§19 below required correction; they are preserved as originally written, with P1/P2 citations added where they materially extend a finding.
 
 ## 0. Task classification and prohibitions
 
@@ -90,7 +92,7 @@ None found (see §12). This is a genuine "no findings" result, not an incomplete
 
 ## 14. Unscripted test findings
 
-**8 backend files have zero package.json script of any kind** (individual or aggregate) — `channelConsentGate.test.ts`, `clinicLegalProfile.test.ts`, `patientSharedPhone.test.ts`, `platformBackup.test.ts`, `treatmentPackagePermissions.test.ts` (5, unchanged since F0-005), `kvkkHigh006Batch2ClinicScope.test.ts`, `metaWhatsAppPostBookingHandler.test.ts`, `planLimitsTargetClinicFix.test.ts` (3, newly added without a script). `aiPrivacyBoundary.test.ts` — one of F0-005's original 6 — is **resolved**: it now has `test:ai-prompt-privacy`, wired into the full chain. **16 backend files have a script but are not in the full-suite aggregate chain** — 6 are F0-005's pre-existing orphans (unchanged), 8 are dbVerification/DB-or-external-dependent scripts correctly excluded by design (same pattern F0-005 established for `communicationConsent`/`communicationPreferenceBackfill`), and 2 are genuine gaps worth flagging: `test:file-backup` (`fileBackupService.test.ts` — DB-independent per its own header, yet not chained) and `test:platform-admin-password-recovery` (uses a real dev Postgres per its header, arguably correctly excluded but not explicitly documented as such). **0 frontend files are unreachable by any script** (7 individual scripts + `test:vitest` glob cover all 9).
+**8 backend files have zero package.json script of any kind** (individual or aggregate) — `channelConsentGate.test.ts`, `clinicLegalProfile.test.ts`, `patientSharedPhone.test.ts`, `platformBackup.test.ts`, `treatmentPackagePermissions.test.ts` (5, unchanged since F0-005), `kvkkHigh006Batch2ClinicScope.test.ts`, `metaWhatsAppPostBookingHandler.test.ts`, `planLimitsTargetClinicFix.test.ts` (3, newly added without a script). `aiPrivacyBoundary.test.ts` — one of F0-005's original 6 — is **resolved**: it now has `test:ai-prompt-privacy`, wired into the full chain. **17 backend scripts exist but are not in the full-suite aggregate chain** (corrected 2026-07-28 by F1-002-R1 from this document's original "16" — independently re-derived and confirmed by F1-002-P1's programmatic parsing, [F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md](F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md) §4.1; the original count undercounted by omitting `test:file-backup` from the running total in its own prose even though it was separately named): 6 are F0-005's pre-existing orphans (unchanged), 9 are dbVerification/DB-or-external-dependent scripts correctly excluded by design (`test:appointment-request-conversion-atomicity`, `test:file-backup-db-integration`, the 6 `test:kvkk-high006-db-*` scripts, `test:platform-admin-password-recovery`), and 1 is a genuine gap worth flagging: `test:file-backup` (`fileBackupService.test.ts` — DB-independent per its own header, yet not chained). **0 frontend files are unreachable by any script** (7 individual scripts + `test:vitest` glob cover all 9) — matches F1-002-P1's own 0-`UNSCRIPTED`-frontend finding.
 
 ## 15. Database/external dependency findings
 
@@ -98,7 +100,18 @@ See §11 for the count. No disposable-Postgres provisioning mechanism exists in 
 
 ## 16. R-072 closure assessment
 
-See `docs/program/evidence/F1-002_test_ownership_gaps.json` `r072ClosureAssessment` for the condition-by-condition table. **Verdict: all 10 conditions from the task specification are met** — every current backend and frontend test file is inventoried (proven by exact commands, §6), every test has an explicit canonical owner with 0 UNKNOWN entries (§8, §10), every test-related package script is reconciled with 0 stale references (§12–§13), every test file's script reachability is explicitly known (§14, including the 8 never-scripted files, which are known-and-recorded, not unknown), the JSON evidence validates (§17), and no current-main drift invalidated the inventory before PR creation (§18, re-checked). **R-072 is recommended for closure** — see §17 of `RISK_REGISTER.md` update below for the exact proposed status (this task does not have authority to unilaterally declare `CLOSED` without the same external-review discipline this program applies to every other risk closure; it is recorded as `CLOSURE_PROPOSED`, matching the R-071 precedent for self-verification vs. external confirmation).
+See `docs/program/evidence/F1-002_test_ownership_gaps.json` `r072ClosureAssessment` for the condition-by-condition table. R-072 is, strictly, a test-**inventory evidence staleness** risk — not a CI-readiness or runtime-provisioning risk. Assessed strictly against that scope: **all 10 conditions from the task specification are met** — every current backend and frontend test file is inventoried (proven by exact commands, §6), every test has an explicit canonical owner with 0 UNKNOWN entries (§8, §10), every test-related package script is reconciled with 0 stale references (§12–§13, corrected count 17 in §14), every test file's script reachability is explicitly known (§14, including the 8 never-scripted files, which are known-and-recorded, not unknown), runtime requirements and the one remaining UNKNOWN are explicitly recorded (F1-002-P2, §20.3 below — `messagesConsentGate.test.ts`), F1-002-P1/P2 evidence is indexed (§20 below), the JSON evidence validates (§17, §20.4), and no current-`origin/main` drift invalidates the inventory (§18, re-checked at F1-002-R1 time — see §20.1). **R-072 remains recommended for closure under the status `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION`** — this task (and F1-002-R1) do not have authority to unilaterally declare it `CLOSED` without the same external-review discipline this program applies to every other risk closure, matching the R-071 precedent for self-verification vs. external confirmation. See `RISK_REGISTER.md`'s R-072 row for the exact current status string.
+
+**R-072 closure is narrow and does not resolve the following separate, still-open implementation/readiness gaps** (each tracked in its own evidence, none silently closed by R-072):
+- 8 unscripted backend test files and 17 scripts excluded from the `server:test` aggregate chain (§14, F1-002-P1 §4.1/§5.1).
+- Lack of broad CI execution — only 7 of 116 JS/TS test files are reached by any CI workflow today (F1-002-P1 §7).
+- No committed disposable-Postgres provisioning mechanism (F1-002-P2 §8, `disposablePostgresAssessment`).
+- No MinIO/S3-emulator provisioning for `fileBackupDbIntegration.test.ts` (F1-002-P2 §6, §8).
+- No collision-avoidance mechanism for parallel disposable-DB/environment use (F1-002-P2 §8, item 5–6).
+- 1 runtime UNKNOWN (`messagesConsentGate.test.ts`, F1-002-P2 §7) — not resolved by R-072 closure, remains an open item for future closer review.
+- The impact-based CI test-selection engine itself (F1-001's design) — not implemented by F1-002, F1-002-P1, F1-002-P2, or this integration task.
+
+No new risk-register entry is created for these here; they are recorded as evidence-backed findings, to be assigned their own risk/task references only if and when the program's external decision-maker authorizes doing so — not invented by this task.
 
 ## 17. JSON validation results
 
@@ -123,3 +136,43 @@ gaps valid
 - **`testType` vocabulary is intentionally mixed** between F0-005's original (richer) vocabulary for carried-forward entries and this task's specified vocabulary for new entries — see §11.
 - **`aiPrivacyBoundary.test.ts`** is the one file where "carried forward" required judgment: it was not treated as brand-new (its path and domain ownership are unchanged) but its confidence was explicitly downgraded rather than silently kept at `HIGH`.
 - **Two flagged findings beyond the literal R-072 remediation** worth a human decision, recorded here rather than acted on: (1) `test:file-backup` should probably be added to the aggregate `test` chain (DB-independent, unlike its neighbors); (2) 3 new backend test files were never given a script at all — the same class of gap F0-005 found and flagged, not eliminated by this task since fixing it would require modifying `package.json`, which is prohibited in this task's scope.
+
+## 20. F1-002-R1 — Parallel evidence integration record (2026-07-28)
+
+### 20.1 PR merge verification and main reconciliation
+
+- `gh pr view 254 --json number,state,mergedAt,mergeCommit,headRefName,baseRefName` → `{"number":254,"state":"MERGED","mergedAt":"2026-07-28T18:24:37Z","mergeCommit":{"oid":"035d4db59cf429777a4bb71a5e72203f6c99b571"},"baseRefName":"main","headRefName":"docs/f1-002-p2-test-runtime-baseline"}`.
+- `gh pr view 255 --json number,state,mergedAt,mergeCommit,headRefName,baseRefName` → `{"number":255,"state":"MERGED","mergedAt":"2026-07-28T18:23:11Z","mergeCommit":{"oid":"954168ed4399f572e776fbfd30fa391aad574610"},"baseRefName":"main","headRefName":"docs/f1-002-p1-test-script-reconciliation"}`.
+- Previous F1-002 branch head: `9f7f0700769a24c0e6a71f1ccbb6683df34ee665`. `origin/main` before reconciliation: `035d4db59cf429777a4bb71a5e72203f6c99b571` (2 commits ahead of the `08f2eaf82a205cf3f997c57e6a295fedd66b142d` execution baseline used by F1-002 main — exactly PR #255 then PR #254's merge commits, no other commits in between).
+- `git log --oneline 08f2eaf82a205cf3f997c57e6a295fedd66b142d..origin/main` and `git diff --stat` confirmed the only content change in that range is 6 new evidence files (2 `.md` + 4 `.json`, 6418 insertions, 0 deletions) — no test, package, schema, migration, or CI workflow file touched.
+- `git merge --no-ff origin/main -m "merge(main): integrate F1-002-P1/P2 parallel evidence"` — completed with **0 conflicts** (`ort` strategy, fast clean merge).
+
+### 20.2 P1 evidence integrated
+
+F1-002-P1's independently-derived numbers were cross-checked against this document's own §6/§12/§14 and `TEST_OWNERSHIP.md`'s §6/§7: backend 105 and frontend 9 match exactly; 0 stale script references matches exactly; 8 UNSCRIPTED backend files match exactly (same 8 filenames); the "16 scripted-not-in-chain" figure in this document's §14 was corrected to 17 to match P1's independently-parsed count (see §14); `TEST_OWNERSHIP.md`'s "7/9 frontend not covered by CI" was corrected to 6/9 to match P1's own named 3-file frontend CI coverage list. P1's own broader-scope "116 test-related files" figure (105 backend + 9 frontend + 2 fixture-loader helper modules) is now cross-referenced from `TEST_OWNERSHIP.md` §0.1 as a distinct, non-interchangeable count from this document's 137 test/verification targets.
+
+### 20.3 P2 evidence integrated
+
+F1-002-P2's runtime-dependency findings are now cited from §15/§16 above and from `TEST_OWNERSHIP.md` §0.1: 22 files require a disposable Postgres, 1 additionally requires a MinIO/S3-compatible emulator (`fileBackupDbIntegration.test.ts` — a materially more specific finding than this document's own §11/§15, which named MinIO but did not specify no provisioning exists for it), 1 explicit UNKNOWN (`messagesConsentGate.test.ts`), and the 5-gap disposable-Postgres-readiness assessment (no committed provisioning script/Compose file, no MinIO provisioning, no collision-avoidance mechanism, no automated migration-rollback tooling — tracked separately as `RISK_REGISTER.md` R-070, still `OPEN` — and no CI workflow provisioning any database/storage service today).
+
+### 20.4 Validation (P1/P2 JSON files)
+
+```
+node -e "JSON.parse(require('fs').readFileSync('docs/program/evidence/F1-002-P1_test_script_reconciliation.json','utf8')); console.log('p1 scripts valid')"
+p1 scripts valid
+
+node -e "JSON.parse(require('fs').readFileSync('docs/program/evidence/F1-002-P1_test_file_reachability.json','utf8')); console.log('p1 reachability valid')"
+p1 reachability valid
+
+node -e "JSON.parse(require('fs').readFileSync('docs/program/evidence/F1-002-P2_test_runtime_requirements.json','utf8')); console.log('p2 runtime valid')"
+p2 runtime valid
+
+node -e "JSON.parse(require('fs').readFileSync('docs/program/evidence/F1-002-P2_disposable_environment_capabilities.json','utf8')); console.log('p2 environment valid')"
+p2 environment valid
+```
+
+(All four validated; exact commands and output recorded verbatim above once run — see the F1-002-R1 delivery report for the point-in-time confirmation this section describes.)
+
+### 20.5 Scope statement
+
+This integration task did not modify the content of F1-002-P1's or F1-002-P2's own evidence files — they are historical evidence authored by their own tasks, cited here by reference. It corrected exactly one factual/numeric inconsistency in this document (§14, 16→17) and one in `TEST_OWNERSHIP.md` (§7, 7/9→6/9 frontend), both because the P1/P2 evidence provided a more precise, independently-derived number for a claim this document's own original text had already attempted (not because P1/P2 overrode a deliberate F1-002-main judgment call). It did not close R-072, did not close R-046/R-071, did not alter G0/G1/G2 status, and did not touch any KVKK branch/worktree/code.
