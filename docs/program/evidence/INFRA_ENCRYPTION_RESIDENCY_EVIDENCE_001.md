@@ -1,6 +1,6 @@
 # INFRA-ENCRYPTION-RESIDENCY-EVIDENCE-001 — Production Encryption and Data-Residency Evidence Package
 
-**Status: `AWAITING_OPERATOR_AND_PROVIDER_EVIDENCE`.** This document does not yet contain any operator- or provider-supplied production evidence. Every claim below is either cited from existing repository/evidence-file facts (`VERIFIED_REPOSITORY` / `VERIFIED_PRODUCTION_OBSERVED`, already recorded in other files) or is an open evidence request awaiting a read-only operator command result or a provider-console/document screenshot.
+**Status: `PARTIALLY_COLLECTED_OPERATOR_EVIDENCE`.** An operator has now run a subset of the §3 read-only production commands and supplied results (recorded per-row below and summarized in §3a). This closes several database-transport and secret-permission rows (§3.5, §3.6, §3.14) and adds a negative OS-level disk-encryption signal (§3.3/§3.4), but it does **not** close provider disk-at-rest encryption or VPS data-residency/datacenter-location — those remain `AWAITING_PROVIDER_EVIDENCE` (§3.1, §3.3's provider-layer question) because no Hostinger hPanel/support evidence has been supplied yet, and a guest-OS check cannot itself prove or disprove hypervisor/storage-backend-level encryption. Every other claim below is either cited from existing repository/evidence-file facts (`VERIFIED_REPOSITORY` / `VERIFIED_PRODUCTION_OBSERVED`, already recorded in other files) or remains an open evidence request awaiting a read-only operator command result or a provider-console/document screenshot.
 
 Baseline: `origin/main` @ `26c6c339a7cd8db06b1707c059f7f27857f45e61`.
 Branch: `audit/infra-encryption-residency-evidence-001`.
@@ -45,10 +45,30 @@ Each row: **Claim** → **Current status** → **Source of evidence** → **Comm
 
 ---
 
+### 3.0 Operator-supplied production evidence — 2026-07-28 pass
+
+The following facts were supplied directly by the operator from a production SSH session on `disklinik-prod-01` on 2026-07-28. They are recorded verbatim here as the source facts; the individual §3.x rows below cite this pass and update their own `Current status` accordingly. This pass did **not** cover every row in §3 — rows not listed here remain in their prior status.
+
+| Observed fact | Value |
+|---|---|
+| PostgreSQL `listen_addresses` | `localhost` |
+| PostgreSQL `port` | `5432` |
+| PostgreSQL `SHOW ssl` | `on` |
+| Current operator connection | `127.0.0.1`, `ssl=true` |
+| All observed application (`noramedi-api`/`noramedi-worker`) connections | `127.0.0.1` only — no non-loopback source observed |
+| `server/.env` permissions | `600 root:root` |
+| Guest-OS LUKS/dm-crypt evidence (`lsblk -f`, `cryptsetup status`, `findmnt`) | none found — no `crypto_LUKS`/`crypt` device-mapper entry visible from inside the guest OS |
+| Provider (Hostinger) disk-at-rest encryption and VPS datacenter/residency | **still unknown** — no hPanel/provider evidence supplied in this pass; a guest-OS-only check cannot confirm or rule out hypervisor/storage-backend-level encryption, so this is recorded as a negative *guest-visible* signal only, not a confirmed absence of encryption |
+| TLS certificate SAN coverage | confirmed to cover `api.noramedi.com` (consistent with the existing Let's Encrypt cert already recorded in [F0-002_PRODUCTION_BASELINE_EVIDENCE.md](F0-002_PRODUCTION_BASELINE_EVIDENCE.md)) |
+
+**What this pass does not establish:** provider-side disk/volume encryption-at-rest (§3.3's provider-layer question), VPS country/datacenter region (§3.1), backup encryption (§3.9), off-host backup existence (§3.11 — already separately confirmed absent), SSH hardening (§3.13), secrets-manager usage (§3.15), or log storage/retention (§3.16). Those rows remain `AWAITING_OPERATOR_EVIDENCE` / `AWAITING_PROVIDER_EVIDENCE` exactly as before this pass.
+
+---
+
 ### 3.1 VPS country and datacenter region
 
 - **Claim:** the production VPS is physically located in a specific country/datacenter region operated by Hostinger.
-- **Current status:** `AWAITING_PROVIDER_EVIDENCE` — no repository or prior evidence file records this. `docs/22-hostinger-vps-postgres-deploy-plan.md` names the provider but not a location.
+- **Current status:** `AWAITING_PROVIDER_EVIDENCE` — no repository or prior evidence file records this. `docs/22-hostinger-vps-postgres-deploy-plan.md` names the provider but not a location. **Not closed by the §3.0 2026-07-28 operator pass** — that pass was a guest-OS/database check only and did not include Hostinger hPanel or support-ticket evidence; VPS country/datacenter residency remains explicitly open.
 - **Source of evidence:** Hostinger hPanel (authoritative) plus VPS-side supplementary signals (non-authoritative, corroborating only).
 - **Command / provider document:**
   - **Authoritative:** Hostinger hPanel → VPS → server overview/details panel — records the datacenter location field (e.g. city/country) as Hostinger itself designates it. Screenshot or copy the location field text only.
@@ -84,7 +104,7 @@ Each row: **Claim** → **Current status** → **Source of evidence** → **Comm
 ### 3.3 Host disk encryption
 
 - **Claim:** the VPS's underlying disk/volume is encrypted at rest by the hosting provider or at the OS/LUKS level.
-- **Current status:** `AWAITING_OPERATOR_EVIDENCE` — listed as an open item in `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` §4 ("VPS disk/volume encryption status", "VPS provider (Hostinger) snapshot encryption settings"); never checked.
+- **Current status:** `AWAITING_PROVIDER_EVIDENCE` (guest-OS portion partially checked, provider-layer portion still open). The §3.0 2026-07-28 operator pass ran the guest-OS checks below and found no `crypto_LUKS`/`crypt` device-mapper evidence visible from inside the guest — recorded as a **negative guest-visible signal only**. This does **not** close the claim: hypervisor/storage-backend-level encryption-at-rest (the layer Hostinger itself may apply) is invisible from inside the guest OS by design and can only be confirmed or ruled out by Hostinger hPanel evidence or a direct support-ticket answer, neither of which has been supplied yet. Was previously listed as an open item in `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` §4 ("VPS disk/volume encryption status", "VPS provider (Hostinger) snapshot encryption settings").
 - **Source of evidence:** operator shell session on the VPS, plus Hostinger hPanel if the provider documents host-level encryption-at-rest for its VPS product tier.
 - **Command / provider document:**
   ```bash
@@ -121,7 +141,7 @@ Each row: **Claim** → **Current status** → **Source of evidence** → **Comm
 ### 3.5 Database local-only bind
 
 - **Claim:** PostgreSQL only accepts connections from `localhost`/loopback, not from the public network interface.
-- **Current status:** `AWAITING_OPERATOR_EVIDENCE`. Repository evidence only establishes that the application's `DATABASE_URL` targets `localhost` by convention (`server/.env.example`) — it does not prove PostgreSQL itself is bound to loopback only.
+- **Current status:** `VERIFIED_PRODUCTION_OBSERVED` — closed by the §3.0 2026-07-28 operator pass: `listen_addresses=localhost`, `port=5432`, and every observed application (`noramedi-api`/`noramedi-worker`) connection originated from `127.0.0.1` only, with no non-loopback source observed. Previously, repository evidence only established that the application's `DATABASE_URL` targets `localhost` by convention (`server/.env.example`) — it did not prove PostgreSQL itself was bound to loopback only; that gap is now closed.
 - **Source of evidence:** operator shell session; `postgresql.conf`'s `listen_addresses`, `pg_hba.conf`'s accepted hosts, and the OS firewall.
 - **Command / provider document:**
   ```bash
@@ -141,7 +161,7 @@ Each row: **Claim** → **Current status** → **Source of evidence** → **Comm
 ### 3.6 PostgreSQL SSL mode and active connections
 
 - **Claim:** whether TLS is enabled/enforced for PostgreSQL connections, and what the application's actual negotiated connection mode is.
-- **Current status:** `AWAITING_OPERATOR_EVIDENCE`. `server/.env.example`'s `DATABASE_URL` template carries no `sslmode` parameter, and `server/src/db.ts` (per F0-006 evidence) constructs the Prisma driver adapter directly from `DATABASE_URL` with no separate SSL override — so today's expected behavior (pending confirmation) is `sslmode=prefer`'s default-off outcome over a loopback connection, not an enforced-TLS connection. This is an inference from repository code, not yet a confirmed production fact.
+- **Current status:** `VERIFIED_PRODUCTION_OBSERVED` — closed by the §3.0 2026-07-28 operator pass: `SHOW ssl` returned `on`, and the operator's own connection at collection time showed `127.0.0.1`, `ssl=true`. This supersedes the prior inference (`server/.env.example`'s `DATABASE_URL` template carries no `sslmode` parameter, and `server/src/db.ts` per F0-006 evidence constructs the Prisma driver adapter directly from `DATABASE_URL` with no separate SSL override) — SSL is confirmed enabled and in use on the loopback connection, not merely assumed off-by-default.
 - **Source of evidence:** operator shell session (`SHOW ssl`, `pg_stat_ssl`), repository code (`server/src/db.ts`, `server/.env.example`).
 - **Command / provider document:**
   ```bash
@@ -152,9 +172,11 @@ Each row: **Claim** → **Current status** → **Source of evidence** → **Comm
     FROM pg_stat_ssl s JOIN pg_stat_activity a ON s.pid = a.pid
     WHERE a.datname = 'noramedi_crm';
   "
-  grep -E "^\s*sslmode=" "$APP_DIR/server/.env" 2>/dev/null | sed 's/=.*/=<redacted-check-presence-only>/' || echo "no sslmode parameter found in DATABASE_URL line (presence check only, value not printed)"
+  grep -oE 'sslmode=[^&"[:space:]]+' "$APP_DIR/server/.env" 2>/dev/null || echo "no sslmode parameter found (Prisma DATABASE_URL query string, presence check only, no other DATABASE_URL content printed)"
   ```
   (`$APP_DIR` — confirm as `/var/www/noramedi` per the same convention as [F0-002_PRODUCTION_EVIDENCE_REQUEST.md](F0-002_PRODUCTION_EVIDENCE_REQUEST.md) §B; do not guess it.)
+
+  > **Correction (independent review):** the original form of this check, `grep -E "^\s*sslmode="`, produces a false negative against this repository's actual `.env` layout. Prisma's `DATABASE_URL` embeds `sslmode` as a query parameter inside the connection-string URL (e.g. `DATABASE_URL=postgresql://user:pass@host/db?sslmode=require`) — the line begins with `DATABASE_URL=`, not `sslmode=`, so an anchored `^\s*sslmode=` never matches even when `sslmode` is present, silently reporting "no sslmode parameter found" regardless of the true value. The corrected command above uses `grep -oE` (only-matching mode) to extract just the `sslmode=<value>` token from anywhere in the file, stopping at `&`, an unescaped `"`, or whitespace — it never prints the rest of the `DATABASE_URL` line (host, credentials, database name), preserving the same redaction guarantee the original check intended.
 - **Expected output:** `SHOW ssl` returns `on`/`off`; the `pg_stat_ssl` join shows `ssl_conns` vs. `total_conns` for the live `noramedi_crm` connections at the moment the query runs (a point-in-time snapshot, not a policy guarantee).
 - **Sensitive-output redaction rule:** never print the full `DATABASE_URL` line — the `grep`/`sed` above only reports presence of the `sslmode` token, not its value or any credential in the connection string.
 - **Remediation if absent:** since API and database currently run on the same host (loopback connection, confirmed topology), unencrypted local-loopback traffic is a materially lower-risk gap than an unencrypted network hop — but if this host ever splits into separate DB/app hosts, `sslmode=require` (or stricter) must be added to `DATABASE_URL` and `ssl=on` enabled in `postgresql.conf` before that split, not after.
@@ -164,7 +186,7 @@ Each row: **Claim** → **Current status** → **Source of evidence** → **Comm
 ### 3.7 Nginx TLS versions/ciphers/certificates
 
 - **Claim:** which TLS protocol versions and cipher suites the host Nginx negotiates publicly, and the active certificate's issuer/expiry.
-- **Current status:** partially `VERIFIED_PRODUCTION_OBSERVED` (certificate expiry only — `2026-09-26`, Let's Encrypt, SAN covers all 4 hostnames, per [F0-002_PRODUCTION_BASELINE_EVIDENCE.md](F0-002_PRODUCTION_BASELINE_EVIDENCE.md) and [PRODUCTION_TOPOLOGY.md](../PRODUCTION_TOPOLOGY.md) §5). TLS protocol versions and cipher suite are `AWAITING_OPERATOR_EVIDENCE` — never collected; prior evidence passes deliberately did not request full Nginx config content (F0-006 evidence §4).
+- **Current status:** partially `VERIFIED_PRODUCTION_OBSERVED` (certificate expiry and SAN coverage — `2026-09-26`, Let's Encrypt, SAN covers all 4 hostnames including `api.noramedi.com`, per [F0-002_PRODUCTION_BASELINE_EVIDENCE.md](F0-002_PRODUCTION_BASELINE_EVIDENCE.md), [PRODUCTION_TOPOLOGY.md](../PRODUCTION_TOPOLOGY.md) §5, and re-confirmed for `api.noramedi.com` specifically by the §3.0 2026-07-28 operator pass). TLS protocol versions and cipher suite are still `AWAITING_OPERATOR_EVIDENCE` — the `ssl_protocols`/`ssl_ciphers`/`openssl s_client` negotiation checks in this row were not part of the §3.0 pass; prior evidence passes also deliberately did not request full Nginx config content (F0-006 evidence §4).
 - **Source of evidence:** operator shell session (`nginx -T` grep'd narrowly) and an external TLS negotiation probe.
 - **Command / provider document:**
   ```bash
@@ -308,7 +330,7 @@ Each row: **Claim** → **Current status** → **Source of evidence** → **Comm
 ### 3.14 Secret-file permissions
 
 - **Claim:** filesystem permissions on `server/.env` (and any other secret-bearing file) restrict read access to the owning user/process only.
-- **Current status:** `AWAITING_OPERATOR_EVIDENCE` — listed as an open item in `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` §4 ("`server/.env` file permissions... and production `ENCRYPTION_KEY` fail-closed behavior") and [F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md](F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md) §10/§13; never checked. `ENCRYPTION_KEY`'s fail-closed startup behavior itself is already `VERIFIED_REPOSITORY` (`server/src/index.ts:75-89`, per F0-006 evidence §5) — only the filesystem-permission question is open here.
+- **Current status:** `VERIFIED_PRODUCTION_OBSERVED` — closed by the §3.0 2026-07-28 operator pass: `server/.env` is mode `600`, owned `root:root`, consistent with the already-confirmed root-owned PM2 processes (F0-006 evidence §10). Previously listed as an open item in `docs/compliance/KVKK_COMPLIANCE_AUDIT_AND_REMEDIATION.md` §4 ("`server/.env` file permissions... and production `ENCRYPTION_KEY` fail-closed behavior") and [F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md](F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md) §10/§13; that gap is now closed for the permission question (fail-closed `ENCRYPTION_KEY` behavior itself was already `VERIFIED_REPOSITORY` separately). `ENCRYPTION_KEY`'s fail-closed startup behavior itself is already `VERIFIED_REPOSITORY` (`server/src/index.ts:75-89`, per F0-006 evidence §5) — only the filesystem-permission question is open here.
 - **Source of evidence:** operator shell session.
 - **Command / provider document:**
   ```bash
