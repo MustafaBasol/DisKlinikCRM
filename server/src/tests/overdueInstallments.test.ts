@@ -6,7 +6,9 @@
  * *all* pending Payment rows regardless of due date, so it never actually
  * reflected overdue collections and did not match /payment-plans (which has
  * its own overdue notion: PaymentPlanInstallment.status === 'pending' &&
- * dueDate < now — nothing ever sets status to the literal string 'overdue').
+ * dueDate < now — plus legacy/persisted rows explicitly marked with the
+ * literal status 'overdue', which production does contain; see
+ * server/src/utils/overdueInstallments.ts and commit 81323a88).
  * This module is now the single definition both the dashboard card
  * (server/src/routes/dashboard.ts) and the frontend (src/pages/PaymentPlans.tsx
  * isOverdue) are built on.
@@ -40,9 +42,9 @@ function section(title: string) {
 
 section('1. overdueInstallmentWhere — where filtresi şekli');
 
-test('status her zaman pending — literal "overdue" durumu asla yazılmaz', () => {
+test('status pending VEYA legacy/persisted "overdue" olabilir — { in: ["pending","overdue"] } filtresi uygulanır', () => {
   const where = overdueInstallmentWhere({ clinicId: 'clinic-A' });
-  assert.equal(where.status, 'pending');
+  assert.deepEqual(where.status, { in: ['pending', 'overdue'] });
 });
 
 test('dueDate < now filtresi uygulanır', () => {
@@ -80,9 +82,9 @@ test('paid + geçmiş vade → overdue değil (ödenmiş taksit gecikmiş sayıl
   assert.equal(isInstallmentOverdue('2026-07-01T00:00:00Z', 'paid', now), false);
 });
 
-test('literal status="overdue" (hiç yazılmayan değer) — pending olmadığı için false döner', () => {
+test('legacy/persisted status="overdue" + geçmiş vade + ödeme bağlı değil → overdue sayılır', () => {
   const now = new Date('2026-07-09T00:00:00Z');
-  assert.equal(isInstallmentOverdue('2026-07-01T00:00:00Z', 'overdue', now), false);
+  assert.equal(isInstallmentOverdue('2026-07-01T00:00:00Z', 'overdue', now), true);
 });
 
 // ─── 3. Regression: dashboard toplamı, gecikmiş taksitlerin toplamıyla eşleşir ──
