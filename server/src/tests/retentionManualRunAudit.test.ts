@@ -31,6 +31,7 @@ import jwt from 'jsonwebtoken';
 import {
   DATA_RETENTION_RUNTIME_SETTING_KEY,
 } from '../services/privacy/dataRetentionPolicy.js';
+import { DATA_RETENTION_JOB_LOCK_NAME } from '../jobs/dataRetentionCleanupJob.js';
 import { getPlatformSetting, setPlatformSetting, unsetPlatformSetting } from '../services/platformSettings.js';
 
 let passed = 0;
@@ -435,6 +436,79 @@ await test('no cross-tenant leakage: audit metadata never carries a clinicId/org
     for (const forbidden of ['clinicId', 'organizationId', 'patientId', 'phone', 'email']) {
       assert.ok(!keys.includes(`"${forbidden}"`), `safeMetadata must never carry a ${forbidden} key — this job is platform-scoped, not tenant-scoped`);
     }
+  });
+  await clearRuntimeSetting();
+});
+
+section('POST /privacy/data-retention/run — audit persistence failure');
+
+await test('audit write failure: live run still executes (real deletion happens) but the response makes the missing audit record explicit, not a plain 200', async () => {
+  await cleanAuditRows();
+  await setRuntimeEnabled(true);
+  const marker = `retention-audit-writefail-${randomUUID()}`;
+  await seedOldOperationalEvent(marker);
+
+  // actorPlatformAdminId has a real FK to PlatformAdmin(id) — a non-existent
+  // admin id forces a genuine DB-level foreign-key violation on the audit
+  // insert itself, no mocking required (same technique as
+  // legacyConsentCorrection's forced-FK-violation tests in platformAdmin.test.ts).
+  const ghostActorId = 'retention-manual-run-ghost-admin';
+  const req = mockReq({ dryRun: false });
+  req.platformAdmin = { id: ghostActorId, email: 'ghost@platform.test' };
+
+  await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: undefined }, async () => {
+    const chain = runChainForRoute();
+    const res = mockRes();
+    await runChain(chain, req, res);
+
+    assert.equal(res.statusCode, 500, 'a cleanup that ran but whose audit record failed to persist must never look like an ordinary 200 success');
+    assert.ok(res.body?.summary, 'the actual summary must still be surfaced so the caller/ops can see what really happened');
+    assert.ok(res.body.summary.deletedOperationalEvents >= 1, 'the response summary must reflect the real deletion, not be hidden');
+
+    assert.equal(await countOperationalEventsBySubstring(marker), 0, 'the cleanup itself must have actually run and deleted the eligible row, even though its audit row failed to persist — this endpoint cannot atomically bundle a 7-table batched cleanup with one audit insert');
+
+    const ghostRows = await prisma.platformAdminAuditEvent.findMany({ where: { actorPlatformAdminId: ghostActorId } });
+    assert.equal(ghostRows.length, 0, 'the failed audit insert must not leave a partial/corrupt row behind — its own transaction rolled back cleanly');
+  });
+  await clearRuntimeSetting();
+});
+
+section('POST /privacy/data-retention/run — concurrent manual runs');
+
+await test('concurrent live runs: the shared job lock serializes execution — only one run actually deletes, the other is rejected 409 with outcome=blocked/concurrent_run_in_progress', async () => {
+  await cleanAuditRows();
+  await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+  await setRuntimeEnabled(true);
+  const marker = `retention-audit-concurrent-${randomUUID()}`;
+  await seedOldOperationalEvent(marker);
+
+  await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: undefined }, async () => {
+    const chain = runChainForRoute();
+    const resA = mockRes();
+    const resB = mockRes();
+    // Fired together via Promise.all (no await between them) against the same
+    // Postgres instance — genuine DB-level concurrency, not a simulated race.
+    await Promise.all([
+      runChain(chain, mockReq({ dryRun: false }), resA),
+      runChain(chain, mockReq({ dryRun: false }), resB),
+    ]);
+
+    const statusCodes = [resA.statusCode, resB.statusCode].sort();
+    assert.deepEqual(statusCodes, [200, 409], 'exactly one concurrent live run must execute (200) and the other must be rejected as already-in-progress (409)');
+
+    const winner = resA.statusCode === 200 ? resA : resB;
+    const loser = resA.statusCode === 200 ? resB : resA;
+    assert.equal(winner.body.summary.deletedOperationalEvents, 1, 'the winning run must be the one that actually deleted the seeded row');
+    assert.equal(loser.body.error, 'Another data retention run (scheduled or manual) is already in progress. Try again shortly.');
+
+    assert.equal(await countOperationalEventsBySubstring(marker), 0, 'the seeded row is deleted exactly once — no double-processing');
+
+    const rows = await auditRows();
+    assert.equal(rows.length, 2, 'both attempts — the executed one and the lock-rejected one — each get their own immutable audit row');
+    const outcomes = rows.map((r) => r.outcome).sort();
+    assert.deepEqual(outcomes, ['blocked', 'success']);
+    const blockedRow = rows.find((r) => r.outcome === 'blocked')!;
+    assert.equal((blockedRow.safeMetadata as any).errorCategory, 'concurrent_run_in_progress');
   });
   await clearRuntimeSetting();
 });
