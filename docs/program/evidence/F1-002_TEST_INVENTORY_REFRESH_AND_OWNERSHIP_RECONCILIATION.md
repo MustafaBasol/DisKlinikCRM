@@ -100,7 +100,7 @@ See §11 for the count. No disposable-Postgres provisioning mechanism exists in 
 
 ## 16. R-072 closure assessment
 
-See `docs/program/evidence/F1-002_test_ownership_gaps.json` `r072ClosureAssessment` for the condition-by-condition table. R-072 is, strictly, a test-**inventory evidence staleness** risk — not a CI-readiness or runtime-provisioning risk. Assessed strictly against that scope: **all 10 conditions from the task specification are met** — every current backend and frontend test file is inventoried (proven by exact commands, §6), every test has an explicit canonical owner with 0 UNKNOWN entries (§8, §10), every test-related package script is reconciled with 0 stale references (§12–§13, corrected count 17 in §14), every test file's script reachability is explicitly known (§14, including the 8 never-scripted files, which are known-and-recorded, not unknown), runtime requirements and the one remaining UNKNOWN are explicitly recorded (F1-002-P2, §20.3 below — `messagesConsentGate.test.ts`), F1-002-P1/P2 evidence is indexed (§20 below), the JSON evidence validates (§17, §20.4), and no current-`origin/main` drift invalidates the inventory (§18, re-checked at F1-002-R1 time — see §20.1). **R-072 remains recommended for closure under the status `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION`** — this task (and F1-002-R1) do not have authority to unilaterally declare it `CLOSED` without the same external-review discipline this program applies to every other risk closure, matching the R-071 precedent for self-verification vs. external confirmation. See `RISK_REGISTER.md`'s R-072 row for the exact current status string.
+See `docs/program/evidence/F1-002_test_ownership_gaps.json` `r072ClosureAssessment` for the condition-by-condition table. R-072 is, strictly, a test-**inventory evidence staleness** risk — not a CI-readiness or runtime-provisioning risk. Assessed strictly against that scope: **all 10 conditions from the task specification are met** — every current backend and frontend test file is inventoried (proven by exact commands, §6), every test has an explicit canonical owner with 0 UNKNOWN entries (§8, §10), every test-related package script is reconciled with 0 stale references (§12–§13, corrected count 17 in §14), every test file's script reachability is explicitly known (§14, including the 8 never-scripted files, which are known-and-recorded, not unknown), runtime requirements and the one remaining UNKNOWN are explicitly recorded (F1-002-P2, §20.3 below — `messagesConsentGate.test.ts`), F1-002-P1/P2 evidence is indexed (§20 below), the JSON evidence validates (§17, §20.4), and no current-`origin/main` drift invalidates the inventory (§18, re-checked at F1-002-R1 time — see §20.1). **At F1-002/F1-002-R1's own capture time, R-072 was recommended for closure under the status `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION`** — neither task had authority to unilaterally declare it `CLOSED` without the same external-review discipline this program applies to every other risk closure, matching the R-071 precedent for self-verification vs. external confirmation. **Superseded 2026-07-28 (F1-002-R2): the external architecture review and Mustafa Basol's merge decision granted closure confirmation — R-072 → `CLOSED`.** See §21 below and `RISK_REGISTER.md`'s R-072 row for the exact current status string.
 
 **R-072 closure is narrow and does not resolve the following separate, still-open implementation/readiness gaps** (each tracked in its own evidence, none silently closed by R-072):
 - 8 unscripted backend test files and 17 scripts excluded from the `server:test` aggregate chain (§14, F1-002-P1 §4.1/§5.1).
@@ -176,3 +176,36 @@ p2 environment valid
 ### 20.5 Scope statement
 
 This integration task did not modify the content of F1-002-P1's or F1-002-P2's own evidence files — they are historical evidence authored by their own tasks, cited here by reference. It corrected exactly one factual/numeric inconsistency in this document (§14, 16→17) and one in `TEST_OWNERSHIP.md` (§7, 7/9→6/9 frontend), both because the P1/P2 evidence provided a more precise, independently-derived number for a claim this document's own original text had already attempted (not because P1/P2 overrode a deliberate F1-002-main judgment call). It did not close R-072, did not close R-046/R-071, did not alter G0/G1/G2 status, and did not touch any KVKK branch/worktree/code.
+
+## 21. F1-002-R2 — External R-072 closure record (2026-07-28)
+
+### 21.1 External program decision
+
+The external architecture review (ChatGPT architecture review) accepted the full F1-002 / F1-002-P1 / F1-002-P2 evidence chain described in §1–§20 above and, jointly with Mustafa Basol's merge decision, granted closure confirmation for R-072. This section records that decision — it does not re-derive or re-verify the underlying evidence, which is unchanged from §16–§20.
+
+### 21.2 Closure record
+
+- **R-072 status:** `CLOSED`.
+- **Closure date:** 2026-07-28.
+- **Closure basis:** F1-002 current test inventory and ownership reconciliation (§6–§10 above) + F1-002-P1 script reachability evidence + F1-002-P2 runtime dependency evidence + 0 `UNKNOWN` canonical ownership (§8, §10) + complete package-script reachability classification (§12–§14) + current-`main` reconciliation completed (§20.1).
+- **External confirmation authority:** ChatGPT architecture review and Mustafa Basol (merge decision).
+
+### 21.3 What this closure does not resolve
+
+Unchanged from §16's own list — reproduced here for a single point-in-time reference at closure:
+- 8 unscripted backend test files and 17 aggregate-chain-excluded test scripts.
+- Only 7 of 116 JS/TS test-related files reached by any CI workflow.
+- No committed disposable-Postgres provisioning mechanism.
+- No MinIO/S3-emulator provisioning for `fileBackupDbIntegration.test.ts`.
+- No collision-avoidance mechanism for parallel disposable-DB/environment use.
+- 1 runtime UNKNOWN (`messagesConsentGate.test.ts`).
+- The impact-based CI test-selection engine itself (F1-001's design) — not implemented.
+- R-070 (migration-rollback tooling gap) — a related, separately-tracked risk, unaffected by this closure.
+
+### 21.4 Next task
+
+**F1-003 — Baseline CI Test Execution and Disposable Runtime Readiness** is assigned by this pass, status `READY, not started` — see `phases/F1_CI_AND_TEST_ARCHITECTURE.md`'s own F1-003 definition for its exact scope. This pass assigns F1-003; it does not execute it.
+
+### 21.5 Scope statement
+
+This pass changed no test/package-script/CI-workflow/application/schema/migration/deployment file. It did not touch any KVKK branch/worktree/code, did not close R-046 or R-071, and did not alter G0/G1/G2 status. `origin/main` was re-fetched at this pass's start; the branch's own tip already contained `origin/main` as an ancestor — no drift, no reconciliation merge required.
