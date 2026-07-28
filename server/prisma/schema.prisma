@@ -3086,3 +3086,70 @@ model SecurityIncidentActivity {
 
   @@index([incidentId, createdAt])
 }
+
+// ─── File Backup Coverage (FILE-BACKUP-COVERAGE-001) ───────────────────────
+// Off-host replication ledger for filesystem-backed clinical artifacts
+// (patient attachments, lab-order attachments, imaging images). Additive
+// only: does NOT modify PatientAttachment/LabOrderAttachment/ImagingImage/
+// ImagingStudy, does not rename or move any existing fileStorage.ts
+// storageKey, and the backup job never deletes or mutates a source file.
+// See docs/program/evidence/FILE_BACKUP_COVERAGE_001.md.
+
+/// One row per backup job execution. Append-only history — a run is never
+/// deleted, so this table is also the durable evidence trail for "was a
+/// backup ever run" (mirrors the concern R-032 raised for the DB restore
+/// test, applied here to file backup/restore).
+model FileBackupRun {
+  id           String    @id @default(uuid())
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  status       String    @default("running") // running | completed | failed
+  trigger      String    @default("scheduled") // scheduled | manual
+
+  filesScanned  Int    @default(0)
+  filesCopied   Int    @default(0)
+  filesVerified Int    @default(0)
+  filesSkipped  Int    @default(0) // already backed up in a prior run, checksum unchanged
+  filesFailed   Int    @default(0)
+  filesMissing  Int    @default(0) // DB row present, source physical file not found
+  bytesCopied   BigInt @default(0)
+
+  errorSummary String?
+  manifestKey  String? // off-host manifest object key for this run, if written
+
+  entries FileBackupEntry[]
+
+  @@index([status, startedAt])
+}
+
+/// One row per source file considered by a FileBackupRun. Immutable once
+/// written (a file already `verified` in an earlier run is recorded again as
+/// `skipped_unchanged` in a later run, never mutated in place) so the ledger
+/// stays a durable per-run audit trail, not just current state.
+model FileBackupEntry {
+  id    String        @id @default(uuid())
+  runId String
+  run   FileBackupRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  sourceModel    String // PatientAttachment | LabOrderAttachment | ImagingImage
+  sourceRecordId String
+  clinicId       String
+  sourceKey      String // existing fileStorage.ts storage key — read-only, never modified
+  destinationKey String // off-host backup destination key
+
+  sourceChecksumSha256      String?
+  destinationChecksumSha256 String?
+  sourceSizeBytes           Int?
+
+  status       String // copied | verified | skipped_unchanged | failed | missing_source
+  errorMessage String?
+
+  copiedAt   DateTime?
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([runId, status])
+  @@index([clinicId])
+  @@index([sourceModel, sourceRecordId])
+}
