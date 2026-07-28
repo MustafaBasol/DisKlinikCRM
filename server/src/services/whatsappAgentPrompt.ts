@@ -1,5 +1,5 @@
 import { whatsappAgentActionValues, whatsappAgentIntentValues } from './whatsappAgentSchema.js';
-import { getAiSafeFirstName, redactSensitiveText } from './privacy/redaction.js';
+import { getAiCustomerNamePlaceholder, redactSensitiveText } from './privacy/redaction.js';
 
 export type WhatsAppAgentPromptService = {
   id: string;
@@ -137,9 +137,13 @@ export const buildWhatsAppAgentPrompt = (args: WhatsAppAgentPromptArgs) => [
   '}',
   '',
   'Known context:',
-  // Only the first name reaches the AI provider — never the full name — and it
-  // is routed through the same sanitizer as free text as defense-in-depth.
-  `Customer name: ${getAiSafeFirstName(args.customerName) ?? 'null'}`,
+  // No real name reaches the AI provider — not the full name, not even the
+  // first name. Decision/action classification and slot extraction rely on
+  // the message text itself, not on this field, so a fixed pseudonym is sent
+  // instead (see AI_CUSTOMER_NAME_PLACEHOLDER in privacy/redaction.ts). The
+  // app keeps the real name locally (DB records, patient matching, outbound
+  // messages sent directly to the customer) — it just never reaches Gemini.
+  `Customer name: ${getAiCustomerNamePlaceholder(args.customerName) ?? 'null'}`,
   `Current intent: ${args.currentIntent ?? 'null'}`,
   `Current step: ${args.currentStep ?? 'null'}`,
   `Selected service: ${args.selectedAppointmentTypeName ?? 'null'}`,

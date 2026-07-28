@@ -5,6 +5,13 @@
 **Branch:** `fix/ai-prompt-redaction-gap-001`
 **Worktree:** `E:/Ek Gelir/Siteler/DisKlinikCRM-worktrees/ai-prompt-redaction-gap-001` (fresh worktree; primary working tree untouched)
 
+**Superseded claims notice:** §2–§6 below describe the *original* implementation. Two
+follow-up rounds landed on top of it and changed the current behavior in ways that make a
+few of the original claims stale — most importantly, **no patient/customer name (not even a
+first name) is sent to the AI provider anymore**, where the original implementation sent a
+redacted first name. §8 is the authoritative description of current behavior; read it after
+§2–§6 for the full history, or first if you only care about what ships today.
+
 ---
 
 ## 1. Baseline
@@ -264,3 +271,121 @@ conflict-avoidance instructions, not by this branch):
    `LAUNCH_GATES.md` — explicitly out of scope for this branch per instructions.
 3. The three LEGAL-owned findings in §6.3 remain open regardless of this fix's production
    verification status.
+
+---
+
+## 8. Follow-up hardening (current behavior)
+
+Two review rounds landed on top of §1–§7's original implementation. This section is the
+authoritative description of what actually ships; it supersedes any conflicting claim above.
+
+### 8.1 Round 1 — `review/pr245-ai-privacy-fixes` (merged as commit `0ac4177`)
+
+Independent review found two reproducible gaps the original evidence had not actually proven
+closed:
+
+1. **Provider error bodies were not sanitized.** `response.text()` on a non-ok Gemini response
+   was embedded verbatim into the thrown `Error` message in all three call paths
+   (`googleAiStudio.ts`, `whatsappConversationAgent.ts`, `whatsappStepAwareNlu.ts`), and those
+   `Error` objects are logged via `console.error` at each call site. §2's "Verified NOT exposed"
+   claim about error logging only checked that the constructed *prompt* wasn't logged — it never
+   checked whether the *provider's own error response* could echo request-derived PII back into a
+   log. Fixed by routing `errorText` through the existing `redactSensitiveText` before it reaches
+   the `Error` message, in all three modules.
+2. **Date+time phrases were being swallowed into `[PHONE]`.** `redactPhoneCandidates` treated a
+   calendar date immediately followed by a clock time (`"27.07.2026 14:00"`) as a single
+   phone-shaped candidate once the combined digit count landed in the 9–15 range — destroying both
+   the date and the time (`"27.07.2026 14:00"` → `"[PHONE]:00"`). §6.1's "Limitations" section had
+   mischaracterized this as a narrow theoretical edge case; it is in fact the single most common
+   way a customer types a specific appointment request. Fixed by recognizing
+   date-immediately-followed-by-time via calendar/clock range validation (`isCalendarDateShape`,
+   `isDateFollowedByTime` in `redaction.ts`), not just character-class shape, so it is exempted
+   from phone redaction without weakening detection of an actual adjacent phone number.
+
+Both fixes are additive to the shared boundary (`services/privacy/redaction.ts`). 7 regression
+tests added (36 → 43, all passing).
+
+### 8.2 Round 2 — credential punctuation-tail leak + customer-name minimization
+
+A second review found the `key: value` credential redaction added in §3 used a fixed character
+class (`[A-Za-z0-9._-]{4,}`) for the *value*, which stops matching at the first character outside
+that class and silently leaves everything after it in plain text. Any credential containing
+punctuation kept its tail exposed, e.g.:
+
+| Input | Old (broken) output | New output |
+|---|---|---|
+| `password=Sup3r!Secret` | `password: [TOKEN]!Secret` | `password: [TOKEN]` |
+| `token=abc123+/==` | `token: [TOKEN]+/==` | `token: [TOKEN]` |
+| `api_key=sk-test_123!more` | `api_key: [TOKEN]!more` | `api_key: [TOKEN]` |
+| `secret: value-with-$pecial#chars` | `secret: [TOKEN]-with-$pecial#chars` | `secret: [TOKEN]` |
+
+Fixed by replacing the character-class value match with bounded parsing
+(`redactCredentialKeyValues` in `redaction.ts`): the value is "everything up to the next clear
+terminator" — whitespace, end of line/string, or a matching closing quote — which fully consumes
+punctuation-bearing credentials while still stopping before ordinary prose that follows the
+credential on the same line (prose is always whitespace-separated from the credential). A small
+set of sentence-ending punctuation (`. , ; : ! ?`) directly touching that terminator is peeled back
+off the credential value and re-attached after `[TOKEN]`, so a credential at the end of a sentence
+doesn't absorb the sentence's own punctuation.
+
+**Customer-name minimization.** Investigation of every active AI prompt (both files that reach
+Gemini with a "customer name" field — `googleAiStudio.ts`'s `extractAssistantInputWithGoogleAi`
+and the shared `whatsappAgentPrompt.ts`'s `buildWhatsAppAgentPrompt`, which is the one boundary for
+native WhatsApp, Meta WhatsApp, and Instagram) found **no operational dependency on the real name**:
+
+- Neither prompt's decision/classification rules reference the "Known customer name" /
+  "Customer name" context field for anything — intent classification, action selection, and
+  clarification logic are all driven by the message text itself.
+- The `name` *slot* the AI extracts and returns (`slots.name` / the extraction schema's `name`
+  field) is independently parsed by the model out of the customer's own message text (e.g. "adım
+  Faruk Duman"), which is separately redacted via `redactSensitiveText` — it does not depend on
+  the "Known customer name" context field at all.
+- No downstream consumer of the AI's `reply` field is instructed to greet the customer by name;
+  the application's own outbound messages (main menu, confirmations, `formatMainMenu`, etc.) do
+  their own name interpolation locally, from the real name kept in application state — never from
+  anything the AI returns.
+
+Since no test could demonstrate a correctness dependency on the real (or even redacted first)
+name, `getAiSafeFirstName(args.customerName)` was replaced at both call sites with
+`getAiCustomerNamePlaceholder(args.customerName)`, which returns a fixed pseudonym
+(`AI_CUSTOMER_NAME_PLACEHOLDER = '[CUSTOMER]'`) whenever a name is known, and `null` when it is
+not — never any form of the real name. **§3's claim that `getAiSafeFirstName` output "is now the
+only form in which a patient/customer name may reach any of the three prompt builders" is
+superseded: as of this round, no form of the real name reaches any of them.**
+
+`getAiSafeFirstName` itself is unchanged and still exported/tested (`redaction.ts`) as a general
+first-name-extraction-with-defensive-redaction utility — it is simply no longer called by any
+active AI prompt builder. The application continues to keep and use the real name locally
+(patient/DB matching, conversation-state persistence, outbound WhatsApp/Instagram messages sent
+directly to the customer) — this change only affects what crosses the boundary to the third-party
+AI provider.
+
+### 8.3 Changed/added in this round
+
+| File | Change |
+|---|---|
+| `server/src/services/privacy/redaction.ts` | Replaced the fixed-character-class credential value match with bounded parsing (`redactCredentialKeyValues`); added `AI_CUSTOMER_NAME_PLACEHOLDER` / `getAiCustomerNamePlaceholder` |
+| `server/src/services/googleAiStudio.ts` | `Known customer name:` now sends `getAiCustomerNamePlaceholder(...)` instead of `getAiSafeFirstName(...)` |
+| `server/src/services/whatsappAgentPrompt.ts` | `Customer name:` now sends `getAiCustomerNamePlaceholder(...)` instead of `getAiSafeFirstName(...)` |
+| `server/src/tests/aiPrivacyBoundary.test.ts` | Updated tests that asserted the old real-first-name behavior to assert `[CUSTOMER]` instead; added credential punctuation-tail, prose-preservation, multi-credential, and pseudonym-specific regression tests |
+
+### 8.4 Tests (this round)
+
+`npm run test:ai-prompt-privacy` — see the test file for the current count. Added coverage:
+
+- All 4 punctuation-bearing credential examples above, each fully redacted with no suffix leak.
+- Credential at end of line/string (no trailing whitespace).
+- Credential immediately followed by ordinary prose — the prose must survive unmodified.
+- Multiple credentials in a single string, each redacted independently.
+- `[CUSTOMER]` pseudonym present (and the real name absent) on every AI prompt path:
+  `buildWhatsAppAgentPrompt`, `extractAssistantInputWithGoogleAi`,
+  `resolveWhatsAppConversationAgentDecision`.
+- Provider (Gemini) error echo sanitized before reaching the thrown error / `console.error` (Round
+  1, re-verified).
+- TR/FR/ISO date-time phrases preserved, not misread as phone numbers (Round 1, re-verified).
+- A date-time phrase co-occurring with a real phone number: the phone is still redacted, the
+  date-time phrase survives.
+
+Full required suite (`typecheck`, `test:ai-prompt-privacy`, `test:msg-safety`, `test:meta-wa`,
+`test:instagram`, `test:agent`, `test:booking-flow-log-redaction`) re-verified green — see the PR
+description / commit message for this round's exact pass counts.

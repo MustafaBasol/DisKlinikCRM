@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getAiSafeFirstName, redactSensitiveText } from './privacy/redaction.js';
+import { getAiCustomerNamePlaceholder, redactSensitiveText } from './privacy/redaction.js';
 
 const allowedIntents = new Set([
   'greeting',
@@ -153,7 +153,10 @@ export const extractAssistantInputWithGoogleAi = async (
     '',
     `Current intent: ${args.currentIntent ?? 'null'}`,
     `Current step: ${args.currentStep ?? 'null'}`,
-    `Known customer name: ${getAiSafeFirstName(args.customerName) ?? 'null'}`,
+    // No genuine name transmitted: this extraction task does not depend on
+    // knowing the customer's real name for correctness, so a fixed pseudonym
+    // is sent instead (see AI_CUSTOMER_NAME_PLACEHOLDER in privacy/redaction.ts).
+    `Known customer name: ${getAiCustomerNamePlaceholder(args.customerName) ?? 'null'}`,
     `Selected appointment type: ${args.selectedAppointmentTypeName ?? 'null'}`,
     `Selected date: ${args.selectedDate ?? 'null'}`,
     `Available services: ${JSON.stringify(args.services)}`,

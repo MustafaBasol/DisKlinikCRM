@@ -9,7 +9,12 @@
  * third-party AI provider.
  *
  * Rules enforced here:
- * - Only the first name (not full name) reaches the AI prompt.
+ * - No form of the customer/patient's real name reaches the AI prompt — not the
+ *   full name, not even a first name. A fixed pseudonym (AI_CUSTOMER_NAME_PLACEHOLDER,
+ *   via getAiCustomerNamePlaceholder) is sent instead wherever "the customer's name"
+ *   would otherwise be included as prompt context. The app may still keep and use the
+ *   real name locally (DB records, patient matching, outbound messages sent directly
+ *   to the customer) — this only governs what crosses the boundary to the AI provider.
  * - Message history is capped to a maximum count and per-message character limit.
  * - Phone-like, email-like, UUID/identifier-like, and token/credential-like
  *   strings are redacted from text before it is included in an AI prompt —
@@ -85,7 +90,79 @@ const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._-]{8,}/gi;
 
 // key: value / key=value pairs where the key names a credential — the key name
 // is kept (it carries no PII) but the value is replaced.
-const SECRET_KEY_VALUE_PATTERN = /\b(api[_-]?key|apikey|secret|token|password|pwd|auth[_-]?token|cookie|bearer)\s*[:=]\s*"?'?[A-Za-z0-9._-]{4,}"?'?/gi;
+//
+// Only the key + separator is matched by regex; the value itself is parsed by
+// redactCredentialKeyValues below using bounded scanning rather than a fixed
+// character class. A character-class-based value pattern (e.g.
+// [A-Za-z0-9._-]+) stops at the FIRST character outside that class and
+// silently leaves everything after it as plain text — which is exactly how a
+// credential containing punctuation ("Sup3r!Secret", "abc123+/==",
+// "sk-test_123!more", "value-with-$pecial#chars") leaked its tail. Bounded
+// scanning instead treats "value" as "everything up to the next clear
+// terminator" (whitespace, end of line/string, or a matching closing quote),
+// which fully consumes punctuation-bearing credentials while still stopping
+// before ordinary prose that follows on the same line (prose is always
+// separated from the credential by whitespace).
+const CREDENTIAL_KEY_PATTERN = /\b(api[_-]?key|apikey|secret|token|password|pwd|auth[_-]?token|cookie|bearer)\s*[:=]\s*/gi;
+
+// A trailing character directly touching the terminator (whitespace/EOL) that
+// looks like sentence punctuation is treated as surrounding prose rather than
+// part of the credential value — e.g. "token=abc123." at the end of a
+// sentence redacts to "token: [TOKEN]." instead of swallowing the period into
+// the placeholder. Only applies to the single run of trailing characters
+// immediately before the terminator, never to punctuation in the middle of
+// the value (so "Sup3r!Secret" is unaffected — the "!" is not at the end).
+const SENTENCE_TERMINATOR_CHARS = new Set(['.', ',', ';', ':', '!', '?']);
+
+/**
+ * Replaces key:value / key=value credential-shaped substrings with
+ * `key: [TOKEN]`, fully consuming the value via bounded parsing (see
+ * CREDENTIAL_KEY_PATTERN above) instead of a fixed character class — no
+ * suffix of a punctuation-bearing credential is left unredacted.
+ */
+const redactCredentialKeyValues = (value: string): string => {
+  let result = '';
+  let cursor = 0;
+  CREDENTIAL_KEY_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = CREDENTIAL_KEY_PATTERN.exec(value)) !== null) {
+    const keyName = match[1];
+    const valueStart = match.index + match[0].length;
+    result += value.slice(cursor, match.index);
+
+    let valueEnd: number;
+    let trailingPunctuation = '';
+    const openingQuote = value[valueStart] === '"' || value[valueStart] === "'" ? value[valueStart] : null;
+
+    if (openingQuote) {
+      // Bounded by the matching closing quote — or end of line/string if the
+      // quote is never closed, so a stray opening quote can't run away with
+      // the rest of the document.
+      let i = valueStart + 1;
+      while (i < value.length && value[i] !== openingQuote && value[i] !== '\n') i++;
+      valueEnd = value[i] === openingQuote ? i + 1 : i;
+    } else {
+      // Unquoted: bounded by whitespace or end of string. Whitespace is a
+      // clear terminator that is never part of a credential value, so this
+      // never consumes prose that follows on the same line.
+      let i = valueStart;
+      while (i < value.length && !/\s/.test(value[i])) i++;
+      valueEnd = i;
+      // Peel sentence-ending punctuation off the very end of the run (never
+      // all the way down to nothing) and re-attach it after the placeholder.
+      while (valueEnd > valueStart + 1 && SENTENCE_TERMINATOR_CHARS.has(value[valueEnd - 1])) {
+        trailingPunctuation = value[valueEnd - 1] + trailingPunctuation;
+        valueEnd--;
+      }
+    }
+
+    result += `${keyName}: [TOKEN]${trailingPunctuation}`;
+    cursor = valueEnd;
+    CREDENTIAL_KEY_PATTERN.lastIndex = valueEnd;
+  }
+  result += value.slice(cursor);
+  return result;
+};
 
 // Catch-all for identifier/token-shaped strings that don't match the specific
 // patterns above — malformed UUIDs, database-style ids (Mongo ObjectId, cuid,
@@ -146,7 +223,7 @@ export const redactSensitiveText = (value: string): string => {
     let result = value;
     result = result.replace(JWT_PATTERN, '[TOKEN]');
     result = result.replace(BEARER_PATTERN, '[TOKEN]');
-    result = result.replace(SECRET_KEY_VALUE_PATTERN, (_match, key: string) => `${key}: [TOKEN]`);
+    result = redactCredentialKeyValues(result);
     result = result.replace(EMAIL_PATTERN, '[EMAIL]');
     result = result.replace(UUID_PATTERN, '[ID]');
     result = redactPhoneCandidates(result);
@@ -162,8 +239,11 @@ export const redactSensitiveText = (value: string): string => {
  * same sanitizer as defense-in-depth (a name field that accidentally contains
  * a phone/email/token must not leak it). Returns null for empty input.
  *
- * This is the ONLY form of a patient/customer name that may reach an AI
- * prompt — never the full name, never a raw name string.
+ * General-purpose name-minimization utility — NOT used by any active AI prompt
+ * builder (see getAiCustomerNamePlaceholder below, which is what those use: no
+ * form of the real name, not even the first name, is sent to the AI provider).
+ * Kept for any caller that has a genuine need for a first-name-only value that
+ * isn't an AI prompt (e.g. deterministic local business logic).
  */
 export const getAiSafeFirstName = (fullName?: string | null): string | null => {
   try {
@@ -186,6 +266,29 @@ export const buildSafeAiPatientContext = (patient: {
 }): { firstName: string | null } => ({
   firstName: patient.firstName?.trim() || null,
 });
+
+// Fixed pseudonym stood in for the customer's real name on every AI prompt
+// path. No active Gemini call site depends on the real (or even redacted
+// first) name for correctness: intent/action classification and slot
+// extraction are driven by the message text itself, and any name the model
+// extracts comes from parsing that message text (already routed through
+// redactSensitiveText) — never from this context field. It exists purely so
+// the model has a stable token to refer to "the person I'm talking to" if a
+// reply needs to address them, without the real name ever leaving the
+// application boundary. The app is free to keep the real name locally (DB
+// records, patient matching, outbound message templating sent directly to
+// the customer) — this constant only governs what is sent TO the AI provider.
+export const AI_CUSTOMER_NAME_PLACEHOLDER = '[CUSTOMER]';
+
+/**
+ * Returns the fixed AI_CUSTOMER_NAME_PLACEHOLDER when a customer/patient name
+ * is known, or null when no name is known yet — never the real name. This is
+ * the ONLY form a customer/patient name may take in an AI prompt.
+ */
+export const getAiCustomerNamePlaceholder = (fullName?: string | null): string | null => {
+  const trimmed = fullName?.trim();
+  return trimmed ? AI_CUSTOMER_NAME_PLACEHOLDER : null;
+};
 
 export type AiMessage = {
   direction: 'incoming' | 'outgoing';

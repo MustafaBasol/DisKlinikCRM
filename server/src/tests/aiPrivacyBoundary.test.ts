@@ -55,6 +55,12 @@
  *  41.  extractAssistantInputWithGoogleAi sanitizes a PII-bearing provider error body.
  *  42.  resolveWhatsAppConversationAgentDecision sanitizes a PII-bearing provider error body.
  *  43.  resolveStepAwareWhatsAppIntent sanitizes a PII-bearing provider error body.
+ *  44.  redactSensitiveText fully redacts punctuation-bearing credentials (password=Sup3r!Secret,
+ *       token=abc123+/==, api_key=sk-test_123!more, secret: value-with-$pecial#chars) — no suffix leak.
+ *  45.  redactSensitiveText fully redacts a credential at the end of a line/string.
+ *  46.  redactSensitiveText redacts a credential but leaves ordinary prose that follows it intact.
+ *  47.  redactSensitiveText redacts multiple distinct credentials within one string.
+ *  48.  getAiCustomerNamePlaceholder returns the fixed pseudonym for a known name and null otherwise.
  */
 
 import assert from 'node:assert/strict';
@@ -71,6 +77,7 @@ import {
   buildSafeAiPatientContext,
   sanitizeAiMessageHistory,
   getAiSafeFirstName,
+  getAiCustomerNamePlaceholder,
 } from '../services/privacy/redaction.js';
 import { buildWhatsAppAgentPrompt } from '../services/whatsappAgentPrompt.js';
 import { extractAssistantInputWithGoogleAi, normalizeDateWithGoogleAi } from '../services/googleAiStudio.js';
@@ -214,8 +221,8 @@ async function main() {
     assert.ok(!result[0].text.includes('test@ornek.com'), `raw email must be absent in "${result[0].text}"`);
   });
 
-  // 10. buildWhatsAppAgentPrompt — first name only
-  await test('buildWhatsAppAgentPrompt sends only the first name, not the full name', () => {
+  // 10. buildWhatsAppAgentPrompt — no real name, fixed pseudonym only
+  await test('buildWhatsAppAgentPrompt sends the fixed [CUSTOMER] pseudonym, never any form of the real name', () => {
     const prompt = buildWhatsAppAgentPrompt({
       latestMessage: 'merhaba',
       customerName: 'Ahmet Yılmaz',
@@ -227,8 +234,9 @@ async function main() {
       recentMessages: [],
       clinicFacts: baseClinicFacts,
     });
-    assert.ok(prompt.includes('Customer name: Ahmet'), `expected first name in prompt`);
-    assert.ok(!prompt.includes('Ahmet Yılmaz'), `full name must not appear in prompt, got: ${prompt.slice(prompt.indexOf('Customer name'), prompt.indexOf('Customer name') + 40)}`);
+    assert.ok(prompt.includes('Customer name: [CUSTOMER]'), `expected fixed pseudonym in prompt, got: ${prompt.slice(prompt.indexOf('Customer name'), prompt.indexOf('Customer name') + 40)}`);
+    assert.ok(!prompt.includes('Ahmet'), `no form of the real name (not even first name) may appear in prompt, got: ${prompt.slice(prompt.indexOf('Customer name'), prompt.indexOf('Customer name') + 40)}`);
+    assert.ok(!prompt.includes('Yılmaz'), `surname must not appear in prompt`);
   });
 
   // 11. buildWhatsAppAgentPrompt — no medical / insurance / payment data in context section
@@ -420,8 +428,8 @@ async function main() {
     assert.ok(body!.includes('[PHONE]'), 'expected redacted [PHONE] token in outbound request body');
   });
 
-  // 27. extractAssistantInputWithGoogleAi — full name never sent
-  await test('extractAssistantInputWithGoogleAi sends only the first name, never the full patient name', async () => {
+  // 27. extractAssistantInputWithGoogleAi — no real name ever sent, fixed pseudonym only
+  await test('extractAssistantInputWithGoogleAi sends the fixed [CUSTOMER] pseudonym, never any form of the real patient name', async () => {
     const mock = mockGeminiFetch('{"intent":"greeting"}');
     try {
       await extractAssistantInputWithGoogleAi({
@@ -437,8 +445,8 @@ async function main() {
       mock.restore();
     }
     const body = mock.getCapturedBody();
-    assert.ok(body!.includes('Ahmet'), 'expected first name to still be present');
-    assert.ok(!body!.includes('Ahmet Yılmaz'), 'full name must not reach the AI provider');
+    assert.ok(body!.includes('[CUSTOMER]'), 'expected the fixed pseudonym to be present');
+    assert.ok(!body!.includes('Ahmet'), 'no form of the real name (not even first name) may reach the AI provider');
     assert.ok(!body!.includes('Yılmaz'), 'surname must not reach the AI provider');
   });
 
@@ -600,7 +608,8 @@ async function main() {
     assert.ok(!body!.includes('0532 123 45 67'));
     assert.ok(!body!.includes('ahmet@ornek.com'));
     assert.ok(!body!.includes('Ahmet Yılmaz'));
-    assert.ok(body!.includes('Ahmet'));
+    assert.ok(!body!.includes('Ahmet'), 'no form of the real name (not even first name) may reach the AI provider');
+    assert.ok(body!.includes('[CUSTOMER]'), 'expected the fixed pseudonym in the outbound request body');
   });
 
   // 35. resolveStepAwareWhatsAppIntent — customer actively providing their phone number
@@ -773,6 +782,71 @@ async function main() {
       assert.ok(!serialized.includes('0532 123 45 67'), 'console.error must never include a raw phone number from a provider error body');
       assert.ok(!serialized.includes('ahmet@ornek.com'), 'console.error must never include a raw email from a provider error body');
     }
+  });
+
+  // 44. redactSensitiveText — punctuation-bearing credentials fully redacted, no suffix leak
+  await test('redactSensitiveText fully redacts credentials containing punctuation (no suffix leak)', () => {
+    const cases: Array<{ input: string; mustNotContain: string[] }> = [
+      { input: 'password=Sup3r!Secret', mustNotContain: ['Sup3r', 'Secret', '!Secret'] },
+      { input: 'token=abc123+/==', mustNotContain: ['abc123', '+/=='] },
+      { input: 'api_key=sk-test_123!more', mustNotContain: ['sk-test', '123', '!more'] },
+      { input: 'secret: value-with-$pecial#chars', mustNotContain: ['value-with', '$pecial', '#chars'] },
+    ];
+    for (const { input, mustNotContain } of cases) {
+      const result = redactSensitiveText(input);
+      assert.ok(result.includes('[TOKEN]'), `expected [TOKEN] in "${result}" (from "${input}")`);
+      for (const fragment of mustNotContain) {
+        assert.ok(!result.includes(fragment), `credential fragment "${fragment}" leaked in "${result}" (from "${input}")`);
+      }
+    }
+  });
+
+  // 45. redactSensitiveText — credential at end of line/string
+  await test('redactSensitiveText fully redacts a credential at the end of a line/string', () => {
+    const singleLine = redactSensitiveText('password=Sup3r!Secret');
+    assert.equal(singleLine, 'password: [TOKEN]');
+
+    const multiLine = redactSensitiveText('Lütfen bu bilgiyi kullanın:\npassword=Sup3r!Secret');
+    assert.ok(multiLine.endsWith('password: [TOKEN]'), `expected credential fully redacted at end of string in "${multiLine}"`);
+    assert.ok(!multiLine.includes('Secret'), `raw credential value must not survive in "${multiLine}"`);
+  });
+
+  // 46. redactSensitiveText — ordinary prose following a credential must survive
+  await test('redactSensitiveText redacts a credential but leaves ordinary prose that follows it intact', () => {
+    const result = redactSensitiveText(
+      'token=abc123 bu mesajın geri kalanı normal bir cümledir ve olduğu gibi kalmalıdır.',
+    );
+    assert.ok(!result.includes('abc123'), `raw credential must not survive in "${result}"`);
+    assert.ok(result.includes('[TOKEN]'), `expected [TOKEN] in "${result}"`);
+    assert.ok(
+      result.includes('bu mesajın geri kalanı normal bir cümledir ve olduğu gibi kalmalıdır.'),
+      `ordinary prose following the credential must survive unmodified in "${result}"`,
+    );
+  });
+
+  // 47. redactSensitiveText — multiple credentials in one string
+  await test('redactSensitiveText redacts multiple distinct credentials within one string', () => {
+    const result = redactSensitiveText(
+      'password=Sup3r!Secret ve ayrıca token=abc123+/== ve api_key=sk-test_123!more kullanıldı',
+    );
+    assert.ok(!result.includes('Sup3r'), `first credential must not survive in "${result}"`);
+    assert.ok(!result.includes('abc123'), `second credential must not survive in "${result}"`);
+    assert.ok(!result.includes('sk-test'), `third credential must not survive in "${result}"`);
+    const tokenCount = (result.match(/\[TOKEN\]/g) ?? []).length;
+    assert.equal(tokenCount, 3, `expected exactly 3 [TOKEN] placeholders in "${result}"`);
+    assert.ok(result.includes('ve ayrıca'), `prose between credentials must survive in "${result}"`);
+    assert.ok(result.includes('ve api_key'), `prose between credentials must survive in "${result}"`);
+    assert.ok(result.includes('kullanıldı'), `trailing prose must survive in "${result}"`);
+  });
+
+  // 48. getAiCustomerNamePlaceholder — fixed pseudonym, never the real name
+  await test('getAiCustomerNamePlaceholder returns the fixed pseudonym for a known name and null otherwise', () => {
+    assert.equal(getAiCustomerNamePlaceholder('Ahmet Yılmaz'), '[CUSTOMER]');
+    assert.equal(getAiCustomerNamePlaceholder('Ahmet'), '[CUSTOMER]');
+    assert.equal(getAiCustomerNamePlaceholder(null), null);
+    assert.equal(getAiCustomerNamePlaceholder(undefined), null);
+    assert.equal(getAiCustomerNamePlaceholder(''), null);
+    assert.equal(getAiCustomerNamePlaceholder('   '), null);
   });
 
   // ─── Summary ────────────────────────────────────────────────────────────────
