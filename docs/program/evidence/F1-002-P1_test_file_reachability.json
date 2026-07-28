@@ -1,0 +1,2027 @@
+{
+  "taskId": "F1-002-P1",
+  "parentTaskId": "F1-002",
+  "generatedAt": "2026-07-28",
+  "executionBaselineCommit": "08f2eaf82a205cf3f997c57e6a295fedd66b142d",
+  "totalFiles": 116,
+  "files": [
+    {
+      "relativePath": "server/src/tests/aiPrivacyBoundary.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:ai-prompt-privacy"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/appointmentAvailabilityService.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:availability-service"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/appointmentRequestOverlapSafety.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:overlap-safety"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/appointmentRequestRecordScope.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:appointment-request-record-scope"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/appointmentUpdateValidation.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:appointment-update-validation"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:billing-financial-select"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/billingPatientAccess.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:billing-patient-access"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/channelConsentFlowResume.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:consent-resume"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/channelConsentGate.test.ts",
+      "directlyMatchedByScripts": [],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": false,
+      "unreachable": true,
+      "ambiguity": "NONE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/clinicBulkExport.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:clinic-bulk-export"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/clinicLegalProfile.test.ts",
+      "directlyMatchedByScripts": [],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": false,
+      "unreachable": true,
+      "ambiguity": "NONE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/communicationConsent.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:communication-consent"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/communicationConsentAuditReport.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:communication-consent-audit-report"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/communicationPreferenceBackfill.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:communication-consent-backfill"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/communicationPreferenceReconciliationReport.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:communication-consent-reconciliation-report"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/communicationPreferencesRoute.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:communication-consent-matrix-route"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/contactRequests.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:contact-requests"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/dashboard.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:dashboard"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/dataRetentionCleanupJob.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:data-retention"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/dbVerification/appointmentRequestConversionAtomicity.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:appointment-request-conversion-atomicity"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:file-backup-db-integration"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": true,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-clinic-scope-access"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-verification"
+      ],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/dbVerification/kvkkHigh006DbInputHandling.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-input-handling"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-verification"
+      ],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/dbVerification/kvkkHigh006DbInsuranceListBehavior.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-insurance-list-behavior"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-verification"
+      ],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/dbVerification/kvkkHigh006DbPlanLimitsQuota.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-plan-limits-quota"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-verification"
+      ],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-record-owned-mutation-scope"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-verification"
+      ],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/dbVerification/kvkkHigh006DbTargetClinicCreation.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-target-clinic-creation"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test:kvkk-high006-db-verification"
+      ],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/dentalChartClinicScope.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:dental-chart-clinic-scope"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/emailVerification.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:email-verification"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/excelImport.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:imports"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/fileBackupService.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:file-backup"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/filePreview.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:file-preview"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/financeDashboard.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:finance"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/httpRequestLogPrivacy.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:http-log-privacy"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/imaging.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:imaging"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/imagingBridgeOnboarding.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:imaging-bridge-onboarding"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/imagingBridgePairing.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:imaging-bridge-pairing"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/imagingBridgeUpdate.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:imaging-bridge-update"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/instagramAssistantParity.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:instagram"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/instagramConversion.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:instagram"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/instagramProvider.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:instagram"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:kvkk-lifecycle"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": true,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/kvkkHigh006Batch2ClinicScope.test.ts",
+      "directlyMatchedByScripts": [],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": false,
+      "unreachable": true,
+      "ambiguity": "NONE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH"
+    },
+    {
+      "relativePath": "server/src/tests/kvkkHigh006Batch3ClinicScope.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:kvkk-high006-batch3"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/kvkkHigh007High008SchemaIntegrity.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:kvkk-high007-high008-schema-integrity"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/labOrders.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:lab-orders"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/legacyConsentCorrection.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:legacy-consent-correction"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/legacyReconciliationResolver.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:communication-consent-reconciliation"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/messageSafetyHardening.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:msg-safety"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/messagesConsentGate.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:messages-consent-gate"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/messagesRecordScope.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:messages-record-scope"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/messageTemplatePurpose.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:purpose"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/messageTemplateWabaBinding.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:template-waba-binding"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/metaTemplateService.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:meta-template"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/metaTemplateSyncJob.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:meta-template-sync"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/metaWhatsAppPostBookingHandler.test.ts",
+      "directlyMatchedByScripts": [],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": false,
+      "unreachable": true,
+      "ambiguity": "NONE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH"
+    },
+    {
+      "relativePath": "server/src/tests/metaWhatsAppWebhook.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:meta-wa"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/multiBranchAccess.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:roles"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/noShow.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:no-shows"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/noShowFollowUpParity.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:no-show-follow-up-parity"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/operationalMonitoring.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:ops"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/organizationDashboard.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:orgdash"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/organizationMessagingConnectionScope.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:messaging-connection-scope"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/overdueInstallments.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:overdue-installments"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/overdueReceivables.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:overdue-receivables"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/passwordReset.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:password-reset"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/patientName.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:patient-name"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/patientPrivacy.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:patient-privacy"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/patientSharedPhone.test.ts",
+      "directlyMatchedByScripts": [],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": false,
+      "unreachable": true,
+      "ambiguity": "NONE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/patientsImportClinicScope.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:patients-import-clinic-scope"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/paymentBillingEdit.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:payment-billing-edit"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/paymentsListFieldScope.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:payments-list-field-scope"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/paymentValidation.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:payment-validation"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/planLimitsTargetClinicFix.test.ts",
+      "directlyMatchedByScripts": [],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": false,
+      "unreachable": true,
+      "ambiguity": "NONE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH"
+    },
+    {
+      "relativePath": "server/src/tests/platformAdmin.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:auth"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/platformAdminPasswordRecovery.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:platform-admin-password-recovery"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/platformBackup.test.ts",
+      "directlyMatchedByScripts": [],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": false,
+      "unreachable": true,
+      "ambiguity": "NONE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/postTreatmentMessaging.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:post-treatment"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/publicBookingAvailability.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:public-booking"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/publicBookingNoticeEvidence.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:notice-evidence"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/publicBookingSlotConsistency.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:public-booking-slots"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/publicBookingSlotRequired.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:public-booking-slot-required"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/recallConsentGate.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:recall-consent-gate"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/reportsClinicScope.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:reports-clinic-scope"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/reportsRevenueByPeriod.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:reports-revenue-by-period"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/retentionManualRunAudit.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:retention-manual-run-audit"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/scheduleAccess.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:schedule"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/securityIncident.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:security-incidents"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": true,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/servicePricing.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:pricing"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/sessionCookieCsrf.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:auth"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/smsModule.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:sms"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/staffOnboarding.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:staff-onboarding"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/totp.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:totp"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/treatmentCaseClinicScope.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:treatment-case-scope"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/treatmentPackagePermissions.test.ts",
+      "directlyMatchedByScripts": [],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": false,
+      "unreachable": true,
+      "ambiguity": "NONE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/userImportOnboarding.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:user-import-onboarding"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappAgentEvaluation.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:agent"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappAwaitingServiceStep.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:meta-wa"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappBookingFlowLogRedaction.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:booking-flow-log-redaction"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappConversationPersistence.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:wa-persistence"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappIdentityAndPostBooking.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:meta-wa"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappInbox.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:inbox"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappOutboundMessaging.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:outbound"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappProvider.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:whatsapp"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappStepAwareNlu.test.ts",
+      "directlyMatchedByScripts": [
+        "server:test:meta-wa"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappConversationFixtures.ts",
+      "directlyMatchedByScripts": [
+        "server:test:fixtures"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "server/src/tests/whatsappSafetyFixtures.ts",
+      "directlyMatchedByScripts": [
+        "server:test:safety"
+      ],
+      "indirectlyMatchedByScripts": [
+        "server:test"
+      ],
+      "reachableThroughFullSuite": true,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "MULTI_SCRIPT_REACHABLE",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "src/components/CommunicationPreferencesPanel.vitest.test.tsx",
+      "directlyMatchedByScripts": [
+        "root (health-crm-frontend):test:vitest"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "vitest",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "src/components/imaging/__tests__/dicomHelpers.test.ts",
+      "directlyMatchedByScripts": [
+        "root (health-crm-frontend):test:dicom-helpers"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "src/components/imaging/__tests__/onboardingHelpers.test.ts",
+      "directlyMatchedByScripts": [
+        "root (health-crm-frontend):test:onboarding-helpers"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "src/components/imaging/__tests__/pairingPoller.test.ts",
+      "directlyMatchedByScripts": [
+        "root (health-crm-frontend):test:pairing-poller"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "src/components/PatientDetailTabs.vitest.test.tsx",
+      "directlyMatchedByScripts": [
+        "root (health-crm-frontend):test:vitest"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "vitest",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    },
+    {
+      "relativePath": "src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts",
+      "directlyMatchedByScripts": [
+        "root (health-crm-frontend):test:clinic-bulk-export-selection"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "src/components/__tests__/communicationConsentMatrixHelpers.test.ts",
+      "directlyMatchedByScripts": [
+        "root (health-crm-frontend):test:communication-consent-matrix"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "src/pages/__tests__/bookingWidgetHelpers.test.ts",
+      "directlyMatchedByScripts": [
+        "root (health-crm-frontend):test:booking-widget-helpers"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": false,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "HIGH (carried forward from F0-005 evidence)"
+    },
+    {
+      "relativePath": "src/pages/__tests__/patientDetailTabsHelpers.test.ts",
+      "directlyMatchedByScripts": [
+        "root (health-crm-frontend):test:patient-detail-tabs-helpers"
+      ],
+      "indirectlyMatchedByScripts": [],
+      "reachableThroughFullSuite": false,
+      "reachableThroughTargetedScript": true,
+      "unreachable": false,
+      "ambiguity": "SINGLE_PATH",
+      "runner": "tsx (hand-rolled assert-based runner)",
+      "isNewSinceF0005": true,
+      "databaseRequired": false,
+      "externalServiceRequired": false,
+      "confidence": "MEDIUM (derived by this task via static source inspection, not executed)"
+    }
+  ]
+}
