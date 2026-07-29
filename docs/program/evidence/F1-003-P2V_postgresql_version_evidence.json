@@ -23,7 +23,61 @@
     "branch": "feature/f1-003-p2-disposable-runtime",
     "headAtInspection": "ed568c9",
     "touched": false,
-    "note": "Identical to origin/main at inspection time, no divergent commits yet. Listed via git worktree list only; never entered, read, or modified."
+    "uncommittedImplementationObserved": true,
+    "uncommittedImplementationPaths": ["scripts/test-runtime/"],
+    "note": "Identical to origin/main at inspection time, no divergent commits yet. Pre-existing untracked implementation files observed under scripts/test-runtime/. Listed via git worktree list (and worktree-level status observation) only; never entered, read beyond that, diffed, or modified."
+  },
+  "p2StatusCorrection": {
+    "correctingTaskId": "F1-003-P2V-R1",
+    "correctedAt": "2026-07-29",
+    "continuedOnPr": 259,
+    "newPrOpened": false,
+    "merged": false,
+    "rebased": false,
+    "forcePushed": false,
+    "priorStatusText": "not started",
+    "correctedStatus": "AGENT_WORK_IN_PROGRESS",
+    "basis": "git worktree list (recorded by this same task's own p2WorktreeStatus above) shows an active, isolated F1-003-P2 worktree containing pre-existing, uncommitted/unverified implementation work under scripts/test-runtime/. This task did not re-enter or re-inspect that worktree; it used only the already-recorded observation.",
+    "qualifiers": [
+      "isolated worktree exists",
+      "uncommitted/unverified implementation work observed",
+      "P2 delivery report not yet received",
+      "P2 runtime verification not yet reviewed",
+      "P2 commit evidence not available to this task",
+      "P2 PR not opened",
+      "not merged",
+      "not deployed",
+      "not production verified"
+    ],
+    "statusSeparation": {
+      "agentWorkStarted": true,
+      "implementationDelivered": false,
+      "implementationValidated": false,
+      "testsPassed": "no evidence yet",
+      "commitCreated": "no evidence from this task",
+      "prOpened": false,
+      "merged": false,
+      "deployed": false,
+      "productionVerified": false
+    },
+    "p3BlockedUntil": "F1-003-P2 is delivered, reviewed, and merged",
+    "postgresqlConclusionChanged": false,
+    "filesCorrected": [
+      "docs/program/evidence/F1-003-P2V_POSTGRESQL_MAJOR_VERSION_EVIDENCE.md",
+      "docs/program/evidence/F1-003-P2V_postgresql_version_evidence.json",
+      "docs/program/NORAMEDI_MASTER_TRACKER.md",
+      "docs/program/CURRENT_PHASE.md",
+      "docs/program/phases/F1_CI_AND_TEST_ARCHITECTURE.md",
+      "PR #259 description"
+    ],
+    "filesNotTouched": [
+      "F1-003-P2 worktree/branch",
+      "scripts/test-runtime/**",
+      "server/package.json",
+      "any test file",
+      "any application/schema/migration/Docker/Compose/CI-workflow/deployment file",
+      "docs/program/RISK_REGISTER.md"
+    ]
   },
   "codegraphStatus": {
     "available": false,
