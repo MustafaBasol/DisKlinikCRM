@@ -1,0 +1,359 @@
+{
+  "schemaVersion": "1.0.0",
+  "taskId": "F1-003-P2V",
+  "parentTaskId": "F1-003",
+  "phase": "F1 — CI and Test Architecture",
+  "taskType": "PARALLEL_INFRASTRUCTURE_EVIDENCE_DOCUMENTATION_ONLY",
+  "baselineCommit": "ed568c9db3b0d62a049bc291d2137f5c913a7ac7",
+  "baselineCommitSource": "origin/main HEAD at task start; identical to the expected authoritative ancestor (PR #256 merge commit) named in the task brief",
+  "ancestorCheck": {
+    "command": "git merge-base --is-ancestor ed568c9db3b0d62a049bc291d2137f5c913a7ac7 origin/main",
+    "exitCode": 0,
+    "note": "trivially true — origin/main and the named commit are identical; zero commits after PR #256 exist on origin/main"
+  },
+  "pr256Status": {
+    "command": "gh pr view 256 --json state,mergedAt,mergeCommit",
+    "state": "MERGED",
+    "mergedAt": "2026-07-28T22:50:43Z",
+    "mergeCommit": "ed568c9db3b0d62a049bc291d2137f5c913a7ac7",
+    "note": "Newer than the F1-003-P2A lineage's own self-referential 'still open as of F1-003-R1B' note — recorded here for context, not corrected in that lineage's own files (out of this task's scope)."
+  },
+  "p2WorktreeStatus": {
+    "path": "E:\\Ek Gelir\\Siteler\\DisKlinikCRM-worktrees\\f1-003-p2-disposable-runtime",
+    "branch": "feature/f1-003-p2-disposable-runtime",
+    "headAtInspection": "ed568c9",
+    "touched": false,
+    "uncommittedImplementationObserved": true,
+    "uncommittedImplementationPaths": ["scripts/test-runtime/"],
+    "note": "Identical to origin/main at inspection time, no divergent commits yet. Pre-existing untracked implementation files observed under scripts/test-runtime/. Listed via git worktree list (and worktree-level status observation) only; never entered, read beyond that, diffed, or modified."
+  },
+  "p2StatusCorrection": {
+    "correctingTaskId": "F1-003-P2V-R1",
+    "correctedAt": "2026-07-29",
+    "continuedOnPr": 259,
+    "newPrOpened": false,
+    "merged": false,
+    "rebased": false,
+    "forcePushed": false,
+    "priorStatusText": "not started",
+    "correctedStatus": "AGENT_WORK_IN_PROGRESS",
+    "basis": "git worktree list (recorded by this same task's own p2WorktreeStatus above) shows an active, isolated F1-003-P2 worktree containing pre-existing, uncommitted/unverified implementation work under scripts/test-runtime/. This task did not re-enter or re-inspect that worktree; it used only the already-recorded observation.",
+    "qualifiers": [
+      "isolated worktree exists",
+      "uncommitted/unverified implementation work observed",
+      "P2 delivery report not yet received",
+      "P2 runtime verification not yet reviewed",
+      "P2 commit evidence not available to this task",
+      "P2 PR not opened",
+      "not merged",
+      "not deployed",
+      "not production verified"
+    ],
+    "statusSeparation": {
+      "agentWorkStarted": true,
+      "implementationDelivered": false,
+      "implementationValidated": false,
+      "testsPassed": "no evidence yet",
+      "commitCreated": "no evidence from this task",
+      "prOpened": false,
+      "merged": false,
+      "deployed": false,
+      "productionVerified": false
+    },
+    "p3BlockedUntil": "F1-003-P2 is delivered, reviewed, and merged",
+    "postgresqlConclusionChanged": false,
+    "filesCorrected": [
+      "docs/program/evidence/F1-003-P2V_POSTGRESQL_MAJOR_VERSION_EVIDENCE.md",
+      "docs/program/evidence/F1-003-P2V_postgresql_version_evidence.json",
+      "docs/program/NORAMEDI_MASTER_TRACKER.md",
+      "docs/program/CURRENT_PHASE.md",
+      "docs/program/phases/F1_CI_AND_TEST_ARCHITECTURE.md",
+      "PR #259 description"
+    ],
+    "filesNotTouched": [
+      "F1-003-P2 worktree/branch",
+      "scripts/test-runtime/**",
+      "server/package.json",
+      "any test file",
+      "any application/schema/migration/Docker/Compose/CI-workflow/deployment file",
+      "docs/program/RISK_REGISTER.md"
+    ]
+  },
+  "codegraphStatus": {
+    "available": false,
+    "commandsTried": [
+      "ToolSearch(query=\"CodeGraph code graph analysis\", max_results=5)"
+    ],
+    "result": "Zero matching deferred tools found. Sixth independent confirmation in this program (after F1-001, F1-002-P1, F1-002-P2, the original F1-003-P2A design, and F1-003-P2A's own F1-003-R1 reconciliation).",
+    "fallbackUsed": "Narrowly-bounded Grep across docs/program/**, server/.env.example, server/prisma/schema.prisma; existence checks for docker-compose*/Dockerfile*/deployment//deploy//infra//infrastructure//ops//scripts/deploy/; directory listing of .github/workflows/. No repository-wide unscoped scan performed."
+  },
+  "inspectedSources": [
+    "AGENTS.md",
+    "docs/program/NORAMEDI_MASTER_TRACKER.md",
+    "docs/program/CURRENT_PHASE.md",
+    "docs/program/phases/F1_CI_AND_TEST_ARCHITECTURE.md",
+    "docs/program/RISK_REGISTER.md",
+    "docs/program/evidence/F1-003-P2A_DISPOSABLE_RUNTIME_PROVISIONING_DESIGN.md",
+    "docs/program/evidence/F1-003-P2A_disposable_runtime_contract.json",
+    "docs/program/PRODUCTION_TOPOLOGY.md",
+    "docs/program/evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md",
+    "docs/program/evidence/F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md",
+    "docs/program/evidence/KVKK-HIGH-008-PMVR_POST_MERGE_READINESS_EVIDENCE.md",
+    "docs/program/evidence/R046_PRODUCTION_VERIFICATION.md",
+    "docs/program/evidence/F0-011-P2_KVKK_HIGH007_HIGH008_ROLLBACK_TENANT_VERIFICATION.md",
+    "docs/program/evidence/DATA-INTEGRITY-001-R2_INDEPENDENT_VERIFICATION.md",
+    "docs/program/evidence/KVKK-HIGH-006-DISPOSABLE_POSTGRES_VERIFICATION.md",
+    "docs/program/evidence/F1-002-P2_test_runtime_requirements.json",
+    "docs/program/evidence/F1-002-P2_disposable_environment_capabilities.json",
+    "docs/program/evidence/README.md",
+    "server/prisma/schema.prisma",
+    "server/.env.example",
+    ".github/workflows/windows-bridge-pr.yml",
+    ".github/workflows/windows-bridge-release.yml"
+  ],
+  "versionReferences": [
+    {
+      "path": "docs/program/evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md",
+      "line": 54,
+      "section": "B.3 Runtime versions",
+      "exactReference": "PostgreSQL 16.14",
+      "environment": "production",
+      "evidenceDate": "2026-07-19T13:43:12+03:00",
+      "stillActive": true,
+      "authorityLevel": "PRODUCTION_AUTHORITATIVE",
+      "reason": "VERIFIED_PRODUCTION_OBSERVED — read-only commands executed directly on the production VPS by the user, per docs/program/evidence/README.md's classification legend"
+    },
+    {
+      "path": "docs/program/evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md",
+      "line": 108,
+      "section": "B.7 Database and migrations",
+      "exactReference": "PostgreSQL version 16.14 (same as §B.3)",
+      "environment": "production",
+      "evidenceDate": "2026-07-19T13:43:12+03:00",
+      "stillActive": true,
+      "authorityLevel": "PRODUCTION_AUTHORITATIVE",
+      "reason": "Same evidence session as the §B.3 row, restated within the same document, not an independent second observation"
+    },
+    {
+      "path": "docs/program/PRODUCTION_TOPOLOGY.md",
+      "line": 51,
+      "section": "1. Topology diagram / 6. Storage and backup summary",
+      "exactReference": "PostgreSQL 16.14 — database noramedi_crm (16 MB)",
+      "environment": "production",
+      "evidenceDate": "2026-07-19 (cites F0-002 Stage B)",
+      "stillActive": true,
+      "authorityLevel": "PRODUCTION_AUTHORITATIVE",
+      "reason": "Program's own synthesized production reference document; derivative citation of F0-002 Stage B, not an independent measurement"
+    },
+    {
+      "path": "docs/program/evidence/F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md",
+      "line": 29,
+      "section": "1. Reconciliation of task-supplied production evidence with F0-002 Stage B",
+      "exactReference": "PostgreSQL 16.14 (within 'same runtime versions' consistency list)",
+      "environment": "production",
+      "evidenceDate": "2026-07-19 (same calendar date, reconciled as corroborating re-confirmation)",
+      "stillActive": true,
+      "authorityLevel": "PRODUCTION_AUTHORITATIVE",
+      "reason": "Independent second production evidence snapshot, cross-checked field-by-field against F0-002 Stage B, 'no field contradicts Stage B'"
+    },
+    {
+      "path": "docs/program/evidence/KVKK-HIGH-008-PMVR_POST_MERGE_READINESS_EVIDENCE.md",
+      "line": 43,
+      "section": "5. Disposable PostgreSQL environments",
+      "exactReference": "PostgreSQL 16.14 (disposable, image postgres:16.14, explicitly matched to PRODUCTION_TOPOLOGY.md)",
+      "environment": "test_only",
+      "evidenceDate": "2026-07-20",
+      "stillActive": false,
+      "authorityLevel": "TEST_ONLY",
+      "reason": "Disposable rehearsal deliberately version-matched to production; corroborates by citation, not an independent production observation"
+    },
+    {
+      "path": "docs/program/evidence/R046_PRODUCTION_VERIFICATION.md",
+      "line": 46,
+      "section": "3. What this task adds",
+      "exactReference": "postgres:16-alpine, resolved version PostgreSQL 16.14, 'matches production's documented version per PRODUCTION_TOPOLOGY.md'",
+      "environment": "test_only",
+      "evidenceDate": "2026-07-28",
+      "stillActive": false,
+      "authorityLevel": "TEST_ONLY",
+      "reason": "Disposable rehearsal; incidentally shows postgres:16-alpine resolved to exactly 16.14 at pull time on this date, not a guaranteed future pin"
+    },
+    {
+      "path": "docs/program/evidence/F0-011-P2_KVKK_HIGH007_HIGH008_ROLLBACK_TENANT_VERIFICATION.md",
+      "line": 33,
+      "section": "disposable environment setup",
+      "exactReference": "Image: postgres:16-alpine",
+      "environment": "test_only",
+      "evidenceDate": "2026-07-20",
+      "stillActive": false,
+      "authorityLevel": "TEST_ONLY",
+      "reason": "Disposable rehearsal"
+    },
+    {
+      "path": "docs/program/evidence/DATA-INTEGRITY-001-R2_INDEPENDENT_VERIFICATION.md",
+      "line": 250,
+      "section": "disposable environment setup",
+      "exactReference": "postgres:16-alpine (two ephemeral containers)",
+      "environment": "test_only",
+      "evidenceDate": "2026-07-23",
+      "stillActive": false,
+      "authorityLevel": "TEST_ONLY",
+      "reason": "Disposable rehearsal"
+    },
+    {
+      "path": "docs/program/evidence/KVKK-HIGH-006-DISPOSABLE_POSTGRES_VERIFICATION.md",
+      "line": 53,
+      "section": "environment table",
+      "exactReference": "Image | postgres:16-alpine",
+      "environment": "test_only",
+      "evidenceDate": "2026-07-21",
+      "stillActive": false,
+      "authorityLevel": "TEST_ONLY",
+      "reason": "Disposable rehearsal"
+    },
+    {
+      "path": "docs/program/evidence/F1-002-P2_test_runtime_requirements.json",
+      "line": 114,
+      "section": "existingProvisioningPattern",
+      "exactReference": "ad hoc docker run postgres:16-alpine + npx prisma migrate deploy, repeated per task, never committed to the repository as a script or Compose file",
+      "environment": "test_only",
+      "evidenceDate": "2026-07-27/28",
+      "stillActive": true,
+      "authorityLevel": "TEST_ONLY",
+      "reason": "Descriptive pattern summary of the ad hoc disposable-Postgres precedent this program has used repeatedly, not a single instance"
+    },
+    {
+      "path": "docs/program/evidence/F1-003-P2A_DISPOSABLE_RUNTIME_PROVISIONING_DESIGN.md",
+      "line": 169,
+      "section": "13. PostgreSQL version evidence (§G)",
+      "exactReference": "postgres:16-alpine (provisional, 'no authoritative repository/deployment evidence exists' claim)",
+      "environment": "test_only",
+      "evidenceDate": "2026-07-28 (F1-003-R1 reconciliation)",
+      "stillActive": true,
+      "authorityLevel": "TEST_ONLY",
+      "reason": "Current F1-003-P2 disposable-runtime design decision; the document's own 'no authoritative evidence' finding is superseded by this task's own search (see explicitNonClaims / productionVersionConclusion.staleClaimCorrected below) — this task does not edit that file"
+    },
+    {
+      "path": "server/prisma/schema.prisma",
+      "line": 6,
+      "section": "datasource db block",
+      "exactReference": "provider = \"postgresql\"",
+      "environment": "third_party_tooling",
+      "evidenceDate": "current",
+      "stillActive": true,
+      "authorityLevel": "THIRD_PARTY_TOOLING",
+      "reason": "Engine-agnostic Prisma provider identifier, no version pin — explicitly not usable to infer a version per task decision rules"
+    },
+    {
+      "path": "server/.env.example",
+      "line": 1,
+      "section": "DATABASE_URL example",
+      "exactReference": "postgresql://crm_user:change-me@localhost:5432/noramedi_crm?schema=public",
+      "environment": "example_only",
+      "evidenceDate": "current",
+      "stillActive": true,
+      "authorityLevel": "EXAMPLE_ONLY",
+      "reason": "No version string present"
+    }
+  ],
+  "classifications": {
+    "PRODUCTION_AUTHORITATIVE": 4,
+    "TEST_ONLY": 8,
+    "THIRD_PARTY_TOOLING": 1,
+    "EXAMPLE_ONLY": 1,
+    "PRODUCTION_HISTORICAL": 0,
+    "STAGING_AUTHORITATIVE": 0,
+    "LOCAL_DEVELOPMENT": 0,
+    "UNKNOWN": 0
+  },
+  "productionTopologyConclusion": {
+    "containerized": false,
+    "externallyManaged": false,
+    "note": "PostgreSQL runs as an OS-level service on the same bare VPS (disklinik-prod-01) as the application; not provisioned by any repository script (assumed pre-installed); no Docker/Compose file exists anywhere in the repository. Single-environment topology — no evidence of a separate staging PostgreSQL instance or multiple environments with different versions. docs/35-docker-deploy-runbook.md describes a topology confirmed stale/aspirational by F0-006, unchanged by this task.",
+    "source": "docs/program/PRODUCTION_TOPOLOGY.md; docs/program/evidence/F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md §3/§6"
+  },
+  "productionVersionConclusion": {
+    "case": "CASE_A_AUTHORITATIVE_PRODUCTION_VERSION_FOUND",
+    "productionMajorVersion": 16,
+    "productionExactVersion": "16.14",
+    "evidenceSource": "docs/program/evidence/F0-002_PRODUCTION_BASELINE_EVIDENCE.md §B.3 (line 54) / §B.7 (line 108), classification VERIFIED_PRODUCTION_OBSERVED",
+    "evidenceDate": "2026-07-19T13:43:12+03:00",
+    "independentCorroboration": [
+      "docs/program/evidence/F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md (independent second production evidence snapshot, field-by-field consistent with F0-002 Stage B)",
+      "docs/program/PRODUCTION_TOPOLOGY.md (program's own synthesized production reference, restates the same figure)",
+      "docs/program/evidence/KVKK-HIGH-008-PMVR_POST_MERGE_READINESS_EVIDENCE.md (2026-07-20, explicitly cites and matches this figure)",
+      "docs/program/evidence/R046_PRODUCTION_VERIFICATION.md (2026-07-28, explicitly cites and matches this figure)"
+    ],
+    "corroboratingDocumentCount": 5,
+    "corroboratingTaskLineageCount": 3,
+    "contradictingProductionObservationFound": false,
+    "staleClaimCorrected": {
+      "claimingDocument": "docs/program/evidence/F1-003-P2A_DISPOSABLE_RUNTIME_PROVISIONING_DESIGN.md §13/§G and F1-003-P2A_disposable_runtime_contract.json postgresVersionEvidence.authoritativeProductionMajorVersionFound",
+      "originalClaim": "No authoritative repository/deployment inventory recording production PostgreSQL's major version was found",
+      "reasonForGap": "That search was scoped to docs/program/ grep + server/.env.example + schema.prisma datasource block + deployment evidence cited by RISK_REGISTER.md's R-046/R-070 rows; it did not directly open F0-002_PRODUCTION_BASELINE_EVIDENCE.md, F0-006_PRODUCTION_TOPOLOGY_EVIDENCE.md, or PRODUCTION_TOPOLOGY.md themselves",
+      "correctedBy": "F1-003-P2V (this task)",
+      "correctionAppliedToOriginalFile": false,
+      "note": "This task does not edit F1-003-P2A's own files (out of scope, separate task lineage) — the correction is recorded here and may be applied to that lineage by a future task or by F1-003-P2 itself"
+    }
+  },
+  "exactVersionKnown": true,
+  "exactVersionCaveat": "16.14 is the most recent production PostgreSQL-version read on record (2026-07-19T13:43:12+03:00). No later production read exists. Routine OS-level patch updates since that date would not be detected by this evidence. This is a point-in-time observation, not an ongoing-correctness certification.",
+  "provisionalTestImage": {
+    "image": "postgres:16-alpine",
+    "majorVersion": 16,
+    "retainedByThisTask": true,
+    "changeRequired": false,
+    "optionalRecommendation": "postgres:16.14-alpine or postgres:16.14 would achieve exact minor/patch parity if ever desired by F1-003-P2's own implementation-time decision; not required by this task or by any existing F1-003-P2 acceptance criterion"
+  },
+  "parityStatus": {
+    "majorVersionParity": true,
+    "exactVersionParity": false,
+    "exactVersionParityReason": "postgres:16-alpine is a floating major-version tag, resolves to whatever the latest 16.x patch is at pull time; not pinned to 16.14",
+    "overallParityClassification": "MAJOR_ONLY"
+  },
+  "conflicts": [],
+  "unresolvedItems": [
+    "Exact production PostgreSQL patch/minor version as of today (2026-07-29) is not independently re-verified — 16.14 is the most recent read on record (2026-07-19), routine OS patching since then is undetected by any repository evidence",
+    "F1-003-P2A_DISPOSABLE_RUNTIME_PROVISIONING_DESIGN.md's own §13/§G text and JSON companion still state no authoritative evidence was found — not corrected in that file by this task (out of scope)"
+  ],
+  "explicitNonClaims": [
+    "F1 is complete",
+    "F1-003 is complete",
+    "the disposable runtime is ready",
+    "CI is ready",
+    "production was newly verified — the 16.14 figure is cited from a pre-existing, already-accepted 2026-07-19 evidence session, not re-collected by this task",
+    "PostgreSQL exact-patch parity is established — only major-version parity is",
+    "R-070 is closed",
+    "R-046 is closed",
+    "G1/G2 approval status has changed",
+    "the KVKK baseline is stable",
+    "F1-003-P2 (disposable runtime implementation) has started or is authorized to start by this task",
+    "this task reached any status beyond AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW",
+    "production was accessed, SSH'd into, or queried by this task",
+    "any secret was read or exposed by this task"
+  ],
+  "securityImpact": "none — no application authorization/authentication code path touched; no new production access performed; no credential read, referenced, or exposed",
+  "tenantIsolationImpact": "none — no fixture, scoping, or authorization logic touched",
+  "kvkkImpact": "none — no patient data referenced; the 16.14 figure and noramedi_crm database name are already-published, non-secret operational facts present in five pre-existing, accepted evidence documents this task only reads and cites",
+  "r070Status": "OPEN — verified by direct read of docs/program/RISK_REGISTER.md line 142, unchanged by this task",
+  "r046Status": "OPEN — verified by direct read of docs/program/RISK_REGISTER.md line 116, unchanged by this task",
+  "filesCreated": [
+    "docs/program/evidence/F1-003-P2V_POSTGRESQL_MAJOR_VERSION_EVIDENCE.md",
+    "docs/program/evidence/F1-003-P2V_postgresql_version_evidence.json"
+  ],
+  "filesMinimallyUpdated": [
+    "docs/program/NORAMEDI_MASTER_TRACKER.md",
+    "docs/program/CURRENT_PHASE.md",
+    "docs/program/phases/F1_CI_AND_TEST_ARCHITECTURE.md",
+    "docs/program/evidence/README.md"
+  ],
+  "filesNotTouched": [
+    "docs/program/evidence/F1-003-P2A_DISPOSABLE_RUNTIME_PROVISIONING_DESIGN.md",
+    "docs/program/evidence/F1-003-P2A_disposable_runtime_contract.json",
+    "any P2 implementation file, runtime script, package script, test file, or P2 evidence artifact",
+    "server/package.json",
+    "server/prisma/schema.prisma",
+    "any .github/workflows/** file",
+    "any Docker/Compose file (none exist in the repository)"
+  ]
+}
