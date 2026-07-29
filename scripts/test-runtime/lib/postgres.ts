@@ -2,13 +2,21 @@ import { runDockerSync, getHostPort, dockerRemoveContainer, dockerExec } from '.
 import { labelArgs, type RuntimeLabels } from './labels.js';
 
 /**
- * Provisional test-runtime PostgreSQL image, per the merged F1-003-P2A
- * contract §13 — historical repository precedent (3 prior disposable-Postgres
- * uses all used version-16-family images). Production major-version parity is
- * NOT claimed; see the evidence document's explicit pre-P3/pre-release
- * verification item.
+ * Digest-pinned test-runtime PostgreSQL image (F1-003-P2-R1), per the merged
+ * F1-003-P2A contract §13 — historical repository precedent (3 prior
+ * disposable-Postgres uses all used version-16-family images). Exact tag
+ * pinned by digest (not a floating tag) so a future run never silently
+ * changes image content:
+ *   tag:    16-alpine
+ *   digest: sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+ * Resolved production PostgreSQL is 16.14 (F1-003-P2V, PR #259) — this is
+ * major-version parity, confirmed; exact image/build/package parity with
+ * production is NOT claimed.
  */
-export const POSTGRES_IMAGE = 'postgres:16-alpine';
+export const POSTGRES_IMAGE_TAG = 'postgres:16-alpine';
+export const POSTGRES_IMAGE_DIGEST =
+  'sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777';
+export const POSTGRES_IMAGE = `postgres@${POSTGRES_IMAGE_DIGEST}`;
 
 export interface PostgresInstance {
   containerName: string;

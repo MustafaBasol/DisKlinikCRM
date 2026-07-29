@@ -16,7 +16,12 @@
     "result": "Zero matching deferred tools found — sixth independent confirmation in this program (after F1-001, F1-002-P1, F1-002-P2, F1-003-P2A original, F1-003-R1).",
     "fallbackUsed": "Narrowly-bounded Read/Grep/Glob scoped to server/src/tests/dbVerification/, server/src/services/fileBackupDestination.ts, server/src/db.ts, server/package.json, the two F1-003-P2A evidence files, and the new implementation paths under scripts/test-runtime/. No repository-wide scan performed."
   },
-  "runProfiles": ["postgres", "storage", "verify-parallel", "cleanup-stale"],
+  "runProfiles": [
+    "postgres",
+    "storage",
+    "verify-parallel",
+    "cleanup-stale"
+  ],
   "images": {
     "postgres": {
       "tag": "postgres:16-alpine",
@@ -24,15 +29,19 @@
       "resolvedVersion": "16.14",
       "versionCheckCommand": "docker run --rm postgres:16-alpine postgres --version",
       "versionCheckOutput": "postgres (PostgreSQL) 16.14",
-      "productionMajorVersionParityClaimed": false,
-      "selectionRationale": "Historical repository precedent per F1-003-P2A §13 — 3 prior disposable-Postgres uses in this repository all used version-16-family images. Recorded as a pre-P3/pre-release verification item, not production version parity."
+      "productionMajorVersionParityClaimed": true,
+      "selectionRationale": "Historical repository precedent per F1-003-P2A §13 — 3 prior disposable-Postgres uses in this repository all used version-16-family images. Recorded as a pre-P3/pre-release verification item, not production version parity. [Updated 2026-07-29 by F1-003-P2-R1: production PostgreSQL major version confirmed 16.14 via merged F1-003-P2V evidence (PR #259) — major-version parity now CONFIRMED; exact image/build/package parity still NOT claimed. Runtime invocation switched from the floating tag to the digest-pinned reference above (Option A).]",
+      "imageRef": "postgres@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+      "digestPinnedInvocation": true,
+      "exactImageBuildPackageParityClaimed": false
     },
     "minio": {
       "tag": "minio/minio:RELEASE.2025-04-08T15-41-24Z",
       "resolvedDigest": "sha256:8834ae47a2de3509b83e0e70da9369c24bbbc22de42f2a2eddc530eee88acd1b",
       "imageRef": "minio/minio@sha256:8834ae47a2de3509b83e0e70da9369c24bbbc22de42f2a2eddc530eee88acd1b",
       "mutableLatestUsed": false,
-      "selectionRationale": "First MinIO use in this program's history (per F1-003-P2A §14/§H finding) — no prior repository precedent to match. Tag resolved and digest verified via `docker pull` + `docker inspect` at implementation time; the digest-pinned reference is what every provisioning call actually uses, not the mutable tag alone."
+      "selectionRationale": "First MinIO use in this program's history (per F1-003-P2A §14/§H finding) — no prior repository precedent to match. Tag resolved and digest verified via `docker pull` + `docker inspect` at implementation time; the digest-pinned reference is what every provisioning call actually uses, not the mutable tag alone.",
+      "digestPinnedInvocation": true
     }
   },
   "runIds": {
@@ -45,8 +54,13 @@
     "productionGuardInjection": "20260729T083256Z-55441056-11812"
   },
   "allocatedPorts": {
-    "postgresProfileSuccessful": { "postgres": 50237 },
-    "storageProfileSuccessful": { "postgres": 60049, "minio": 57955 }
+    "postgresProfileSuccessful": {
+      "postgres": 50237
+    },
+    "storageProfileSuccessful": {
+      "postgres": 60049,
+      "minio": 57955
+    }
   },
   "databaseNames": {
     "postgresProfileSuccessful": "nmtest_postgres_20260729t074700z_2252d697_18272",
@@ -120,8 +134,14 @@
   },
   "parallelCollisionResults": {
     "verificationMethod": "npm run test:runtime:parallel (orchestrator's verify-parallel profile) — runs 2 concurrent postgres-profile invocations via Promise.all, then 2 concurrent storage-profile invocations via Promise.all, then checks uniqueness of run IDs, container names, database names, and allocated host ports across all 4 runs.",
-    "postgresPairOutcomeExitCodes": [0, 0],
-    "storagePairOutcomeExitCodes": [0, 0],
+    "postgresPairOutcomeExitCodes": [
+      0,
+      0
+    ],
+    "storagePairOutcomeExitCodes": [
+      0,
+      0
+    ],
     "collisionCheck": {
       "uniqueRunIds": true,
       "uniqueContainerNames": true,
@@ -136,7 +156,12 @@
       "20260729T084316Z-f45cdaed-20608",
       "20260729T084316Z-edc5d2af-20608"
     ],
-    "secondInvocationExitCodes": [0, 0, 0, 0],
+    "secondInvocationExitCodes": [
+      0,
+      0,
+      0,
+      0
+    ],
     "secondInvocationZeroLabeledResourcesAfter": true
   },
   "failureInjectionResults": [
@@ -146,7 +171,10 @@
       "testExitCode": 1,
       "cleanupSuccess": true,
       "finalExitCode": 1,
-      "verified": ["cleanup still ran", "final exit non-zero"]
+      "verified": [
+        "cleanup still ran",
+        "final exit non-zero"
+      ]
     },
     {
       "mode": "migration",
@@ -156,7 +184,10 @@
       "testsStarted": false,
       "cleanupSuccess": true,
       "finalExitCode": 1,
-      "verified": ["tests did not start", "cleanup still ran"]
+      "verified": [
+        "tests did not start",
+        "cleanup still ran"
+      ]
     },
     {
       "mode": "readiness",
@@ -165,7 +196,9 @@
       "readinessError": "PostgreSQL readiness timeout after 200ms for container \"nmtest-pg-postgres-20260729t081638z-7dae3c8b-9116\": /var/run/postgresql:5432 - no response",
       "cleanupSuccess": true,
       "finalExitCode": 1,
-      "verified": ["cleanup still ran despite readiness timeout"]
+      "verified": [
+        "cleanup still ran despite readiness timeout"
+      ]
     },
     {
       "mode": "cleanup (tests passed)",
@@ -175,7 +208,10 @@
       "cleanupSuccess": false,
       "cleanupError": "network has active endpoints (sidecar container)",
       "finalExitCode": 1,
-      "verified": ["successful tests + cleanup failure => final non-zero exit", "test-harness hygiene removed the sidecar and network afterward, confirmed via zero labeled resources remaining"]
+      "verified": [
+        "successful tests + cleanup failure => final non-zero exit",
+        "test-harness hygiene removed the sidecar and network afterward, confirmed via zero labeled resources remaining"
+      ]
     },
     {
       "mode": "test+cleanup (tests failed)",
@@ -184,7 +220,10 @@
       "testExitCode": 1,
       "cleanupSuccess": false,
       "finalExitCode": 1,
-      "verified": ["original test failure exit code (1) preserved, not overwritten by the cleanup failure", "cleanup failure separately reported, not conflated into one opaque message"]
+      "verified": [
+        "original test failure exit code (1) preserved, not overwritten by the cleanup failure",
+        "cleanup failure separately reported, not conflated into one opaque message"
+      ]
     },
     {
       "mode": "production-guard",
@@ -193,14 +232,25 @@
       "containerNamesCreated": [],
       "networkCreated": false,
       "finalExitCode": 1,
-      "verified": ["rejected before migration/test execution", "zero Docker containers or networks created — no network access of any kind occurred before rejection"]
+      "verified": [
+        "rejected before migration/test execution",
+        "zero Docker containers or networks created — no network access of any kind occurred before rejection"
+      ]
     }
   ],
   "cleanupResults": {
     "normalSuccessRuns": {
-      "postgresProfile": { "success": true, "errors": [] },
-      "storageProfile": { "success": true, "errors": [] },
-      "parallelRuns_x4": { "allSucceeded": true }
+      "postgresProfile": {
+        "success": true,
+        "errors": []
+      },
+      "storageProfile": {
+        "success": true,
+        "errors": []
+      },
+      "parallelRuns_x4": {
+        "allSucceeded": true
+      }
     },
     "zeroLabeledResourcesVerifiedAfter": [
       "postgres profile success",
@@ -271,19 +321,31 @@
     ]
   },
   "typecheckResults": {
-    "scriptsTestRuntime": { "command": "npx tsc --noEmit -p scripts/test-runtime/tsconfig.json", "errors": 0 },
-    "server": { "command": "npm run typecheck (npx prisma generate && tsc --noEmit)", "errors": 0 }
+    "scriptsTestRuntime": {
+      "command": "npx tsc --noEmit -p scripts/test-runtime/tsconfig.json",
+      "errors": 0
+    },
+    "server": {
+      "command": "npm run typecheck (npx prisma generate && tsc --noEmit)",
+      "errors": 0
+    }
   },
   "syntaxValidationResults": {
     "powershell": {
       "method": "[System.Management.Automation.Language.Parser]::ParseFile on each .ps1 file",
-      "files": ["scripts/test-runtime/provision.ps1", "scripts/test-runtime/sweep.ps1"],
+      "files": [
+        "scripts/test-runtime/provision.ps1",
+        "scripts/test-runtime/sweep.ps1"
+      ],
       "result": "both parse cleanly",
       "bugFoundAndFixed": "An em-dash immediately followed by an apostrophe inside a double-quoted string within a script block caused a genuine PowerShell parser error ('The string is missing the terminator'). Root-caused and fixed by rewording to ASCII-only punctuation; re-validated clean afterward."
     },
     "bash": {
       "method": "bash -n on each .sh file",
-      "files": ["scripts/test-runtime/provision.sh", "scripts/test-runtime/sweep.sh"],
+      "files": [
+        "scripts/test-runtime/provision.sh",
+        "scripts/test-runtime/sweep.sh"
+      ],
       "result": "both pass"
     },
     "jsonAndPackageJson": {
@@ -294,40 +356,202 @@
     "gitDiffCheck": "clean — no whitespace errors or conflict markers; only benign CRLF-normalization notices"
   },
   "acceptanceCriteria": [
-    { "id": 1, "text": "PowerShell entry point committed.", "status": "MET", "evidence": "scripts/test-runtime/provision.ps1" },
-    { "id": 2, "text": "Bash/Linux entry point committed.", "status": "MET", "evidence": "scripts/test-runtime/provision.sh" },
-    { "id": 3, "text": "Shared orchestrator committed.", "status": "MET", "evidence": "scripts/test-runtime/orchestrator.ts + lib/*" },
-    { "id": 4, "text": "PostgreSQL one container per run.", "status": "MET" },
-    { "id": 5, "text": "MinIO one container per storage run.", "status": "MET" },
-    { "id": 6, "text": "No persistent volumes.", "status": "MET", "evidence": "no -v/--mount flags anywhere in postgres.ts/minio.ts" },
-    { "id": 7, "text": "Docker dynamic host ports.", "status": "MET", "evidence": "-p 127.0.0.1::5432 / ::9000::9001, port discovered post-bind via docker inspect" },
-    { "id": 8, "text": "Collision-resistant run/container/database/bucket names.", "status": "MET", "evidence": "verify-parallel collisionCheck all true" },
-    { "id": 9, "text": "Generated env before DB/storage-dependent test import.", "status": "MET", "evidence": "env constructed and passed via child_process env option before npm run <script> spawns" },
-    { "id": 10, "text": "Production-like endpoint guard fails closed.", "status": "MET", "evidence": "productionGuardInjection result" },
-    { "id": 11, "text": "PostgreSQL readiness bounded and verified.", "status": "MET", "evidence": "readinessFailureInjection result" },
-    { "id": 12, "text": "MinIO readiness bounded and verified.", "status": "MET", "evidence": "waitForMinioReady, 60s default bound, used successfully in storage profile run" },
-    { "id": 13, "text": "prisma migrate deploy succeeds on fresh disposable DB.", "status": "MET", "evidence": "migrationResults" },
-    { "id": 14, "text": "server:test:disposable-db executes successfully.", "status": "MET", "evidence": "aggregateResults.serverTestDisposableDb" },
-    { "id": 15, "text": "server:test:storage-integration executes successfully.", "status": "MET", "evidence": "aggregateResults.serverTestStorageIntegration" },
-    { "id": 16, "text": "Sole genuine MinIO leaf target executes exactly once.", "status": "MET", "evidence": "test:file-backup-db-integration is the only member of server:test:storage-integration" },
-    { "id": 17, "text": "At least two concurrent postgres runs succeed without collision.", "status": "MET", "evidence": "parallelCollisionResults" },
-    { "id": 18, "text": "At least two concurrent storage runs succeed without collision.", "status": "MET", "evidence": "parallelCollisionResults" },
-    { "id": 19, "text": "Forced test failure cleans up and returns non-zero.", "status": "MET", "evidence": "failureInjectionResults[0]" },
-    { "id": 20, "text": "Forced migration failure cleans up and prevents test execution.", "status": "MET", "evidence": "failureInjectionResults[1]" },
-    { "id": 21, "text": "Forced readiness failure cleans up.", "status": "MET", "evidence": "failureInjectionResults[2]" },
-    { "id": 22, "text": "Cleanup failure produces final non-zero exit.", "status": "MET", "evidence": "failureInjectionResults[3], failureInjectionResults[4]" },
-    { "id": 23, "text": "Production guard rejects before migration/test.", "status": "MET", "evidence": "failureInjectionResults[5]" },
-    { "id": 24, "text": "Normal completion leaves zero labeled resources.", "status": "MET", "evidence": "cleanupResults.zeroLabeledResourcesVerifiedAfter" },
-    { "id": 25, "text": "Stale sweeper dry-run and live modes verified against owned resources only.", "status": "MET", "evidence": "staleSweeperResults" },
-    { "id": 26, "text": "Credentials are redacted and not persisted.", "status": "MET", "evidence": "lib/redact.ts, unit tests" },
-    { "id": 27, "text": "No external provider call occurs.", "status": "MET" },
-    { "id": 28, "text": "No production access occurs.", "status": "MET" },
-    { "id": 29, "text": "No schema migration is created.", "status": "MET", "evidence": "no new file under server/prisma/migrations/ — 67 directories before and after" },
-    { "id": 30, "text": "R-070 remains OPEN.", "status": "MET" },
-    { "id": 31, "text": "No CI workflow is implemented.", "status": "MET", "evidence": "no .github/workflows/** file touched" },
-    { "id": 32, "text": "P2 reaches at most AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW.", "status": "MET" },
-    { "id": 33, "text": "F1 and F1-003 remain IN_PROGRESS.", "status": "MET" },
-    { "id": 34, "text": "P3 remains not started until this PR is externally reviewed and merged.", "status": "MET" }
+    {
+      "id": 1,
+      "text": "PowerShell entry point committed.",
+      "status": "MET",
+      "evidence": "scripts/test-runtime/provision.ps1"
+    },
+    {
+      "id": 2,
+      "text": "Bash/Linux entry point committed.",
+      "status": "MET",
+      "evidence": "scripts/test-runtime/provision.sh"
+    },
+    {
+      "id": 3,
+      "text": "Shared orchestrator committed.",
+      "status": "MET",
+      "evidence": "scripts/test-runtime/orchestrator.ts + lib/*"
+    },
+    {
+      "id": 4,
+      "text": "PostgreSQL one container per run.",
+      "status": "MET"
+    },
+    {
+      "id": 5,
+      "text": "MinIO one container per storage run.",
+      "status": "MET"
+    },
+    {
+      "id": 6,
+      "text": "No persistent volumes.",
+      "status": "MET",
+      "evidence": "no -v/--mount flags anywhere in postgres.ts/minio.ts"
+    },
+    {
+      "id": 7,
+      "text": "Docker dynamic host ports.",
+      "status": "MET",
+      "evidence": "-p 127.0.0.1::5432 / ::9000::9001, port discovered post-bind via docker inspect"
+    },
+    {
+      "id": 8,
+      "text": "Collision-resistant run/container/database/bucket names.",
+      "status": "MET",
+      "evidence": "verify-parallel collisionCheck all true"
+    },
+    {
+      "id": 9,
+      "text": "Generated env before DB/storage-dependent test import.",
+      "status": "MET",
+      "evidence": "env constructed and passed via child_process env option before npm run <script> spawns"
+    },
+    {
+      "id": 10,
+      "text": "Production-like endpoint guard fails closed.",
+      "status": "MET",
+      "evidence": "productionGuardInjection result"
+    },
+    {
+      "id": 11,
+      "text": "PostgreSQL readiness bounded and verified.",
+      "status": "MET",
+      "evidence": "readinessFailureInjection result"
+    },
+    {
+      "id": 12,
+      "text": "MinIO readiness bounded and verified.",
+      "status": "MET",
+      "evidence": "waitForMinioReady, 60s default bound, used successfully in storage profile run"
+    },
+    {
+      "id": 13,
+      "text": "prisma migrate deploy succeeds on fresh disposable DB.",
+      "status": "MET",
+      "evidence": "migrationResults"
+    },
+    {
+      "id": 14,
+      "text": "server:test:disposable-db executes successfully.",
+      "status": "MET",
+      "evidence": "aggregateResults.serverTestDisposableDb"
+    },
+    {
+      "id": 15,
+      "text": "server:test:storage-integration executes successfully.",
+      "status": "MET",
+      "evidence": "aggregateResults.serverTestStorageIntegration"
+    },
+    {
+      "id": 16,
+      "text": "Sole genuine MinIO leaf target executes exactly once.",
+      "status": "MET",
+      "evidence": "test:file-backup-db-integration is the only member of server:test:storage-integration"
+    },
+    {
+      "id": 17,
+      "text": "At least two concurrent postgres runs succeed without collision.",
+      "status": "MET",
+      "evidence": "parallelCollisionResults"
+    },
+    {
+      "id": 18,
+      "text": "At least two concurrent storage runs succeed without collision.",
+      "status": "MET",
+      "evidence": "parallelCollisionResults"
+    },
+    {
+      "id": 19,
+      "text": "Forced test failure cleans up and returns non-zero.",
+      "status": "MET",
+      "evidence": "failureInjectionResults[0]"
+    },
+    {
+      "id": 20,
+      "text": "Forced migration failure cleans up and prevents test execution.",
+      "status": "MET",
+      "evidence": "failureInjectionResults[1]"
+    },
+    {
+      "id": 21,
+      "text": "Forced readiness failure cleans up.",
+      "status": "MET",
+      "evidence": "failureInjectionResults[2]"
+    },
+    {
+      "id": 22,
+      "text": "Cleanup failure produces final non-zero exit.",
+      "status": "MET",
+      "evidence": "failureInjectionResults[3], failureInjectionResults[4]"
+    },
+    {
+      "id": 23,
+      "text": "Production guard rejects before migration/test.",
+      "status": "MET",
+      "evidence": "failureInjectionResults[5]"
+    },
+    {
+      "id": 24,
+      "text": "Normal completion leaves zero labeled resources.",
+      "status": "MET",
+      "evidence": "cleanupResults.zeroLabeledResourcesVerifiedAfter"
+    },
+    {
+      "id": 25,
+      "text": "Stale sweeper dry-run and live modes verified against owned resources only.",
+      "status": "MET",
+      "evidence": "staleSweeperResults"
+    },
+    {
+      "id": 26,
+      "text": "Credentials are redacted and not persisted.",
+      "status": "MET",
+      "evidence": "lib/redact.ts, unit tests"
+    },
+    {
+      "id": 27,
+      "text": "No external provider call occurs.",
+      "status": "MET"
+    },
+    {
+      "id": 28,
+      "text": "No production access occurs.",
+      "status": "MET"
+    },
+    {
+      "id": 29,
+      "text": "No schema migration is created.",
+      "status": "MET",
+      "evidence": "no new file under server/prisma/migrations/ — 67 directories before and after"
+    },
+    {
+      "id": 30,
+      "text": "R-070 remains OPEN.",
+      "status": "MET"
+    },
+    {
+      "id": 31,
+      "text": "No CI workflow is implemented.",
+      "status": "MET",
+      "evidence": "no .github/workflows/** file touched"
+    },
+    {
+      "id": 32,
+      "text": "P2 reaches at most AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW.",
+      "status": "MET"
+    },
+    {
+      "id": 33,
+      "text": "F1 and F1-003 remain IN_PROGRESS.",
+      "status": "MET"
+    },
+    {
+      "id": 34,
+      "text": "P3 remains not started until this PR is externally reviewed and merged.",
+      "status": "MET"
+    }
   ],
   "unresolvedItems": [
     "Production PostgreSQL major-version confirmation — no repository/deployment evidence source answers it; recorded (again) as a pre-P3/pre-release verification item, not resolved by this task.",
@@ -343,7 +567,7 @@
     "F1 or F1-003 is complete.",
     "G1/G2 approval status has changed.",
     "The KVKK baseline is stable or that the KVKK freeze boundary was touched.",
-    "Production PostgreSQL major-version parity with postgres:16-alpine is established.",
+    "Exact image/build/package parity between the disposable PostgreSQL image and production is established — only major-version parity (16 = 16, confirmed via F1-003-P2V, PR #259) is claimed; production observed 16.14, disposable observed 16.14. [Corrected 2026-07-29 by F1-003-P2-R1 — original wording preserved in the narrative evidence document §10/§35/§36.]",
     "Full network-egress denial is implemented at the OS/firewall level — only Docker's own loopback-only port publishing plus a per-run isolated bridge network are implemented; both are best-effort/practically-enforceable measures, not a claim of complete egress denial.",
     "Cleanup is guaranteed to survive a hard kill (SIGKILL), OS crash, or Docker daemon crash — only best-effort SIGINT/SIGTERM handling is implemented.",
     "Legacy server:test's own 23 DB-required members were provisioned or executed by this task — they were deliberately deferred.",
@@ -383,5 +607,123 @@
     "onlyForwardMigrationExercised": true,
     "noRollbackToolingImplemented": true,
     "noPrismaMigrationsManualRewrite": true
+  },
+  "p2r1PostgresParityAndImagePinningUpdate": {
+    "addedBy": "F1-003-P2-R1",
+    "date": "2026-07-29",
+    "reason": "Reconciliation with origin/main after F1-003-P2V/P2V-R1 merged as PR #259 (merge commit 8592a570708c6308d7a19aff703db6e0a699ece7, mergedAt 2026-07-29T07:57:11Z).",
+    "postgresqlParity": {
+      "productionObservedVersion": "16.14",
+      "disposableObservedVersion": "16.14",
+      "majorVersionParity": "CONFIRMED",
+      "observedPatchVersionEquality": "16.14 = 16.14",
+      "exactImageBuildPackageParity": "NOT_CLAIMED"
+    },
+    "imagePinning": {
+      "postgres": {
+        "before": {
+          "reference": "postgres:16-alpine",
+          "digestPinned": false,
+          "note": "floating tag; only the resolved digest was recorded after pulling, future byte-level reproducibility was not guaranteed"
+        },
+        "after": {
+          "reference": "postgres@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+          "digestPinned": true,
+          "note": "live re-verified via docker pull in this task, identical digest, Image is up to date"
+        },
+        "optionApplied": "A"
+      },
+      "minio": {
+        "reference": "minio/minio@sha256:8834ae47a2de3509b83e0e70da9369c24bbbc22de42f2a2eddc530eee88acd1b",
+        "digestPinned": true,
+        "changeRequired": false,
+        "note": "already genuinely digest-pinned since original F1-003-P2 implementation; live re-verified via docker pull in this task, identical digest"
+      }
+    },
+    "realProfilesRerun": {
+      "postgres": {
+        "migrationExit": 0,
+        "testScript": "server:test:disposable-db",
+        "testExit": 0,
+        "cleanupSucceeded": true
+      },
+      "storage": {
+        "migrationExit": 0,
+        "testScript": "server:test:storage-integration",
+        "testExit": 0,
+        "assertions": "21/21",
+        "cleanupSucceeded": true
+      },
+      "verifyParallelRuns": [
+        {
+          "run": 1,
+          "allExit0": true,
+          "collisionCheck": {
+            "uniqueRunIds": true,
+            "uniqueContainerNames": true,
+            "uniqueDatabaseNames": true,
+            "uniqueHostPorts": true
+          }
+        },
+        {
+          "run": 2,
+          "allExit0": false,
+          "note": "one storage invocation failed at prisma generate with EBUSY (Windows filesystem race under 4-way concurrent prisma generate against a shared node_modules/.prisma/client output); collisionCheck fields were still all true (not a naming/port collision); newly discovered, not attributable to the postgres digest-pin change; cleanup still succeeded for the failed run",
+          "collisionCheck": {
+            "uniqueRunIds": true,
+            "uniqueContainerNames": true,
+            "uniqueDatabaseNames": true,
+            "uniqueHostPorts": true
+          }
+        },
+        {
+          "run": 3,
+          "allExit0": true,
+          "note": "re-run to check for a pattern after run 2 anomaly",
+          "collisionCheck": {
+            "uniqueRunIds": true,
+            "uniqueContainerNames": true,
+            "uniqueDatabaseNames": true,
+            "uniqueHostPorts": true
+          }
+        }
+      ],
+      "postgresFailureInjectionRerun": {
+        "test": {
+          "exitCode": 1,
+          "reason": "tests failed with exit code 1",
+          "cleanupSucceeded": true
+        },
+        "migration": {
+          "exitCode": 1,
+          "reason": "setup failure before tests started: migration failed at step migrate-deploy (exit 1)",
+          "cleanupSucceeded": true
+        },
+        "readiness": {
+          "exitCode": 1,
+          "reason": "setup failure before tests started: PostgreSQL readiness timeout after 200ms",
+          "cleanupSucceeded": true
+        },
+        "cleanup": {
+          "exitCode": 1,
+          "testsPassed": true,
+          "cleanupSucceeded": false,
+          "reason": "network removal failed: has active endpoints (sidecar) - fail-fatal policy confirmed"
+        }
+      },
+      "zeroResourceCleanupVerified": true,
+      "nonDisposableBaseline": {
+        "script": "server:test:non-disposable",
+        "exitCode": 0,
+        "members": "68/68",
+        "regression": false
+      }
+    },
+    "newFindingRecorded": "Intermittent Windows-filesystem EBUSY race in concurrent prisma generate under verify-parallel 4-way concurrency (1 of 3 fresh runs in this task) — not fixed by this task, recorded transparently as a candidate future risk item, out of this task narrow scope.",
+    "notClaimed": [
+      "The EBUSY race is fixed.",
+      "verify-parallel is guaranteed collision-free under all concurrency levels.",
+      "Any production access, deployment, schema/migration authoring, or CI-workflow change occurred in this task."
+    ]
   }
 }

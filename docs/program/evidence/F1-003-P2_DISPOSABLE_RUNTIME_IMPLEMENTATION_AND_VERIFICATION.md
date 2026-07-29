@@ -103,11 +103,11 @@ From the PowerShell/Bash wrappers directly: `pwsh -File scripts/test-runtime/pro
 
 ## 10. PostgreSQL image/tag/digest
 
-- Tag: `postgres:16-alpine`
+- Tag (historical, at original implementation time): `postgres:16-alpine`
 - Resolved digest: `sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777`
 - Resolved version, confirmed live: `docker run --rm postgres:16-alpine postgres --version` → `postgres (PostgreSQL) 16.14` (major version 16, matching the expected provisional choice — no silent major-version drift).
 - Selection rationale (unchanged from the merged design): historical repository precedent — 3 prior disposable-Postgres uses in this repository all used version-16-family images.
-- **Production major-version parity is NOT claimed.** No repository/deployment evidence source records production PostgreSQL's major version (re-confirmed by this task's own search — same finding as F1-003-P2A §13). Recorded, again, as an explicit pre-P3/pre-release verification item.
+- ~~**Production major-version parity is NOT claimed.** No repository/deployment evidence source records production PostgreSQL's major version (re-confirmed by this task's own search — same finding as F1-003-P2A §13). Recorded, again, as an explicit pre-P3/pre-release verification item.~~ **[SUPERSEDED 2026-07-29 by F1-003-P2-R1, §38 below: F1-003-P2V (merged PR #259) established production PostgreSQL as `16.14`. Major-version parity between this disposable image and production is now CONFIRMED (`16` = `16`). Exact image/build/package parity is still NOT claimed. This original sentence is preserved verbatim as dated historical evidence, not deleted — see §38 for the canonical current wording and the digest-pin switch it also records.]**
 
 ## 11. MinIO image/tag/digest
 
@@ -325,7 +325,7 @@ Exact rollback method: `git revert` the merge/implementation commit(s) on this b
 
 ## 35. Remaining risks
 
-- Production PostgreSQL major-version parity with `postgres:16-alpine` is unconfirmed — carried forward as a pre-P3/pre-release verification item, not resolved by this task.
+- ~~Production PostgreSQL major-version parity with `postgres:16-alpine` is unconfirmed — carried forward as a pre-P3/pre-release verification item, not resolved by this task.~~ **[SUPERSEDED 2026-07-29 by F1-003-P2-R1, §38: major-version parity is now CONFIRMED (production `16.14`, disposable `16.14`); exact image/build/package parity remains an open item, now correctly framed as "not claimed" rather than "unconfirmed."]**
 - Legacy `server:test`'s own 23 DB-required members remain unprovisioned by any disposable-runtime tooling — deliberately deferred to a future, separately-authorized task.
 - `fileBackupDbIntegration.test.ts`'s `Date.now()`-based bucket naming and incomplete bucket-teardown path remain unresolved test-code items, requiring separate authorization (unchanged from the merged design).
 - Cleanup is **not** guaranteed to survive a hard process kill (SIGKILL), an OS crash, or a Docker daemon crash — only best-effort `SIGINT`/`SIGTERM` handling is implemented in the orchestrator, with the platform limitation explicitly documented in both shell wrappers.
@@ -334,7 +334,7 @@ Exact rollback method: `git revert` the merge/implementation commit(s) on this b
 
 ## 36. Explicit non-claims
 
-This task does **not** claim: disposable-Postgres/MinIO provisioning is wired into any CI workflow (no `.github/workflows/**` file exists or was created); R-070 is resolved, mitigated, or closed (it remains `OPEN`); F1's exit gate is satisfied; F1 or F1-003 is complete; G1/G2 approval status has changed; the KVKK baseline is stable or that the KVKK freeze boundary was touched; production PostgreSQL major-version parity is established; full network-egress denial exists; cleanup survives a hard kill/OS crash/Docker-daemon crash; legacy `server:test`'s own DB-required members were provisioned or executed by this task (they were deliberately deferred); a production database, production storage endpoint, or real patient data was accessed at any point; this task reached any status beyond `AGENT_COMPLETED` / `PR_OPENED_AWAITING_REVIEW`.
+This task does **not** claim: disposable-Postgres/MinIO provisioning is wired into any CI workflow (no `.github/workflows/**` file exists or was created); R-070 is resolved, mitigated, or closed (it remains `OPEN`); F1's exit gate is satisfied; F1 or F1-003 is complete; G1/G2 approval status has changed; the KVKK baseline is stable or that the KVKK freeze boundary was touched; ~~production PostgreSQL major-version parity is established~~ **[SUPERSEDED 2026-07-29 by F1-003-P2-R1, §38: major-version parity IS now established/confirmed via merged F1-003-P2V evidence (PR #259) — this task still does not claim exact image/build/package parity with production]**; full network-egress denial exists; cleanup survives a hard kill/OS crash/Docker-daemon crash; legacy `server:test`'s own DB-required members were provisioned or executed by this task (they were deliberately deferred); a production database, production storage endpoint, or real patient data was accessed at any point; this task reached any status beyond `AGENT_COMPLETED` / `PR_OPENED_AWAITING_REVIEW`.
 
 ## 37. Acceptance-criteria matrix
 
@@ -345,3 +345,39 @@ See the JSON companion's `acceptanceCriteria` array for the full 34-item machine
 3. **`docker rm -f` idempotency**: found, while designing the cleanup-failure-injection test, that `docker rm -f` on an already-removed container returns exit code `0` (Docker treats forced removal as idempotent) — meaning the originally-planned "pre-remove the container out-of-band, then let the normal path fail" injection technique never actually produced a real failure. Redesigned to attach a genuine, untracked sidecar container to the run's Docker network, which makes `docker network rm` **really** fail with "has active endpoints" — a real, reproducible failure signal, with test-harness hygiene afterward (executed only after the measured cleanup outcome is computed) removing the sidecar so this verification run itself does not leak resources.
 
 These are reported here transparently, not hidden, as evidence that the verification process was adversarial against its own implementation rather than a happy-path-only self-check.
+
+## 38. F1-003-P2-R1 update (2026-07-29): PostgreSQL parity correction and image-pinning verification
+
+This section records a later reconciliation task (F1-003-P2-R1, continued on this same open PR #260 branch, no new PR) that merged `origin/main` after **F1-003-P2V/P2V-R1 merged as PR #259** (merge commit `8592a570708c6308d7a19aff703db6e0a699ece7`, mergedAt `2026-07-29T07:57:11Z`).
+
+**PostgreSQL parity — corrected wording (supersedes §10/§35/§36 above, which are preserved unedited):**
+- Production PostgreSQL observed version: `16.14`
+- Disposable PostgreSQL observed version: `16.14`
+- Major-version parity: **CONFIRMED** (`16` = `16`)
+- Observed patch-version equality: `16.14 = 16.14`
+- Exact image/build/package parity: **NOT claimed** (production's exact base-image/build provenance is not recorded anywhere in the repository)
+
+**Image-pinning verification (actual invocation inspected, not assumed):**
+
+| | PostgreSQL | MinIO |
+|---|---|---|
+| Configured reference (before this task) | `postgres:16-alpine` (floating tag) | `minio/minio@sha256:8834ae...` (digest) |
+| Configured reference (after this task) | `postgres@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777` | unchanged |
+| Exact `docker run`/`pull` reference used | `postgres@sha256:57c72f...` (was `postgres:16-alpine`) | `minio/minio@sha256:8834ae47a2de3509b83e0e70da9369c24bbbc22de42f2a2eddc530eee88acd1b` |
+| Resolved image ID (this task, live `docker image inspect`) | `sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777` | not re-inspected by ID this task; digest re-pulled and matched (see below) |
+| Repo digest (this task, live) | `postgres@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777` | `minio/minio@sha256:8834ae47a2de3509b83e0e70da9369c24bbbc22de42f2a2eddc530eee88acd1b` |
+| Digest-pinned invocation? | **Yes, after this task** (was tag-only before) | **Yes, unchanged** |
+| Only the resolved digest recorded after pulling (tag could silently drift)? | No longer applicable — the digest itself is now the invocation, not merely recorded after the fact | No — was already the invocation, not merely recorded |
+| Byte-reproducible on future runs? | **Yes** — `docker run postgres@sha256:...` always resolves to the exact same content-addressed image, unaffected by upstream re-tagging of `postgres:16-alpine` | **Yes**, unchanged — already digest-pinned since original implementation |
+
+Before this task, PostgreSQL's own invocation used the word "pinned" ambiguously in prose (§10 said "matching the expected provisional choice" without distinguishing tag-pinning from digest-pinning); this section states plainly: **the previous PostgreSQL invocation was tag-pinned only, not digest-pinned** — Docker Hub could re-publish `postgres:16-alpine` under a new digest at any time, and a future run would have silently picked up different bytes. **Option A was applied**: `scripts/test-runtime/lib/postgres.ts`'s `POSTGRES_IMAGE` now resolves to the digest reference above; `POSTGRES_IMAGE_TAG` is retained for logging only and is never passed to `docker run`. Both the PostgreSQL digest and the MinIO digest were independently re-verified live in this task via `docker pull <ref>` — both reported "Image is up to date," confirming the exact same content is still resolvable today (2026-07-29), not merely carried forward from the original implementation task's earlier pull.
+
+**Real profiles rerun against the new PostgreSQL reference (this task, live Docker Desktop engine, not carried forward):**
+- `postgres` profile: migration exit `0`, `server:test:disposable-db` (9 members) exit `0`, cleanup succeeded.
+- `storage` profile: migration exit `0`, `server:test:storage-integration` exit `0` (21/21 assertions), cleanup succeeded.
+- `verify-parallel` (2×postgres + 2×storage concurrent): run **3 times** in this task (one more than the originally-planned 2, due to an anomaly below). Run 1: all 4 exit `0`, `collisionCheck` all `true` (unique run IDs/container names/database names/host ports). Run 2: **a real, non-fabricated intermittent failure** — one of the two `storage` invocations failed at the `prisma generate` step with `EBUSY: resource busy or locked, copyfile ... query_compiler_fast_bg.postgresql.js -> ... query_compiler_fast_bg.js`, a Windows-filesystem-level race when multiple concurrent `prisma generate` invocations write to the same shared `server/node_modules/.prisma/client` output directory under 4-way concurrency; the failing run's own collision fields (run ID/container/database/port) were still unique — this is not a naming/port collision, it is a separate, newly-discovered local-filesystem race, independent of the PostgreSQL digest-pin change (the failure occurs in a Node-level `prisma generate` step, before any Docker/image interaction). Cleanup still succeeded for the failed run. Run 3: repeated to check for a pattern — all 4 exit `0` again, `collisionCheck` all `true`. **This EBUSY race is recorded here as a new, honestly-reported finding, not silently omitted** — a candidate future risk item for the `verify-parallel` orchestration (e.g. serializing `prisma generate` across concurrent invocations, or giving each run its own isolated `node_modules`), out of this task's own narrow scope to fix.
+- Postgres-relevant failure-injection modes rerun against the digest-pinned image: `--inject-failure=test` (exit `1`, "tests failed with exit code 1", cleanup succeeded), `--inject-failure=migration` (exit `1`, migration failed at `migrate-deploy`, cleanup succeeded), `--inject-failure=readiness` (exit `1`, readiness timeout after 200ms, cleanup succeeded), `--inject-failure=cleanup` (tests passed, cleanup deliberately failed via sidecar attachment, exit `1` — fail-fatal policy confirmed). All four reproduced the same real, non-fabricated failure signals as the original implementation.
+- Zero-resource cleanup verified after every rerun above (including the deliberately-failed cleanup-injection run and the EBUSY-failed parallel run): `docker ps -a` and `docker network ls`, filtered and unfiltered, show zero `nmtest-*` containers or networks remaining.
+- `npm run server:test:non-disposable` (run from `server/`) rerun: exit `0`, 68/68, no failure marker in the combined log — no regression from this task's one-line image-reference change.
+
+**Not claimed by this task:** that the EBUSY race is fixed (it is recorded, not resolved); that `verify-parallel` is now guaranteed collision-free under all concurrency levels (2 of 3 fresh runs were clean; the third's failure was a filesystem race, not a naming/port collision, and collision-uniqueness fields were `true` even in the failed run); that this task performed any production access, deployment, schema/migration authoring, or CI-workflow change.
