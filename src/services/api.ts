@@ -258,6 +258,7 @@ export const treatmentCaseService = {
   addMaterial: (id: string, data: { itemId: string; quantity: number; notes?: string }) => api.post(`/treatment-cases/${id}/materials`, data),
   removeMaterial: (id: string, txId: string) => api.delete(`/treatment-cases/${id}/materials/${txId}`),
   applyPackage: (id: string, data: { packageId: string; allowDuplicate?: boolean }) => api.post(`/treatment-cases/${id}/package-applications`, data),
+  getProposalPdf: (id: string) => api.get(`/treatment-cases/${id}/proposal-pdf`, { responseType: 'blob' }),
 };
 
 export const insuranceProvisionService = {

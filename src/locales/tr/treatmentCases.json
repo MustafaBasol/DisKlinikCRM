@@ -63,6 +63,11 @@
     "markLost": "Kaybedildi İşaretle",
     "viewDetails": "Detayları Gör"
   },
+  "proposal": {
+    "download": "Tedavi Teklifini İndir",
+    "preparing": "Teklif hazırlanıyor…",
+    "downloadFailed": "Teklif indirilemedi."
+  },
   "detail": {
     "backToPipeline": "Pipeline'a Dön",
     "closedOn": "{{date}} tarihinde kapatıldı",

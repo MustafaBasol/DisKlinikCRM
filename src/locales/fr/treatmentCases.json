@@ -62,6 +62,11 @@
     "markLost": "Marquer comme perdu",
     "viewDetails": "Voir les détails"
   },
+  "proposal": {
+    "download": "Télécharger la proposition de traitement",
+    "preparing": "Préparation de la proposition…",
+    "downloadFailed": "Échec du téléchargement de la proposition."
+  },
   "detail": {
     "backToPipeline": "Retour au pipeline",
     "closedOn": "Fermé le {{date}}",
