@@ -21,7 +21,7 @@ export function assertValidProfile(value: string | undefined): RuntimeProfile {
   return value;
 }
 
-export const INJECTABLE_FAILURE_MODES = ['test', 'migration', 'readiness', 'cleanup'] as const;
+export const INJECTABLE_FAILURE_MODES = ['test', 'migration', 'readiness', 'cleanup', 'parent-generate'] as const;
 export type InjectableFailureMode = (typeof INJECTABLE_FAILURE_MODES)[number];
 
 export function isValidInjectFailureMode(value: string): value is InjectableFailureMode {

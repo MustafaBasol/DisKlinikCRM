@@ -17,6 +17,10 @@
  *   npx tsx scripts/test-runtime/orchestrator.ts postgres --inject-failure=migration
  *   npx tsx scripts/test-runtime/orchestrator.ts postgres --inject-failure=readiness
  *   npx tsx scripts/test-runtime/orchestrator.ts postgres --inject-failure=cleanup
+ *   npx tsx scripts/test-runtime/orchestrator.ts verify-parallel --inject-failure=parent-generate
+ *     (F1-003-P2-R2: forces the single parent-level `prisma generate` step to
+ *     fail deterministically — verifies zero children/Docker resources are
+ *     created when generation fails, before any fan-out.)
  * Production-endpoint-guard failure injection is exercised by pre-setting a
  * fake DATABASE_URL in the invoking environment (see evidence doc) — no flag
  * needed, since the guard rejects any inherited override unconditionally.
@@ -42,11 +46,23 @@ import { runSweep } from './lib/sweep.js';
 import { assertValidProfile, isValidInjectFailureMode, type InjectableFailureMode } from './lib/profiles.js';
 import { redactConnectionUrl } from './lib/redact.js';
 import { dockerAvailable, dockerCreateNetwork, runDockerSync, dockerRemoveContainer } from './lib/docker.js';
+import {
+  generatePrismaClientOnce,
+  isGenerationFailure,
+  type GenerationAuthorization,
+} from './lib/prismaGeneration.js';
 
 interface RunOptions {
   profile: 'postgres' | 'storage';
   injectFailures?: InjectableFailureMode[];
   readinessTimeoutMs?: number;
+  /**
+   * A token from a parent-level generatePrismaClientOnce() call (used by
+   * verify-parallel to eliminate the concurrent `prisma generate` race —
+   * see F1-003-P2-R2). Absent for standalone postgres/storage invocations,
+   * which continue to generate their own client exactly as before.
+   */
+  generationAuthorization?: GenerationAuthorization;
 }
 
 interface RunSummary {
@@ -178,7 +194,7 @@ async function runDisposableProfile(opts: RunOptions): Promise<RunSummary> {
       env.DATABASE_URL = `postgresql://${username}:${password}@127.0.0.1:1/${dbName}?schema=public`;
     }
 
-    migrationResult = await runMigrations(env);
+    migrationResult = await runMigrations(env, { authorization: opts.generationAuthorization });
     if (migrationResult.code !== 0) {
       throw new Error(`migration failed at step "${migrationResult.step}" (exit ${migrationResult.code})`);
     }
@@ -249,11 +265,58 @@ function checkNoCollision(summaries: RunSummary[]): CollisionCheck {
   };
 }
 
-async function runVerifyParallel(): Promise<{ postgresPair: RunSummary[]; storagePair: RunSummary[]; collisionCheck: CollisionCheck }> {
-  const postgresPair = await Promise.all([runDisposableProfile({ profile: 'postgres' }), runDisposableProfile({ profile: 'postgres' })]);
-  const storagePair = await Promise.all([runDisposableProfile({ profile: 'storage' }), runDisposableProfile({ profile: 'storage' })]);
+interface VerifyParallelResult {
+  generation: { succeeded: boolean; code: number };
+  postgresPair: RunSummary[];
+  storagePair: RunSummary[];
+  collisionCheck: CollisionCheck;
+  reasons: string[];
+}
+
+const VACUOUS_COLLISION_CHECK: CollisionCheck = {
+  uniqueRunIds: true,
+  uniqueContainerNames: true,
+  uniqueDatabaseNames: true,
+  uniqueHostPorts: true,
+};
+
+/**
+ * F1-003-P2-R2: `prisma generate` is run exactly ONCE here, before any child
+ * is spawned, eliminating the concurrent-generate race that previously hit
+ * a real Windows EBUSY inside the storage pair (2-way concurrency at that
+ * point — not full 4-way, since the postgres pair completes and tears down
+ * before the storage pair starts). Generation failure aborts before any
+ * Docker resource is created — zero children run.
+ */
+async function runVerifyParallel(injectFailures: InjectableFailureMode[] = []): Promise<VerifyParallelResult> {
+  const generationEnv: NodeJS.ProcessEnv = { ...process.env };
+  if (injectFailures.includes('parent-generate')) {
+    generationEnv.NMTEST_INJECT_PARENT_GENERATE_FAILURE = '1';
+  }
+
+  const generation = await generatePrismaClientOnce(generationEnv);
+  if (isGenerationFailure(generation)) {
+    return {
+      generation: { succeeded: false, code: generation.code },
+      postgresPair: [],
+      storagePair: [],
+      collisionCheck: VACUOUS_COLLISION_CHECK,
+      reasons: [
+        `parent prisma generate failed (exit ${generation.code}) before any child was started — zero Docker resources created`,
+      ],
+    };
+  }
+
+  const postgresPair = await Promise.all([
+    runDisposableProfile({ profile: 'postgres', generationAuthorization: generation }),
+    runDisposableProfile({ profile: 'postgres', generationAuthorization: generation }),
+  ]);
+  const storagePair = await Promise.all([
+    runDisposableProfile({ profile: 'storage', generationAuthorization: generation }),
+    runDisposableProfile({ profile: 'storage', generationAuthorization: generation }),
+  ]);
   const collisionCheck = checkNoCollision([...postgresPair, ...storagePair]);
-  return { postgresPair, storagePair, collisionCheck };
+  return { generation: { succeeded: true, code: 0 }, postgresPair, storagePair, collisionCheck, reasons: [] };
 }
 
 function redactSummary(summary: RunSummary): RunSummary {
@@ -289,11 +352,12 @@ async function main(): Promise<void> {
   const profile = assertValidProfile(profileArg);
 
   if (profile === 'verify-parallel') {
-    const result = await runVerifyParallel();
+    const result = await runVerifyParallel(injectFailures);
     console.log(JSON.stringify({ ...result, postgresPair: result.postgresPair.map(redactSummary), storagePair: result.storagePair.map(redactSummary) }, null, 2));
-    const allOutcomesOk = [...result.postgresPair, ...result.storagePair].every((s) => s.outcome.exitCode === 0);
+    const allChildrenRan = result.postgresPair.length === 2 && result.storagePair.length === 2;
+    const allOutcomesOk = allChildrenRan && [...result.postgresPair, ...result.storagePair].every((s) => s.outcome.exitCode === 0);
     const noCollision = Object.values(result.collisionCheck).every(Boolean);
-    process.exitCode = allOutcomesOk && noCollision ? 0 : 1;
+    process.exitCode = result.generation.succeeded && allChildrenRan && allOutcomesOk && noCollision ? 0 : 1;
     return;
   }
 

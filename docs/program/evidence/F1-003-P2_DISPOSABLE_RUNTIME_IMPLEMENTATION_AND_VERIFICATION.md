@@ -263,7 +263,7 @@ See §18-§25 above for the full exact-command/exact-result record. Summary tabl
 | `npm run typecheck` (server) | 0 errors |
 | `npm run test:runtime:postgres` | exit 0, 9/9 disposable-db members pass |
 | `npm run test:runtime:storage` | exit 0, 21/21 file-backup-db-integration assertions pass |
-| `npm run test:runtime:parallel` (×2 invocations) | exit 0 both times, zero collisions both times |
+| `npm run test:runtime:parallel` (×2 invocations) | exit 0 both times, zero collisions both times **[Initial pre-F1-003-P2-R1 observation, 2 runs only. F1-003-P2-R1 later found a real Windows EBUSY on a 3rd/4th rerun; F1-003-P2-R2 (§39) found the root cause, fixed it, and re-verified with 5 consecutive clean runs post-fix — see §39.7 for the full 8-attempt history.]** |
 | `--inject-failure=test` | exit 1, cleanup succeeds |
 | `--inject-failure=migration` | exit 1, tests never start, cleanup succeeds |
 | `--inject-failure=readiness` | exit 1, genuine timeout, cleanup succeeds |
@@ -338,7 +338,7 @@ This task does **not** claim: disposable-Postgres/MinIO provisioning is wired in
 
 ## 37. Acceptance-criteria matrix
 
-See the JSON companion's `acceptanceCriteria` array for the full 34-item machine-readable matrix (all 34 items: `MET`). Narrative highlights: every falsifiable criterion from the merged F1-003-P2A design §L was independently, live-verified against a real Docker Desktop engine on this machine — not merely asserted from code inspection. Two real bugs were found and fixed by that live-verification process before every criterion could be marked `MET`:
+See the JSON companion's `acceptanceCriteria` array for the full 34-item machine-readable matrix. ~~All 34 items: `MET`~~ **[CORRECTED — see §39 below. This blanket statement is preserved as this task's own original, as-observed-at-the-time claim, based on exactly 2 fresh `verify-parallel` runs with no adversarial repetition. Items 17 and 18 (concurrent postgres/storage runs succeed without collision) were later found by F1-003-P2-R1 to rest on an unproven assumption — a 3rd rerun hit a real `EBUSY` race in concurrent `prisma generate`. F1-003-P2-R2 found the root cause, fixed it, and re-earned `MET` status for items 17/18 with materially stronger evidence: 5 consecutive clean runs after the fix, not 2. The other 32 items are unaffected by this correction.]** Narrative highlights: every falsifiable criterion from the merged F1-003-P2A design §L was independently, live-verified against a real Docker Desktop engine on this machine — not merely asserted from code inspection. Two real bugs were found and fixed by that live-verification process before every criterion could be marked `MET`:
 
 1. **Guard-normalization bug**: the production-endpoint guard's own database-identity check compared the *raw* (mixed-case, dash-containing) run ID against the *sanitized* (lowercased, underscore-separated) generated database name, causing every real disposable-Postgres run to fail its own safety check. Fixed by normalizing both sides identically before comparison (`lib/guard.ts`); a dedicated regression unit test now reproduces the exact real-world naming shapes involved.
 2. **Windows `spawn EINVAL`**: `child_process.spawn` cannot invoke `npm.cmd`/`npx.cmd` directly on Windows without `shell: true`. Fixed by conditionally enabling `shell: true` for those two invocations only on `win32`, passing only fixed internal literal arguments (never user-controlled text), so no injection surface is introduced.
@@ -381,3 +381,112 @@ Before this task, PostgreSQL's own invocation used the word "pinned" ambiguously
 - `npm run server:test:non-disposable` (run from `server/`) rerun: exit `0`, 68/68, no failure marker in the combined log — no regression from this task's one-line image-reference change.
 
 **Not claimed by this task:** that the EBUSY race is fixed (it is recorded, not resolved); that `verify-parallel` is now guaranteed collision-free under all concurrency levels (2 of 3 fresh runs were clean; the third's failure was a filesystem race, not a naming/port collision, and collision-uniqueness fields were `true` even in the failed run); that this task performed any production access, deployment, schema/migration authoring, or CI-workflow change.
+
+## 39. F1-003-P2-R2 update (2026-07-30): parallel Prisma generation race eliminated, deterministic verification
+
+This section records F1-003-P2-R2, continued on this same open PR #260 branch (no new PR), which resolves the EBUSY finding recorded in §38 above.
+
+### 39.1 Blocking finding (preserved, not deleted)
+
+F1-003-P2-R1's `verify-parallel` reruns (§38): run 1 success, **run 2 — one `storage` invocation failed with a real Windows `EBUSY`** (`copyfile ...\node_modules\@prisma\client\runtime\query_compiler_fast_bg.postgresql.js -> ...\node_modules\.prisma\client\query_compiler_fast_bg.js`) during `prisma generate`, run 3 success. This is preserved above verbatim, not rewritten.
+
+### 39.2 Root cause
+
+CodeGraph confirmed unavailable for this task too (`ToolSearch` returned zero matches — consistent with every prior program task); bounded `Read`/`Grep` used instead, scoped exactly to `scripts/test-runtime/**`, root `package.json`, `server/package.json`, `server/prisma/schema.prisma`, `server/prisma.config.ts`, and `server/src/db.ts`.
+
+- `scripts/test-runtime/lib/process.ts`'s `runMigrations()` ran `npx prisma generate && npx prisma migrate deploy` **unconditionally on every single disposable-profile invocation**, targeting the shared, schema-derived default output directory `server/node_modules/.prisma/client` (`server/prisma/schema.prisma`'s `generator client` block has no custom `output`; `server/prisma.config.ts` only configures `schema`/`migrations`/`datasource` paths, not generator output).
+- `orchestrator.ts`'s `runVerifyParallel()` runs the postgres pair (2-way concurrent, via `Promise.all`) to completion **first**, then the storage pair (2-way concurrent) — not full 4-way concurrency as §38's prose imprecisely stated. The EBUSY was correctly observed within the storage pair specifically; this section corrects that imprecision without deleting §38's original wording.
+- Each concurrent child independently spawned its own `npx prisma generate` child process (`spawnAsync`), racing on the same shared output directory — a genuine Windows filesystem collision, not a Docker name/port/database collision (all `collisionCheck` fields were already `true` in the failed run).
+- Prisma Client generation output depends only on `schema.prisma`, never on `DATABASE_URL` or any other per-run value (confirmed by direct inspection of `server/src/db.ts`'s `new PrismaClient(...)` construction — the connection string is supplied at runtime, not baked in at generate time) — so one generation safely serves every child spawned within the same orchestrator invocation.
+- `prisma migrate deploy` does not require the generated `@prisma/client` output — it operates directly against `prisma/migrations/**` and the schema, independent of the generated client (Prisma's own documented CLI architecture; not itself a claim requiring repository-specific evidence).
+
+Answers to the 7 required root-cause questions: (1) `npx prisma generate`, run once per disposable-profile invocation; (2) `server/node_modules/.prisma/client` (the default `prisma-client-js` output); (3) not required per invocation — only once per orchestrator process; (4) yes, safely, since generation is schema-derived only; (5) no, `migrate deploy` does not require generation first; (6) not attempted — Option A (below) achieves the fix without any per-run output path or import change; (7) no cross-process lock needed — `verify-parallel`'s concurrency is entirely same-process (one Node orchestrator process spawning child Docker/CLI processes via `Promise.all`), so an in-process generate-once step, ordered before fan-out, fully eliminates the race.
+
+### 39.3 Chosen remediation: Option A — generate once before parallel fan-out
+
+New module `scripts/test-runtime/lib/prismaGeneration.ts`: `generatePrismaClientOnce(env, runner?)` runs `npx prisma generate` exactly once and mints a random 32-hex-char single-process authorization token (`node:crypto.randomBytes(16)`) recorded in a private, module-scoped `Set<string>`. `isValidGenerationAuthorization(auth)` returns `true` only for a token present in that set — a fabricated/foreign token, an object from an unrelated call, or `undefined` all return `false`. `runMigrations()` (`lib/process.ts`) now accepts an optional `{ authorization }`; when `isValidGenerationAuthorization(authorization)` is `false` (including when no authorization is supplied at all — the standalone `postgres`/`storage` profile path, unchanged from before this task), it runs its own `prisma generate` exactly as before. `orchestrator.ts`'s `runVerifyParallel()` now calls `generatePrismaClientOnce()` exactly once, before spawning any child; if generation fails, the function returns immediately with `generation.succeeded: false` and empty `postgresPair`/`storagePair` arrays — **zero Docker resources are created**, matching "generation failure prevents fan-out." On success, the one authorization is passed to all 4 `runDisposableProfile()` calls, each of which passes it through to its own `runMigrations()` call, which skips its own generate step.
+
+This is the narrowest safe fix supported by direct repository evidence: no schema/migration change, no application import change, no lock/mutex, no new external dependency, and standalone single-invocation profiles are byte-for-byte unaffected (they still generate exactly once, exactly as before — just via the same code path, now gated by an authorization check that is trivially `false` when none is supplied).
+
+Rejected: Option B (cross-process lock) — unnecessary complexity for a same-process concurrency problem; Option C (per-run isolated Prisma output) — would require either an application import change or non-trivial `node_modules` manipulation, for no additional safety benefit over Option A.
+
+### 39.4 Files changed
+
+- `scripts/test-runtime/lib/paths.ts` (new) — extracted `REPO_ROOT`/`SERVER_DIR` constants (previously inline in `process.ts`) to break a would-be circular import between `process.ts` and the new `prismaGeneration.ts`.
+- `scripts/test-runtime/lib/prismaGeneration.ts` (new) — the generate-once coordination mechanism described above.
+- `scripts/test-runtime/lib/process.ts` — `runMigrations()` accepts `{ authorization }` and skips its own generate step only when a valid authorization is presented.
+- `scripts/test-runtime/lib/profiles.ts` — added `'parent-generate'` to `INJECTABLE_FAILURE_MODES`, a new test-only failure-injection mode analogous to the existing 4 (a real, deterministic non-zero exit via `NMTEST_INJECT_PARENT_GENERATE_FAILURE=1`, not a fabricated failure).
+- `scripts/test-runtime/orchestrator.ts` — `RunOptions.generationAuthorization`; `runDisposableProfile()` passes it to `runMigrations()`; `runVerifyParallel()` now generates once up front and aborts before fan-out on failure; `main()`'s `verify-parallel` exit-code logic now also requires `generation.succeeded` and all 4 children having actually run.
+- `scripts/test-runtime/__tests__/orchestratorUnit.test.ts` — 9 new focused unit tests for the coordination mechanism (§39.5) plus an update to the existing `isValidInjectFailureMode` test to include `'parent-generate'`.
+
+No schema, migration, CI workflow, application-domain, or `server/package.json` file was touched.
+
+### 39.5 Unit tests (Docker-free, `npm run test:runtime:unit`)
+
+`generatePrismaClientOnce` accepts an injectable `GenerateRunner` function specifically so these tests exercise the coordination logic without spawning a real subprocess:
+
+1. Only one generation owner: a counting fake runner proves the underlying command is invoked exactly once per `generatePrismaClientOnce()` call.
+2. A single minted token authorizes multiple independent verifiers — models concurrent children all correctly recognizing the one shared authorization.
+3. Generation failure propagates the real underlying exit code (not fabricated).
+4. A failed generation mints no token — no child can be authorized by a failed run.
+5. The `parent-generate` injection env var forces deterministic failure regardless of the underlying runner's own outcome.
+6. A slow-but-successful runner still resolves to success — no premature/artificial timeout is introduced (Option A has no lock/wait loop, so no timeout mechanism is needed or added).
+7. A fabricated/unrelated token never validates — unrelated run IDs cannot spoof authorization.
+8. A child without a valid authorization cannot skip generation (the exact fail-safe gate `runMigrations()` itself uses).
+9. `resetGenerationAuthorizationsForTest()` revokes previously-valid tokens (cleanup/release behavior between test cases).
+
+Two list items from the task's minimum-coverage list are explicitly **not applicable** under Option A and are recorded as such rather than faked: **stale-lock behavior** (no lock exists — Option A has no lock to go stale) and a dedicated **timeout-behavior** test beyond item 6 above (no cross-process wait loop is introduced; the existing `npx prisma generate` call has no additional timeout wrapper, consistent with the "no sleep as correctness mechanism" and "no indefinite wait" prohibitions — Option A removes the concurrency rather than making processes wait on each other).
+
+Result: **59/59 passed, 0 failed** (the pre-existing 50 plus these 9 new ones).
+
+### 39.6 Standalone profile and failure-injection reruns (real Docker Desktop engine)
+
+- `npm run test:runtime:postgres`: exit `0`, `server:test:disposable-db` (9 members) exit `0`.
+- `npm run test:runtime:storage`: exit `0`, `server:test:storage-integration` exit `0` (21/21 assertions).
+- `npm run server:test:non-disposable` (from `server/`): exit `0`, 68/68 — no regression.
+- Postgres failure-injection modes re-run against the new wiring: `--inject-failure=test` (exit `1`, tests failed, cleanup succeeded), `--inject-failure=migration` (exit `1`, failed at `migrate-deploy`, cleanup succeeded), `--inject-failure=readiness` (exit `1`, readiness timeout, cleanup succeeded), `--inject-failure=cleanup` (tests passed, cleanup deliberately failed via sidecar, exit `1`) — all four unchanged in behavior, confirming standalone invocations are unaffected by this fix.
+- New `verify-parallel --inject-failure=parent-generate`: `generation.succeeded: false`, `code: 1`, `postgresPair: []`, `storagePair: []`, exit `1` — **zero Docker containers or networks created** (confirmed via `docker ps -a`/`docker network ls` immediately after), proving generation failure genuinely prevents fan-out.
+
+### 39.7 Parallel stability gate — total attempts, every failure, 5 consecutive successes
+
+Total `verify-parallel` attempts across F1-003-P2-R1 and F1-003-P2-R2 combined: **8** (3 pre-fix in R1, 5 post-fix in R2). Every attempt, not only the final five:
+
+| # | Task | Result | Notes |
+|---|---|---|---|
+| 1 | R1 | success | pre-fix |
+| 2 | R1 | **FAILED** | real Windows `EBUSY` in concurrent `prisma generate` (storage pair) — the finding this task fixes |
+| 3 | R1 | success | pre-fix, re-run to check for a pattern |
+| 4 | R2 (attempt 1) | success | post-fix; exactly 1 `Generated Prisma Client` log line for the whole run; zero `EBUSY` |
+| 5 | R2 (attempt 2) | success | post-fix; 1 generation; zero `EBUSY` |
+| 6 | R2 (attempt 3) | success | post-fix; 1 generation; zero `EBUSY` |
+| 7 | R2 (attempt 4) | success | post-fix; 1 generation; zero `EBUSY` |
+| 8 | R2 (attempt 5) | success | post-fix; 1 generation; zero `EBUSY` — **5th consecutive clean run, gate satisfied** |
+
+Attempts 4-8 (R2's own 5 consecutive runs) each: `generation.succeeded: true`; both postgres-pair and both storage-pair children exit `0` (4/4 every run); `collisionCheck` all `true` every run; exactly one `Generated Prisma Client` line in the combined log every run (confirming the fix — generation happens once, not up to 4 times); zero `EBUSY` anywhere; `docker ps -a`/`docker network ls` show zero `nmtest-*` resources immediately after every single run. The counter was never reset to hide attempt 2's failure — it is recorded here as part of the same continuous total.
+
+### 39.8 Migration status
+
+No schema or migration file created or modified. Existing migrations (already-committed `prisma/migrations/**`) were applied only to disposable, per-run databases during every rerun above. No production database access. No `_prisma_migrations` table manually altered. No rollback performed or claimed.
+
+### 39.9 Security / tenant / KVKK impact
+
+- **Trust boundary**: the generate-once mechanism is an in-process, same-invocation trust boundary, not a cross-process or cross-machine one — `validTokens` is a private module-scoped `Set` that dies with the orchestrator process; there is no persisted lock/temp file of any kind, so there is no stale-lock-file deletion safety question to answer (no lock file exists).
+- **Command-injection impact**: none — the new code paths introduce no new shell string concatenation; `generatePrismaClientOnce`'s default runner reuses the existing `spawnAsync` argv-array invocation pattern (`shell: true` only for the pre-existing Windows `npx.cmd` case, with only fixed internal literal arguments, unchanged from before this task).
+- **Temp/lock-file permissions**: not applicable — no file-based lock or temp artifact is created by this mechanism.
+- No application runtime file imports this tooling (`scripts/test-runtime/**` remains test/dev-only).
+- No tenant-scoping/authorization behavior changed — every disposable-DB test in `server:test:disposable-db`/`server:test:storage-integration`/`server:test:non-disposable` passed unchanged.
+- No real patient data — all fixtures remain synthetic, unchanged from the original P2 implementation.
+- No KVKK freeze boundary touched.
+
+### 39.10 Rollback
+
+Single `git revert` of this task's commit — removes `lib/paths.ts` and `lib/prismaGeneration.ts`, and reverts the `process.ts`/`profiles.ts`/`orchestrator.ts`/unit-test changes, restoring the pre-R2 (racy) behavior. No lock/temp artifact exists to clean up (none is ever created). No schema/data/deployment rollback applicable.
+
+### 39.11 Corrected acceptance-criteria status (items 17 and 18)
+
+| id | text | pre-R2 status | R2 status | Evidence |
+|---|---|---|---|---|
+| 17 | At least two concurrent postgres runs succeed without collision | `MET` (2 runs only, later found to rest on an unproven assumption per §38) | `MET` | 5/5 consecutive clean runs post-fix, §39.7 |
+| 18 | At least two concurrent storage runs succeed without collision | `MET` (2 runs only; run 2 of a later 3rd/4th check hit real `EBUSY`, §38) | `MET` | 5/5 consecutive clean runs post-fix, §39.7 |
+
+All other 32 criteria are unaffected by this correction and remain `MET` as originally recorded.

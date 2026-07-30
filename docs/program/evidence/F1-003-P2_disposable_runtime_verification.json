@@ -454,13 +454,15 @@
       "id": 17,
       "text": "At least two concurrent postgres runs succeed without collision.",
       "status": "MET",
-      "evidence": "parallelCollisionResults"
+      "evidence": "parallelCollisionResults",
+      "verificationHistory": "Original (2026-07-29): MET based on exactly 2 fresh runs. F1-003-P2-R1 later found a real Windows EBUSY race in concurrent prisma generate during a 3rd/4th rerun (not a naming/port/database collision). F1-003-P2-R2 (2026-07-30) found the root cause, fixed it (generate-once coordination), and re-verified MET status with 5 consecutive clean runs post-fix."
     },
     {
       "id": 18,
       "text": "At least two concurrent storage runs succeed without collision.",
       "status": "MET",
-      "evidence": "parallelCollisionResults"
+      "evidence": "parallelCollisionResults",
+      "verificationHistory": "Original (2026-07-29): MET based on exactly 2 fresh runs. F1-003-P2-R1 later found a real Windows EBUSY race in concurrent prisma generate during a 3rd/4th rerun (not a naming/port/database collision). F1-003-P2-R2 (2026-07-30) found the root cause, fixed it (generate-once coordination), and re-verified MET status with 5 consecutive clean runs post-fix."
     },
     {
       "id": 19,
@@ -725,5 +727,179 @@
       "verify-parallel is guaranteed collision-free under all concurrency levels.",
       "Any production access, deployment, schema/migration authoring, or CI-workflow change occurred in this task."
     ]
+  },
+  "p2r2ParallelGenerationRaceFix": {
+    "addedBy": "F1-003-P2-R2",
+    "date": "2026-07-30",
+    "blockingFinding": {
+      "source": "F1-003-P2-R1",
+      "run1": "success",
+      "run2": "FAILED — real Windows EBUSY in concurrent prisma generate (storage pair, 2-way concurrency, not 4-way)",
+      "run3": "success"
+    },
+    "rootCause": {
+      "codegraphAvailable": false,
+      "codegraphError": "ToolSearch returned zero matches (consistent with every prior program task)",
+      "cause": "runMigrations() in scripts/test-runtime/lib/process.ts ran npx prisma generate unconditionally on every disposable-profile invocation, targeting the shared schema-derived default output server/node_modules/.prisma/client (no custom generator output in server/prisma/schema.prisma or server/prisma.config.ts). Concurrent verify-parallel children (2-way concurrency within the storage pair specifically, not full 4-way) raced on that shared directory.",
+      "generationIsSchemaOnly": true,
+      "migrateDeployRequiresGenerateFirst": false,
+      "crossProcessLockNeeded": false,
+      "rationale": "verify-parallel concurrency is entirely same-process (one orchestrator process spawning children via Promise.all), so an in-process generate-once step ordered before fan-out fully eliminates the race without a lock."
+    },
+    "remediation": {
+      "optionChosen": "A",
+      "optionsRejected": {
+        "B": "cross-process lock — unnecessary complexity for a same-process concurrency problem",
+        "C": "per-run isolated Prisma output — would require an application import change or node_modules manipulation for no additional benefit over Option A"
+      },
+      "filesChanged": [
+        "scripts/test-runtime/lib/paths.ts (new)",
+        "scripts/test-runtime/lib/prismaGeneration.ts (new)",
+        "scripts/test-runtime/lib/process.ts",
+        "scripts/test-runtime/lib/profiles.ts",
+        "scripts/test-runtime/orchestrator.ts",
+        "scripts/test-runtime/__tests__/orchestratorUnit.test.ts"
+      ],
+      "mechanism": "generatePrismaClientOnce() runs prisma generate exactly once per orchestrator invocation and mints a random single-process authorization token (node:crypto.randomBytes(16)) recorded in a private Set. isValidGenerationAuthorization() returns true only for a token present in that set. runMigrations() skips its own generate step only when presented a valid token; absent/foreign/invalid tokens fall back to generating (fail-safe, never fail-skip). Standalone postgres/storage invocations are unaffected (no authorization is ever passed to them)."
+    },
+    "unitTests": {
+      "newCount": 9,
+      "totalCount": 59,
+      "previousTotalCount": 50,
+      "allPassed": true,
+      "notApplicableItems": [
+        "stale-lock behavior (no lock used under Option A)",
+        "dedicated cross-process timeout test (no lock/wait loop introduced)"
+      ]
+    },
+    "standaloneAndInjectionReruns": {
+      "postgresProfile": {
+        "exitCode": 0,
+        "testScript": "server:test:disposable-db",
+        "testExit": 0
+      },
+      "storageProfile": {
+        "exitCode": 0,
+        "testScript": "server:test:storage-integration",
+        "testExit": 0,
+        "assertions": "21/21"
+      },
+      "nonDisposableBaseline": {
+        "script": "server:test:non-disposable",
+        "exitCode": 0,
+        "members": "68/68",
+        "regression": false
+      },
+      "postgresFailureInjection": {
+        "test": {
+          "exitCode": 1,
+          "cleanupSucceeded": true
+        },
+        "migration": {
+          "exitCode": 1,
+          "step": "migrate-deploy",
+          "cleanupSucceeded": true
+        },
+        "readiness": {
+          "exitCode": 1,
+          "cleanupSucceeded": true
+        },
+        "cleanup": {
+          "testsPassed": true,
+          "cleanupSucceeded": false,
+          "exitCode": 1
+        }
+      },
+      "parentGenerateFailureInjection": {
+        "command": "npm run test:runtime:parallel -- --inject-failure=parent-generate",
+        "generationSucceeded": false,
+        "code": 1,
+        "postgresPairLength": 0,
+        "storagePairLength": 0,
+        "exitCode": 1,
+        "dockerResourcesCreated": 0,
+        "verifiedVia": "docker ps -a and docker network ls immediately after — zero nmtest-* resources"
+      }
+    },
+    "parallelStabilityGate": {
+      "totalAttemptsAcrossR1AndR2": 8,
+      "attempts": [
+        {
+          "seq": 1,
+          "task": "R1",
+          "result": "success",
+          "note": "pre-fix"
+        },
+        {
+          "seq": 2,
+          "task": "R1",
+          "result": "FAILED",
+          "note": "real Windows EBUSY in concurrent prisma generate (storage pair) — the finding this task fixes"
+        },
+        {
+          "seq": 3,
+          "task": "R1",
+          "result": "success",
+          "note": "pre-fix, re-run to check for a pattern"
+        },
+        {
+          "seq": 4,
+          "task": "R2",
+          "result": "success",
+          "note": "post-fix attempt 1 of 5; exactly 1 Generated Prisma Client log line; zero EBUSY"
+        },
+        {
+          "seq": 5,
+          "task": "R2",
+          "result": "success",
+          "note": "post-fix attempt 2 of 5"
+        },
+        {
+          "seq": 6,
+          "task": "R2",
+          "result": "success",
+          "note": "post-fix attempt 3 of 5"
+        },
+        {
+          "seq": 7,
+          "task": "R2",
+          "result": "success",
+          "note": "post-fix attempt 4 of 5"
+        },
+        {
+          "seq": 8,
+          "task": "R2",
+          "result": "success",
+          "note": "post-fix attempt 5 of 5 — gate satisfied"
+        }
+      ],
+      "consecutiveSuccessesRequired": 5,
+      "consecutiveSuccessesAchieved": 5,
+      "counterResetToHideFailure": false,
+      "perRunDetailPostFix": {
+        "allFourChildrenExitZero": true,
+        "collisionCheckAllTrueEveryRun": true,
+        "exactlyOneGenerationPerRun": true,
+        "ebusyCount": 0,
+        "zeroDockerResourcesAfterEveryRun": true
+      }
+    },
+    "migrationStatus": {
+      "schemaOrMigrationCreated": false,
+      "productionAccess": false,
+      "prismaMigrationsTableManuallyAltered": false,
+      "rollbackPerformed": false
+    },
+    "r070Status": "OPEN, unchanged",
+    "securityTenantKvkkImpact": {
+      "trustBoundary": "in-process, same-invocation only; validTokens is a private module-scoped Set with no persisted lock/temp file",
+      "commandInjectionImpact": "none — reuses existing argv-array spawnAsync invocation pattern",
+      "lockOrTempFileExists": false,
+      "applicationRuntimeImport": false,
+      "tenantBehaviorChanged": false,
+      "realPatientData": false,
+      "kvkkFreezeImpact": false
+    },
+    "rollback": "single git revert of this commit; no lock/temp artifact to clean up (none created); no schema/data/deployment rollback applicable"
   }
 }

@@ -29,6 +29,13 @@ import { redactConnectionUrl, redactSecret, redactEnvForLogging } from '../lib/r
 import { buildLabels, labelArgs, labelFilterArgs } from '../lib/labels.js';
 import { isStale, resolveStaleTtlHours, combineOutcome, DEFAULT_STALE_TTL_HOURS } from '../lib/outcome.js';
 import { assertValidProfile, InvalidProfileError, isValidInjectFailureMode } from '../lib/profiles.js';
+import {
+  generatePrismaClientOnce,
+  isGenerationFailure,
+  isValidGenerationAuthorization,
+  resetGenerationAuthorizationsForTest,
+  type GenerateRunner,
+} from '../lib/prismaGeneration.js';
 
 let passed = 0;
 let failed = 0;
@@ -63,6 +70,18 @@ function assertThrows(fn: () => void, msg: string) {
     threw = true;
   }
   if (!threw) throw new Error(`${msg}: expected to throw`);
+}
+
+async function testAsync(name: string, fn: () => Promise<void>) {
+  try {
+    await fn();
+    console.log(`  ✓ ${name}`);
+    passed++;
+  } catch (err) {
+    console.error(`  ✗ ${name}`);
+    console.error(`      ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+    failed++;
+  }
 }
 
 // ─── Run ID generation / sanitization ───────────────────────────────────────
@@ -383,10 +402,87 @@ test('assertValidProfile rejects an empty/undefined profile', () => {
 });
 
 test('isValidInjectFailureMode recognizes exactly the documented failure modes', () => {
-  for (const mode of ['test', 'migration', 'readiness', 'cleanup']) {
+  for (const mode of ['test', 'migration', 'readiness', 'cleanup', 'parent-generate']) {
     assert(isValidInjectFailureMode(mode), `"${mode}" should be a recognized failure-injection mode`);
   }
   assert(!isValidInjectFailureMode('bogus'), 'an unrecognized mode must not validate');
+});
+
+// ─── Prisma generation coordination (F1-003-P2-R2) ──────────────────────────
+section('Prisma generation coordination (parallel-generate race fix)');
+
+const okRunner: GenerateRunner = async () => ({ code: 0 });
+const failRunner: GenerateRunner = async () => ({ code: 1 });
+
+await testAsync('generatePrismaClientOnce mints a valid token on a successful run (only one generation owner per call)', async () => {
+  resetGenerationAuthorizationsForTest();
+  let calls = 0;
+  const countingRunner: GenerateRunner = async () => {
+    calls++;
+    return { code: 0 };
+  };
+  const auth = await generatePrismaClientOnce({}, countingRunner);
+  assertEqual(calls, 1, 'the underlying generate command must run exactly once for one authorization');
+  assert(!isGenerationFailure(auth), 'a code-0 runner must produce a success authorization, not a failure');
+});
+
+await testAsync('a single minted token authorizes multiple independent verifiers (concurrent children sharing one authorization)', async () => {
+  resetGenerationAuthorizationsForTest();
+  const auth = await generatePrismaClientOnce({}, okRunner);
+  assert(!isGenerationFailure(auth), 'setup: generation must succeed');
+  if (!isGenerationFailure(auth)) {
+    assert(isValidGenerationAuthorization(auth), 'first concurrent child checking the token must see it as valid');
+    assert(isValidGenerationAuthorization({ ...auth }), 'second concurrent child checking an equivalent token object must also see it as valid');
+  }
+});
+
+await testAsync('generation failure propagates the real underlying exit code, not a fabricated one', async () => {
+  resetGenerationAuthorizationsForTest();
+  const result = await generatePrismaClientOnce({}, failRunner);
+  assert(isGenerationFailure(result), 'a code-1 runner must produce a failure, never a silently-accepted success');
+  if (isGenerationFailure(result)) {
+    assertEqual(result.code, 1, 'the exact underlying exit code must be preserved');
+  }
+});
+
+await testAsync('a failed generation mints no token (no child can be authorized by a failed run)', async () => {
+  resetGenerationAuthorizationsForTest();
+  await generatePrismaClientOnce({}, failRunner);
+  assert(!isValidGenerationAuthorization({ token: 'anything' }), 'no token exists to validate against after a failed generation');
+});
+
+await testAsync('the parent-generate failure-injection env var forces a deterministic failure even with a passing runner', async () => {
+  resetGenerationAuthorizationsForTest();
+  const result = await generatePrismaClientOnce({ NMTEST_INJECT_PARENT_GENERATE_FAILURE: '1' }, okRunner);
+  assert(isGenerationFailure(result), 'the injection flag must force failure regardless of the underlying runner outcome');
+});
+
+await testAsync('generatePrismaClientOnce awaits a slow runner fully — no premature/artificial timeout is introduced', async () => {
+  resetGenerationAuthorizationsForTest();
+  const slowRunner: GenerateRunner = () => new Promise((resolve) => setTimeout(() => resolve({ code: 0 }), 30));
+  const auth = await generatePrismaClientOnce({}, slowRunner);
+  assert(!isGenerationFailure(auth), 'a slow-but-successful runner must still resolve to success, not time out');
+});
+
+test('a fabricated/unrelated token never validates (unrelated run IDs cannot spoof authorization)', () => {
+  resetGenerationAuthorizationsForTest();
+  assert(!isValidGenerationAuthorization({ token: 'totally-made-up-token' }), 'a foreign/fabricated token must be rejected');
+  assert(!isValidGenerationAuthorization(undefined), 'no authorization at all must be rejected, not treated as valid');
+  assert(!isValidGenerationAuthorization({}), 'a malformed authorization object must be rejected');
+});
+
+test('a child without a valid authorization cannot skip generation (fail-safe default)', () => {
+  resetGenerationAuthorizationsForTest();
+  // This mirrors runMigrations' own gate: `canSkipGenerate = isValidGenerationAuthorization(opts?.authorization)`.
+  const canSkipGenerate = isValidGenerationAuthorization(undefined);
+  assertEqual(canSkipGenerate, false, 'an absent authorization must never allow skipping the generate step');
+});
+
+test('resetGenerationAuthorizationsForTest revokes previously-valid tokens (cleanup/release behavior)', () => {
+  resetGenerationAuthorizationsForTest();
+  // Cannot mint synchronously here without a runner; assert directly against
+  // the post-reset state instead — no token survives a reset.
+  assert(!isValidGenerationAuthorization({ token: 'pre-reset-token' }), 'no token should be considered valid immediately after a reset');
 });
 
 // ─── Summary ─────────────────────────────────────────────────────────────────

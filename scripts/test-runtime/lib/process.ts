@@ -1,22 +1,33 @@
 import { spawnAsync } from './docker.js';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { REPO_ROOT, SERVER_DIR } from './paths.js';
+import { isValidGenerationAuthorization } from './prismaGeneration.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-export const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
-export const SERVER_DIR = path.join(REPO_ROOT, 'server');
+export { REPO_ROOT, SERVER_DIR };
 
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 // Windows .cmd shims cannot be spawned without a shell (Node ENOENT/EINVAL);
 // every argv element passed through it below is a fixed internal literal.
 const useShell = process.platform === 'win32';
 
-/** Runs `npx prisma generate && npx prisma migrate deploy` from server/, sequentially. */
-export async function runMigrations(env: NodeJS.ProcessEnv): Promise<{ code: number; step: 'generate' | 'migrate-deploy' | 'ok' }> {
+/**
+ * Runs `npx prisma generate && npx prisma migrate deploy` from server/,
+ * sequentially. If `opts.authorization` is a token minted by this same
+ * process's `generatePrismaClientOnce()` (see prismaGeneration.ts), the
+ * generate step is skipped — the caller has already generated a fresh
+ * client and this invocation only needs to apply migrations to its own
+ * disposable database. Any invalid/missing/foreign authorization falls back
+ * to generating here, exactly as before (fail-safe, never fail-skip).
+ */
+export async function runMigrations(
+  env: NodeJS.ProcessEnv,
+  opts?: { authorization?: unknown },
+): Promise<{ code: number; step: 'generate' | 'migrate-deploy' | 'ok' }> {
   const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const generate = await spawnAsync(npxCmd, ['prisma', 'generate'], { cwd: SERVER_DIR, env, shell: useShell });
-  if (generate.code !== 0) return { code: generate.code, step: 'generate' };
+  const canSkipGenerate = isValidGenerationAuthorization(opts?.authorization);
+  if (!canSkipGenerate) {
+    const generate = await spawnAsync(npxCmd, ['prisma', 'generate'], { cwd: SERVER_DIR, env, shell: useShell });
+    if (generate.code !== 0) return { code: generate.code, step: 'generate' };
+  }
   const deploy = await spawnAsync(npxCmd, ['prisma', 'migrate', 'deploy'], { cwd: SERVER_DIR, env, shell: useShell });
   if (deploy.code !== 0) return { code: deploy.code, step: 'migrate-deploy' };
   return { code: 0, step: 'ok' };
