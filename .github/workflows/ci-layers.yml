@@ -5,8 +5,8 @@ name: ci-layers
 # ci-main-and-nightly.yml (push to main, nightly schedule, manual dispatch).
 # Kept as a single reusable workflow so the two thin callers never duplicate
 # job definitions (see docs/program/evidence/
-# F1-003-P3_LAYERED_CI_WORKFLOWS_AND_FULL_SUITE_FAIL_SAFE.md for the full
-# design record).
+# F1-003-P3_LAYERED_CI_WORKFLOWS_AND_FULL_SUITE_FAIL_SAFE.md and its P3-R1
+# update for the full design record).
 #
 # Layer map:
 #   Layer 1 (static/type/syntax) -> frontend-typecheck-and-build,
@@ -16,18 +16,30 @@ name: ci-layers
 #   Layer 2 (non-disposable backend)      -> non-disposable-backend-tests
 #   Layer 3 (disposable PostgreSQL)       -> disposable-postgres-tests
 #   Layer 4 (disposable PostgreSQL+MinIO) -> storage-integration-tests
-#   Layer 5 (full-suite/compatibility fail-safe) -> full-suite-compatibility-failsafe
+#   Layer 5 (full-suite/compatibility fail-safe) -> full-suite-compatibility-failsafe-frontend,
+#                                                    full-suite-compatibility-failsafe-backend
 #
 # All jobs run on every call, on every trigger, with no path filters - the
 # layering itself is what must never silently narrow which canonical scripts
-# execute (see Layer 5 job comment for the one honestly-documented exception:
-# legacy `server:test`'s own additional DB-required members remain deferred,
-# unchanged from F1-003-P1/P2's own prior deferral).
+# execute.
+#
+# F1-003-P3-R1: Layer 5 now has a backend half. The original P3 Layer 5 only
+# covered the frontend leaf scripts; legacy `server:test` silently chains 23
+# additional PostgreSQL-required/MinIO-free scripts (exact names in
+# server/package.json's new `server:test:legacy-db-required` aggregate, and
+# in docs/program/evidence/F1-003-P3_layered_ci_verification.json) that were
+# not reachable from any CI-safe aggregate before this task. Closure: an
+# additive `postgres-compat` profile was added to the existing, unmodified
+# F1-003-P2 orchestrator (scripts/test-runtime/orchestrator.ts) - it reuses
+# 100% of the `postgres` profile's provisioning/guard/migration/cleanup code
+# path, only swapping which already-existing package script it executes.
+# Legacy `server:test` itself is never read, invoked, or modified.
 #
 # Every job invokes an existing, already-accepted package script by name -
 # none reproduces test file membership in YAML, and none reimplements the
-# F1-003-P2 disposable PostgreSQL/MinIO orchestrator (scripts/test-runtime/**
-# is used exactly as merged, unmodified).
+# F1-003-P2 disposable PostgreSQL/MinIO provisioning mechanism
+# (scripts/test-runtime/** is used exactly as merged, additively extended
+# only with the new profile described above).
 
 on:
   workflow_call: {}
@@ -152,6 +164,23 @@ jobs:
           cache: 'npm'
           cache-dependency-path: server/package-lock.json
       - run: npm ci
+      - name: Generate Prisma Client
+        # F1-003-P3-R1 root-cause fix: this job's own test files import
+        # @prisma/client (server/src/db.ts) at module load time, but `npm ci`
+        # alone does not generate it - no postinstall script does this in
+        # server/package.json. Layers 3/4 never needed this explicit step
+        # because the F1-003-P2 orchestrator's runMigrations() always
+        # generates the client itself before running any test script; this
+        # job calls server:test:non-disposable directly, without going
+        # through the orchestrator, so it must generate the client itself.
+        # Root-caused from the real GitHub Actions failure on this job in
+        # PR #268's initial run (SyntaxError: the requested module
+        # '@prisma/client' does not provide an export named 'PrismaClient'),
+        # which a from-scratch CI checkout hits every time - not reproduced
+        # locally only because this task's own local environment had already
+        # generated the client via earlier, unrelated commands in the same
+        # persistent working directory.
+        run: npx prisma generate
       - name: server:test:non-disposable (68 members, zero external infra)
         run: npm run server:test:non-disposable
 
@@ -172,7 +201,22 @@ jobs:
         run: npm ci
         working-directory: server
       - name: Provision disposable PostgreSQL, run server:test:disposable-db, tear down
-        run: npm run test:runtime:postgres | tee postgres-run-summary.json
+        # --summary-file writes a genuine, standalone JSON file (F1-003-P3-R1)
+        # separate from this step's own combined human-readable stdout log
+        # (which GitHub Actions already captures in the job log on its own).
+        run: npm run test:runtime:postgres -- --summary-file=postgres-run-summary.json
+      - name: Validate run-summary artifact is real JSON (failure only)
+        if: failure()
+        run: node -e "JSON.parse(require('fs').readFileSync('postgres-run-summary.json','utf8')); console.log('postgres-run-summary.json is valid JSON')"
+      - name: Scan run-summary artifact for prohibited secret patterns (failure only)
+        if: failure()
+        run: |
+          set -euo pipefail
+          if grep -EiI 'postgresql://|postgres://|AKIA[0-9A-Z]{16}|BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY|secretAccessKey|accessKeyId["'"'"']?\s*[:=]|password["'"'"']?\s*[:=]' postgres-run-summary.json; then
+            echo "Prohibited secret-like pattern found in artifact candidate - refusing to upload" >&2
+            exit 1
+          fi
+          echo "No prohibited secret patterns detected in postgres-run-summary.json"
       - name: Upload sanitized run summary (failure only)
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -182,7 +226,7 @@ jobs:
           retention-days: 7
       - name: Label-scoped residual-resource check (fails on any leftover/cleanup error)
         if: always()
-        run: npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01 | tee postgres-cleanup-check.json
+        run: npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01
 
   storage-integration-tests:
     name: 'Layer 4: disposable PostgreSQL + MinIO storage integration tests'
@@ -201,7 +245,19 @@ jobs:
         run: npm ci
         working-directory: server
       - name: Provision disposable PostgreSQL + MinIO, run server:test:storage-integration, tear down
-        run: npm run test:runtime:storage | tee storage-run-summary.json
+        run: npm run test:runtime:storage -- --summary-file=storage-run-summary.json
+      - name: Validate run-summary artifact is real JSON (failure only)
+        if: failure()
+        run: node -e "JSON.parse(require('fs').readFileSync('storage-run-summary.json','utf8')); console.log('storage-run-summary.json is valid JSON')"
+      - name: Scan run-summary artifact for prohibited secret patterns (failure only)
+        if: failure()
+        run: |
+          set -euo pipefail
+          if grep -EiI 'postgresql://|postgres://|s3://|AKIA[0-9A-Z]{16}|BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY|secretAccessKey|accessKeyId["'"'"']?\s*[:=]|password["'"'"']?\s*[:=]' storage-run-summary.json; then
+            echo "Prohibited secret-like pattern found in artifact candidate - refusing to upload" >&2
+            exit 1
+          fi
+          echo "No prohibited secret patterns detected in storage-run-summary.json"
       - name: Upload sanitized run summary (failure only)
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -211,10 +267,10 @@ jobs:
           retention-days: 7
       - name: Label-scoped residual-resource check (fails on any leftover/cleanup error)
         if: always()
-        run: npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01 | tee storage-cleanup-check.json
+        run: npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01
 
-  full-suite-compatibility-failsafe:
-    name: 'Layer 5: full-suite/compatibility fail-safe'
+  full-suite-compatibility-failsafe-frontend:
+    name: 'Layer 5: full-suite/compatibility fail-safe (frontend)'
     needs: [frontend-typecheck-and-build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -224,18 +280,9 @@ jobs:
     # "only 7 of 116 JS/TS test-related files reached by any workflow"). This
     # job has no path filter and runs on every trigger (PR, main push,
     # nightly, manual dispatch) unconditionally, so it cannot be silently
-    # narrowed by a future PR-only optimization.
-    #
-    # Explicit non-claim: legacy `server:test` (server/package.json) chains
-    # roughly 14 additional DB-required scripts beyond the 9 already covered
-    # by server:test:disposable-db (Layer 3). Running legacy `server:test`
-    # itself would require either a second disposable-PostgreSQL mechanism
-    # (prohibited - scripts/test-runtime/** is the sole accepted
-    # implementation) or extending that orchestrator's fixed profile-to-script
-    # mapping, which is out of this task's authorized scope (no rewrite of
-    # accepted P1/P2 test architecture). This gap is therefore left exactly
-    # as F1-003-P1/P2 already, explicitly, deferred it - not silently
-    # resolved and not silently hidden.
+    # narrowed by a future PR-only optimization. See the sibling
+    # `full-suite-compatibility-failsafe-backend` job for this layer's
+    # backend half.
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -255,3 +302,55 @@ jobs:
           npm run test:patient-detail-tabs-helpers
       - name: Vitest suite
         run: npm run test:vitest
+
+  full-suite-compatibility-failsafe-backend:
+    name: 'Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)'
+    needs: [frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # F1-003-P3-R1: closes the gap the original P3 Layer 5 left open. Legacy
+    # `server:test` (server/package.json, untouched by this task) silently
+    # chains 23 scripts that are PostgreSQL-required/MinIO-free and were not
+    # members of `server:test:non-disposable`, `server:test:disposable-db`,
+    # or `server:test:storage-integration` - see the new, additive
+    # `server:test:legacy-db-required` aggregate (exact 23 names) and the
+    # `postgres-compat` orchestrator profile that runs it against a
+    # disposable PostgreSQL using the exact same provisioning/guard/
+    # migration/cleanup/pinning/collision-avoidance code path as the existing
+    # `postgres` profile (Layer 3) - no second PostgreSQL implementation, no
+    # change to legacy `server:test` itself.
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: server npm ci (server:test:legacy-db-required + prisma live under server/)
+        run: npm ci
+        working-directory: server
+      - name: Provision disposable PostgreSQL, run server:test:legacy-db-required, tear down
+        run: npm run test:runtime:postgres-compat -- --summary-file=postgres-compat-run-summary.json
+      - name: Validate run-summary artifact is real JSON (failure only)
+        if: failure()
+        run: node -e "JSON.parse(require('fs').readFileSync('postgres-compat-run-summary.json','utf8')); console.log('postgres-compat-run-summary.json is valid JSON')"
+      - name: Scan run-summary artifact for prohibited secret patterns (failure only)
+        if: failure()
+        run: |
+          set -euo pipefail
+          if grep -EiI 'postgresql://|postgres://|AKIA[0-9A-Z]{16}|BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY|secretAccessKey|accessKeyId["'"'"']?\s*[:=]|password["'"'"']?\s*[:=]' postgres-compat-run-summary.json; then
+            echo "Prohibited secret-like pattern found in artifact candidate - refusing to upload" >&2
+            exit 1
+          fi
+          echo "No prohibited secret patterns detected in postgres-compat-run-summary.json"
+      - name: Upload sanitized run summary (failure only)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: postgres-compat-run-summary-${{ github.run_id }}-${{ github.run_attempt }}
+          path: postgres-compat-run-summary.json
+          retention-days: 7
+      - name: Label-scoped residual-resource check (fails on any leftover/cleanup error)
+        if: always()
+        run: npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01

@@ -28,7 +28,11 @@ import {
 import { redactConnectionUrl, redactSecret, redactEnvForLogging } from '../lib/redact.js';
 import { buildLabels, labelArgs, labelFilterArgs } from '../lib/labels.js';
 import { isStale, resolveStaleTtlHours, combineOutcome, DEFAULT_STALE_TTL_HOURS } from '../lib/outcome.js';
-import { assertValidProfile, InvalidProfileError, isValidInjectFailureMode } from '../lib/profiles.js';
+import { assertValidProfile, InvalidProfileError, isValidInjectFailureMode, resolvePostgresOnlyTestScript } from '../lib/profiles.js';
+import { maybeWriteSummaryFile } from '../lib/summaryFile.js';
+import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   generatePrismaClientOnce,
   isGenerationFailure,
@@ -396,7 +400,7 @@ test('setup failure before tests start -> exit 1 with a reason, regardless of cl
 section('Profile validation');
 
 test('assertValidProfile accepts every documented profile', () => {
-  for (const p of ['postgres', 'storage', 'verify-parallel', 'cleanup-stale']) {
+  for (const p of ['postgres', 'postgres-compat', 'storage', 'verify-parallel', 'cleanup-stale']) {
     assertEqual(assertValidProfile(p), p, `profile "${p}" should be accepted`);
   }
 });
@@ -419,6 +423,80 @@ test('isValidInjectFailureMode recognizes exactly the documented failure modes',
     assert(isValidInjectFailureMode(mode), `"${mode}" should be a recognized failure-injection mode`);
   }
   assert(!isValidInjectFailureMode('bogus'), 'an unrecognized mode must not validate');
+});
+
+// ─── PostgreSQL-only profile → script resolution (F1-003-P3-R1) ────────────
+section('PostgreSQL-only profile script resolution');
+
+test('resolvePostgresOnlyTestScript("postgres") resolves to the original disposable-db aggregate', () => {
+  assertEqual(
+    resolvePostgresOnlyTestScript('postgres'),
+    'server:test:disposable-db',
+    'the pre-existing postgres profile must keep running its original 9-member aggregate',
+  );
+});
+
+test('resolvePostgresOnlyTestScript("postgres-compat") resolves to the new legacy-db-required aggregate', () => {
+  assertEqual(
+    resolvePostgresOnlyTestScript('postgres-compat'),
+    'server:test:legacy-db-required',
+    'the compatibility profile must run the 23-member legacy-db-required aggregate, not the original 9-member one',
+  );
+});
+
+// ─── Summary-file artifact writer (F1-003-P3-R1) ────────────────────────────
+section('Summary-file artifact writer');
+
+test('maybeWriteSummaryFile is a no-op when --summary-file is absent', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nmtest-summary-'));
+  try {
+    const path = join(dir, 'should-not-exist.json');
+    maybeWriteSummaryFile(['postgres', '--inject-failure=test'], { a: 1 });
+    assert(!existsSync(path), 'no file should be written when the flag is absent');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('maybeWriteSummaryFile writes the exact given data as valid, re-parseable JSON', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nmtest-summary-'));
+  try {
+    const path = join(dir, 'summary.json');
+    const data = { runId: 'r-1', outcome: { exitCode: 0, reasons: ['tests passed', 'cleanup succeeded'] } };
+    maybeWriteSummaryFile([`--summary-file=${path}`], data);
+    assert(existsSync(path), 'summary file must be created');
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    assertEqual(JSON.stringify(parsed), JSON.stringify(data), 'file content must round-trip exactly');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('maybeWriteSummaryFile never throws when the target path is invalid (must not mask the real exit code)', () => {
+  // An unwritable path (nonexistent parent directory, no recursive create) -
+  // this must be swallowed and logged, never thrown, per this module's own
+  // contract: an artifact-write failure must never crash the orchestrator or
+  // override a real, already-determined process.exitCode.
+  const badPath = join(tmpdir(), 'nmtest-summary-nonexistent-dir-xyz', 'nested', 'summary.json');
+  let threw = false;
+  try {
+    maybeWriteSummaryFile([`--summary-file=${badPath}`], { a: 1 });
+  } catch {
+    threw = true;
+  }
+  assert(!threw, 'a write failure must be caught internally, not propagated');
+  assert(!existsSync(badPath), 'no file should exist at the unwritable path');
+});
+
+test('maybeWriteSummaryFile tolerates the flag appearing anywhere in argv', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nmtest-summary-'));
+  try {
+    const path = join(dir, 'summary2.json');
+    maybeWriteSummaryFile(['postgres-compat', `--summary-file=${path}`, '--inject-failure=migration'], { ok: true });
+    assert(existsSync(path), 'file must be written regardless of flag position in argv');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // ─── Prisma generation coordination (F1-003-P2-R2) ──────────────────────────

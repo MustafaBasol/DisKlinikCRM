@@ -2,6 +2,8 @@
 
 **Status: `AGENT_COMPLETED` — implementation complete, locally validated, PR opened, not merged. Maximum status: `AGENT_COMPLETED` / `PR_OPENED_AWAITING_REVIEW`.**
 
+**Updated by F1-003-P3-R1 (2026-07-30) — see §17 below.** §1-§16 are preserved verbatim as originally authored; §11's "actionlint... zero findings" and other point-in-time claims are historical as of the original P3 commit and superseded where §17 says so. R1 found and fixed a real defect that only manifests on a from-scratch CI checkout (§17.4), closed the backend compatibility gap §5/§16 explicitly deferred, and replaced the `null` GitHub Actions evidence in §13/the companion JSON with actual run data.
+
 ## 1. Task identity and phase
 
 | Field | Value |
@@ -210,3 +212,151 @@ To be completed after push and PR creation — see the PR description and the fi
 - Does not claim legacy `server:test`'s own additional DB-required members are now covered by CI (§5) — an explicit, continued deferral, not a silent one.
 - Does not claim actual GitHub Actions execution has passed — no remote run exists until the PR in §13 is opened and inspected.
 - Does not claim Windows graceful-interruption behavior is now verified (§9) — unchanged, still an open, explicitly-documented limitation from F1-003-P2-R3.
+
+## 17. F1-003-P3-R1 — Main Reconciliation, Backend Compatibility Fail-Safe, and Remote CI Evidence Closure
+
+### 17.1 Baseline reconciliation
+
+- Existing worktree/branch reused (`feature/f1-003-p3-layered-ci-workflows`), not recreated.
+- `git fetch origin --prune`; fetched `origin/main` = `cc31aeb7a0c379a641e7ab4558031e9adcdf1e59` (PR #266 merge, calendar drag/resize hardening) — **not** `04723f9a...` (the original P3 baseline) and **not** `cc31aeb7...`'s own earlier-reported value from GitHub's PR UI at task-assignment time; the freshly fetched SHA was used, not assumed.
+- `git merge-base --is-ancestor origin/main HEAD` (pre-merge) → exit `1` — origin/main had advanced, reconciliation required.
+- `git diff --name-only 04723f9a... origin/main` → 6 files, all under `src/components/CalendarTimelineView.*` and `src/locales/*/appointments.json` — completely disjoint from this task's own changed paths (`.github/workflows/**`, `docs/program/**`, `scripts/test-runtime/**`, `server/package.json`, `package.json`).
+- `git merge --no-ff origin/main` → merge commit `7ab630c9a5a54acc7bb757b06c908b772c5f138d`, **zero conflicts** (disjoint file sets). No `--ours`/`--theirs`, no rebase, no force push, no reset.
+- Post-merge: `git merge-base --is-ancestor origin/main HEAD` exit `0`; `git merge-base --is-ancestor <pre-merge-P3-HEAD e99dd096...> HEAD` exit `0` — both ancestries confirmed.
+- Side effect noted: the merge pulled in a new `src/components/CalendarTimelineView.vitest.test.tsx`, raising `test:vitest`'s file count from 2 to 3 (29→35 tests) — reflected in this task's own Layer 5 regression run (§17.6).
+
+### 17.2 Exact uncovered-test inventory (before this task's remediation)
+
+Computed programmatically (not estimated) by diffing legacy `server:test`'s own chain against the union of the three existing safe aggregates:
+
+```
+legacy server:test chain:        77 npm-run references
+server:test:non-disposable:      68 members
+server:test:disposable-db:        9 members
+server:test:storage-integration:  1 member
+uncovered (in legacy chain, in none of the three above): 23 members, exact names:
+```
+
+| # | Script | postgresRequired | minioRequired | Source |
+|---|---|---|---|---|
+| 1 | `test:auth` | true | false | F1-003-P1_test_execution_contract.json |
+| 2 | `test:instagram` | true | false | ″ |
+| 3 | `test:overlap-safety` | true | false | ″ |
+| 4 | `test:availability-service` | true | false | ″ |
+| 5 | `test:public-booking` | true | false | ″ |
+| 6 | `test:public-booking-slots` | true | false | ″ |
+| 7 | `test:notice-evidence` | true | false | ″ |
+| 8 | `test:payments-list-field-scope` | true | false | ″ |
+| 9 | `test:kvkk-lifecycle` | true | false | ″ |
+| 10 | `test:clinic-bulk-export` | true | false | ″ |
+| 11 | `test:security-incidents` | true | false | ″ |
+| 12 | `test:communication-consent` | true | false | ″ |
+| 13 | `test:communication-consent-backfill` | true | false | ″ |
+| 14 | `test:communication-consent-reconciliation-report` | true | false | ″ |
+| 15 | `test:communication-consent-reconciliation` | true | false | ″ |
+| 16 | `test:communication-consent-audit-report` | true | false | ″ |
+| 17 | `test:communication-consent-matrix-route` | true | false | ″ |
+| 18 | `test:legacy-consent-correction` | true | false | ″ |
+| 19 | `test:kvkk-high007-high008-schema-integrity` | true | false | ″ |
+| 20 | `test:messages-consent-gate` | true | false | ″ |
+| 21 | `test:recall-consent-gate` | true | false | ″ |
+| 22 | `test:messaging-connection-scope` | true | false | ″ |
+| 23 | `test:retention-manual-run-audit` | true | false | ″ |
+
+Cross-referenced against `docs/program/evidence/F1-003-P1_test_execution_contract.json`'s own per-script `postgresRequired`/`minioRequired` fields (not re-derived from scratch): all 23 are `postgresRequired: true`, `minioRequired: false` — this matches, and gives exact machine-readable confirmation to, the previously-narrative-only F1-003-P1/P2 finding of "23 silently-DB-required members" (this task's own original §16 non-claim had mis-stated this as "roughly 14," which is corrected here to the exact, verified figure of **23**).
+
+### 17.3 Coverage reconciliation table (by aggregate group)
+
+| Group | Members | CI job (this workflow) | Directly executed? | Infra required | Uncovered before this task? | Closure |
+|---|---|---|---|---|---|---|
+| `server:test:non-disposable` | 68 | `non-disposable-backend-tests` | yes | none | No | unchanged |
+| `server:test:disposable-db` | 9 | `disposable-postgres-tests` (`postgres` profile) | yes | disposable PostgreSQL | No | unchanged |
+| `server:test:storage-integration` | 1 | `storage-integration-tests` (`storage` profile) | yes | disposable PostgreSQL + MinIO | No | unchanged |
+| `server:test:legacy-db-required` (**new**) | 23 | `full-suite-compatibility-failsafe-backend` (**new**, `postgres-compat` profile) | yes | disposable PostgreSQL | **Yes** | **new aggregate + new profile, closes gap this task** |
+| 7 frontend leaf scripts + `test:vitest` (3 files) | 10 | `full-suite-compatibility-failsafe-frontend` | yes | none | No (closed by original P3) | unchanged |
+| `typecheck:runtime` + `test:runtime:unit` | n/a (tooling) | `tooling-typecheck-and-unit` | yes | none | No | unchanged |
+| Legacy `server:test` itself (as one aggregate script) | n/a | none — never directly invoked | No | disposable PostgreSQL (whole chain) | still not directly invoked | **not** required — its own 101 members (68+9+1+23, minus overlaps the legacy chain itself doesn't contain) are now each reachable via one of the four rows above; invoking the legacy aggregate script itself remains unnecessary and is not attempted, consistent with never modifying it |
+
+No canonical PostgreSQL-required/MinIO-free script is left unreachable by any CI-safe aggregate as of this task.
+
+### 17.4 Root-caused GitHub Actions defect (found via real remote evidence, not local testing)
+
+The original P3 PR run (`30536185063`, head `e99dd096d2d6d1222c9f7c7f59c0735ab4380979`) **completed with overall conclusion `failure`** — `ci-layers / Layer 2: non-disposable backend tests` failed with:
+
+```
+SyntaxError: The requested module '@prisma/client' does not provide an export named 'PrismaClient'
+```
+
+**Root cause:** `non-disposable-backend-tests` ran `npm ci` in `server/` and then directly invoked `npm run server:test:non-disposable` — it never generated the Prisma Client. `server/package.json` has no `postinstall` script that does this; the only two places that ever ran `npx prisma generate` were `npm run typecheck` (a different job, `server-typecheck` — separate runner, separate checkout, does not share state) and the F1-003-P2 orchestrator's own `runMigrations()` (used by Layers 3/4 and the new Layer 5 backend job, §17.5 — which is exactly why those three jobs succeeded on the very same run). This did not reproduce in this task's own local validation only because the local working directory had already generated the client via earlier, unrelated commands in the same persistent environment — a from-scratch checkout (every real CI run) hits it every time.
+
+**Fix:** added an explicit `npx prisma generate` step to `non-disposable-backend-tests` in `ci-layers.yml`, before the test-aggregate step. No test file, application file, or Prisma schema changed — this is a CI-workflow-only fix for a CI-workflow-only defect introduced by the original P3 task.
+
+### 17.5 Backend compatibility closure design
+
+Reuses 100% of the existing F1-003-P2 disposable-runtime orchestrator; no second PostgreSQL implementation.
+
+- `server/package.json`: one new, additive aggregate, `server:test:legacy-db-required`, chaining exactly the 23 scripts in §17.2, in their original legacy-chain relative order. Legacy `server:test` itself is not read or modified.
+- `scripts/test-runtime/lib/profiles.ts`: `RUNTIME_PROFILES` extended with `'postgres-compat'`; new pure function `resolvePostgresOnlyTestScript(profile)` — `'postgres'` → `server:test:disposable-db` (unchanged), `'postgres-compat'` → `server:test:legacy-db-required` (new). Unit-tested (Docker-free).
+- `scripts/test-runtime/orchestrator.ts`: `RunOptions.profile` widened to include `'postgres-compat'`; the single `if (opts.profile === 'storage')` MinIO-provisioning branch is unaffected (unchanged equality check), so `postgres-compat` correctly gets PostgreSQL-only provisioning, identical to `postgres` — same guard (`assertNoInheritedOverride`, `assertSafeDatabaseUrl`), same digest-pinned image (`postgres@sha256:57c72fd2a1...`), same migration path (`prisma migrate deploy` against the disposable DB only), same fail-fatal cleanup (`teardown()` via the concurrency-safe registry), same collision-resistant naming (`nmtest-pg-postgres-compat-<runid>`).
+- root `package.json`: one new, additive script, `test:runtime:postgres-compat`.
+- `ci-layers.yml`: new job `full-suite-compatibility-failsafe-backend` (part of Layer 5), gated on all 4 Layer-1 jobs (Docker-based, like Layers 3/4), `timeout-minutes: 20`, same `if: always()` residual-cleanup-check and failure-only sanitized-artifact-upload pattern as Layers 3/4.
+- Legacy `server:test`, the existing `postgres`/`storage` profiles, and all P2 provisioning/guard/cleanup/pinning code are unmodified — verified by full regression (§17.6).
+
+### 17.6 Artifact-generation correction
+
+**Problem (as reported):** `npm run test:runtime:postgres | tee postgres-run-summary.json` captured combined human-readable stdout (test-runner progress lines, migration output) plus the final JSON — the file was not valid, parseable JSON as a whole.
+
+**Fix chosen: Option 1 (preferred).** Added `maybeWriteSummaryFile(args, data)` in a new module, `scripts/test-runtime/lib/summaryFile.ts` — an additive `--summary-file=<path>` CLI flag that writes the exact same already-redacted object passed to `console.log` to a dedicated file as pure JSON, independent of stdout. Wired into all three orchestrator output sites (`postgres`/`postgres-compat`/`storage` summary, `verify-parallel` result, `cleanup-stale` report) for consistency, though only the first is required by this task. `ci-layers.yml`'s three Layer 3/4/5-backend jobs now run e.g. `npm run test:runtime:postgres -- --summary-file=postgres-run-summary.json`, then (failure-only) validate the file is real JSON via `node -e "JSON.parse(...)"`, then scan it for prohibited secret-like patterns (`postgresql://`, `AKIA[0-9A-Z]{16}`, PEM key headers, `secretAccessKey`, `accessKeyId`/`password` key-value shapes) before uploading — refusing the upload step if any pattern matches. The RunSummary object contains no credentials by construction (`runId`, `profile`, `containerNames`, `networkName`, `hostPorts`, `databaseName`, `migration`, `test`, `cleanup`, `outcome` only), so this scan is defense-in-depth, not a fix for an actual leak.
+
+**A second, real defect found and fixed during this work:** an initial implementation let `writeFileSync` throw on a bad path, which propagated out of `main()` to the top-level `.catch()` handler — overriding the correctly-computed real test-outcome exit code with a generic "Fatal orchestrator error" exit `1`. This was caught by this task's own local verification (an accidental bad path during testing) before it could reach CI. Fixed: `maybeWriteSummaryFile` now catches and logs any write failure to stderr, never throws — an artifact-handling failure must never conceal the real test/cleanup exit code (per this task's own explicit requirement). Verified by 4 new Docker-free unit tests (no-op when flag absent; exact round-trip JSON when present; tolerant of flag position in argv; never throws on an unwritable path).
+
+### 17.7 Local validation (P3-R1, exact commands/results)
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `git merge --no-ff origin/main` | 0 | merge commit `7ab630c9a5a54acc7bb757b06c908b772c5f138d`, 0 conflicts |
+| 2 | `npm run typecheck:runtime` | 0 | clean (after profiles.ts/orchestrator.ts/summaryFile.ts changes) |
+| 3 | `npm run test:runtime:unit` | 0 | **74/74 passed** (was 68; +2 profile-resolution, +4 summary-file, net +6) |
+| 4 | `npm run test:runtime:postgres-compat` (first live run, no `--summary-file`) | 1 | **116 passed, 1 failed** — see §17.8 for root cause of the 1 failure (not a defect) |
+| 5 | `npm run test:runtime:postgres-compat -- --summary-file=postgres-compat-run-summary.json` (second run) | 1 | same result; summary file confirmed valid, re-parseable JSON with `test.code:1`, `cleanup.success:true`, `outcome.exitCode:1` — proves the artifact fix and proves cleanup runs and succeeds even when the test phase fails |
+| 6 | `docker ps -a` / `network ls`, label-filtered, after run #5 | — | **zero** residual resources despite the test failure |
+| 7 | `npm run test:runtime:postgres` (regression) | 0 | still resolves to `server:test:disposable-db` (unaffected by the new profile), 9/9, cleanup clean |
+| 8 | `npm run test:runtime:storage` (regression) | 0 | 21/21, cleanup clean |
+| 9 | `npm run test:runtime:parallel` (regression) | 0 | collision-free, 1 Prisma generation, 0 `EBUSY`, zero residual resources — unaffected by the new profile (verify-parallel does not invoke `postgres-compat`) |
+| 10 | `server: npx prisma generate && tsc --noEmit` (`npm run typecheck`) | 0 | clean |
+| 11 | `server: npm run server:test:non-disposable` | 0 | **68/68** |
+| 12 | `npm run build` (root, after merge added `CalendarTimelineView.vitest.test.tsx`) | 0 | 23.43s |
+| 13 | `npm run lint` | 2 | still confirmed non-functional (unchanged finding) |
+| 14 | `npm run test:vitest` | 0 | **3 files, 35/35 tests** (was 2 files/29 before the main-reconciliation merge) |
+| 15 | 7× frontend leaf scripts | 0 each | 156 assertions total, unchanged |
+| 16 | `actionlint -color` (all 3 workflow files) | 0 | zero findings, after the Prisma-generate fix and new job |
+| 17 | `git diff --check` | 0 | clean (one CRLF/LF advisory on the modified `.yml`/`.md`/`.json` files, expected on this Windows checkout, not part of the committed diff) |
+
+### 17.8 The one local `postgres-compat` failure: root-caused, not a defect, expected to pass on Linux CI
+
+`server:test:legacy-db-required`'s `test:clinic-bulk-export` member has one assertion, `status DTO never serializes sensitive fields`, that does `source.indexOf('res.json({\n      jobId: row.id,')` against the literal text of `server/src/routes/clinicBulkExport.ts`. This machine's git checkout has `core.autocrlf=true` (confirmed: `git config --get core.autocrlf` → `true`) and the file is confirmed on disk with CRLF line terminators (`file` reports "CRLF line terminators"). A direct Node reproduction proved the mechanism exactly:
+
+```
+CRLF-as-read indexOf (LF-only needle against a CRLF file): -1  (not found -> assertion fails)
+LF-normalized indexOf (same content, \r\n -> \n):           10363 (found -> assertion passes)
+```
+
+This is a pre-existing property of the test file (an exact-whitespace source-text match) interacting with this one Windows machine's line-ending conversion — unrelated to F1-003-P3-R1's own changes, to the disposable-runtime infrastructure, or to any real defect in `routes/clinicBulkExport.ts`. GitHub Actions' `ubuntu-latest` checkout does not perform this conversion (no `core.autocrlf=true` is set there), so this exact assertion is expected to pass in real CI — confirmed against the actual new-head-SHA run in §17.9, not merely predicted. The test file was not modified, weakened, or skipped.
+
+### 17.9 GitHub Actions evidence
+
+**Run associated with the original P3 head SHA (`e99dd096d2d6d1222c9f7c7f59c0735ab4380979`, pre-R1) — historical, not acceptance evidence for this update:**
+
+| Field | Value |
+|---|---|
+| Run ID | `30536185063` |
+| URL | https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/30536185063 |
+| Event | `pull_request` |
+| Status | `completed` |
+| Conclusion | **`failure`** |
+| Failing job | `ci-layers / Layer 2: non-disposable backend tests` — root-caused and fixed in §17.4 |
+| Other jobs | Layer 1 (all 4): `success`; Layer 3: `success`; Layer 4: `success`; Layer 5 (frontend, original): `success` |
+
+**Run associated with the new head SHA produced by this task's remediation push — the actual acceptance evidence:**
+
+See the companion JSON (`ghActionsEvidence.postR1Run`) and PR #268's own description/comments for the exact run ID, per-job conclusions, and observation timestamp, recorded immediately after the push in the same working session (not predicted or assumed in advance). If that run had not reached a terminal state by the time this task's final report was written, the report says so explicitly and does not claim a merge-ready conclusion.

@@ -8,6 +8,13 @@
  *
  * Usage (from repo root):
  *   npx tsx scripts/test-runtime/orchestrator.ts postgres
+ *   npx tsx scripts/test-runtime/orchestrator.ts postgres-compat
+ *     (F1-003-P3-R1: same disposable-PostgreSQL provisioning/guard/migration/
+ *     cleanup path as `postgres`, but runs `server:test:legacy-db-required`
+ *     instead of `server:test:disposable-db` - the 23 scripts legacy
+ *     `server:test` silently chains that are PostgreSQL-required/MinIO-free
+ *     and were not members of any disposable-runtime-safe aggregate before
+ *     this task. Legacy `server:test` itself is untouched.)
  *   npx tsx scripts/test-runtime/orchestrator.ts storage
  *   npx tsx scripts/test-runtime/orchestrator.ts verify-parallel
  *   npx tsx scripts/test-runtime/orchestrator.ts cleanup-stale [--live] [--ttl-hours=4]
@@ -44,7 +51,8 @@ import { teardown, type TeardownTargets } from './lib/cleanup.js';
 import { registerCleanupTargets, unregisterCleanupTargets, runSignalCleanupOnce } from './lib/cleanupRegistry.js';
 import { combineOutcome, type TestPhaseResult, type CleanupResult } from './lib/outcome.js';
 import { runSweep } from './lib/sweep.js';
-import { assertValidProfile, isValidInjectFailureMode, type InjectableFailureMode } from './lib/profiles.js';
+import { assertValidProfile, isValidInjectFailureMode, resolvePostgresOnlyTestScript, type InjectableFailureMode } from './lib/profiles.js';
+import { maybeWriteSummaryFile } from './lib/summaryFile.js';
 import { redactConnectionUrl } from './lib/redact.js';
 import { dockerAvailable, dockerCreateNetwork, runDockerSync, dockerRemoveContainer } from './lib/docker.js';
 import {
@@ -69,7 +77,7 @@ import {
 const CLEANUP_FAILURE_SIDECAR_IMAGE = 'alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b';
 
 interface RunOptions {
-  profile: 'postgres' | 'storage';
+  profile: 'postgres' | 'postgres-compat' | 'storage';
   injectFailures?: InjectableFailureMode[];
   readinessTimeoutMs?: number;
   /**
@@ -230,7 +238,8 @@ async function runDisposableProfile(opts: RunOptions): Promise<RunSummary> {
       throw new Error(`migration failed at step "${migrationResult.step}" (exit ${migrationResult.code})`);
     }
 
-    const scriptName = opts.profile === 'postgres' ? 'server:test:disposable-db' : 'server:test:storage-integration';
+    const scriptName =
+      opts.profile === 'storage' ? 'server:test:storage-integration' : resolvePostgresOnlyTestScript(opts.profile);
     const execResult =
       opts.injectFailures?.includes('test') ? await runInjectedFailingCommand(env) : await runNpmScript(scriptName, env);
     testResult = { scriptName, code: execResult.code };
@@ -376,6 +385,7 @@ async function main(): Promise<void> {
     const ttlHoursOverride = ttlArg ? ttlArg.split('=')[1] : undefined;
     const report = runSweep({ dryRun, ttlHoursOverride });
     console.log(JSON.stringify(report, null, 2));
+    maybeWriteSummaryFile(args, report);
     process.exitCode = report.errors.length > 0 ? 1 : 0;
     return;
   }
@@ -384,7 +394,9 @@ async function main(): Promise<void> {
 
   if (profile === 'verify-parallel') {
     const result = await runVerifyParallel(injectFailures);
-    console.log(JSON.stringify({ ...result, postgresPair: result.postgresPair.map(redactSummary), storagePair: result.storagePair.map(redactSummary) }, null, 2));
+    const redactedResult = { ...result, postgresPair: result.postgresPair.map(redactSummary), storagePair: result.storagePair.map(redactSummary) };
+    console.log(JSON.stringify(redactedResult, null, 2));
+    maybeWriteSummaryFile(args, redactedResult);
     const allChildrenRan = result.postgresPair.length === 2 && result.storagePair.length === 2;
     const allOutcomesOk = allChildrenRan && [...result.postgresPair, ...result.storagePair].every((s) => s.outcome.exitCode === 0);
     const noCollision = Object.values(result.collisionCheck).every(Boolean);
@@ -392,7 +404,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (profile !== 'postgres' && profile !== 'storage') {
+  if (profile !== 'postgres' && profile !== 'postgres-compat' && profile !== 'storage') {
     console.error(`Profile "${profile}" is not a single-invocation disposable profile.`);
     process.exitCode = 2;
     return;
@@ -402,7 +414,9 @@ async function main(): Promise<void> {
     profile,
     injectFailures: injectFailures.length > 0 ? injectFailures : undefined,
   });
-  console.log(JSON.stringify(redactSummary(summary), null, 2));
+  const redacted = redactSummary(summary);
+  console.log(JSON.stringify(redacted, null, 2));
+  maybeWriteSummaryFile(args, redacted);
   process.exitCode = summary.outcome.exitCode;
 }
 
