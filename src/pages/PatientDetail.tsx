@@ -203,15 +203,12 @@ const PatientDetail: React.FC = () => {
         setInsuranceError(true);
       }
 
-      setAttachmentsLoading(true);
       try {
         const attachRes = await attachmentService.getAll(id);
         setAttachments(attachRes.data);
       } catch {
         setAttachments([]);
         setAttachmentsError(true);
-      } finally {
-        setAttachmentsLoading(false);
       }
 
       try {
@@ -487,7 +484,7 @@ const PatientDetail: React.FC = () => {
                 const currency = paymentCurrency;
                 const fmt = (n: number) => formatCurrency(n, currency, { maximumFractionDigits: 0 });
                 if (paymentsError || treatmentCasesError) {
-                  return <p className="text-sm text-red-500 italic">{t('common:errorGeneric')}</p>;
+                  return <p role="alert" className="text-sm text-red-500 italic">{t('common:errorGeneric')}</p>;
                 }
                 if (totalTreatment === 0 && payments.length === 0) {
                   return <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noPayments')}</p>;
@@ -564,7 +561,7 @@ const PatientDetail: React.FC = () => {
                     const currency = paymentCurrency;
                     const fmt = (n: number) => formatCurrency(n, currency, { maximumFractionDigits: 0 });
                     if (paymentsError || treatmentCasesError) {
-                      return <p className="text-sm text-red-500 italic">{t('common:errorGeneric')}</p>;
+                      return <p role="alert" className="text-sm text-red-500 italic">{t('common:errorGeneric')}</p>;
                     }
                     if (totalTreatment === 0 && payments.length === 0) {
                       return <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noPayments')}</p>;
@@ -841,7 +838,7 @@ const PatientDetail: React.FC = () => {
                   </div>
                 )) : (
                   <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed">
-                    {tasksError ? <span className="text-red-500">{t('common:errorGeneric')}</span> : t('common:noData')}
+                    {tasksError ? <span role="alert" className="text-red-500">{t('common:errorGeneric')}</span> : t('common:noData')}
                   </div>
                 )}
               </div>
@@ -887,7 +884,7 @@ const PatientDetail: React.FC = () => {
                     </div>
                   </Link>
                 )) : treatmentCasesError ? (
-                  <div className="text-center py-12 text-red-500 bg-gray-50 rounded-xl border-2 border-dashed">
+                  <div role="alert" className="text-center py-12 text-red-500 bg-gray-50 rounded-xl border-2 border-dashed">
                     <p>{t('common:errorGeneric')}</p>
                   </div>
                 ) : (
@@ -989,7 +986,7 @@ const PatientDetail: React.FC = () => {
                         </tr>
                       )) : paymentsError ? (
                         <tr>
-                          <td colSpan={4} className="p-8 text-center text-red-500 italic">{t('common:errorGeneric')}</td>
+                          <td role="alert" colSpan={4} className="p-8 text-center text-red-500 italic">{t('common:errorGeneric')}</td>
                         </tr>
                       ) : (
                         <tr>
@@ -1095,7 +1092,7 @@ const PatientDetail: React.FC = () => {
                     </div>
                   </Link>
                 )) : insuranceError ? (
-                  <div className="text-center py-12 text-red-500 bg-gray-50 rounded-xl border-2 border-dashed">{t('common:errorGeneric')}</div>
+                  <div role="alert" className="text-center py-12 text-red-500 bg-gray-50 rounded-xl border-2 border-dashed">{t('common:errorGeneric')}</div>
                 ) : (
                   <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed">{t('common:noData')}</div>
                 )}
@@ -1245,7 +1242,7 @@ const PatientDetail: React.FC = () => {
             {attachmentsLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary-500" /></div>
             ) : attachmentsError ? (
-              <div className="text-center py-10 text-red-500">
+              <div role="alert" className="text-center py-10 text-red-500">
                 <Paperclip size={36} className="mx-auto mb-2 opacity-30" />
                 <p>{t('common:errorGeneric')}</p>
               </div>
