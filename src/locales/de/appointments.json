@@ -27,7 +27,9 @@
     "nextMonth": "Nächster Monat",
     "appointmentCount": "{{count}} Termine",
     "noAppointments": "Keine Termine",
-    "noDoctors": "Keine registrierten Behandler gefunden."
+    "noDoctors": "Keine registrierten Behandler gefunden.",
+    "moveFailed": "Der Termin konnte nicht verschoben werden. Die Änderung wurde rückgängig gemacht.",
+    "resizeFailed": "Die Termindauer konnte nicht geändert werden. Die Änderung wurde rückgängig gemacht."
   },
   "availabilityWarning": {
     "title": "Der Behandler ist zu dieser Zeit nicht verfügbar",

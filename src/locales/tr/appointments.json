@@ -27,7 +27,9 @@
     "nextMonth": "Sonraki ay",
     "appointmentCount": "{{count}} randevu",
     "noAppointments": "Randevu yok",
-    "noDoctors": "Kayıtlı hekim bulunamadı."
+    "noDoctors": "Kayıtlı hekim bulunamadı.",
+    "moveFailed": "Randevu taşınamadı. Değişiklik geri alındı.",
+    "resizeFailed": "Randevu süresi değiştirilemedi. Değişiklik geri alındı."
   },
   "availabilityWarning": {
     "title": "Hekim bu saatte müsait değil",
