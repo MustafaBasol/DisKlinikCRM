@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useMemo } from 'react';
+import React, { useRef, useCallback, useMemo, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -7,7 +7,36 @@ import type { EventClickArg, EventDropArg, EventContentArg } from '@fullcalendar
 import trLocale from '@fullcalendar/core/locales/tr';
 import deLocale from '@fullcalendar/core/locales/de';
 import frLocale from '@fullcalendar/core/locales/fr';
+import { useTranslation } from 'react-i18next';
 import { appointmentService } from '../services/api';
+import { getErrorMessage } from '../utils/errors';
+
+/**
+ * Resolves the payload sent after an eventDrop/eventResize.
+ *
+ * Uses the FullCalendar event's actual `Date` objects (`.toISOString()`), not
+ * `.startStr`/`.endStr`: with the default `timeZone: 'local'`, those *Str
+ * getters format wall-clock time with no UTC offset, and the backend then
+ * parses that naive string using the server's local timezone (not the
+ * browser's) — silently shifting the appointment by the server/browser
+ * offset. `.toISOString()` always carries an explicit UTC 'Z', so the round
+ * trip is unambiguous regardless of where the browser or server run.
+ *
+ * Falls back to the appointment's original duration (not a hardcoded value)
+ * when FullCalendar reports no end time.
+ */
+export function resolveDragDropTimes(
+  event: { start: Date | null; end: Date | null },
+  original: { startTime: string; endTime: string },
+): { startTime: string; endTime: string } {
+  const originalDurationMs = new Date(original.endTime).getTime() - new Date(original.startTime).getTime();
+  const start = event.start ?? new Date(original.startTime);
+  const end = event.end ?? new Date(start.getTime() + originalDurationMs);
+  return {
+    startTime: start.toISOString(),
+    endTime: end.toISOString(),
+  };
+}
 
 interface CalendarAppointment {
   id: string;
@@ -62,8 +91,10 @@ const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
   onAppointmentClick,
   onRefresh,
 }) => {
+  const { t } = useTranslation(['appointments', 'common']);
   const calendarRef = useRef<FullCalendar>(null);
   const lastReportedDateRef = useRef<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const events = useMemo(() => appointments.map((appt) => ({
     id: appt.id,
@@ -87,28 +118,26 @@ const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
   const handleEventDrop = useCallback(async (info: EventDropArg) => {
     const appt: CalendarAppointment = info.event.extendedProps.appointment;
     try {
-      await appointmentService.update(appt.id, {
-        startTime: info.event.startStr,
-        endTime: info.event.endStr || new Date(new Date(info.event.startStr).getTime() + 30 * 60000).toISOString(),
-      });
+      await appointmentService.update(appt.id, resolveDragDropTimes(info.event, appt));
+      setActionError(null);
       onRefresh();
-    } catch {
+    } catch (err) {
       info.revert();
+      setActionError(getErrorMessage(err, t('appointments:calendar.moveFailed')));
     }
-  }, [onRefresh]);
+  }, [onRefresh, t]);
 
   const handleEventResize = useCallback(async (info: any) => {
     const appt: CalendarAppointment = info.event.extendedProps.appointment;
     try {
-      await appointmentService.update(appt.id, {
-        startTime: info.event.startStr,
-        endTime: info.event.endStr,
-      });
+      await appointmentService.update(appt.id, resolveDragDropTimes(info.event, appt));
+      setActionError(null);
       onRefresh();
-    } catch {
+    } catch (err) {
       info.revert();
+      setActionError(getErrorMessage(err, t('appointments:calendar.resizeFailed')));
     }
-  }, [onRefresh]);
+  }, [onRefresh, t]);
 
   const handleEventClick = useCallback((info: EventClickArg) => {
     onAppointmentClick(info.event.extendedProps.appointment);
@@ -136,6 +165,22 @@ const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
 
   return (
     <div className="card p-4 fc-wrapper">
+      {actionError && (
+        <div
+          role="alert"
+          className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/40 dark:text-red-200"
+        >
+          <span>{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="shrink-0 text-red-700 hover:text-red-900 dark:text-red-200 dark:hover:text-white"
+            aria-label={t('common:close')}
+          >
+            &times;
+          </button>
+        </div>
+      )}
       <FullCalendar
         ref={calendarRef}
         plugins={[timeGridPlugin, dayGridPlugin, interactionPlugin]}

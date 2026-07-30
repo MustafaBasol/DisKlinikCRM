@@ -27,7 +27,9 @@
     "nextMonth": "Next month",
     "appointmentCount": "{{count}} appointments",
     "noAppointments": "No appointments",
-    "noDoctors": "No registered practitioners found."
+    "noDoctors": "No registered practitioners found.",
+    "moveFailed": "The appointment could not be moved. The change was reverted.",
+    "resizeFailed": "The appointment duration could not be changed. The change was reverted."
   },
   "availabilityWarning": {
     "title": "Practitioner is not available at this time",

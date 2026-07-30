@@ -27,7 +27,9 @@
     "nextMonth": "Mois suivant",
     "appointmentCount": "{{count}} rendez-vous",
     "noAppointments": "Aucun rendez-vous",
-    "noDoctors": "Aucun praticien enregistré trouvé."
+    "noDoctors": "Aucun praticien enregistré trouvé.",
+    "moveFailed": "Le rendez-vous n'a pas pu être déplacé. La modification a été annulée.",
+    "resizeFailed": "La durée du rendez-vous n'a pas pu être modifiée. La modification a été annulée."
   },
   "availabilityWarning": {
     "title": "Le praticien n'est pas disponible à cet horaire",
