@@ -1,0 +1,194 @@
+{
+  "taskId": "F1-003-P3",
+  "title": "Layered CI Workflows and Full-Suite Fail-Safe",
+  "phase": "F1",
+  "parentTask": "F1-003",
+  "maxAuthorizedStatus": "AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW",
+  "baseline": {
+    "originMainSha": "04723f9add600b6c432fb517f0607235944d6c2e",
+    "isPr260MergeCommit": true,
+    "pr260": {
+      "number": 260,
+      "state": "MERGED",
+      "mergedAt": "2026-07-30T09:45:38Z",
+      "mergeCommit": "04723f9add600b6c432fb517f0607235944d6c2e",
+      "base": "main",
+      "head": "feature/f1-003-p2-disposable-runtime",
+      "headSha": "64aa152311238aba7d7ec90a33021a168f7bce67"
+    },
+    "ancestorCheck": {
+      "command": "git merge-base --is-ancestor 04723f9add600b6c432fb517f0607235944d6c2e origin/main",
+      "exitCode": 0
+    }
+  },
+  "worktree": {
+    "primaryRepo": "E:\\Ek Gelir\\Siteler\\DisKlinikCRM-git",
+    "primaryBranch": "fix/revenue-report-group-by",
+    "primaryCleanAtStart": true,
+    "isolatedPath": "E:\\Ek Gelir\\Siteler\\DisKlinikCRM-worktrees\\f1-003-p3-layered-ci-workflows",
+    "branch": "feature/f1-003-p3-layered-ci-workflows",
+    "initialHead": "04723f9add600b6c432fb517f0607235944d6c2e"
+  },
+  "existingWorkflowInventory": [
+    { "file": ".github/workflows/windows-bridge-pr.yml", "touched": false },
+    { "file": ".github/workflows/windows-bridge-release.yml", "touched": false }
+  ],
+  "newWorkflows": [
+    {
+      "file": ".github/workflows/ci-layers.yml",
+      "type": "reusable (workflow_call)",
+      "jobs": [
+        "frontend-typecheck-and-build",
+        "server-typecheck",
+        "tooling-typecheck-and-unit",
+        "workflow-and-syntax-lint",
+        "non-disposable-backend-tests",
+        "disposable-postgres-tests",
+        "storage-integration-tests",
+        "full-suite-compatibility-failsafe"
+      ]
+    },
+    {
+      "file": ".github/workflows/ci-pr.yml",
+      "trigger": "pull_request -> main",
+      "concurrency": { "group": "ci-pr-${{ github.event.pull_request.number }}", "cancelInProgress": true }
+    },
+    {
+      "file": ".github/workflows/ci-main-and-nightly.yml",
+      "trigger": "push:main, schedule:'17 2 * * *', workflow_dispatch",
+      "concurrency": { "group": "ci-main-and-nightly", "cancelInProgress": false }
+    }
+  ],
+  "layerToJobMapping": {
+    "layer1_static": ["frontend-typecheck-and-build", "server-typecheck", "tooling-typecheck-and-unit", "workflow-and-syntax-lint"],
+    "layer2_nonDisposableBackend": ["non-disposable-backend-tests"],
+    "layer3_disposablePostgres": ["disposable-postgres-tests"],
+    "layer4_storageIntegration": ["storage-integration-tests"],
+    "layer5_fullSuiteFailsafe": ["full-suite-compatibility-failsafe"]
+  },
+  "scriptToJobMapping": [
+    { "job": "frontend-typecheck-and-build", "script": "npm run build" },
+    { "job": "server-typecheck", "script": "npm run typecheck", "cwd": "server" },
+    { "job": "tooling-typecheck-and-unit", "scripts": ["npm run typecheck:runtime", "npm run test:runtime:unit"] },
+    { "job": "non-disposable-backend-tests", "script": "npm run server:test:non-disposable", "cwd": "server" },
+    { "job": "disposable-postgres-tests", "scripts": ["npm run test:runtime:postgres", "npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01"] },
+    { "job": "storage-integration-tests", "scripts": ["npm run test:runtime:storage", "npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01"] },
+    { "job": "full-suite-compatibility-failsafe", "scripts": [
+      "npm run test:dicom-helpers",
+      "npm run test:onboarding-helpers",
+      "npm run test:pairing-poller",
+      "npm run test:booking-widget-helpers",
+      "npm run test:clinic-bulk-export-selection",
+      "npm run test:communication-consent-matrix",
+      "npm run test:patient-detail-tabs-helpers",
+      "npm run test:vitest"
+    ] }
+  ],
+  "orchestratorAndServerPackageJsonUnchanged": true,
+  "designDecisionNoOrchestratorFullSuiteFlag": {
+    "considered": "adding a --full-suite CLI flag to the postgres profile so Layer 5 could run legacy server:test against a disposable Postgres",
+    "rejectedBecause": "would modify scripts/test-runtime/orchestrator.ts and lib/profiles.ts, the accepted merged F1-003-P2 implementation, outside this task's CI-workflow-only authorized scope",
+    "consequence": "legacy server:test's own ~14 additional DB-required members beyond the 9 in server:test:disposable-db remain unprovisioned in CI - continuing F1-003-P1/P2's own prior, explicit deferral, not a new or silent gap"
+  },
+  "actionPinning": [
+    { "action": "actions/checkout", "tag": "v4.2.2", "sha": "11bd71901bbe5b1630ceea73d27597364c9af683", "reusedFrom": "windows-bridge-pr.yml", "independentlyVerified": true },
+    { "action": "actions/setup-node", "tag": "v4.4.0", "sha": "49933ea5288caeca8642d1e84afbd3f7d6820020", "reusedFrom": "windows-bridge-pr.yml", "independentlyVerified": true },
+    { "action": "actions/upload-artifact", "tag": "v4.6.2", "sha": "ea165f8d65b6e75b540449e92b4886f43607fa02", "reusedFrom": "windows-bridge-pr.yml", "independentlyVerified": true }
+  ],
+  "actionlint": {
+    "version": "v1.7.12",
+    "source": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz",
+    "sha256": "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
+    "checksumVerified": true,
+    "localExecution": {
+      "command": "actionlint -color (against all 5 .github/workflows/*.yml)",
+      "exitCode": 0,
+      "findings": 0
+    },
+    "wiredIntoCi": true
+  },
+  "containerImages": {
+    "postgres": { "ref": "postgres@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777", "observedVersion": "16.14", "changedByThisTask": false },
+    "minio": { "ref": "minio/minio@sha256:8834ae47a2de3509b83e0e70da9369c24bbbc22de42f2a2eddc530eee88acd1b", "changedByThisTask": false }
+  },
+  "timeouts": {
+    "frontend-typecheck-and-build": 15,
+    "server-typecheck": 15,
+    "tooling-typecheck-and-unit": 10,
+    "workflow-and-syntax-lint": 10,
+    "non-disposable-backend-tests": 20,
+    "disposable-postgres-tests": 15,
+    "storage-integration-tests": 15,
+    "full-suite-compatibility-failsafe": 10
+  },
+  "localValidation": {
+    "nodeVersionLocal": "v24.18.0",
+    "nodeVersionCi": "20",
+    "nodeVersionCrossCheckPerformed": false,
+    "npmVersion": "11.16.0",
+    "dockerVersion": "29.6.2",
+    "results": [
+      { "command": "git diff --check", "exitCode": 0 },
+      { "command": "node -e JSON.parse package.json", "exitCode": 0 },
+      { "command": "node -e JSON.parse server/package.json", "exitCode": 0 },
+      { "command": "actionlint -color (5 workflow files)", "exitCode": 0, "findings": 0 },
+      { "command": "bash -n scripts/test-runtime/provision.sh", "exitCode": 0 },
+      { "command": "bash -n scripts/test-runtime/sweep.sh", "exitCode": 0 },
+      { "command": "PowerShell Parser::ParseFile provision.ps1", "errorCount": 0 },
+      { "command": "PowerShell Parser::ParseFile sweep.ps1", "errorCount": 0 },
+      { "command": "npm run typecheck:runtime", "exitCode": 0 },
+      { "command": "npm run test:runtime:unit", "exitCode": 0, "passed": 68, "failed": 0 },
+      { "command": "npm run build", "exitCode": 0, "durationSeconds": 13.26 },
+      { "command": "npm run lint", "exitCode": 2, "note": "confirmed non-functional: ESLint 9.39.4 cannot find eslint.config.js; no such file exists in the repository; not wired into CI" },
+      { "command": "server: npm run typecheck", "exitCode": 0 },
+      { "command": "server: npm run server:test:non-disposable", "exitCode": 0, "members": 68, "lastMemberResult": "test:overdue-installments 9/9" },
+      { "command": "npm run test:runtime:postgres", "exitCode": 0, "runId": "20260730T101740Z-9126f60f-11424", "migrationCode": 0, "testScript": "server:test:disposable-db", "testCode": 0, "cleanupSuccess": true, "cleanupErrors": [] },
+      { "command": "npm run test:runtime:storage", "exitCode": 0, "runId": "20260730T101823Z-9e006cd9-22716", "migrationCode": 0, "testScript": "server:test:storage-integration", "testCode": 0, "assertionsPassed": 21, "cleanupSuccess": true, "cleanupErrors": [] },
+      { "command": "docker ps/network ls, label=com.noramedi.test-runtime=true, post postgres+storage runs", "residualResources": 0 },
+      { "command": "npm run test:vitest", "exitCode": 0, "testFiles": 2, "testsPassed": 29 },
+      { "command": "7x frontend leaf scripts", "exitCode": 0, "passedCounts": { "test:dicom-helpers": 36, "test:onboarding-helpers": 21, "test:pairing-poller": 8, "test:booking-widget-helpers": 26, "test:clinic-bulk-export-selection": 24, "test:communication-consent-matrix": 29, "test:patient-detail-tabs-helpers": 12 } },
+      { "command": "npm run test:runtime:parallel (verify-parallel regression)", "exitCode": 0, "generationSucceeded": true, "childrenExitCodes": [0, 0, 0, 0], "collisionCheck": { "uniqueRunIds": true, "uniqueContainerNames": true, "uniqueDatabaseNames": true, "uniqueHostPorts": true }, "prismaGenerationCount": 1, "ebusyCount": 0, "residualResourcesAfter": 0 }
+    ],
+    "fullSuiteCompatibilityCommandStatus": "locally executed (Layer 5 content = commands #20-21 above), both exit 0",
+    "legacyServerTestStatus": "not executed by this task anywhere - explicitly deferred, see designDecisionNoOrchestratorFullSuiteFlag"
+  },
+  "migrationStatus": {
+    "schemaChanged": false,
+    "migrationFilesCreated": 0,
+    "existingMigrationsAppliedTo": "disposable databases only, during local validation (67 migrations per disposable-postgres invocation)",
+    "productionMigrationRun": false,
+    "productionAccessed": false
+  },
+  "riskAndGateStatus": {
+    "r070": "OPEN",
+    "r046": "OPEN",
+    "r071": "CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION",
+    "g1": "NOT_APPROVED",
+    "g2": "NOT_APPROVED",
+    "kvkkFreeze": "ACTIVE",
+    "kvkkBaselineStable": false
+  },
+  "githubActionsEvidence": {
+    "prNumber": null,
+    "prUrl": null,
+    "headSha": null,
+    "runIds": [],
+    "note": "Not yet available at evidence-authoring time - populated after PR is opened; see final delivery report."
+  },
+  "rollback": {
+    "method": "git revert of this task's single commit (or PR merge commit)",
+    "databaseRollback": false,
+    "deploymentRollback": false,
+    "productionRollback": false
+  },
+  "statusSeparation": {
+    "agentCompleted": true,
+    "testsPassedLocally": true,
+    "localWorkflowSyntaxValidated": true,
+    "actualGithubActionsPassed": "unknown - not yet run",
+    "prOpened": "pending - see final delivery report",
+    "merged": false,
+    "deployed": false,
+    "productionVerified": false
+  }
+}

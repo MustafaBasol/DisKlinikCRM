@@ -1,0 +1,257 @@
+name: ci-layers
+
+# F1-003-P3 — reusable layered CI implementation. Not triggered directly;
+# called by ci-pr.yml (every pull request into main) and
+# ci-main-and-nightly.yml (push to main, nightly schedule, manual dispatch).
+# Kept as a single reusable workflow so the two thin callers never duplicate
+# job definitions (see docs/program/evidence/
+# F1-003-P3_LAYERED_CI_WORKFLOWS_AND_FULL_SUITE_FAIL_SAFE.md for the full
+# design record).
+#
+# Layer map:
+#   Layer 1 (static/type/syntax) -> frontend-typecheck-and-build,
+#                                   server-typecheck,
+#                                   tooling-typecheck-and-unit,
+#                                   workflow-and-syntax-lint
+#   Layer 2 (non-disposable backend)      -> non-disposable-backend-tests
+#   Layer 3 (disposable PostgreSQL)       -> disposable-postgres-tests
+#   Layer 4 (disposable PostgreSQL+MinIO) -> storage-integration-tests
+#   Layer 5 (full-suite/compatibility fail-safe) -> full-suite-compatibility-failsafe
+#
+# All jobs run on every call, on every trigger, with no path filters - the
+# layering itself is what must never silently narrow which canonical scripts
+# execute (see Layer 5 job comment for the one honestly-documented exception:
+# legacy `server:test`'s own additional DB-required members remain deferred,
+# unchanged from F1-003-P1/P2's own prior deferral).
+#
+# Every job invokes an existing, already-accepted package script by name -
+# none reproduces test file membership in YAML, and none reimplements the
+# F1-003-P2 disposable PostgreSQL/MinIO orchestrator (scripts/test-runtime/**
+# is used exactly as merged, unmodified).
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  frontend-typecheck-and-build:
+    name: 'Layer 1: frontend typecheck + build'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Frontend typecheck + build (tsc -b && vite build)
+        run: npm run build
+
+  server-typecheck:
+    name: 'Layer 1: server typecheck'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Server typecheck (prisma generate + tsc --noEmit)
+        run: npm run typecheck
+
+  tooling-typecheck-and-unit:
+    name: 'Layer 1: test-runtime tooling typecheck + unit tests'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Typecheck scripts/test-runtime
+        run: npm run typecheck:runtime
+      - name: Docker-free orchestrator unit tests
+        run: npm run test:runtime:unit
+
+  workflow-and-syntax-lint:
+    name: 'Layer 1: workflow YAML, shell, PowerShell, and JSON validation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download and checksum-verify actionlint v1.7.12 (linux_amd64)
+        run: |
+          set -euo pipefail
+          curl -sSL -o actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz" | sha256sum -c -
+          tar xzf actionlint.tar.gz actionlint
+          chmod +x actionlint
+
+      - name: actionlint (.github/workflows/**)
+        run: ./actionlint -color
+
+      - name: Shell syntax check (scripts/test-runtime/*.sh)
+        run: |
+          set -euo pipefail
+          for f in scripts/test-runtime/*.sh; do
+            echo "== $f =="
+            bash -n "$f"
+          done
+
+      - name: PowerShell parser validation (scripts/test-runtime/*.ps1)
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem -Path scripts/test-runtime -Filter *.ps1 | ForEach-Object {
+            Write-Host "== $($_.FullName) =="
+            $errors = $null; $tokens = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: JSON validation (package.json manifests)
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('package.json','utf8')); console.log('package.json OK')"
+          node -e "JSON.parse(require('fs').readFileSync('server/package.json','utf8')); console.log('server/package.json OK')"
+
+  non-disposable-backend-tests:
+    name: 'Layer 2: non-disposable backend tests'
+    needs: [frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: server:test:non-disposable (68 members, zero external infra)
+        run: npm run server:test:non-disposable
+
+  disposable-postgres-tests:
+    name: 'Layer 3: disposable PostgreSQL tests'
+    needs: [frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: server npm ci (server:test:disposable-db + prisma live under server/)
+        run: npm ci
+        working-directory: server
+      - name: Provision disposable PostgreSQL, run server:test:disposable-db, tear down
+        run: npm run test:runtime:postgres | tee postgres-run-summary.json
+      - name: Upload sanitized run summary (failure only)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: disposable-postgres-run-summary-${{ github.run_id }}-${{ github.run_attempt }}
+          path: postgres-run-summary.json
+          retention-days: 7
+      - name: Label-scoped residual-resource check (fails on any leftover/cleanup error)
+        if: always()
+        run: npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01 | tee postgres-cleanup-check.json
+
+  storage-integration-tests:
+    name: 'Layer 4: disposable PostgreSQL + MinIO storage integration tests'
+    needs: [frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: server npm ci (server:test:storage-integration + prisma live under server/)
+        run: npm ci
+        working-directory: server
+      - name: Provision disposable PostgreSQL + MinIO, run server:test:storage-integration, tear down
+        run: npm run test:runtime:storage | tee storage-run-summary.json
+      - name: Upload sanitized run summary (failure only)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: storage-integration-run-summary-${{ github.run_id }}-${{ github.run_attempt }}
+          path: storage-run-summary.json
+          retention-days: 7
+      - name: Label-scoped residual-resource check (fails on any leftover/cleanup error)
+        if: always()
+        run: npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01 | tee storage-cleanup-check.json
+
+  full-suite-compatibility-failsafe:
+    name: 'Layer 5: full-suite/compatibility fail-safe'
+    needs: [frontend-typecheck-and-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Runs the frontend leaf test scripts and root:test:vitest, none of which
+    # were reachable from any CI workflow prior to F1-003-P3 (see
+    # docs/program/evidence/F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md,
+    # "only 7 of 116 JS/TS test-related files reached by any workflow"). This
+    # job has no path filter and runs on every trigger (PR, main push,
+    # nightly, manual dispatch) unconditionally, so it cannot be silently
+    # narrowed by a future PR-only optimization.
+    #
+    # Explicit non-claim: legacy `server:test` (server/package.json) chains
+    # roughly 14 additional DB-required scripts beyond the 9 already covered
+    # by server:test:disposable-db (Layer 3). Running legacy `server:test`
+    # itself would require either a second disposable-PostgreSQL mechanism
+    # (prohibited - scripts/test-runtime/** is the sole accepted
+    # implementation) or extending that orchestrator's fixed profile-to-script
+    # mapping, which is out of this task's authorized scope (no rewrite of
+    # accepted P1/P2 test architecture). This gap is therefore left exactly
+    # as F1-003-P1/P2 already, explicitly, deferred it - not silently
+    # resolved and not silently hidden.
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Frontend leaf test scripts (previously unreachable by any CI workflow)
+        run: |
+          npm run test:dicom-helpers
+          npm run test:onboarding-helpers
+          npm run test:pairing-poller
+          npm run test:booking-widget-helpers
+          npm run test:clinic-bulk-export-selection
+          npm run test:communication-consent-matrix
+          npm run test:patient-detail-tabs-helpers
+      - name: Vitest suite
+        run: npm run test:vitest

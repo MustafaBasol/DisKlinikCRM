@@ -1,0 +1,47 @@
+name: ci-main-and-nightly
+
+# F1-003-P3 — push-to-main, nightly, and manual triggers for the same layered
+# CI model used on pull requests (ci-pr.yml). All layer/job definitions live
+# in the reusable workflow ci-layers.yml - this file only supplies the
+# trigger model, per F1-003-P1's own forward-looking CI command matrix
+# (docs/program/evidence/F1-003-P1_test_execution_contract.json
+# futureCiCommandMatrix.main / .nightly): "main" re-verifies the same safety
+# profile against the merged tip; "nightly" is this same complete set run on
+# a fixed schedule so drift is caught even without a triggering push.
+#
+# No dedicated "release" workflow is introduced by this task: forward-only
+# migration deployment (`prisma migrate deploy`) is already exercised by
+# every Layer 3/4 run in ci-layers.yml, on every trigger below, including
+# this one's `workflow_dispatch` - a separate release-candidate workflow
+# would duplicate that coverage without adding physical-rollback
+# verification, which remains blocked on R-070 (OPEN) per the futureCiCommandMatrix.release
+# entry in the same evidence file.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 02:17 UTC daily - avoids the exact top-of-hour scheduling crowd GitHub
+    # documents for its Actions cron scheduler.
+    - cron: '17 2 * * *'
+  workflow_dispatch: {}
+
+# One fixed group for this workflow only (never shared with ci-pr.yml's
+# per-PR groups or any other workflow name) - a nightly run in progress is
+# never cancelled by a same-day push to main, and vice versa; both queue
+# rather than race, since the disposable-runtime jobs' own dynamic
+# ports/collision-resistant naming (F1-003-P2) make concurrent *separate*
+# GitHub-hosted runners safe, but this repo has no reason to spend runner
+# minutes cancelling a full-suite signal that was already in flight.
+concurrency:
+  group: ci-main-and-nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci-layers:
+    uses: ./.github/workflows/ci-layers.yml
+    permissions:
+      contents: read
