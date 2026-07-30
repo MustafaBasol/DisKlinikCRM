@@ -41,6 +41,7 @@ import { provisionMinio, waitForMinioReady, MINIO_IMAGE_REF, type MinioInstance 
 import { assertSafeDatabaseUrl, assertSafeMinioEndpoint, assertNoInheritedOverride } from './lib/guard.js';
 import { runMigrations, runNpmScript, runInjectedFailingCommand } from './lib/process.js';
 import { teardown, type TeardownTargets } from './lib/cleanup.js';
+import { registerCleanupTargets, unregisterCleanupTargets, runSignalCleanupOnce } from './lib/cleanupRegistry.js';
 import { combineOutcome, type TestPhaseResult, type CleanupResult } from './lib/outcome.js';
 import { runSweep } from './lib/sweep.js';
 import { assertValidProfile, isValidInjectFailureMode, type InjectableFailureMode } from './lib/profiles.js';
@@ -51,6 +52,21 @@ import {
   isGenerationFailure,
   type GenerationAuthorization,
 } from './lib/prismaGeneration.js';
+
+/**
+ * F1-003-P2-R3 (optional supply-chain cleanup): the cleanup-failure-injection
+ * sidecar previously used the mutable `alpine:latest` tag. Pinned here to the
+ * exact digest already resolved and present on this machine (confirmed via
+ * `docker image inspect alpine:latest --format '{{index .RepoDigests 0}}'`),
+ * so a future `docker pull`/registry update of the `latest` tag can never
+ * silently change what this test-only sidecar runs. This container is never
+ * part of the actual disposable PostgreSQL/MinIO runtime under test — it
+ * exists only to force a genuine `docker network rm` failure for the
+ * `--inject-failure=cleanup` acceptance test (see the comment at its call
+ * site), and is removed as test-harness hygiene immediately after that
+ * measurement is taken.
+ */
+const CLEANUP_FAILURE_SIDECAR_IMAGE = 'alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b';
 
 interface RunOptions {
   profile: 'postgres' | 'storage';
@@ -78,15 +94,24 @@ interface RunSummary {
   outcome: { exitCode: number; reasons: string[] };
 }
 
-let activeCleanupTargets: TeardownTargets | null = null;
-let signalCleanupInFlight = false;
-
+/**
+ * F1-003-P2-R3: signal cleanup now goes through the concurrency-safe
+ * registry (lib/cleanupRegistry.ts) instead of a single global
+ * `activeCleanupTargets` slot. `runSignalCleanupOnce()` snapshots and
+ * attempts teardown for EVERY currently-registered invocation (not just the
+ * most recently started one), and caches its in-flight promise so a second
+ * SIGINT/SIGTERM delivered mid-teardown does not start an overlapping pass.
+ */
 async function handleTerminationSignal(signal: string, exitCode: number): Promise<void> {
-  if (signalCleanupInFlight) return;
-  signalCleanupInFlight = true;
   console.error(`\n[test-runtime] Received ${signal} — attempting best-effort cleanup before exit (no guarantee survives a hard kill/daemon crash).`);
-  if (activeCleanupTargets) {
-    await teardown(activeCleanupTargets).catch(() => undefined);
+  const outcomes = await runSignalCleanupOnce().catch(() => []);
+  const failed = outcomes.filter((o) => !o.result.success);
+  if (failed.length > 0) {
+    console.error(
+      `[test-runtime] Cleanup failed for ${failed.length}/${outcomes.length} run(s): ${failed.map((f) => f.runId).join(', ')}`,
+    );
+  } else if (outcomes.length > 0) {
+    console.error(`[test-runtime] Cleanup attempted for ${outcomes.length} run(s): ${outcomes.map((o) => o.runId).join(', ')}`);
   }
   process.exit(exitCode);
 }
@@ -107,7 +132,6 @@ async function runDisposableProfile(opts: RunOptions): Promise<RunSummary> {
     networkNames: [],
     tempDirs: [],
   };
-  activeCleanupTargets = cleanupTargets;
   let cleanupFailureSidecar: string | undefined;
 
   let migrationResult: { code: number; step: string } | null = null;
@@ -118,6 +142,13 @@ async function runDisposableProfile(opts: RunOptions): Promise<RunSummary> {
   let netName: string | undefined;
 
   try {
+    // Registered before any Docker resource is created (F1-003-P2-R3):
+    // this invocation's own runId keys its entry in the concurrency-safe
+    // registry, so a signal arriving while multiple profiles run in
+    // parallel (verify-parallel's Promise.all pairs) can find and attempt
+    // teardown for every active invocation, not just the last one to run.
+    registerCleanupTargets(runId, cleanupTargets);
+
     // Production-like endpoint guard: reject any inherited DATABASE_URL/MinIO
     // override immediately, fail closed, before any Docker command or network
     // access of any kind.
@@ -142,7 +173,7 @@ async function runDisposableProfile(opts: RunOptions): Promise<RunSummary> {
       // container), so a fake-removal trick would not produce a real failure.
       cleanupFailureSidecar = `${netName}-sidecar`;
       const sidecarResult = runDockerSync([
-        'run', '-d', '--name', cleanupFailureSidecar, '--network', netName, 'alpine:latest', 'sleep', '300',
+        'run', '-d', '--name', cleanupFailureSidecar, '--network', netName, CLEANUP_FAILURE_SIDECAR_IMAGE, 'sleep', '300',
       ]);
       if (sidecarResult.code !== 0) {
         throw new Error(`Failed to start cleanup-failure-injection sidecar: ${sidecarResult.stderr.trim()}`);
@@ -215,7 +246,7 @@ async function runDisposableProfile(opts: RunOptions): Promise<RunSummary> {
   }
 
   const cleanupResult = await teardown(cleanupTargets);
-  activeCleanupTargets = null;
+  unregisterCleanupTargets(runId);
   const outcome = combineOutcome(testPhase, cleanupResult);
 
   if (cleanupFailureSidecar) {

@@ -36,6 +36,19 @@ import {
   resetGenerationAuthorizationsForTest,
   type GenerateRunner,
 } from '../lib/prismaGeneration.js';
+import type { TeardownTargets } from '../lib/cleanup.js';
+import {
+  registerCleanupTargets,
+  unregisterCleanupTargets,
+  getRegisteredRunIds,
+  registrySize,
+  snapshotRegisteredTargets,
+  teardownAllRegistered,
+  runSignalCleanupOnce,
+  resetCleanupRegistryForTest,
+  DuplicateRunRegistrationError,
+  type TeardownFn,
+} from '../lib/cleanupRegistry.js';
 
 let passed = 0;
 let failed = 0;
@@ -483,6 +496,132 @@ test('resetGenerationAuthorizationsForTest revokes previously-valid tokens (clea
   // Cannot mint synchronously here without a runner; assert directly against
   // the post-reset state instead — no token survives a reset.
   assert(!isValidGenerationAuthorization({ token: 'pre-reset-token' }), 'no token should be considered valid immediately after a reset');
+});
+
+// ─── Parallel signal-cleanup registry (F1-003-P2-R3) ────────────────────────
+section('Cleanup-target registry (parallel signal cleanup, F1-003-P2-R3)');
+
+function fakeTargets(tag: string): TeardownTargets {
+  return { containerNames: [`container-${tag}`], networkNames: [`network-${tag}`], tempDirs: [] };
+}
+
+test('two concurrent run targets can be registered simultaneously', () => {
+  resetCleanupRegistryForTest();
+  registerCleanupTargets('run-a', fakeTargets('a'));
+  registerCleanupTargets('run-b', fakeTargets('b'));
+  assertEqual(registrySize(), 2, 'both concurrent runs must be registered at once');
+  const ids = getRegisteredRunIds();
+  assert(ids.includes('run-a') && ids.includes('run-b'), 'both run IDs must be present');
+});
+
+test('removing one target does not remove the other', () => {
+  resetCleanupRegistryForTest();
+  registerCleanupTargets('run-a', fakeTargets('a'));
+  registerCleanupTargets('run-b', fakeTargets('b'));
+  unregisterCleanupTargets('run-a');
+  assertEqual(registrySize(), 1, 'only the removed run may be gone');
+  assert(!getRegisteredRunIds().includes('run-a'), 'run-a must be gone');
+  assert(getRegisteredRunIds().includes('run-b'), 'run-b must remain untouched');
+});
+
+test('signal snapshot includes all active targets, reflecting in-place mutation after registration', () => {
+  resetCleanupRegistryForTest();
+  const targetsA = fakeTargets('a');
+  registerCleanupTargets('run-a', targetsA);
+  registerCleanupTargets('run-b', fakeTargets('b'));
+  targetsA.containerNames.push('late-added-container');
+  const snapshot = snapshotRegisteredTargets();
+  assertEqual(snapshot.length, 2, 'snapshot must include every active invocation');
+  const snapshotA = snapshot.find((s) => s.runId === 'run-a');
+  assert(!!snapshotA, 'run-a must be present in the snapshot');
+  assert(
+    !!snapshotA && snapshotA.targets.containerNames.includes('late-added-container'),
+    'snapshot must see targets mutated after registration (same object reference — no separate "update" API needed)',
+  );
+});
+
+await testAsync('cleanup failure for target A does not skip target B', async () => {
+  resetCleanupRegistryForTest();
+  registerCleanupTargets('run-a', fakeTargets('a'));
+  registerCleanupTargets('run-b', fakeTargets('b'));
+  const attempted: string[] = [];
+  const teardownFn: TeardownFn = async (targets) => {
+    attempted.push(targets.containerNames[0]);
+    if (targets.containerNames[0] === 'container-a') throw new Error('simulated docker failure for A');
+    return { success: true, errors: [] };
+  };
+  const outcomes = await teardownAllRegistered(teardownFn);
+  assertEqual(attempted.length, 2, 'both targets must be attempted even though A fails (Promise.allSettled, not Promise.all)');
+  const outcomeA = outcomes.find((o) => o.runId === 'run-a');
+  const outcomeB = outcomes.find((o) => o.runId === 'run-b');
+  assert(!!outcomeA && outcomeA.result.success === false, 'A must be reported as failed');
+  assert(!!outcomeB && outcomeB.result.success === true, 'B must still succeed despite A failing');
+});
+
+test('duplicate registration for one run ID is rejected deterministically', () => {
+  resetCleanupRegistryForTest();
+  registerCleanupTargets('run-x', fakeTargets('x'));
+  assertThrows(() => registerCleanupTargets('run-x', fakeTargets('x2')), 'duplicate runId registration must throw');
+  try {
+    registerCleanupTargets('run-x', fakeTargets('x3'));
+    throw new Error('expected throw');
+  } catch (err) {
+    assert(err instanceof DuplicateRunRegistrationError, 'must throw the typed DuplicateRunRegistrationError');
+  }
+});
+
+test('removing an unknown/already-removed run ID is harmless', () => {
+  resetCleanupRegistryForTest();
+  registerCleanupTargets('run-a', fakeTargets('a'));
+  unregisterCleanupTargets('never-registered');
+  assertEqual(registrySize(), 1, 'unrelated unregister call must not disturb the real entry');
+  unregisterCleanupTargets('run-a');
+  unregisterCleanupTargets('run-a'); // second removal of the same, now-gone ID
+  assertEqual(registrySize(), 0, 'double-removal of the same ID must not throw or corrupt state');
+});
+
+await testAsync('a second signal while signal cleanup is in flight does not start a second pass', async () => {
+  resetCleanupRegistryForTest();
+  registerCleanupTargets('run-a', fakeTargets('a'));
+  let calls = 0;
+  let resolveTeardown: (() => void) | undefined;
+  const slowTeardownFn: TeardownFn = () =>
+    new Promise((resolve) => {
+      calls++;
+      resolveTeardown = () => resolve({ success: true, errors: [] });
+    });
+  const first = runSignalCleanupOnce(slowTeardownFn);
+  const second = runSignalCleanupOnce(slowTeardownFn); // simulates a second SIGINT/SIGTERM arriving mid-teardown
+  assert(first === second, 'a second signal mid-teardown must reuse the same in-flight pass, not start another');
+  resolveTeardown?.();
+  await first;
+  assertEqual(calls, 1, 'the underlying teardown must run exactly once despite two signal deliveries');
+});
+
+test('registry is empty after a normal successful run completes', () => {
+  resetCleanupRegistryForTest();
+  registerCleanupTargets('run-normal', fakeTargets('normal'));
+  // Mirrors orchestrator.ts's own normal-path sequence: teardown, then
+  // unregister unconditionally regardless of the teardown outcome.
+  unregisterCleanupTargets('run-normal');
+  assertEqual(registrySize(), 0, 'registry must be empty once the only active run completes normally');
+});
+
+await testAsync('test reset clears all registry state, including an in-flight signal-cleanup pass', async () => {
+  resetCleanupRegistryForTest();
+  registerCleanupTargets('run-a', fakeTargets('a'));
+  let calls = 0;
+  const countingTeardownFn: TeardownFn = async () => {
+    calls++;
+    return { success: true, errors: [] };
+  };
+  await runSignalCleanupOnce(countingTeardownFn);
+  assertEqual(calls, 1, 'setup: one pass completed');
+  resetCleanupRegistryForTest();
+  assertEqual(registrySize(), 0, 'reset must clear all registered targets');
+  registerCleanupTargets('run-b', fakeTargets('b'));
+  await runSignalCleanupOnce(countingTeardownFn);
+  assertEqual(calls, 2, 'after a reset, signal cleanup must start a brand-new pass, not reuse the old cached promise');
 });
 
 // ─── Summary ─────────────────────────────────────────────────────────────────

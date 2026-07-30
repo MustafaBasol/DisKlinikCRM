@@ -901,5 +901,154 @@
       "kvkkFreezeImpact": false
     },
     "rollback": "single git revert of this commit; no lock/temp artifact to clean up (none created); no schema/data/deployment rollback applicable"
+  },
+  "p2r3ParallelSignalCleanupRegistry": {
+    "addedBy": "F1-003-P2-R3",
+    "date": "2026-07-30",
+    "defect": {
+      "description": "orchestrator.ts tracked SIGINT/SIGTERM cleanup state in one module-scoped `let activeCleanupTargets` slot, overwritten and nulled by each runDisposableProfile() invocation. verify-parallel's Promise.all-based postgres pair and storage pair each keep two invocations concurrently live in the same process, so the slot could reflect only one invocation (or null) at any given moment during that normal, expected window.",
+      "reproductionMethod": "code-path proof (direct read of orchestrator.ts's pre-fix source and runVerifyParallel()'s Promise.all usage), not an observed live crash",
+      "codegraphAvailable": false,
+      "codegraphError": "ToolSearch returned zero matches (consistent with every prior program task, including F1-003-P2-R2's own confirmation for this same file set)"
+    },
+    "remediation": {
+      "newModule": "scripts/test-runtime/lib/cleanupRegistry.ts",
+      "dataStructure": "Map<runId, TeardownTargets>, targets stored by reference so in-place mutation after registration (containers/networks pushed on as created) is automatically visible to later snapshots",
+      "signalCoordination": "runSignalCleanupOnce() caches the teardownAllRegistered() promise on first call; a second call while a pass is in flight returns the same cached promise instead of starting an overlapping pass",
+      "teardownFanOut": "teardownAllRegistered() uses Promise.allSettled (not Promise.all) so one registered invocation's teardown failure cannot prevent attempts for the others",
+      "injectableForTesting": "teardownFn defaults to the real Docker-backed teardown() from lib/cleanup.ts but is injectable, mirroring lib/prismaGeneration.ts's injectable GenerateRunner pattern from F1-003-P2-R2",
+      "cleanupTsModified": false,
+      "filesChanged": [
+        "scripts/test-runtime/lib/cleanupRegistry.ts (new)",
+        "scripts/test-runtime/orchestrator.ts",
+        "scripts/test-runtime/__tests__/orchestratorUnit.test.ts"
+      ]
+    },
+    "unitTests": {
+      "newCount": 9,
+      "totalCount": 68,
+      "previousTotalCount": 59,
+      "allPassed": true,
+      "scenarios": [
+        "two concurrent run targets registered simultaneously",
+        "removing one target does not remove the other",
+        "signal snapshot includes all active targets, including post-registration in-place mutation",
+        "cleanup failure for target A does not skip target B (Promise.allSettled)",
+        "duplicate registration for one run ID throws DuplicateRunRegistrationError",
+        "removing an unknown/already-removed run ID is harmless",
+        "a second signal while cleanup is in flight reuses the same pass (call-counter proof of exactly one execution)",
+        "registry is empty after a normal successful run completes",
+        "test reset clears all registry state including an in-flight signal-cleanup promise"
+      ]
+    },
+    "standaloneAndInjectionReruns": {
+      "postgresProfile": { "runId": "20260730T081436Z-bd393684-17508", "exitCode": 0, "testExit": 0, "cleanupSucceeded": true },
+      "storageProfile": { "runId": "20260730T081916Z-fb4fcbe1-34736", "exitCode": 0, "testExit": 0, "assertions": "21/21", "cleanupSucceeded": true },
+      "nonDisposableBaseline": { "script": "server:test:non-disposable", "exitCode": 0, "members": "68/68", "regression": false },
+      "postgresFailureInjection": {
+        "test": { "runId": "20260730T085640Z-a128d04c-14100", "exitCode": 1, "cleanupSucceeded": true },
+        "migration": { "runId": "20260730T085756Z-159f1912-31864", "exitCode": 1, "step": "migrate-deploy", "cleanupSucceeded": true },
+        "readiness": { "runId": "20260730T090109Z-7fa6b58e-30852", "exitCode": 1, "cleanupSucceeded": true },
+        "cleanup": { "runId": "20260730T090119Z-521b4bb9-33968", "testsPassed": true, "cleanupSucceeded": false, "exitCode": 1, "usesPinnedSidecarImage": true },
+        "testPlusCleanup": { "runId": "20260730T090602Z-438ab3ad-23824", "testExitCode": 1, "cleanupSucceeded": false, "exitCode": 1 }
+      },
+      "parentGenerateFailureInjection": {
+        "command": "npm run test:runtime:parallel -- --inject-failure=parent-generate",
+        "generationSucceeded": false,
+        "code": 1,
+        "postgresPairLength": 0,
+        "storagePairLength": 0,
+        "exitCode": 1,
+        "dockerResourcesCreated": 0
+      }
+    },
+    "parallelStabilityReruns": {
+      "totalAttemptsThisTask": 3,
+      "allSucceeded": true,
+      "attempts": [
+        {
+          "seq": 1,
+          "result": "success",
+          "storagePairRunIds": ["20260730T082424Z-254fa18c-34568", "20260730T082425Z-67f4ab1c-34568"],
+          "collisionCheckAllTrue": true
+        },
+        {
+          "seq": 2,
+          "result": "success",
+          "postgresPairRunIds": ["20260730T082830Z-40cde8f6-29896", "20260730T082831Z-9d41e4ac-29896"],
+          "storagePairRunIds": ["20260730T083304Z-f6df1209-29896", "20260730T083305Z-ce149340-29896"],
+          "collisionCheckAllTrue": true,
+          "prismaGenerationCount": 1,
+          "ebusyCount": 0
+        },
+        {
+          "seq": 3,
+          "result": "success",
+          "postgresPairRunIds": ["20260730T083420Z-0278a3d3-412", "20260730T083421Z-9984b567-412"],
+          "storagePairRunIds": ["20260730T083854Z-f8ce357e-412", "20260730T083854Z-4020977f-412"],
+          "collisionCheckAllTrue": true,
+          "prismaGenerationCount": 1,
+          "ebusyCount": 0
+        }
+      ],
+      "zeroLabeledResourcesAfterBatch": true,
+      "incidentalFinding": "an unrelated shell command-timeout hard-killed one standalone postgres-profile run mid-execution during this task's own regression testing, leaving one labeled container and one labeled network behind - a hard kill bypasses the Node process and no SIGINT/SIGTERM handler (old or new) can run, consistent with the already-documented 'not guaranteed to survive a hard kill' limitation. Removed manually as test-harness hygiene before any measurement in this section was taken; not counted as a registry defect."
+    },
+    "liveInterruptionVerification": {
+      "scenarioA_parallelPostgresInterruption": { "status": "ATTEMPTED_INCONCLUSIVE", "claimed": false },
+      "scenarioB_parallelStorageInterruption": { "status": "ATTEMPTED_INCONCLUSIVE", "claimed": false },
+      "attemptedApproaches": [
+        {
+          "approach": "child_process.spawn + child.kill('SIGINT') from a Node parent",
+          "result": "Child process exited and the parent observed exit signal='SIGINT', but the child's own process.on('SIGINT', ...) handler never executed (its output marker never appeared) - empirically confirmed via an isolated minimal repro, not merely asserted from documentation.",
+          "conclusion": "On this Windows machine, child.kill('SIGINT') against a non-console-sharing child performs an unconditional hard termination and only reports the requested signal as the exit reason; it does not deliver something the child's own handler can observe."
+        },
+        {
+          "approach": "Win32 GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0) via PowerShell Add-Type P/Invoke",
+          "result": "NOT_COMPLETED",
+          "reason": "the tool invocation required interactive approval that was not granted during this session",
+          "note": "this is the task's own suggested 'strongest supported graceful interruption path'; recorded as attempted-but-inconclusive, not silently omitted, and not claimed as working or non-working"
+        }
+      ],
+      "fallbackVerification": "deterministic unit-level verification of the multi-target signal handler, per the task's own explicit fallback instruction - see unitTests above (scenarios 3, 4, and 7 directly model the snapshot-covers-all-targets, one-failure-does-not-block-others, and duplicate-signal-does-not-overlap requirements A and B would have exercised live)",
+      "notClaimed": [
+        "a live, real-time-observed Docker interruption of a running verify-parallel invocation was performed in this task",
+        "SIGKILL, OS crash, terminal hard-close, or Docker-daemon-crash cleanup is supported or was tested",
+        "GenerateConsoleCtrlEvent delivery was confirmed working or non-working on this platform"
+      ]
+    },
+    "sidecarImagePinning": {
+      "before": "alpine:latest (mutable tag)",
+      "after": "alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+      "digestSource": "docker image inspect alpine:latest --format '{{index .RepoDigests 0}}' against this machine's already-locally-cached image - no new pull performed",
+      "role": "test-only cleanup-failure-injection sidecar; never part of the actual disposable PostgreSQL/MinIO runtime under test; removed as test-harness hygiene immediately after each measurement",
+      "reverifiedWorking": true
+    },
+    "migrationStatus": {
+      "schemaOrMigrationCreated": false,
+      "productionAccess": false,
+      "prismaMigrationsTableManuallyAltered": false,
+      "rollbackPerformed": false
+    },
+    "r070Status": "OPEN, unchanged",
+    "securityTenantKvkkImpact": {
+      "trustBoundary": "in-process, module-scoped Map only; no persisted lock/temp file; dies with the orchestrator process",
+      "commandInjectionImpact": "none - no new shell string concatenation; the sidecar image-reference change is a literal-string swap through the existing argv-array runDockerSync() call",
+      "lockOrTempFileExists": false,
+      "applicationRuntimeImport": false,
+      "tenantBehaviorChanged": false,
+      "realPatientData": false,
+      "kvkkFreezeImpact": false,
+      "preservedUnchanged": [
+        "fail-fatal cleanup policy",
+        "per-run label ownership",
+        "stale-resource sweeper",
+        "production endpoint guards",
+        "F1-003-P2-R2 parent-level Prisma generation fix",
+        "digest-pinned PostgreSQL/MinIO references",
+        "existing failure-injection behavior"
+      ]
+    },
+    "rollback": "single git revert of this commit; no lock/temp artifact to clean up (none created); no schema/data/deployment rollback applicable; reverting only the sidecar-image-pin sub-change without the registry fix would just restore alpine:latest with no functional effect on the registry logic"
   }
 }

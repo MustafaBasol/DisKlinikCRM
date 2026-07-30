@@ -490,3 +490,147 @@ Single `git revert` of this task's commit — removes `lib/paths.ts` and `lib/pr
 | 18 | At least two concurrent storage runs succeed without collision | `MET` (2 runs only; run 2 of a later 3rd/4th check hit real `EBUSY`, §38) | `MET` | 5/5 consecutive clean runs post-fix, §39.7 |
 
 All other 32 criteria are unaffected by this correction and remain `MET` as originally recorded.
+
+## 40. F1-003-P2-R3 update (2026-07-30): concurrency-safe parallel signal-cleanup registry and interruption verification
+
+This section records F1-003-P2-R3, continued on this same open PR #260 branch (no new PR), parent task F1-003-P2-R2 (§39 above). This task fixes a *different* concurrency defect from §39's Prisma-generation race — this one is in the orchestrator's SIGINT/SIGTERM best-effort cleanup path itself, not in test provisioning.
+
+### 40.1 Defect (reproduced by code-path proof, not by an observed crash)
+
+Before this task, `orchestrator.ts` tracked cleanup state in one process-wide variable:
+
+```ts
+let activeCleanupTargets: TeardownTargets | null = null;
+```
+
+`runDisposableProfile()` assigned `activeCleanupTargets = cleanupTargets` at the start of every invocation and reset it to `null` after its own teardown completed. Under `verify-parallel`'s `Promise.all([...two concurrent runDisposableProfile() calls...])`, two invocations share the same JS event loop and the same module-scoped variable: the second invocation's assignment silently overwrites the first's, and either invocation's completion can null the slot out from under the other. A SIGINT/SIGTERM arriving at any point during that window would see at most one invocation's containers/network (whichever last wrote the slot) or `null` (if either invocation had already finished and reset it) — never both. This was a real, exploitable code path, not a hypothetical: `runVerifyParallel()` (§39.3) runs the postgres pair and the storage pair each via `Promise.all`, so the window where two invocations are simultaneously live is the normal, expected steady state of every `verify-parallel` run, not an edge case.
+
+### 40.2 Root cause
+
+CodeGraph confirmed unavailable for this task as well (`ToolSearch(query="CodeGraph code graph analysis")` returned zero matches — consistent with every prior program task, including §39.2's own confirmation for this same file set). Bounded `Read`/`Grep` used instead, scoped to `scripts/test-runtime/orchestrator.ts`, `scripts/test-runtime/lib/cleanup.ts`, `scripts/test-runtime/lib/docker.ts`, `scripts/test-runtime/__tests__/orchestratorUnit.test.ts`, and this document's own §38/§39.
+
+Root cause: a single module-scoped `let activeCleanupTargets` slot cannot represent more than one invocation's live cleanup state at a time, and nothing about its use in `runDisposableProfile()` or the SIGINT/SIGTERM handler was concurrency-aware — both were written assuming (correctly, for the standalone `postgres`/`storage` profiles; incorrectly, for `verify-parallel`) that at most one invocation would ever be live in a given orchestrator process.
+
+### 40.3 Chosen remediation: `Map<runId, TeardownTargets>` registry
+
+New module `scripts/test-runtime/lib/cleanupRegistry.ts` (pure, Docker-free, never imported by application runtime — same isolation boundary as every other `lib/` module):
+
+- `registerCleanupTargets(runId, targets)` — stores `targets` by **reference**, keyed by the invocation's own run ID, before any Docker resource is created. Because the registry holds a reference rather than a copy, the invocation's later `cleanupTargets.containerNames.push(...)` / `.networkNames.push(...)` calls (as containers/networks are actually created) are automatically visible to any later signal snapshot — no separate "update" API is needed, and none was added. Throws `DuplicateRunRegistrationError` on a duplicate `runId` (deterministic rejection, not a silent overwrite).
+- `unregisterCleanupTargets(runId)` — removes one entry; a no-op, not a throw, for an unknown/already-removed `runId`.
+- `snapshotRegisteredTargets()` — returns every currently-registered `{ runId, targets }` pair at call time.
+- `teardownAllRegistered(teardownFn = teardown)` — snapshots the registry, then runs `teardownFn` against every entry via `Promise.allSettled` (never `Promise.all`), so one invocation's teardown throwing/rejecting cannot prevent the others from being attempted. Each entry that completes teardown (successfully or not) is removed from the registry; `teardownFn` is injectable specifically so unit tests can exercise this coordination logic without Docker — the same pattern `lib/prismaGeneration.ts`'s injectable `GenerateRunner` already established in §39.3.
+- `runSignalCleanupOnce(teardownFn = teardown)` — the actual SIGINT/SIGTERM entry point. Caches the `teardownAllRegistered()` promise on first call; every subsequent call (i.e. a second signal delivered while the first pass is still in flight) returns the *same* promise instead of starting a second, overlapping pass. The cached promise is intentionally never cleared after settling — a signal-cleanup pass is a one-shot, process-terminating action for the life of the module.
+- `resetCleanupRegistryForTest()` — test-only; clears both the registry map and the cached in-flight-signal-cleanup promise.
+
+`orchestrator.ts` changes: `activeCleanupTargets`/`signalCleanupInFlight` are removed entirely. `runDisposableProfile()` calls `registerCleanupTargets(runId, cleanupTargets)` as the first statement inside its `try` block (before `assertNoInheritedOverride()`, before any Docker command — satisfying "register before the first Docker resource is created" even for the production-guard-rejection path) and `unregisterCleanupTargets(runId)` unconditionally after its own `teardown()` call, regardless of outcome. `handleTerminationSignal()` now calls `runSignalCleanupOnce()` (no argument — the real, Docker-backed `teardown()` is the default), logs how many run IDs were attempted and how many failed, then `process.exit(exitCode)`.
+
+This is the narrowest fix supported by direct repository evidence: no lock/mutex, no new external dependency, no change to `teardown()`/`cleanup.ts` itself (its per-target teardown contract — attempt every step, aggregate errors, never throw — is reused as-is, just now invoked once per registered invocation instead of once globally), and the standalone `postgres`/`storage` profiles are behaviorally unaffected (each still registers/unregisters exactly one entry, exactly as the old single-slot code did for the single-invocation case).
+
+### 40.4 Files changed
+
+- `scripts/test-runtime/lib/cleanupRegistry.ts` (new) — the registry described above.
+- `scripts/test-runtime/orchestrator.ts` — removed `activeCleanupTargets`/`signalCleanupInFlight`; `runDisposableProfile()` registers/unregisters by `runId`; `handleTerminationSignal()` uses `runSignalCleanupOnce()`; also pins the cleanup-failure-injection sidecar image (§40.9).
+- `scripts/test-runtime/__tests__/orchestratorUnit.test.ts` — 9 new focused unit tests (§40.5).
+
+No schema, migration, CI workflow, application-domain, or `server/package.json` file was touched. `lib/cleanup.ts` itself was **not** modified — its existing per-invocation `teardown()` contract already satisfied everything the registry needed to compose against.
+
+### 40.5 Unit tests (Docker-free, `npm run test:runtime:unit`)
+
+All 9 required scenarios, using an injectable `TeardownFn` so no scenario touches Docker:
+
+1. Two concurrent run targets (`run-a`, `run-b`) can be registered simultaneously — `registrySize()` reaches 2, both IDs present.
+2. Removing one target (`unregisterCleanupTargets('run-a')`) leaves the other registered and untouched.
+3. `snapshotRegisteredTargets()` includes every active target, including a container name pushed onto a target's array **after** registration (same-object-reference semantics — mirrors real container/network names being added as they're actually created).
+4. A fake `teardownFn` that throws for target A and succeeds for target B: both are attempted (`Promise.allSettled`), A is reported as failed, B is still reported as succeeded.
+5. Duplicate registration for the same `runId` throws the typed `DuplicateRunRegistrationError`.
+6. Removing an unknown ID, and removing the same ID twice, are both harmless no-ops (`registrySize()` unaffected/decrements correctly, no throw).
+7. Calling `runSignalCleanupOnce()` twice while a slow fake teardown is still in flight returns the identical cached promise both times, and the underlying teardown function's call counter proves it ran exactly once — the "second signal" scenario.
+8. The normal single-invocation register-then-unregister sequence (mirroring `runDisposableProfile()`'s own real sequence) leaves `registrySize() === 0`.
+9. `resetCleanupRegistryForTest()` clears both registered targets and an already-completed in-flight-signal promise — proven by showing a *second, independent* `runSignalCleanupOnce()` pass runs (call counter increments again) after a reset, where it would otherwise have returned the first pass's stale cached result.
+
+Result: **68/68 passed, 0 failed** (the pre-existing 59 from §39.5 plus these 9).
+
+### 40.6 Standalone profile and failure-injection reruns (real Docker Desktop engine, this task)
+
+- `npm run test:runtime:postgres`: run ID `20260730T081436Z-bd393684-17508`, migration exit `0`, `server:test:disposable-db` exit `0`, cleanup succeeded, outcome exit `0`.
+- `npm run test:runtime:storage`: run ID `20260730T081916Z-fb4fcbe1-34736`, migration exit `0`, `server:test:storage-integration` exit `0` (21/21 assertions), cleanup succeeded, outcome exit `0`.
+- `--inject-failure=test`: run ID `20260730T085640Z-a128d04c-14100`, test exit `1`, cleanup succeeded, outcome exit `1`.
+- `--inject-failure=migration`: run ID `20260730T085756Z-159f1912-31864`, migration failed at `migrate-deploy` (exit `1`), test never started, cleanup succeeded, outcome exit `1`.
+- `--inject-failure=readiness`: run ID `20260730T090109Z-7fa6b58e-30852`, genuine `pg_isready` timeout after 200ms with full diagnostic, cleanup succeeded, outcome exit `1`.
+- `--inject-failure=cleanup`: run ID `20260730T090119Z-521b4bb9-33968`, tests passed (exit `0`), cleanup genuinely failed (`"network ... has active endpoints"` — the digest-pinned sidecar, §40.9), outcome exit `1` — fail-fatal policy confirmed unchanged.
+- `--inject-failure=test --inject-failure=cleanup`: run ID `20260730T090602Z-438ab3ad-23824`, test exit `1` preserved verbatim, cleanup separately reported as failed, outcome exit `1`.
+- `verify-parallel --inject-failure=parent-generate`: `generation.succeeded: false`, code `1`, `postgresPair: []`, `storagePair: []`, outcome exit `1` — zero Docker resources created, confirming §39's generate-once-before-fan-out guard is untouched by this task's registry change.
+- `npm run server:test:non-disposable` (from `server/`): exit `0` — ends with `test:overdue-installments`: `Total: 9 Passed: 9 Failed: 0`, matching the already-merged F1-003-B1 baseline exactly; no regression from this task.
+
+After every run above (including the deliberately-failed cleanup-injection runs, whose sidecar/network are removed by the orchestrator's own existing test-harness-hygiene step immediately after the measured outcome is computed — unchanged from §21/§23): `docker ps -aq --filter label=com.noramedi.test-runtime=true` and `docker network ls -q --filter label=com.noramedi.test-runtime=true` both returned `0`.
+
+### 40.7 Parallel stability reruns — 3 consecutive `verify-parallel` invocations (this task)
+
+| # | Result | Postgres-pair run IDs | Storage-pair run IDs | Collision check | Prisma generations | EBUSY |
+|---|---|---|---|---|---|---|
+| 1 | exit 0 | (not individually re-captured to a log file; console output confirmed all 4 children exit 0) | `20260730T082424Z-254fa18c-34568`, `20260730T082425Z-67f4ab1c-34568` | all `true` | not separately counted this run | 0 observed |
+| 2 | exit 0 | `20260730T082830Z-40cde8f6-29896`, `20260730T082831Z-9d41e4ac-29896` | `20260730T083304Z-f6df1209-29896`, `20260730T083305Z-ce149340-29896` | all `true` | exactly 1 | 0 |
+| 3 | exit 0 | `20260730T083420Z-0278a3d3-412`, `20260730T083421Z-9984b567-412` | `20260730T083854Z-f8ce357e-412`, `20260730T083854Z-4020977f-412` | all `true` | exactly 1 | 0 |
+
+All 3 runs: exit `0`, all 4 children exit `0`, `collisionCheck` all `true`, zero labeled Docker resources remaining afterward (confirmed by direct `docker ps`/`docker network ls` count after the batch — see §40.6's closing line). This reconfirms §39.7's generate-once fix is unaffected by this task's registry change, on top of confirming this task's own registry change introduces no new collision or regression in the already-passing pairs.
+
+One incidental, honestly-recorded data point from this task's own regression testing (not part of the required matrix, but a genuine real-world confirmation of an already-documented limitation): during an earlier `postgres`-profile run in this task, the invoking shell's own command timeout hard-killed the orchestrator process mid-run before it reached its own cleanup step. This left one labeled container and one labeled network behind — exactly the documented, un-changed-by-this-task limitation that cleanup is best-effort for SIGINT/SIGTERM only and is **not** guaranteed to survive a hard kill (§35/§36, restated in §40.8 below). It was removed manually as test-harness hygiene (`docker rm -f`/`docker network rm` against its own labeled name) before any of the measurements in §40.6/§40.7 were taken, and is not counted as a cleanup-registry failure — a hard kill bypasses the Node process entirely and no JS-level signal handler (old or new) can run in that case.
+
+### 40.8 Live interruption verification: attempted, and the exact Windows-platform limitation hit
+
+Two automated approaches to deliver a real, catchable interrupt to a running orchestrator child process were attempted in this task, on this Windows 11 machine, using the actual orchestrator process (and, for the first approach, a minimal isolated reproduction to isolate the platform behavior from any orchestrator-specific code):
+
+1. **`child_process.spawn` + `child.kill('SIGINT')`** (Node-native): a minimal Node parent script spawned a Node child that registered `process.on('SIGINT', ...)` and printed a distinct marker from inside that handler, then the parent called `child.kill('SIGINT')` once the child signaled readiness. Observed result: the child process exited, and the parent's `'exit'` event reported `signal: 'SIGINT'` — but the child's own handler never ran (its marker line never appeared in captured output). This demonstrates, empirically and not merely from documentation, that on this Windows machine `child.kill('SIGINT')` against a non-console-sharing child performs an unconditional termination and merely *reports* the requested signal as the exit reason, rather than delivering something the child's own `process.on('SIGINT', ...)` can observe and act on. This matches Node's own documented Windows caveat that arbitrary POSIX-style signal delivery to a child process is not reliably supported outside real console Ctrl+C/Ctrl+Break events.
+2. **Win32 `GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0)`** via a PowerShell `Add-Type` P/Invoke helper, broadcasting a genuine console control event to every process sharing the calling console (the actual mechanism a human pressing Ctrl+C in a real terminal triggers, and the one Node's libuv does correctly translate into a catchable `'SIGINT'` emit): this is the "strongest supported graceful interruption path" the task instructions themselves point to. This attempt was **not completed** in this session — the tool invocation required an interactive approval step that was not granted during this run — so it is explicitly **not claimed** as verified, working, or non-working; it is recorded here as attempted-but-inconclusive, not silently omitted.
+
+Consequently, this task does **not** claim a live, real-time-observed Docker interruption test was performed for either scenario A (parallel postgres interruption) or scenario B (parallel storage interruption) in the "start it, wait for both invocations' resources to exist, deliver a signal, observe cleanup" sense the task brief describes. This is recorded honestly rather than fabricated.
+
+What **is** verified, deterministically and without this platform limitation, is the exact logic the live test would have exercised, at the unit level (§40.5, all passing): two concurrently-registered run IDs both present in a signal snapshot (including one whose targets were mutated in place after registration — the real-world shape of containers/networks being added as they're created); a teardown failure for one registered run not preventing an attempt for the other; a second signal call while a pass is in flight reusing the same in-flight promise rather than starting an overlapping pass, with the underlying teardown call counted to prove it ran exactly once. The orchestrator's real `process.on('SIGINT', ...)`/`process.on('SIGTERM', ...)` handlers call this exact, unit-verified `runSignalCleanupOnce()` function unconditionally — so a genuine interactive Ctrl+C from a real terminal session (the normal, human-driven use of this mechanism) exercises the identical code path already proven correct in isolation. What remains unverified by this task is specifically the fully-automated, non-interactive delivery of that signal inside this sandboxed session — not the orchestrator's own registry/handler logic.
+
+**Not claimed** (unchanged from §35/§36, restated for this task specifically): that SIGKILL, an OS crash, a terminal hard-close, or a Docker-daemon crash is cleaned up — only best-effort SIGINT/SIGTERM handling is implemented, exactly as before this task; that a live, real-time interruption of a running `verify-parallel` invocation was observed in this task; that `GenerateConsoleCtrlEvent` delivery was confirmed working or non-working on this platform (attempted, inconclusive, not completed).
+
+### 40.9 Optional supply-chain cleanup: cleanup-failure-injection sidecar image pinned
+
+The cleanup-failure-injection sidecar (§21/§23; a genuinely-attached, untracked container used only to force a real `docker network rm` failure for the `--inject-failure=cleanup` acceptance test) used the mutable `alpine:latest` tag. Pinned in this task to the exact digest already present on this machine (`docker image inspect alpine:latest --format '{{index .RepoDigests 0}}'` → `alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b`), as a named `CLEANUP_FAILURE_SIDECAR_IMAGE` constant in `orchestrator.ts`, with a comment explaining its narrow test-only role. No new pull was required or performed — the exact bytes this task now pins to are the same bytes already cached locally from this environment's own prior `alpine:latest` pulls. This sidecar is never part of the actual disposable PostgreSQL/MinIO runtime under test; it exists solely to force one specific, already-documented failure-injection scenario and is removed as test-harness hygiene immediately after that measurement is taken (unchanged from §21/§23). Re-verified live in this task (§40.6): the `--inject-failure=cleanup` and `--inject-failure=test --inject-failure=cleanup` scenarios both still reproduce the same genuine `"has active endpoints"` failure using the pinned reference.
+
+### 40.10 Migration status
+
+No schema or migration file created or modified. No production database access. No `_prisma_migrations` table manually altered. No rollback performed or claimed. **R-070 remains OPEN**, untouched by this task.
+
+### 40.11 Security / tenant / KVKK impact
+
+- **Trust boundary**: `cleanupRegistry.ts`'s `Map` is private, module-scoped, in-process state that dies with the orchestrator process — no persisted lock/temp file of any kind, same boundary as §39.9's generation-authorization mechanism.
+- **Command-injection impact**: none — no new shell string concatenation of any kind is introduced; the only Docker-image-reference change (§40.9) replaces one literal string constant with another, still passed through the existing argv-array `runDockerSync()` call, unchanged invocation shape.
+- No application runtime file imports `scripts/test-runtime/**` (unchanged).
+- No tenant-scoping/authorization behavior changed — this task touches only orchestrator-internal cleanup bookkeeping, never any application-domain code, and every regression test in §40.6 passed unchanged.
+- No real patient data — all fixtures remain synthetic, unchanged from the original P2 implementation.
+- No KVKK freeze boundary touched.
+- Fail-fatal cleanup policy, per-run label ownership, the stale-resource sweeper, the production-endpoint guards, §39's parent-level Prisma generation fix, and both images' digest-pinning are all unmodified by this task and were live-reconfirmed working in §40.6/§40.7.
+
+### 40.12 Rollback
+
+Single `git revert` of this task's commit — removes `lib/cleanupRegistry.ts` and reverts the `orchestrator.ts`/unit-test changes, restoring the pre-R3 single-slot (racy-under-`verify-parallel`) behavior. No lock/temp artifact exists to clean up (none is ever created by the registry). No schema/data/deployment rollback applicable. The sidecar-image-pin change (§40.9) reverts along with the rest of the commit; reverting it alone (without reverting the registry) would simply restore `alpine:latest` with no functional effect on the registry fix.
+
+### 40.13 Acceptance status for this task's own required items
+
+| Requirement | Status | Evidence |
+|---|---|---|
+| Concurrency-safe registry replaces single global slot | MET | §40.3, `lib/cleanupRegistry.ts` |
+| Register before first Docker resource created | MET | `registerCleanupTargets()` is the first statement in `runDisposableProfile()`'s `try` block, §40.3 |
+| Registered target updated in place as resources are added | MET | reference semantics, no separate "update" API; unit test 3, §40.5 |
+| Remove only the completed invocation's entry | MET | `unregisterCleanupTargets(runId)`, unit tests 1/2, §40.5 |
+| Signal handler snapshots all registered targets | MET | `snapshotRegisteredTargets()`/`teardownAllRegistered()`, unit test 3, §40.5 |
+| Signal handler attempts teardown for every registered invocation | MET | `Promise.allSettled` in `teardownAllRegistered()`, unit test 4, §40.5 |
+| One teardown failure does not block others | MET | unit test 4, §40.5 |
+| Duplicate signal delivery does not overlap passes | MET | `runSignalCleanupOnce()` cached promise, unit test 7, §40.5 |
+| Normal/signal cleanup idempotent or tolerant of already-removed resources | MET (best-effort, as before) | `teardown()`'s existing `docker rm -f` idempotency + error-aggregation contract is reused unchanged; §40.3 |
+| No broad Docker cleanup/prune | MET | registry only ever touches its own registered/labeled targets, same as before |
+| No cross-process lock/temp file/persisted state | MET | in-process `Map` only, §40.11 |
+| 9 required unit tests | MET | §40.5, 68/68 total passing |
+| Live parallel postgres interruption (A) | **NOT MET / attempted, inconclusive** | §40.8 |
+| Live parallel storage interruption (B) | **NOT MET / attempted, inconclusive** | §40.8 |
+| Deterministic unit-level verification as fallback for A/B | MET | §40.5/§40.8 |
+| Regression suite (unit/typecheck/PS/bash/profiles/parallel×3/injections/non-disposable/JSON/git diff) | MET | §40.5-§40.7, this section |
+| Optional sidecar image pin | MET (elected to apply) | §40.9 |
+
+This task reaches, at most, `AGENT_COMPLETED` / `PR_OPENED_AWAITING_REVIEW` — identical ceiling to §38/§39, unchanged by this task. F1 and F1-003 remain `IN_PROGRESS`. P3 remains blocked on PR #260's external review and merge.
