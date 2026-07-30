@@ -359,4 +359,44 @@ This is a pre-existing property of the test file (an exact-whitespace source-tex
 
 **Run associated with the new head SHA produced by this task's remediation push — the actual acceptance evidence:**
 
-See the companion JSON (`ghActionsEvidence.postR1Run`) and PR #268's own description/comments for the exact run ID, per-job conclusions, and observation timestamp, recorded immediately after the push in the same working session (not predicted or assumed in advance). If that run had not reached a terminal state by the time this task's final report was written, the report says so explicitly and does not claim a merge-ready conclusion.
+| Field | Value |
+|---|---|
+| Head SHA | `930cc70620c6431da9425df5d7ad3ee6971c156a` |
+| Run ID | `30542271302` |
+| URL | https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/30542271302 |
+| Status | `completed` (checked twice: initial run, then one `gh run rerun --failed` to distinguish a one-off flake from a deterministic result) |
+| Overall conclusion | **`failure`**, both times |
+| Layer 1 (all 4 jobs) | `success`, both times |
+| Layer 2 (`non-disposable-backend-tests`) | **`success`** — confirms the §17.4 Prisma-generate fix works; this exact job failed on the pre-R1 run |
+| Layer 3 (`disposable-postgres-tests`) | `success` |
+| Layer 4 (`storage-integration-tests`) | `success` |
+| Layer 5 frontend (`full-suite-compatibility-failsafe-frontend`) | `success` |
+| Layer 5 backend (`full-suite-compatibility-failsafe-backend`, new) | **`failure`, reproducibly (2/2)** — see §17.10 |
+
+`test:clinic-bulk-export` (the script with the Windows-local CRLF-only failure documented in §17.8) passed **117/117** on this real Linux run, confirming that root-cause hypothesis directly rather than merely predicting it.
+
+### 17.10 New finding: a genuine, previously-invisible concurrency race in `test:retention-manual-run-audit` — not fixed, out of this task's scope
+
+The one assertion that failed, both times, in `full-suite-compatibility-failsafe-backend`:
+
+```
+✗ concurrent live runs: the shared job lock serializes execution — only one run actually
+  deletes; both attempts get their own started+terminal audit pair, the loser terminal is
+  manual_run_blocked/concurrent_run_in_progress
+      exactly one concurrent live run must execute (200) and the other must be rejected as
+      already-in-progress (409)
+      + actual - expected
+        [ 200, +200 -409 ]
+```
+
+Both concurrent `POST /privacy/data-retention/run` requests returned `200` (both executed) instead of one `200` + one `409` — the shared job-lock did not serialize the two requests in this run's timing.
+
+**Reproducibility:** `2/2` on GitHub Actions `ubuntu-latest` (the initial run and one `gh run rerun --failed`), `0/2` on this task's own local Windows + Docker Desktop environment (§17.7 command #4-5) — a genuine, deterministic environment-specific timing difference, not a one-off flake and not caused by this task's own CI wiring.
+
+**Significance:** this is the **first time this script has ever executed against a live disposable PostgreSQL in any CI environment** — legacy `server:test` (which silently contains it) was never wired into any workflow before this task. This finding is a direct, positive consequence of this task's own closure work (§17.5) exposing a previously-invisible, pre-existing behavior — exactly the kind of thing a full-suite fail-safe exists to surface, and exactly why F1-003-P1 and F1-003-P2 each transparently reported the real bugs their own live-verification work found rather than hiding them.
+
+**Why this task does not fix it:** the underlying job-lock/concurrency implementation lives in `server/src` (application runtime code); modifying it, or altering the test's own timing assumptions to make it pass, is explicitly outside F1-003-P3-R1's CI-workflow-only authorized scope ("do not modify application runtime," "do not weaken tests"). No application, lock, or test file was touched in response to this finding.
+
+**Recommendation:** a separate, explicitly-authorized follow-up task should investigate the data-retention job-lock's concurrency guarantees under real concurrent HTTP load (not just this task's own scope), and/or evaluate this specific test against F1's own already-planned, not-yet-started backlog item 4 ("Flaky test tespiti ve karantina süreci" / flaky-test detection and quarantine).
+
+**What this does and does not mean for this task's own acceptance:** the `full-suite-compatibility-failsafe-backend` job's own provisioning, migration, test-execution, and cleanup all worked exactly as designed — its own summary artifact shows `cleanup: {success:true, errors:[]}` even though the test phase itself failed, and 19 of that script's own 20 assertions (plus all 22 other scripts' assertions, ~745 total) passed. The CI-workflow implementation this task built is not the source of the one failing assertion; it is precisely what correctly surfaced it. This task's own overall CI conclusion is honestly reported as `failure` — it is not described as passing, and P4 remains blocked pending both external review and a resolution path for this new finding (which may be "accepted as a known, separately-tracked issue" — an external/product decision, not this task's own to make).

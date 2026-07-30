@@ -291,9 +291,52 @@
       "note": "historical - superseded by postR1Run below, which is the actual acceptance evidence for this remediation"
     },
     "postR1Run": {
-      "note": "PLACEHOLDER at evidence-authoring time, before the P3-R1 remediation commit is pushed. Populated with the real run ID/status/per-job conclusions immediately after push, in the same working session - see this document's own git history / the final delivery report / PR #268's description for the actual values if this placeholder was not updated in place."
+      "headSha": "930cc70620c6431da9425df5d7ad3ee6971c156a",
+      "runId": 30542271302,
+      "url": "https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/30542271302",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "failure",
+      "attempts": 2,
+      "attempt1": {
+        "conclusion": "failure",
+        "jobs": [
+          { "name": "Layer 1: frontend typecheck + build", "conclusion": "success" },
+          { "name": "Layer 1: server typecheck", "conclusion": "success" },
+          { "name": "Layer 1: test-runtime tooling typecheck + unit tests", "conclusion": "success" },
+          { "name": "Layer 1: workflow YAML, shell, PowerShell, and JSON validation", "conclusion": "success" },
+          { "name": "Layer 2: non-disposable backend tests", "conclusion": "success", "note": "P3-R1's prisma-generate fix confirmed working - this job failed on the pre-R1 run" },
+          { "name": "Layer 3: disposable PostgreSQL tests", "conclusion": "success" },
+          { "name": "Layer 4: disposable PostgreSQL + MinIO storage integration tests", "conclusion": "success" },
+          { "name": "Layer 5: full-suite/compatibility fail-safe (frontend)", "conclusion": "success" },
+          { "name": "Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)", "conclusion": "failure", "rootCause": "see p3r1NewFindingRetentionLockRace" }
+        ]
+      },
+      "attempt2": {
+        "note": "gh run rerun --failed, to distinguish a one-off flake from a deterministic environment-specific failure",
+        "conclusion": "failure",
+        "onlyRerunJob": "Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)",
+        "result": "failed again, same exact assertion - confirms reproducible, not a one-off flake",
+        "otherJobsRerun": ["Layer 1 (all 4)"],
+        "otherJobsConclusion": "success (cached/rerun, unaffected)"
+      },
+      "confirmedFixed": ["p3r1RootCausedCiDefect (Layer 2 Prisma generate)", "the CRLF-only local test:clinic-bulk-export failure (117/117 passed on Linux, confirming the §17.8 root-cause hypothesis)"],
+      "confirmedNewFinding": "p3r1NewFindingRetentionLockRace - NOT fixed, out of this task's authorized scope, see that field"
     },
-    "runIds": [30536185063],
+    "p3r1NewFindingRetentionLockRace": {
+      "discoveredVia": "the actual GitHub Actions run(s) on the post-remediation head SHA - NOT reproduced in this task's own local validation on Windows (0 failures across 2 local postgres-compat runs)",
+      "script": "test:retention-manual-run-audit",
+      "failingAssertion": "concurrent live runs: the shared job lock serializes execution - only one run actually deletes; both attempts get their own started+terminal audit pair, the loser terminal is manual_run_blocked/concurrent_run_in_progress",
+      "observedBehavior": "both concurrent POST /privacy/data-retention/run requests returned 200 (both executed) instead of one 200 + one 409 - the shared job lock did not serialize the two requests in this environment/timing",
+      "reproducibility": "2/2 on GitHub Actions ubuntu-latest (initial run + one rerun via gh run rerun --failed), 0/2 on this task's local Windows + Docker Desktop environment - a genuine, deterministic environment-specific timing difference, not a one-off flake",
+      "significance": "this is the FIRST time this script has ever executed against a live disposable PostgreSQL in ANY CI environment - legacy server:test (which silently contains it) was never wired into any workflow before this task; this finding is a direct, positive consequence of this task's own closure work exposing a previously-invisible behavior",
+      "rootCauseCharacterization": "a race-condition-sensitive test/lock-acquisition timing window; likely sensitive to the relative scheduling of two near-simultaneous HTTP requests and their underlying lock-acquisition SQL, which appears to behave differently under GitHub Actions' container/runner scheduling than on this task's local machine",
+      "correctionMade": false,
+      "whyNoCorrectionMade": "fixing this would require modifying the actual job-lock/concurrency implementation in server/src (application runtime code) and/or the test's own timing assumptions - both explicitly outside F1-003-P3-R1's CI-workflow-only authorized scope ('do not modify application runtime', 'do not weaken tests')",
+      "recommendation": "a separate, explicitly-authorized follow-up task should investigate the data-retention job-lock's concurrency guarantees under real (not just same-process) concurrent load, and/or evaluate this specific test for the F1 phase's own already-planned 'flaky test detection and quarantine' backlog item (F1 Initial task backlog item 4, not yet started)",
+      "impactOnThisTasksAcceptance": "the full-suite-compatibility-failsafe-backend job's overall CI conclusion is honestly reported as failing on real CI; this does not indicate a defect in this task's own CI-workflow implementation (Layers 1-4 and Layer 5-frontend are all green, and the backend-compat mechanism's own provisioning/execution/cleanup all worked correctly - see cleanup:{success:true,errors:[]} in the run's own summary JSON, uploaded as an artifact)"
+    },
+    "runIds": [30536185063, 30542271302],
     "note": "preR1Run is historical; postR1Run (populated after this task's remediation push) is the actual acceptance evidence per this task's own instruction to use only the new-head-SHA run."
   },
   "rollback": {
@@ -306,8 +349,10 @@
     "agentCompleted": true,
     "testsPassedLocally": true,
     "localWorkflowSyntaxValidated": true,
-    "actualGithubActionsPassed": "unknown - not yet run",
-    "prOpened": "pending - see final delivery report",
+    "actualGithubActionsPassed": false,
+    "actualGithubActionsPassedDetail": "8 of 9 jobs pass on the post-remediation head SHA (930cc706...), confirmed across 2 attempts; the 9th (full-suite-compatibility-failsafe-backend) fails reproducibly due to a newly-discovered, pre-existing application-level concurrency race in the data-retention job-lock (see p3r1NewFindingRetentionLockRace) - not a defect in this task's own CI-workflow implementation, not fixed by this task as it is outside CI-workflow-only authorized scope",
+    "prOpened": true,
+    "prNumber": 268,
     "merged": false,
     "deployed": false,
     "productionVerified": false
