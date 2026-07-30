@@ -71,7 +71,8 @@
       "system": "Sistem",
       "privacy": "Gizlilik / Veri",
       "backups": "Yedekler",
-      "securityIncidents": "Güvenlik Olayları"
+      "securityIncidents": "Güvenlik Olayları",
+      "externalCalendar": "Harici Takvim"
     }
   },
   "dashboard": {
@@ -145,6 +146,59 @@
         "blocked": "Engellendi",
         "selectedProvider": "Seçilen sağlayıcı"
       }
+    }
+  },
+  "externalCalendar": {
+    "title": "Harici Takvim Entegrasyonu",
+    "subtitle": "Harici diş hekimliği yazılımı takvim entegrasyonunu (ör. DigiDentiS) yapılandırmak için bir klinik seçin.",
+    "searchPlaceholder": "Klinik ara...",
+    "noClinics": "Klinik bulunamadı",
+    "selectClinicPrompt": "Entegrasyonu görüntülemek veya yapılandırmak için soldan bir klinik seçin.",
+    "provider": {
+      "digidentis": "Sağlayıcı: DigiDentiS"
+    },
+    "status": {
+      "not_configured": "Yapılandırılmadı",
+      "configured": "Yapılandırıldı",
+      "connected": "Bağlandı",
+      "error": "Hata"
+    },
+    "enabled": "Etkin",
+    "configured": "Yapılandırıldı",
+    "notConfigured": "Yapılandırılmadı",
+    "fields": {
+      "clientId": "İstemci Kimliği",
+      "clientSecret": "İstemci Gizli Anahtarı",
+      "webhookSecret": "Webhook Gizli Anahtarı",
+      "apiBaseUrl": "API Temel URL'si (isteğe bağlı)",
+      "externalCompanyId": "DigiDentiS Şirket Kimliği",
+      "externalClinicId": "DigiDentiS Klinik Kimliği"
+    },
+    "testConnection": "Bağlantıyı test et",
+    "lastSuccessfulCheck": "Son başarılı kontrol",
+    "lastCheckedAt": "Son kontrol",
+    "lastError": "Son hata",
+    "webhookUrl": "Webhook URL'si",
+    "webhookUrlHint": "Bu URL'yi bu klinik için DigiDentiS webhook ayarlarında yapılandırın.",
+    "mappings": {
+      "title": "Hekim / Hizmet Eşlemeleri",
+      "loadRemote": "DigiDentiS'ten Yükle",
+      "type": "Tür",
+      "local": "NoraMedi",
+      "external": "DigiDentiS",
+      "practitioner": "Hekim",
+      "service": "Hizmet",
+      "empty": "Henüz eşleme yapılandırılmadı",
+      "externalIdPlaceholder": "Harici kimlik",
+      "blockingHint": "Aktif bir eşlemesi olmayan hekim veya hizmet, bir yönetici burada eşleme yapana kadar senkronize edilemez."
+    },
+    "errors": {
+      "loadFailed": "Entegrasyon yapılandırması yüklenemedi",
+      "saveFailed": "Yapılandırma kaydedilemedi",
+      "toggleFailed": "Etkinleştirme durumu güncellenemedi",
+      "testFailed": "Bağlantı testi başarısız oldu",
+      "remoteOptionsFailed": "DigiDentiS'ten hekimler/tedavi türleri yüklenemedi",
+      "mappingSaveFailed": "Eşleme kaydedilemedi"
     }
   },
   "organizations": {

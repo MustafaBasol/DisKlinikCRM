@@ -18,6 +18,7 @@ import { startPatientPrivacyExportCleanupJob } from './patientPrivacyExportClean
 import { startClinicBulkExportWorker } from './clinicBulkExportWorker.js';
 import { startClinicBulkExportCleanupJob } from './clinicBulkExportCleanupJob.js';
 import { startFileBackupJob } from './fileBackupJob.js';
+import { startExternalCalendarInboundRetryJob } from './externalCalendarInboundRetryJob.js';
 
 export function startBackgroundJobs(): void {
   startReminderJobs();
@@ -30,4 +31,5 @@ export function startBackgroundJobs(): void {
   startClinicBulkExportWorker();
   startClinicBulkExportCleanupJob();
   startFileBackupJob();
+  startExternalCalendarInboundRetryJob();
 }

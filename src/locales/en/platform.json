@@ -71,7 +71,8 @@
       "system": "System",
       "privacy": "Privacy / Data",
       "backups": "Backups",
-      "securityIncidents": "Security Incidents"
+      "securityIncidents": "Security Incidents",
+      "externalCalendar": "External Calendar"
     }
   },
   "dashboard": {
@@ -145,6 +146,59 @@
         "blocked": "Blocked",
         "selectedProvider": "Selected provider"
       }
+    }
+  },
+  "externalCalendar": {
+    "title": "External Calendar Integration",
+    "subtitle": "Select a clinic to configure its external dental-software calendar integration (e.g. DigiDentiS).",
+    "searchPlaceholder": "Search clinics...",
+    "noClinics": "No clinics found",
+    "selectClinicPrompt": "Select a clinic on the left to view or configure its integration.",
+    "provider": {
+      "digidentis": "Provider: DigiDentiS"
+    },
+    "status": {
+      "not_configured": "Not configured",
+      "configured": "Configured",
+      "connected": "Connected",
+      "error": "Error"
+    },
+    "enabled": "Enabled",
+    "configured": "Configured",
+    "notConfigured": "Not configured",
+    "fields": {
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "webhookSecret": "Webhook Secret",
+      "apiBaseUrl": "API Base URL (optional override)",
+      "externalCompanyId": "DigiDentiS Company ID",
+      "externalClinicId": "DigiDentiS Clinic ID"
+    },
+    "testConnection": "Test connection",
+    "lastSuccessfulCheck": "Last successful check",
+    "lastCheckedAt": "Last checked",
+    "lastError": "Last error",
+    "webhookUrl": "Webhook URL",
+    "webhookUrlHint": "Configure this URL in the DigiDentiS webhook settings for this clinic.",
+    "mappings": {
+      "title": "Practitioner / Service Mappings",
+      "loadRemote": "Load from DigiDentiS",
+      "type": "Type",
+      "local": "NoraMedi",
+      "external": "DigiDentiS",
+      "practitioner": "Practitioner",
+      "service": "Service",
+      "empty": "No mappings configured yet",
+      "externalIdPlaceholder": "External id",
+      "blockingHint": "A practitioner or service with no active mapping cannot be synchronized until an administrator maps it here."
+    },
+    "errors": {
+      "loadFailed": "Failed to load the integration configuration",
+      "saveFailed": "Failed to save the configuration",
+      "toggleFailed": "Failed to update the enabled state",
+      "testFailed": "Connection test failed",
+      "remoteOptionsFailed": "Failed to load doctors/treatment types from DigiDentiS",
+      "mappingSaveFailed": "Failed to save the mapping"
     }
   },
   "organizations": {

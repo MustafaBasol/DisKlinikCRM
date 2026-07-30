@@ -71,7 +71,8 @@
       "system": "System",
       "privacy": "Datenschutz / Daten",
       "backups": "Sicherungen",
-      "securityIncidents": "Sicherheitsvorfälle"
+      "securityIncidents": "Sicherheitsvorfälle",
+      "externalCalendar": "Externer Kalender"
     }
   },
   "dashboard": {
@@ -145,6 +146,59 @@
         "blocked": "Blockiert",
         "selectedProvider": "Ausgewählter Anbieter"
       }
+    }
+  },
+  "externalCalendar": {
+    "title": "Externe Kalenderintegration",
+    "subtitle": "Wählen Sie eine Klinik aus, um deren externe Kalenderintegration (z. B. DigiDentiS) zu konfigurieren.",
+    "searchPlaceholder": "Kliniken durchsuchen...",
+    "noClinics": "Keine Kliniken gefunden",
+    "selectClinicPrompt": "Wählen Sie links eine Klinik aus, um die Integration anzuzeigen oder zu konfigurieren.",
+    "provider": {
+      "digidentis": "Anbieter: DigiDentiS"
+    },
+    "status": {
+      "not_configured": "Nicht konfiguriert",
+      "configured": "Konfiguriert",
+      "connected": "Verbunden",
+      "error": "Fehler"
+    },
+    "enabled": "Aktiviert",
+    "configured": "Konfiguriert",
+    "notConfigured": "Nicht konfiguriert",
+    "fields": {
+      "clientId": "Client-ID",
+      "clientSecret": "Client-Secret",
+      "webhookSecret": "Webhook-Secret",
+      "apiBaseUrl": "API-Basis-URL (optionale Überschreibung)",
+      "externalCompanyId": "DigiDentiS-Unternehmens-ID",
+      "externalClinicId": "DigiDentiS-Klinik-ID"
+    },
+    "testConnection": "Verbindung testen",
+    "lastSuccessfulCheck": "Letzte erfolgreiche Prüfung",
+    "lastCheckedAt": "Zuletzt geprüft",
+    "lastError": "Letzter Fehler",
+    "webhookUrl": "Webhook-URL",
+    "webhookUrlHint": "Konfigurieren Sie diese URL in den DigiDentiS-Webhook-Einstellungen für diese Klinik.",
+    "mappings": {
+      "title": "Behandler-/Leistungs-Zuordnungen",
+      "loadRemote": "Von DigiDentiS laden",
+      "type": "Typ",
+      "local": "NoraMedi",
+      "external": "DigiDentiS",
+      "practitioner": "Behandler",
+      "service": "Leistung",
+      "empty": "Noch keine Zuordnungen konfiguriert",
+      "externalIdPlaceholder": "Externe ID",
+      "blockingHint": "Ein Behandler oder eine Leistung ohne aktive Zuordnung kann erst synchronisiert werden, wenn ein Administrator sie hier zuordnet."
+    },
+    "errors": {
+      "loadFailed": "Die Integrationskonfiguration konnte nicht geladen werden",
+      "saveFailed": "Die Konfiguration konnte nicht gespeichert werden",
+      "toggleFailed": "Der Aktivierungsstatus konnte nicht aktualisiert werden",
+      "testFailed": "Verbindungstest fehlgeschlagen",
+      "remoteOptionsFailed": "Ärzte/Behandlungsarten konnten nicht von DigiDentiS geladen werden",
+      "mappingSaveFailed": "Die Zuordnung konnte nicht gespeichert werden"
     }
   },
   "organizations": {
