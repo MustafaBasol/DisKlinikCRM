@@ -102,6 +102,7 @@ model Clinic {
   communicationPreferences      PatientCommunicationPreference[]
   communicationConsentEvents    PatientCommunicationConsentEvent[]
   legacyConsentCorrections      PatientLegacyConsentCorrection[]
+  externalCalendarIntegration   ExternalCalendarIntegration?
 
   @@unique([organizationId, slug])
 }
@@ -345,15 +346,16 @@ model Appointment {
   treatmentCaseId String?
   treatmentCase   TreatmentCase? @relation(fields: [treatmentCaseId], references: [id])
 
-  tasks            Task[]
-  sentMessages     SentMessage[]
-  activityLogs     ActivityLog[]
-  recallCandidates RecallCandidate[]
-  recallActions    RecallAction[]
-  sourceRequests   AppointmentRequest[] @relation("ConvertedAppointment")
-  smsMessages      SmsMessage[]
-  imagingRequests  ImagingRequest[]
-  imagingStudies   ImagingStudy[]
+  tasks                 Task[]
+  sentMessages          SentMessage[]
+  activityLogs          ActivityLog[]
+  recallCandidates      RecallCandidate[]
+  recallActions         RecallAction[]
+  sourceRequests        AppointmentRequest[]              @relation("ConvertedAppointment")
+  smsMessages           SmsMessage[]
+  imagingRequests       ImagingRequest[]
+  imagingStudies        ImagingStudy[]
+  externalCalendarLinks ExternalCalendarAppointmentLink[]
 
   // Postgres'te Prisma FK kolonlarına otomatik indeks koymaz; takvim ve
   // uygunluk (available-slots) sorguları bu indeksler olmadan tablo taraması yapar.
@@ -3162,4 +3164,166 @@ model FileBackupEntry {
   @@index([runId, status])
   @@index([clinicId])
   @@index([sourceModel, sourceRecordId])
+}
+
+// ── External Calendar Integration Framework (DigiDentiS + future providers) ──
+// See docs/architecture/external-calendar-integration.md for the full design.
+// Provider-agnostic by construction: `provider` is a free-form key (starts
+// with "digidentis"), never assumed to be DigiDentiS-only in shape.
+
+/// Platform-admin-configured external dental-software calendar integration.
+/// One row per clinic (a clinic runs exactly one active integration at a
+/// time — mirrors ClinicSmsSettings' clinicId @unique pattern). Credentials
+/// are encrypted at rest (utils/encryption.ts encryptSecret) and are
+/// write-only from the API: GET responses only ever report
+/// configured/not-configured booleans, never ciphertext or plaintext.
+/// Disabled by default — `enabled` must be explicitly turned on by a
+/// Platform Admin after mappings are configured.
+model ExternalCalendarIntegration {
+  id             String   @id @default(uuid())
+  organizationId String
+  clinicId       String   @unique
+  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+
+  /// digidentis | (future provider keys)
+  provider String  @default("digidentis")
+  /// Platform Admin master switch. Never auto-enabled by any job or webhook.
+  enabled  Boolean @default(false)
+  /// not_configured | configured | connected | error
+  status   String  @default("not_configured")
+
+  /// DigiDentiS OAuth2 client id. Not classified as a secret, but never
+  /// returned in full by the admin API (last-4 hint only).
+  clientId String?
+  /// AES-256-GCM (utils/encryption.ts encryptSecret). Write-only from the API.
+  clientSecretEncrypted String?
+  /// AES-256-GCM (utils/encryption.ts encryptSecret). HMAC key used to verify
+  /// inbound DigiDentiS webhook signatures. Write-only from the API.
+  webhookSecretEncrypted String?
+  /// Opaque, random, per-clinic token used ONLY as the public webhook URL's
+  /// path segment — deliberately never this row's own database id, so the
+  /// URL exposes no predictable/enumerable identifier and can be rotated
+  /// (regenerated) independently of the integration row itself. Generated
+  /// app-side with crypto.randomBytes (see externalCalendarConnectionService.ts).
+  webhookReceiverKey String @unique
+
+  /// DigiDentiS-side company/clinic identifiers this row maps to.
+  externalCompanyId String?
+  externalClinicId  String?
+  /// Optional per-clinic API base URL override (e.g. DigiDentiS sandbox).
+  apiBaseUrl        String?
+
+  lastSuccessfulCheckAt DateTime?
+  lastCheckedAt         DateTime?
+  /// Last connectivity/auth error, sanitized (never includes secrets/tokens).
+  lastError             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mappings         ExternalCalendarMapping[]
+  inboundEvents    ExternalCalendarInboundEvent[]
+  appointmentLinks ExternalCalendarAppointmentLink[]
+
+  @@index([organizationId])
+  @@index([provider])
+}
+
+/// Persistent, id-based mapping between a NoraMedi practitioner/service and a
+/// provider-side doctor/treatment type. Matching is NEVER done by name at
+/// runtime — see externalCalendarMappingService.ts resolveMapping(), which
+/// blocks synchronization with an administrative error when a mapping is
+/// missing or inactive.
+model ExternalCalendarMapping {
+  id             String                      @id @default(uuid())
+  connectionId   String
+  connection     ExternalCalendarIntegration @relation(fields: [connectionId], references: [id])
+  organizationId String
+  clinicId       String
+
+  /// practitioner | service
+  mappingType String
+  /// NoraMedi User.id (practitioner) or AppointmentType.id (service)
+  localId     String
+  /// Provider-side doctor id or treatment type id
+  externalId  String
+  /// Cached display label from the provider, for the admin UI only — never
+  /// used for matching.
+  externalLabel String?
+  isActive      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([connectionId, mappingType, localId])
+  @@index([clinicId])
+  @@index([connectionId, mappingType])
+}
+
+/// Idempotent inbound webhook ledger for external calendar providers —
+/// mirrors MessagingInboundEvent's dedupe-by-unique-constraint pattern.
+/// Reserved/unknown event types are stored here without applying any domain
+/// change — see externalCalendarWebhookProcessor.ts.
+model ExternalCalendarInboundEvent {
+  id             String                       @id @default(uuid())
+  provider       String
+  connectionId   String?
+  connection     ExternalCalendarIntegration? @relation(fields: [connectionId], references: [id])
+  clinicId       String?
+  organizationId String?
+
+  /// appointment.created | appointment.cancelled | appointment.rescheduled |
+  /// any other provider event type (stored verbatim, treated as reserved/unknown)
+  eventType             String
+  /// Dedupe key: the provider's own event id, or a deterministic fallback
+  /// derived from the payload when the provider omits one.
+  providerEventId       String
+  externalAppointmentId String?
+  rawPayload            Json?
+
+  /// received | processing | processed | ignored | failed
+  status       String    @default("received")
+  errorMessage String?
+  attempts     Int       @default(0)
+  processedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, connectionId, providerEventId])
+  @@index([organizationId, status, createdAt])
+  @@index([clinicId, status, createdAt])
+  @@index([status, updatedAt])
+}
+
+/// Stable NoraMedi ⇄ provider appointment reference plus the outbound-create
+/// idempotency ledger (a retried create request must never double-book a
+/// provider-side appointment). Not yet wired to the appointment approval
+/// flow — this table is the prepared orchestration boundary for that,
+/// intentionally unused by any production write path in this phase.
+model ExternalCalendarAppointmentLink {
+  id             String                      @id @default(uuid())
+  connectionId   String
+  connection     ExternalCalendarIntegration @relation(fields: [connectionId], references: [id])
+  organizationId String
+  clinicId       String
+
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+
+  externalAppointmentId String
+  /// Client-generated idempotency key sent to the provider on create.
+  idempotencyKey        String
+
+  /// active | cancelled | rescheduled
+  status       String    @default("active")
+  lastSyncedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([connectionId, idempotencyKey])
+  @@index([connectionId, externalAppointmentId])
+  @@index([clinicId])
+  @@index([appointmentId])
 }
