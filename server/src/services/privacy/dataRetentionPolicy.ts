@@ -8,6 +8,11 @@
  *   - WhatsAppConversationMessage rows (raw inbound/outbound text)
  *   - WhatsAppConversationState rows (AI assistant session state, shared with Instagram)
  *   - MessagingInboundEvent rows (idempotency deduplication ledger)
+ *   - ExternalCalendarInboundEvent rows (DigiDentiS webhook idempotency
+ *     ledger — rawPayload carries patient PII echoed back by the provider,
+ *     e.g. appointment.created's nested patient{first_name,last_name,phone,
+ *     email}; cleaned on the same DATA_RETENTION_INBOUND_EVENT_DAYS schedule
+ *     as MessagingInboundEvent, its sibling idempotency ledger)
  *   - OperationalEvent rows (integration failure / webhook error events)
  *   - ContactRequest PII fields (phone, name, note, lastMessage) — resolved/closed only
  *   - WhatsAppInboxEntry.lastMessageText / rawPayload — resolved entries only (row kept)
