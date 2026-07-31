@@ -19,6 +19,7 @@
     "test:digidentis-signing": "tsx src/tests/digidentisSigning.test.ts",
     "test:digidentis-api-client": "tsx src/tests/digidentisApiClient.test.ts",
     "test:external-calendar-webhook-processor": "tsx src/tests/externalCalendarWebhookProcessor.test.ts",
+    "test:external-calendar-security-review": "tsx src/tests/externalCalendarSecurityReview.test.ts",
     "test:payments-list-field-scope": "tsx src/tests/paymentsListFieldScope.test.ts",
     "test:security-incidents": "tsx src/tests/securityIncident.test.ts",
     "test:clinic-bulk-export": "tsx src/tests/clinicBulkExport.test.ts",
