@@ -30,6 +30,7 @@ import { getExternalCalendarProvider } from '../services/externalCalendar/extern
 import { processExternalCalendarWebhookEvent } from '../services/externalCalendar/externalCalendarWebhookProcessor.js';
 import { writeAuditLog } from '../utils/auditLog.js';
 import { requireWebhookSecretInProduction } from '../utils/secrets.js';
+import { logUnhandledError } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -130,7 +131,14 @@ router.post(
         parsed,
       });
     } catch (err) {
-      console.error('[external-calendar-webhook] handler error:', err);
+      // Structured, privacy-safe logging (see utils/logger.ts) — never the
+      // raw err object: this handler processes provider payloads (which may
+      // carry patient names/phones/emails/health data) and this is the one
+      // path that runs after the raw body/signature have been read, so a
+      // plain console.error(err) risks printing that payload if a thrown
+      // value carries it as a property. logUnhandledError coerces to
+      // type/message/stack only, redacted in production.
+      logUnhandledError(req, 200, err);
     }
   },
 );

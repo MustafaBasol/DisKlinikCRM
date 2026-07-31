@@ -375,6 +375,55 @@ await test('live run: old inbound events are deleted', async () => {
   assert.equal(inboundDeps.executeCalls.length, 1);
 });
 
+// ── Section H2: ExternalCalendarInboundEvent (sibling PII-bearing ledger) ─────
+
+section('H2. ExternalCalendarInboundEvent (DigiDentiS webhook idempotency ledger)');
+
+await test('live run: old external calendar inbound events (rawPayload PII) are deleted', async () => {
+  const extCalDeps = makeCategoryDeps(4);
+  const summary = await runDataRetentionCleanup(
+    { dryRun: false, config: DEFAULT_TEST_CONFIG },
+    { conversationMessages: zeroDeps(), conversationStates: zeroDeps(),
+      operationalEvents: zeroDeps(), inboundEvents: zeroDeps(),
+      externalCalendarInboundEvents: extCalDeps,
+      contactRequests: zeroDeps(), inboxEntries: zeroDeps() },
+  );
+  assert.equal(summary.deletedExternalCalendarInboundEvents, 4);
+  assert.equal(extCalDeps.executeCalls.length, 1);
+});
+
+await test('live run: recent external calendar inbound events are not deleted (zero eligible)', async () => {
+  const extCalDeps = makeCategoryDeps(0);
+  const summary = await runDataRetentionCleanup(
+    { dryRun: false, config: DEFAULT_TEST_CONFIG },
+    { conversationMessages: zeroDeps(), conversationStates: zeroDeps(),
+      operationalEvents: zeroDeps(), inboundEvents: zeroDeps(),
+      externalCalendarInboundEvents: extCalDeps,
+      contactRequests: zeroDeps(), inboxEntries: zeroDeps() },
+  );
+  assert.equal(summary.deletedExternalCalendarInboundEvents, 0);
+});
+
+await test('external calendar inbound events use the same inboundEventDays threshold as MessagingInboundEvent', async () => {
+  const extCalDeps = makeCategoryDeps(1);
+  const config = { ...DEFAULT_TEST_CONFIG, inboundEventDays: 90 };
+
+  await runDataRetentionCleanup(
+    { dryRun: false, config },
+    { conversationMessages: zeroDeps(), conversationStates: zeroDeps(),
+      operationalEvents: zeroDeps(), inboundEvents: zeroDeps(),
+      externalCalendarInboundEvents: extCalDeps,
+      contactRequests: zeroDeps(), inboxEntries: zeroDeps() },
+  );
+
+  const call = extCalDeps.executeCalls[0];
+  assert.ok(call, 'executeCleanupBatch should have been called');
+  const expectedThreshold = new Date();
+  expectedThreshold.setDate(expectedThreshold.getDate() - 90);
+  assert.ok(Math.abs(call.threshold.getTime() - expectedThreshold.getTime()) < 2000,
+    `threshold should be ~90 days ago, got ${call.threshold.toISOString()}`);
+});
+
 // ── Section I: OperationalEvent ───────────────────────────────────────────────
 
 section('I. OperationalEvent');
@@ -486,6 +535,7 @@ await test('all categories fail: summary has errors but does not throw', async (
     conversationStates: failingDeps('b'),
     operationalEvents: failingDeps('c'),
     inboundEvents: failingDeps('d'),
+    externalCalendarInboundEvents: failingDeps('h'),
     contactRequests: failingDeps('e'),
     inboxEntries: failingDeps('f'),
     communicationConsentConflictBuckets: failingDeps('g'),
@@ -500,7 +550,7 @@ await test('all categories fail: summary has errors but does not throw', async (
   }
   assert.equal(threw, false, 'runDataRetentionCleanup must not throw even if all categories fail');
   assert.ok(summary, 'summary should be returned');
-  assert.ok((summary?.errors?.length ?? 0) >= 7, 'should have collected all 7 errors');
+  assert.ok((summary?.errors?.length ?? 0) >= 8, 'should have collected all 8 errors');
 });
 
 // ── Section L: Log safety ─────────────────────────────────────────────────────
@@ -597,6 +647,7 @@ await test('summary contains all required fields', async () => {
   assert.ok('deletedConversationStates' in summary);
   assert.ok('deletedOperationalEvents' in summary);
   assert.ok('deletedInboundEvents' in summary);
+  assert.ok('deletedExternalCalendarInboundEvents' in summary);
   assert.ok('anonymizedContactRequests' in summary);
   assert.ok('redactedInboxEntries' in summary);
   assert.ok('skippedCategories' in summary);
