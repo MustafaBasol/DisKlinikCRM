@@ -180,6 +180,8 @@
     "lastError": "Dernière erreur",
     "webhookUrl": "URL du webhook",
     "webhookUrlHint": "Configurez cette URL dans les paramètres de webhook DigiDentiS de cette clinique.",
+    "rotateWebhookKey": "Renouveler la clé du webhook",
+    "rotateWebhookKeyConfirm": "Renouveler la clé du webhook ? L'URL du webhook actuelle cessera immédiatement de fonctionner et DigiDentiS devra être reconfiguré avec la nouvelle URL.",
     "mappings": {
       "title": "Correspondances praticiens / services",
       "loadRemote": "Charger depuis DigiDentiS",
@@ -198,7 +200,8 @@
       "toggleFailed": "Échec de la mise à jour de l'état d'activation",
       "testFailed": "Échec du test de connexion",
       "remoteOptionsFailed": "Échec du chargement des médecins/types de traitement depuis DigiDentiS",
-      "mappingSaveFailed": "Échec de l'enregistrement de la correspondance"
+      "mappingSaveFailed": "Échec de l'enregistrement de la correspondance",
+      "rotateFailed": "Échec du renouvellement de la clé du webhook"
     }
   },
   "organizations": {

@@ -111,7 +111,7 @@ const connection = {
 };
 
 function sign(body: Buffer): string {
-  return `sha256=${createHmac('sha256', webhookSecretPlain).update(body).digest('hex')}`;
+  return createHmac('sha256', webhookSecretPlain).update(body).digest('hex');
 }
 
 section('Webhook signature verification (encrypted secret round-trip)');
@@ -119,14 +119,14 @@ section('Webhook signature verification (encrypted secret round-trip)');
 await test('a correctly signed payload verifies against the encrypted webhook secret', () => {
   const body = Buffer.from(JSON.stringify({ type: 'appointment.created', id: 'evt-1' }));
   const signature = sign(body);
-  const valid = provider.verifyWebhookSignature(connection, body, { 'x-digidentis-signature': signature });
+  const valid = provider.verifyWebhookSignature(connection, body, { 'x-webhook-signature': signature });
   assert.equal(valid, true);
 });
 
 await test('a payload signed with the WRONG clinic secret is rejected', () => {
   const body = Buffer.from(JSON.stringify({ type: 'appointment.created', id: 'evt-2' }));
-  const wrongSignature = `sha256=${createHmac('sha256', 'someone-elses-secret').update(body).digest('hex')}`;
-  const valid = provider.verifyWebhookSignature(connection, body, { 'x-digidentis-signature': wrongSignature });
+  const wrongSignature = createHmac('sha256', 'someone-elses-secret').update(body).digest('hex');
+  const valid = provider.verifyWebhookSignature(connection, body, { 'x-webhook-signature': wrongSignature });
   assert.equal(valid, false);
 });
 
@@ -136,7 +136,7 @@ await test('a connection with no webhook secret configured always rejects', () =
   const valid = noSecretConnection.webhookSecretEncrypted
     ? true
     : provider.verifyWebhookSignature(noSecretConnection as any, body, {
-        'x-digidentis-signature': sign(body),
+        'x-webhook-signature': sign(body),
       });
   assert.equal(valid, false);
 });

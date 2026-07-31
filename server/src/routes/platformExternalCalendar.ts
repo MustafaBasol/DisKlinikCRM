@@ -27,6 +27,7 @@ import {
   getExternalCalendarConnectionRecord,
   getExternalCalendarIntegrationSummary,
   recordExternalCalendarConnectionCheck,
+  rotateExternalCalendarWebhookReceiverKey,
   setExternalCalendarIntegrationEnabled,
   upsertExternalCalendarIntegration,
 } from '../services/externalCalendar/externalCalendarConnectionService.js';
@@ -51,9 +52,9 @@ function getClinicIdParam(req: PlatformAdminRequest): string {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function webhookUrlForConnection(connectionId: string): string {
+function webhookUrlForConnection(receiverKey: string): string {
   const base = process.env.PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, '') || '';
-  return `${base}/api/public/external-calendar/digidentis/${connectionId}/webhook`;
+  return `${base}/api/public/external-calendar/digidentis/${receiverKey}/webhook`;
 }
 
 // GET /api/platform/external-calendar/providers — supported provider keys, for the admin UI's dropdown.
@@ -71,7 +72,7 @@ router.get('/clinics/:clinicId/external-calendar', async (req: PlatformAdminRequ
   res.json({
     clinic: { id: clinic.id, name: clinic.name },
     integration: summary,
-    webhookUrl: summary ? webhookUrlForConnection(summary.id) : null,
+    webhookUrl: summary ? webhookUrlForConnection(summary.webhookReceiverKey) : null,
   });
 });
 
@@ -98,7 +99,7 @@ router.put('/clinics/:clinicId/external-calendar', async (req: PlatformAdminRequ
       actorUserId: req.platformAdmin?.id ?? null,
       actorRole: 'PLATFORM_ADMIN',
     });
-    res.json({ integration: summary, webhookUrl: webhookUrlForConnection(summary.id) });
+    res.json({ integration: summary, webhookUrl: webhookUrlForConnection(summary.webhookReceiverKey) });
   } catch (err) {
     if (err instanceof ExternalCalendarClinicNotFoundError) return res.status(404).json({ error: err.message });
     if (err instanceof ExternalCalendarUnsupportedProviderError) return res.status(400).json({ error: err.message });
@@ -125,6 +126,24 @@ router.patch('/clinics/:clinicId/external-calendar/enabled', async (req: Platfor
     if (err instanceof ExternalCalendarClinicNotFoundError) return res.status(404).json({ error: err.message });
     if (err instanceof Error) return res.status(400).json({ error: err.message });
     res.status(500).json({ error: 'Failed to update external calendar integration' });
+  }
+});
+
+// POST /api/platform/clinics/:clinicId/external-calendar/rotate-webhook-key — regenerates the
+// opaque public webhook URL token. The previous webhook URL stops resolving immediately.
+router.post('/clinics/:clinicId/external-calendar/rotate-webhook-key', async (req: PlatformAdminRequest, res: Response) => {
+  const clinicId = getClinicIdParam(req);
+
+  try {
+    const summary = await rotateExternalCalendarWebhookReceiverKey(clinicId, {
+      actorUserId: req.platformAdmin?.id ?? null,
+      actorRole: 'PLATFORM_ADMIN',
+    });
+    res.json({ integration: summary, webhookUrl: webhookUrlForConnection(summary.webhookReceiverKey) });
+  } catch (err) {
+    if (err instanceof ExternalCalendarClinicNotFoundError) return res.status(404).json({ error: err.message });
+    console.error('[platform-external-calendar] rotate webhook key failed:', err);
+    res.status(500).json({ error: 'Failed to rotate the webhook key' });
   }
 });
 

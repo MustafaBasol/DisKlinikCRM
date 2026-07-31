@@ -1,15 +1,21 @@
 /**
- * DigiDentisApiClient.ts — low-level, signed HTTP client for the DigiDentiS
- * v3.2.0 API. Higher-level orchestration (mapping resolution, tenant
- * scoping) lives in DigiDentisProvider.ts / externalCalendarConnectionService.ts
- * — this module only knows how to make one signed, authenticated call and
- * map the response/error.
+ * DigiDentisApiClient.ts — low-level, HMAC-signed HTTP client for the
+ * DigiDentiS v3.2.0 API. Higher-level orchestration (mapping resolution,
+ * tenant scoping) lives in DigiDentisProvider.ts /
+ * externalCalendarConnectionService.ts — this module only knows how to make
+ * one signed request and map the response/error.
  *
- * See DigiDentisSigning.ts's header comment: request signing and endpoint
- * paths are assumed placeholders pending real v3.2.0 documentation.
+ * Authentication is per-request HMAC-SHA256 signing (X-Client-ID/
+ * X-Timestamp/X-Nonce/X-Signature — see DigiDentisSigning.ts). There is no
+ * token endpoint, no bearer token, and nothing to cache: every call signs
+ * itself independently from the clinic's clientId/clientSecret.
+ *
+ * See DigiDentisSigning.ts's header comment: the exact signing-string byte
+ * layout and REST endpoint paths are assumed placeholders pending real
+ * v3.2.0 documentation — the header names and HMAC-SHA256 algorithm
+ * themselves are per this task's explicit specification, not a guess.
  */
 
-import { getDigiDentisAccessToken } from './DigiDentisAuthClient.js';
 import { signDigiDentisRequest } from './DigiDentisSigning.js';
 import { DEFAULT_DIGIDENTIS_BASE_URL, DIGIDENTIS_PATHS } from './digidentisConfig.js';
 import {
@@ -30,7 +36,6 @@ import type {
 } from '../ExternalCalendarProvider.js';
 
 export type DigiDentisClientConfig = {
-  connectionId: string;
   baseUrl: string;
   clientId: string;
   clientSecret: string;
@@ -66,17 +71,11 @@ async function performRequest(
   fetchImpl: typeof fetch,
 ): Promise<unknown> {
   const { url, pathWithQuery } = buildUrl(config.baseUrl, options.path, options.query);
+  // The exact same Buffer is used both to compute the signature and as the
+  // transmitted body below — signing a re-serialization of `options.body`
+  // instead of these exact bytes would make the signature invalid on the
+  // receiving end.
   const bodyBuffer = options.body !== undefined ? Buffer.from(JSON.stringify(options.body)) : Buffer.alloc(0);
-
-  const accessToken = await getDigiDentisAccessToken(
-    {
-      connectionId: config.connectionId,
-      baseUrl: config.baseUrl,
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
-    },
-    fetchImpl,
-  );
 
   const signedHeaders = signDigiDentisRequest(config.clientId, config.clientSecret, options.method, pathWithQuery, bodyBuffer);
 
@@ -85,7 +84,6 @@ async function performRequest(
     response = await fetchImpl(url, {
       method: options.method,
       headers: {
-        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         ...signedHeaders,
       },

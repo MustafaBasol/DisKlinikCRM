@@ -15,13 +15,17 @@
  *     externalCalendarWebhookProcessor.ts before any processing is
  *     attempted — a crash after that point is recoverable, never a silent
  *     drop.
- *   - Cross-clinic leakage is impossible: :connectionId is the
- *     ExternalCalendarIntegration's own id, and clinicId/organizationId are
- *     read from that row, never from the request body.
+ *   - Cross-clinic leakage is impossible: :receiverKey is an opaque, random
+ *     per-clinic token (ExternalCalendarIntegration.webhookReceiverKey) —
+ *     deliberately NOT the row's own database id, so the URL exposes no
+ *     predictable/enumerable identifier and can be rotated independently
+ *     (see externalCalendarConnectionService.ts's
+ *     rotateExternalCalendarWebhookReceiverKey). clinicId/organizationId are
+ *     always read from the resolved row, never from the request body.
  */
 
 import express, { Request, Response } from 'express';
-import { getExternalCalendarConnectionRecordById } from '../services/externalCalendar/externalCalendarConnectionService.js';
+import { getExternalCalendarConnectionRecordByReceiverKey } from '../services/externalCalendar/externalCalendarConnectionService.js';
 import { getExternalCalendarProvider } from '../services/externalCalendar/externalCalendarProviderFactory.js';
 import { processExternalCalendarWebhookEvent } from '../services/externalCalendar/externalCalendarWebhookProcessor.js';
 import { writeAuditLog } from '../utils/auditLog.js';
@@ -58,19 +62,19 @@ function logWebhookSecurityEvent(
 }
 
 router.post(
-  '/external-calendar/digidentis/:connectionId/webhook',
+  '/external-calendar/digidentis/:receiverKey/webhook',
   express.raw({ type: 'application/json' }),
   async (req: Request, res: Response) => {
     // Always respond 200 quickly — prevents provider retry storms and never
-    // reveals whether a connection id or signature was valid.
+    // reveals whether a receiver key or signature was valid.
     res.status(200).json({ status: 'ok' });
 
-    const connectionId = req.params['connectionId'] as string;
+    const receiverKey = req.params['receiverKey'] as string;
 
     try {
       const rawBody = getRawBody(req);
 
-      const connection = await getExternalCalendarConnectionRecordById(connectionId);
+      const connection = await getExternalCalendarConnectionRecordByReceiverKey(receiverKey);
       if (!connection) return;
 
       const provider = getExternalCalendarProvider(connection.provider);
@@ -80,7 +84,7 @@ router.post(
         logWebhookSecurityEvent(
           connection.organizationId,
           connection.clinicId,
-          connectionId,
+          connection.id,
           'external_calendar_webhook_no_secret_rejected',
           'DigiDentiS webhook rejected: no webhook secret configured in production',
         );
@@ -93,7 +97,7 @@ router.post(
           logWebhookSecurityEvent(
             connection.organizationId,
             connection.clinicId,
-            connectionId,
+            connection.id,
             'external_calendar_webhook_invalid_signature',
             'DigiDentiS webhook rejected: signature mismatch',
           );
@@ -103,7 +107,7 @@ router.post(
         logWebhookSecurityEvent(
           connection.organizationId,
           connection.clinicId,
-          connectionId,
+          connection.id,
           'external_calendar_webhook_no_secret',
           'DigiDentiS webhook received without signature verification (no secret configured)',
         );

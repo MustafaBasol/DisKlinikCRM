@@ -180,6 +180,8 @@
     "lastError": "Last error",
     "webhookUrl": "Webhook URL",
     "webhookUrlHint": "Configure this URL in the DigiDentiS webhook settings for this clinic.",
+    "rotateWebhookKey": "Rotate webhook key",
+    "rotateWebhookKeyConfirm": "Rotate the webhook key? The current webhook URL will stop working immediately and DigiDentiS must be reconfigured with the new one.",
     "mappings": {
       "title": "Practitioner / Service Mappings",
       "loadRemote": "Load from DigiDentiS",
@@ -198,7 +200,8 @@
       "toggleFailed": "Failed to update the enabled state",
       "testFailed": "Connection test failed",
       "remoteOptionsFailed": "Failed to load doctors/treatment types from DigiDentiS",
-      "mappingSaveFailed": "Failed to save the mapping"
+      "mappingSaveFailed": "Failed to save the mapping",
+      "rotateFailed": "Failed to rotate the webhook key"
     }
   },
   "organizations": {

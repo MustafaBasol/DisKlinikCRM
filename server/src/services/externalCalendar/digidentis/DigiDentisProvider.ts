@@ -53,7 +53,6 @@ function resolveClientConfig(connection: ExternalCalendarConnectionRecord): Digi
     throw new ExternalCalendarAuthError('DigiDentiS', 'clientSecret is not configured for this clinic');
   }
   return {
-    connectionId: connection.id,
     baseUrl: resolveDigiDentisBaseUrl(connection.apiBaseUrl),
     clientId: connection.clientId,
     clientSecret: decryptSecret(connection.clientSecretEncrypted),
@@ -141,7 +140,7 @@ export class DigiDentisProvider implements ExternalCalendarProvider {
   ): boolean {
     if (!connection.webhookSecretEncrypted) return false;
     const secret = decryptSecret(connection.webhookSecretEncrypted);
-    const header = headers['x-digidentis-signature'];
+    const header = headers['x-webhook-signature'];
     const signature = Array.isArray(header) ? header[0] : header;
     return verifyDigiDentisWebhookSignature(rawBody, signature, secret);
   }

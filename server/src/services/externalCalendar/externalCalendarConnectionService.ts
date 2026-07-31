@@ -11,11 +11,18 @@
  * module ever hands back to a route handler.
  */
 
+import { randomBytes } from 'crypto';
 import prisma from '../../db.js';
 import { encryptSecret } from '../../utils/encryption.js';
 import { writeAuditLog } from '../../utils/auditLog.js';
 import type { ExternalCalendarConnectionRecord } from './ExternalCalendarProvider.js';
 import { listSupportedExternalCalendarProviders } from './externalCalendarProviderFactory.js';
+
+/** 32 random bytes (256 bits), URL-safe — opaque and unguessable, and never
+ *  reused as a database identifier for anything else. */
+function generateWebhookReceiverKey(): string {
+  return randomBytes(32).toString('base64url');
+}
 
 export type ExternalCalendarIntegrationSummary = {
   id: string;
@@ -28,6 +35,9 @@ export type ExternalCalendarIntegrationSummary = {
   clientIdHint: string | null;
   clientSecretConfigured: boolean;
   webhookSecretConfigured: boolean;
+  /** Opaque public webhook URL token — not a secret (the webhook secret is
+   *  what authenticates deliveries), but never the row's own database id. */
+  webhookReceiverKey: string;
   externalCompanyId: string | null;
   externalClinicId: string | null;
   apiBaseUrl: string | null;
@@ -58,6 +68,7 @@ function toSummaryDto(row: {
   clientId: string | null;
   clientSecretEncrypted: string | null;
   webhookSecretEncrypted: string | null;
+  webhookReceiverKey: string;
   externalCompanyId: string | null;
   externalClinicId: string | null;
   apiBaseUrl: string | null;
@@ -77,6 +88,7 @@ function toSummaryDto(row: {
     clientIdHint: row.clientId ? row.clientId.slice(-4) : null,
     clientSecretConfigured: Boolean(row.clientSecretEncrypted),
     webhookSecretConfigured: Boolean(row.webhookSecretEncrypted),
+    webhookReceiverKey: row.webhookReceiverKey,
     externalCompanyId: row.externalCompanyId,
     externalClinicId: row.externalClinicId,
     apiBaseUrl: row.apiBaseUrl,
@@ -148,14 +160,16 @@ export async function getExternalCalendarConnectionRecord(
 }
 
 /**
- * Fetches the full record by the integration's own id (its primary key) —
- * used by the webhook receiver, which only knows :connectionId from the URL.
- * Never return this shape from a route handler directly.
+ * Fetches the full record by its opaque public webhookReceiverKey — used by
+ * the webhook receiver, which only knows :receiverKey from the URL. This is
+ * deliberately NOT a lookup by the row's own database id: the id is never
+ * exposed in the public webhook URL (see webhookReceiverKey's schema
+ * comment). Never return this shape from a route handler directly.
  */
-export async function getExternalCalendarConnectionRecordById(
-  connectionId: string,
+export async function getExternalCalendarConnectionRecordByReceiverKey(
+  receiverKey: string,
 ): Promise<ExternalCalendarConnectionRecord | null> {
-  const row = await prisma.externalCalendarIntegration.findUnique({ where: { id: connectionId } });
+  const row = await prisma.externalCalendarIntegration.findUnique({ where: { webhookReceiverKey: receiverKey } });
   return row ? toConnectionRecord(row) : null;
 }
 
@@ -195,6 +209,11 @@ export async function upsertExternalCalendarIntegration(
       organizationId: clinic.organizationId,
       provider,
       status: 'configured',
+      // Generated once at row creation only — never touched by a config
+      // update, so re-saving the clientId/secret never silently changes the
+      // clinic's already-configured webhook URL. Use
+      // rotateExternalCalendarWebhookReceiverKey() to change it on purpose.
+      webhookReceiverKey: generateWebhookReceiverKey(),
       ...data,
     },
     update: { ...data, status: nextStatus },
@@ -252,6 +271,38 @@ export async function setExternalCalendarIntegrationEnabled(
   });
 
   return toSummaryDto(updated);
+}
+
+/**
+ * Regenerates the clinic's public webhook receiver key. The previous
+ * webhook URL stops resolving immediately — DigiDentiS must be
+ * reconfigured with the new URL. Use when a URL may have leaked (e.g.
+ * appeared in a log, a screenshot, a support ticket).
+ */
+export async function rotateExternalCalendarWebhookReceiverKey(
+  clinicId: string,
+  actor?: { actorUserId?: string | null; actorRole?: string | null },
+): Promise<ExternalCalendarIntegrationSummary> {
+  const existing = await prisma.externalCalendarIntegration.findUnique({ where: { clinicId } });
+  if (!existing) throw new ExternalCalendarClinicNotFoundError(clinicId);
+
+  const row = await prisma.externalCalendarIntegration.update({
+    where: { clinicId },
+    data: { webhookReceiverKey: generateWebhookReceiverKey() },
+  });
+
+  await writeAuditLog({
+    organizationId: existing.organizationId,
+    clinicId,
+    actorUserId: actor?.actorUserId ?? null,
+    actorRole: actor?.actorRole ?? 'PLATFORM_ADMIN',
+    action: 'external_calendar_webhook_key_rotated',
+    entityType: 'external_calendar_integration',
+    entityId: row.id,
+    description: 'Platform Admin rotated the external calendar webhook receiver key; the previous webhook URL is now invalid',
+  });
+
+  return toSummaryDto(row);
 }
 
 /** Records the outcome of a manual/automatic connectivity check. */

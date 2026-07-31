@@ -180,6 +180,8 @@
     "lastError": "Son hata",
     "webhookUrl": "Webhook URL'si",
     "webhookUrlHint": "Bu URL'yi bu klinik için DigiDentiS webhook ayarlarında yapılandırın.",
+    "rotateWebhookKey": "Webhook anahtarını yenile",
+    "rotateWebhookKeyConfirm": "Webhook anahtarı yenilensin mi? Mevcut webhook URL'si hemen çalışmayı durduracak ve DigiDentiS tarafında yenisiyle yeniden yapılandırılması gerekecek.",
     "mappings": {
       "title": "Hekim / Hizmet Eşlemeleri",
       "loadRemote": "DigiDentiS'ten Yükle",
@@ -198,7 +200,8 @@
       "toggleFailed": "Etkinleştirme durumu güncellenemedi",
       "testFailed": "Bağlantı testi başarısız oldu",
       "remoteOptionsFailed": "DigiDentiS'ten hekimler/tedavi türleri yüklenemedi",
-      "mappingSaveFailed": "Eşleme kaydedilemedi"
+      "mappingSaveFailed": "Eşleme kaydedilemedi",
+      "rotateFailed": "Webhook anahtarı yenilenemedi"
     }
   },
   "organizations": {

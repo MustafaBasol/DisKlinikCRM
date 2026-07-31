@@ -180,6 +180,8 @@
     "lastError": "Letzter Fehler",
     "webhookUrl": "Webhook-URL",
     "webhookUrlHint": "Konfigurieren Sie diese URL in den DigiDentiS-Webhook-Einstellungen für diese Klinik.",
+    "rotateWebhookKey": "Webhook-Schlüssel rotieren",
+    "rotateWebhookKeyConfirm": "Webhook-Schlüssel rotieren? Die aktuelle Webhook-URL funktioniert danach sofort nicht mehr und muss bei DigiDentiS mit der neuen URL neu konfiguriert werden.",
     "mappings": {
       "title": "Behandler-/Leistungs-Zuordnungen",
       "loadRemote": "Von DigiDentiS laden",
@@ -198,7 +200,8 @@
       "toggleFailed": "Der Aktivierungsstatus konnte nicht aktualisiert werden",
       "testFailed": "Verbindungstest fehlgeschlagen",
       "remoteOptionsFailed": "Ärzte/Behandlungsarten konnten nicht von DigiDentiS geladen werden",
-      "mappingSaveFailed": "Die Zuordnung konnte nicht gespeichert werden"
+      "mappingSaveFailed": "Die Zuordnung konnte nicht gespeichert werden",
+      "rotateFailed": "Der Webhook-Schlüssel konnte nicht rotiert werden"
     }
   },
   "organizations": {

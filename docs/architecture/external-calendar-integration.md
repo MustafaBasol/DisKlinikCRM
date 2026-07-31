@@ -25,9 +25,8 @@ server/src/services/externalCalendar/
   externalCalendarOrchestration.ts     — prepared (NOT wired up) seam for the appointment approval flow
   digidentis/
     digidentisConfig.ts       — endpoint paths, defaults
-    DigiDentisSigning.ts      — request signing + webhook signature verification
-    DigiDentisAuthClient.ts   — OAuth2 client-credentials token cache
-    DigiDentisApiClient.ts    — low-level signed HTTP client
+    DigiDentisSigning.ts      — per-request HMAC signing + webhook signature verification
+    DigiDentisApiClient.ts    — low-level HMAC-signed HTTP client (no token/bearer auth)
     DigiDentisProvider.ts     — ExternalCalendarProvider implementation for DigiDentiS
 
 server/src/routes/
@@ -91,28 +90,82 @@ Reserved/unknown webhook event types (anything DigiDentiS sends that is not
 one of the three active types) are stored with `status: 'ignored'` — never
 silently dropped, never guessed at.
 
-## Known limitation — DigiDentiS v3.2.0 authentication/signing
+## Authentication — DigiDentiS v3.2.0 per-request HMAC signing
 
-The DigiDentiS v3.2.0 API documentation referenced by this task was not
-available in the repository or task materials at implementation time.
-`DigiDentisSigning.ts` implements a best-practice placeholder (OAuth2
-client-credentials + HMAC-SHA256 request signing, modeled on this
-codebase's existing Meta webhook verification) that is deliberately
-isolated in `DigiDentisSigning.ts` / `digidentisConfig.ts` so it can be
-corrected against the real spec without touching any other module. **Do not
-treat the current header names, canonicalization, or endpoint paths as
-verified against a real DigiDentiS deployment.** Before enabling this
-integration for any real clinic, confirm and correct:
+DigiDentiS authenticates every API request individually with an HMAC
+signature — there is no OAuth2 token endpoint, no bearer token, and nothing
+to cache or refresh. An earlier revision of this module incorrectly assumed
+OAuth2 client-credentials auth; that code (`DigiDentisAuthClient.ts`, the
+`/oauth/token` path, the `Authorization: Bearer` header) has been removed
+entirely.
 
-- The token endpoint path and grant shape (`digidentisConfig.ts`'s
-  `DIGIDENTIS_PATHS.token`).
-- The request-signing header names/canonicalization
-  (`DigiDentisSigning.ts`).
-- The webhook signature header name and scheme
-  (`DigiDentisProvider.verifyWebhookSignature`, currently
-  `X-DigiDentiS-Signature: sha256=<hex>`).
-- All REST resource paths in `digidentisConfig.ts`'s `DIGIDENTIS_PATHS`
-  (companies/clinics/doctors/treatment-types/slots/appointments).
+Every outgoing request (`DigiDentisApiClient.ts`) carries:
+
+| Header | Value |
+| --- | --- |
+| `X-Client-ID` | the clinic's DigiDentiS client id (plaintext, not secret) |
+| `X-Timestamp` | unix epoch milliseconds, decimal string |
+| `X-Nonce` | 16 random bytes as 32 hex chars, unique per request |
+| `X-Signature` | `hex(HMAC-SHA256(clientSecret, signingString))` |
+
+`signingString = "${METHOD}\n${path}\n${timestamp}\n${nonce}\n${sha256Hex(body)}"`,
+where `path` is the request path only (no scheme/host/query) and `body` is
+the *exact* Buffer transmitted as the HTTP body (never a re-serialization of
+it — see `DigiDentisApiClient.ts`'s `performRequest`, which signs and sends
+the same `Buffer`). Implementation: `DigiDentisSigning.ts`.
+
+Inbound webhooks are verified the same way: `X-Webhook-Signature: <hex>` is
+`HMAC-SHA256(webhookSecret, rawRequestBody)`, compared with
+`crypto.timingSafeEqual` (`DigiDentisProvider.verifyWebhookSignature`).
+
+**Known limitation.** No publicly reachable copy of the DigiDentiS Takvim
+API v3.2.0 documentation could be located for this task (web search turned
+up nothing under the DigiDentiS name matching a dental-calendar API). The
+header names and HMAC-SHA256 algorithm above are exactly what was specified
+for this task and are treated as authoritative. What remains unverified —
+because no real spec was available to check them against — is the
+byte-for-byte signing-string field order/separators, and all REST resource
+paths/payloads/response shapes/error codes in `digidentisConfig.ts`'s
+`DIGIDENTIS_PATHS` and `DigiDentisApiClient.ts` (companies/clinics/doctors/
+treatment-types/slots/appointments). **Do not treat those as verified
+against a real DigiDentiS deployment** — confirm and correct them against
+the actual v3.2.0 documentation before enabling this integration for any
+real clinic.
+
+## Public webhook URL — opaque receiver key, not the row's database id
+
+`ExternalCalendarIntegration.webhookReceiverKey` is a 256-bit random,
+URL-safe token (`crypto.randomBytes(32).toString('base64url')`), generated
+once when a clinic's integration is first configured and stored alongside
+(but independent from) the row's own primary key. The public webhook URL is
+built from this key, never from the row's own database id:
+
+```
+/api/public/external-calendar/digidentis/:webhookReceiverKey/webhook
+```
+
+This matters because the row's own id is also the foreign-key target for
+every child table (`ExternalCalendarMapping`, `ExternalCalendarInboundEvent`,
+`ExternalCalendarAppointmentLink`) and the audit log's `entityId` — it isn't
+something that can be safely rotated on its own. `webhookReceiverKey` exists
+so the public-facing value can be regenerated independently:
+
+- `POST /api/platform/clinics/:clinicId/external-calendar/rotate-webhook-key`
+  (Platform Admin only) regenerates the key. The previous webhook URL stops
+  resolving immediately (the lookup is a `findUnique` by
+  `webhookReceiverKey` — see `getExternalCalendarConnectionRecordByReceiverKey`
+  in `externalCalendarConnectionService.ts`), and DigiDentiS must be
+  reconfigured with the new URL. The Platform Admin UI exposes this as a
+  "Rotate webhook key" button next to the displayed webhook URL.
+- Saving other configuration fields (client id/secret, external ids) never
+  touches `webhookReceiverKey` — only explicit rotation changes it.
+- The key itself is not treated as a secret in the same sense as the
+  webhook HMAC secret (it's returned in the Platform Admin summary DTO so
+  the URL can be displayed/copied) — forged webhook deliveries are still
+  rejected by `X-Webhook-Signature` verification regardless of whether the
+  receiver key leaked. Its purpose is to avoid exposing/enumerating a
+  predictable database identifier in a public URL, and to make that URL
+  rotatable without disturbing the integration row's identity.
 
 ## Configuration / deployment notes
 
@@ -120,7 +173,7 @@ integration for any real clinic, confirm and correct:
   no new encryption key needed.
 - `PUBLIC_API_BASE_URL` (optional): if set, the Platform Admin UI's
   displayed webhook URL is prefixed with it (e.g.
-  `https://api.example.com/api/public/external-calendar/digidentis/:id/webhook`).
+  `https://api.example.com/api/public/external-calendar/digidentis/:webhookReceiverKey/webhook`).
   If unset, the webhook URL is shown as a relative path — set this in
   production so the displayed URL is the one DigiDentiS should actually
   call.
@@ -132,3 +185,8 @@ integration for any real clinic, confirm and correct:
   additive (four new tables, two new nullable back-relation columns via
   Prisma relations only — no columns added to existing tables). No backfill
   needed; no existing behavior changes on deploy.
+- Migration `20260731000000_add_external_calendar_webhook_receiver_key`
+  adds the `webhookReceiverKey` column described above (additive; backfills
+  any pre-existing rows with a random value, then enforces `NOT NULL` +
+  `UNIQUE`). This feature has not shipped to production, so no real backfill
+  is expected in practice.

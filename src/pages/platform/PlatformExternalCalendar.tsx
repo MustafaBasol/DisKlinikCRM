@@ -22,6 +22,7 @@ interface IntegrationSummary {
   clientIdHint: string | null;
   clientSecretConfigured: boolean;
   webhookSecretConfigured: boolean;
+  webhookReceiverKey: string;
   externalCompanyId: string | null;
   externalClinicId: string | null;
   apiBaseUrl: string | null;
@@ -71,6 +72,7 @@ const PlatformExternalCalendar: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [rotating, setRotating] = useState(false);
 
   const [mappings, setMappings] = useState<MappingRow[]>([]);
   const [localOptions, setLocalOptions] = useState<{ practitioners: LocalOption[]; services: LocalOption[] }>({ practitioners: [], services: [] });
@@ -201,6 +203,21 @@ const PlatformExternalCalendar: React.FC = () => {
     if (!selected) return;
     await api.delete(`/platform/clinics/${selected.id}/external-calendar/mappings/${mappingId}`).catch(() => {});
     setMappings((prev) => prev.filter((m) => m.id !== mappingId));
+  };
+
+  const rotateWebhookKey = async () => {
+    if (!selected) return;
+    if (!window.confirm(t('platform:externalCalendar.rotateWebhookKeyConfirm'))) return;
+    setRotating(true);
+    try {
+      const res = await api.post(`/platform/clinics/${selected.id}/external-calendar/rotate-webhook-key`);
+      setIntegration(res.data.integration);
+      setWebhookUrl(res.data.webhookUrl);
+    } catch (err: any) {
+      setDetailError(err.response?.data?.error ?? t('platform:externalCalendar.errors.rotateFailed'));
+    } finally {
+      setRotating(false);
+    }
   };
 
   const copyWebhookUrl = () => {
@@ -402,6 +419,14 @@ const PlatformExternalCalendar: React.FC = () => {
                       <code className="flex-1 text-xs bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 overflow-x-auto whitespace-nowrap text-gray-700 dark:text-gray-300">{webhookUrl}</code>
                       <button onClick={copyWebhookUrl} className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                         {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+                      </button>
+                      <button
+                        onClick={rotateWebhookKey}
+                        disabled={rotating}
+                        title={t('platform:externalCalendar.rotateWebhookKey')}
+                        className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                      >
+                        {rotating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                       </button>
                     </div>
                     <p className="mt-1 text-xs text-gray-400">{t('platform:externalCalendar.webhookUrlHint')}</p>

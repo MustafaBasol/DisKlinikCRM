@@ -1,6 +1,10 @@
 /**
  * digidentisConfig.ts — shared constants for the DigiDentiS v3.2.0 client.
  *
+ * Authentication is per-request HMAC signing (see DigiDentisSigning.ts) —
+ * there is no token endpoint and no bearer token, so no auth-related
+ * constant lives here anymore.
+ *
  * PATHS below are assumed REST conventions, not confirmed against the real
  * v3.2.0 spec (see DigiDentisSigning.ts's header comment for why). Kept in
  * one place so they are trivial to correct later without touching call
@@ -17,7 +21,6 @@ export const DEFAULT_DIGIDENTIS_BASE_URL =
   process.env.DIGIDENTIS_DEFAULT_API_BASE_URL?.trim() || 'https://sandbox.digidentis.invalid/api/v3.2';
 
 export const DIGIDENTIS_PATHS = {
-  token: '/oauth/token',
   companies: '/companies',
   clinicsForCompany: (companyId: string) => `/companies/${encodeURIComponent(companyId)}/clinics`,
   doctors: (clinicId: string) => `/clinics/${encodeURIComponent(clinicId)}/doctors`,
@@ -29,7 +32,3 @@ export const DIGIDENTIS_PATHS = {
   appointmentReschedule: (clinicId: string, appointmentId: string) =>
     `/clinics/${encodeURIComponent(clinicId)}/appointments/${encodeURIComponent(appointmentId)}/reschedule`,
 } as const;
-
-/** Access tokens are treated as expired this many ms before their real
- *  expiry, so a request never starts with a token that expires mid-flight. */
-export const DIGIDENTIS_TOKEN_SKEW_MS = 60_000;

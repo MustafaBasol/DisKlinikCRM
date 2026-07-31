@@ -3200,6 +3200,12 @@ model ExternalCalendarIntegration {
   /// AES-256-GCM (utils/encryption.ts encryptSecret). HMAC key used to verify
   /// inbound DigiDentiS webhook signatures. Write-only from the API.
   webhookSecretEncrypted String?
+  /// Opaque, random, per-clinic token used ONLY as the public webhook URL's
+  /// path segment — deliberately never this row's own database id, so the
+  /// URL exposes no predictable/enumerable identifier and can be rotated
+  /// (regenerated) independently of the integration row itself. Generated
+  /// app-side with crypto.randomBytes (see externalCalendarConnectionService.ts).
+  webhookReceiverKey String @unique
 
   /// DigiDentiS-side company/clinic identifiers this row maps to.
   externalCompanyId String?

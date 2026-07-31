@@ -1,9 +1,12 @@
 /**
- * digidentisApiClient.test.ts — DigiDentiS API client error handling and
- * create-appointment idempotency-key propagation.
+ * digidentisApiClient.test.ts — DigiDentiS API client per-request HMAC
+ * signing, error handling, and create-appointment idempotency-key
+ * propagation.
  *
  * Uses a fake `fetch` implementation (injected via the client's optional
- * fetchImpl parameter) — no real network access, no live DigiDentiS server.
+ * fetchImpl parameter) — no real network access, no live DigiDentiS server,
+ * and no token endpoint: authentication is per-request HMAC signing, so
+ * every call is self-contained.
  *
  * Run with: npx tsx src/tests/digidentisApiClient.test.ts
  */
@@ -15,7 +18,6 @@ import {
   digiDentisTestConnection,
   type DigiDentisClientConfig,
 } from '../services/externalCalendar/digidentis/DigiDentisApiClient.js';
-import { clearDigiDentisTokenCacheForTests } from '../services/externalCalendar/digidentis/DigiDentisAuthClient.js';
 import {
   ExternalCalendarAuthError,
   ExternalCalendarRateLimitedError,
@@ -27,7 +29,6 @@ let passed = 0;
 let failed = 0;
 
 async function test(name: string, fn: () => void | Promise<void>) {
-  clearDigiDentisTokenCacheForTests();
   return Promise.resolve()
     .then(() => fn())
     .then(() => { console.log(`  ✓ ${name}`); passed++; })
@@ -43,7 +44,6 @@ function section(title: string) {
 }
 
 const baseConfig: DigiDentisClientConfig = {
-  connectionId: 'conn-1',
   baseUrl: 'https://sandbox.digidentis.invalid/api/v3.2',
   clientId: 'client-1',
   clientSecret: 'secret-1',
@@ -53,30 +53,50 @@ function jsonResponse(status: number, body: unknown, headers: Record<string, str
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 }
 
-/** A fetch fake that always issues a valid token, then delegates the actual
- *  API call to `apiHandler`. */
 function fakeFetch(apiHandler: (url: string, init: RequestInit | undefined) => Response): typeof fetch {
-  return (async (input: any, init?: any) => {
-    const url = String(input);
-    if (url.includes('/oauth/token')) {
-      return jsonResponse(200, { access_token: 'test-token', expires_in: 3600 });
-    }
-    return apiHandler(url, init);
-  }) as typeof fetch;
+  return (async (input: any, init?: any) => apiHandler(String(input), init)) as typeof fetch;
 }
+
+section('Request signing — every call is self-authenticated (no token endpoint)');
+
+await test('outgoing requests carry X-Client-ID/X-Timestamp/X-Nonce/X-Signature and no Authorization header', async () => {
+  let capturedHeaders: Record<string, string> = {};
+  const fetchImpl = fakeFetch((_url, init) => {
+    capturedHeaders = Object.fromEntries(new Headers(init?.headers as HeadersInit).entries());
+    return jsonResponse(200, { doctors: [] });
+  });
+
+  await digiDentisListDoctors(baseConfig, 'ext-clinic-1', fetchImpl);
+
+  assert.equal(capturedHeaders['x-client-id'], 'client-1');
+  assert.ok(capturedHeaders['x-timestamp']);
+  assert.ok(capturedHeaders['x-nonce']);
+  assert.ok(capturedHeaders['x-signature']);
+  assert.equal(capturedHeaders['authorization'], undefined);
+});
+
+await test('two calls in a row use different nonces', async () => {
+  const nonces: string[] = [];
+  const fetchImpl = fakeFetch((_url, init) => {
+    nonces.push(new Headers(init?.headers as HeadersInit).get('x-nonce') ?? '');
+    return jsonResponse(200, { doctors: [] });
+  });
+
+  await digiDentisListDoctors(baseConfig, 'ext-clinic-1', fetchImpl);
+  await digiDentisListDoctors(baseConfig, 'ext-clinic-1', fetchImpl);
+
+  assert.notEqual(nonces[0], nonces[1]);
+});
 
 section('Provider error handling — auth');
 
 await test('HTTP 401 from the API maps to ExternalCalendarAuthError', async () => {
-  const fetchImpl = fakeFetch(() => jsonResponse(401, { error: 'invalid_token' }));
+  const fetchImpl = fakeFetch(() => jsonResponse(401, { error: 'invalid_signature' }));
   await assert.rejects(() => digiDentisListDoctors(baseConfig, 'ext-clinic-1', fetchImpl), ExternalCalendarAuthError);
 });
 
-await test('HTTP 401 from the TOKEN endpoint itself maps to ExternalCalendarAuthError', async () => {
-  const fetchImpl = (async (input: any) => {
-    if (String(input).includes('/oauth/token')) return jsonResponse(401, { error: 'invalid_client' });
-    return jsonResponse(200, { doctors: [] });
-  }) as typeof fetch;
+await test('HTTP 403 from the API maps to ExternalCalendarAuthError', async () => {
+  const fetchImpl = fakeFetch(() => jsonResponse(403, { error: 'forbidden' }));
   await assert.rejects(() => digiDentisListDoctors(baseConfig, 'ext-clinic-1', fetchImpl), ExternalCalendarAuthError);
 });
 

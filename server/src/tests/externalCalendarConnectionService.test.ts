@@ -46,6 +46,7 @@ type IntegrationRow = {
   clientId: string | null;
   clientSecretEncrypted: string | null;
   webhookSecretEncrypted: string | null;
+  webhookReceiverKey: string;
   externalCompanyId: string | null;
   externalClinicId: string | null;
   apiBaseUrl: string | null;
@@ -78,6 +79,7 @@ function findIntegration(clinicId: string) {
   async findUnique({ where }: any) {
     if (where.clinicId) return findIntegration(where.clinicId);
     if (where.id) return integrations.find((r) => r.id === where.id) ?? null;
+    if (where.webhookReceiverKey) return integrations.find((r) => r.webhookReceiverKey === where.webhookReceiverKey) ?? null;
     return null;
   },
   async upsert({ where, create, update }: any) {
@@ -86,6 +88,7 @@ function findIntegration(clinicId: string) {
       Object.assign(existing, update, { updatedAt: new Date() });
       return existing;
     }
+    if (!create.webhookReceiverKey) throw new Error('webhookReceiverKey must be generated on create');
     const row: IntegrationRow = {
       id: `conn-${++seq}`,
       clinicId: where.clinicId,
@@ -96,6 +99,7 @@ function findIntegration(clinicId: string) {
       clientId: create.clientId ?? null,
       clientSecretEncrypted: create.clientSecretEncrypted ?? null,
       webhookSecretEncrypted: create.webhookSecretEncrypted ?? null,
+      webhookReceiverKey: create.webhookReceiverKey,
       externalCompanyId: create.externalCompanyId ?? null,
       externalClinicId: create.externalClinicId ?? null,
       apiBaseUrl: create.apiBaseUrl ?? null,
@@ -128,9 +132,11 @@ function findIntegration(clinicId: string) {
 const {
   getExternalCalendarIntegrationSummary,
   getExternalCalendarConnectionRecord,
+  getExternalCalendarConnectionRecordByReceiverKey,
   upsertExternalCalendarIntegration,
   setExternalCalendarIntegrationEnabled,
   recordExternalCalendarConnectionCheck,
+  rotateExternalCalendarWebhookReceiverKey,
 } = await import('../services/externalCalendar/externalCalendarConnectionService.js');
 
 section('Clinic-specific configuration');
@@ -215,6 +221,7 @@ await test('enabling is refused until required fields are configured', async () 
     clientId: null,
     clientSecretEncrypted: null,
     webhookSecretEncrypted: null,
+    webhookReceiverKey: 'receiver-key-incomplete',
     externalCompanyId: null,
     externalClinicId: null,
     apiBaseUrl: null,
@@ -235,6 +242,67 @@ await test('enabling succeeds once clientId/clientSecret/externalClinicId are se
 await test('integration is disabled by default on creation', async () => {
   const summary = await getExternalCalendarIntegrationSummary('clinic-B');
   assert.equal(summary!.enabled, false);
+});
+
+section('Webhook receiver key — opaque, per-clinic, rotatable public URL token');
+
+await test('a webhookReceiverKey is generated automatically on creation', async () => {
+  const summary = await getExternalCalendarIntegrationSummary('clinic-A');
+  assert.ok(summary!.webhookReceiverKey);
+  assert.equal(typeof summary!.webhookReceiverKey, 'string');
+});
+
+await test('the receiver key is never the row\'s own database id', async () => {
+  const summary = await getExternalCalendarIntegrationSummary('clinic-A');
+  assert.notEqual(summary!.webhookReceiverKey, summary!.id);
+});
+
+await test('each clinic gets a distinct receiver key', async () => {
+  const a = await getExternalCalendarIntegrationSummary('clinic-A');
+  const b = await getExternalCalendarIntegrationSummary('clinic-B');
+  assert.notEqual(a!.webhookReceiverKey, b!.webhookReceiverKey);
+});
+
+await test('re-saving clinic config does not change its receiver key', async () => {
+  const before = await getExternalCalendarIntegrationSummary('clinic-A');
+  await upsertExternalCalendarIntegration('clinic-A', { externalCompanyId: 'company-a-2' });
+  const after = await getExternalCalendarIntegrationSummary('clinic-A');
+  assert.equal(after!.webhookReceiverKey, before!.webhookReceiverKey);
+});
+
+await test('the connection can be looked up by its receiver key', async () => {
+  const summary = await getExternalCalendarIntegrationSummary('clinic-A');
+  const found = await getExternalCalendarConnectionRecordByReceiverKey(summary!.webhookReceiverKey);
+  assert.equal(found!.clinicId, 'clinic-A');
+});
+
+await test('an unknown receiver key resolves to null (never leaks which ids exist)', async () => {
+  const found = await getExternalCalendarConnectionRecordByReceiverKey('not-a-real-key');
+  assert.equal(found, null);
+});
+
+await test('rotating the receiver key changes it and invalidates the old lookup', async () => {
+  const before = await getExternalCalendarIntegrationSummary('clinic-A');
+  const rotated = await rotateExternalCalendarWebhookReceiverKey('clinic-A');
+  assert.notEqual(rotated.webhookReceiverKey, before!.webhookReceiverKey);
+
+  const byOldKey = await getExternalCalendarConnectionRecordByReceiverKey(before!.webhookReceiverKey);
+  assert.equal(byOldKey, null);
+
+  const byNewKey = await getExternalCalendarConnectionRecordByReceiverKey(rotated.webhookReceiverKey);
+  assert.equal(byNewKey!.clinicId, 'clinic-A');
+});
+
+await test('rotating for an unknown clinic throws ExternalCalendarClinicNotFoundError', async () => {
+  await assert.rejects(() => rotateExternalCalendarWebhookReceiverKey('clinic-does-not-exist'), /not found/i);
+});
+
+await test('key rotation is audit logged without exposing the key value as a "secret"', async () => {
+  const before = auditEvents.length;
+  await rotateExternalCalendarWebhookReceiverKey('clinic-A');
+  assert.ok(auditEvents.length > before);
+  const last = auditEvents[auditEvents.length - 1] as any;
+  assert.equal(last.action, 'external_calendar_webhook_key_rotated');
 });
 
 section('Connection check recording');
