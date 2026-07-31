@@ -3298,9 +3298,13 @@ model ExternalCalendarInboundEvent {
 
 /// Stable NoraMedi ⇄ provider appointment reference plus the outbound-create
 /// idempotency ledger (a retried create request must never double-book a
-/// provider-side appointment). Not yet wired to the appointment approval
-/// flow — this table is the prepared orchestration boundary for that,
-/// intentionally unused by any production write path in this phase.
+/// provider-side appointment). Phase 2 wires this into the AppointmentRequest
+/// conversion flow — see externalCalendarOutboundSync.ts. One row is created
+/// per converted Appointment when the clinic has an enabled integration, and
+/// its `status`/`attempts`/`nextAttemptAt` drive the immediate sync attempt,
+/// the bounded retry job, and manual staff retries — all three funnel through
+/// the same atomic claim (status transition guarded by a conditional
+/// updateMany) so they can never process the same row concurrently.
 model ExternalCalendarAppointmentLink {
   id             String                      @id @default(uuid())
   connectionId   String
@@ -3311,13 +3315,39 @@ model ExternalCalendarAppointmentLink {
   appointmentId String?
   appointment   Appointment? @relation(fields: [appointmentId], references: [id])
 
-  externalAppointmentId String
-  /// Client-generated idempotency key sent to the provider on create.
+  /// Set once the provider confirms creation — null while pending/syncing/failed.
+  externalAppointmentId String?
+  /// Client-generated idempotency key sent to the provider on every create
+  /// attempt (as X-Idempotency-Key) — deterministic per appointment (see
+  /// computeOutboundSyncIdempotencyKey()) so retries and duplicate conversion
+  /// requests can never create a second provider-side appointment.
   idempotencyKey        String
 
-  /// active | cancelled | rescheduled
-  status       String    @default("active")
+  /// pending | syncing | synced | failed_retryable | failed_terminal | cancelled
+  /// (outbound lifecycle) — see externalCalendarOutboundSync.ts header comment.
+  /// "active | cancelled | rescheduled" from the original design doc collapses
+  /// into this same field once a row is synced: 'synced' plays the role
+  /// "active" would have played for a freshly created appointment link.
+  status       String    @default("pending")
+  /// Attempts already made (immediate + retry job + manual retry all
+  /// increment this atomically as part of the claim). Compared against the
+  /// job's MAX_ATTEMPTS to classify retry exhaustion as failed_terminal.
+  attempts     Int       @default(0)
+  /// Backoff floor: the retry job only claims a failed_retryable row once
+  /// now() >= nextAttemptAt. Null means "claimable as soon as picked up"
+  /// (fresh pending rows, or immediately after a manual retry request).
+  nextAttemptAt DateTime?
+  lastAttemptAt DateTime?
+  /// Set only on a successful create — the moment the row reaches 'synced'.
   lastSyncedAt DateTime?
+  /// Sanitized, human-readable failure summary for staff — never the raw
+  /// provider response body (which may echo back patient data) and never
+  /// secrets/credentials. See classifyExternalCalendarSyncError().
+  lastError String?
+  /// Machine-readable failure classification, e.g. AUTH_ERROR,
+  /// MAPPING_MISSING, VALIDATION_ERROR, SLOT_NOT_AVAILABLE, RATE_LIMITED,
+  /// TRANSIENT, NOT_CONFIGURED. Null while pending/syncing/synced.
+  errorCode String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3326,4 +3356,5 @@ model ExternalCalendarAppointmentLink {
   @@index([connectionId, externalAppointmentId])
   @@index([clinicId])
   @@index([appointmentId])
+  @@index([status, nextAttemptAt])
 }

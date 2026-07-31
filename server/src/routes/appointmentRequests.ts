@@ -14,7 +14,7 @@ import { appointmentRequestStatusSchema, appointmentRequestConvertSchema, appoin
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 import { findUserAssignedToClinic } from '../utils/relationGuards.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
-import { sendAppointmentRequestConfirmationNotification } from '../services/appointmentRequestNotification.js';
+import { scheduleExternalCalendarSyncOrNotify } from '../services/externalCalendar/externalCalendarOutboundSync.js';
 
 const router = express.Router();
 
@@ -436,24 +436,35 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
 
     res.status(201).json({ appointment, request: updatedRequest });
 
-    sendAppointmentRequestConfirmationNotification({
+    // Determined AFTER the conversion transaction has committed and the
+    // response has already been sent — never inside prisma.$transaction
+    // above, never while an advisory lock is held. When no external calendar
+    // integration is enabled for this clinic, this sends the exact same
+    // confirmation notification as before, with the same arguments. When one
+    // is enabled, this creates a durable outbound sync record and attempts
+    // synchronization first — the confirmation is sent only once that
+    // synchronization succeeds. See externalCalendarOutboundSync.ts.
+    scheduleExternalCalendarSyncOrNotify({
+      appointmentId: appointment.id,
       clinicId,
-      source: request.source,
-      phone: request.phone,
-      externalSenderId: request.externalSenderId,
-      sourceConnectionId: request.sourceConnectionId,
-      patientName: request.patientName,
-      organizationId: req.user!.organizationId,
-      patientId: updatedRequest.patientId!,
-      appointment: {
-        startTime: appointment.startTime,
-        appointmentType: { name: appointment.appointmentType.name },
-        practitioner: {
-          firstName: appointment.practitioner.firstName,
-          lastName: appointment.practitioner.lastName,
+      notification: {
+        source: request.source,
+        phone: request.phone,
+        externalSenderId: request.externalSenderId,
+        sourceConnectionId: request.sourceConnectionId,
+        patientName: request.patientName,
+        organizationId: req.user!.organizationId,
+        patientId: updatedRequest.patientId!,
+        appointment: {
+          startTime: appointment.startTime,
+          appointmentType: { name: appointment.appointmentType.name },
+          practitioner: {
+            firstName: appointment.practitioner.firstName,
+            lastName: appointment.practitioner.lastName,
+          },
         },
       },
-    }).catch(err => console.error('[appointment-confirmation] notification failed', err));
+    }).catch(err => console.error('[appointment-confirmation] post-conversion sync/notify failed', err));
   } catch {
     res.status(500).json({ error: 'Failed to convert appointment request' });
   }
