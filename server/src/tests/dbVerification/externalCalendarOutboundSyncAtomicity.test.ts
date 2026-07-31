@@ -46,8 +46,10 @@ import {
 } from './dbVerificationHarness.js';
 import {
   ensurePendingSyncLink,
+  ensurePendingSyncLinkInConversionTransaction,
   claimSyncLinkForAttempt,
   requeueSyncLinkForManualRetry,
+  attemptExternalCalendarSync,
   computeOutboundSyncIdempotencyKey,
 } from '../../services/externalCalendar/externalCalendarOutboundSync.js';
 
@@ -172,6 +174,10 @@ async function scenarioTransactionIndependentOfExternalReachability() {
     // The local appointment/request remain committed and unaffected by the sync outcome.
     const dbRequest = await prisma.appointmentRequest.findUnique({ where: { id: request.id } });
     assert.equal(dbRequest!.status, 'converted', 'external sync failure must never revert or cancel the local conversion');
+
+    const dbIntegration = await prisma.externalCalendarIntegration.findUnique({ where: { clinicId } });
+    assert.equal(dbIntegration!.status, 'error', 'a real AUTH_ERROR from the (deliberately unconfigured) provider must degrade integration health, same as the mocked-Prisma unit test');
+    assert.ok(dbIntegration!.lastError && !dbIntegration!.lastError.toLowerCase().includes('secret'));
   });
 }
 
@@ -297,6 +303,90 @@ async function scenarioIdempotencyIsARealUniqueConstraint() {
   });
 }
 
+// ─── 5. Durable link creation survives a crash right after commit ───────────
+
+async function scenarioDurableLinkSurvivesCrashAfterCommit() {
+  section('5. The pending sync link commits atomically with the appointment — never depends on the post-response continuation running');
+  const fixtures = await createClinicFixtureSet('ext-sync-durable-commit');
+  const clinicId = fixtures.defaultClinicId;
+  const practitioner = await createFullyAvailablePractitioner(fixtures, clinicId);
+  const service = await createService(clinicId);
+  const integration = await enableIntegration(fixtures, clinicId);
+  await mapPractitionerAndService(integration.id, clinicId, fixtures.orgId, practitioner.id, service.id);
+  const patient = await prisma.patient.create({ data: { organizationId: fixtures.orgId, clinicId, firstName: 'Durable', lastName: 'Link', phone: '+905550000011' } });
+
+  await test('a real prisma.$transaction that creates the appointment and the durable link, with NOTHING run after commit, already has a pending link row', async () => {
+    const appointment = await prisma.$transaction(async (tx) => {
+      const appt = await tx.appointment.create({
+        data: {
+          clinicId,
+          patientId: patient.id,
+          practitionerId: practitioner.id,
+          appointmentTypeId: service.id,
+          startTime: new Date(),
+          endTime: new Date(Date.now() + 30 * 60 * 1000),
+          status: 'scheduled',
+        },
+      });
+      // Mirrors appointmentRequests.ts's convert handler: durable link
+      // bookkeeping runs INSIDE the transaction, no external HTTP call.
+      await ensurePendingSyncLinkInConversionTransaction(tx, { appointmentId: appt.id, clinicId });
+      return appt;
+    });
+
+    // Deliberately never call scheduleExternalCalendarSyncOrNotify or
+    // attemptExternalCalendarSync here — simulating a process exit
+    // immediately after the transaction above commits. The retry job's
+    // periodic sweep (externalCalendarOutboundSyncJob.ts) is what would find
+    // this row in production; this assertion proves there IS a durable row
+    // for it to find.
+    const link = await prisma.externalCalendarAppointmentLink.findFirst({ where: { appointmentId: appointment.id } });
+    assert.ok(link, 'the pending link must already exist in the database the instant the transaction commits');
+    assert.equal(link!.status, 'pending');
+    assert.equal(link!.idempotencyKey, computeOutboundSyncIdempotencyKey(appointment.id));
+  });
+}
+
+// ─── 6. Integration-health short-circuit under a real DB ────────────────────
+
+async function scenarioIntegrationHealthShortCircuitsRealSync() {
+  section('6. Once an integration is marked unhealthy, a second appointment short-circuits to INTEGRATION_UNHEALTHY at the real-DB level');
+  const fixtures = await createClinicFixtureSet('ext-sync-unhealthy');
+  const clinicId = fixtures.defaultClinicId;
+  const practitioner = await createFullyAvailablePractitioner(fixtures, clinicId);
+  const service = await createService(clinicId);
+  const integration = await enableIntegration(fixtures, clinicId);
+  await mapPractitionerAndService(integration.id, clinicId, fixtures.orgId, practitioner.id, service.id);
+  const patient = await prisma.patient.create({ data: { organizationId: fixtures.orgId, clinicId, firstName: 'Unhealthy', lastName: 'Clinic', phone: '+905550000012' } });
+
+  async function makeApptAndLink() {
+    const appt = await prisma.appointment.create({
+      data: {
+        clinicId, patientId: patient.id, practitionerId: practitioner.id, appointmentTypeId: service.id,
+        startTime: new Date(), endTime: new Date(Date.now() + 30 * 60 * 1000), status: 'scheduled',
+      },
+    });
+    const link = await ensurePendingSyncLink({ connection: { id: integration.id, clinicId, organizationId: fixtures.orgId, provider: 'digidentis' } as any, appointmentId: appt.id, clinicId });
+    return link;
+  }
+
+  await test('first attempt gets a real AUTH_ERROR (unconfigured provider) and degrades the integration to error', async () => {
+    const linkA = await makeApptAndLink();
+    const resultA = await attemptExternalCalendarSync(linkA.id);
+    assert.equal(resultA.outcome, 'failed_terminal');
+    if ('errorCode' in resultA) assert.equal(resultA.errorCode, 'AUTH_ERROR');
+    const dbIntegration = await prisma.externalCalendarIntegration.findUnique({ where: { clinicId } });
+    assert.equal(dbIntegration!.status, 'error');
+  });
+
+  await test('a second, independent appointment at the same clinic short-circuits as INTEGRATION_UNHEALTHY (no repeated provider call)', async () => {
+    const linkB = await makeApptAndLink();
+    const resultB = await attemptExternalCalendarSync(linkB.id);
+    assert.equal(resultB.outcome, 'failed_terminal');
+    if ('errorCode' in resultB) assert.equal(resultB.errorCode, 'INTEGRATION_UNHEALTHY');
+  });
+}
+
 // ─── Run ──────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -304,6 +394,8 @@ async function main() {
   await scenarioExistingConcurrencyGuaranteesUnchanged();
   await scenarioGenuineConcurrentClaim();
   await scenarioIdempotencyIsARealUniqueConstraint();
+  await scenarioDurableLinkSurvivesCrashAfterCommit();
+  await scenarioIntegrationHealthShortCircuitsRealSync();
 
   const ok = summary();
   await cleanupAllFixtures();

@@ -23,10 +23,19 @@ import cron from 'node-cron';
 import prisma from '../db.js';
 import { attemptExternalCalendarSync, MAX_SYNC_ATTEMPTS } from '../services/externalCalendar/externalCalendarOutboundSync.js';
 import { withJobLock } from '../utils/jobLock.js';
+import { logger } from '../utils/logger.js';
 
 /** A provider HTTP call is expected to resolve in seconds, not minutes — 30
  *  minutes stuck in 'syncing' can only mean the process crashed mid-attempt. */
 const STUCK_SYNCING_MS = 30 * 60 * 1000;
+/** A 'pending' row this old was created by the conversion transaction (see
+ *  ensurePendingSyncLinkInConversionTransaction) but never picked up by the
+ *  immediate post-response attempt — most likely because the process
+ *  exited before that fire-and-forget continuation ran. The grace period
+ *  gives the normal immediate-attempt path (which completes in seconds) time
+ *  to claim the row first; claimSyncLinkForAttempt's atomic claim makes it
+ *  harmless even if both race. */
+const STALE_PENDING_MS = 2 * 60 * 1000;
 const BATCH_SIZE = 50;
 
 export async function runExternalCalendarOutboundSyncJob(): Promise<void> {
@@ -43,22 +52,40 @@ export async function runExternalCalendarOutboundSyncJob(): Promise<void> {
     },
   });
   if (stuck.count > 0) {
-    console.warn(`[external-calendar-outbound-sync] Recovered ${stuck.count} stuck syncing row(s).`);
+    logger.warn({ count: stuck.count }, 'external-calendar-outbound-sync: recovered stuck syncing row(s)');
   }
 
-  const due = await prisma.externalCalendarAppointmentLink.findMany({
-    where: {
-      status: 'failed_retryable',
-      attempts: { lt: MAX_SYNC_ATTEMPTS },
-      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: new Date() } }],
-    },
-    orderBy: { updatedAt: 'asc' },
-    take: BATCH_SIZE,
-    select: { id: true },
-  });
+  const [dueFailed, stalePending] = await Promise.all([
+    prisma.externalCalendarAppointmentLink.findMany({
+      where: {
+        status: 'failed_retryable',
+        attempts: { lt: MAX_SYNC_ATTEMPTS },
+        OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: new Date() } }],
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: BATCH_SIZE,
+      select: { id: true },
+    }),
+    // Rows the conversion transaction created durably but that never got an
+    // immediate attempt (e.g. the process exited before the post-response
+    // fire-and-forget continuation ran) — see STALE_PENDING_MS.
+    prisma.externalCalendarAppointmentLink.findMany({
+      where: {
+        status: 'pending',
+        createdAt: { lt: new Date(Date.now() - STALE_PENDING_MS) },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: BATCH_SIZE,
+      select: { id: true },
+    }),
+  ]);
 
+  const due = [...dueFailed, ...stalePending];
   if (due.length === 0) return;
-  console.info(`[external-calendar-outbound-sync] Retrying ${due.length} failed sync record(s).`);
+  logger.info(
+    { failedRetryableCount: dueFailed.length, stalePendingCount: stalePending.length },
+    'external-calendar-outbound-sync: retrying sync record(s)',
+  );
 
   for (const row of due) {
     try {
@@ -71,7 +98,7 @@ export async function runExternalCalendarOutboundSyncJob(): Promise<void> {
       // attemptExternalCalendarSync already classifies and persists failures
       // internally; this catch only guards against a truly unexpected throw
       // (e.g. a DB outage mid-attempt) so one bad row can't abort the batch.
-      console.error('[external-calendar-outbound-sync] Unexpected error retrying sync record', { linkId: row.id, error });
+      logger.error({ linkId: row.id, error }, 'external-calendar-outbound-sync: unexpected error retrying sync record');
     }
   }
 }
@@ -81,15 +108,15 @@ let retryJobRunning = false;
 export function startExternalCalendarOutboundSyncJob(): void {
   cron.schedule('*/10 * * * *', () => {
     if (retryJobRunning) {
-      console.warn('[external-calendar-outbound-sync] Previous run still in progress, skipping this tick.');
+      logger.warn('external-calendar-outbound-sync: previous run still in progress, skipping this tick');
       return;
     }
     retryJobRunning = true;
     withJobLock('external-calendar-outbound-sync', 10 * 60 * 1000, runExternalCalendarOutboundSyncJob)
-      .catch((error) => console.error('[external-calendar-outbound-sync] Job run failed:', error))
+      .catch((error) => logger.error({ error }, 'external-calendar-outbound-sync: job run failed'))
       .finally(() => {
         retryJobRunning = false;
       });
   });
-  console.log('[external-calendar-outbound-sync] External calendar outbound sync retry job scheduled (every 10 min).');
+  logger.info('external-calendar-outbound-sync: retry job scheduled (every 10 min)');
 }

@@ -60,6 +60,7 @@ let patients: any[] = [];
 let practitioners: any[] = [];
 let appointmentTypes: any[] = [];
 let clinics: any[] = [];
+let operationalEvents: any[] = [];
 let seq = 0;
 
 function resetFixtures() {
@@ -71,12 +72,25 @@ function resetFixtures() {
   practitioners = [];
   appointmentTypes = [];
   clinics = [];
+  operationalEvents = [];
 }
 
 (prisma as any).externalCalendarIntegration = {
   async findUnique({ where }: any) {
     if (where.clinicId !== undefined) return integrations.find((i) => i.clinicId === where.clinicId) ?? null;
     return integrations.find((i) => i.id === where.id) ?? null;
+  },
+  async update({ where, data }: any) {
+    const row = integrations.find((i) => i.clinicId === where.clinicId);
+    if (!row) throw new Error('not found');
+    Object.assign(row, data);
+    return { ...row };
+  },
+};
+(prisma as any).operationalEvent = {
+  async create({ data }: any) {
+    operationalEvents.push(data);
+    return { id: `opevent-${++seq}`, createdAt: new Date(), resolvedAt: null, resolvedById: null, ...data };
   },
 };
 (prisma as any).externalCalendarMapping = {
@@ -105,6 +119,7 @@ function resetFixtures() {
     let results = links.filter((l) => {
       if (where.status && l.status !== where.status) return false;
       if (where.attempts?.lt !== undefined && !(l.attempts < where.attempts.lt)) return false;
+      if (where.createdAt?.lt !== undefined && !(l.createdAt < where.createdAt.lt)) return false;
       if (where.OR) {
         const matches = where.OR.some((clause: any) => {
           if ('nextAttemptAt' in clause) {
@@ -118,6 +133,7 @@ function resetFixtures() {
       return true;
     });
     if (orderBy?.updatedAt === 'asc') results = results.sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+    if (orderBy?.createdAt === 'asc') results = results.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     if (take) results = results.slice(0, take);
     return results.map((r) => ({ ...r }));
   },
@@ -170,6 +186,8 @@ function makeUnconfiguredConnection(clinicId: string) {
     organizationId: `org-${clinicId}`,
     provider: 'digidentis',
     enabled: true,
+    status: 'configured',
+    lastError: null,
     // Deliberately no clientId/clientSecret — forces a deterministic,
     // network-free ExternalCalendarAuthError from DigiDentisProvider itself.
     clientId: null,
@@ -178,6 +196,11 @@ function makeUnconfiguredConnection(clinicId: string) {
     externalCompanyId: null,
     externalClinicId: null,
     apiBaseUrl: null,
+    lastCheckedAt: null,
+    lastSuccessfulCheckAt: null,
+    webhookReceiverKey: `webhook-${clinicId}`,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
   integrations.push(row);
   clinics.push({ id: clinicId, organizationId: row.organizationId });
@@ -273,6 +296,39 @@ async function main() {
       assert.equal(dbLink.attempts, 2, 'the job must have driven exactly one more attempt');
       assert.equal(dbLink.status, 'failed_terminal');
       assert.equal(dbLink.errorCode, 'AUTH_ERROR');
+
+      const integration = integrations.find((i) => i.clinicId === clinicId)!;
+      assert.equal(integration.status, 'error', 'an AUTH_ERROR surfaced by the retry job must degrade the integration health, same as an immediate attempt');
+    });
+  }
+
+  section('Stale pending rows (durable link created by the conversion transaction, never attempted — e.g. process restart) are swept');
+  resetFixtures();
+  {
+    const clinicId = 'clinic-job-stale-pending';
+    const conn = makeUnconfiguredConnection(clinicId);
+    const apptStale = makeAppointmentWithMappings(clinicId, conn.id);
+    const stalePending = makeLink({
+      connectionId: conn.id, clinicId, appointmentId: apptStale.id, idempotencyKey: `appt:${apptStale.id}`,
+      status: 'pending', attempts: 0, createdAt: new Date(Date.now() - 10 * 60 * 1000), updatedAt: new Date(Date.now() - 10 * 60 * 1000),
+    });
+    const apptFresh = makeAppointmentWithMappings(clinicId, conn.id);
+    const freshPending = makeLink({
+      connectionId: conn.id, clinicId, appointmentId: apptFresh.id, idempotencyKey: `appt:${apptFresh.id}`,
+      status: 'pending', attempts: 0, createdAt: new Date(), updatedAt: new Date(),
+    });
+
+    await test('a pending row older than the grace period is claimed and attempted by the job, not left stuck forever', async () => {
+      await runExternalCalendarOutboundSyncJob();
+      const dbStale = links.find((l) => l.id === stalePending.id)!;
+      assert.equal(dbStale.attempts, 1, 'the sweep must drive a real attempt on the stale pending row');
+      assert.notEqual(dbStale.status, 'pending', 'must have transitioned out of pending');
+    });
+
+    await test('a freshly-created pending row (within the grace period) is left for the immediate post-response attempt, not raced by the sweep', async () => {
+      const dbFresh = links.find((l) => l.id === freshPending.id)!;
+      assert.equal(dbFresh.attempts, 0);
+      assert.equal(dbFresh.status, 'pending');
     });
   }
 

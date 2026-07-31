@@ -50,12 +50,19 @@ type IntegrationRow = {
   organizationId: string;
   provider: string;
   enabled: boolean;
+  status: string;
+  lastError: string | null;
   clientId: string | null;
   clientSecretEncrypted: string | null;
   webhookSecretEncrypted: string | null;
   externalCompanyId: string | null;
   externalClinicId: string | null;
   apiBaseUrl: string | null;
+  lastCheckedAt: Date | null;
+  lastSuccessfulCheckAt: Date | null;
+  webhookReceiverKey: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 type MappingRow = {
@@ -120,6 +127,7 @@ let appointmentTypes: AppointmentTypeRow[] = [];
 let clinics: ClinicRow[] = [];
 let appointmentRequests: AppointmentRequestRow[] = [];
 let links: LinkRow[] = [];
+let operationalEvents: any[] = [];
 let seq = 0;
 
 function resetFixtures() {
@@ -132,6 +140,7 @@ function resetFixtures() {
   clinics = [];
   appointmentRequests = [];
   links = [];
+  operationalEvents = [];
 }
 
 (prisma as any).externalCalendarIntegration = {
@@ -139,6 +148,19 @@ function resetFixtures() {
     if (where.clinicId !== undefined) return integrations.find((i) => i.clinicId === where.clinicId) ?? null;
     if (where.id !== undefined) return integrations.find((i) => i.id === where.id) ?? null;
     return null;
+  },
+  async update({ where, data }: any) {
+    const row = integrations.find((i) => i.clinicId === where.clinicId);
+    if (!row) throw new Error('not found');
+    Object.assign(row, data);
+    return { ...row };
+  },
+};
+
+(prisma as any).operationalEvent = {
+  async create({ data }: any) {
+    operationalEvents.push(data);
+    return { id: `opevent-${++seq}`, createdAt: new Date(), resolvedAt: null, resolvedById: null, ...data };
   },
 };
 
@@ -267,12 +289,19 @@ function makeConnection(clinicId: string, overrides: Partial<IntegrationRow> = {
     organizationId: `org-${clinicId}`,
     provider: 'digidentis',
     enabled: true,
+    status: 'configured',
+    lastError: null,
     clientId: 'client-1',
     clientSecretEncrypted: 'enc:secret',
     webhookSecretEncrypted: 'enc:webhook',
     externalCompanyId: 'company-1',
     externalClinicId: 'ext-clinic-1',
     apiBaseUrl: null,
+    lastCheckedAt: null,
+    lastSuccessfulCheckAt: null,
+    webhookReceiverKey: `webhook-${clinicId}`,
+    createdAt: new Date(),
+    updatedAt: new Date(),
     ...overrides,
   };
   integrations.push(row);
@@ -745,6 +774,67 @@ async function main() {
       assert.equal(result.outcome, 'failed_terminal');
       if ('errorCode' in result) assert.equal(result.errorCode, 'MAPPING_MISSING');
       assert.equal(calls.createAppointment, 0);
+    });
+  }
+
+  // ─── 15. Integration health degrade/short-circuit/restore ───────────────
+  section('15. Auth failure degrades integration health and blocks further provider calls');
+  resetFixtures();
+  {
+    const clinicId = 'clinic-unhealthy';
+    const conn = makeConnection(clinicId);
+    const apptA = makeAppointment(clinicId);
+    const apptB = makeAppointment(clinicId);
+    mapPractitioner(conn.id, clinicId, apptA.practitionerId);
+    mapService(conn.id, clinicId, apptA.appointmentTypeId);
+    mapPractitioner(conn.id, clinicId, apptB.practitionerId);
+    mapService(conn.id, clinicId, apptB.appointmentTypeId);
+    const linkA = await ensurePendingSyncLink({ connection: conn as any, appointmentId: apptA.id, clinicId });
+    const linkB = await ensurePendingSyncLink({ connection: conn as any, appointmentId: apptB.id, clinicId });
+
+    await test('an AUTH_ERROR marks the link failed_terminal, degrades the integration to status=error with a safe lastError, and records an OperationalEvent', async () => {
+      const { provider } = makeFakeProvider({
+        slots: [defaultAvailableSlot(apptA)],
+        createError: new ExternalCalendarAuthError('DigiDentiS', 'bad token'),
+      });
+      const result = await attemptExternalCalendarSync(linkA.id, { getProvider: () => provider as any });
+      assert.equal(result.outcome, 'failed_terminal');
+      if ('errorCode' in result) assert.equal(result.errorCode, 'AUTH_ERROR');
+
+      const integration = integrations.find((i) => i.clinicId === clinicId)!;
+      assert.equal(integration.status, 'error', 'the integration must be marked unhealthy after an auth failure');
+      assert.ok(integration.lastError && !integration.lastError.toLowerCase().includes('secret'), 'lastError must never leak secrets');
+
+      const event = operationalEvents.find((e) => e.metadata?.linkId === linkA.id);
+      assert.ok(event, 'a staff-visible OperationalEvent must be recorded for a terminal failure');
+      assert.equal(event.severity, 'error');
+      assert.equal(event.source, 'external_calendar');
+      assert.ok(!JSON.stringify(event).toLowerCase().includes('client-1'), 'OperationalEvent must never include credentials');
+    });
+
+    await test('a second, unrelated appointment at the SAME clinic short-circuits as INTEGRATION_UNHEALTHY without calling the provider again', async () => {
+      const { provider, calls } = makeFakeProvider({ slots: [defaultAvailableSlot(apptB)] });
+      const result = await attemptExternalCalendarSync(linkB.id, { getProvider: () => provider as any });
+      assert.equal(result.outcome, 'failed_terminal');
+      if ('errorCode' in result) assert.equal(result.errorCode, 'INTEGRATION_UNHEALTHY');
+      assert.equal(calls.listAvailableSlots, 0, 'must never call the provider while the integration is marked unhealthy');
+      assert.equal(calls.createAppointment, 0);
+    });
+
+    await test('restoring the integration (simulating a credential update / successful connection test) unblocks future attempts', async () => {
+      const integration = integrations.find((i) => i.clinicId === clinicId)!;
+      integration.status = 'configured';
+      integration.lastError = null;
+      await requeueSyncLinkForManualRetry(linkB.id);
+
+      const { provider, calls } = makeFakeProvider({
+        slots: [defaultAvailableSlot(apptB)],
+        createResult: { externalAppointmentId: 'ext-appt-restored-1', status: 'confirmed' },
+      });
+      const result = await attemptExternalCalendarSync(linkB.id, { getProvider: () => provider as any });
+      assert.equal(result.outcome, 'synced', 'once the integration is healthy again, the retry must actually call the provider and succeed');
+      assert.equal(calls.listAvailableSlots, 1);
+      assert.equal(calls.createAppointment, 1);
     });
   }
 

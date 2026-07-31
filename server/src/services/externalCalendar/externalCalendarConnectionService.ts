@@ -200,7 +200,17 @@ export async function upsertExternalCalendarIntegration(
   if (input.apiBaseUrl !== undefined) data.apiBaseUrl = input.apiBaseUrl;
 
   const existing = await prisma.externalCalendarIntegration.findUnique({ where: { clinicId } });
-  const nextStatus = existing?.status === 'not_configured' || !existing ? 'configured' : existing.status;
+  // 'error' (set by a failed connection test or a provider auth/credential
+  // rejection during outbound sync — see externalCalendarOutboundSync.ts) is
+  // deliberately reset back to 'configured' whenever an admin saves new
+  // config here: the credentials just changed, so the previous error no
+  // longer describes the current configuration. This is what lets a
+  // credential update "restore" an unhealthy integration — the next sync
+  // attempt or connection test gets a clean slate rather than being
+  // short-circuited by the stale error status.
+  const nextStatus = !existing || existing.status === 'not_configured' || existing.status === 'error'
+    ? 'configured'
+    : existing.status;
 
   const row = await prisma.externalCalendarIntegration.upsert({
     where: { clinicId },

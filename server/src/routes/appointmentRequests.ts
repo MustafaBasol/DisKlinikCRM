@@ -14,7 +14,11 @@ import { appointmentRequestStatusSchema, appointmentRequestConvertSchema, appoin
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 import { findUserAssignedToClinic } from '../utils/relationGuards.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
-import { scheduleExternalCalendarSyncOrNotify } from '../services/externalCalendar/externalCalendarOutboundSync.js';
+import {
+  scheduleExternalCalendarSyncOrNotify,
+  ensurePendingSyncLinkInConversionTransaction,
+} from '../services/externalCalendar/externalCalendarOutboundSync.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -394,6 +398,14 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
           },
         });
 
+        // Durable outbound-sync bookkeeping only (local reads/writes, never an
+        // external HTTP call) — commits atomically with the appointment
+        // itself so an unexpected process exit right after this transaction
+        // commits can never permanently lose the outbound sync task. A no-op
+        // when the clinic has no enabled integration. See
+        // ensurePendingSyncLinkInConversionTransaction's doc comment.
+        await ensurePendingSyncLinkInConversionTransaction(tx, { appointmentId: appointment.id, clinicId });
+
         return { appointment, updatedRequest };
       });
       appointment = result.appointment;
@@ -464,7 +476,7 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
           },
         },
       },
-    }).catch(err => console.error('[appointment-confirmation] post-conversion sync/notify failed', err));
+    }).catch(err => logger.error({ appointmentId: appointment.id, clinicId, err }, 'appointment-requests: post-conversion sync/notify failed'));
   } catch {
     res.status(500).json({ error: 'Failed to convert appointment request' });
   }
