@@ -3,6 +3,9 @@
  * DigiDentiS. Decrypts connection credentials internally; callers never see
  * plaintext secrets. Mirrors services/whatsapp/MetaCloudWhatsAppProvider.ts's
  * shape (decrypt-then-delegate).
+ *
+ * Verified against the real vendor documentation
+ * (`docs/vendor/digidentis/DigiDentiS_Takvim_API_Documentation_v3.2.html`).
  */
 
 import { createHash } from 'crypto';
@@ -10,6 +13,7 @@ import { decryptSecret } from '../../../utils/encryption.js';
 import type {
   ExternalCalendarConnectionRecord,
   ExternalCalendarProvider,
+  ExternalCalendarEventType,
   ExternalCompany,
   ExternalClinic,
   ExternalDoctor,
@@ -17,12 +21,13 @@ import type {
   ExternalSlot,
   ExternalSlotQuery,
   CreateExternalAppointmentPayload,
+  RescheduleExternalAppointmentInput,
   ExternalAppointmentResult,
   TestConnectionResult,
   ParsedExternalCalendarWebhookEvent,
 } from '../ExternalCalendarProvider.js';
 import {
-  digiDentisTestConnection,
+  digiDentisHealthCheck,
   digiDentisListCompanies,
   digiDentisListClinics,
   digiDentisListDoctors,
@@ -37,13 +42,26 @@ import {
 import { verifyDigiDentisWebhookSignature } from './DigiDentisSigning.js';
 import { ExternalCalendarAuthError } from '../externalCalendarErrors.js';
 
-const ACTIVE_EVENT_TYPES = new Set(['appointment.created', 'appointment.cancelled', 'appointment.rescheduled']);
+/** vendor doc §11.1 — "Available" today: the only event types that mark a
+ *  stored inbound event 'processed' (still no domain mutation in this
+ *  phase — see externalCalendarWebhookProcessor.ts). */
+const ACTIVE_EVENT_TYPES = new Set<ExternalCalendarEventType>([
+  'appointment.created',
+  'appointment.cancelled',
+  'appointment.rescheduled',
+]);
 
-/** Some providers emit "canceled" (US spelling) — normalize without
- *  inventing new domain event types. */
-const RAW_EVENT_TYPE_ALIASES: Record<string, string> = {
-  'appointment.canceled': 'appointment.cancelled',
-};
+/** vendor doc §11.1 — "Reserved": explicitly part of the webhook contract,
+ *  documented to "arrive automatically once activated." Recognized (never
+ *  classified as 'unknown'), but stored as reserved/not-yet-active rather
+ *  than 'processed' — see externalCalendarWebhookProcessor.ts. */
+const RESERVED_EVENT_TYPES = new Set<ExternalCalendarEventType>([
+  'appointment.confirmed',
+  'appointment.completed',
+  'appointment.no_show',
+]);
+
+const RECOGNIZED_EVENT_TYPES = new Set<ExternalCalendarEventType>([...ACTIVE_EVENT_TYPES, ...RESERVED_EVENT_TYPES]);
 
 function resolveClientConfig(connection: ExternalCalendarConnectionRecord): DigiDentisClientConfig {
   if (!connection.clientId) {
@@ -66,10 +84,24 @@ function requireExternalClinicId(connection: ExternalCalendarConnectionRecord): 
   return connection.externalClinicId;
 }
 
+/** Doctors/treatment types are listed per DigiDentiS *company*, not per
+ *  clinic (vendor doc §7.6, §7.10) — see digidentisConfig.ts's header comment. */
+function requireExternalCompanyId(connection: ExternalCalendarConnectionRecord): string {
+  if (!connection.externalCompanyId) {
+    throw new ExternalCalendarAuthError('DigiDentiS', 'externalCompanyId is not configured for this clinic');
+  }
+  return connection.externalCompanyId;
+}
+
+function headerValue(headers: Record<string, string | string[] | undefined>, name: string): string | undefined {
+  const value = headers[name];
+  return Array.isArray(value) ? value[0] : value;
+}
+
 export class DigiDentisProvider implements ExternalCalendarProvider {
   async testConnection(connection: ExternalCalendarConnectionRecord): Promise<TestConnectionResult> {
     try {
-      return await digiDentisTestConnection(resolveClientConfig(connection));
+      return await digiDentisHealthCheck(resolveClientConfig(connection));
     } catch (err) {
       return { success: false, message: (err as Error).message };
     }
@@ -84,18 +116,18 @@ export class DigiDentisProvider implements ExternalCalendarProvider {
   }
 
   async listDoctors(connection: ExternalCalendarConnectionRecord): Promise<ExternalDoctor[]> {
-    return digiDentisListDoctors(resolveClientConfig(connection), requireExternalClinicId(connection));
+    return digiDentisListDoctors(resolveClientConfig(connection), requireExternalCompanyId(connection));
   }
 
   async listTreatmentTypes(connection: ExternalCalendarConnectionRecord): Promise<ExternalTreatmentType[]> {
-    return digiDentisListTreatmentTypes(resolveClientConfig(connection), requireExternalClinicId(connection));
+    return digiDentisListTreatmentTypes(resolveClientConfig(connection), requireExternalCompanyId(connection));
   }
 
   async listAvailableSlots(
     connection: ExternalCalendarConnectionRecord,
     query: ExternalSlotQuery,
   ): Promise<ExternalSlot[]> {
-    return digiDentisListAvailableSlots(resolveClientConfig(connection), requireExternalClinicId(connection), query);
+    return digiDentisListAvailableSlots(resolveClientConfig(connection), query);
   }
 
   async createAppointment(
@@ -109,28 +141,17 @@ export class DigiDentisProvider implements ExternalCalendarProvider {
     connection: ExternalCalendarConnectionRecord,
     externalAppointmentId: string,
     reason?: string,
+    idempotencyKey?: string,
   ): Promise<void> {
-    return digiDentisCancelAppointment(
-      resolveClientConfig(connection),
-      requireExternalClinicId(connection),
-      externalAppointmentId,
-      reason,
-    );
+    return digiDentisCancelAppointment(resolveClientConfig(connection), externalAppointmentId, reason, idempotencyKey);
   }
 
   async rescheduleAppointment(
     connection: ExternalCalendarConnectionRecord,
     externalAppointmentId: string,
-    newStartTime: string,
-    newEndTime: string,
+    input: RescheduleExternalAppointmentInput,
   ): Promise<ExternalAppointmentResult> {
-    return digiDentisRescheduleAppointment(
-      resolveClientConfig(connection),
-      requireExternalClinicId(connection),
-      externalAppointmentId,
-      newStartTime,
-      newEndTime,
-    );
+    return digiDentisRescheduleAppointment(resolveClientConfig(connection), externalAppointmentId, input);
   }
 
   verifyWebhookSignature(
@@ -140,31 +161,35 @@ export class DigiDentisProvider implements ExternalCalendarProvider {
   ): boolean {
     if (!connection.webhookSecretEncrypted) return false;
     const secret = decryptSecret(connection.webhookSecretEncrypted);
-    const header = headers['x-webhook-signature'];
-    const signature = Array.isArray(header) ? header[0] : header;
+    const signature = headerValue(headers, 'x-webhook-signature');
     return verifyDigiDentisWebhookSignature(rawBody, signature, secret);
   }
 
-  parseWebhook(payload: unknown): ParsedExternalCalendarWebhookEvent {
+  parseWebhook(
+    payload: unknown,
+    headers: Record<string, string | string[] | undefined>,
+  ): ParsedExternalCalendarWebhookEvent {
     const record = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
-    const data = (record.data && typeof record.data === 'object' ? record.data : record) as Record<string, unknown>;
+    // vendor doc §11.3: the envelope is always { event, timestamp, data }.
+    const data = (record.data && typeof record.data === 'object' ? record.data : {}) as Record<string, unknown>;
 
-    const rawEventType = String(record.type ?? record.event ?? record.eventType ?? 'unknown');
-    const normalized = RAW_EVENT_TYPE_ALIASES[rawEventType] ?? rawEventType;
-    const eventType = ACTIVE_EVENT_TYPES.has(normalized)
-      ? (normalized as ParsedExternalCalendarWebhookEvent['eventType'])
+    const rawEventType = String(record.event ?? 'unknown');
+    const eventType = RECOGNIZED_EVENT_TYPES.has(rawEventType as ExternalCalendarEventType)
+      ? (rawEventType as ExternalCalendarEventType)
       : 'unknown';
 
-    const explicitEventId = record.eventId ?? record.id;
+    // vendor doc §11.2/§11.5: the delivery/dedupe id is the X-Webhook-Id
+    // request header — "use X-Webhook-Id (or data.id) to make your
+    // processing idempotent." Never guessed from a hash of the payload when
+    // a real delivery id is available out-of-band.
+    const webhookIdHeader = headerValue(headers, 'x-webhook-id');
+    const dataId = typeof data.id === 'string' && data.id.trim() ? data.id : undefined;
     const providerEventId =
-      typeof explicitEventId === 'string' && explicitEventId.trim()
-        ? explicitEventId
-        : createHash('sha256').update(JSON.stringify(payload ?? {})).digest('hex');
+      webhookIdHeader?.trim() ||
+      dataId ||
+      createHash('sha256').update(JSON.stringify(payload ?? {})).digest('hex');
 
-    const appointmentIdCandidate =
-      (data as any)?.appointmentId ?? (data as any)?.appointment?.id ?? (record as any)?.appointmentId;
-    const externalAppointmentId =
-      typeof appointmentIdCandidate === 'string' && appointmentIdCandidate.trim() ? appointmentIdCandidate : undefined;
+    const externalAppointmentId = dataId;
 
     return {
       eventType,

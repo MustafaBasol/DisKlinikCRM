@@ -6,6 +6,13 @@
  * jobs, the future appointment-approval boundary) calls providers only
  * through externalCalendarProviderFactory.ts — never a concrete class
  * directly — mirroring services/whatsapp/WhatsAppProvider.ts.
+ *
+ * Shapes below are verified against the real DigiDentiS Takvim API v3.2.0
+ * documentation where DigiDentiS is concerned (dates/times, UUID prefixes,
+ * company-vs-clinic scoping) — see DigiDentisApiClient.ts. This interface
+ * itself stays provider-agnostic; a future second provider may not share
+ * every field (e.g. `treatmentDurationMinutes`), which is fine — it simply
+ * won't populate/require what its own real API doesn't support.
  */
 
 /** Minimal connection info a provider needs. Encrypted fields are decrypted
@@ -24,34 +31,69 @@ export type ExternalCalendarConnectionRecord = {
 };
 
 export type ExternalCompany = { id: string; name: string };
-export type ExternalClinic = { id: string; companyId: string; name: string };
-export type ExternalDoctor = { id: string; name: string; isActive?: boolean };
-export type ExternalTreatmentType = { id: string; name: string; durationMinutes?: number; isActive?: boolean };
+export type ExternalClinic = { id: string; name: string };
+export type ExternalDoctor = { id: string; name: string; clinicId?: string | null };
+export type ExternalTreatmentType = { id: string; name: string; durationMinutes?: number | null };
 
+/**
+ * DigiDentiS's own doctor-slots endpoint takes only a doctor id plus a date
+ * range (vendor doc §7.8) — there is no treatment-type filter on
+ * availability. `fromDate`/`toDate` are `YYYY-MM-DD`, Europe/Istanbul (the
+ * vendor's documented timezone, §10.3); a future provider with different
+ * slot semantics implements this the same way its own real API works.
+ */
 export type ExternalSlotQuery = {
   externalDoctorId: string;
-  externalTreatmentTypeId: string;
-  fromDate: string; // ISO date (yyyy-mm-dd) — provider's own calendar timezone
+  fromDate: string;
   toDate: string;
 };
 
 export type ExternalSlot = {
-  startTime: string; // ISO 8601
-  endTime: string; // ISO 8601
+  /** `YYYY-MM-DD`, Europe/Istanbul. */
+  date: string;
+  /** `HH:MM`, 24-hour, Europe/Istanbul. */
+  startTime: string;
+  endTime: string;
   externalDoctorId: string;
 };
 
+/**
+ * DigiDentiS's create/reschedule-appointment body (vendor doc §7.12, §7.16)
+ * splits date and time, and accepts EITHER an explicit `endTime` OR a
+ * `treatmentDurationMinutes` (never both meaningfully) — if neither is
+ * given, the provider's own default appointment duration for that doctor
+ * applies. Patient name is two fields, not one, per the real API.
+ */
 export type CreateExternalAppointmentPayload = {
   externalDoctorId: string;
   externalTreatmentTypeId: string;
-  startTime: string; // ISO 8601
-  endTime: string; // ISO 8601
-  patientName: string;
+  /** `YYYY-MM-DD`, Europe/Istanbul. */
+  date: string;
+  /** `HH:MM`, 24-hour, Europe/Istanbul. */
+  startTime: string;
+  endTime?: string | null;
+  treatmentDurationMinutes?: number | null;
+  patientFirstName: string;
+  patientLastName: string;
   patientPhone?: string | null;
+  patientEmail?: string | null;
   notes?: string | null;
+  /** Caller's own internal booking reference, echoed back by some providers. */
+  bookingId?: string | null;
   /** Client-generated idempotency key — a retried call with the same key
-   *  must never create a second provider-side appointment. */
+   *  must never create a second provider-side appointment. Sent as a
+   *  request HEADER by DigiDentiS (X-Idempotency-Key), never a body field. */
   idempotencyKey: string;
+};
+
+/** Same date/time split as create — see CreateExternalAppointmentPayload. */
+export type RescheduleExternalAppointmentInput = {
+  date: string;
+  startTime: string;
+  endTime?: string | null;
+  treatmentDurationMinutes?: number | null;
+  /** Sent as X-Idempotency-Key, same convention as create. */
+  idempotencyKey?: string;
 };
 
 export type ExternalAppointmentResult = {
@@ -64,13 +106,32 @@ export type TestConnectionResult = {
   message: string;
 };
 
+/**
+ * DigiDentiS's webhook contract (vendor doc §11.1) defines six event types:
+ * three that fire today ("Available") and three reserved for later
+ * ("Reserved" — explicitly part of the contract, arriving automatically
+ * once activated). Both groups are recognized/normalized here; only
+ * genuinely unrecognized provider event types fall back to 'unknown'.
+ */
+export type ExternalCalendarEventType =
+  | 'appointment.created'
+  | 'appointment.confirmed'
+  | 'appointment.cancelled'
+  | 'appointment.rescheduled'
+  | 'appointment.completed'
+  | 'appointment.no_show'
+  | 'unknown';
+
 export type ParsedExternalCalendarWebhookEvent = {
-  /** Normalized to one of the active event types when recognized; the
-   *  provider's own raw type string otherwise (never invented/guessed). */
-  eventType: 'appointment.created' | 'appointment.cancelled' | 'appointment.rescheduled' | 'unknown';
+  /** Normalized to one of the six documented event types when recognized;
+   *  'unknown' otherwise (never invented/guessed). */
+  eventType: ExternalCalendarEventType;
   /** The provider's raw event type string, always populated. */
   rawEventType: string;
-  /** Dedupe key for this specific delivery — provider event id when present. */
+  /** Dedupe key for this specific delivery. For DigiDentiS this is the
+   *  `X-Webhook-Id` request header (vendor doc §11.2/§11.5: "use X-Webhook-Id
+   *  (or data.id) to make your processing idempotent") — never guessed from
+   *  the payload body when a proper delivery id is available out-of-band. */
   providerEventId: string;
   externalAppointmentId?: string;
   raw: unknown;
@@ -82,7 +143,11 @@ export interface ExternalCalendarProvider {
 
   listCompanies(connection: ExternalCalendarConnectionRecord): Promise<ExternalCompany[]>;
   listClinics(connection: ExternalCalendarConnectionRecord, companyId: string): Promise<ExternalClinic[]>;
+  /** Doctors are listed per DigiDentiS *company*, not per clinic (vendor doc §7.6). */
   listDoctors(connection: ExternalCalendarConnectionRecord): Promise<ExternalDoctor[]>;
+  /** Treatment types are listed per DigiDentiS *company* (vendor doc §7.10) —
+   *  an empty result means none are marked "API Visible" in the DigiDentiS
+   *  dashboard (Settings > System > Customization), not an error. */
   listTreatmentTypes(connection: ExternalCalendarConnectionRecord): Promise<ExternalTreatmentType[]>;
   listAvailableSlots(
     connection: ExternalCalendarConnectionRecord,
@@ -95,19 +160,27 @@ export interface ExternalCalendarProvider {
     payload: CreateExternalAppointmentPayload,
   ): Promise<ExternalAppointmentResult>;
 
-  /** Cancel a previously created appointment, where the documented API allows it. */
+  /**
+   * Cancel a previously created appointment, where the documented API
+   * allows it. Only appointments created through this same API can be
+   * cancelled (vendor doc §7.15) — a front-desk-created DigiDentiS
+   * appointment is out of reach entirely.
+   */
   cancelAppointment(
     connection: ExternalCalendarConnectionRecord,
     externalAppointmentId: string,
     reason?: string,
+    idempotencyKey?: string,
   ): Promise<void>;
 
-  /** Reschedule a previously created appointment, where the documented API allows it. */
+  /**
+   * Reschedule a previously created appointment, where the documented API
+   * allows it. Same API-created-only restriction as cancelAppointment.
+   */
   rescheduleAppointment(
     connection: ExternalCalendarConnectionRecord,
     externalAppointmentId: string,
-    newStartTime: string,
-    newEndTime: string,
+    input: RescheduleExternalAppointmentInput,
   ): Promise<ExternalAppointmentResult>;
 
   /** Verify an inbound webhook's signature. Returns false on any mismatch. */
@@ -117,6 +190,14 @@ export interface ExternalCalendarProvider {
     headers: Record<string, string | string[] | undefined>,
   ): boolean;
 
-  /** Parse an already-signature-verified webhook payload into a normalized event. */
-  parseWebhook(payload: unknown): ParsedExternalCalendarWebhookEvent;
+  /**
+   * Parse an already-signature-verified webhook payload into a normalized
+   * event. `headers` is passed alongside the payload because the
+   * provider-agnostic delivery/dedupe id may live in a header rather than
+   * the body (DigiDentiS: `X-Webhook-Id`, vendor doc §11.2).
+   */
+  parseWebhook(
+    payload: unknown,
+    headers: Record<string, string | string[] | undefined>,
+  ): ParsedExternalCalendarWebhookEvent;
 }

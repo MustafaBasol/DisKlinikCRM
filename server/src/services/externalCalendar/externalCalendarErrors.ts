@@ -77,10 +77,29 @@ export class ExternalCalendarTransientError extends ExternalCalendarError {
 /** The provider rejected the request as invalid — not safe to retry as-is. */
 export class ExternalCalendarValidationError extends ExternalCalendarError {
   readonly status: number | null;
+  readonly code: string | null;
 
-  constructor(provider: string, status: number | null, detail?: string) {
+  constructor(provider: string, status: number | null, detail?: string, code: string | null = null) {
     super(`${provider} rejected the request${status ? ` (HTTP ${status})` : ''}${detail ? `: ${detail}` : ''}`);
     this.status = status;
+    this.code = code;
+  }
+}
+
+/**
+ * The provider reports a genuine conflict with current state — e.g. HTTP 409
+ * `SLOT_NOT_AVAILABLE` (the requested time slot is already booked) or
+ * `SLOT_IN_PAST` (vendor doc §8, "HTTP Status Codes"). Distinct from
+ * ExternalCalendarValidationError because the request itself was well-formed;
+ * retrying with the *same* slot will fail again, but the caller may
+ * legitimately want to re-query availability and retry with a different one.
+ */
+export class ExternalCalendarConflictError extends ExternalCalendarError {
+  readonly code: string | null;
+
+  constructor(provider: string, code: string | null, detail?: string) {
+    super(`${provider} reported a conflict${code ? ` (${code})` : ''}${detail ? `: ${detail}` : ''}`);
+    this.code = code;
   }
 }
 

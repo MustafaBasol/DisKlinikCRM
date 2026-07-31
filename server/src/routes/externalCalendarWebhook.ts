@@ -120,7 +120,7 @@ router.post(
         return; // Malformed payload — nothing to record.
       }
 
-      const parsed = provider.parseWebhook(payload);
+      const parsed = provider.parseWebhook(payload, req.headers as Record<string, string | string[] | undefined>);
 
       await processExternalCalendarWebhookEvent({
         provider: connection.provider,
