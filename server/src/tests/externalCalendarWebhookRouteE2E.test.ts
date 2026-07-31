@@ -30,6 +30,7 @@ import http from 'node:http';
 import { createHmac, randomUUID } from 'node:crypto';
 import express from 'express';
 import prisma from '../db.js';
+import { logger } from '../utils/logger.js';
 
 let passed = 0;
 let failed = 0;
@@ -152,10 +153,10 @@ function findIntegrationByClinic(clinicId: string) {
 /**
  * A providerEventId matching this sentinel forces `create` to throw a
  * generic (non-P2002) error — simulating an unexpected DB failure so the
- * route handler's outer `catch` block (`console.error('[external-calendar-webhook]
- * handler error:', err)` in routes/externalCalendarWebhook.ts) actually
- * fires. Used by the "structured webhook error logging" regression test
- * below.
+ * route handler's outer `catch` block (routed through `logUnhandledError`,
+ * server/src/utils/logger.ts — a structured, privacy-safe logger call, not
+ * a raw `console.error(err)` dump) actually fires. Used by the "structured
+ * webhook error logging" regression test below.
  */
 const FORCE_HANDLER_ERROR_WEBHOOK_ID = 'whk_force_handler_error_regression';
 
@@ -465,13 +466,21 @@ async function main() {
     });
   });
 
-  section('Privacy — secrets, signatures, and patient PII never appear in the audit log or captured console output');
+  section('Privacy — secrets, signatures, and patient PII never appear in the audit log, captured console output, or the structured error log');
 
   const consoleLines: string[] = [];
   const originalConsoleLog = console.log.bind(console);
   const originalConsoleError = console.error.bind(console);
   console.log = (...args: unknown[]) => { consoleLines.push(args.map(String).join(' ')); originalConsoleLog(...args); };
   console.error = (...args: unknown[]) => { consoleLines.push(args.map(String).join(' ')); originalConsoleError(...args); };
+
+  // The route's outer catch no longer dumps to console.error — it's routed
+  // through logUnhandledError (server/src/utils/logger.ts), a structured
+  // pino call. Capture logger.error calls the same way, so the regression
+  // test below asserts against the logger that actually fires today.
+  const loggedErrorCalls: unknown[][] = [];
+  const originalLoggerError = logger.error.bind(logger);
+  (logger as any).error = (...args: unknown[]) => { loggedErrorCalls.push(args); };
 
   await withServer(async (port) => {
     await test('a delivery embedding a full patient name/phone in the payload never leaks those values into the audit log', async () => {
@@ -503,14 +512,19 @@ async function main() {
       assert.ok(!auditText.includes(forgedSignature.replace('sha256=', '')), 'attempted signature value leaked into audit log');
     });
 
-    // Regression: routes/externalCalendarWebhook.ts's outer catch
-    // (`console.error('[external-calendar-webhook] handler error:', err)`)
-    // must keep firing with its structured tag on any unexpected processing
-    // failure — never crash the response, and never let the logged error
-    // carry the request's secrets/PII (see FORCE_HANDLER_ERROR_WEBHOOK_ID
-    // above, which forces the DB write inside processExternalCalendarWebhookEvent
-    // to throw a genuine, non-duplicate error).
-    await test('an unexpected processing error is caught, logged with the structured handler-error tag, and never surfaces as a non-200 or leaks secrets/PII', async () => {
+    // Regression: routes/externalCalendarWebhook.ts's outer catch is routed
+    // through logUnhandledError (server/src/utils/logger.ts) — a structured,
+    // privacy-safe pino call, not the raw `console.error('[external-calendar-
+    // webhook] handler error:', err)` dump this route used before. It must
+    // keep firing on any unexpected processing failure — never crash the
+    // response, never fall back to the raw console.error path, and never let
+    // the logged error carry the request's secrets/PII (see
+    // FORCE_HANDLER_ERROR_WEBHOOK_ID above, which forces the DB write inside
+    // processExternalCalendarWebhookEvent to throw a genuine, non-duplicate
+    // error). Exhaustive coverage of the logger's field allowlist and
+    // production redaction lives in externalCalendarWebhookLogPrivacy.test.ts;
+    // this is the route-level E2E check that the wiring still holds.
+    await test('an unexpected processing error is caught, logged via the structured privacy-safe logger, and never surfaces as a non-200 or leaks secrets/PII', async () => {
       const body = webhookPayload('appointment.created', {
         id: 'apt_force_handler_error',
         patient_name: SENTINEL_PATIENT_NAME,
@@ -523,11 +537,16 @@ async function main() {
       assert.equal(res.statusCode, 200, 'an unexpected processing error must never surface as a non-200 to the provider');
       await new Promise((r) => setTimeout(r, 20));
 
-      const loggedLine = consoleLines.find((l) => l.includes('[external-calendar-webhook] handler error:'));
-      assert.ok(loggedLine, 'expected the outer catch to log with its structured "[external-calendar-webhook] handler error:" tag');
-      assert.ok(!loggedLine!.includes(CLINIC_A_WEBHOOK_SECRET), 'clinic A webhook secret leaked into the handler-error log line');
-      assert.ok(!loggedLine!.includes(SENTINEL_PATIENT_NAME), 'patient name leaked into the handler-error log line');
-      assert.ok(!loggedLine!.includes(SENTINEL_PATIENT_PHONE), 'patient phone leaked into the handler-error log line');
+      assert.equal(
+        consoleLines.some((l) => l.includes('handler error')),
+        false,
+        'the raw console.error(err) dump path must not have returned — unexpected errors are now routed through the structured logger only',
+      );
+      assert.equal(loggedErrorCalls.length, 1, 'expected exactly one structured logger.error call for the forced failure');
+      const serializedLogCall = JSON.stringify(loggedErrorCalls[0]);
+      assert.ok(!serializedLogCall.includes(CLINIC_A_WEBHOOK_SECRET), 'clinic A webhook secret leaked into the structured error log');
+      assert.ok(!serializedLogCall.includes(SENTINEL_PATIENT_NAME), 'patient name leaked into the structured error log');
+      assert.ok(!serializedLogCall.includes(SENTINEL_PATIENT_PHONE), 'patient phone leaked into the structured error log');
       assert.ok(
         !events.some((e) => e.externalAppointmentId === 'apt_force_handler_error'),
         'a request that failed before the DB write completed must never leave a stored event row behind',
@@ -537,6 +556,7 @@ async function main() {
 
   console.log = originalConsoleLog;
   console.error = originalConsoleError;
+  (logger as any).error = originalLoggerError;
 
   await test('neither webhook secret, nor any captured signature, nor sentinel patient PII appears anywhere in this run\'s console output', () => {
     const fullText = consoleLines.join('\n');
