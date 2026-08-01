@@ -8,6 +8,11 @@
  * integers, then converts back — deterministic regardless of summation order.
  * Scope is intentionally narrow: this does not change how estimatedCost/
  * estimatedAmount are stored or displayed anywhere else in the app.
+ *
+ * Assumption: rounds to 2-decimal minor units (cents) for every currency, matching this
+ * app's currently-supported currencies (TRY/USD/EUR/GBP/CAD/CHF, see clinicOperatingPreferences.ts
+ * currencySchema — all 2-decimal). Zero-decimal (e.g. JPY) or three-decimal (e.g. KWD)
+ * currencies are out of scope for this helper.
  */
 export function sumMoney(amounts: Array<number | null | undefined>): number {
   const totalMinorUnits = amounts.reduce<number>((sum, amount) => {

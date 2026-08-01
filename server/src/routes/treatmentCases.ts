@@ -156,6 +156,10 @@ router.get('/treatment-cases/:id/proposal-pdf', authorize(['OWNER', 'ORG_ADMIN',
         practitioner: { select: { firstName: true, lastName: true } },
         clinic: { select: { name: true, address: true, phone: true, currency: true, defaultLanguage: true } },
         procedures: {
+          // Cancelled procedures must never appear on the patient proposal or contribute to
+          // its total — filtered here at the Prisma level (preferred); the PDF service also
+          // filters defense-in-depth, per the project's `status !== 'cancelled'` convention.
+          where: { status: { not: 'cancelled' } },
           select: { toothFdi: true, procedureName: true, status: true, estimatedCost: true },
           orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
         },
@@ -186,6 +190,8 @@ router.get('/treatment-cases/:id/proposal-pdf', authorize(['OWNER', 'ORG_ADMIN',
         stage: tc.stage,
         practitionerName: tc.practitioner ? `${tc.practitioner.firstName} ${tc.practitioner.lastName}` : null,
         currency: tc.currency || tc.clinic.currency,
+        estimatedAmount: tc.estimatedAmount,
+        acceptedAmount: tc.acceptedAmount,
       },
       procedures: tc.procedures.map((p) => ({
         toothFdi: p.toothFdi,
