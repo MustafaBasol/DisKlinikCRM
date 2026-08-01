@@ -144,6 +144,24 @@ async function waitForLinkTerminal(appointmentId: string, timeoutMs = 5000): Pro
   throw new Error(`Timed out waiting for a terminal sync outcome for appointment ${appointmentId}`);
 }
 
+/**
+ * Production performs the link-status write and the integration-health write
+ * as two sequential awaited statements (finalizeFailure in
+ * externalCalendarOutboundSync.ts), not one transaction — so a poller that
+ * only waits for the link to go terminal can still observe the integration
+ * row a beat before its status update lands. Poll for the integration's own
+ * status directly instead of assuming it's already settled once the link is.
+ */
+async function waitForIntegrationStatus(clinicId: string, expectedStatus: string, timeoutMs = 5000): Promise<any> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const integration = await prisma.externalCalendarIntegration.findUnique({ where: { clinicId } });
+    if (integration && integration.status === expectedStatus) return integration;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error(`Timed out waiting for integration ${clinicId} to reach status "${expectedStatus}"`);
+}
+
 // ─── 1. Conversion succeeds regardless of external calendar reachability ────
 
 async function scenarioTransactionIndependentOfExternalReachability() {
@@ -175,9 +193,13 @@ async function scenarioTransactionIndependentOfExternalReachability() {
     const dbRequest = await prisma.appointmentRequest.findUnique({ where: { id: request.id } });
     assert.equal(dbRequest!.status, 'converted', 'external sync failure must never revert or cancel the local conversion');
 
-    const dbIntegration = await prisma.externalCalendarIntegration.findUnique({ where: { clinicId } });
-    assert.equal(dbIntegration!.status, 'error', 'a real AUTH_ERROR from the (deliberately unconfigured) provider must degrade integration health, same as the mocked-Prisma unit test');
-    assert.ok(dbIntegration!.lastError && !dbIntegration!.lastError.toLowerCase().includes('secret'));
+    // The link write and the integration-health write are two sequential
+    // awaited statements in production (not one transaction) — poll for the
+    // integration's own status rather than assuming it's already settled
+    // the instant the link reaches a terminal state.
+    const dbIntegration = await waitForIntegrationStatus(clinicId, 'error');
+    assert.equal(dbIntegration.status, 'error', 'a real AUTH_ERROR from the (deliberately unconfigured) provider must degrade integration health, same as the mocked-Prisma unit test');
+    assert.ok(dbIntegration.lastError && !dbIntegration.lastError.toLowerCase().includes('secret'));
   });
 }
 
