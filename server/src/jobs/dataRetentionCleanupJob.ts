@@ -35,6 +35,7 @@ export type DataRetentionSummary = {
   deletedConversationStates: number;
   deletedOperationalEvents: number;
   deletedInboundEvents: number;
+  deletedExternalCalendarInboundEvents: number;
   anonymizedContactRequests: number;
   redactedInboxEntries: number;
   deletedCommunicationConsentConflictBuckets: number;
@@ -58,6 +59,7 @@ export type DataRetentionDeps = {
   conversationStates: DataRetentionCategoryDeps;
   operationalEvents: DataRetentionCategoryDeps;
   inboundEvents: DataRetentionCategoryDeps;
+  externalCalendarInboundEvents: DataRetentionCategoryDeps;
   contactRequests: DataRetentionCategoryDeps;
   inboxEntries: DataRetentionCategoryDeps;
   communicationConsentConflictBuckets: DataRetentionCategoryDeps;
@@ -144,6 +146,30 @@ function makeInboundEventsDeps(): DataRetentionCategoryDeps {
       });
       if (rows.length === 0) return 0;
       const { count } = await prisma.messagingInboundEvent.deleteMany({
+        where: { id: { in: rows.map(r => r.id) } },
+      });
+      return count;
+    },
+  };
+}
+
+/** ExternalCalendarInboundEvent — DigiDentiS webhook idempotency ledger,
+ *  sibling to MessagingInboundEvent above. rawPayload carries patient PII
+ *  the provider echoes back (appointment.created's nested patient
+ *  first/last name, phone, email) — cleaned on the same
+ *  DATA_RETENTION_INBOUND_EVENT_DAYS schedule. */
+function makeExternalCalendarInboundEventsDeps(): DataRetentionCategoryDeps {
+  return {
+    countEligible: (threshold) =>
+      prisma.externalCalendarInboundEvent.count({ where: { createdAt: { lt: threshold } } }),
+    executeCleanupBatch: async (threshold, batchSize) => {
+      const rows = await prisma.externalCalendarInboundEvent.findMany({
+        where: { createdAt: { lt: threshold } },
+        select: { id: true },
+        take: batchSize,
+      });
+      if (rows.length === 0) return 0;
+      const { count } = await prisma.externalCalendarInboundEvent.deleteMany({
         where: { id: { in: rows.map(r => r.id) } },
       });
       return count;
@@ -257,6 +283,7 @@ function defaultDeps(): DataRetentionDeps {
     conversationStates: makeConversationStatesDeps(),
     operationalEvents: makeOperationalEventsDeps(),
     inboundEvents: makeInboundEventsDeps(),
+    externalCalendarInboundEvents: makeExternalCalendarInboundEventsDeps(),
     contactRequests: makeContactRequestsDeps(),
     inboxEntries: makeInboxEntriesDeps(),
     communicationConsentConflictBuckets: makeCommunicationConsentConflictBucketsDeps(),
@@ -300,6 +327,7 @@ export async function runDataRetentionCleanup(
     deletedConversationStates: 0,
     deletedOperationalEvents: 0,
     deletedInboundEvents: 0,
+    deletedExternalCalendarInboundEvents: 0,
     anonymizedContactRequests: 0,
     redactedInboxEntries: 0,
     deletedCommunicationConsentConflictBuckets: 0,
@@ -346,6 +374,15 @@ export async function runDataRetentionCleanup(
     summary,
   );
 
+  summary.deletedExternalCalendarInboundEvents = await runCategory(
+    'externalCalendarInboundEvents',
+    daysAgo(config.inboundEventDays),
+    config,
+    resolved.externalCalendarInboundEvents,
+    dryRun,
+    summary,
+  );
+
   summary.anonymizedContactRequests = await runCategory(
     'contactRequests',
     daysAgo(config.resolvedContactRequestDays),
@@ -379,6 +416,7 @@ export async function runDataRetentionCleanup(
     ` states=${summary.deletedConversationStates}` +
     ` operationalEvents=${summary.deletedOperationalEvents}` +
     ` inboundEvents=${summary.deletedInboundEvents}` +
+    ` externalCalendarInboundEvents=${summary.deletedExternalCalendarInboundEvents}` +
     ` contactRequests=${summary.anonymizedContactRequests}` +
     ` inboxEntries=${summary.redactedInboxEntries}` +
     ` consentConflictBuckets=${summary.deletedCommunicationConsentConflictBuckets}` +
