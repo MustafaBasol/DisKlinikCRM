@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Package, Plus, AlertTriangle, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, Search, X, Pencil } from 'lucide-react';
-import { inventoryService } from '../services/api';
+import { Package, Plus, AlertTriangle, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, Search, X, Pencil, Ruler } from 'lucide-react';
+import { inventoryService, inventoryUnitService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { canManageInventory } from '../utils/permissions';
+import { computeBaseUnitPreview, isCoherentUnitConfiguration, selectableTransactionUnits, type InventoryUnitLite } from './inventoryUnitHelpers';
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 const CATEGORY_KEYS = ['implant', 'prosthetic', 'consumable', 'medication', 'equipment', 'other'] as const;
@@ -31,6 +32,29 @@ const TX_COLORS: Record<string, string> = {
   adjustment: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
 };
 
+// Maps backend error `code` values (see server/src/routes/inventory.ts and
+// inventoryUnits.ts) to translation keys, so the same validation failure
+// reads correctly in tr/en/fr/de regardless of the raw backend message.
+const ERROR_CODE_KEYS: Record<string, string> = {
+  INVENTORY_UNIT_INACTIVE: 'inventory:errors.unitInactive',
+  INVENTORY_UNIT_NOT_ASSIGNED: 'inventory:errors.unitNotAssigned',
+  INVENTORY_UNIT_CROSS_CLINIC: 'inventory:errors.unitCrossClinic',
+  INVENTORY_CONVERSION_FACTOR_MISSING: 'inventory:errors.conversionFactorMissing',
+  INVENTORY_CONVERSION_FACTOR_INVALID: 'inventory:errors.conversionFactorInvalid',
+  INVENTORY_CONVERSION_FACTOR_LOCKED: 'inventory:errors.conversionFactorLocked',
+  INVENTORY_UNIT_CONFIG_INCOMPLETE: 'inventory:errors.unitConfigIncomplete',
+  INVENTORY_ADJUSTMENT_UNIT_UNSUPPORTED: 'inventory:errors.adjustmentUnitUnsupported',
+  INVENTORY_UNIT_FIELDS_REQUIRED: 'inventory:errors.unitFieldsRequired',
+  INVENTORY_UNIT_DUPLICATE: 'inventory:errors.unitDuplicate',
+  INVENTORY_INSUFFICIENT_STOCK: 'inventory:transaction.errors.insufficientStockGeneric',
+};
+
+function translateApiError(err: any, t: (key: string, opts?: any) => string, fallbackKey: string): string {
+  const code = err?.response?.data?.code as string | undefined;
+  if (code && ERROR_CODE_KEYS[code]) return t(ERROR_CODE_KEYS[code]);
+  return err?.response?.data?.error || t(fallbackKey);
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface InventoryItem {
   id: string;
@@ -47,6 +71,11 @@ interface InventoryItem {
   isLowStock: boolean;
   createdAt: string;
   updatedAt: string;
+  purchaseUnitId?: string | null;
+  purchaseUnit?: InventoryUnitLite | null;
+  consumptionUnitId?: string | null;
+  consumptionUnit?: InventoryUnitLite | null;
+  conversionFactor?: number | null;
 }
 
 interface Transaction {
@@ -59,6 +88,20 @@ interface Transaction {
   createdAt: string;
   performedBy?: { id: string; firstName: string; lastName: string } | null;
   treatmentCase?: { id: string; title: string } | null;
+  unitId?: string | null;
+  unit?: InventoryUnitLite | null;
+  quantityInBaseUnit?: number | null;
+}
+
+// Renders an item's consumption unit (preferred, when configured) or falls
+// back to the legacy free-text `unit` field — never both.
+function itemUnitLabel(item: InventoryItem, t: (key: string, opts?: any) => string): string {
+  if (item.consumptionUnit) {
+    return item.consumptionUnit.isActive
+      ? item.consumptionUnit.abbreviation
+      : `${item.consumptionUnit.abbreviation}${t('inventory:unitConversion.inactiveSuffix')}`;
+  }
+  return t(`inventory:units.${item.unit}`, { defaultValue: item.unit });
 }
 
 // ── Item Form ─────────────────────────────────────────────────────────────────
@@ -72,14 +115,19 @@ const EMPTY_ITEM = {
   supplier: '',
   barcode: '',
   notes: '',
+  purchaseUnitId: '',
+  consumptionUnitId: '',
+  conversionFactor: '',
 };
 
 function ItemFormModal({
   initial,
+  units,
   onSave,
   onClose,
 }: {
   initial?: InventoryItem | null;
+  units: InventoryUnitLite[];
   onSave: (data: any) => Promise<void>;
   onClose: () => void;
 }) {
@@ -96,15 +144,39 @@ function ItemFormModal({
           supplier: initial.supplier ?? '',
           barcode: initial.barcode ?? '',
           notes: initial.notes ?? '',
+          purchaseUnitId: initial.purchaseUnitId ?? '',
+          consumptionUnitId: initial.consumptionUnitId ?? '',
+          conversionFactor: initial.conversionFactor ?? '',
         }
       : { ...EMPTY_ITEM }
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Keep the currently-assigned unit selectable even if it has since been
+  // deactivated (historical records may keep referencing inactive units).
+  const unitOptions = (role: 'purchase' | 'consumption') => {
+    const currentId = role === 'purchase' ? initial?.purchaseUnitId : initial?.consumptionUnitId;
+    const currentUnit = role === 'purchase' ? initial?.purchaseUnit : initial?.consumptionUnit;
+    const active = units.filter((u) => u.isActive);
+    if (currentUnit && !currentUnit.isActive && !active.some((u) => u.id === currentId)) {
+      return [...active, currentUnit];
+    }
+    return active;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return setError(t('inventory:errors.nameRequired'));
+
+    const conversionFactor = form.conversionFactor !== '' ? Number(form.conversionFactor) : null;
+    if (!isCoherentUnitConfiguration({ purchaseUnitId: form.purchaseUnitId || null, consumptionUnitId: form.consumptionUnitId || null, conversionFactor })) {
+      return setError(t('inventory:errors.unitConfigIncomplete'));
+    }
+    if (conversionFactor != null && conversionFactor <= 0) {
+      return setError(t('inventory:errors.conversionFactorInvalid'));
+    }
+
     setSaving(true);
     setError('');
     try {
@@ -116,10 +188,13 @@ function ItemFormModal({
         supplier: form.supplier || null,
         barcode: form.barcode || null,
         notes: form.notes || null,
+        purchaseUnitId: form.purchaseUnitId || null,
+        consumptionUnitId: form.consumptionUnitId || null,
+        conversionFactor,
       });
       onClose();
-    } catch {
-      setError(t('inventory:errors.saveFailed'));
+    } catch (err: any) {
+      setError(translateApiError(err, t, 'inventory:errors.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -127,7 +202,7 @@ function ItemFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             {initial ? t('inventory:itemForm.editTitle') : t('inventory:itemForm.createTitle')}
@@ -242,8 +317,147 @@ function ItemFormModal({
             </div>
           </div>
 
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:unitConversion.sectionTitle')}</p>
+            <p className="text-xs text-gray-400 mb-3">{t('inventory:unitConversion.sectionHint')}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:unitConversion.purchaseUnit')}</label>
+                <select
+                  value={form.purchaseUnitId}
+                  onChange={(e) => setForm({ ...form, purchaseUnitId: e.target.value })}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">{t('inventory:unitConversion.none')}</option>
+                  {unitOptions('purchase').map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.abbreviation}){!u.isActive ? t('inventory:unitConversion.inactiveSuffix') : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:unitConversion.consumptionUnit')}</label>
+                <select
+                  value={form.consumptionUnitId}
+                  onChange={(e) => setForm({ ...form, consumptionUnitId: e.target.value })}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">{t('inventory:unitConversion.none')}</option>
+                  {unitOptions('consumption').map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.abbreviation}){!u.isActive ? t('inventory:unitConversion.inactiveSuffix') : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:unitConversion.conversionFactor')}</label>
+                <input
+                  type="number"
+                  min={0.000001}
+                  step="0.000001"
+                  value={form.conversionFactor}
+                  onChange={(e) => setForm({ ...form, conversionFactor: e.target.value })}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="100"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">
+              {t('common:cancel')}
+            </button>
+            <button type="submit" disabled={saving} className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+              {saving ? t('common:saving') : t('common:save')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Unit Form ─────────────────────────────────────────────────────────────────
+function UnitFormModal({
+  initial,
+  onSave,
+  onClose,
+}: {
+  initial?: InventoryUnitLite | null;
+  onSave: (data: any) => Promise<void>;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation(['inventory', 'common']);
+  const [form, setForm] = useState({
+    name: initial?.name ?? '',
+    abbreviation: initial?.abbreviation ?? '',
+    isActive: initial?.isActive ?? true,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.abbreviation.trim()) {
+      return setError(t('inventory:errors.unitFieldsRequired'));
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(form);
+      onClose();
+    } catch (err: any) {
+      setError(translateApiError(err, t, 'inventory:errors.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            {initial ? t('inventory:unitManagement.editTitle') : t('inventory:unitManagement.createTitle')}
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={18} /></button>
+        </div>
+
+        {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:unitManagement.fields.name')} *</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              placeholder={t('inventory:unitManagement.placeholders.name')}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:unitManagement.fields.abbreviation')} *</label>
+            <input
+              type="text"
+              value={form.abbreviation}
+              onChange={(e) => setForm({ ...form, abbreviation: e.target.value })}
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              placeholder={t('inventory:unitManagement.placeholders.abbreviation')}
+            />
+          </div>
+          {initial && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={form.isActive}
+                onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+              />
+              {t('inventory:unitManagement.status.active')}
+            </label>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
               {t('common:cancel')}
             </button>
             <button type="submit" disabled={saving} className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
@@ -267,17 +481,44 @@ function TransactionModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation(['inventory', 'common']);
-  const [form, setForm] = useState({ type: 'in', quantity: '', reason: 'purchase', notes: '' });
+  const [form, setForm] = useState({
+    type: 'in' as 'in' | 'out' | 'adjustment',
+    quantity: '',
+    reason: 'purchase',
+    notes: '',
+    unitId: item.consumptionUnitId || '',
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const unitChoices = selectableTransactionUnits({
+    purchaseUnit: item.purchaseUnit,
+    consumptionUnit: item.consumptionUnit,
+    transactionType: form.type,
+  });
+  const hasUnitChoices = unitChoices.length > 0;
+
+  const qtyNumber = Number(form.quantity);
+  const basePreview = hasUnitChoices
+    ? computeBaseUnitPreview({
+        quantity: qtyNumber,
+        selectedUnitId: form.unitId || null,
+        purchaseUnitId: item.purchaseUnitId ?? null,
+        conversionFactor: item.conversionFactor ?? null,
+      })
+    : null;
+  const isPurchaseUnitSelected = Boolean(form.unitId && form.unitId === item.purchaseUnitId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const qty = Number(form.quantity);
-    const unitLabel = t(`inventory:units.${item.unit}`, { defaultValue: item.unit });
+    const unitLabel = itemUnitLabel(item, t);
     if (!qty || qty <= 0) return setError(t('inventory:transaction.errors.quantityPositive'));
-    if (form.type === 'out' && qty > item.currentStock) {
-      return setError(t('inventory:transaction.errors.insufficientStock', { current: item.currentStock, unit: unitLabel }));
+    if (form.type === 'out') {
+      const normalized = isPurchaseUnitSelected && basePreview != null ? basePreview : qty;
+      if (normalized > item.currentStock) {
+        return setError(t('inventory:transaction.errors.insufficientStock', { current: item.currentStock, unit: unitLabel }));
+      }
     }
     setSaving(true);
     setError('');
@@ -287,10 +528,11 @@ function TransactionModal({
         quantity: qty,
         reason: form.reason || null,
         notes: form.notes || null,
+        unitId: hasUnitChoices && form.unitId ? form.unitId : undefined,
       });
       onClose();
     } catch (err: any) {
-      setError(err?.response?.data?.error || t('inventory:transaction.errors.actionFailed'));
+      setError(translateApiError(err, t, 'inventory:transaction.errors.actionFailed'));
     } finally {
       setSaving(false);
     }
@@ -323,7 +565,10 @@ function TransactionModal({
                 <button
                   key={type}
                   type="button"
-                  onClick={() => { setForm({ ...form, type, reason: type === 'in' ? 'purchase' : type === 'out' ? 'usage' : 'adjustment' }); }}
+                  onClick={() => {
+                    const nextUnitId = type === 'adjustment' && form.unitId === item.purchaseUnitId ? (item.consumptionUnitId || '') : form.unitId;
+                    setForm({ ...form, type, reason: type === 'in' ? 'purchase' : type === 'out' ? 'usage' : 'adjustment', unitId: nextUnitId });
+                  }}
                   className={`flex-1 py-2 text-sm rounded-lg border font-medium transition-colors ${
                     form.type === type
                       ? 'bg-blue-600 text-white border-blue-600'
@@ -336,10 +581,25 @@ function TransactionModal({
             </div>
           </div>
 
+          {hasUnitChoices && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('inventory:transaction.fields.unit')}</label>
+              <select
+                value={form.unitId}
+                onChange={(e) => setForm({ ...form, unitId: e.target.value })}
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                {unitChoices.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>)}
+              </select>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('inventory:transaction.quantityLabel', {
-                unit: t(`inventory:units.${item.unit}`, { defaultValue: item.unit }),
+                unit: hasUnitChoices && form.unitId
+                  ? (unitChoices.find((u) => u.id === form.unitId)?.abbreviation ?? itemUnitLabel(item, t))
+                  : itemUnitLabel(item, t),
                 current: item.currentStock,
               })}
             </label>
@@ -351,6 +611,11 @@ function TransactionModal({
               onChange={(e) => setForm({ ...form, quantity: e.target.value })}
               className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
+            {isPurchaseUnitSelected && basePreview != null && (
+              <p className="text-xs text-gray-400 mt-1">
+                {t('inventory:transaction.normalizedPreview', { amount: basePreview, unit: itemUnitLabel(item, t) })}
+              </p>
+            )}
           </div>
 
           <div>
@@ -390,7 +655,7 @@ function TransactionModal({
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-type Tab = 'list' | 'alerts' | 'history';
+type Tab = 'list' | 'alerts' | 'history' | 'units';
 
 export default function Inventory() {
   const { user } = useAuth();
@@ -403,6 +668,7 @@ export default function Inventory() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [alertItems, setAlertItems] = useState<InventoryItem[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [units, setUnits] = useState<InventoryUnitLite[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState('');
@@ -411,6 +677,8 @@ export default function Inventory() {
   const [showItemForm, setShowItemForm] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [txItem, setTxItem] = useState<InventoryItem | null>(null);
+  const [showUnitForm, setShowUnitForm] = useState(false);
+  const [editUnit, setEditUnit] = useState<InventoryUnitLite | null>(null);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -458,11 +726,26 @@ export default function Inventory() {
     }
   }, []);
 
+  const loadUnits = useCallback(async () => {
+    try {
+      const res = await inventoryUnitService.getAll({ includeInactive: 'true' });
+      setUnits(res.data);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'list') loadItems();
     else if (activeTab === 'alerts') loadAlerts();
     else if (activeTab === 'history') loadAllTransactions();
-  }, [activeTab, loadItems, loadAlerts, loadAllTransactions, selectedClinicId]);
+    else if (activeTab === 'units') loadUnits();
+  }, [activeTab, loadItems, loadAlerts, loadAllTransactions, loadUnits, selectedClinicId]);
+
+  // Units are needed by the item form regardless of the active tab.
+  useEffect(() => {
+    loadUnits();
+  }, [loadUnits, selectedClinicId]);
 
   const handleSaveItem = async (data: any) => {
     if (editItem) {
@@ -481,8 +764,18 @@ export default function Inventory() {
     if (activeTab === 'alerts') loadAlerts();
   };
 
+  const handleSaveUnit = async (data: any) => {
+    if (editUnit) {
+      await inventoryUnitService.update(editUnit.id, data);
+    } else {
+      await inventoryUnitService.create(data);
+    }
+    setEditUnit(null);
+    setShowUnitForm(false);
+    loadUnits();
+  };
+
   const categoryLabel = (key: string) => t(`inventory:categories.${key}`, { defaultValue: key });
-  const unitLabel = (key: string) => t(`inventory:units.${key}`, { defaultValue: key });
   const transactionTypeLabel = (key: string) => t(`inventory:transaction.types.${key}`, { defaultValue: key });
   const reasonLabel = (key: string) => t(`inventory:transaction.reasons.${key}`, { defaultValue: key });
 
@@ -494,6 +787,7 @@ export default function Inventory() {
       icon: <AlertTriangle size={16} />,
     },
     { id: 'history' as Tab, label: t('inventory:tabs.history'), icon: <SlidersHorizontal size={16} /> },
+    { id: 'units' as Tab, label: t('inventory:tabs.units'), icon: <Ruler size={16} /> },
   ];
 
   // Pre-fetch alert count on mount
@@ -514,7 +808,14 @@ export default function Inventory() {
             <p className="text-sm text-gray-500 dark:text-gray-400">{t('inventory:subtitle')}</p>
           </div>
         </div>
-        {isAdmin && (
+        {isAdmin && activeTab === 'units' ? (
+          <button
+            onClick={() => { setEditUnit(null); setShowUnitForm(true); }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} /> {t('inventory:unitManagement.newUnit')}
+          </button>
+        ) : isAdmin && (
           <button
             onClick={() => { setEditItem(null); setShowItemForm(true); }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
@@ -610,10 +911,10 @@ export default function Inventory() {
                           <span className={`font-semibold ${item.isLowStock ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-white'}`}>
                             {item.currentStock}
                           </span>
-                          <span className="text-xs text-gray-400 ml-1">{unitLabel(item.unit)}</span>
+                          <span className="text-xs text-gray-400 ml-1">{itemUnitLabel(item, t)}</span>
                         </td>
                         <td className="px-4 py-3 text-center text-gray-500 dark:text-gray-400">
-                          {item.minimumStock} <span className="text-xs">{unitLabel(item.unit)}</span>
+                          {item.minimumStock} <span className="text-xs">{itemUnitLabel(item, t)}</span>
                         </td>
                         <td className="px-4 py-3 text-right hidden md:table-cell text-gray-700 dark:text-gray-300">
                           {item.unitCost != null ? formatCurrency(item.unitCost) : '—'}
@@ -691,7 +992,7 @@ export default function Inventory() {
                     <div className="mt-3 flex items-center gap-2 text-sm">
                       <span className="text-orange-600 dark:text-orange-400 font-bold">{item.currentStock}</span>
                       <span className="text-gray-400">/ min {item.minimumStock}</span>
-                      <span className="text-xs text-gray-400">{unitLabel(item.unit)}</span>
+                      <span className="text-xs text-gray-400">{itemUnitLabel(item, t)}</span>
                     </div>
                     {item.supplier && <p className="text-xs text-gray-400 mt-1">{t('inventory:itemForm.fields.supplier')}: {item.supplier}</p>}
                   </div>
@@ -744,7 +1045,15 @@ export default function Inventory() {
                           {tx.reason ? reasonLabel(tx.reason) : '-'}
                           {tx.treatmentCase && <span className="text-xs text-gray-400 block">{tx.treatmentCase.title}</span>}
                         </td>
-                        <td className="px-4 py-3 text-center font-semibold text-gray-900 dark:text-white">{tx.quantity}</td>
+                        <td className="px-4 py-3 text-center font-semibold text-gray-900 dark:text-white">
+                          {tx.quantity}
+                          {tx.unit && <span className="text-xs text-gray-400 ml-1">{tx.unit.abbreviation}</span>}
+                          {tx.unit && tx.quantityInBaseUnit != null && tx.quantityInBaseUnit !== tx.quantity && (
+                            <span className="block text-xs text-gray-400">
+                              {t('inventory:transaction.normalizedPreview', { amount: tx.quantityInBaseUnit, unit: '' })}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 hidden md:table-cell text-gray-500 dark:text-gray-400 text-xs">
                           {tx.performedBy ? `${tx.performedBy.firstName} ${tx.performedBy.lastName}` : '-'}
                         </td>
@@ -759,10 +1068,62 @@ export default function Inventory() {
         </div>
       )}
 
+      {/* ── Birimler ── */}
+      {activeTab === 'units' && (
+        <div className="space-y-4">
+          {units.length === 0 ? (
+            <div className="card p-6 text-center text-gray-500 dark:text-gray-400">
+              <Ruler size={36} className="mx-auto mb-3 opacity-40" />
+              <p>{t('inventory:unitManagement.empty')}</p>
+            </div>
+          ) : (
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-700/50 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    <tr>
+                      <th className="px-4 py-3 text-left">{t('inventory:unitManagement.fields.name')}</th>
+                      <th className="px-4 py-3 text-left">{t('inventory:unitManagement.fields.abbreviation')}</th>
+                      <th className="px-4 py-3 text-center">{t('inventory:unitManagement.fields.status')}</th>
+                      <th className="px-4 py-3 text-center">{t('common:actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {units.map((u) => (
+                      <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{u.name}</td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{u.abbreviation}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${u.isActive ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+                            {u.isActive ? t('inventory:unitManagement.status.active') : t('inventory:unitManagement.status.inactive')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {isAdmin && (
+                            <button
+                              onClick={() => { setEditUnit(u); setShowUnitForm(true); }}
+                              title={t('common:edit')}
+                              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Modals */}
       {showItemForm && (
         <ItemFormModal
           initial={editItem}
+          units={units}
           onSave={handleSaveItem}
           onClose={() => { setShowItemForm(false); setEditItem(null); }}
         />
@@ -772,6 +1133,13 @@ export default function Inventory() {
           item={txItem}
           onSave={handleAddTransaction}
           onClose={() => setTxItem(null)}
+        />
+      )}
+      {showUnitForm && (
+        <UnitFormModal
+          initial={editUnit}
+          onSave={handleSaveUnit}
+          onClose={() => { setShowUnitForm(false); setEditUnit(null); }}
         />
       )}
     </div>

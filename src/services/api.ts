@@ -575,6 +575,12 @@ export const inventoryService = {
   addTransaction: (id: string, data: any) => api.post(`/inventory/${id}/transactions`, data),
 };
 
+export const inventoryUnitService = {
+  getAll: (params?: any) => api.get('/inventory-units', { params }),
+  create: (data: any) => api.post('/inventory-units', data),
+  update: (id: string, data: any) => api.put(`/inventory-units/${id}`, data),
+};
+
 export const paymentPlanService = {
   getAll: (params?: any) => api.get('/payment-plans', { params }),
   getById: (id: string) => api.get(`/payment-plans/${id}`),
