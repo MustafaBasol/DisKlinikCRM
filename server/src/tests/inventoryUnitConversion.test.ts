@@ -13,8 +13,10 @@ import assert from 'node:assert/strict';
 import {
   computeQuantityInBaseUnit,
   isCoherentUnitConfiguration,
+  isConsumptionUnitChangeBlocked,
   isConversionFactorChangeBlocked,
   isValidConversionFactor,
+  isValidQuantity,
   InventoryUnitConversionError,
   resolveUnitRole,
 } from '../services/inventoryUnitConversion.js';
@@ -66,9 +68,27 @@ await test('non-finite / non-numeric values are rejected', () => {
 
 section('── resolveUnitRole ───────────────────────────────────────────────────');
 
-await test('no unitId supplied → legacy role (backward-compatible, pre-conversion items)', () => {
+await test('legacy item (no units configured) + omitted unitId → legacy role (backward-compatible)', () => {
   assert.equal(resolveUnitRole(LEGACY_ITEM, undefined), 'legacy');
-  assert.equal(resolveUnitRole(ITEM_WITH_CONVERSION, null), 'legacy');
+  assert.equal(resolveUnitRole(LEGACY_ITEM, null), 'legacy');
+});
+
+await test('configured item + omitted unitId → INVENTORY_TRANSACTION_UNIT_REQUIRED (unitId is mandatory once units are configured)', () => {
+  assert.throws(
+    () => resolveUnitRole(ITEM_WITH_CONVERSION, undefined),
+    (err: unknown) => err instanceof InventoryUnitConversionError && err.code === 'INVENTORY_TRANSACTION_UNIT_REQUIRED',
+  );
+  assert.throws(
+    () => resolveUnitRole(ITEM_WITH_CONVERSION, null),
+    (err: unknown) => err instanceof InventoryUnitConversionError && err.code === 'INVENTORY_TRANSACTION_UNIT_REQUIRED',
+  );
+});
+
+await test('partially-configured item (only purchaseUnitId set) + omitted unitId → also INVENTORY_TRANSACTION_UNIT_REQUIRED (fail-safe, not legacy passthrough)', () => {
+  assert.throws(
+    () => resolveUnitRole({ purchaseUnitId: 'unit-koli', consumptionUnitId: null }, undefined),
+    (err: unknown) => err instanceof InventoryUnitConversionError && err.code === 'INVENTORY_TRANSACTION_UNIT_REQUIRED',
+  );
 });
 
 await test('unitId matching purchaseUnitId → purchase role', () => {
@@ -84,6 +104,38 @@ await test('unitId matching neither unit on the item → INVENTORY_UNIT_NOT_ASSI
     () => resolveUnitRole(ITEM_WITH_CONVERSION, 'unit-from-another-item'),
     (err: unknown) => err instanceof InventoryUnitConversionError && err.code === 'INVENTORY_UNIT_NOT_ASSIGNED',
   );
+});
+
+await test('unitId supplied on a legacy item (no units configured) → still INVENTORY_UNIT_NOT_ASSIGNED, never accepted', () => {
+  assert.throws(
+    () => resolveUnitRole(LEGACY_ITEM, 'unit-koli'),
+    (err: unknown) => err instanceof InventoryUnitConversionError && err.code === 'INVENTORY_UNIT_NOT_ASSIGNED',
+  );
+});
+
+section('── isValidQuantity ────────────────────────────────────────────────────');
+
+await test('positive finite quantities are accepted', () => {
+  assert.equal(isValidQuantity(1), true);
+  assert.equal(isValidQuantity(0.5), true);
+  assert.equal(isValidQuantity(1e9), true);
+});
+
+await test('zero and negative quantities are rejected', () => {
+  assert.equal(isValidQuantity(0), false);
+  assert.equal(isValidQuantity(-5), false);
+});
+
+await test('NaN, Infinity and -Infinity are rejected', () => {
+  assert.equal(isValidQuantity(NaN), false);
+  assert.equal(isValidQuantity(Infinity), false);
+  assert.equal(isValidQuantity(-Infinity), false);
+});
+
+await test('non-numeric values are rejected', () => {
+  assert.equal(isValidQuantity('5'), false);
+  assert.equal(isValidQuantity(null), false);
+  assert.equal(isValidQuantity(undefined), false);
 });
 
 section('── computeQuantityInBaseUnit ─────────────────────────────────────────');
@@ -114,6 +166,13 @@ await test('purchase role with an invalid (zero) conversionFactor → INVENTORY_
   assert.throws(
     () => computeQuantityInBaseUnit({ quantity: 3, role: 'purchase', conversionFactor: 0 }),
     (err: unknown) => err instanceof InventoryUnitConversionError && err.code === 'INVENTORY_CONVERSION_FACTOR_MISSING',
+  );
+});
+
+await test('multiplication overflowing to a non-finite result → INVENTORY_QUANTITY_INVALID (never reaches Prisma)', () => {
+  assert.throws(
+    () => computeQuantityInBaseUnit({ quantity: Number.MAX_VALUE, role: 'purchase', conversionFactor: Number.MAX_VALUE }),
+    (err: unknown) => err instanceof InventoryUnitConversionError && err.code === 'INVENTORY_QUANTITY_INVALID',
   );
 });
 
@@ -180,6 +239,118 @@ await test('partial configuration (missing conversionFactor) is rejected', () =>
 
 await test('partial configuration (only purchaseUnitId) is rejected', () => {
   assert.equal(isCoherentUnitConfiguration({ purchaseUnitId: 'u1', consumptionUnitId: null, conversionFactor: null }), false);
+});
+
+section('── isConsumptionUnitChangeBlocked (base-unit lock) ───────────────────');
+
+await test('first-time assignment (currently null) is allowed when stock, minimum stock and history are all empty', () => {
+  const blocked = isConsumptionUnitChangeBlocked({
+    currentConsumptionUnitId: null,
+    nextConsumptionUnitId: 'unit-adet',
+    currentStock: 0,
+    minimumStock: 0,
+    hasTransactions: false,
+  });
+  assert.equal(blocked, false);
+});
+
+await test('first-time assignment is rejected when currentStock is nonzero', () => {
+  const blocked = isConsumptionUnitChangeBlocked({
+    currentConsumptionUnitId: null,
+    nextConsumptionUnitId: 'unit-adet',
+    currentStock: 5,
+    minimumStock: 0,
+    hasTransactions: false,
+  });
+  assert.equal(blocked, true);
+});
+
+await test('change to a different unit is rejected when currentStock is nonzero', () => {
+  const blocked = isConsumptionUnitChangeBlocked({
+    currentConsumptionUnitId: 'unit-adet',
+    nextConsumptionUnitId: 'unit-gram',
+    currentStock: 5,
+    minimumStock: 0,
+    hasTransactions: false,
+  });
+  assert.equal(blocked, true);
+});
+
+await test('change is rejected when minimumStock is nonzero (even with currentStock at 0)', () => {
+  const blocked = isConsumptionUnitChangeBlocked({
+    currentConsumptionUnitId: 'unit-adet',
+    nextConsumptionUnitId: 'unit-gram',
+    currentStock: 0,
+    minimumStock: 10,
+    hasTransactions: false,
+  });
+  assert.equal(blocked, true);
+});
+
+await test('change is rejected when at least one transaction exists (even with stock and minimumStock at 0)', () => {
+  const blocked = isConsumptionUnitChangeBlocked({
+    currentConsumptionUnitId: 'unit-adet',
+    nextConsumptionUnitId: 'unit-gram',
+    currentStock: 0,
+    minimumStock: 0,
+    hasTransactions: true,
+  });
+  assert.equal(blocked, true);
+});
+
+await test('clearing the consumption unit (to null) is rejected under the same conditions as changing it', () => {
+  const blocked = isConsumptionUnitChangeBlocked({
+    currentConsumptionUnitId: 'unit-adet',
+    nextConsumptionUnitId: null,
+    currentStock: 5,
+    minimumStock: 0,
+    hasTransactions: false,
+  });
+  assert.equal(blocked, true);
+});
+
+await test('clearing the consumption unit is allowed when stock, minimum stock and history are all empty', () => {
+  const blocked = isConsumptionUnitChangeBlocked({
+    currentConsumptionUnitId: 'unit-adet',
+    nextConsumptionUnitId: null,
+    currentStock: 0,
+    minimumStock: 0,
+    hasTransactions: false,
+  });
+  assert.equal(blocked, false);
+});
+
+await test('swapping purchase/consumption unit values (consumption receives the old purchase unit id) is rejected once history exists', () => {
+  const blocked = isConsumptionUnitChangeBlocked({
+    currentConsumptionUnitId: 'unit-adet',
+    nextConsumptionUnitId: 'unit-koli',
+    currentStock: 0,
+    minimumStock: 0,
+    hasTransactions: true,
+  });
+  assert.equal(blocked, true);
+});
+
+await test('setting the same value is a no-op, never blocked, regardless of stock/history', () => {
+  const blocked = isConsumptionUnitChangeBlocked({
+    currentConsumptionUnitId: 'unit-adet',
+    nextConsumptionUnitId: 'unit-adet',
+    currentStock: 100,
+    minimumStock: 10,
+    hasTransactions: true,
+  });
+  assert.equal(blocked, false);
+});
+
+await test('field not present in the request (undefined) is never blocked — unrelated item edits stay unaffected', () => {
+  const blocked = isConsumptionUnitChangeBlocked({
+    currentConsumptionUnitId: 'unit-adet',
+    nextConsumptionUnitId: undefined,
+    currentStock: 100,
+    minimumStock: 10,
+    hasTransactions: true,
+  });
+  assert.equal(blocked, false);
 });
 
 console.log(`\n${'─'.repeat(50)}`);

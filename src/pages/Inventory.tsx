@@ -47,6 +47,9 @@ const ERROR_CODE_KEYS: Record<string, string> = {
   INVENTORY_UNIT_FIELDS_REQUIRED: 'inventory:errors.unitFieldsRequired',
   INVENTORY_UNIT_DUPLICATE: 'inventory:errors.unitDuplicate',
   INVENTORY_INSUFFICIENT_STOCK: 'inventory:transaction.errors.insufficientStockGeneric',
+  INVENTORY_TRANSACTION_UNIT_REQUIRED: 'inventory:errors.transactionUnitRequired',
+  INVENTORY_CONSUMPTION_UNIT_LOCKED: 'inventory:errors.consumptionUnitLocked',
+  INVENTORY_QUANTITY_INVALID: 'inventory:transaction.errors.quantityPositive',
 };
 
 function translateApiError(err: any, t: (key: string, opts?: any) => string, fallbackKey: string): string {

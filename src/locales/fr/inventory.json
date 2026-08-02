@@ -139,6 +139,8 @@
     "unitConfigIncomplete": "L'unité d'achat, l'unité de consommation et le facteur de conversion doivent être définis ensemble.",
     "adjustmentUnitUnsupported": "Les transactions d'ajustement doivent utiliser l'unité de consommation, pas l'unité d'achat.",
     "unitFieldsRequired": "Le nom et l'abréviation de l'unité sont obligatoires.",
-    "unitDuplicate": "Une unité portant ce nom ou cette abréviation existe déjà."
+    "unitDuplicate": "Une unité portant ce nom ou cette abréviation existe déjà.",
+    "transactionUnitRequired": "Une unité doit être sélectionnée pour le mouvement de stock de cet article.",
+    "consumptionUnitLocked": "L'unité de consommation ne peut pas être modifiée ou supprimée tant qu'il existe un stock, un stock minimum ou un historique de mouvements pour cet article."
   }
 }

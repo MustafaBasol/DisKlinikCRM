@@ -139,6 +139,8 @@
     "unitConfigIncomplete": "Alış birimi, sarf birimi ve dönüşüm katsayısı birlikte tanımlanmalıdır.",
     "adjustmentUnitUnsupported": "Düzeltme işlemleri alış birimiyle değil sarf birimiyle yapılmalıdır.",
     "unitFieldsRequired": "Birim adı ve kısaltması zorunludur.",
-    "unitDuplicate": "Bu isimde veya kısaltmada bir birim zaten mevcut."
+    "unitDuplicate": "Bu isimde veya kısaltmada bir birim zaten mevcut.",
+    "transactionUnitRequired": "Bu malzeme için stok hareketinde bir birim seçilmelidir.",
+    "consumptionUnitLocked": "Bu malzeme için stok, minimum stok veya işlem geçmişi mevcutken sarf birimi değiştirilemez veya kaldırılamaz."
   }
 }

@@ -80,6 +80,8 @@ const REQUIRED_UNIT_CONVERSION_KEYS = [
   'errors.adjustmentUnitUnsupported',
   'errors.unitFieldsRequired',
   'errors.unitDuplicate',
+  'errors.transactionUnitRequired',
+  'errors.consumptionUnitLocked',
 ];
 
 async function main() {

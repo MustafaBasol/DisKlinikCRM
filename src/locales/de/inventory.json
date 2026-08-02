@@ -139,6 +139,8 @@
     "unitConfigIncomplete": "Einkaufseinheit, Verbrauchseinheit und Umrechnungsfaktor muessen zusammen angegeben werden.",
     "adjustmentUnitUnsupported": "Korrekturbuchungen muessen die Verbrauchseinheit verwenden, nicht die Einkaufseinheit.",
     "unitFieldsRequired": "Einheitsname und Abkuerzung sind erforderlich.",
-    "unitDuplicate": "Eine Einheit mit diesem Namen oder dieser Abkuerzung existiert bereits."
+    "unitDuplicate": "Eine Einheit mit diesem Namen oder dieser Abkuerzung existiert bereits.",
+    "transactionUnitRequired": "Fuer die Bestandsbewegung dieses Artikels muss eine Einheit ausgewaehlt werden.",
+    "consumptionUnitLocked": "Die Verbrauchseinheit kann nicht geaendert oder entfernt werden, solange fuer diesen Artikel Bestand, Mindestbestand oder ein Bewegungsverlauf vorhanden ist."
   }
 }

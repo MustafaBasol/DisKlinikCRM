@@ -1,4 +1,5 @@
 import express, { Response } from 'express';
+import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
@@ -7,8 +8,10 @@ import { validateAndGetScope, getAccessibleClinicIds, resolveEffectiveClinicId }
 import {
   computeQuantityInBaseUnit,
   isCoherentUnitConfiguration,
+  isConsumptionUnitChangeBlocked,
   isConversionFactorChangeBlocked,
   isValidConversionFactor,
+  isValidQuantity,
   InventoryUnitConversionError,
   resolveUnitRole,
 } from '../services/inventoryUnitConversion.js';
@@ -220,6 +223,11 @@ router.post('/inventory', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), a
 });
 
 // ── PUT /api/inventory/:id ───────────────────────────────────────────────────
+class InventoryItemNotFoundError extends Error {}
+class UnitConfigIncompleteError extends Error {}
+class ConsumptionUnitLockedError extends Error {}
+class ConversionFactorLockedError extends Error {}
+
 router.put('/inventory/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const userId = req.user!.id;
@@ -239,21 +247,13 @@ router.put('/inventory/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'])
     const accessibleIds = await getAccessibleClinicIds(req.user!);
     if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
 
-    const existing = await prisma.inventoryItem.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
-    if (!existing) return res.status(404).json({ error: 'Item not found' });
+    const existingForAuth = await prisma.inventoryItem.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
+    if (!existingForAuth) return res.status(404).json({ error: 'Item not found' });
 
-    const clinicId = existing.clinicId;
+    const clinicId = existingForAuth.clinicId;
 
-    const finalPurchaseUnitId = purchaseUnitIdProvided ? purchaseUnitId : existing.purchaseUnitId;
-    const finalConsumptionUnitId = consumptionUnitIdProvided ? consumptionUnitId : existing.consumptionUnitId;
-    const finalConversionFactor = conversionFactorProvided ? conversionFactor : existing.conversionFactor;
-    if (!isCoherentUnitConfiguration({ purchaseUnitId: finalPurchaseUnitId, consumptionUnitId: finalConsumptionUnitId, conversionFactor: finalConversionFactor })) {
-      return res.status(400).json({
-        error: 'purchaseUnitId, consumptionUnitId, and conversionFactor must be provided together',
-        code: 'INVENTORY_UNIT_CONFIG_INCOMPLETE',
-      });
-    }
-
+    // Cross-clinic/active checks are read-only lookups on InventoryUnit rows,
+    // not on this item's own row — not race-sensitive, safe ahead of the lock.
     if (purchaseUnitIdProvided && purchaseUnitId) {
       const err = await validateUnitReference(clinicId, purchaseUnitId);
       if (err) return res.status(400).json(err);
@@ -263,46 +263,109 @@ router.put('/inventory/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'])
       if (err) return res.status(400).json(err);
     }
 
-    if (conversionFactorProvided && existing.conversionFactor !== null && conversionFactor !== existing.conversionFactor) {
-      const normalizedPurchaseTransactionCount = existing.purchaseUnitId
-        ? await prisma.inventoryTransaction.count({
-            where: { itemId: id, unitId: existing.purchaseUnitId, quantityInBaseUnit: { not: null } },
-          })
-        : 0;
-      if (isConversionFactorChangeBlocked({
-        currentConversionFactor: existing.conversionFactor,
-        nextConversionFactor: conversionFactor,
-        hasNormalizedPurchaseTransactions: normalizedPurchaseTransactionCount > 0,
-      })) {
-        return res.status(409).json({
-          error: 'conversionFactor cannot be changed once purchase-unit transactions have been recorded for this item',
-          code: 'INVENTORY_CONVERSION_FACTOR_LOCKED',
-        });
-      }
-    }
+    // Concurrency strategy: the consumption-unit lock decision (stock,
+    // minimum stock, transaction-history counts) and the item write happen
+    // inside one interactive transaction, guarded by a FOR UPDATE lock taken
+    // on this row *before* any of those counts are read. Every
+    // stock-mutating write on this item (POST /inventory/:id/transactions)
+    // also takes the same lock before it touches InventoryTransaction, so a
+    // transaction-create request racing this update always serializes
+    // against it — it either fully lands first (and its InventoryTransaction
+    // row is counted here) or blocks until this transaction commits/rolls
+    // back (and then re-resolves its unit role against the now-committed
+    // configuration). There is no window where "no history exists" is read
+    // here while a transaction is concurrently being created underneath it.
+    const updated = await prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<{ id: string }[]>(
+        Prisma.sql`SELECT id FROM "InventoryItem" WHERE id = ${id} AND "clinicId" = ${clinicId} FOR UPDATE`
+      );
+      if (locked.length === 0) throw new InventoryItemNotFoundError();
 
-    const updated = await prisma.inventoryItem.update({
-      where: { id },
-      data: {
-        ...(name != null && { name: String(name) }),
-        ...(category != null && { category: String(category) }),
-        ...(unit != null && { unit: String(unit) }),
-        ...(minimumStock != null && { minimumStock: Number(minimumStock) }),
-        ...(unitCost !== undefined && { unitCost: unitCost != null ? Number(unitCost) : null }),
-        ...(supplier !== undefined && { supplier: supplier ? String(supplier) : null }),
-        ...(barcode !== undefined && { barcode: barcode ? String(barcode) : null }),
-        ...(notes !== undefined && { notes: notes ? String(notes) : null }),
-        ...(isActive != null && { isActive: Boolean(isActive) }),
-        ...(purchaseUnitIdProvided && { purchaseUnitId }),
-        ...(consumptionUnitIdProvided && { consumptionUnitId }),
-        ...(conversionFactorProvided && { conversionFactor }),
-      },
+      const existing = await tx.inventoryItem.findUniqueOrThrow({ where: { id } });
+
+      const finalPurchaseUnitId = purchaseUnitIdProvided ? purchaseUnitId : existing.purchaseUnitId;
+      const finalConsumptionUnitId = consumptionUnitIdProvided ? consumptionUnitId : existing.consumptionUnitId;
+      const finalConversionFactor = conversionFactorProvided ? conversionFactor : existing.conversionFactor;
+      if (!isCoherentUnitConfiguration({ purchaseUnitId: finalPurchaseUnitId, consumptionUnitId: finalConsumptionUnitId, conversionFactor: finalConversionFactor })) {
+        throw new UnitConfigIncompleteError();
+      }
+
+      if (consumptionUnitIdProvided) {
+        const hasTransactions = (await tx.inventoryTransaction.count({ where: { itemId: id } })) > 0;
+        if (isConsumptionUnitChangeBlocked({
+          currentConsumptionUnitId: existing.consumptionUnitId,
+          nextConsumptionUnitId: consumptionUnitId,
+          currentStock: existing.currentStock,
+          minimumStock: existing.minimumStock,
+          hasTransactions,
+        })) {
+          throw new ConsumptionUnitLockedError();
+        }
+      }
+
+      if (conversionFactorProvided && existing.conversionFactor !== null && conversionFactor !== existing.conversionFactor) {
+        const normalizedPurchaseTransactionCount = existing.purchaseUnitId
+          ? await tx.inventoryTransaction.count({
+              where: { itemId: id, unitId: existing.purchaseUnitId, quantityInBaseUnit: { not: null } },
+            })
+          : 0;
+        if (isConversionFactorChangeBlocked({
+          currentConversionFactor: existing.conversionFactor,
+          nextConversionFactor: conversionFactor,
+          hasNormalizedPurchaseTransactions: normalizedPurchaseTransactionCount > 0,
+        })) {
+          throw new ConversionFactorLockedError();
+        }
+      }
+
+      // Replacing/clearing purchaseUnitId is not lock-guarded: past
+      // transactions store their own unitId/quantityInBaseUnit independently
+      // of the item's current purchaseUnitId, so they stay correctly
+      // attributed to whichever unit was active when they were created,
+      // regardless of what the item points to afterwards. The
+      // conversionFactor history lock above still protects the multiplier.
+      return tx.inventoryItem.update({
+        where: { id },
+        data: {
+          ...(name != null && { name: String(name) }),
+          ...(category != null && { category: String(category) }),
+          ...(unit != null && { unit: String(unit) }),
+          ...(minimumStock != null && { minimumStock: Number(minimumStock) }),
+          ...(unitCost !== undefined && { unitCost: unitCost != null ? Number(unitCost) : null }),
+          ...(supplier !== undefined && { supplier: supplier ? String(supplier) : null }),
+          ...(barcode !== undefined && { barcode: barcode ? String(barcode) : null }),
+          ...(notes !== undefined && { notes: notes ? String(notes) : null }),
+          ...(isActive != null && { isActive: Boolean(isActive) }),
+          ...(purchaseUnitIdProvided && { purchaseUnitId }),
+          ...(consumptionUnitIdProvided && { consumptionUnitId }),
+          ...(conversionFactorProvided && { conversionFactor }),
+        },
+      });
     });
 
     await logActivity({ clinicId, userId, action: 'update', entityType: 'inventory', entityId: id, description: `Stok kalemi güncellendi: ${updated.name}` });
 
     res.json(updated);
   } catch (err) {
+    if (err instanceof InventoryItemNotFoundError) return res.status(404).json({ error: 'Item not found' });
+    if (err instanceof UnitConfigIncompleteError) {
+      return res.status(400).json({
+        error: 'purchaseUnitId, consumptionUnitId, and conversionFactor must be provided together',
+        code: 'INVENTORY_UNIT_CONFIG_INCOMPLETE',
+      });
+    }
+    if (err instanceof ConsumptionUnitLockedError) {
+      return res.status(409).json({
+        error: 'consumptionUnitId cannot be changed or cleared once stock, minimum stock, or transaction history exists for this item',
+        code: 'INVENTORY_CONSUMPTION_UNIT_LOCKED',
+      });
+    }
+    if (err instanceof ConversionFactorLockedError) {
+      return res.status(409).json({
+        error: 'conversionFactor cannot be changed once purchase-unit transactions have been recorded for this item',
+        code: 'INVENTORY_CONVERSION_FACTOR_LOCKED',
+      });
+    }
     console.error('Inventory update error:', err);
     res.status(500).json({ error: 'Failed to update inventory item' });
   }
@@ -310,6 +373,7 @@ router.put('/inventory/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'])
 
 // ── POST /api/inventory/:id/transactions ─────────────────────────────────────
 class InsufficientStockError extends Error {}
+class AdjustmentUnitUnsupportedError extends Error {}
 
 router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
@@ -324,8 +388,8 @@ router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLI
   }
 
   const qty = Number(quantity);
-  if (isNaN(qty) || qty <= 0) {
-    return res.status(400).json({ error: 'quantity must be a positive number' });
+  if (!isValidQuantity(qty)) {
+    return res.status(400).json({ error: 'quantity must be a positive number', code: 'INVENTORY_QUANTITY_INVALID' });
   }
 
   const txType = String(type);
@@ -335,41 +399,16 @@ router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLI
     const accessibleIds = await getAccessibleClinicIds(req.user!);
     if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
 
-    const item = await prisma.inventoryItem.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
-    if (!item) return res.status(404).json({ error: 'Item not found' });
+    const itemForAuth = await prisma.inventoryItem.findFirst({ where: { id, clinicId: { in: accessibleIds } } });
+    if (!itemForAuth) return res.status(404).json({ error: 'Item not found' });
 
-    const clinicId = item.clinicId;
+    const clinicId = itemForAuth.clinicId;
 
-    let role;
-    try {
-      role = resolveUnitRole(item, requestedUnitId);
-    } catch (e) {
-      if (e instanceof InventoryUnitConversionError) return res.status(400).json({ error: e.message, code: e.code });
-      throw e;
-    }
-
-    // Adjustment sets an absolute target quantity — ambiguous in purchase-unit
-    // terms (target box count vs. target piece count), so it is restricted to
-    // the consumption/base unit (or the legacy free-text unit), same as before
-    // unit-conversion existed.
-    if (role === 'purchase' && txType === 'adjustment') {
-      return res.status(400).json({
-        error: 'Adjustment transactions must use the consumption unit, not the purchase unit',
-        code: 'INVENTORY_ADJUSTMENT_UNIT_UNSUPPORTED',
-      });
-    }
-
+    // Cross-clinic/active checks are read-only lookups on InventoryUnit rows
+    // and don't depend on this item's own state — safe ahead of the lock.
     if (requestedUnitId) {
       const unitErr = await validateUnitReference(clinicId, requestedUnitId);
       if (unitErr) return res.status(400).json(unitErr);
-    }
-
-    let quantityInBaseUnit: number;
-    try {
-      quantityInBaseUnit = computeQuantityInBaseUnit({ quantity: qty, role, conversionFactor: item.conversionFactor });
-    } catch (e) {
-      if (e instanceof InventoryUnitConversionError) return res.status(400).json({ error: e.message, code: e.code });
-      throw e;
     }
 
     // Validate treatmentCaseId belongs to clinic if provided
@@ -378,27 +417,53 @@ router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLI
       if (!tc) return res.status(400).json({ error: 'Invalid treatmentCaseId' });
     }
 
-    const transactionData = {
-      clinicId,
-      itemId: id,
-      type: txType,
-      quantity: qty,
-      unitCost: unitCost != null ? Number(unitCost) : null,
-      reason: reason ? String(reason) : null,
-      treatmentCaseId: treatmentCaseId ? String(treatmentCaseId) : null,
-      notes: notes ? String(notes) : null,
-      performedById: userId,
-      unitId: requestedUnitId,
-      quantityInBaseUnit,
-    };
-
-    // Atomic, race-safe stock mutation: 'in' uses Prisma's atomic increment
-    // (safe regardless of concurrent writers); 'out' uses an updateMany with a
-    // currentStock >= quantityInBaseUnit guard so two concurrent depletions
-    // cannot both succeed and drive stock negative (same pattern as
-    // treatmentStockDeduction.ts's deductInventoryRequirements); 'adjustment'
-    // sets the absolute target (unchanged last-write-wins semantics).
+    // Concurrency strategy: role resolution and quantity conversion are
+    // deliberately re-derived *inside* this transaction from a FOR UPDATE
+    // locked read, not from the itemForAuth snapshot above. PUT
+    // /inventory/:id's unit-config lock takes the same FOR UPDATE lock on
+    // this row before it commits a purchase/consumption/conversionFactor
+    // change — so if a concurrent PUT is in flight, this request either
+    // observes its fully-committed result (and resolves the role against
+    // it) or blocks until it does. Atomic, race-safe stock mutation: 'in'
+    // uses Prisma's atomic increment (safe regardless of concurrent
+    // writers); 'out' uses an updateMany with a currentStock >=
+    // quantityInBaseUnit guard so two concurrent depletions cannot both
+    // succeed and drive stock negative (same pattern as
+    // treatmentStockDeduction.ts's deductInventoryRequirements);
+    // 'adjustment' sets the absolute target (unchanged last-write-wins
+    // semantics).
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw<{ id: string }[]>(
+        Prisma.sql`SELECT id FROM "InventoryItem" WHERE id = ${id} AND "clinicId" = ${clinicId} FOR UPDATE`
+      );
+      const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id } });
+
+      const role = resolveUnitRole(item, requestedUnitId);
+
+      // Adjustment sets an absolute target quantity — ambiguous in
+      // purchase-unit terms (target box count vs. target piece count), so
+      // it is restricted to the consumption/base unit (or the legacy
+      // free-text unit), same as before unit-conversion existed.
+      if (role === 'purchase' && txType === 'adjustment') {
+        throw new AdjustmentUnitUnsupportedError();
+      }
+
+      const quantityInBaseUnit = computeQuantityInBaseUnit({ quantity: qty, role, conversionFactor: item.conversionFactor });
+
+      const transactionData = {
+        clinicId,
+        itemId: id,
+        type: txType,
+        quantity: qty,
+        unitCost: unitCost != null ? Number(unitCost) : null,
+        reason: reason ? String(reason) : null,
+        treatmentCaseId: treatmentCaseId ? String(treatmentCaseId) : null,
+        notes: notes ? String(notes) : null,
+        performedById: userId,
+        unitId: requestedUnitId,
+        quantityInBaseUnit,
+      };
+
       if (txType === 'out') {
         const updateResult = await tx.inventoryItem.updateMany({
           where: { id, currentStock: { gte: quantityInBaseUnit } },
@@ -413,16 +478,25 @@ router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLI
 
       const created = await tx.inventoryTransaction.create({ data: transactionData });
       const updatedItem = await tx.inventoryItem.findUniqueOrThrow({ where: { id }, select: { currentStock: true } });
-      return { created, newStock: updatedItem.currentStock };
+      return { created, newStock: updatedItem.currentStock, itemName: item.name, itemUnit: item.unit };
     });
 
     const typeLabel = txType === 'in' ? 'Giriş' : txType === 'out' ? 'Çıkış' : 'Düzeltme';
-    await logActivity({ clinicId, userId, action: 'update', entityType: 'inventory', entityId: id, description: `${item.name}: stok ${typeLabel} (${qty} ${item.unit})` });
+    await logActivity({ clinicId, userId, action: 'update', entityType: 'inventory', entityId: id, description: `${result.itemName}: stok ${typeLabel} (${qty} ${result.itemUnit})` });
 
     res.status(201).json({ transaction: result.created, newStock: result.newStock });
   } catch (err) {
     if (err instanceof InsufficientStockError) {
       return res.status(400).json({ error: 'Insufficient stock for this transaction', code: 'INVENTORY_INSUFFICIENT_STOCK' });
+    }
+    if (err instanceof AdjustmentUnitUnsupportedError) {
+      return res.status(400).json({
+        error: 'Adjustment transactions must use the consumption unit, not the purchase unit',
+        code: 'INVENTORY_ADJUSTMENT_UNIT_UNSUPPORTED',
+      });
+    }
+    if (err instanceof InventoryUnitConversionError) {
+      return res.status(400).json({ error: err.message, code: err.code });
     }
     console.error('Inventory transaction error:', err);
     res.status(500).json({ error: 'Failed to create inventory transaction' });
