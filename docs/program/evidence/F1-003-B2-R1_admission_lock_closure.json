@@ -31,6 +31,18 @@
     ],
     "mergeCommit": "2fc2d9b1985a33125d14251bca6077c149f589c4",
     "isAncestorAfterMerge": true,
+    "secondReconciliation": {
+      "reason": "origin/main advanced again mid-session after this task's own code/docs commits",
+      "originMainAtSecondFetch": "83701882bd0f48a34ca8f8b02beb8a779003e638",
+      "newlyMergedPrsSinceFirstReconciliation": [270, 279, 278],
+      "conflicts": 0,
+      "secondMergeCommit": "2aff72e744148a207723ff6e9c07619ddbc611cb",
+      "newDependencyPickedUp": "pdfkit / @types/pdfkit (from PR #270)",
+      "npmCiRerun": true,
+      "fullRegressionSuiteRerunAfterSecondMerge": true,
+      "fullRegressionSuiteResultAfterSecondMerge": "29/29 retention suite, 42/42 test:data-retention, exit 0 server:test:non-disposable, exit 0 test:runtime:postgres",
+      "isAncestorAfterSecondMerge": true
+    },
     "schemaChangedByMerge": false,
     "evidenceClassification": "CODE_PATH_CONFIRMED"
   },
