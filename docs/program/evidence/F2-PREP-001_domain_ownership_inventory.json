@@ -1,0 +1,3927 @@
+{
+  "task": "F2-PREP-001",
+  "title": "Modular Monolith Domain Ownership and Boundary Inventory — structured inventory",
+  "phase": "F2 PREPARATION — Modular Monolith Boundary Definition",
+  "type": "READ-ONLY ARCHITECTURE DISCOVERY (evidence files only, no code/schema/index change)",
+  "baseline": {
+    "branch": "origin/main",
+    "sha": "70b1690c1a656c95cead7b42812cc9ae6447bfb7",
+    "commit_date": "2026-08-01T22:13:44+02:00",
+    "commit_subject": "Merge pull request #275 from MustafaBasol/feature/external-calendar-outbound-sync-phase2",
+    "worktree": "E:\\Ek Gelir\\Siteler\\DisKlinikCRM-worktrees\\f2-prep-001-domain-ownership-inventory",
+    "branch_created": "docs/f2-prep-001-domain-ownership-inventory"
+  },
+  "methodology": "This inventory does NOT re-derive domain ownership from zero. It inherits the already repository-evidence-verified, F0-008-reviewed baseline produced by F0-003 (MODULE_MAP.md / F0-003_module_ownership_inventory.json, pinned to commit 368bcc8d) and F0-004 (DEPENDENCY_MAP.md / F0-004_dependency_inventory.json) — 37 domains, 88 Prisma models, an 833-edge cross-domain dependency matrix, already cited as evidence by ADR-001/ADR-014/ADR-015 (ACCEPTED / ACCEPTED_WITH_CONDITIONS). Re-deriving that evidence from zero would duplicate already-accepted work and risks silently contradicting it. Instead, this task (1) reconciled the F0-003/F0-004 baseline commit (368bcc8d) against the current origin/main HEAD (70b1690c) via targeted `git diff --stat`/`--name-status` scoped to server/src/routes, server/src/services, server/prisma/schema.prisma, src/pages, src/components; (2) classified every file/model touched by that diff; (3) added one new domain (External Calendar Integration) and extended three existing domains (Privacy/Consent/Retention/DSR, Platform Administration, Storage Abstraction) whose evidence changed; (4) added the 4-bucket Prisma-model ownership-category classification (DOMAIN_OWNED/SHARED_KERNEL_CANDIDATE/PLATFORM_INFRASTRUCTURE/OWNERSHIP_AMBIGUOUS) required by this task, which F0-003 did not use; (5) added the target-module-shape recommendation required by this task. All 37 inherited domains are unchanged in identity/name/models from the accepted MODULE_MAP.md unless explicitly noted in that domain's `evidenceSource` field.",
+  "codegraph_usage": {
+    "attempted_commands": [
+      "codegraph status",
+      "which codegraph"
+    ],
+    "result": "UNAVAILABLE — `codegraph` is not an installed CLI/PATH-resolvable tool in this environment (confirmed via `which codegraph` -> not found, and direct invocation -> \"command not found\"). This is at minimum the seventh independent confirmation of CodeGraph unavailability across this program (see CURRENT_PHASE.md F1-003-P2-R2 entry, \"sixth+ independent confirmation\").",
+    "fallback": "Bounded `Read`/`Grep`/`Glob`/`git diff` scoped strictly to server/src/{routes,services,jobs}, server/prisma/schema.prisma, server/src/index.ts (route mounting), server/package.json, package.json, src/pages, src/components — matching the F0-003 CODEGRAPH DISCIPLINE-scoped root set. No whole-project exploratory scan was run."
+  },
+  "paths_inspected": [
+    "AGENTS.md",
+    "docs/program/NORAMEDI_MASTER_TRACKER.md (F2-relevant entries via targeted grep, not full read — file exceeds single-read token budget)",
+    "docs/program/CURRENT_PHASE.md (head section — F1 status; F2 has no entries yet, confirmed via grep for \"F2-PREP\")",
+    "docs/program/phases/F2_MODULAR_BOUNDARIES.md",
+    "docs/program/MODULE_MAP.md",
+    "docs/program/DEPENDENCY_MAP.md",
+    "docs/program/ARCHITECTURE_DECISIONS.md (ADR-001/002/003/014/015 read in full)",
+    "docs/program/evidence/F0-003_MODULE_OWNERSHIP_EVIDENCE.md",
+    "docs/program/evidence/F0-003_module_ownership_inventory.json",
+    "package.json (root)",
+    "server/package.json",
+    "server/prisma/schema.prisma (model count + 11 new model definitions read directly)",
+    "server/src/index.ts (route mounting, lines ~178-260)",
+    "server/src/jobs/ (directory listing — scheduled-job inventory)",
+    "src/pages/platform/ (directory listing — new frontend page confirmation)",
+    "git diff --stat / --name-status 368bcc8d0a9f4c0ea185ca33d4dd1193d8def9ef..HEAD scoped to server/src/routes, server/src/services, server/prisma/schema.prisma, src/pages, src/components (164 files changed, delta since F0-003/F0-004 baseline)"
+  ],
+  "explicit_non_claims": [
+    "Does NOT claim module boundaries are enforced today — a single shared PrismaClient is used everywhere; no lint/CI rule blocks cross-domain imports (unchanged from F0-003/F0-004 finding).",
+    "Does NOT independently re-verify the 37-domain F0-003/F0-004 baseline's per-file evidence line-by-line — it is treated as already-accepted (ADR-001/014/015) prior evidence and reconciled only against the diff since its pinned commit.",
+    "Does NOT claim the new External Calendar Integration domain or the PRV/PAD/STG deltas have been through the same F0-008-style external-review cycle as the original 37 domains — flagged explicitly per-domain as this task's own unreviewed classification.",
+    "Does NOT audit raw SQL statement-by-statement for tenant-predicate correctness (F0-003/F0-004's own stated deferral, unchanged).",
+    "Does NOT independently re-scan bridge-agent/ or windows-bridge/ internals (out of CODEGRAPH DISCIPLINE scope, unchanged from F0-003).",
+    "Does NOT propose database-per-domain — Prisma/PostgreSQL remains shared per ADR-001/ADR-003 (ACCEPTED/ACCEPTED_WITH_CONDITIONS).",
+    "Does NOT move any file, rename any code, edit server/prisma/schema.prisma, or touch NORAMEDI_MASTER_TRACKER.md / CURRENT_PHASE.md / any phase document / evidence/README.md, per this task's explicit shared-document restriction.",
+    "Does NOT re-run or re-verify F0-004's 833-edge dependency matrix for the 37 inherited domains — cited as-is. The new External Calendar Integration domain's cross-domain edges are NOT yet coded into that matrix (flagged as a follow-up)."
+  ],
+  "domains": [
+    {
+      "code": "IDA",
+      "id": "core-identity-access",
+      "proposedCanonicalDomainName": "Identity and Access",
+      "classification": "core platform",
+      "businessResponsibility": "middleware/auth.ts is imported by nearly every route file (mounted globally at server/src/index.ts:193) — high blast radius core dependency, not a violation.",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "partially bounded",
+      "routes": [
+        "server/src/routes/auth.ts"
+      ],
+      "services": [
+        "server/src/middleware/auth.ts",
+        "server/src/middleware/csrf.ts",
+        "server/src/utils/authFallback.ts",
+        "server/src/utils/totp.ts",
+        "server/src/utils/passwordResetToken.ts",
+        "server/src/utils/passwordStepUp.ts",
+        "server/src/utils/sessionCookies.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/auth.ts"
+      ],
+      "ownedPrismaModels": [
+        "User",
+        "PasswordResetToken",
+        "EmailVerificationToken"
+      ],
+      "ownedFrontend": [
+        "src/pages/Login.tsx",
+        "src/pages/Register.tsx",
+        "src/pages/ForgotPassword.tsx",
+        "src/pages/ResetPassword.tsx",
+        "src/pages/VerifyEmail.tsx",
+        "src/pages/ResendVerification.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "MEDIUM-HIGH (organization-scoped data)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "HIGH (high fan-in — root tenant/platform center, expected)",
+      "publicContractCandidates": [
+        "AuthenticatedUserContext (already implicit via middleware/auth.ts req.user)"
+      ],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": "Whether User.role-based checks belong here or in core-permissions-roles is not sharply separated in current code; both live partly in middleware/auth.ts.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-identity-access', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "ORG",
+      "id": "core-org-clinic-membership",
+      "proposedCanonicalDomainName": "Organization / Clinic / User Membership",
+      "classification": "core platform",
+      "businessResponsibility": "Plan model has no clinicId/organizationId — global reference data.",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "partially bounded",
+      "routes": [
+        "server/src/routes/clinicRegistration.ts",
+        "server/src/routes/organizationBranches.ts",
+        "server/src/routes/organizationDashboard.ts",
+        "server/src/routes/users.ts",
+        "server/src/routes/usersImport.ts"
+      ],
+      "services": [
+        "server/src/services/clinicOperatingPreferences.ts",
+        "server/src/middleware/planLimits.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/clinicRegistration.ts",
+        "server/src/routes/organizationBranches.ts",
+        "server/src/routes/organizationDashboard.ts",
+        "server/src/routes/users.ts",
+        "server/src/routes/usersImport.ts",
+        "server/src/services/clinicOperatingPreferences.ts"
+      ],
+      "ownedPrismaModels": [
+        "Organization",
+        "Clinic",
+        "ClinicInvitation",
+        "ClinicWorkingHours",
+        "UserClinic",
+        "Plan"
+      ],
+      "ownedFrontend": [
+        "src/pages/Branches.tsx",
+        "src/pages/OrganizationDashboard.tsx",
+        "src/pages/Users.tsx",
+        "src/components/ClinicSwitcher.tsx",
+        "src/components/UserClinicAssignmentModal.tsx",
+        "src/components/UserImportModal.tsx",
+        "src/components/UserList.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "HIGH (high fan-in — root tenant/platform center, expected)",
+      "publicContractCandidates": [
+        "ClinicDirectory / OrganizationDirectory (read-only reference lookup for other domains)"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/clinicOperatingPreferences.ts"
+      ],
+      "ownershipAmbiguity": "Plan really straddles this domain and a future Entitlements domain; kept here because it is FK'd from Clinic/Organization and has no dedicated routes of its own.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-org-clinic-membership', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "TSC",
+      "id": "core-tenant-security",
+      "proposedCanonicalDomainName": "Tenant Security and Scope",
+      "classification": "core platform",
+      "businessResponsibility": "DEPENDENCY_MAP.md §8 already names this class of helper as a high-risk shared component to track in F0-004.",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "clearly bounded",
+      "routes": [],
+      "services": [
+        "server/src/middleware/clinicAccess.ts",
+        "server/src/utils/clinicScope.ts",
+        "server/src/utils/tenantGuard.ts",
+        "server/src/utils/relationGuards.ts"
+      ],
+      "dataAccessLocations": [],
+      "ownedPrismaModels": [],
+      "ownedFrontend": [],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "MEDIUM (core platform dependency, narrow surface)",
+      "publicContractCandidates": [
+        "already a public-ish contract in practice: validateAndGetClinicIdScope-style helpers are imported widely; a formal public export would harden this"
+      ],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": false,
+        "infrastructure": false,
+        "http": false,
+        "public": true,
+        "internal": false,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": false,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-tenant-security', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "PRM",
+      "id": "core-permissions-roles",
+      "proposedCanonicalDomainName": "Permissions / Roles",
+      "classification": "core platform",
+      "businessResponsibility": "role checks are scattered inline across route files in addition to utils/roles.ts — not a single bounded module today.",
+      "criticality": "high-risk",
+      "maturity": "mixed",
+      "routes": [],
+      "services": [
+        "server/src/utils/roles.ts"
+      ],
+      "dataAccessLocations": [],
+      "ownedPrismaModels": [],
+      "ownedFrontend": [],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [
+        "PermissionCheck service — currently role-string checks are inlined per-route rather than a single contract"
+      ],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": "Extent of inline (non-utils/roles.ts) permission logic was not exhaustively enumerated — flagged for F0-004 import-evidence pass.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": false,
+        "infrastructure": false,
+        "http": false,
+        "public": true,
+        "internal": false,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": false,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-permissions-roles', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "AUD",
+      "id": "core-audit-activity",
+      "proposedCanonicalDomainName": "Audit and Activity",
+      "classification": "core platform",
+      "businessResponsibility": "ActivityLog is clinic-scoped/FK-heavy; AuditLog is organization-scoped and deliberately separate per schema comment at server/prisma/schema.prisma:1521.",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "clearly bounded",
+      "routes": [],
+      "services": [
+        "server/src/utils/activity.ts",
+        "server/src/utils/auditLog.ts"
+      ],
+      "dataAccessLocations": [],
+      "ownedPrismaModels": [
+        "ActivityLog",
+        "AuditLog"
+      ],
+      "ownedFrontend": [],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "LOW (operational/audit data only)",
+      "couplingLevel": "HIGH (high fan-in — root tenant/platform center, expected)",
+      "publicContractCandidates": [
+        "AuditService.record() — already close to a de-facto contract via utils/auditLog.ts"
+      ],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": false,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": false,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-audit-activity', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "PRV",
+      "id": "core-privacy-consent-retention-dsr",
+      "proposedCanonicalDomainName": "Privacy / Consent / Retention / Data Subject Rights",
+      "classification": "core platform",
+      "businessResponsibility": "This is the most actively-developed domain in the repo (KVKK-CRIT-003/HIGH-004 work); also owns legalHold fields on PatientAttachment and ImagingStudy which live physically in other domains' tables — a legitimate, documented cross-domain concern (see cross_domain notes below).",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "mixed",
+      "routes": [
+        "server/src/routes/patientPrivacy.ts",
+        "server/src/routes/gdprExport.ts",
+        "server/src/routes/clinicBulkExport.ts",
+        "server/src/routes/clinicLegalProfile.ts",
+        "server/src/routes/publicClinicKvkk.ts",
+        "server/src/routes/communicationPreferences.ts"
+      ],
+      "services": [
+        "server/src/services/privacy/clinicBulkExportConfig.ts",
+        "server/src/services/privacy/clinicBulkExportFieldAllowlists.ts",
+        "server/src/services/privacy/clinicBulkExportPackage.ts",
+        "server/src/services/privacy/clinicBulkExportPasswordAttempts.ts",
+        "server/src/services/privacy/dataRetentionPolicy.ts",
+        "server/src/services/privacy/deletionReviewInventory.ts",
+        "server/src/services/privacy/orphanFileInspection.ts",
+        "server/src/services/privacy/patientAnonymization.ts",
+        "server/src/services/privacy/patientPrivacyExportPackage.ts",
+        "server/src/services/privacy/redaction.ts",
+        "server/src/services/publicBookingNoticeEvidence.ts",
+        "server/src/services/channelConsentGate.ts",
+        "server/src/utils/encryption.ts",
+        "server/src/utils/secrets.ts",
+        "server/src/services/communicationConsent/communicationConsentAdmin.ts",
+        "server/src/services/communicationConsent/communicationConsentAuditLogging.ts",
+        "server/src/services/communicationConsent/communicationConsentAuditReport.ts",
+        "server/src/services/communicationConsent/communicationConsentConflictTracker.ts",
+        "server/src/services/communicationConsent/communicationConsentPolicy.ts",
+        "server/src/services/communicationConsent/consentEvidenceSanitizer.ts",
+        "server/src/services/communicationConsent/enforcementConfig.ts",
+        "server/src/services/communicationConsent/legacyConsentCorrection.ts",
+        "server/src/services/communicationConsent/legacyReconciliationResolver.ts",
+        "server/src/services/communicationConsent/taxonomy.ts",
+        "server/src/services/privacy/dataRetentionManualRunAudit.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/patientPrivacy.ts",
+        "server/src/routes/gdprExport.ts",
+        "server/src/routes/clinicBulkExport.ts",
+        "server/src/routes/clinicLegalProfile.ts",
+        "server/src/routes/publicClinicKvkk.ts",
+        "server/src/services/privacy/clinicBulkExportConfig.ts",
+        "server/src/services/privacy/clinicBulkExportFieldAllowlists.ts",
+        "server/src/services/privacy/clinicBulkExportPackage.ts",
+        "server/src/services/privacy/clinicBulkExportPasswordAttempts.ts",
+        "server/src/services/privacy/dataRetentionPolicy.ts",
+        "server/src/services/privacy/deletionReviewInventory.ts",
+        "server/src/services/privacy/orphanFileInspection.ts",
+        "server/src/services/privacy/patientAnonymization.ts",
+        "server/src/services/privacy/patientPrivacyExportPackage.ts",
+        "server/src/services/privacy/redaction.ts",
+        "server/src/services/publicBookingNoticeEvidence.ts",
+        "server/src/services/channelConsentGate.ts"
+      ],
+      "ownedPrismaModels": [
+        "PatientPrivacyRequest",
+        "ClinicLegalProfile",
+        "PublicBookingNoticeEvidence",
+        "ChannelConsentLog",
+        "PatientPrivacyExportArchive",
+        "ClinicBulkExportArchive",
+        "ClinicBulkExportPasswordAttempt",
+        "PatientCommunicationPreference",
+        "PatientCommunicationConsentEvent",
+        "CommunicationConsentConflictBucket",
+        "PatientLegacyConsentCorrection"
+      ],
+      "ownedFrontend": [
+        "src/pages/clinic/ClinicKvkkPublicPage.tsx",
+        "src/pages/legal/CommunicationsNoticePage.tsx",
+        "src/pages/legal/ConsentTemplatePage.tsx",
+        "src/pages/legal/CookiePolicyPage.tsx",
+        "src/pages/legal/DataSubjectRequestPage.tsx",
+        "src/pages/legal/LegalCenterPage.tsx",
+        "src/pages/legal/PrivacyNoticePage.tsx",
+        "src/pages/platform/PlatformPrivacy.tsx",
+        "src/components/PatientPrivacyPanel.tsx",
+        "src/components/settings/ClinicBulkExportSection.tsx",
+        "src/components/settings/clinicBulkExportSelectionHelpers.ts",
+        "src/components/settings/ClinicKvkkSection.tsx",
+        "src/components/legal/LegalLayout.tsx",
+        "src/components/CommunicationPreferencesPanel.tsx",
+        "src/components/LegacyConsentCorrectionHistory.tsx",
+        "src/components/LegacyConsentCorrectionModal.tsx",
+        "src/components/communicationConsentMatrixHelpers.ts"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [
+        "jobs/dataRetentionCleanupJob.ts",
+        "jobs/patientPrivacyExportCleanupJob.ts",
+        "jobs/clinicBulkExportCleanupJob.ts",
+        "jobs/clinicBulkExportWorker.ts",
+        "jobs/publicBookingNoticeEvidenceCleanupJob.ts"
+      ],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "HIGH (high fan-out — DEPENDENCY_MAP.md §10.3, \"god module\" signature)",
+      "publicContractCandidates": [
+        "Consent/Privacy evidence service (as named in task spec) — currently split across channelConsentGate.ts, redaction.ts, and per-flow ad hoc checks"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/privacy/clinicBulkExportConfig.ts",
+        "server/src/services/privacy/clinicBulkExportFieldAllowlists.ts",
+        "server/src/services/privacy/clinicBulkExportPackage.ts",
+        "server/src/services/privacy/clinicBulkExportPasswordAttempts.ts",
+        "server/src/services/privacy/dataRetentionPolicy.ts",
+        "server/src/services/privacy/deletionReviewInventory.ts",
+        "server/src/services/privacy/orphanFileInspection.ts",
+        "server/src/services/privacy/patientAnonymization.ts",
+        "server/src/services/privacy/patientPrivacyExportPackage.ts",
+        "server/src/services/privacy/redaction.ts",
+        "server/src/services/publicBookingNoticeEvidence.ts",
+        "server/src/services/channelConsentGate.ts"
+      ],
+      "ownershipAmbiguity": "An uncommitted, in-progress services/communicationConsent/ directory and 2 new Prisma models were observed in the working tree; excluded from this evidence-based map (see notes.uncommitted_working_tree_drift).",
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": true,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": "reads/writes PatientAttachment.legalHold (clinical-patients-owned table) and ImagingStudy.legalHold (imaging-server-viewer-owned table) directly — documented in schema comments as intentional KVKK lifecycle fields, not an accidental violation, but a candidate for a future explicit LegalHold contract per module-boundary principles.",
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-privacy-consent-retention-dsr', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001 | DELTA since baseline: F0-003's own §\"uncertainty\" note flagged an uncommitted communicationConsent/ working-tree directory and excluded it — that work is now committed (KVKK-HIGH-007/008 lineage) and is folded into this domain's evidence by F2-PREP-001, git-diff-confirmed against 368bcc8d..70b1690c."
+    },
+    {
+      "code": "SEC",
+      "id": "core-security-incident-detection",
+      "proposedCanonicalDomainName": "Security Incident Response and Detection",
+      "classification": "core platform",
+      "businessResponsibility": "Added by PR #167 (368bcc8, merged 2026-07-18), deliberately kept separate from OperationalEvent per schema comment at server/prisma/schema.prisma:2670 (org-id nullability reasoning).",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/platformSecurityIncidents.ts"
+      ],
+      "services": [
+        "server/src/services/security/securityDetectionRules.ts",
+        "server/src/services/security/securityIncidentService.ts",
+        "server/src/services/security/securitySignalService.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/platformSecurityIncidents.ts",
+        "server/src/services/security/securityDetectionRules.ts",
+        "server/src/services/security/securityIncidentService.ts",
+        "server/src/services/security/securitySignalService.ts"
+      ],
+      "ownedPrismaModels": [
+        "SecuritySignalEvent",
+        "SecurityIncident",
+        "SecurityIncidentActivity"
+      ],
+      "ownedFrontend": [
+        "src/pages/platform/PlatformSecurityIncidents.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW (operational/audit data only)",
+      "couplingLevel": "MEDIUM (core platform dependency, narrow surface)",
+      "publicContractCandidates": [
+        "SecuritySignalIngest command — already close to bounded via securitySignalService.ts"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/security/securityDetectionRules.ts",
+        "server/src/services/security/securityIncidentService.ts",
+        "server/src/services/security/securitySignalService.ts"
+      ],
+      "ownershipAmbiguity": "This is the most recently merged domain; only 3 commits of history exist — maturity may change quickly.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-security-incident-detection', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "CFG",
+      "id": "core-config-secrets",
+      "proposedCanonicalDomainName": "Configuration and Secrets",
+      "classification": "core platform",
+      "businessResponsibility": "utils/secrets.ts and utils/encryption.ts are imported across many domains (WhatsApp/Instagram token encryption, imaging bridge tokens, SMS provider credentials) — high blast radius shared primitive.",
+      "criticality": "high-risk",
+      "maturity": "partially bounded",
+      "routes": [
+        "server/src/routes/settings.ts"
+      ],
+      "services": [
+        "server/src/services/platformSettings.ts",
+        "server/src/utils/secrets.ts",
+        "server/src/utils/encryption.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/settings.ts",
+        "server/src/services/platformSettings.ts"
+      ],
+      "ownedPrismaModels": [
+        "Setting",
+        "PlatformSetting"
+      ],
+      "ownedFrontend": [
+        "src/pages/Settings.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "LOW (operational/audit data only)",
+      "couplingLevel": "MEDIUM (core platform dependency, narrow surface)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [
+        "server/src/services/platformSettings.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-config-secrets', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "OBS",
+      "id": "core-observability-ops-events",
+      "proposedCanonicalDomainName": "Observability / Operational Events",
+      "classification": "core platform",
+      "businessResponsibility": "operationalMonitoring.ts uses raw SQL (see hotspots/raw_sql_locations) for aggregate queries.",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/operationalMonitoring.ts"
+      ],
+      "services": [
+        "server/src/services/operationalEventService.ts",
+        "server/src/utils/logger.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/operationalMonitoring.ts",
+        "server/src/services/operationalEventService.ts"
+      ],
+      "ownedPrismaModels": [
+        "OperationalEvent"
+      ],
+      "ownedFrontend": [
+        "src/pages/platform/PlatformSystem.tsx",
+        "src/pages/Operations.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "MEDIUM-HIGH (organization-scoped data)",
+      "kvkkSensitivity": "LOW (operational/audit data only)",
+      "couplingLevel": "MEDIUM (core platform dependency, narrow surface)",
+      "publicContractCandidates": [
+        "OperationalEvent.emit() — already a de-facto contract via operationalEventService.ts"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/operationalEventService.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-observability-ops-events', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "EVQ",
+      "id": "core-shared-events-queue-idempotency",
+      "proposedCanonicalDomainName": "Shared Events / Queue Contracts / Idempotency",
+      "classification": "core platform",
+      "businessResponsibility": "No real queue/broker exists yet (ADR-006/ADR-007 both PROPOSED); this is an in-process job-lock + idempotency-ledger pattern, not a transactional outbox.",
+      "criticality": "high-risk",
+      "maturity": "partially bounded",
+      "routes": [],
+      "services": [
+        "server/src/services/messagingInboundIdempotency.ts",
+        "server/src/utils/jobLock.ts",
+        "server/src/utils/concurrency.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/services/messagingInboundIdempotency.ts"
+      ],
+      "ownedPrismaModels": [
+        "MessagingInboundEvent",
+        "JobLock"
+      ],
+      "ownedFrontend": [],
+      "externalProviders": [],
+      "scheduledJobs": [
+        "jobs/inboundEventRetryJob.ts",
+        "jobs/startBackgroundJobs.ts (bootstrap, schedules all jobs below)"
+      ],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "LOW (global/platform reference data, not tenant data)",
+      "kvkkSensitivity": "LOW (operational/audit data only)",
+      "couplingLevel": "MEDIUM (core platform dependency, narrow surface)",
+      "publicContractCandidates": [
+        "already an explicit design intent per schema comment: MessagingInboundEvent.connectionId is documented as provider-agnostic for future channels"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/messagingInboundIdempotency.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": false,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": true,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": false,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-shared-events-queue-idempotency', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "STG",
+      "id": "core-storage-abstraction",
+      "proposedCanonicalDomainName": "Storage Abstraction",
+      "classification": "core platform",
+      "businessResponsibility": "ADR-008 (object-storage abstraction) is PROPOSED, dependent on F0-011; current fileStorage.ts is local-filesystem-based per F0-002 Stage A evidence (not independently re-verified here).",
+      "criticality": "high-risk",
+      "maturity": "partially bounded",
+      "routes": [],
+      "services": [
+        "server/src/services/fileStorage.ts",
+        "server/src/utils/fileSignature.ts",
+        "server/src/utils/filePreview.ts",
+        "server/src/services/fileBackupService.ts",
+        "server/src/services/fileBackupDestination.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/services/fileStorage.ts"
+      ],
+      "ownedPrismaModels": [
+        "FileBackupRun",
+        "FileBackupEntry"
+      ],
+      "ownedFrontend": [
+        "src/components/FilePreviewModal.tsx"
+      ],
+      "externalProviders": [
+        "local VPS filesystem (per F0-002/F0-011 evidence — no S3/object-storage provider configured in production); FileBackupDestination adds an off-host backup destination abstraction"
+      ],
+      "scheduledJobs": [
+        "jobs/fileBackupJob.ts (new since F0-003 baseline)"
+      ],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "MEDIUM (core platform dependency, narrow surface)",
+      "publicContractCandidates": [
+        "StoragePort (as named in task spec) — fileStorage.ts is the closest existing candidate",
+        "FileBackupPort (reads via existing StoragePort candidate/fileStorage.ts source keys, writes to a new off-host destination)"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/fileStorage.ts"
+      ],
+      "ownershipAmbiguity": "Provider abstraction maturity not independently re-verified in this task; deferred to F0-011.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": false,
+        "infrastructure": false,
+        "http": false,
+        "public": true,
+        "internal": false,
+        "backgroundJobs": true,
+        "providerAdapters": true,
+        "dtoSchemaBoundary": false,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-storage-abstraction', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001 | DELTA since baseline: FileBackupRun/FileBackupEntry + fileBackupService.ts/fileBackupDestination.ts + jobs/fileBackupJob.ts are new since 368bcc8d — this is the F0-011/ADR-013 \"gap-C\" (object storage / file-tree backup) remediation referenced as a design gap in ARCHITECTURE_DECISIONS.md ADR-013."
+    },
+    {
+      "code": "NTF",
+      "id": "core-notifications",
+      "proposedCanonicalDomainName": "Notifications",
+      "classification": "core platform",
+      "businessResponsibility": "In-app notifications only (Notification model) — distinct from outbound messaging (SentMessage/SmsMessage), which belongs to Messaging domains.",
+      "criticality": "normal",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/notifications.ts"
+      ],
+      "services": [
+        "server/src/services/notificationPreferences.ts",
+        "server/src/services/taskAssignmentNotifier.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/notifications.ts",
+        "server/src/services/notificationPreferences.ts",
+        "server/src/services/taskAssignmentNotifier.ts"
+      ],
+      "ownedPrismaModels": [
+        "Notification"
+      ],
+      "ownedFrontend": [
+        "src/components/NotificationBell.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "LOW (operational/audit data only)",
+      "couplingLevel": "MEDIUM (core platform dependency, narrow surface)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [
+        "server/src/services/notificationPreferences.ts",
+        "server/src/services/taskAssignmentNotifier.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-notifications', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "PAD",
+      "id": "core-platform-administration",
+      "proposedCanonicalDomainName": "Platform Administration",
+      "classification": "platform capability",
+      "businessResponsibility": "routes/platformAdmin.ts is a 1201-line, 40-route hotspot spanning clinic/org/plan/backup/SMS-provider administration — see hotspots.",
+      "criticality": "high-risk",
+      "maturity": "mixed",
+      "routes": [
+        "server/src/routes/platformAdmin.ts"
+      ],
+      "services": [
+        "server/src/services/backupService.ts",
+        "server/src/middleware/platformAuth.ts",
+        "server/src/services/platformAdminAudit.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/platformAdmin.ts",
+        "server/src/services/backupService.ts"
+      ],
+      "ownedPrismaModels": [
+        "PlatformAdmin",
+        "PlatformSmsProvider",
+        "PlatformAdminAuditEvent"
+      ],
+      "ownedFrontend": [
+        "src/pages/PlatformAdmin.tsx",
+        "src/pages/platform/PlatformBackups.tsx",
+        "src/pages/platform/PlatformClinics.tsx",
+        "src/pages/platform/PlatformDashboard.tsx",
+        "src/pages/platform/PlatformLogin.tsx",
+        "src/pages/platform/PlatformOrganizations.tsx",
+        "src/pages/platform/PlatformPlans.tsx",
+        "src/pages/platform/PlatformUsers.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "LOW (global/platform reference data, not tenant data)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "HIGH (high fan-out — DEPENDENCY_MAP.md §10.3, \"god module\" signature)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [
+        "server/src/services/backupService.ts"
+      ],
+      "ownershipAmbiguity": "Exact sub-boundaries inside platformAdmin.ts (clinics vs. orgs vs. plans vs. SMS-provider admin) were not separately traced route-by-route; flagged as a hotspot for F0-004/strangler planning.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'core-platform-administration', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001 | DELTA since baseline: PlatformAdminAuditEvent + platformAdminAudit.ts are new since 368bcc8d (git-diff-confirmed)."
+    },
+    {
+      "code": "PAT",
+      "id": "clinical-patients",
+      "proposedCanonicalDomainName": "Patients",
+      "classification": "core clinical",
+      "businessResponsibility": "Patient is the single most cross-referenced model in the schema (18+ inbound relations) — prime candidate for a first public query contract.",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "partially bounded",
+      "routes": [
+        "server/src/routes/patients.ts",
+        "server/src/routes/patientsImport.ts",
+        "server/src/routes/attachments.ts"
+      ],
+      "services": [
+        "server/src/utils/patientName.ts",
+        "server/src/utils/excelImport.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/patients.ts",
+        "server/src/routes/patientsImport.ts",
+        "server/src/routes/attachments.ts"
+      ],
+      "ownedPrismaModels": [
+        "Patient",
+        "PatientAttachment",
+        "PatientClinic"
+      ],
+      "ownedFrontend": [
+        "src/pages/Patients.tsx",
+        "src/pages/PatientDetail.tsx",
+        "src/components/PatientForm.tsx",
+        "src/components/PatientImportModal.tsx",
+        "src/components/GlobalSearch.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (health/special-category data present)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [
+        "PatientDirectory / PatientReferenceQuery (as named in task spec) — heavily consumed by Appointments, TreatmentCases, Messaging, Imaging, Lab, Finance domains today via direct Prisma reads"
+      ],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'clinical-patients', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "APT",
+      "id": "clinical-appointments-availability",
+      "proposedCanonicalDomainName": "Appointments and Availability",
+      "classification": "core clinical",
+      "businessResponsibility": "AppointmentRequest is written directly by clinical-public-booking, messaging-whatsapp and messaging-instagram (source field: whatsapp/instagram/public), making it a natural first cross-domain command/contract candidate.",
+      "criticality": "regulatory/tenant-critical",
+      "maturity": "partially bounded",
+      "routes": [
+        "server/src/routes/appointments.ts",
+        "server/src/routes/appointmentRequests.ts",
+        "server/src/routes/schedules.ts",
+        "server/src/routes/contactRequests.ts",
+        "server/src/routes/services.ts",
+        "server/src/routes/noShows.ts"
+      ],
+      "services": [
+        "server/src/services/appointments/appointmentAvailabilityService.ts",
+        "server/src/services/appointmentRequestSafety.ts",
+        "server/src/services/appointmentRequestNotification.ts",
+        "server/src/utils/noShowFollowUp.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/appointments.ts",
+        "server/src/routes/appointmentRequests.ts",
+        "server/src/routes/schedules.ts",
+        "server/src/routes/contactRequests.ts",
+        "server/src/routes/services.ts",
+        "server/src/routes/noShows.ts",
+        "server/src/services/appointments/appointmentAvailabilityService.ts",
+        "server/src/services/appointmentRequestSafety.ts",
+        "server/src/services/appointmentRequestNotification.ts"
+      ],
+      "ownedPrismaModels": [
+        "Appointment",
+        "AppointmentType",
+        "AppointmentRequest",
+        "DoctorAvailability",
+        "DoctorOffDay",
+        "ContactRequest"
+      ],
+      "ownedFrontend": [
+        "src/pages/Appointments.tsx",
+        "src/pages/AppointmentDetail.tsx",
+        "src/pages/AppointmentRequests.tsx",
+        "src/pages/ClinicSchedule.tsx",
+        "src/pages/ContactRequests.tsx",
+        "src/pages/NoShows.tsx",
+        "src/components/AppointmentForm.tsx",
+        "src/components/CalendarTimelineView.tsx",
+        "src/components/DoctorAvailabilityManager.tsx",
+        "src/components/MultiDoctorDayView.tsx",
+        "src/components/ServiceList.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "HIGH",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "HIGH (high fan-in — root tenant/platform center, expected)",
+      "publicContractCandidates": [
+        "AppointmentReferenceQuery",
+        "AppointmentCompleted event"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/appointments/appointmentAvailabilityService.ts",
+        "server/src/services/appointmentRequestSafety.ts",
+        "server/src/services/appointmentRequestNotification.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": "AppointmentRequest and ContactRequest rows are created directly (Prisma) by messaging-whatsapp/messaging-instagram route and service code rather than through an Appointments-owned command — classified as transitional, not yet a violation given no contract exists to violate.",
+      "evidenceSource": "F0-003/F0-004 baseline domain 'clinical-appointments-availability', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "TRC",
+      "id": "clinical-treatment-cases",
+      "proposedCanonicalDomainName": "Treatment Cases",
+      "classification": "core clinical",
+      "businessResponsibility": "TreatmentPackageApplication triggers stock deduction in the Inventory domain (services/treatmentStockDeduction.ts) — legitimate business collaboration, currently direct-call rather than event-based.",
+      "criticality": "elevated",
+      "maturity": "partially bounded",
+      "routes": [
+        "server/src/routes/treatmentCases.ts",
+        "server/src/routes/treatmentPackages.ts"
+      ],
+      "services": [],
+      "dataAccessLocations": [
+        "server/src/routes/treatmentCases.ts",
+        "server/src/routes/treatmentPackages.ts"
+      ],
+      "ownedPrismaModels": [
+        "TreatmentCase",
+        "TreatmentPackage",
+        "TreatmentPackageItem",
+        "TreatmentPackageApplication"
+      ],
+      "ownedFrontend": [
+        "src/pages/TreatmentCases.tsx",
+        "src/pages/TreatmentCaseDetail.tsx",
+        "src/components/TreatmentCaseForm.tsx",
+        "src/components/TreatmentPackageList.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (health/special-category data present)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [
+        "ProcedureCompleted event (shared with clinical-dental-chart-procedures)"
+      ],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'clinical-treatment-cases', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "DEN",
+      "id": "clinical-dental-chart-procedures",
+      "proposedCanonicalDomainName": "Dental Chart / Procedures",
+      "classification": "core clinical",
+      "businessResponsibility": "treatmentStockDeduction.ts sits here but writes InventoryTransaction rows directly — cross-domain write into Inventory-owned data.",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/dentalChart.ts",
+        "server/src/routes/treatmentPlanProcedures.ts"
+      ],
+      "services": [
+        "server/src/services/treatmentStockDeduction.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/dentalChart.ts",
+        "server/src/routes/treatmentPlanProcedures.ts",
+        "server/src/services/treatmentStockDeduction.ts"
+      ],
+      "ownedPrismaModels": [
+        "ToothRecord",
+        "TreatmentPlanProcedure"
+      ],
+      "ownedFrontend": [
+        "src/components/DentalChart.tsx",
+        "src/components/dentalChart.types.ts",
+        "src/components/DentalChartFullscreenModal.tsx",
+        "src/components/ToothDetailPanel.tsx",
+        "src/components/ToothIcon.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (health/special-category data present)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [
+        "ProcedureCompleted event (as named in task spec)"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/treatmentStockDeduction.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": "services/treatmentStockDeduction.ts writes InventoryTransaction (Inventory-owned model) directly — transitional, candidate for an Inventory stock-adjustment command per task spec's contract list.",
+      "evidenceSource": "F0-003/F0-004 baseline domain 'clinical-dental-chart-procedures', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "PUB",
+      "id": "clinical-public-booking",
+      "proposedCanonicalDomainName": "Public Booking",
+      "classification": "core clinical",
+      "businessResponsibility": "publicBooking.ts writes AppointmentRequest and PublicBookingNoticeEvidence directly — no dedicated model of its own; it is a channel/entry-point domain over Appointments + Privacy data.",
+      "criticality": "elevated",
+      "maturity": "partially bounded",
+      "routes": [
+        "server/src/routes/publicBooking.ts"
+      ],
+      "services": [],
+      "dataAccessLocations": [
+        "server/src/routes/publicBooking.ts"
+      ],
+      "ownedPrismaModels": [],
+      "ownedFrontend": [
+        "src/pages/BookingWidget.tsx",
+        "src/pages/bookingWidgetHelpers.ts",
+        "src/pages/LandingPage.tsx",
+        "src/components/landing/* (marketing surfaces around the public booking/landing funnel)"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": "Whether this deserves an independently-owned model set or should formally be modeled as an entry-point over clinical-appointments-availability is unresolved — flagged for ADR-015 input.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": false,
+        "infrastructure": false,
+        "http": true,
+        "public": true,
+        "internal": false,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'clinical-public-booking', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "PAY",
+      "id": "clinical-basic-payments",
+      "proposedCanonicalDomainName": "Basic Payments",
+      "classification": "core clinical",
+      "businessResponsibility": "PractitionerEarning reads Payment directly (finance-advanced-compensation reading clinical-basic-payments data) — legitimate business collaboration.",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/payments.ts",
+        "server/src/routes/paymentPlans.ts"
+      ],
+      "services": [
+        "server/src/utils/overdueInstallments.ts",
+        "server/src/utils/overdueReceivables.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/payments.ts",
+        "server/src/routes/paymentPlans.ts"
+      ],
+      "ownedPrismaModels": [
+        "Payment",
+        "PaymentPlan",
+        "PaymentPlanInstallment"
+      ],
+      "ownedFrontend": [
+        "src/pages/Payments.tsx",
+        "src/pages/PaymentPlans.tsx",
+        "src/components/PaymentForm.tsx",
+        "src/components/PaymentPlanForm.tsx",
+        "src/components/ReceiptModal.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "MEDIUM (financial data, KVKK-adjacent)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [
+        "PaymentReceived event (as named in task spec)"
+      ],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'clinical-basic-payments', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "TSK",
+      "id": "clinical-tasks-followup",
+      "proposedCanonicalDomainName": "Tasks and Follow-up",
+      "classification": "core clinical",
+      "businessResponsibility": "Task is referenced by RecallAction (messaging-automation-recall-followup) — legitimate cross-domain reference (taskId FK), not a listed domain in the task spec's required list but added because AGENTS.md names 'Follow-up tasks' as a top-level MVP entity and a distinct Task model/route/page exists.",
+      "criticality": "normal",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/tasks.ts"
+      ],
+      "services": [],
+      "dataAccessLocations": [
+        "server/src/routes/tasks.ts"
+      ],
+      "ownedPrismaModels": [
+        "Task"
+      ],
+      "ownedFrontend": [
+        "src/pages/Tasks.tsx",
+        "src/components/TaskForm.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "LOW (operational/audit data only)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'clinical-tasks-followup', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "WHA",
+      "id": "messaging-whatsapp",
+      "proposedCanonicalDomainName": "Messaging — WhatsApp",
+      "classification": "optional operational",
+      "businessResponsibility": "routes/whatsapp.ts is a 3999-line, 7-route hotspot: only ~380 lines (3616-3999) are actual route handlers; the remaining ~3600 lines are conversation-AI/patient-matching/booking-flow business logic embedded directly in the route file. See hotspots.",
+      "criticality": "elevated",
+      "maturity": "mixed",
+      "routes": [
+        "server/src/routes/whatsapp.ts",
+        "server/src/routes/whatsappInbox.ts",
+        "server/src/routes/metaWhatsAppWebhook.ts",
+        "server/src/routes/organizationWhatsApp.ts"
+      ],
+      "services": [
+        "server/src/services/whatsapp/clinicResolver.ts",
+        "server/src/services/whatsapp/conversationMessageStore.ts",
+        "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts",
+        "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts",
+        "server/src/services/whatsapp/metaInboundDelivery.ts",
+        "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+        "server/src/services/whatsapp/templateBinding.ts",
+        "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+        "server/src/services/whatsapp/WhatsAppProvider.ts",
+        "server/src/services/whatsapp/whatsappProviderFactory.ts",
+        "server/src/services/whatsapp/whatsappService.ts",
+        "server/src/services/evolutionApi.ts",
+        "server/src/services/metaTemplateService.ts",
+        "server/src/utils/legacyWhatsApp.ts",
+        "server/src/utils/whatsappDate.ts",
+        "server/src/utils/webhookVerification.ts",
+        "server/src/utils/webhookRouting.ts",
+        "server/src/utils/messageSanitizer.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/whatsapp.ts",
+        "server/src/routes/whatsappInbox.ts",
+        "server/src/routes/metaWhatsAppWebhook.ts",
+        "server/src/routes/organizationWhatsApp.ts",
+        "server/src/services/whatsapp/clinicResolver.ts",
+        "server/src/services/whatsapp/conversationMessageStore.ts",
+        "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts",
+        "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts",
+        "server/src/services/whatsapp/metaInboundDelivery.ts",
+        "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+        "server/src/services/whatsapp/templateBinding.ts",
+        "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+        "server/src/services/whatsapp/WhatsAppProvider.ts",
+        "server/src/services/whatsapp/whatsappProviderFactory.ts",
+        "server/src/services/whatsapp/whatsappService.ts",
+        "server/src/services/evolutionApi.ts",
+        "server/src/services/metaTemplateService.ts"
+      ],
+      "ownedPrismaModels": [
+        "WhatsAppConnection",
+        "ClinicWhatsAppConnection",
+        "WhatsAppInboxEntry",
+        "WhatsAppConversationState",
+        "WhatsAppConversationMessage"
+      ],
+      "ownedFrontend": [
+        "src/pages/WhatsAppConnections.tsx",
+        "src/pages/WhatsAppInbox.tsx",
+        "src/pages/MetaCallbackPage.tsx",
+        "src/pages/MessageTemplates.tsx",
+        "src/pages/Messages.tsx",
+        "src/components/MessageTemplateForm.tsx",
+        "src/components/PrepareMessageModal.tsx"
+      ],
+      "externalProviders": [
+        "Evolution API (self-hosted WhatsApp bridge)",
+        "Meta WhatsApp Cloud API"
+      ],
+      "scheduledJobs": [
+        "jobs/metaTemplateSyncJob.ts"
+      ],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "HIGH (high fan-out — DEPENDENCY_MAP.md §10.3, \"god module\" signature)",
+      "publicContractCandidates": [
+        "Messaging send/automation command (as named in task spec) — provider factory pattern already exists (whatsappProviderFactory.ts)"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/whatsapp/clinicResolver.ts",
+        "server/src/services/whatsapp/conversationMessageStore.ts",
+        "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts",
+        "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts",
+        "server/src/services/whatsapp/metaInboundDelivery.ts",
+        "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+        "server/src/services/whatsapp/templateBinding.ts",
+        "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+        "server/src/services/whatsapp/WhatsAppProvider.ts",
+        "server/src/services/whatsapp/whatsappProviderFactory.ts",
+        "server/src/services/whatsapp/whatsappService.ts",
+        "server/src/services/evolutionApi.ts",
+        "server/src/services/metaTemplateService.ts"
+      ],
+      "ownershipAmbiguity": "Exact line-level boundary between AI-orchestration logic and WhatsApp-provider logic inside routes/whatsapp.ts was not further decomposed — flagged for a dedicated hotspot strangler task.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": true,
+        "providerAdapters": true,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": "routes/whatsapp.ts creates Patient and finds/creates User rows directly (see handleIncomingWhatsAppMessage and ensureWhatsAppContactPatient at server/src/routes/whatsapp.ts:1206) — a direct write into clinical-patients-owned data from a messaging route, not through a Patients-owned command.",
+      "evidenceSource": "F0-003/F0-004 baseline domain 'messaging-whatsapp', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "IGM",
+      "id": "messaging-instagram",
+      "proposedCanonicalDomainName": "Messaging — Instagram",
+      "classification": "optional operational",
+      "businessResponsibility": "Structured deliberately as a dedicated model set ('Option B') per schema comment at server/prisma/schema.prisma:1621 to avoid disrupting WhatsApp — an explicit repository decision favoring parallel channel domains over one shared messaging schema.",
+      "criticality": "elevated",
+      "maturity": "mixed",
+      "routes": [
+        "server/src/routes/instagramInbox.ts",
+        "server/src/routes/instagramWebhook.ts",
+        "server/src/routes/organizationInstagram.ts"
+      ],
+      "services": [
+        "server/src/services/instagram/instagramAiConversationProcessor.ts",
+        "server/src/services/instagram/instagramClinicResolver.ts",
+        "server/src/services/instagram/InstagramMessagingProvider.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/instagramInbox.ts",
+        "server/src/routes/instagramWebhook.ts",
+        "server/src/routes/organizationInstagram.ts",
+        "server/src/services/instagram/instagramAiConversationProcessor.ts",
+        "server/src/services/instagram/instagramClinicResolver.ts",
+        "server/src/services/instagram/InstagramMessagingProvider.ts"
+      ],
+      "ownedPrismaModels": [
+        "InstagramConnection",
+        "ClinicInstagramConnection",
+        "InstagramInboxEntry",
+        "InstagramConversationMessage"
+      ],
+      "ownedFrontend": [
+        "src/pages/InstagramConnections.tsx",
+        "src/pages/InstagramInbox.tsx"
+      ],
+      "externalProviders": [
+        "Meta Instagram Messaging API"
+      ],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [
+        "shares the Messaging send/automation command candidate with messaging-whatsapp"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/instagram/instagramAiConversationProcessor.ts",
+        "server/src/services/instagram/instagramClinicResolver.ts",
+        "server/src/services/instagram/InstagramMessagingProvider.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": true,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'messaging-instagram', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "SMS",
+      "id": "messaging-sms",
+      "proposedCanonicalDomainName": "Messaging — SMS",
+      "classification": "optional operational",
+      "businessResponsibility": "smsEntitlement.ts is a named, dedicated entitlement-check module — a positive example other domains' future entitlement checks could follow.",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/sms.ts"
+      ],
+      "services": [
+        "server/src/services/sms/platformSmsProviders.ts",
+        "server/src/services/sms/smsEntitlement.ts",
+        "server/src/services/sms/SmsProvider.ts",
+        "server/src/services/sms/smsProviders.ts",
+        "server/src/services/sms/smsRouting.ts",
+        "server/src/services/sms/smsRoutingPolicy.ts",
+        "server/src/services/sms/smsService.ts",
+        "server/src/services/sms/smsTemplating.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/sms.ts",
+        "server/src/services/sms/platformSmsProviders.ts",
+        "server/src/services/sms/smsEntitlement.ts",
+        "server/src/services/sms/SmsProvider.ts",
+        "server/src/services/sms/smsProviders.ts",
+        "server/src/services/sms/smsRouting.ts",
+        "server/src/services/sms/smsRoutingPolicy.ts",
+        "server/src/services/sms/smsService.ts",
+        "server/src/services/sms/smsTemplating.ts"
+      ],
+      "ownedPrismaModels": [
+        "ClinicSmsSettings",
+        "SmsMessage",
+        "SmsUsageCounter"
+      ],
+      "ownedFrontend": [
+        "src/components/settings/SmsSettingsSection.tsx"
+      ],
+      "externalProviders": [
+        "multiple regional SMS providers via services/sms/smsProviders.ts (provider-factory pattern)"
+      ],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [
+        "server/src/services/sms/platformSmsProviders.ts",
+        "server/src/services/sms/smsEntitlement.ts",
+        "server/src/services/sms/SmsProvider.ts",
+        "server/src/services/sms/smsProviders.ts",
+        "server/src/services/sms/smsRouting.ts",
+        "server/src/services/sms/smsRoutingPolicy.ts",
+        "server/src/services/sms/smsService.ts",
+        "server/src/services/sms/smsTemplating.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": true,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'messaging-sms', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "EML",
+      "id": "messaging-email",
+      "proposedCanonicalDomainName": "Messaging — Email",
+      "classification": "optional operational",
+      "businessResponsibility": "No dedicated route file or Prisma model — email is used for auth flows (verification/reset) and consumed via emailService.ts by core-identity-access; not evidenced as a clinic-facing messaging channel with its own inbox model like WhatsApp/Instagram.",
+      "criticality": "normal",
+      "maturity": "partially bounded",
+      "routes": [],
+      "services": [
+        "server/src/services/emailService.ts",
+        "server/src/services/emailTemplates.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/services/emailService.ts",
+        "server/src/services/emailTemplates.ts"
+      ],
+      "ownedPrismaModels": [],
+      "ownedFrontend": [],
+      "externalProviders": [
+        "SMTP provider (via emailService.ts, provider not independently re-verified)"
+      ],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [
+        "server/src/services/emailService.ts",
+        "server/src/services/emailTemplates.ts"
+      ],
+      "ownershipAmbiguity": "Whether Email deserves independent domain status vs. being a core-identity-access utility is genuinely ambiguous given current evidence.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": false,
+        "infrastructure": false,
+        "http": false,
+        "public": true,
+        "internal": false,
+        "backgroundJobs": false,
+        "providerAdapters": true,
+        "dtoSchemaBoundary": false,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'messaging-email', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "AIO",
+      "id": "messaging-ai-orchestration",
+      "proposedCanonicalDomainName": "Messaging AI Orchestration",
+      "classification": "optional operational",
+      "businessResponsibility": "This is currently a WhatsApp-specific conversational-AI stack, not a channel-agnostic AI Gateway; ADR-009 (AI Gateway) is PROPOSED and explicitly depends on this kind of evidence.",
+      "criticality": "elevated",
+      "maturity": "shared/ambiguous",
+      "routes": [],
+      "services": [
+        "server/src/services/whatsappAgentPrompt.ts",
+        "server/src/services/whatsappAgentSchema.ts",
+        "server/src/services/whatsappAvailability.ts",
+        "server/src/services/whatsappBookingFlow.ts",
+        "server/src/services/whatsappClarification.ts",
+        "server/src/services/whatsappConversationAgent.ts",
+        "server/src/services/whatsappInterpreter.ts",
+        "server/src/services/whatsappPublicApi.ts",
+        "server/src/services/whatsappResolvedIntentRouter.ts",
+        "server/src/services/whatsappStepAwareNlu.ts",
+        "server/src/services/whatsappWebhookPayload.ts",
+        "server/src/services/googleAiStudio.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/services/whatsappAgentPrompt.ts",
+        "server/src/services/whatsappAgentSchema.ts",
+        "server/src/services/whatsappAvailability.ts",
+        "server/src/services/whatsappBookingFlow.ts",
+        "server/src/services/whatsappClarification.ts",
+        "server/src/services/whatsappConversationAgent.ts",
+        "server/src/services/whatsappInterpreter.ts",
+        "server/src/services/whatsappPublicApi.ts",
+        "server/src/services/whatsappResolvedIntentRouter.ts",
+        "server/src/services/whatsappStepAwareNlu.ts",
+        "server/src/services/whatsappWebhookPayload.ts",
+        "server/src/services/googleAiStudio.ts"
+      ],
+      "ownedPrismaModels": [],
+      "ownedFrontend": [],
+      "externalProviders": [
+        "Google AI Studio (Gemini) — services/googleAiStudio.ts"
+      ],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [
+        "AiProvider / AiGateway contract (as named in task spec) — googleAiStudio.ts is the only generic AI-provider file today; the rest is WhatsApp-specific conversation logic, not a general AI platform"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/whatsappAgentPrompt.ts",
+        "server/src/services/whatsappAgentSchema.ts",
+        "server/src/services/whatsappAvailability.ts",
+        "server/src/services/whatsappBookingFlow.ts",
+        "server/src/services/whatsappClarification.ts",
+        "server/src/services/whatsappConversationAgent.ts",
+        "server/src/services/whatsappInterpreter.ts",
+        "server/src/services/whatsappPublicApi.ts",
+        "server/src/services/whatsappResolvedIntentRouter.ts",
+        "server/src/services/whatsappStepAwareNlu.ts",
+        "server/src/services/whatsappWebhookPayload.ts",
+        "server/src/services/googleAiStudio.ts"
+      ],
+      "ownershipAmbiguity": "Whether Instagram's instagramAiConversationProcessor.ts should merge into this domain or stay under messaging-instagram is unresolved — kept under messaging-instagram here because it lives in services/instagram/ and has no shared code path with the WhatsApp agent files evidenced.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": false,
+        "infrastructure": false,
+        "http": false,
+        "public": true,
+        "internal": false,
+        "backgroundJobs": false,
+        "providerAdapters": true,
+        "dtoSchemaBoundary": false,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'messaging-ai-orchestration', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "REC",
+      "id": "messaging-automation-recall-followup",
+      "proposedCanonicalDomainName": "Automations / Reminders / Follow-up / Recall",
+      "classification": "optional operational",
+      "businessResponsibility": "jobs/reminders.ts is the main scheduled entry point sending appointment/payment/recall reminders — reads across Appointments, Payments, and this domain's own models.",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/recall.ts",
+        "server/src/routes/postTreatment.ts"
+      ],
+      "services": [
+        "server/src/services/recallCandidateService.ts",
+        "server/src/services/recallSettings.ts",
+        "server/src/services/postTreatmentMessaging.ts",
+        "server/src/utils/noShowFollowUp.ts (shared with clinical-appointments-availability)"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/recall.ts",
+        "server/src/routes/postTreatment.ts",
+        "server/src/services/recallCandidateService.ts",
+        "server/src/services/recallSettings.ts",
+        "server/src/services/postTreatmentMessaging.ts"
+      ],
+      "ownedPrismaModels": [
+        "ClinicRecallSetting",
+        "RecallCandidate",
+        "RecallAction",
+        "PostTreatmentMessageTemplate",
+        "PostTreatmentMessageQueue"
+      ],
+      "ownedFrontend": [
+        "src/pages/RecallDashboard.tsx",
+        "src/components/recall/RecallActionModal.tsx",
+        "src/components/recall/RecallCandidateStatusBadge.tsx",
+        "src/components/recall/RecallCandidateTable.tsx",
+        "src/components/recall/RecallMessageDraftModal.tsx",
+        "src/components/recall/RecallSettingsSection.tsx",
+        "src/components/recall/RecallSummaryCards.tsx",
+        "src/components/PostTreatmentMessages.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [
+        "jobs/reminders.ts"
+      ],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "HIGH (high fan-out — DEPENDENCY_MAP.md §10.3, \"god module\" signature)",
+      "publicContractCandidates": [
+        "consumes ProcedureCompleted/AppointmentCompleted events (as named in task spec) once those exist"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/recallCandidateService.ts",
+        "server/src/services/recallSettings.ts",
+        "server/src/services/postTreatmentMessaging.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": true,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'messaging-automation-recall-followup', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "IMG",
+      "id": "imaging-server-viewer",
+      "proposedCanonicalDomainName": "Imaging — Server Ingest and Viewer",
+      "classification": "optional operational",
+      "businessResponsibility": "AGENTS.md explicitly lists 'Medical imaging storage' as something to avoid in the MVP unless explicitly requested — yet a substantial Imaging domain (routes/imaging.ts is 1303 lines/27 routes, plus a full bridge subsystem) exists in the repository. This is repository evidence contradicting the MVP charter, not a judgment on whether the feature should exist — flagged as a governance note for the user/ADR-011.",
+      "criticality": "elevated",
+      "maturity": "mixed",
+      "routes": [
+        "server/src/routes/imaging.ts"
+      ],
+      "services": [
+        "server/src/services/imaging/imagingRequestTransitions.ts",
+        "server/src/services/imaging/imagingUploadValidation.ts",
+        "server/src/services/imaging/releaseMetadataValidation.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/imaging.ts",
+        "server/src/services/imaging/imagingRequestTransitions.ts",
+        "server/src/services/imaging/imagingUploadValidation.ts",
+        "server/src/services/imaging/releaseMetadataValidation.ts"
+      ],
+      "ownedPrismaModels": [
+        "ImagingDevice",
+        "ImagingRequest",
+        "ImagingStudy",
+        "ImagingImage"
+      ],
+      "ownedFrontend": [
+        "src/pages/ImagingQueue.tsx",
+        "src/components/imaging/DicomViewer.tsx",
+        "src/components/imaging/dicomHelpers.ts",
+        "src/components/imaging/ImagingSettingsPanel.tsx",
+        "src/components/imaging/PatientImagingTab.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (health/special-category data present)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [
+        "ImagingStudyReceived event (as named in task spec)"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/imaging/imagingRequestTransitions.ts",
+        "server/src/services/imaging/imagingUploadValidation.ts",
+        "server/src/services/imaging/releaseMetadataValidation.ts"
+      ],
+      "ownershipAmbiguity": "none significant on the ownership question itself",
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'imaging-server-viewer', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "BRG",
+      "id": "imaging-device-bridge",
+      "proposedCanonicalDomainName": "Imaging — Device Bridge / Windows Bridge",
+      "classification": "external adapter/integration",
+      "businessResponsibility": "bridge-agent/ and windows-bridge/ top-level directories exist as separate deployables; their internals were not scanned in this task per CODEGRAPH DISCIPLINE scope limits (server/src and src only) — flagged as unverified/out of scope, not as absent.",
+      "criticality": "elevated",
+      "maturity": "partially bounded",
+      "routes": [
+        "server/src/routes/imagingBridgePublic.ts"
+      ],
+      "services": [
+        "server/src/services/imaging/bridgeOnboardingConfig.ts",
+        "server/src/services/imaging/bridgePairing.ts",
+        "server/src/services/imaging/bridgeTokens.ts",
+        "server/src/services/imaging/bridgeUpdateConfig.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/imagingBridgePublic.ts",
+        "server/src/services/imaging/bridgeOnboardingConfig.ts",
+        "server/src/services/imaging/bridgePairing.ts",
+        "server/src/services/imaging/bridgeTokens.ts",
+        "server/src/services/imaging/bridgeUpdateConfig.ts"
+      ],
+      "ownedPrismaModels": [
+        "ImagingBridgeAgent",
+        "ImagingBridgePairing",
+        "ImagingBridgePairingDevice",
+        "ImagingBridgeBinding"
+      ],
+      "ownedFrontend": [
+        "src/components/imaging/bridgeHelpers.ts",
+        "src/components/imaging/BridgeOnboardingCard.tsx",
+        "src/components/imaging/BridgeSetupWizard.tsx",
+        "src/components/imaging/constants.ts",
+        "src/components/imaging/onboardingHelpers.ts",
+        "src/components/imaging/pairingPoller.ts"
+      ],
+      "externalProviders": [
+        "Windows Bridge agent (bridge-agent/, windows-bridge/ — separate deployables, internals out of CODEGRAPH-DISCIPLINE scope)"
+      ],
+      "scheduledJobs": [
+        "jobs/imagingBridgeOfflineJob.ts"
+      ],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [
+        "provider port/adapter — bridge is already an anti-corruption-boundary-shaped design (token-based pairing, no local paths stored server-side per schema comment)"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/imaging/bridgeOnboardingConfig.ts",
+        "server/src/services/imaging/bridgePairing.ts",
+        "server/src/services/imaging/bridgeTokens.ts",
+        "server/src/services/imaging/bridgeUpdateConfig.ts"
+      ],
+      "ownershipAmbiguity": "bridge-agent/ and windows-bridge/ internal structure is unverified by this task.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": true,
+        "providerAdapters": true,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'imaging-device-bridge', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "INV",
+      "id": "inventory",
+      "proposedCanonicalDomainName": "Inventory",
+      "classification": "optional operational",
+      "businessResponsibility": "InventoryItem is organization-scoped (has organizationId directly) while InventoryTransaction is clinic-scoped — a scope-level inconsistency worth flagging for the future tenant/RLS phase (F5), not fixed here.",
+      "criticality": "normal",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/inventory.ts"
+      ],
+      "services": [
+        "server/src/services/inventoryAlerts.ts",
+        "server/src/services/treatmentStockDeduction.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/inventory.ts",
+        "server/src/services/inventoryAlerts.ts",
+        "server/src/services/treatmentStockDeduction.ts"
+      ],
+      "ownedPrismaModels": [
+        "InventoryItem",
+        "InventoryTransaction",
+        "AppointmentTypeMaterial",
+        "TreatmentPackageMaterial"
+      ],
+      "ownedFrontend": [
+        "src/pages/Inventory.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "LOW (operational/audit data only)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [
+        "Inventory stock-adjustment command or event consumer (as named in task spec)"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/inventoryAlerts.ts",
+        "server/src/services/treatmentStockDeduction.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": "services/treatmentStockDeduction.ts (physically located under clinical-dental-chart-procedures backend) writes InventoryTransaction directly — see that domain's cross_domain_direct_access note.",
+      "evidenceSource": "F0-003/F0-004 baseline domain 'inventory', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "INS",
+      "id": "insurance",
+      "proposedCanonicalDomainName": "Insurance",
+      "classification": "optional operational",
+      "businessResponsibility": "No dedicated insurance-provider integration exists — InsuranceProvision is an internal tracking record only (policyNumber/provisionNumber free text), not an adapter to a real insurer API.",
+      "criticality": "normal",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/insuranceProvisions.ts"
+      ],
+      "services": [],
+      "dataAccessLocations": [
+        "server/src/routes/insuranceProvisions.ts"
+      ],
+      "ownedPrismaModels": [
+        "InsuranceProvision"
+      ],
+      "ownedFrontend": [
+        "src/pages/InsuranceProvisions.tsx",
+        "src/pages/InsuranceProvisionDetail.tsx",
+        "src/components/InsuranceProvisionForm.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (personal data or credentials present)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'insurance', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "FIN",
+      "id": "finance-advanced-compensation",
+      "proposedCanonicalDomainName": "Advanced Finance — Compensation and Payouts",
+      "classification": "optional operational",
+      "businessResponsibility": "reads Payment (clinical-basic-payments) directly to compute earnings — legitimate business collaboration, not yet contract-mediated.",
+      "criticality": "elevated",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/financeDashboard.ts",
+        "server/src/routes/compensationRules.ts",
+        "server/src/routes/practitionerEarnings.ts",
+        "server/src/routes/practitionerPayouts.ts"
+      ],
+      "services": [
+        "server/src/services/earningService.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/financeDashboard.ts",
+        "server/src/routes/compensationRules.ts",
+        "server/src/routes/practitionerEarnings.ts",
+        "server/src/routes/practitionerPayouts.ts",
+        "server/src/services/earningService.ts"
+      ],
+      "ownedPrismaModels": [
+        "PractitionerCompensationRule",
+        "ServiceCompensationRule",
+        "PractitionerEarning",
+        "PractitionerPayout"
+      ],
+      "ownedFrontend": [
+        "src/pages/FinanceDashboard.tsx",
+        "src/pages/MyEarnings.tsx",
+        "src/pages/PractitionerEarnings.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "MEDIUM",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "MEDIUM (financial data, KVKK-adjacent)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [
+        "server/src/services/earningService.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'finance-advanced-compensation', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "RPT",
+      "id": "reporting-analytics",
+      "proposedCanonicalDomainName": "Reporting / Analytics",
+      "classification": "optional operational",
+      "businessResponsibility": "reports.ts is a raw-SQL hotspot (see raw_sql_locations) reading directly across Patients/Appointments/Payments/TreatmentCases tables — the clearest existing case for a future read-model/OLAP boundary (ADR-017, PROPOSED).",
+      "criticality": "normal",
+      "maturity": "shared/ambiguous",
+      "routes": [
+        "server/src/routes/reports.ts",
+        "server/src/routes/dashboard.ts",
+        "server/src/routes/organizationDashboard.ts"
+      ],
+      "services": [],
+      "dataAccessLocations": [
+        "server/src/routes/reports.ts",
+        "server/src/routes/dashboard.ts",
+        "server/src/routes/organizationDashboard.ts"
+      ],
+      "ownedPrismaModels": [],
+      "ownedFrontend": [
+        "src/pages/Reports.tsx",
+        "src/pages/Dashboard.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "HIGH (high fan-out — DEPENDENCY_MAP.md §10.3, \"god module\" signature)",
+      "publicContractCandidates": [
+        "Reporting read-model/query boundary (as named in task spec)"
+      ],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": "No dedicated Prisma models — this domain is purely a cross-cutting read surface over other domains' data, which is expected for reporting but means it has the widest direct cross-domain read footprint in the backend.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": false,
+        "http": true,
+        "public": true,
+        "internal": false,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'reporting-analytics', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "LAB",
+      "id": "lab-prosthetics-tracking",
+      "proposedCanonicalDomainName": "Dental Laboratory / Prosthetics Tracking",
+      "classification": "optional operational",
+      "businessResponsibility": "Not in the task spec's required domain list; added because clear, self-contained repository evidence (dedicated routes/services/models/tests/pages) supports treating it as its own bounded domain rather than folding it into Treatment Cases or Inventory.",
+      "criticality": "normal",
+      "maturity": "clearly bounded",
+      "routes": [
+        "server/src/routes/laboratories.ts",
+        "server/src/routes/labOrders.ts"
+      ],
+      "services": [
+        "server/src/services/labOrders/labOrderStatusTransitions.ts",
+        "server/src/services/labOrders/labOrderSummary.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/laboratories.ts",
+        "server/src/routes/labOrders.ts",
+        "server/src/services/labOrders/labOrderStatusTransitions.ts",
+        "server/src/services/labOrders/labOrderSummary.ts"
+      ],
+      "ownedPrismaModels": [
+        "Laboratory",
+        "LabWorkOrder",
+        "LabWorkOrderStatusHistory",
+        "LabOrderAttachment"
+      ],
+      "ownedFrontend": [
+        "src/pages/LabOrders.tsx"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped data — primary tenant-isolation boundary)",
+      "kvkkSensitivity": "HIGH (health/special-category data present)",
+      "couplingLevel": "LOW-MEDIUM (feature domain, bounded dependency set — see DEPENDENCY_MAP.md §10.2 row)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [
+        "server/src/services/labOrders/labOrderStatusTransitions.ts",
+        "server/src/services/labOrders/labOrderSummary.ts"
+      ],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": false,
+        "providerAdapters": false,
+        "dtoSchemaBoundary": true,
+        "note": "Directional only — no file move authorized by this task; see docs/program/phases/F2_MODULAR_BOUNDARIES.md prohibited-work list."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'lab-prosthetics-tracking', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "PAI",
+      "id": "planned-ai-platform-gateway",
+      "proposedCanonicalDomainName": "AI Platform / AI Gateway",
+      "classification": "planned/not implemented",
+      "businessResponsibility": "No provider registry, model routing, prompt versioning, usage/cost metering, safety policy, PII/PHI minimization, evaluation, human review, or AI audit/provenance components were found as a distinct platform. Current AI usage is entirely embedded inside messaging-ai-orchestration (WhatsApp-specific).",
+      "criticality": "normal",
+      "maturity": "planned only",
+      "routes": [],
+      "services": [
+        "server/src/services/googleAiStudio.ts (only generic AI-provider file found)"
+      ],
+      "dataAccessLocations": [
+        "server/src/services/googleAiStudio.ts (only generic AI-provider file found)"
+      ],
+      "ownedPrismaModels": [],
+      "ownedFrontend": [],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "NONE (not implemented)",
+      "publicContractCandidates": [
+        "AiProvider / AiGateway contract — ADR-009, PROPOSED, dependent on ADR-001"
+      ],
+      "likelyInternalOnly": [
+        "server/src/services/googleAiStudio.ts (only generic AI-provider file found)"
+      ],
+      "ownershipAmbiguity": "none — clearly absent, not merely unverified",
+      "targetModuleShape": {
+        "needed": false,
+        "note": "Not implemented — no module shape applies until the domain is built (see ADR dependencies)."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'planned-ai-platform-gateway', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "PIG",
+      "id": "planned-integration-platform",
+      "proposedCanonicalDomainName": "Integration Platform (Official/Ministry Adapters)",
+      "classification": "planned/not implemented",
+      "businessResponsibility": "No Sağlık Bakanlığı or other official/government integration code found. Each existing external integration (WhatsApp, Instagram, SMS) has its own bespoke provider-factory pattern rather than a shared adapter platform.",
+      "criticality": "normal",
+      "maturity": "planned only",
+      "routes": [],
+      "services": [],
+      "dataAccessLocations": [],
+      "ownedPrismaModels": [],
+      "ownedFrontend": [],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "NONE (not implemented)",
+      "publicContractCandidates": [
+        "Integration connector port — ADR-010, PROPOSED"
+      ],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": "none — clearly absent",
+      "targetModuleShape": {
+        "needed": false,
+        "note": "Not implemented — no module shape applies until the domain is built (see ADR dependencies)."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'planned-integration-platform', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "PBL",
+      "id": "planned-billing-subscription",
+      "proposedCanonicalDomainName": "Billing / Subscription Engine",
+      "classification": "planned/not implemented",
+      "businessResponsibility": "src/pages/PricingPage.tsx and src/components/pricing/* are marketing/comparison surfaces, not a functioning subscription-billing system (no payment-provider integration for platform subscriptions found).",
+      "criticality": "normal",
+      "maturity": "planned only",
+      "routes": [],
+      "services": [],
+      "dataAccessLocations": [],
+      "ownedPrismaModels": [],
+      "ownedFrontend": [
+        "src/pages/PricingPage.tsx (marketing page, not a billing engine)",
+        "src/components/pricing/* (marketing/comparison UI, not billing logic)"
+      ],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "NONE (not implemented)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": null,
+      "targetModuleShape": {
+        "needed": false,
+        "note": "Not implemented — no module shape applies until the domain is built (see ADR dependencies)."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'planned-billing-subscription', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "PCM",
+      "id": "planned-campaign-health-tourism-invoicing",
+      "proposedCanonicalDomainName": "Campaign Management / Health Tourism / Invoicing",
+      "classification": "planned/not implemented",
+      "businessResponsibility": "No routes, services, models, or dedicated frontend pages found for Campaign Management, Health Tourism, Lead Management, Call Center, Marketing Analytics, Invoicing, e-Invoice/e-Archive, Accounting Connectors, or Insurance Connectors. Confirmed absent, not merely unverified.",
+      "criticality": "normal",
+      "maturity": "planned only",
+      "routes": [],
+      "services": [],
+      "dataAccessLocations": [],
+      "ownedPrismaModels": [],
+      "ownedFrontend": [],
+      "externalProviders": [],
+      "scheduledJobs": [],
+      "events": {
+        "inbound": [],
+        "outbound": [],
+        "note": "No transactional outbox/queue exists (ADR-006/ADR-007 NEEDS_POC) — any \"events\" today are inbound webhook ledgers (MessagingInboundEvent/ExternalCalendarInboundEvent) or in-process job scheduling, not a real event bus."
+      },
+      "securitySensitivity": "LOW",
+      "tenantIsolationSensitivity": "N/A or inherited from core Tenant Security and Scope",
+      "kvkkSensitivity": "LOW-INDIRECT (no owned models; reads/orchestrates other domains' PD/HD data)",
+      "couplingLevel": "NONE (not implemented)",
+      "publicContractCandidates": [],
+      "likelyInternalOnly": [],
+      "ownershipAmbiguity": "none — clearly absent",
+      "targetModuleShape": {
+        "needed": false,
+        "note": "Not implemented — no module shape applies until the domain is built (see ADR dependencies)."
+      },
+      "crossDomainDirectAccess": null,
+      "evidenceSource": "F0-003/F0-004 baseline domain 'planned-campaign-health-tourism-invoicing', reconciled against origin/main HEAD 70b1690c1a656c95cead7b42812cc9ae6447bfb7 by F2-PREP-001"
+    },
+    {
+      "code": "EXC",
+      "id": "external-calendar-integration",
+      "proposedCanonicalDomainName": "External Calendar Integration",
+      "classification": "external adapter/integration",
+      "businessResponsibility": "Synchronizes NoraMedi appointments with an external dental-practice-management calendar/software provider (DigiDentiS first, framework designed provider-agnostic) — inbound webhook ingestion plus outbound appointment-create sync, both idempotent.",
+      "criticality": "elevated",
+      "maturity": "partially bounded (new since F0-003/F0-004 baseline; not yet covered by the accepted dependency matrix)",
+      "routes": [
+        "server/src/routes/externalCalendarWebhook.ts (public)",
+        "server/src/routes/platformExternalCalendar.ts (platform admin config)",
+        "server/src/routes/externalCalendarOutboundSyncStatusRoutes.ts (tenant API, exact filename externalCalendarOutboundSyncStatus.ts)"
+      ],
+      "services": [
+        "server/src/services/externalCalendar/ExternalCalendarProvider.ts",
+        "server/src/services/externalCalendar/externalCalendarConnectionService.ts",
+        "server/src/services/externalCalendar/externalCalendarErrors.ts",
+        "server/src/services/externalCalendar/externalCalendarIdempotency.ts",
+        "server/src/services/externalCalendar/externalCalendarMappingService.ts",
+        "server/src/services/externalCalendar/externalCalendarOrchestration.ts",
+        "server/src/services/externalCalendar/externalCalendarOutboundSync.ts",
+        "server/src/services/externalCalendar/externalCalendarProviderFactory.ts",
+        "server/src/services/externalCalendar/externalCalendarWebhookProcessor.ts",
+        "server/src/services/externalCalendar/digidentis/DigiDentisApiClient.ts",
+        "server/src/services/externalCalendar/digidentis/DigiDentisProvider.ts",
+        "server/src/services/externalCalendar/digidentis/DigiDentisSigning.ts",
+        "server/src/services/externalCalendar/digidentis/digidentisConfig.ts"
+      ],
+      "dataAccessLocations": [
+        "server/src/routes/externalCalendarWebhook.ts",
+        "server/src/routes/platformExternalCalendar.ts",
+        "server/src/services/externalCalendar/*"
+      ],
+      "ownedPrismaModels": [
+        "ExternalCalendarIntegration",
+        "ExternalCalendarMapping",
+        "ExternalCalendarInboundEvent",
+        "ExternalCalendarAppointmentLink"
+      ],
+      "ownedFrontend": [
+        "src/pages/platform/PlatformExternalCalendar.tsx"
+      ],
+      "externalProviders": [
+        "DigiDentiS (OAuth2 + webhook, first provider key \"digidentis\"; provider-agnostic framework for future providers)"
+      ],
+      "scheduledJobs": [
+        "jobs/externalCalendarInboundRetryJob.ts (new)",
+        "jobs/externalCalendarOutboundSyncJob.ts (new)"
+      ],
+      "events": {
+        "inbound": [
+          "ExternalCalendarInboundEvent (idempotent webhook ledger, mirrors MessagingInboundEvent pattern)"
+        ],
+        "outbound": [
+          "ExternalCalendarAppointmentLink outbound-create sync (immediate attempt + bounded retry job + manual retry, all funneled through one atomic claim)"
+        ],
+        "note": "Provider-agnostic by construction; no shared transactional outbox exists program-wide (ADR-006 NEEDS_POC) — this domain implements its own idempotency/retry ledger rather than depending on one."
+      },
+      "securitySensitivity": "HIGH (encrypted OAuth2 client secret + webhook HMAC secret; write-only credential API)",
+      "tenantIsolationSensitivity": "HIGH (clinic-scoped, ExternalCalendarIntegration.clinicId @unique — one active integration per clinic)",
+      "kvkkSensitivity": "MEDIUM-HIGH (ExternalCalendarAppointmentLink references Appointment, which is PD-adjacent via patient link; rawPayload on ExternalCalendarInboundEvent may echo provider-side PII — see sanitization notes in schema comments)",
+      "couplingLevel": "LOW-MEDIUM (new domain; direct FK/read dependency on Appointments and Availability [Appointment], Identity and Access [User via practitioner mapping], and Organization/Clinic/Membership [Clinic] — not yet present in the accepted F0-004 matrix, so not independently verified against that matrix's C/E/S/X coding by this task)",
+      "publicContractCandidates": [
+        "ExternalCalendarSync command/port (already provider-factory-shaped: ExternalCalendarProvider.ts + externalCalendarProviderFactory.ts)",
+        "shares the AppointmentReferenceQuery/AppointmentCompleted contract candidates already named by F0-004 for Appointments and Availability"
+      ],
+      "likelyInternalOnly": [
+        "digidentis/DigiDentisApiClient.ts",
+        "digidentis/DigiDentisSigning.ts",
+        "digidentis/digidentisConfig.ts (provider-specific internals — must stay behind ExternalCalendarProvider.ts)"
+      ],
+      "ownershipAmbiguity": "Genuinely new since the F0-003/F0-004 accepted baseline (commit 368bcc8d) — this task's own repository-evidence classification, not yet independently reviewed the way F0-003/F0-004 were reviewed by F0-008. Recommend a follow-up F0-004-style incremental dependency-matrix update before this domain is treated as equally authoritative to the other 37.",
+      "targetModuleShape": {
+        "domain": true,
+        "application": true,
+        "infrastructure": true,
+        "http": true,
+        "public": true,
+        "internal": true,
+        "backgroundJobs": true,
+        "providerAdapters": true,
+        "dtoSchemaBoundary": true,
+        "note": "Already the closest thing to a pre-built modular-monolith module shape in the repository (provider port + factory + idempotency ledger + orchestration + dedicated routes) — good pilot-module candidate per F2_MODULAR_BOUNDARIES.md \"Pilot module boundary application and evidence\" backlog item."
+      },
+      "crossDomainDirectAccess": "ExternalCalendarAppointmentLink.appointmentId is a direct FK read/write into Appointment (Appointments and Availability-owned) with no contract; ExternalCalendarMapping.localId resolves against User.id (Identity and Access) or AppointmentType.id (Appointments and Availability) by direct id lookup, not a contract call.",
+      "evidenceSource": "New domain identified by F2-PREP-001 via git diff 368bcc8d..70b1690c (server/src/routes, server/src/services, server/prisma/schema.prisma) — not present in F0-003 (MODULE_MAP.md) or F0-004 (DEPENDENCY_MAP.md) baselines."
+    }
+  ],
+  "prismaModelOwnership": [
+    {
+      "model": "Clinic",
+      "owningDomain": "Organization/Clinic/Membership",
+      "ownershipCategory": "SHARED_KERNEL_CANDIDATE",
+      "tenantScope": "OS",
+      "principalKey": "organizationId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "read by nearly every domain",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via a shared-kernel read contract (e.g. ClinicDirectory/OrganizationDirectory/AuthenticatedUserContext) — remains readable by all modules but only through a stable contract, not raw joins",
+      "notes": "root tenant entity"
+    },
+    {
+      "model": "User",
+      "owningDomain": "Identity and Access",
+      "ownershipCategory": "SHARED_KERNEL_CANDIDATE",
+      "tenantScope": "OS(+CS home)",
+      "principalKey": "organizationId, clinicId",
+      "sensitivity": "CR+PD",
+      "referencedCrossDomainBy": "read by nearly every domain",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via a shared-kernel read contract (e.g. ClinicDirectory/OrganizationDirectory/AuthenticatedUserContext) — remains readable by all modules but only through a stable contract, not raw joins",
+      "notes": "passwordHash; role string"
+    },
+    {
+      "model": "DoctorAvailability",
+      "owningDomain": "Appointments and Availability",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "DoctorOffDay",
+      "owningDomain": "Appointments and Availability",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "Patient",
+      "owningDomain": "Patients",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "OS(+CS primary)",
+      "principalKey": "organizationId",
+      "sensitivity": "PD/HD-adjacent",
+      "referencedCrossDomainBy": "read by Appointments, TreatmentCases, Messaging (all 3 channels), Imaging, Lab, Finance, Reporting, Privacy",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "most cross-referenced model (18+ inbound relations)"
+    },
+    {
+      "model": "AppointmentType",
+      "owningDomain": "Appointments and Availability",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "read by TreatmentCases, Inventory (materials), Finance",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "acts as service catalog"
+    },
+    {
+      "model": "Appointment",
+      "owningDomain": "Appointments and Availability",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP (PD-adjacent via patient link)",
+      "referencedCrossDomainBy": "read by Messaging, Tasks, Imaging, Reporting",
+      "crossesDomainBoundary": true,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "AppointmentRequest",
+      "owningDomain": "Appointments and Availability",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": "written directly by Public Booking, Messaging-WhatsApp, Messaging-Instagram",
+      "crossesDomainBoundary": true,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "transitional cross-domain write"
+    },
+    {
+      "model": "ContactRequest",
+      "owningDomain": "Appointments and Availability (channel-agnostic intake)",
+      "ownershipCategory": "OWNERSHIP_AMBIGUOUS",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": "written by Messaging channels",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "ownership must be resolved (Appointments vs. a channel-agnostic intake domain) before any contract is designed",
+      "notes": "shared/ambiguous owner"
+    },
+    {
+      "model": "WhatsAppConversationState",
+      "owningDomain": "Messaging — WhatsApp",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "WhatsAppConversationMessage",
+      "owningDomain": "Messaging — WhatsApp",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "TreatmentCase",
+      "owningDomain": "Treatment Cases",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "HD-adjacent",
+      "referencedCrossDomainBy": "read by Finance, Recall, Lab, Imaging",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "TreatmentPackage",
+      "owningDomain": "Treatment Cases",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "read by Inventory, Post-Treatment",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "TreatmentPackageItem",
+      "owningDomain": "Treatment Cases",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "AppointmentTypeMaterial",
+      "owningDomain": "Inventory",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "FK's into Appointments' AppointmentType",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "legitimate join table"
+    },
+    {
+      "model": "TreatmentPackageMaterial",
+      "owningDomain": "Inventory",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "FK's into TreatmentCases' TreatmentPackage",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "legitimate join table"
+    },
+    {
+      "model": "TreatmentPackageApplication",
+      "owningDomain": "Treatment Cases",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "triggers Inventory stock deduction",
+      "crossesDomainBoundary": true,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "InsuranceProvision",
+      "owningDomain": "Insurance",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "FIN/PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "Task",
+      "owningDomain": "Tasks and Follow-up",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "referenced by Recall (taskId FK)",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "Payment",
+      "owningDomain": "Basic Payments",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "FIN",
+      "referencedCrossDomainBy": "read by Finance (earnings), Recall, Reporting",
+      "crossesDomainBoundary": true,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "MessageTemplate",
+      "owningDomain": "Shared Contract/Reference Data",
+      "ownershipCategory": "SHARED_KERNEL_CANDIDATE",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "used by WhatsApp (Meta template fields) and SMS (SmsMessage.templateId)",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via a shared-kernel read contract (e.g. ClinicDirectory/OrganizationDirectory/AuthenticatedUserContext) — remains readable by all modules but only through a stable contract, not raw joins",
+      "notes": "genuinely cross-channel"
+    },
+    {
+      "model": "SentMessage",
+      "owningDomain": "Messaging — WhatsApp (primary)",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": "read by Reporting, Recall",
+      "crossesDomainBoundary": true,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "channel-agnostic in shape but WhatsApp-heavy in practice"
+    },
+    {
+      "model": "ActivityLog",
+      "owningDomain": "Audit and Activity",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "AU",
+      "referencedCrossDomainBy": "written by many domains",
+      "crossesDomainBoundary": true,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": ""
+    },
+    {
+      "model": "Setting",
+      "owningDomain": "Configuration and Secrets",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": ""
+    },
+    {
+      "model": "ClinicRecallSetting",
+      "owningDomain": "Automations / Recall / Follow-up",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "RecallCandidate",
+      "owningDomain": "Automations / Recall / Follow-up",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": "reads Patient, TreatmentCase, Appointment, Payment",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "RecallAction",
+      "owningDomain": "Automations / Recall / Follow-up",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": "references Task (Tasks domain)",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PatientAttachment",
+      "owningDomain": "Patients",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD/HD",
+      "referencedCrossDomainBy": "legalHold managed by Privacy domain",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ToothRecord",
+      "owningDomain": "Dental Chart / Procedures",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "HD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PaymentPlan",
+      "owningDomain": "Basic Payments",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "FIN",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PaymentPlanInstallment",
+      "owningDomain": "Basic Payments",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "PI (via planId)",
+      "principalKey": "clinicId (via plan)",
+      "sensitivity": "FIN",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PractitionerCompensationRule",
+      "owningDomain": "Advanced Finance",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "FIN",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ServiceCompensationRule",
+      "owningDomain": "Advanced Finance",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "FIN",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PractitionerEarning",
+      "owningDomain": "Advanced Finance",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "FIN",
+      "referencedCrossDomainBy": "reads Payment directly",
+      "crossesDomainBoundary": true,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PractitionerPayout",
+      "owningDomain": "Advanced Finance",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "FIN",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "InventoryItem",
+      "owningDomain": "Inventory",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "OS",
+      "principalKey": "organizationId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "wrap in an explicit command/event (e.g. Inventory stock-adjustment command, LegalHold contract) so the existing direct cross-domain write is replaced",
+      "notes": "scope inconsistency vs InventoryTransaction, flagged for F5"
+    },
+    {
+      "model": "InventoryTransaction",
+      "owningDomain": "Inventory",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "written by Dental Chart/Procedures",
+      "crossesDomainBoundary": true,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "TreatmentPlanProcedure",
+      "owningDomain": "Dental Chart / Procedures",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "HD",
+      "referencedCrossDomainBy": "triggers Inventory + Recall",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "Notification",
+      "owningDomain": "Notifications",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "Plan",
+      "owningDomain": "Organization/Clinic/Membership (reference)",
+      "ownershipCategory": "SHARED_KERNEL_CANDIDATE",
+      "tenantScope": "G",
+      "principalKey": "none",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "read by Platform Administration, entitlement checks everywhere",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via a shared-kernel read contract (e.g. ClinicDirectory/OrganizationDirectory/AuthenticatedUserContext) — remains readable by all modules but only through a stable contract, not raw joins",
+      "notes": "commercial entitlement source"
+    },
+    {
+      "model": "PlatformAdmin",
+      "owningDomain": "Platform Administration",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "G",
+      "principalKey": "none",
+      "sensitivity": "CR",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": "platform staff, not tenant"
+    },
+    {
+      "model": "ClinicInvitation",
+      "owningDomain": "Organization/Clinic/Membership",
+      "ownershipCategory": "SHARED_KERNEL_CANDIDATE",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via a shared-kernel read contract (e.g. ClinicDirectory/OrganizationDirectory/AuthenticatedUserContext) — remains readable by all modules but only through a stable contract, not raw joins",
+      "notes": ""
+    },
+    {
+      "model": "Organization",
+      "owningDomain": "Organization/Clinic/Membership",
+      "ownershipCategory": "SHARED_KERNEL_CANDIDATE",
+      "tenantScope": "OS (root)",
+      "principalKey": "id",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via a shared-kernel read contract (e.g. ClinicDirectory/OrganizationDirectory/AuthenticatedUserContext) — remains readable by all modules but only through a stable contract, not raw joins",
+      "notes": ""
+    },
+    {
+      "model": "UserClinic",
+      "owningDomain": "Organization/Clinic/Membership",
+      "ownershipCategory": "SHARED_KERNEL_CANDIDATE",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via a shared-kernel read contract (e.g. ClinicDirectory/OrganizationDirectory/AuthenticatedUserContext) — remains readable by all modules but only through a stable contract, not raw joins",
+      "notes": "join table"
+    },
+    {
+      "model": "PatientClinic",
+      "owningDomain": "Patients",
+      "ownershipCategory": "SHARED_KERNEL_CANDIDATE",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via a shared-kernel read contract (e.g. ClinicDirectory/OrganizationDirectory/AuthenticatedUserContext) — remains readable by all modules but only through a stable contract, not raw joins",
+      "notes": "join table"
+    },
+    {
+      "model": "ClinicWorkingHours",
+      "owningDomain": "Organization/Clinic/Membership",
+      "ownershipCategory": "SHARED_KERNEL_CANDIDATE",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via a shared-kernel read contract (e.g. ClinicDirectory/OrganizationDirectory/AuthenticatedUserContext) — remains readable by all modules but only through a stable contract, not raw joins",
+      "notes": ""
+    },
+    {
+      "model": "WhatsAppConnection",
+      "owningDomain": "Messaging — WhatsApp",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "OS",
+      "principalKey": "organizationId",
+      "sensitivity": "CR",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "encrypted tokens"
+    },
+    {
+      "model": "ClinicWhatsAppConnection",
+      "owningDomain": "Messaging — WhatsApp",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "join table"
+    },
+    {
+      "model": "WhatsAppInboxEntry",
+      "owningDomain": "Messaging — WhatsApp",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "OS",
+      "principalKey": "organizationId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "AuditLog",
+      "owningDomain": "Audit and Activity",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "OS",
+      "principalKey": "organizationId",
+      "sensitivity": "AU",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": "deliberately separate from ActivityLog"
+    },
+    {
+      "model": "OperationalEvent",
+      "owningDomain": "Observability / Operational Events",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "OS(+CS)",
+      "principalKey": "organizationId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": ""
+    },
+    {
+      "model": "MessagingInboundEvent",
+      "owningDomain": "Shared Events / Queue / Idempotency",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "MA (nullable org/clinic)",
+      "principalKey": "none required",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "explicitly designed channel-agnostic",
+      "crossesDomainBoundary": true,
+      "referenceType": "projection",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": "positive shared-contract example"
+    },
+    {
+      "model": "JobLock",
+      "owningDomain": "Shared Events / Queue / Idempotency",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "G",
+      "principalKey": "name",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "projection",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": ""
+    },
+    {
+      "model": "InstagramConnection",
+      "owningDomain": "Messaging — Instagram",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "OS",
+      "principalKey": "organizationId",
+      "sensitivity": "CR",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ClinicInstagramConnection",
+      "owningDomain": "Messaging — Instagram",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "join table"
+    },
+    {
+      "model": "InstagramInboxEntry",
+      "owningDomain": "Messaging — Instagram",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "OS",
+      "principalKey": "organizationId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "InstagramConversationMessage",
+      "owningDomain": "Messaging — Instagram",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "OS(+CS)",
+      "principalKey": "organizationId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PostTreatmentMessageTemplate",
+      "owningDomain": "Automations / Recall / Follow-up",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PostTreatmentMessageQueue",
+      "owningDomain": "Automations / Recall / Follow-up",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PlatformSetting",
+      "owningDomain": "Configuration and Secrets",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "G",
+      "principalKey": "key",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "likely release-flag storage",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": ""
+    },
+    {
+      "model": "PatientPrivacyRequest",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "KVKK/GDPR DSR requests"
+    },
+    {
+      "model": "PasswordResetToken",
+      "owningDomain": "Identity and Access",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "US",
+      "principalKey": "userId",
+      "sensitivity": "CR",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": ""
+    },
+    {
+      "model": "EmailVerificationToken",
+      "owningDomain": "Identity and Access",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "US",
+      "principalKey": "userId",
+      "sensitivity": "CR",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": ""
+    },
+    {
+      "model": "ClinicLegalProfile",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD/legal",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PublicBookingNoticeEvidence",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "AU",
+      "referencedCrossDomainBy": "linked from Appointments",
+      "crossesDomainBoundary": true,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "privacy evidence, not consent"
+    },
+    {
+      "model": "ChannelConsentLog",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": "written by Messaging-WhatsApp/Instagram consent-gate flows",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "legitimate collaboration"
+    },
+    {
+      "model": "ClinicSmsSettings",
+      "owningDomain": "Messaging — SMS",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "addonEnabled = real entitlement flag"
+    },
+    {
+      "model": "SmsMessage",
+      "owningDomain": "Messaging — SMS",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "SmsUsageCounter",
+      "owningDomain": "Messaging — SMS",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "PlatformSmsProvider",
+      "owningDomain": "Platform Administration",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "G",
+      "principalKey": "region+providerCode",
+      "sensitivity": "CR",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": "platform-level, clinics never see"
+    },
+    {
+      "model": "Laboratory",
+      "owningDomain": "Dental Laboratory / Prosthetics Tracking",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "LabWorkOrder",
+      "owningDomain": "Dental Laboratory / Prosthetics Tracking",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "HD-adjacent",
+      "referencedCrossDomainBy": "reads Patient, TreatmentCase",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "LabWorkOrderStatusHistory",
+      "owningDomain": "Dental Laboratory / Prosthetics Tracking",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "PI (via labWorkOrderId)",
+      "principalKey": "—",
+      "sensitivity": "AU",
+      "referencedCrossDomainBy": "append-only",
+      "crossesDomainBoundary": true,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "LabOrderAttachment",
+      "owningDomain": "Dental Laboratory / Prosthetics Tracking",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD/HD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ImagingDevice",
+      "owningDomain": "Imaging — Server Ingest and Viewer",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ImagingRequest",
+      "owningDomain": "Imaging — Server Ingest and Viewer",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "HD",
+      "referencedCrossDomainBy": "reads Appointment, TreatmentCase",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ImagingStudy",
+      "owningDomain": "Imaging — Server Ingest and Viewer",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "HD (special-category)",
+      "referencedCrossDomainBy": "legalHold managed by Privacy domain",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ImagingBridgeAgent",
+      "owningDomain": "Imaging — Device Bridge",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "CR (tokenHash)+device metadata",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ImagingBridgePairing",
+      "owningDomain": "Imaging — Device Bridge",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "CR (codeHash)",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ImagingBridgePairingDevice",
+      "owningDomain": "Imaging — Device Bridge",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "PI (via pairingId)",
+      "principalKey": "—",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ImagingBridgeBinding",
+      "owningDomain": "Imaging — Device Bridge",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": ""
+    },
+    {
+      "model": "ImagingImage",
+      "owningDomain": "Imaging — Server Ingest and Viewer",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "HD (special-category)",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "never hard-deleted"
+    },
+    {
+      "model": "PatientPrivacyExportArchive",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "short-lived export artifact"
+    },
+    {
+      "model": "ClinicBulkExportArchive",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD/FIN",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "feature-flagged off by default"
+    },
+    {
+      "model": "ClinicBulkExportPasswordAttempt",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "AU",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "step-up brute-force lockout"
+    },
+    {
+      "model": "SecuritySignalEvent",
+      "owningDomain": "Security Incident Response and Detection",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "MA (nullable org/clinic)",
+      "principalKey": "none required",
+      "sensitivity": "AU",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": "append-only"
+    },
+    {
+      "model": "SecurityIncident",
+      "owningDomain": "Security Incident Response and Detection",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "MA (nullable org/clinic)",
+      "principalKey": "none required",
+      "sensitivity": "AU",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": "mutable aggregate"
+    },
+    {
+      "model": "SecurityIncidentActivity",
+      "owningDomain": "Security Incident Response and Detection",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "PI (via incidentId)",
+      "principalKey": "—",
+      "sensitivity": "AU",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": "immutable history"
+    },
+    {
+      "model": "PlatformAdminAuditEvent",
+      "owningDomain": "Platform Administration",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "MA (nullable actor, resource-scoped not tenant-scoped)",
+      "principalKey": "none required",
+      "sensitivity": "AU",
+      "referencedCrossDomainBy": "written by any platform-admin-facing mutation (platformAdminAudit.ts) — cross-cutting by design",
+      "crossesDomainBoundary": true,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": "append-only platform audit ledger; records data_retention manual-run lifecycle events on behalf of Privacy domain (RETENTION-MANUAL-RUN-AUDIT-001)"
+    },
+    {
+      "model": "PatientCommunicationPreference",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD",
+      "referencedCrossDomainBy": "read by Messaging — WhatsApp/Instagram/SMS/Email send paths as a consent gate",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "central per-channel/per-purpose consent register (KVKK-HIGH-007); supersedes legacy per-channel opt-out fields as source of truth going forward"
+    },
+    {
+      "model": "PatientCommunicationConsentEvent",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD/AU",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "append-only evidence trail for PatientCommunicationPreference transitions; ordered by revision, not createdAt"
+    },
+    {
+      "model": "CommunicationConsentConflictBucket",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "AU (deliberately patient-de-identified)",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "projection",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "aggregate-only conflict counter; deliberately excludes any patient-level identifier by design"
+    },
+    {
+      "model": "PatientLegacyConsentCorrection",
+      "owningDomain": "Privacy / Consent / Retention / DSR",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS(+OS)",
+      "principalKey": "clinicId",
+      "sensitivity": "PD/AU",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "KVKK-HIGH-008 immutable correction ledger for legacy consent-adjacent fields (e.g. Patient.smsOptOut); create-only, no update/delete route"
+    },
+    {
+      "model": "FileBackupRun",
+      "owningDomain": "Storage Abstraction",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "G (platform-run, spans clinics)",
+      "principalKey": "none required",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "off-host file-backup run ledger (ADR-013/F0-011 gap-C remediation); reads PatientAttachment/LabOrderAttachment/ImagingImage source keys cross-domain via FileBackupEntry.sourceModel"
+    },
+    {
+      "model": "FileBackupEntry",
+      "owningDomain": "Storage Abstraction",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP (references PD/HD source records by id, stores no content)",
+      "referencedCrossDomainBy": "sourceModel references Patients/Lab/Imaging-owned attachment records by id — evidence/ledger reference, not a content copy in this table",
+      "crossesDomainBoundary": true,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "immutable per-run entry; a file verified once is never mutated, only re-recorded as skipped_unchanged in a later run"
+    },
+    {
+      "model": "ExternalCalendarIntegration",
+      "owningDomain": "External Calendar Integration",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS (clinicId @unique)",
+      "principalKey": "clinicId",
+      "sensitivity": "CR (encrypted client secret/webhook secret)",
+      "referencedCrossDomainBy": "clinic FK into Organization/Clinic/Membership (root tenant entity)",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "platform-admin-configured; disabled by default; provider-agnostic by construction (\"digidentis\" is the first provider key)"
+    },
+    {
+      "model": "ExternalCalendarMapping",
+      "owningDomain": "External Calendar Integration",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": "localId references User.id (Identity and Access) or AppointmentType.id (Appointments and Availability) by id, resolved only through externalCalendarMappingService.ts — never matched by name",
+      "crossesDomainBoundary": true,
+      "referenceType": "identity_or_reference_data",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "id-based practitioner/service mapping; missing/inactive mapping blocks sync with an administrative error"
+    },
+    {
+      "model": "ExternalCalendarInboundEvent",
+      "owningDomain": "External Calendar Integration",
+      "ownershipCategory": "PLATFORM_INFRASTRUCTURE",
+      "tenantScope": "MA (nullable org/clinic, mirrors MessagingInboundEvent pattern)",
+      "principalKey": "none required",
+      "sensitivity": "OP",
+      "referencedCrossDomainBy": null,
+      "crossesDomainBoundary": false,
+      "referenceType": "evidence",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "expose via Core public contract (e.g. AuditService.record(), StoragePort, SecuritySignalIngest) — no direct cross-module table access once F2 boundaries are enforced",
+      "notes": "idempotent inbound webhook ledger; unknown/reserved event types stored without applying any domain change"
+    },
+    {
+      "model": "ExternalCalendarAppointmentLink",
+      "owningDomain": "External Calendar Integration",
+      "ownershipCategory": "DOMAIN_OWNED",
+      "tenantScope": "CS",
+      "principalKey": "clinicId",
+      "sensitivity": "PD (appointmentId FK; no independent patient content)",
+      "referencedCrossDomainBy": "appointmentId references Appointment (Appointments and Availability domain) — direct FK, no contract yet",
+      "crossesDomainBoundary": true,
+      "referenceType": "transaction",
+      "directPrismaAccessTemporarilyAllowed": true,
+      "recommendedFutureContractDirection": "owning domain's own public query/command contract (per DEPENDENCY_MAP.md §4/§6)",
+      "notes": "stable NoraMedi<->provider appointment reference plus outbound-create idempotency ledger; atomic claim via conditional updateMany"
+    }
+  ],
+  "coverage": {
+    "prisma_models_committed_current_head": 99,
+    "prisma_models_mapped": 99,
+    "domains_total": 38,
+    "domains_inherited_from_f0_003_f0_004": 37,
+    "domains_new_this_task": 1,
+    "domains_with_delta_evidence_this_task": 3
+  },
+  "recommended_next_discovery_task": "F2-PREP-002 (per parallel-authorization list in this task's own brief) OR, if not already scoped by F2-PREP-002/003/004, a targeted \"F0-004-R1\" incremental dependency-matrix update limited to the External Calendar Integration domain and the Communication Consent / Legacy Consent Correction / File Backup / Platform Admin Audit deltas identified here — so those additions reach the same evidence tier (import/call-evidence-coded C/E/S/X matrix cells) as the other 37 domains before ADR-001/ADR-015 external review treats this inventory as equally authoritative."
+}
