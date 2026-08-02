@@ -1,0 +1,670 @@
+{
+  "task": "F2-PREP-004",
+  "title": "Modularization Sequencing, Pilot Selection, and Migration Plan",
+  "phase": "F2 PREPARATION - Modular Monolith Boundary Definition",
+  "type": "READ-ONLY sequencing design + new evidence files only",
+  "status": "AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW",
+  "baseline": {
+    "remote": "origin",
+    "branch": "main",
+    "commit": "70b1690c1a656c95cead7b42812cc9ae6447bfb7",
+    "commitSubject": "Merge pull request #275 from MustafaBasol/feature/external-calendar-outbound-sync-phase2",
+    "commitDate": "2026-08-01T22:13:44+02:00"
+  },
+  "worktree": {
+    "path": "fresh isolated worktree; local filesystem path intentionally omitted",
+    "branch": "docs/f2-prep-004-modularization-sequence",
+    "createdVia": [
+      "git fetch origin",
+      "git worktree add -b docs/f2-prep-004-modularization-sequence <local-path-omitted> origin/main"
+    ]
+  },
+  "independenceRule": {
+    "excludedFromReading": [
+      "F2-PREP-001 branch/evidence",
+      "F2-PREP-002 branch/evidence",
+      "F2-PREP-003 branch/evidence"
+    ],
+    "excludedFromReadingNote": "This list reflects the independence rule as applied during this task's original evidence-gathering pass (R0), when none of the three had merged. F2-PREP-001 has since merged (PR #276) and was read only during the R1 reconciliation pass (see reconciliation.mergedOwnershipInventoryRead). F2-PREP-003 has since merged (PR #277) and was read only during this R2 reconciliation pass (see reconciliationR2.mergedFeatureIntakeEvidenceRead). F2-PREP-002-R1 remains unmerged/pending and has not been read by any pass of this task.",
+    "permittedCrossValidationSources": [
+      "docs/program/MODULE_MAP.md (F0-003, merged to main)",
+      "docs/program/DEPENDENCY_MAP.md (F0-004, merged to main)",
+      "docs/program/CURRENT_PHASE.md (merged to main, context only)",
+      "docs/program/RISK_REGISTER.md (merged to main, context only)"
+    ],
+    "crossValidationResult": "no_contradiction_found",
+    "notableRefinement": "Privacy has zero import-level fan-out (independent finding) but real schema-level R/W fan-out into Patient per F0-004's PRV row (e.g. legacyConsentCorrection.ts:302 mutates Patient.smsOptOut directly) - both true simultaneously, not a contradiction."
+  },
+  "sourcesInspected": {
+    "independentResearchPasses": [
+      "Prisma schema (server/prisma/schema.prisma, 3360 lines, 98 models) + full prisma.$transaction inventory (43 sites classified)",
+      "Cross-domain import fan-in/fan-out analysis across all 10 candidate domain file clusters",
+      "Test coverage mapping across 118 server/src/tests/*.test.ts files",
+      "git log change-frequency analysis over full repository history (774 commits) + boundary-enforcement tooling audit"
+    ],
+    "crossValidationDocsRead": [
+      "docs/program/MODULE_MAP.md",
+      "docs/program/DEPENDENCY_MAP.md",
+      "docs/program/CURRENT_PHASE.md",
+      "docs/program/RISK_REGISTER.md"
+    ],
+    "mergedMainDocsReadDuringReconciliation": [
+      "docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md (merged via PR #276)",
+      "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json (merged via PR #276)",
+      "docs/program/evidence/F2-PREP-003_FEATURE_INTAKE_AND_CLICKUP_DOMAIN_MAPPING.md (merged via PR #277)",
+      "docs/program/evidence/F2-PREP-003_feature_intake_domain_mapping.json (merged via PR #277)"
+    ],
+    "independenceNoteR1": "As of the F2-PREP-004-R1 revision, F2-PREP-002 and F2-PREP-003 remained unmerged and were not read, per the independence rule.",
+    "independenceNoteR2": "As of this F2-PREP-004-R2 revision, F2-PREP-003 has since merged (PR #277) and was read as repository evidence (see reconciliationR2). F2-PREP-002-R1 remains unmerged/pending and was not read."
+  },
+  "domainScoring": {
+    "scale": "1-5, 5 = most favorable for an early/first pilot (safe, simple, low blast radius)",
+    "waitingFeaturesAxis": "NO_REPOSITORY_EVIDENCE - requires a product backlog/ticket tracker not accessible in queryable form within this task's independence constraints; not fabricated",
+    "domains": [
+      {
+        "id": "imaging",
+        "boundaryClarity": 5,
+        "currentCoupling": 5,
+        "businessCriticality": 4,
+        "tenantRisk": 4,
+        "kvkkRisk": 3,
+        "transactionComplexity": 5,
+        "providerCoupling": 3,
+        "testCoverage": 3,
+        "changeFrequency": 5,
+        "migrationEffort": 4,
+        "rollbackEase": 5,
+        "additiveMoveAbility": 5,
+        "reusablePatternValue": 3,
+        "changeTouches120d": 30,
+        "distinctFilesTouched": 10,
+        "importFanOut": 0,
+        "importFanIn": 0,
+        "crossDomainTransactionSites": 0,
+        "tenantScopingGaps": [
+          "ImagingBridgePairingDevice missing clinicId/organizationId"
+        ],
+        "dedicatedTestFiles": 5,
+        "note": "Cleanest transactional profile of any FK-heavy domain: patientId/appointmentId/treatmentCaseId are validated by a read before the transaction opens, never written cross-domain inside it. Already has a path-filtered CI workflow (windows-bridge-pr.yml)."
+      },
+      {
+        "id": "billing",
+        "boundaryClarity": 5,
+        "currentCoupling": 5,
+        "businessCriticality": 3,
+        "tenantRisk": 4,
+        "kvkkRisk": 3,
+        "transactionComplexity": 5,
+        "providerCoupling": 5,
+        "testCoverage": 3,
+        "changeFrequency": 3,
+        "migrationEffort": 4,
+        "rollbackEase": 5,
+        "additiveMoveAbility": 5,
+        "reusablePatternValue": 5,
+        "changeTouches120d": 48,
+        "distinctFilesTouched": 8,
+        "importFanOut": 0,
+        "importFanIn": 1,
+        "crossDomainTransactionSites": 0,
+        "tenantScopingGaps": [
+          "PaymentPlanInstallment missing clinicId"
+        ],
+        "dedicatedTestFiles": 10,
+        "note": "No cross-domain prisma.$transaction touches billing models at all. earningService.ts/practitionerEarnings.ts/practitionerPayouts.ts/compensationRules.ts have zero dedicated tests - a gap to close in Stage 1/2, not a disqualifier."
+      },
+      {
+        "id": "inventory",
+        "boundaryClarity": 4,
+        "currentCoupling": 3,
+        "businessCriticality": 3,
+        "tenantRisk": 4,
+        "kvkkRisk": 5,
+        "transactionComplexity": 2,
+        "providerCoupling": 5,
+        "testCoverage": 1,
+        "changeFrequency": 5,
+        "migrationEffort": 5,
+        "rollbackEase": 3,
+        "additiveMoveAbility": 3,
+        "reusablePatternValue": 3,
+        "changeTouches120d": 6,
+        "distinctFilesTouched": 3,
+        "importFanOut": 0,
+        "importFanIn": 1,
+        "crossDomainTransactionSites": 2,
+        "tenantScopingGaps": [],
+        "dedicatedTestFiles": 0,
+        "note": "Deceptively clean at import level. treatmentStockDeduction.ts writes InventoryItem/InventoryTransaction/Notification inside the SAME prisma.$transaction opened for TreatmentPlanProcedure completion (treatmentPlanProcedures.ts:151,271) - a real 3-domain (patients+inventory+notifications) write transaction. Zero test coverage. Not a good first-pilot despite low import fan-out."
+      },
+      {
+        "id": "notifications",
+        "boundaryClarity": 3,
+        "currentCoupling": 3,
+        "businessCriticality": 3,
+        "tenantRisk": 4,
+        "kvkkRisk": 4,
+        "transactionComplexity": 4,
+        "providerCoupling": 4,
+        "testCoverage": 1,
+        "changeFrequency": 4,
+        "migrationEffort": 5,
+        "rollbackEase": 4,
+        "additiveMoveAbility": 4,
+        "reusablePatternValue": 3,
+        "changeTouches120d": 16,
+        "distinctFilesTouched": 6,
+        "importFanOut": 2,
+        "importFanIn": 2,
+        "crossDomainTransactionSites": 0,
+        "tenantScopingGaps": [],
+        "dedicatedTestFiles": 0,
+        "note": "Notification model has zero Prisma FKs to any other model, but is written to directly from inventory's cross-domain transaction. Zero dedicated test files; only incidental source-string assertions in unrelated suites."
+      },
+      {
+        "id": "integrations",
+        "boundaryClarity": 3,
+        "currentCoupling": 3,
+        "businessCriticality": 3,
+        "tenantRisk": 3,
+        "kvkkRisk": 3,
+        "transactionComplexity": 3,
+        "providerCoupling": 2,
+        "testCoverage": 4,
+        "changeFrequency": 3,
+        "migrationEffort": 3,
+        "rollbackEase": 3,
+        "additiveMoveAbility": 4,
+        "reusablePatternValue": 3,
+        "changeTouches120d": 58,
+        "distinctFilesTouched": 24,
+        "importFanOut": 3,
+        "importFanIn": 2,
+        "crossDomainTransactionSites": 1,
+        "tenantScopingGaps": [
+          "LabWorkOrderStatusHistory missing clinicId"
+        ],
+        "dedicatedTestFiles": 14,
+        "note": "labOrders/* subfolder is internally clean (zero external fan-out). Includes the one genuine transport-level route E2E test in the whole suite (externalCalendarWebhookRouteE2E.test.ts). Heavy real external-provider coupling (DigiDentiS, external calendar providers, Meta webhook transport)."
+      },
+      {
+        "id": "patients",
+        "boundaryClarity": 2,
+        "currentCoupling": 2,
+        "businessCriticality": 1,
+        "tenantRisk": 4,
+        "kvkkRisk": 2,
+        "transactionComplexity": 1,
+        "providerCoupling": 5,
+        "testCoverage": 3,
+        "changeFrequency": 2,
+        "migrationEffort": 1,
+        "rollbackEase": 1,
+        "additiveMoveAbility": 2,
+        "reusablePatternValue": 2,
+        "changeTouches120d": 64,
+        "distinctFilesTouched": 8,
+        "importFanOut": 3,
+        "importFanIn": 1,
+        "crossDomainTransactionSites": 5,
+        "tenantScopingGaps": [],
+        "dedicatedTestFiles": 9,
+        "note": "Near-zero import-level fan-in (contrary to intuitive assumption) but is the FK target of most cross-domain writes and participant in 5 of 9 confirmed cross-domain transactions. MODULE_MAP: most-referenced model, 18+ relations. Regulatory/tenant-critical."
+      },
+      {
+        "id": "privacy_retention_consent",
+        "boundaryClarity": 3,
+        "boundaryClarityNote": "3 at import layer / 2 at schema layer - see note",
+        "currentCoupling": 4,
+        "currentCouplingNote": "4 at import layer (zero fan-out) / 2 at schema layer (real R/W into Patient)",
+        "businessCriticality": 1,
+        "tenantRisk": 4,
+        "kvkkRisk": 1,
+        "transactionComplexity": 2,
+        "providerCoupling": 4,
+        "testCoverage": 5,
+        "changeFrequency": 2,
+        "migrationEffort": 2,
+        "rollbackEase": 2,
+        "additiveMoveAbility": 3,
+        "reusablePatternValue": 2,
+        "changeTouches120d": 69,
+        "distinctFilesTouched": 27,
+        "importFanOut": 0,
+        "importFanIn": "very_high_13plus_sites",
+        "crossDomainTransactionSites": 1,
+        "tenantScopingGaps": [],
+        "dedicatedTestFiles": 30,
+        "note": "Zero cross-domain file-import fan-out but real schema-level R/W into Patient (server/src/services/communicationConsent/legacyConsentCorrection.ts:302 mutates Patient.smsOptOut directly), corroborated by F0-004 PRV row (R/W/S into PAT, R/W into APT, R into TRC/DEN). 2nd-highest fan-out of F0-004's 37 domains (97 edges). Best-tested domain in the repo (~30 files, only domain with real-Postgres dbVerification coverage). Under active, in-flight KVKK regulatory remediation per RISK_REGISTER.md/CURRENT_PHASE.md (R-061 OPEN). This is the evidence basis for NOT selecting privacy as pilot despite it being the current blocker domain."
+      },
+      {
+        "id": "appointments",
+        "boundaryClarity": 1,
+        "currentCoupling": 1,
+        "businessCriticality": 1,
+        "tenantRisk": 4,
+        "kvkkRisk": 3,
+        "transactionComplexity": 1,
+        "providerCoupling": 3,
+        "testCoverage": 4,
+        "changeFrequency": 2,
+        "migrationEffort": 1,
+        "rollbackEase": 1,
+        "additiveMoveAbility": 2,
+        "reusablePatternValue": 2,
+        "changeTouches120d": 51,
+        "distinctFilesTouched": 9,
+        "importFanOut": 5,
+        "importFanIn": 3,
+        "crossDomainTransactionSites": 5,
+        "tenantScopingGaps": [],
+        "dedicatedTestFiles": 12,
+        "note": "Highest import fan-out of the 10 domains (5 target domains). F0-004: 2nd-highest fan-in of any of the 37 pre-existing domains (APT, 116 edges). appointmentRequests.ts:305 conversion transaction spans patients+appointments+integrations, repeated across 5 near-identical call sites."
+      },
+      {
+        "id": "messaging",
+        "boundaryClarity": 1,
+        "currentCoupling": 1,
+        "businessCriticality": 2,
+        "tenantRisk": 3,
+        "kvkkRisk": 2,
+        "transactionComplexity": 2,
+        "providerCoupling": 1,
+        "testCoverage": 4,
+        "changeFrequency": 1,
+        "migrationEffort": 1,
+        "rollbackEase": 2,
+        "additiveMoveAbility": 2,
+        "reusablePatternValue": 2,
+        "changeTouches120d": 192,
+        "distinctFilesTouched": 38,
+        "importFanOut": 3,
+        "importFanOutNote": "3 target domains but dozens of individual import lines (13+ into privacy, 13+ into AI)",
+        "importFanIn": 3,
+        "crossDomainTransactionSites": 3,
+        "tenantScopingGaps": [],
+        "dedicatedTestFiles": 20,
+        "note": "Highest change frequency by far (192 touches/120d, ~3x next domain). F0-004: highest fan-out of any of the 37 pre-existing domains (WHA, 106 edges) - 'god module' signature, consistent with routes/whatsapp.ts being 3999 lines with only ~380 being actual route handlers. Contains all 9 confirmed X (high-risk boundary violation) edges: direct Patient/Appointment writes from WhatsApp/Instagram AI flows bypassing the advisory-lock pattern used elsewhere."
+      },
+      {
+        "id": "ai",
+        "boundaryClarity": 1,
+        "currentCoupling": 1,
+        "businessCriticality": 3,
+        "tenantRisk": null,
+        "tenantRiskNote": "N/A - no Prisma models of its own",
+        "kvkkRisk": 2,
+        "transactionComplexity": 1,
+        "providerCoupling": 2,
+        "testCoverage": 2,
+        "changeFrequency": 2,
+        "migrationEffort": 1,
+        "rollbackEase": 2,
+        "additiveMoveAbility": 1,
+        "reusablePatternValue": 2,
+        "changeTouches120d": 65,
+        "distinctFilesTouched": 10,
+        "importFanOut": 3,
+        "importFanIn": "bidirectional_deep_entanglement_with_messaging",
+        "crossDomainTransactionSites": 0,
+        "crossDomainTransactionSitesNote": "0 of its own; participates in messaging's 3 transaction sites since AI code physically executes inside those transactions",
+        "tenantScopingGaps": [],
+        "dedicatedTestFiles": 3,
+        "note": "Zero prisma.* calls in googleAiStudio.ts/whatsappConversationAgent.ts - no data-layer footprint. F0-004's PAI (AI Platform) row/column entirely empty, consistent with F0-003's 'confirmed absent, not merely unverified' finding. routes/whatsapp.ts imports 7 of 10 AI files; metaWhatsAppAiProcessor.ts and instagramAiConversationProcessor.ts (both inside messaging's own subfolders) import 6 AI files each; whatsappBookingFlow.ts:20 imports back into messaging - bidirectional, not one-way. Not extractable as a data-domain module today; only a stateless-service (prompt/NLU/schema files, already DB-free) extraction is realistic."
+      }
+    ]
+  },
+  "pilotSelection": {
+    "primary": {
+      "domain": "imaging",
+      "rationale": [
+        "Zero cross-domain import coupling in both directions (0 fan-out, 0 fan-in among the 10 candidate domains)",
+        "Cleanest transactional profile of any FK-heavy domain - all 5 own prisma.$transaction sites are domain-internal, FK values validated by a pre-transaction read, never written cross-domain inside the transaction",
+        "Lowest business-criticality-weighted blast radius among low-coupling candidates (degrades an optional feature, not money movement or clinical continuity)",
+        "Lowest change frequency of the FK-heavy domains (30 touches/120d)",
+        "Already has a path-filtered CI workflow (windows-bridge-pr.yml) - organizational precedent for isolated CI treatment"
+      ],
+      "caveat": "Reusable-pattern value scored lower (3/5) than billing's (5/5) because of idiosyncratic hardware/Windows-bridge/DICOM content that won't generalize to the next module; the reusable part is the process (Stage 1-7), not the domain content.",
+      "status": "independently_recommended_primary_pilot_candidate"
+    },
+    "fallback": {
+      "domain": "billing",
+      "rationale": [
+        "Equal-lowest import coupling (0 fan-out, 1 read-only fan-in edge)",
+        "Zero cross-domain prisma.$transaction sites at all - only dependency is a safely-splittable two-phase read-then-write",
+        "Zero external provider coupling - cleanest 'pure backend module' pattern instance, highest reusable-pattern value (5/5)",
+        "One small tenant-scoping gap (PaymentPlanInstallment.clinicId), additive fix"
+      ],
+      "whenToPreferOverPrimary": "If reviewers judge imaging's hardware-bridge idiosyncrasies make it a poor template for subsequent pure-TypeScript modules",
+      "status": "independently_recommended_fallback_pilot_candidate"
+    },
+    "explicitlyUnsuitableAsFirstPilot": [
+      {
+        "domain": "appointments",
+        "reason": "Highest import fan-out of the 10 domains (5 target domains); F0-004 confirms 2nd-highest fan-in of the 37 pre-existing domains (116 edges); central participant in the richest cross-domain transaction in the repository (patients+appointments+integrations, 5 near-identical call sites)."
+      },
+      {
+        "domain": "messaging",
+        "reason": "F0-004 confirms highest fan-out of the 37 pre-existing domains (WHA, 106 edges); contains all 9 confirmed high-risk boundary-violation writes into Patient/Appointment; by far the highest change frequency in the repository (192 touches/120d, ~3x next domain) - too much concurrent churn to safely re-draw a boundary around right now."
+      },
+      {
+        "domain": "patients",
+        "reason": "Most cross-domain-referenced Prisma model (18+ relations per MODULE_MAP); direct participant in 5 of 9 confirmed cross-domain transactions; regulatory/tenant-critical clinical core entity; coupling is schema-level, not visible to a naive import-count check."
+      },
+      {
+        "domain": "privacy_retention_consent",
+        "reason": "Task explicitly warns against defaulting to this domain because it is the current blocker; evidence independently supports the warning: real schema-level R/W into Patient (not fully decoupled despite zero import-level fan-out); 2nd-highest fan-out of F0-004's 37 domains (97 edges) and very high fan-in from messaging; KVKK/regulatory risk (a defect here is a compliance incident, not just a bug); already under active, in-flight regulatory remediation (RISK_REGISTER.md R-061 OPEN); DEPENDENCY_MAP's own F0-007 addendum states its PRV/WHA/SMS/REC cells are already known to be provisional pending further in-flight KVKK-HIGH-007 work."
+      },
+      {
+        "domain": "ai",
+        "reason": "No Prisma models, zero prisma.* calls, no data-layer footprint to extract (F0-004's PAI row/column entirely empty); bidirectionally entangled with messaging with no existing interface boundary; modularizing it first would really be a disguised, premature attempt to modularize messaging."
+      }
+    ],
+    "deferredNotFirstWaveButNotUnsuitable": [
+      "notifications",
+      "inventory",
+      "integrations"
+    ],
+    "waitingFeaturesAxis": "NO_REPOSITORY_EVIDENCE for all 10 domains - not used as a pilot-selection factor",
+    "recommendationStatus": "INDEPENDENTLY_RECOMMENDED_CANDIDATES_ONLY - not an approved or selected pilot. Final pilot selection is deferred to F2-PREP-005 (Consolidated Modularization Charter). No implementation task is authorized by this evidence alone.",
+    "mustBeComparedByF2Prep005": [
+      "imaging",
+      "billing",
+      "external_calendar_integration",
+      "CC-04 (Appointment booking/cancellation command contract, per merged F2-PREP-003 - a contract-level candidate, not a domain-migration-order claim)",
+      "any pilot candidate emerging from F2-PREP-002-R1 (still pending)"
+    ],
+    "externalCalendarIntegrationNote": "Not independently scored by this task (did not exist as a named candidate in this task's own 10-domain brief or independent research pass). Added to the F2-PREP-005 comparison set per F2-PREP-004-R1 reconciliation against merged F2-PREP-001 evidence, which observes EXC 'already exhibits essentially the full target module shape' as a factual, evidence-based observation - explicitly not a selection, per F2-PREP-001 itself."
+  },
+  "migrationStages": [
+    {
+      "stage": 1,
+      "name": "Freeze ownership and add dependency rules",
+      "changedFileCategories": [
+        "documentation only"
+      ],
+      "backwardCompatible": true,
+      "rollback": "revert documentation commit, zero risk",
+      "productionVerification": "none required"
+    },
+    {
+      "stage": 2,
+      "name": "Introduce public contract without moving behavior",
+      "changedFileCategories": [
+        "new public.ts wrapper file(s) inside existing folder"
+      ],
+      "backwardCompatible": true,
+      "rollback": "delete new file(s), nothing depends on them yet",
+      "productionVerification": "none required (additive, unused code path)"
+    },
+    {
+      "stage": 3,
+      "name": "Move application service behind contract",
+      "changedFileCategories": [
+        "consumer import path change",
+        "internal file relocation within same top-level folder (not into server/src/modules)"
+      ],
+      "backwardCompatible": true,
+      "rollback": "revert consumer import-path change",
+      "productionVerification": "one full business day stable metrics before Stage 4"
+    },
+    {
+      "stage": 4,
+      "name": "Move infrastructure/data access",
+      "changedFileCategories": [
+        "own repository/data-access layer consolidation, same PrismaClient/schema",
+        "new no-cross-module-direct-Prisma regression test"
+      ],
+      "backwardCompatible": true,
+      "rollback": "revert consolidation commit, no data/schema touched",
+      "productionVerification": "one full business day stable metrics before Stage 5"
+    },
+    {
+      "stage": 5,
+      "name": "Move HTTP routes/jobs",
+      "changedFileCategories": [
+        "route file relocation",
+        "index.ts import/app.use line update",
+        "job registration update in startBackgroundJobs.ts if applicable"
+      ],
+      "backwardCompatible": true,
+      "backwardCompatibleNote": "total if URLs unchanged - only file location moves",
+      "rollback": "revert index.ts + relocation commit, same-day low-risk since URLs unchanged",
+      "productionVerification": "one full business day stable route health/error-rate + confirm job still fires on schedule"
+    },
+    {
+      "stage": 6,
+      "name": "Remove temporary compatibility imports",
+      "changedFileCategories": [
+        "deletion of Stage-3 compatibility re-export(s)"
+      ],
+      "backwardCompatible": false,
+      "backwardCompatibleNote": "intentionally broken for old internal path, only after Stage 5 typecheck proved nothing else uses it",
+      "rollback": "revert deletion commit, trivial",
+      "productionVerification": "confirm deploy succeeded and typecheck/build gates stayed green"
+    },
+    {
+      "stage": 7,
+      "name": "Enforce boundary in CI",
+      "changedFileCategories": [
+        "one new devDependency (root and/or server package.json)",
+        "one new tool config file",
+        "one new/updated CI job"
+      ],
+      "backwardCompatible": true,
+      "backwardCompatibleNote": "total for runtime, CI/build-time only",
+      "rollback": "revert CI job addition, no application code touched",
+      "productionVerification": "none required (CI-only); exercise once with a throwaway test PR"
+    }
+  ],
+  "preferredPattern": "expand-migrate-contract",
+  "boundaryEnforcement": {
+    "currentState": {
+      "eslintConfigExists": false,
+      "eslintFunctional": false,
+      "eslintFunctionalNote": "present in package-lock.json only as a transitive peer dependency, not a real installed project dependency; root lint script is effectively non-functional",
+      "dependencyCruiserInstalled": false,
+      "madgeInstalled": false,
+      "tsMorphInstalled": false,
+      "tsconfigPathsOnServer": false,
+      "ciCoversServerTsBroadly": false,
+      "ciCoversServerTsNote": "only two workflow files exist, both path-filtered to imaging-bridge surfaces, both run on ubuntu-latest (no Windows-runner cross-check for JS/TS despite Windows local dev)",
+      "packageManager": "npm",
+      "workspaceSetup": "none - root and server are two separate npm projects, no workspaces field",
+      "codeGraphAvailable": false,
+      "codeGraphNote": "RISK_REGISTER.md/CURRENT_PHASE.md record at least six independent prior program tasks finding CodeGraph unavailable in their execution environment"
+    },
+    "optionsAssessed": [
+      {
+        "option": "TypeScript paths aliases alone",
+        "maintenanceCost": "low",
+        "windowsLinuxCompat": "full",
+        "ciCost": "none",
+        "falsePositiveRisk": "n/a - cannot enforce, only conventions",
+        "contractExpressiveness": "none - convenience only",
+        "lockfileImpact": "zero"
+      },
+      {
+        "option": "ESLint + eslint-plugin-boundaries",
+        "maintenanceCost": "medium - requires first fixing currently-broken lint setup",
+        "windowsLinuxCompat": "full",
+        "ciCost": "low-medium",
+        "falsePositiveRisk": "medium, tunable",
+        "contractExpressiveness": "good - zones/element-types config",
+        "lockfileImpact": "one new devDependency tree, dual-install (root+server) caveat"
+      },
+      {
+        "option": "dependency-cruiser",
+        "maintenanceCost": "medium - one config file, standalone CLI",
+        "windowsLinuxCompat": "full - pure Node, no native deps",
+        "ciCost": "low",
+        "falsePositiveRisk": "low-medium, explicit regex/path rules",
+        "contractExpressiveness": "good - explicit forbidden rules + visual graph output",
+        "lockfileImpact": "one new devDependency, dual-install caveat"
+      },
+      {
+        "option": "madge",
+        "maintenanceCost": "low",
+        "windowsLinuxCompat": "full",
+        "ciCost": "low",
+        "falsePositiveRisk": "low but narrow scope (circular-dep detector, not a rule engine)",
+        "contractExpressiveness": "weak - no first-class public/private contract concept",
+        "lockfileImpact": "one new devDependency, dual-install caveat"
+      },
+      {
+        "option": "custom static import checker",
+        "maintenanceCost": "medium-high upfront, low ongoing",
+        "windowsLinuxCompat": "full",
+        "ciCost": "low",
+        "falsePositiveRisk": "depends entirely on bespoke code quality - highest risk",
+        "contractExpressiveness": "fully customizable to repo's own P/R/W/S/X vocabulary",
+        "lockfileImpact": "zero new runtime dependency if built on existing TS compiler API"
+      },
+      {
+        "option": "CodeGraph-based evidence checks",
+        "notEvaluated": true,
+        "reason": "confirmed unavailable in this program's execution environment by at least six independent prior tasks"
+      }
+    ],
+    "recommendation": {
+      "minimalFirst": "dependency-cruiser",
+      "minimalFirstRationale": "No prior working ESLint setup required; pure Node with no Windows-compatibility risk; rule model maps directly onto DEPENDENCY_MAP.md's existing P/R/W/S/X vocabulary; ship scoped to the pilot domain only at first with an allowlist/baseline for all other domains' pre-existing edges (notably messaging's 9 known X violations) so Stage 7 does not silently require fixing unrelated domains.",
+      "futureOption": "ESLint + eslint-plugin-boundaries",
+      "futureOptionRationale": "More expressive long-term choice (public.ts/private-module contract modeling, ecosystem-standard, editor-integrated real-time feedback) but requires first fixing the repository's currently non-functional ESLint setup - a separate, currently-unbudgeted piece of work not recommended to bundle into the first pilot's Stage 7.",
+      "companionDiagnostic": "madge - for circular-dependency detection and visual dependency graphs, not primary enforcement",
+      "status": "independently_recommended_minimal_candidate - not an accepted program decision",
+      "decisionOwner": "F2-PREP-005 must decide whether to adopt dependency-cruiser, a custom import checker, TypeScript path-based restrictions, or a future ESLint boundary-enforcement setup, and must record the resulting package/lockfile/supply-chain implications as an implementation concern at that time."
+    }
+  },
+  "releaseWaves": [
+    {
+      "wave": "M0",
+      "name": "Preparation and boundary rules",
+      "entryGate": "This evidence document + JSON merged; DEPENDENCY_MAP.md target rules accepted baseline; dependency-cruiser installed with config",
+      "exitGate": "dependency-cruiser runs successfully (non-blocking, report-only) against whole repo in CI at least once, producing baseline violation count per domain"
+    },
+    {
+      "wave": "M1",
+      "name": "Pilot module (recommended candidate: Imaging; recommended fallback: Billing; final choice - including whether External Calendar Integration should be considered instead - made by F2-PREP-005)",
+      "entryGate": "M0 exit gate met; Stage 1 complete for pilot domain",
+      "exitGate": "Stages 1-7 all complete for pilot domain; dependency-cruiser CI check blocking for pilot's folder with zero tolerated new violations; at least one real-HTTP smoke test added; one full business day stable production metrics post-Stage-5 documented"
+    },
+    {
+      "wave": "M2",
+      "name": "Low-coupling operational modules (Billing if not M1, Notifications, Integrations)",
+      "entryGate": "M1 exit gate met; Stage 1-7 pattern validated end-to-end at least once",
+      "exitGate": "all three modules pass Stages 1-7; dependency-cruiser blocking check covers M1+M2 folders; PaymentPlanInstallment.clinicId and LabWorkOrderStatusHistory.clinicId gaps closed; notifications zero-test-coverage gap closed to baseline",
+      "explicitExclusion": "Inventory deliberately NOT included by default despite low import-level coupling - its real coupling is transactional and tied to patients, not yet modularized at this point"
+    },
+    {
+      "wave": "M3",
+      "name": "Patient/appointment core",
+      "entryGate": "M2 exit gate met; separately-authorized design work exists for the 9 cross-domain transactions (outbox/saga/accepted-shared-boundary decision) - NOT part of this task's scope, explicitly flagged as a prerequisite",
+      "exitGate": "patients and appointments both pass Stages 1-7 (adapted per transaction design decision); inventory included once its patients dependency is resolved; dependency-cruiser extends coverage; zero new X-class edges introduced, CI-verified"
+    },
+    {
+      "wave": "M4",
+      "name": "Messaging/integrations (remaining)",
+      "entryGate": "M3 exit gate met; messaging's KVKK-HIGH-007-class remediation work (tracked separately) has reached a stable, non-actively-churning state",
+      "exitGate": "messaging's 9 pre-existing X edges resolved or individually accepted with documented compensating control; messaging passes Stages 1-7; AI service-layer (prompt/NLU/schema, already DB-free) extraction completed as a service module"
+    },
+    {
+      "wave": "M5",
+      "name": "Imaging (if deferred)/AI data-adjacent parts/high-risk providers",
+      "entryGate": "M4 exit gate met",
+      "exitGate": "dependency-cruiser blocking check covers full server/src tree; all 10 candidate domains have a defined, enforced boundary; ESLint+eslint-plugin-boundaries future option re-evaluated given proven pattern maturity"
+    }
+  ],
+  "filesChanged": [
+    "docs/program/evidence/F2-PREP-004_MODULARIZATION_SEQUENCE_AND_PILOT_SELECTION.md",
+    "docs/program/evidence/F2-PREP-004_modularization_sequence.json"
+  ],
+  "constraints": {
+    "noCodeMovement": true,
+    "noModuleFolderCreation": true,
+    "noImportRewrite": true,
+    "noSchemaMigration": true,
+    "noFrameworkRewrite": true
+  },
+  "reconciliation": {
+    "task": "F2-PREP-004-R1",
+    "purpose": "Reconcile this branch with current origin/main (which now includes merged F2-PREP-001), sanitize evidence, and calibrate pilot-selection language from authoritative to recommendation-only.",
+    "preMergeHead": "61d54ff37f323ead538408c5164384d7a16bc15",
+    "originMainShaAtReconciliation": "0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83",
+    "f2Prep001": {
+      "pr": 276,
+      "mergeCommit": "0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83"
+    },
+    "mergeStrategy": "git merge --no-ff origin/main (no rebase, no force push, no reset, no blanket -ours/-theirs)",
+    "mergeCommitCreatedByThisTask": "1fbd362231359b52dfacf5499a913b96c76e0f0",
+    "conflicts": "none - the merge added two new files only (F2-PREP-001's evidence MD+JSON); no file this task authored or touched was modified by origin/main since baseline",
+    "semanticConflictResolution": "not needed - no overlapping files",
+    "postMergeAncestorCheck": "origin/main confirmed an ancestor of HEAD after the merge (git merge-base --is-ancestor origin/main HEAD)",
+    "mergedOwnershipInventoryRead": [
+      "docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md",
+      "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json"
+    ],
+    "impactOnThisTasksFindings": {
+      "imagingCandidateScore": "Unchanged numerically. Refinement only: F2-PREP-001 splits 'imaging' into two 38-domain-taxonomy entries - IMG (Imaging - Server Ingest and Viewer) and BRG (Imaging - Device Bridge / Windows Bridge). This task's own 'imaging' bucket already spanned both (it cites the ImagingBridgePairingDevice tenant-scoping gap, a BRG-owned model). F2-PREP-001's domain-summary table flags 'Ownership ambiguity: YES' for both IMG and BRG, but its own per-domain JSON detail clarifies this is not a true ownership dispute: IMG = 'none significant on the ownership question itself'; BRG = 'bridge-agent/ and windows-bridge/ internal structure is unverified by this task' (those are separate deployables outside the CODEGRAPH-DISCIPLINE-scoped root set both tasks used - a shared, pre-existing scope limit, not a new gap). Net effect: no change to the primary-candidate recommendation; F2-PREP-005 should treat the Device Bridge's external deployable internals as an explicit due-diligence item before any Stage 1 work on that sub-scope.",
+      "billingFallbackScore": "Unchanged. F2-PREP-001 independently confirms this task's 'billing' bucket (routes/payments.ts, paymentPlans.ts, insuranceProvisions.ts, compensationRules.ts, practitionerEarnings.ts, practitionerPayouts.ts, financeDashboard.ts, services/earningService.ts) is a distinct concept from the separately-tracked, unimplemented 'PBL - Billing / Subscription Engine' domain (0 Prisma models, 0 routes, 0 services, classification 'planned/not implemented' per F2-PREP-001). No score change; this reconciliation makes the distinction explicit to prevent future readers conflating the two.",
+      "integrationsScore": "Potentially understated, not changed by this task. This task's independent 'integrations' bucket (scored 3s across most criteria, see domainScoring) was assembled from pieces of the old 37-domain taxonomy with no single clean analogue (per this task's own methodological note). F2-PREP-001 now names a formal 38th domain, External Calendar Integration (EXC), with its own dedicated routes/services/jobs/provider-factory pattern that did not exist at this task's independent-research scope and is not the same thing this task scored as 'integrations'. F2-PREP-001 itself observes EXC 'already exhibits essentially the full target module shape' (explicitly flagged there as an observation, not a selection). This task does not retroactively score EXC across all 14 criteria - that would require the same depth of independent transaction/coupling/test analysis given to the other 10 domains, which is out of scope for a reconciliation pass. EXC is instead added to the set F2-PREP-005 must compare (see pilotSelection.mustBeComparedByF2Prep005).",
+      "migrationWaveOrder": "Unchanged by this task. Flagged for F2-PREP-005: EXC's clean-slate shape (no legacy code to migrate, already provider-port-shaped) may make it a stronger M1/M2 candidate than this task's original wave plan anticipated, but EXC's cross-domain dependency edges are not yet coded into the accepted DEPENDENCY_MAP.md matrix (per F2-PREP-001 itself), so this task does not unilaterally reorder waves to include it.",
+      "pilotRiskAssumptions": "Reinforced, not changed. F2-PREP-001's ContactRequest OWNERSHIP_AMBIGUOUS finding (Appointments vs. a channel-agnostic intake domain, unresolved) reinforces (does not newly introduce) this task's existing exclusion of Appointments as a first-pilot candidate. F2-PREP-001's Privacy ownership deltas (+4 Prisma models, +10 services since the F0-003/F0-004 baseline, all under the Privacy/Consent/Retention/DSR domain) reinforce this task's existing exclusion of privacy as a first-pilot candidate (an actively-growing domain is not a safer pilot than this task already concluded)."
+    }
+  },
+  "correctedNextTask": {
+    "await": [
+      "F2-PREP-002-R1",
+      "F1-003-B2 completion/review status"
+    ],
+    "then": "Execute F2-PREP-005 - Consolidated Modularization Charter",
+    "f2Prep005MustDo": [
+      "compare all pilot candidates (Imaging, Billing, External Calendar Integration, CC-04 per merged F2-PREP-003, any from F2-PREP-002-R1)",
+      "select the accepted pilot",
+      "select the first boundary-enforcement mechanism",
+      "define M0 entry criteria",
+      "update authoritative tracker/phase/index documents",
+      "authorize the first implementation task"
+    ],
+    "notAuthorizedByThisTask": "Imaging Stage 1 implementation, or any other code/schema/migration change."
+  },
+  "upstreamTaskStatus": {
+    "asOf": "F2-PREP-004-R2",
+    "F2-PREP-001": "MERGED (PR #276, merge commit 0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83)",
+    "F2-PREP-002-R1": "pending",
+    "F2-PREP-003": "MERGED (PR #277, merge commit e8e05f669f049c4895e0c9a7f95db6f3fbd463fe)",
+    "F1-003-B2": "pending review/remediation status",
+    "F2-PREP-005": "not started"
+  },
+  "reconciliationR2": {
+    "task": "F2-PREP-004-R2",
+    "purpose": "Reconcile this branch with current origin/main (which now includes merged F2-PREP-003), correct stale sibling-task status wording, and confirm (not rescore) against F2-PREP-003's feature-intake evidence.",
+    "preMergeHead": "8aafb137fd1ca6313336289182769a085f0dea20",
+    "originMainShaAtReconciliation": "e8e05f669f049c4895e0c9a7f95db6f3fbd463fe",
+    "f2Prep003": {
+      "pr": 277,
+      "mergeCommit": "e8e05f669f049c4895e0c9a7f95db6f3fbd463fe"
+    },
+    "mergeStrategy": "git merge --no-ff origin/main (no rebase, no force push, no reset, no blanket -ours/-theirs)",
+    "mergeCommitCreatedByThisTask": "faa4a725fa5576d98561b38b5248299de342767d",
+    "conflicts": "none - the merge added two new files only (F2-PREP-003's evidence MD+JSON); no file this task authored or touched was modified by origin/main since the R1 reconciliation",
+    "postMergeAncestorCheck": "origin/main confirmed an ancestor of HEAD after the merge (git merge-base --is-ancestor origin/main HEAD)",
+    "mergedFeatureIntakeEvidenceRead": [
+      "docs/program/evidence/F2-PREP-003_FEATURE_INTAKE_AND_CLICKUP_DOMAIN_MAPPING.md",
+      "docs/program/evidence/F2-PREP-003_feature_intake_domain_mapping.json (referenced via the MD companion; not independently re-parsed field-by-field)"
+    ],
+    "confirmedFromF2Prep003": {
+      "seventeenItemsNotFullBacklog": "Confirmed - F2-PREP-003 section 3 states explicitly: 'The 17-item repository-derived backlog in section 5 is not a substitute for the full ClickUp backlog... The 17 items must not be presented, cited, or reported anywhere as the full NoraMedi feature backlog total.'",
+      "clickupImportPending": "Confirmed - F2-PREP-003 recorded clickup_derived_backlog as an empty array, explicitly marked PENDING_EXTERNAL_IMPORT; no ClickUp MCP server was available in that task's execution environment.",
+      "noBacklogItemAssignedToExternalCalendarIntegration": "Confirmed - F2-PREP-003 section 5 ownership counts table explicitly states 'No item is currently owned by PRV, PAD, STG, or the new EXC domain' across all 17 repository-derived backlog items.",
+      "finalPilotSelectionDeferredToF2Prep005": "Confirmed - F2-PREP-003 section 4.1.C states 'No pilot module is selected by this task... F2-PREP-005 makes that call' and section 10 names F2-PREP-005 as the task that 'select[s] the pilot module.'"
+    },
+    "scoringChangeResult": {
+      "imagingRecommendation": "No change. F2-PREP-003's own backlog does include one item touching this task's 'imaging' bucket - F2P3-005 (Windows Bridge .NET test flakiness), owned by BRG, readiness SAFE_NOW_IN_EXISTING_BOUNDARY, wave 0 - which is corroborating, not contradicting: it independently confirms the Device Bridge sub-scope is currently stable enough for a small isolated fix with no new contract required, consistent with (not contrary to) this document's low-risk-pilot reasoning for Imaging.",
+      "billingFallback": "No change. None of F2-PREP-003's 17 items are owned by PAY/FIN/INS (this task's 'billing' bucket). The one billing-adjacent item, F2P3-015 'Billing / Subscription Engine', is owned by PBL - the separate, unimplemented domain this document's section 1.6 already distinguished from its own 'billing' bucket. F2-PREP-003 corroborates that distinction (PBL classified DISCOVERY_REQUIRED / inferred confidence, not an existing implemented surface).",
+      "externalCalendarIntegrationComparisonRequirement": "No change, reconfirmed. F2-PREP-003 independently confirms zero of its 17 backlog items touch EXC, and independently confirms final pilot selection (including whether EXC is accepted) is F2-PREP-005's job, not any preparation task's. This document's existing requirement that F2-PREP-005 compare EXC alongside Imaging/Billing stands unchanged.",
+      "waveOrdering": "No change to this document's M0-M5 migration-sequencing waves. Note for F2-PREP-005: F2-PREP-003 defines its own, differently-scoped 'delivery wave' numbering (0-4) for backlog-item readiness/dependency ordering - a distinct concept from this document's M0-M5 domain-migration waves. The two should not be conflated when F2-PREP-005 reconciles them. F2-PREP-003's F2P3-011 (CC-04, an Appointment booking/cancellation command contract, delivery wave 2, SAFE_AFTER_CONTRACT) is a narrower, contract-level recommendation - not a claim that Appointments should be the first domain-level migration pilot; it does not contradict this document's section 3 exclusion of Appointments as a first pilot, and is noted as a concrete future candidate for this document's Stage 2 (public-contract introduction) once Appointments' own boundary work begins (M3 in section 6)."
+    },
+    "netResult": "No candidate-score change. All four items F2-PREP-003 was read to confirm are confirmed. This is the expected 'no scoring change' outcome anticipated by the R2 task instruction."
+  }
+}
