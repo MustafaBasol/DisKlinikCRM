@@ -141,6 +141,35 @@ function publicRequest(opts: { headers?: Record<string, string>; body?: any; ip?
   };
 }
 
+/**
+ * Finds real Prisma client operations on a given model — `prisma.<model>.<method>(` or
+ * `tx.<model>.<method>(` — and returns each call's full argument text (via
+ * balanced-parenthesis scanning, not a fixed-shape regex, so differences in
+ * formatting/line-wrapping never produce a false negative). Deliberately
+ * does NOT match bare occurrences of the model name in comments, imports,
+ * type annotations, or unrelated identifiers — only an actual client method
+ * invocation counts as an "operation" here (CT-03 static-scope check).
+ */
+function findPrismaModelOperations(text: string, modelName: string): Array<{ method: string; argsText: string }> {
+  const callPattern = new RegExp(`\\b(?:prisma|tx)\\.${modelName}\\.(\\w+)\\(`, 'g');
+  const results: Array<{ method: string; argsText: string }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = callPattern.exec(text))) {
+    const openParenIndex = match.index + match[0].length - 1;
+    let depth = 0;
+    let i = openParenIndex;
+    for (; i < text.length; i++) {
+      if (text[i] === '(') depth++;
+      else if (text[i] === ')') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    results.push({ method: match[1]!, argsText: text.slice(openParenIndex + 1, i) });
+  }
+  return results;
+}
+
 async function main() {
   // ═══════════════════════════════════════════════════════════════════════
   // CT-02 — ListPatientImaging rejects cross-clinic patient/study access
@@ -243,10 +272,14 @@ async function main() {
   section('CT-03: ImagingBridgePairingDevice tenant scoping via parent pairing');
   {
     // Static scope check first (bounded to the Imaging/Privacy files this
-    // task already read — not a whole-repo scan): the ONLY place in the
-    // codebase that queries ImagingBridgePairingDevice is the pair-redemption
-    // handler, always filtered by a specific, already-resolved pairing.id.
-    await test('STATIC: ImagingBridgePairingDevice is queried in exactly one source location, always scoped by a resolved pairingId', async () => {
+    // task already read — not a whole-repo scan): every REAL Prisma client
+    // operation on imagingBridgePairingDevice must be scoped by a resolved
+    // pairingId. Detection is limited to actual `prisma.` / `tx.` client
+    // calls (via findPrismaModelOperations below) — a raw substring count
+    // would also match comments, imports, or type references and make an
+    // unrelated, behavior-preserving edit (e.g. a new comment mentioning the
+    // model name) fail this test for no real reason.
+    await test('STATIC: every real Prisma operation on imagingBridgePairingDevice is scoped by pairingId, and at least one such operation exists (not a vacuous pass)', async () => {
       const candidateFiles = [
         '../routes/imaging.ts',
         '../routes/imagingBridgePublic.ts',
@@ -254,18 +287,25 @@ async function main() {
         '../services/privacy/orphanFileInspection.ts',
         '../services/privacy/patientAnonymization.ts',
       ];
-      let occurrences = 0;
-      let scopedOccurrences = 0;
+      const operations: Array<{ file: string; method: string; argsText: string }> = [];
       for (const rel of candidateFiles) {
         const abs = new URL(rel, import.meta.url);
         const text = fs.readFileSync(abs, 'utf8');
-        const matches = text.match(/imagingBridgePairingDevice\.findMany\(\{\s*where:\s*\{\s*pairingId:/g);
-        const anyMatches = text.match(/imagingBridgePairingDevice/g);
-        occurrences += anyMatches?.length ?? 0;
-        scopedOccurrences += matches?.length ?? 0;
+        for (const op of findPrismaModelOperations(text, 'imagingBridgePairingDevice')) {
+          operations.push({ file: rel, ...op });
+        }
       }
-      assert.equal(occurrences, 1, `expected exactly one reference to imagingBridgePairingDevice across the scanned Imaging/Privacy files, found ${occurrences}`);
-      assert.equal(scopedOccurrences, 1, 'the single reference must be a findMany scoped by a resolved pairingId');
+      assert.ok(
+        operations.length >= 1,
+        'expected at least one real prisma/tx.imagingBridgePairingDevice.<method>(...) call across the scanned Imaging/Privacy files — zero would make the scoping assertion below pass vacuously',
+      );
+      for (const op of operations) {
+        assert.match(
+          op.argsText,
+          /\bpairingId\s*:/,
+          `${op.file}: imagingBridgePairingDevice.${op.method}(...) must be scoped by a pairingId filter/value; got args starting "${op.argsText.trim().slice(0, 120)}"`,
+        );
+      }
     });
 
     const fx = await createClinicFixtureSet('ct03');
