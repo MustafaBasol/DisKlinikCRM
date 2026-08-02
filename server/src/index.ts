@@ -34,6 +34,8 @@ import publicBookingRoutes from './routes/publicBooking.js';
 import treatmentPlanProceduresRoutes from './routes/treatmentPlanProcedures.js';
 import platformAdminRoutes from './routes/platformAdmin.js';
 import platformSecurityIncidentsRoutes from './routes/platformSecurityIncidents.js';
+import platformExternalCalendarRoutes from './routes/platformExternalCalendar.js';
+import externalCalendarOutboundSyncStatusRoutes from './routes/externalCalendarOutboundSyncStatus.js';
 import clinicRegistrationRoutes from './routes/clinicRegistration.js';
 import gdprExportRoutes from './routes/gdprExport.js';
 import clinicBulkExportRoutes from './routes/clinicBulkExport.js';
@@ -62,6 +64,7 @@ import laboratoriesRoutes from './routes/laboratories.js';
 import labOrdersRoutes from './routes/labOrders.js';
 import imagingRoutes from './routes/imaging.js';
 import imagingBridgePublicRoutes from './routes/imagingBridgePublic.js';
+import externalCalendarWebhookRoutes from './routes/externalCalendarWebhook.js';
 import { startBackgroundJobs } from './jobs/startBackgroundJobs.js';
 import { closeRedis } from './utils/redis.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
@@ -179,6 +182,7 @@ app.use('/api/public', instagramWebhookRoutes);
 app.use('/api/public', publicBookingRoutes);
 app.use('/api/public', publicClinicKvkkRoutes);
 app.use('/api/public', imagingBridgePublicRoutes); // köprü heartbeat — Bearer köprü token'ı ile, kullanıcı oturumu değil
+app.use('/api/public', externalCalendarWebhookRoutes);
 
 // Platform admin routes (kendi JWT'si var, global auth dışında)
 app.use('/api/platform', platformAdminRoutes);
@@ -186,6 +190,9 @@ app.use('/api/platform', platformAdminRoutes);
 // gate, kept in a separate file/router from platformAdmin.ts's already-large
 // route surface.
 app.use('/api/platform', platformSecurityIncidentsRoutes);
+// External calendar integration (DigiDentiS + future providers) — own
+// authenticatePlatformAdmin gate, kept separate for the same reason.
+app.use('/api/platform', platformExternalCalendarRoutes);
 
 // Self-service klinik kaydı (public)
 app.use('/api/register', clinicRegistrationRoutes);
@@ -204,6 +211,7 @@ app.use('/api', servicesRoutes);
 app.use('/api', appointmentRequestsRoutes);
 app.use('/api', contactRequestsRoutes);
 app.use('/api', appointmentsRoutes);
+app.use('/api', externalCalendarOutboundSyncStatusRoutes);
 app.use('/api', tasksRoutes);
 app.use('/api', treatmentCasesRoutes);
 app.use('/api', treatmentPackagesRoutes);

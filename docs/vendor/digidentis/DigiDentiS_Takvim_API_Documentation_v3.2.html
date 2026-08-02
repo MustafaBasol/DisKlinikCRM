@@ -1,0 +1,3463 @@
+<!DOCTYPE html>
+<!-- saved from url=(0108)file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#710-list-company-treatment-types -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DigiDentiS - Takvim API – Integration Documentation</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --paper: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --muted2: #64748b;
+      --border: #e2e8f0;
+      --code-bg: #f1f5f9;
+      --shadow: 0 18px 40px rgba(2, 6, 23, .08);
+      --radius: 16px;
+      --radius-sm: 12px;
+      --link: #2563eb;
+
+      --sidebar-bg: #ffffff;
+      --sidebar-text: #0f172a;
+      --sidebar-muted: #475569;
+      --sidebar-border: #e2e8f0;
+      --sidebar-hover: #f1f5f9;
+      --sidebar-active-bg: rgba(37,99,235,.10);
+      --sidebar-active-br: rgba(37,99,235,.18);
+
+      --get-bg: #e0f2fe;
+      --get-fg: #0369a1;
+      --post-bg: #ecfeff;
+      --post-fg: #0f766e;
+      --delete-bg: #fef2f2;
+      --delete-fg: #b91c1c;
+
+      --callout-note-bg: #f8fafc;
+      --callout-note-br: #e2e8f0;
+      --callout-warn-bg: #fff7ed;
+      --callout-warn-br: #fed7aa;
+      --callout-sec-bg: #f1f5f9;
+      --callout-sec-br: #cbd5e1;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text);
+    }
+
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .app {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      min-height: 100vh;
+    }
+
+    /* Light sidebar */
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      background: var(--sidebar-bg);
+      color: var(--sidebar-text);
+      border-right: 1px solid var(--sidebar-border);
+      padding: 18px 14px;
+      overflow: auto;
+    }
+
+    .brand {
+      padding: 12px 12px 14px;
+      border-radius: 14px;
+      background: #ffffff;
+      border: 1px solid var(--sidebar-border);
+      box-shadow: 0 10px 22px rgba(2,6,23,.05);
+      margin-bottom: 14px;
+    }
+    .brand-title {
+      font-weight: 700;
+      font-size: 14px;
+      line-height: 1.2;
+      color: var(--sidebar-text);
+    }
+    .brand-sub {
+      font-size: 12px;
+      color: var(--sidebar-muted);
+      margin-top: 4px;
+    }
+
+    .search {
+      display: flex;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: #ffffff;
+      border: 1px solid var(--sidebar-border);
+      margin-bottom: 12px;
+    }
+    .search input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--sidebar-text);
+      font-size: 13px;
+    }
+    .search input::placeholder { color: #94a3b8; }
+
+    .nav { margin: 0; padding: 6px 6px 10px; list-style: none; }
+    .nav li { margin: 2px 0; }
+    .nav a {
+      display: block;
+      padding: 8px 10px;
+      border-radius: 12px;
+      color: #0f172a;
+      font-size: 13px;
+      line-height: 1.25;
+      border: 1px solid transparent;
+    }
+    .nav a:hover {
+      background: var(--sidebar-hover);
+      border-color: var(--sidebar-border);
+      text-decoration: none;
+    }
+    .nav a.active {
+      background: var(--sidebar-active-bg);
+      border-color: var(--sidebar-active-br);
+      color: #0f172a;
+      font-weight: 650;
+    }
+    .nav .lvl-2 a { padding-left: 22px; font-size: 12.5px; color: #0f172a; opacity: .9;}
+    .nav .lvl-3 a { padding-left: 34px; font-size: 12px; color: #0f172a; opacity: .82;}
+
+    /* Main */
+    .main { padding: 28px 24px 80px; }
+    .paper {
+      max-width: 980px;
+      margin: 0 auto;
+      background: var(--paper);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(15,23,42,.06);
+      overflow: hidden;
+    }
+
+    /* Cover stays premium but lighter */
+    .cover {
+      padding: 34px 34px 26px;
+      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 40%, #eef2ff 100%);
+      color: #0f172a;
+      border-bottom: 1px solid var(--border);
+    }
+    .cover .logo-wrap {
+      display: inline-flex;
+      align-items: center;
+      background: #ffffff;
+      padding: 10px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 22px rgba(2,6,23,.05);
+    }
+    .cover img { height: 34px; width: auto; display: block; }
+    .cover h1 { margin: 18px 0 8px; font-size: 28px; letter-spacing: -0.02em; }
+    .cover p { margin: 0; color: var(--muted); font-size: 14px; }
+    .meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .pill {
+      font-size: 12px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #ffffff;
+      color: #0f172a;
+    }
+
+    .content { padding: 30px 34px 10px; }
+
+    .content h1, .content h2, .content h3 { scroll-margin-top: 18px; color: #0f172a; letter-spacing: -0.01em; }
+    .content h1 { font-size: 22px; margin: 26px 0 10px; }
+    .content h2 { font-size: 18px; margin: 22px 0 10px; }
+    .content h3 { font-size: 15px; margin: 18px 0 8px; }
+    .content p, .content li { font-size: 14px; line-height: 1.7; color: #0f172a; }
+    .content p { margin: 10px 0; }
+    .content ul, .content ol { padding-left: 20px; }
+
+    pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 14px 12px;
+      overflow: auto;
+      position: relative;
+      margin: 14px 0;
+    }
+    pre code { font-size: 12.5px; line-height: 1.55; color: #0b1220; display: block; white-space: pre; }
+    .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #fff;
+      cursor: pointer;
+      color: #111827;
+    }
+    .copy-btn:hover { background: #f8fafc; }
+
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+    th, td { text-align: left; border: 1px solid var(--border); padding: 10px 10px; vertical-align: top; }
+    th { background: #f8fafc; font-weight: 650; color: #0f172a; }
+    tr:nth-child(even) td { background: #fcfdff; }
+
+    .callout { border-radius: var(--radius-sm); padding: 12px 14px; margin: 14px 0; border: 1px solid var(--callout-note-br); background: var(--callout-note-bg); }
+    .callout strong { display: inline-block; margin-bottom: 4px; }
+    .callout.warning { border-color: var(--callout-warn-br); background: var(--callout-warn-bg); }
+    .callout.security { border-color: var(--callout-sec-br); background: var(--callout-sec-bg); }
+
+    .endpoint {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      box-shadow: 0 6px 18px rgba(2,6,23,.05);
+      margin: 14px 0 10px;
+    }
+    .badge {
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .02em;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+    }
+    .badge.get { background: var(--get-bg); color: var(--get-fg); }
+    .badge.post { background: var(--post-bg); color: var(--post-fg); }
+    .badge.delete { background: var(--delete-bg); color: var(--delete-fg); }
+    .path {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 13px;
+      color: #0b1220;
+    }
+    .endpoint .meta { font-size: 12px; color: var(--muted); }
+
+    .footer {
+      padding: 16px 34px 26px;
+      color: var(--muted2);
+      font-size: 12px;
+      border-top: 1px solid var(--border);
+      background: #fff;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: relative; height: auto; }
+      .main { padding: 18px 14px 60px; }
+      .content, .cover, .footer { padding-left: 18px; padding-right: 18px; }
+    }
+
+    @media print {
+      body, html { background: #fff; }
+      .sidebar { display: none; }
+      .main { padding: 0; }
+      .paper { box-shadow: none; border: none; border-radius: 0; }
+      .copy-btn { display: none; }
+      a { color: #0f172a; text-decoration: none; }
+    }
+
+    /* Scroll to Top Button */
+    .scroll-to-top {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      width: 48px;
+      height: 48px;
+      background: var(--link);
+      color: #ffffff;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(20px);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+    .scroll-to-top.visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+    .scroll-to-top:hover {
+      background: #1d4ed8;
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+      transform: translateY(-2px);
+    }
+    .scroll-to-top:active {
+      transform: translateY(0);
+    }
+    .scroll-to-top svg {
+      width: 24px;
+      height: 24px;
+      fill: currentColor;
+    }
+    @media print {
+      .scroll-to-top { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand" role="banner">
+        <div>
+          <div class="brand-title">DigiDentiS - Takvim API</div>
+          <div class="brand-sub">Enterprise docs · v3.2.0</div>
+        </div>
+      </div>
+      <div class="search" role="search">
+        <input id="search" type="text" placeholder="Search sections…" autocomplete="off">
+      </div>
+      <ul id="nav" class="nav" aria-label="Documentation navigation"><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#table-of-contents" data-target="table-of-contents" class="">Table of Contents</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#1-introduction" data-target="1-introduction" class="">1. Introduction</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#base-url" data-target="base-url" class="">Base URL</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#features" data-target="features" class="">Features</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#2-authentication" data-target="2-authentication" class="">2. Authentication</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#credentials" data-target="credentials" class="">Credentials</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#ip-whitelisting" data-target="ip-whitelisting" class="">IP Whitelisting</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#trusted-proxy-support" data-target="trusted-proxy-support" class="">Trusted Proxy Support</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#3-request-headers" data-target="3-request-headers" class="">3. Request Headers</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#required-headers-all-requests" data-target="required-headers-all-requests" class="">Required Headers (All Requests)</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#authentication-headers-mode-specific" data-target="authentication-headers-mode-specific" class="">Authentication Headers</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#optional-headers" data-target="optional-headers" class="">Optional Headers</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#response-headers" data-target="response-headers" class="">Response Headers</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#4-signature-calculation" data-target="4-signature-calculation" class="">4. Signature Calculation</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#step-1-create-body-hash" data-target="step-1-create-body-hash" class="">Step 1: Create Body Hash</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#step-2-create-signing-string" data-target="step-2-create-signing-string" class="">Step 2: Create Signing String</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#step-3-calculate-signature" data-target="step-3-calculate-signature" class="">Step 3: Calculate Signature</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#php-example" data-target="php-example" class="">PHP Example</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#5-rate-limiting" data-target="5-rate-limiting" class="">5. Rate Limiting</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#51-global-rate-limits-default" data-target="51-global-rate-limits-default" class="">5.1 Global Rate Limits (Default)</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#52-per-endpoint-rate-limits-v310" data-target="52-per-endpoint-rate-limits-v310" class="">5.2 Per-Endpoint Rate Limits</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#53-rate-limit-headers" data-target="53-rate-limit-headers" class="">5.3 Rate Limit Headers</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#54-rate-limit-exceeded-response" data-target="54-rate-limit-exceeded-response" class="">5.4 Rate Limit Exceeded Response</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#55-rate-limit-best-practices" data-target="55-rate-limit-best-practices" class="">5.5 Rate Limit Best Practices</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#6-response-headers" data-target="6-response-headers" class="">6. Response Headers</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#standard-headers-all-responses" data-target="standard-headers-all-responses" class="">Standard Headers (All Responses)</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#additional-headers-v310" data-target="additional-headers-v310" class="">Additional Headers</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#security-headers" data-target="security-headers" class="">Security Headers</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#7-api-endpoints" data-target="7-api-endpoints" class="">7. API Endpoints</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#71-health-check" data-target="71-health-check" class="">7.1 Health Check</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#72-list-companies" data-target="72-list-companies" class="">7.2 List Companies</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#73-get-company-details" data-target="73-get-company-details" class="">7.3 Get Company Details</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#74-get-company-quota" data-target="74-get-company-quota" class="">7.4 Get Company Quota</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#75-list-company-clinics" data-target="75-list-company-clinics" class="">7.5 List Company Clinics</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#76-list-company-doctors" data-target="76-list-company-doctors" class="">7.6 List Company Doctors</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#77-get-doctor-details" data-target="77-get-doctor-details" class="">7.7 Get Doctor Details</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#78-get-doctor-slots" data-target="78-get-doctor-slots" class="">7.8 Get Doctor Slots</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#79-get-all-slots-company-wide" data-target="79-get-all-slots-company-wide" class="">7.9 Get All Slots (Company-wide)</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#710-list-company-treatment-types" data-target="710-list-company-treatment-types" class="active">7.10 List Company Treatment Types</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#711-full-sync-export" data-target="711-full-sync-export" class="">7.11 Full Sync Export</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#712-create-appointment" data-target="712-create-appointment" class="">7.12 Create Appointment</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#713-list-appointments" data-target="713-list-appointments">7.13 List Appointments</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#714-get-appointment" data-target="714-get-appointment">7.14 Get Appointment</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#715-cancel-appointment" data-target="715-cancel-appointment">7.15 Cancel Appointment</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#716-reschedule-appointment" data-target="716-reschedule-appointment">7.16 Reschedule Appointment</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#8-error-codes" data-target="8-error-codes">8. Error Codes</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#http-status-codes" data-target="http-status-codes">HTTP Status Codes</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#error-response-format" data-target="error-response-format">Error Response Format</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#9-examples" data-target="9-examples">9. Examples</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#91-complete-php-integration-example" data-target="91-complete-php-integration-example">9.1 Complete PHP Integration Example</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#10-appendix" data-target="10-appendix">10. Appendix</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#101-external-id-format" data-target="101-external-id-format">10.1 External ID Format</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#102-idempotency" data-target="102-idempotency">10.2 Idempotency</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#103-timezone" data-target="103-timezone">10.3 Timezone</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#104-pagination" data-target="104-pagination">10.4 Pagination</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#105-date-range-limits" data-target="105-date-range-limits">10.5 Date Range Limits</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#106-audit-logging" data-target="106-audit-logging">10.7 Audit Logging</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#11-webhooks" data-target="11-webhooks">11. Webhooks</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#111-events" data-target="111-events">11.1 Event Types</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#112-request-format" data-target="112-request-format">11.2 Request Format</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#113-payload" data-target="113-payload">11.3 Payload Shape</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#114-signature-verification" data-target="114-signature-verification">11.4 Signature Verification</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#115-delivery-retries" data-target="115-delivery-retries">11.5 Delivery &amp; Retries</a></li><li class="lvl-3"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#116-best-practices" data-target="116-best-practices">11.6 Best Practices</a></li><li class="lvl-2"><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#support" data-target="support">Support</a></li></ul>
+    </aside>
+
+    <main class="main">
+      <div class="paper">
+        <section class="cover" id="cover">
+          <div class="logo-wrap" aria-label="Company logo">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfEAAAB3CAYAAAATrHkMAAAACXBIWXMAAAsTAAALEwEAmpwYAAAE72lUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNy4xLWMwMDAgMTE2LmNjZjg0ZTAsIDIwMjIvMDUvMTktMTA6NTk6NDcgICAgICAgICI+IDxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+IDxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiIHhtbG5zOnhtcD0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wLyIgeG1sbnM6ZGM9Imh0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIiB4bXA6Q3JlYXRvclRvb2w9IkFkb2JlIFBob3Rvc2hvcCAyMi41IChXaW5kb3dzKSIgeG1wOkNyZWF0ZURhdGU9IjIwMjItMTAtMDZUMjI6MDg6NDYrMDM6MDAiIHhtcDpNZXRhZGF0YURhdGU9IjIwMjItMTAtMDZUMjI6MDg6NDYrMDM6MDAiIHhtcDpNb2RpZnlEYXRlPSIyMDIyLTEwLTA2VDIyOjA4OjQ2KzAzOjAwIiBkYzpmb3JtYXQ9ImltYWdlL3BuZyIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDplM2Q4NTU3ZS0wYjFiLTQ1NGEtYTI5Mi1iMGIxZGZmOGUwNzAiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6ZTNkODU1N2UtMGIxYi00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" alt="DigiDentiS">
+          </div>
+          <h1>DigiDentiS - Takvim API</h1>
+          <p>Integration documentation</p>
+          <div class="meta-row">
+            <span class="pill">Version 3.2.0</span>
+            <span class="pill">Production Ready</span>
+            <span class="pill">Partner Confidential</span>
+            <span class="pill">EN</span>
+          </div>
+        </section>
+
+        <article class="content" id="content">
+          <div class="container">
+        <hr>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ol>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#1-introduction">Introduction</a></li>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#2-authentication">Authentication</a></li>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#3-request-headers">Request Headers</a></li>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#4-signature-calculation">Signature Calculation</a></li>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#5-rate-limiting">Rate Limiting</a></li>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#6-response-headers">Response Headers</a></li>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#7-api-endpoints">API Endpoints</a></li>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#8-error-codes">Error Codes</a></li>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#9-examples">Examples</a></li>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#10-appendix">Appendix</a></li>
+<li><a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#11-webhooks">Webhooks</a></li>
+</ol>
+
+<hr>
+
+<h2 id="1-introduction">1. Introduction</h2>
+
+<p>This document describes the DigiDentiS Takvim API for integration between external booking systems (such as DoktorTakvimi) and the DigiDentiS dental clinic management system. The API enables real-time appointment booking, slot availability checking, and synchronization of doctor schedules.</p>
+
+<h3 id="base-url">Base URL</h3>
+
+<ul>
+<li><strong>Production:</strong> <code>https://www.ddslogin.com/Api/v1/external_booking/</code></li>
+</ul>
+
+<h3 id="features">Features</h3>
+
+<ul>
+<li>Enterprise-grade authentication with HMAC-SHA256 signing</li>
+<li>Idempotency support for safe retries (24-hour window)</li>
+<li>Two-tier rate limiting: Global + per-endpoint limits (v3.1.0+)</li>
+<li>Multi-window tracking (per second, minute, hour, day)</li>
+<li>Pagination for list endpoints (max 100 items per page)</li>
+<li>Comprehensive error handling with detailed error codes</li>
+<li>Audit logging for GDPR/HIPAA compliance</li>
+<li>IP whitelisting for enhanced security</li>
+</ul>
+
+<hr>
+
+<h2 id="2-authentication">2. Authentication</h2>
+
+<h4 id="hmac-signature-recommended-most-secure">HMAC Signature</h4>
+
+<p>Requests are signed using <strong>HMAC-SHA256</strong>.</p>
+
+<p><strong>Headers Required:</strong><br>
+<code>X-Client-ID</code> - Your public identifier<br>
+<code>X-Signature</code> - HMAC-SHA256 signature<br>
+<code>X-Timestamp</code> - Unix timestamp (prevents replay)<br>
+<code>X-Nonce</code> - Unique request ID (prevents replay)</p>
+
+<h3 id="credentials">Credentials</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Credential</th>
+  <th>Format</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Client ID</td>
+  <td><code>dpapi_client_xxxx...</code></td>
+  <td>Public identifier (64 characters)</td>
+</tr>
+<tr>
+  <td>Client Secret</td>
+  <td><code>dpapi_secret_xxxx...</code></td>
+  <td>Private key for signing or authentication</td>
+</tr>
+</tbody>
+</table>
+
+<p>⚠️ <strong>Critical Security Warning:</strong><br>
+- <strong>Never share your Client Secret</strong><br>
+- <strong>Never commit to version control</strong> (use environment variables)<br>
+- <strong>Never include in client-side code</strong> (JavaScript, mobile apps)
+
+</p><h3 id="ip-whitelisting">IP Whitelisting</h3>
+
+<p>All requests must originate from pre-approved IP addresses. Contact DigiDentiS support to register your server IPs before integration.</p>
+
+<h3 id="trusted-proxy-support">Trusted Proxy Support</h3>
+
+<p>The API supports X-Forwarded-For headers from trusted proxies for accurate client IP detection behind load balancers.</p>
+
+<hr>
+
+<h2 id="3-request-headers">3. Request Headers</h2>
+
+<h3 id="required-headers-all-requests">Required Headers (All Requests)</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Header</th>
+  <th>Required</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>X-Client-ID</code></td>
+  <td><strong>Yes</strong></td>
+  <td>Your Client ID (all modes)</td>
+</tr>
+<tr>
+  <td><code>X-Timestamp</code></td>
+  <td><strong>Yes</strong></td>
+  <td>Unix timestamp in seconds (must be within 5 minutes of server time)</td>
+</tr>
+<tr>
+  <td><code>X-Nonce</code></td>
+  <td><strong>Yes</strong></td>
+  <td>Unique request ID (UUID v4 recommended, prevents replay attacks)</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="authentication-headers-mode-specific">Authentication Headers</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Header</th>
+  <th>Required</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>X-Signature</code></td>
+  <td><strong>Yes</strong></td>
+  <td>HMAC-SHA256 signature (see Section 4 for calculation)</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="optional-headers">Optional Headers</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Header</th>
+  <th>When Required</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>X-Idempotency-Key</code></td>
+  <td>POST/DELETE (recommended)</td>
+  <td>Unique key to prevent duplicate operations (max 64 chars)</td>
+</tr>
+<tr>
+  <td><code>Content-Type</code></td>
+  <td>POST requests</td>
+  <td>Must be <code>application/json</code></td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="response-headers">Response Headers</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Header</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>X-Request-ID</code></td>
+  <td>Unique request identifier for tracking (32 chars)</td>
+</tr>
+<tr>
+  <td><code>X-API-Version</code></td>
+  <td>Current API version (e.g., "3.2.0")</td>
+</tr>
+<tr>
+  <td><code>X-RateLimit-Limit</code></td>
+  <td>Rate limit for current window (most restrictive)</td>
+</tr>
+<tr>
+  <td><code>X-RateLimit-Remaining</code></td>
+  <td>Remaining requests in current window</td>
+</tr>
+<tr>
+  <td><code>X-RateLimit-Reset</code></td>
+  <td>Unix timestamp when rate limit resets</td>
+</tr>
+<tr>
+  <td><code>X-RateLimit-Scope</code></td>
+  <td><code>global</code> or <code>endpoint</code> - which limit is shown (v3.1.0+)</td>
+</tr>
+<tr>
+  <td><code>X-RateLimit-Endpoint</code></td>
+  <td>Endpoint pattern when scope=endpoint (v3.1.0+)</td>
+</tr>
+<tr>
+  <td><code>X-Idempotency-Hit</code></td>
+  <td><code>true</code> if response served from cache</td>
+</tr>
+<tr>
+  <td><code>Retry-After</code></td>
+  <td>Seconds to wait before retry (on 429 errors)</td>
+</tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2 id="4-signature-calculation">4. Signature Calculation</h2>
+
+<p>Every request must include an HMAC-SHA256 signature to verify authenticity and integrity.</p>
+
+<h3 id="step-1-create-body-hash">Step 1: Create Body Hash</h3>
+
+<pre><code>body_hash = SHA256(request_body)
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p>For GET requests with no body, use empty string <code>""</code>.</p>
+
+<h3 id="step-2-create-signing-string">Step 2: Create Signing String</h3>
+
+<pre><code>signing_string = timestamp + '.' + nonce + '.' + method + '.' + path + '.' + body_hash
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Important — what <code>path</code> is:</strong> the endpoint path <em>relative to the base URL</em>, with no leading slash and no query string. The base URL prefix (<code>/Api/v1/external_booking</code>) is <strong>removed</strong> before signing.</p>
+
+<table>
+<thead>
+<tr><th>Request</th><th><code>path</code> used in the signature</th></tr>
+</thead>
+<tbody>
+<tr><td><code>GET /Api/v1/external_booking/companies</code></td><td><code>companies</code></td></tr>
+<tr><td><code>GET /Api/v1/external_booking/doctors/doc_770e.../slots?date=2026-01-25</code></td><td><code>doctors/doc_770e.../slots</code></td></tr>
+<tr><td><code>DELETE /Api/v1/external_booking/appointments/apt_880e...</code></td><td><code>appointments/apt_880e...</code></td></tr>
+</tbody>
+</table>
+
+<p><strong>Example</strong> (for <code>GET /Api/v1/external_booking/companies</code>):</p>
+
+<pre><code>1736694000.550e8400-e29b-41d4-a716-446655440000.GET.companies.e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<h3 id="step-3-calculate-signature">Step 3: Calculate Signature</h3>
+
+<pre><code>signature = HMAC-SHA256(signing_string, client_secret)
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<h3 id="php-example">PHP Example</h3>
+
+<pre><code>$timestamp = time();
+$nonce = bin2hex(random_bytes(16));
+$method = 'GET';
+$path = 'companies';   // endpoint path relative to the base URL, no leading slash, no query string
+$body = '';
+
+$bodyHash = hash('sha256', $body);
+$signingString = "{$timestamp}.{$nonce}.{$method}.{$path}.{$bodyHash}";
+$signature = hash_hmac('sha256', $signingString, $clientSecret);
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h2 id="5-rate-limiting">5. Rate Limiting</h2>
+
+<p>The API implements <strong>two-tier rate limiting</strong> to prevent abuse while optimizing resource allocation:</p>
+
+<ol>
+<li><strong>Global Rate Limits</strong> - Apply to all requests from an integrator</li>
+<li><strong>Per-Endpoint Rate Limits</strong> - Apply to specific endpoints (optional, more restrictive)</li>
+</ol>
+
+<p>Both limits must pass for a request to succeed. Response headers always show the <strong>most restrictive</strong> limit.</p>
+
+<h3 id="51-global-rate-limits-default">5.1 Global Rate Limits (Default)</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Window</th>
+  <th>Default Limit</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Per Second</td>
+  <td>10</td>
+  <td>Maximum 10 requests per second</td>
+</tr>
+<tr>
+  <td>Per Minute</td>
+  <td>120</td>
+  <td>Maximum 120 requests per minute</td>
+</tr>
+<tr>
+  <td>Per Hour</td>
+  <td>5,000</td>
+  <td>Maximum 5,000 requests per hour</td>
+</tr>
+<tr>
+  <td>Per Day</td>
+  <td>50,000</td>
+  <td>Maximum 50,000 requests per day</td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout "><strong>Note</strong><div>Global limits may vary per integrator based on service agreement.</div></div>
+
+<h3 id="52-per-endpoint-rate-limits-v310">5.2 Per-Endpoint Rate Limits</h3>
+
+<p>Different endpoints have different resource costs. Per-endpoint limits protect expensive operations:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Endpoint</th>
+  <th>Per Second</th>
+  <th>Per Minute</th>
+  <th>Per Hour</th>
+  <th>Per Day</th>
+  <th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>GET /health</code></td>
+  <td>∞</td>
+  <td>∞</td>
+  <td>∞</td>
+  <td>∞</td>
+  <td>Monitoring should never fail</td>
+</tr>
+<tr>
+  <td><code>GET /companies</code></td>
+  <td>10</td>
+  <td>300</td>
+  <td>5,000</td>
+  <td>20,000</td>
+  <td>List with pagination</td>
+</tr>
+<tr>
+  <td><code>GET /companies/{id}</code></td>
+  <td>20</td>
+  <td>1,000</td>
+  <td>10,000</td>
+  <td>50,000</td>
+  <td>Single record (cheap)</td>
+</tr>
+<tr>
+  <td><code>GET /companies/{id}/quota</code></td>
+  <td>10</td>
+  <td>500</td>
+  <td>5,000</td>
+  <td>25,000</td>
+  <td>Calculation required</td>
+</tr>
+<tr>
+  <td><code>GET /companies/{id}/clinics</code></td>
+  <td>10</td>
+  <td>400</td>
+  <td>6,000</td>
+  <td>30,000</td>
+  <td>Filtered list</td>
+</tr>
+<tr>
+  <td><code>GET /companies/{id}/doctors</code></td>
+  <td>10</td>
+  <td>400</td>
+  <td>6,000</td>
+  <td>30,000</td>
+  <td>Filtered list</td>
+</tr>
+<tr>
+  <td><code>GET /companies/{id}/treatment-types</code></td>
+  <td>10</td>
+  <td>500</td>
+  <td>8,000</td>
+  <td>40,000</td>
+  <td>Reference data (cacheable)</td>
+</tr>
+<tr>
+  <td><code>GET /doctors/{id}</code></td>
+  <td>20</td>
+  <td>1,000</td>
+  <td>10,000</td>
+  <td>50,000</td>
+  <td>Single record (cheap)</td>
+</tr>
+<tr>
+  <td><code>GET /doctors/{id}/slots</code></td>
+  <td>10</td>
+  <td>500</td>
+  <td>5,000</td>
+  <td>20,000</td>
+  <td>Date range query</td>
+</tr>
+<tr>
+  <td><code>GET /slots</code></td>
+  <td>5</td>
+  <td>200</td>
+  <td>2,000</td>
+  <td>10,000</td>
+  <td>Company-wide aggregation</td>
+</tr>
+<tr>
+  <td><code>POST /appointments</code></td>
+  <td>2</td>
+  <td>100</td>
+  <td>500</td>
+  <td>2,000</td>
+  <td>Write operation (expensive)</td>
+</tr>
+<tr>
+  <td><code>GET /appointments</code> (*)</td>
+  <td>10</td>
+  <td>300</td>
+  <td>5,000</td>
+  <td>20,000</td>
+  <td>Filtered list</td>
+</tr>
+<tr>
+  <td><code>GET /appointments/{id}</code></td>
+  <td>20</td>
+  <td>1,000</td>
+  <td>10,000</td>
+  <td>50,000</td>
+  <td>Single record (cheap)</td>
+</tr>
+<tr>
+  <td><code>DELETE /appointments/{id}</code></td>
+  <td>2</td>
+  <td>50</td>
+  <td>200</td>
+  <td>500</td>
+  <td>Write operation (expensive)</td>
+</tr>
+<tr>
+  <td><code>GET /sync</code></td>
+  <td>0</td>
+  <td>5</td>
+  <td>20</td>
+  <td>100</td>
+  <td>Full export (very expensive)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>(*) Note:</strong> <code>GET /appointments</code> covers all listing scenarios:<br>
+- List by Company: <code>?company_id=cmp_xxx</code><br>
+- List by Clinic: <code>?clinic_id=cln_xxx</code><br>
+- List by Doctor: <code>?doctor_id=doc_xxx</code></p>
+
+<p>All three use the same endpoint path and share the same rate limit.</p>
+
+<h3 id="53-rate-limit-headers">5.3 Rate Limit Headers</h3>
+
+<p>Every response includes rate limit information:</p>
+
+<pre><code>X-RateLimit-Limit: 100           # The limit that applies to this request
+X-RateLimit-Remaining: 95         # Requests remaining in current window
+X-RateLimit-Reset: 1736695200     # Unix timestamp when limit resets
+X-RateLimit-Scope: endpoint       # "global" or "endpoint"
+X-RateLimit-Endpoint: POST /appointments  # (only when scope=endpoint)
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Interpretation:</strong><br>
+- <code>X-RateLimit-Scope: global</code> - Global limit is most restrictive<br>
+- <code>X-RateLimit-Scope: endpoint</code> - Endpoint-specific limit is most restrictive<br>
+- Headers always show the <strong>lowest remaining count</strong> across all windows</p>
+
+<h3 id="54-rate-limit-exceeded-response">5.4 Rate Limit Exceeded Response</h3>
+
+<p>When rate limit is exceeded:</p>
+
+<p><strong>HTTP Status:</strong> <code>429 Too Many Requests</code></p>
+
+<p><strong>Headers:</strong></p>
+
+<pre><code>Retry-After: 42                   # Seconds to wait before retry
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1736695245
+X-RateLimit-Scope: endpoint
+X-RateLimit-Endpoint: POST /appointments
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Response Body:</strong></p>
+
+<pre><code>{
+  "success": false,
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Endpoint rate limit exceeded for POST /appointments (minute). Retry after 42 seconds."
+  },
+  "meta": {
+    "request_id": "req_a1b2c3d4e5f6a7b8c9d0e1f2",
+    "timestamp": "2026-01-20T19:51:44+03:00",
+    "api_version": "3.2.0"
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<h3 id="55-rate-limit-best-practices">5.5 Rate Limit Best Practices</h3>
+
+<p><strong>1. Implement Exponential Backoff</strong></p>
+
+<pre><code>$retryAfter = (int)$response-&gt;getHeader('Retry-After');
+sleep($retryAfter);
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>2. Monitor Rate Limit Headers</strong></p>
+
+<pre><code>$remaining = (int)$response-&gt;getHeader('X-RateLimit-Remaining');
+if ($remaining &lt; 10) {
+    // Slow down requests
+    usleep(500000); // 500ms delay
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>3. Cache Frequently Accessed Data</strong>
+- Company details
+- Doctor lists
+- Treatment types
+- Clinic information</p>
+
+<p><strong>4. Use Bulk Operations When Possible</strong>
+- List endpoints support pagination (up to 100 items per page)
+- Use <code>/sync</code> endpoint for initial data load (but respect its very low limits)</p>
+
+<p><strong>5. Optimize Appointment Queries</strong>
+- Request only necessary date ranges (max 90 days)
+- Use specific filters (company/clinic/doctor) rather than full scans
+- Cache slot availability for short periods (1-5 minutes)</p>
+
+<hr>
+
+<h2 id="6-response-headers">6. Response Headers</h2>
+
+<p>Every successful response includes:</p>
+
+<pre><code>HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+X-Request-ID: req_a1b2c3d4e5f6a7b8c9d0e1f2
+X-API-Version: 3.2.0
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1736695200
+X-RateLimit-Scope: endpoint
+X-RateLimit-Endpoint: POST /appointments
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<h3 id="standard-headers-all-responses">Standard Headers (All Responses)</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Header</th>
+  <th>Description</th>
+  <th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>Content-Type</code></td>
+  <td>Response format</td>
+  <td><code>application/json; charset=utf-8</code></td>
+</tr>
+<tr>
+  <td><code>X-Request-ID</code></td>
+  <td>Unique request identifier</td>
+  <td><code>req_a1b2c3d4e5f6a7b8c9d0e1f2</code></td>
+</tr>
+<tr>
+  <td><code>X-API-Version</code></td>
+  <td>Current API version</td>
+  <td><code>3.2.0</code></td>
+</tr>
+<tr>
+  <td><code>X-RateLimit-Limit</code></td>
+  <td>Applicable rate limit</td>
+  <td><code>100</code></td>
+</tr>
+<tr>
+  <td><code>X-RateLimit-Remaining</code></td>
+  <td>Requests remaining</td>
+  <td><code>95</code></td>
+</tr>
+<tr>
+  <td><code>X-RateLimit-Reset</code></td>
+  <td>Unix timestamp for reset</td>
+  <td><code>1736695200</code></td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="additional-headers-v310">Additional Headers</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Header</th>
+  <th>When Present</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>X-RateLimit-Scope</code></td>
+  <td>Always</td>
+  <td><code>global</code> or <code>endpoint</code> - which limit applies</td>
+</tr>
+<tr>
+  <td><code>X-RateLimit-Endpoint</code></td>
+  <td>When scope=endpoint</td>
+  <td>Normalized endpoint pattern</td>
+</tr>
+<tr>
+  <td><code>X-Idempotency-Hit</code></td>
+  <td>POST/DELETE with idempotency key</td>
+  <td><code>true</code> if served from cache</td>
+</tr>
+<tr>
+  <td><code>Retry-After</code></td>
+  <td>Rate limit exceeded (429)</td>
+  <td>Seconds to wait before retry</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="security-headers">Security Headers</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Header</th>
+  <th>Value</th>
+  <th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>Strict-Transport-Security</code></td>
+  <td><code>max-age=31536000; includeSubDomains</code></td>
+  <td>Force HTTPS</td>
+</tr>
+<tr>
+  <td><code>X-Content-Type-Options</code></td>
+  <td><code>nosniff</code></td>
+  <td>Prevent MIME sniffing</td>
+</tr>
+<tr>
+  <td><code>X-Frame-Options</code></td>
+  <td><code>DENY</code></td>
+  <td>Prevent clickjacking</td>
+</tr>
+<tr>
+  <td><code>X-XSS-Protection</code></td>
+  <td><code>1; mode=block</code></td>
+  <td>XSS protection</td>
+</tr>
+<tr>
+  <td><code>Content-Security-Policy</code></td>
+  <td><code>default-src 'none'</code></td>
+  <td>Restrict content sources</td>
+</tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2 id="7-api-endpoints">7. API Endpoints</h2>
+
+<h3 id="71-health-check">7.1 Health Check</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/status (or /health or empty path)</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "api_version": "3.0.0",
+    "integrator": "doktortakvimi",
+    "checks": {
+      "database": "connected",
+      "cache": "connected"
+    },
+    "timestamp": "2026-01-20T19:51:44+03:00",
+    "timezone": "Europe/Istanbul"
+  },
+  "meta": {
+    "request_id": "req_a1b2c3d4e5f6a7b8c9d0e1f2",
+    "response_time_ms": 12.5,
+    "api_version": "3.0.0"
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h3 id="72-list-companies">7.2 List Companies</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/companies</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Default</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>page</code></td>
+  <td>integer</td>
+  <td>1</td>
+  <td>Page number (min: 1)</td>
+</tr>
+<tr>
+  <td><code>per_page</code></td>
+  <td>integer</td>
+  <td>20</td>
+  <td>Items per page (min: 1, max: 100)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "companies": [
+      {
+        "id": "cmp_550e8400-e29b-41d4-a716-446655440000",
+        "name": "Dental Clinic Istanbul",
+        "status": "active",
+        "clinic_count": 3,
+        "quota": {
+          "max_doctors": 10,
+          "active_doctors": 7,
+          "available": 3
+        }
+      }
+    ],
+    "pagination": {
+      "total": 15,
+      "page": 1,
+      "per_page": 20,
+      "total_pages": 1
+    }
+  },
+  "meta": {
+    "request_id": "req_a1b2c3d4e5f6a7b8c9d0e1f2",
+    "response_time_ms": 45.2,
+    "api_version": "3.0.0"
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h3 id="73-get-company-details">7.3 Get Company Details</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/companies/{company_id}</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Path Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>company_id</code></td>
+  <td>string</td>
+  <td>External company ID (e.g., <code>cmp_xxx...</code>)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "id": "cmp_550e8400-e29b-41d4-a716-446655440000",
+    "name": "Dental Clinic Istanbul",
+    "address": "Kadikoy, Istanbul",
+    "phone": "+90 216 555 1234",
+    "email": "info@dentalclinic.com",
+    "status": "active",
+    "subscription_status": "active",
+    "quota": {
+      "max_doctors": 10,
+      "active_doctors": 7,
+      "available": 3
+    },
+    "clinic_count": 3,
+    "doctor_count": 7
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h3 id="74-get-company-quota">7.4 Get Company Quota</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/companies/{company_id}/quota</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Path Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>company_id</code></td>
+  <td>string</td>
+  <td>External company ID (e.g., <code>cmp_xxx...</code>)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "company_id": "cmp_550e8400-e29b-41d4-a716-446655440000",
+    "quota": {
+      "max_doctors": 10,
+      "active_doctors": 7,
+      "available": 3,
+      "usage_percent": 70.0
+    },
+    "breakdown_by_clinic": [
+      {
+        "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+        "clinic_name": "Main Clinic - Kadikoy",
+        "active_doctors": 5
+      },
+      {
+        "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440002",
+        "clinic_name": "Branch - Besiktas",
+        "active_doctors": 2
+      }
+    ]
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h3 id="75-list-company-clinics">7.5 List Company Clinics</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/companies/{company_id}/clinics</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Path Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>company_id</code></td>
+  <td>string</td>
+  <td>External company ID</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Default</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>page</code></td>
+  <td>integer</td>
+  <td>1</td>
+  <td>Page number</td>
+</tr>
+<tr>
+  <td><code>per_page</code></td>
+  <td>integer</td>
+  <td>20</td>
+  <td>Items per page (max 100)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "clinics": [
+      {
+        "id": "cln_660e8400-e29b-41d4-a716-446655440001",
+        "name": "Main Clinic - Kadikoy",
+        "address": "Kadikoy Mah. Istanbul",
+        "phone": "+90 216 555 1234",
+        "email": "kadikoy@clinic.com",
+        "doctor_count": 5
+      }
+    ],
+    "pagination": {
+      "total": 3,
+      "page": 1,
+      "per_page": 20,
+      "total_pages": 1
+    }
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h3 id="76-list-company-doctors">7.6 List Company Doctors</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/companies/{company_id}/doctors</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Path Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>company_id</code></td>
+  <td>string</td>
+  <td>External company ID</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Default</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>page</code></td>
+  <td>integer</td>
+  <td>1</td>
+  <td>Page number</td>
+</tr>
+<tr>
+  <td><code>per_page</code></td>
+  <td>integer</td>
+  <td>20</td>
+  <td>Items per page (max 100)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "company_id": "cmp_f6e5ae3b99907a1c2da83295",
+    "doctors": [
+      {
+        "id": "doc_770e8400-e29b-41d4-a716-446655440002",
+        "company_id": "cmp_f6e5ae3b99907a1c2da83295",
+        "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+        "clinic_name": "Main Clinic - Kadikoy",
+        "name": "Dr. Mehmet Ozkan",
+        "first_name": "Mehmet",
+        "last_name": "Ozkan",
+        "email": "test@test.com",
+        "slot_settings": {
+          "duration": 30,
+          "buffer_before": 0,
+          "buffer_after": 5,
+          "advance_booking_days": 30,
+          "min_notice_hours": 2,
+          "allow_same_day": true
+        },
+        "working_hours": {
+          "monday": {"start": "09:00", "end": "18:00"},
+          "tuesday": {"start": "09:00", "end": "18:00"},
+          "wednesday": {"start": "09:00", "end": "18:00"},
+          "thursday": {"start": "09:00", "end": "18:00"},
+          "friday": {"start": "09:00", "end": "17:00"},
+          "saturday": null,
+          "sunday": null
+        }
+      }
+    ],
+    "pagination": {
+      "total": 7,
+      "page": 1,
+      "per_page": 20,
+      "total_pages": 1
+    }
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h3 id="77-get-doctor-details">7.7 Get Doctor Details</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/doctors/{doctor_id}</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Path Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>doctor_id</code></td>
+  <td>string</td>
+  <td>External doctor ID (e.g., <code>doc_xxx...</code>)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response:</strong> Similar structure to company doctors list item</p>
+
+<hr>
+
+<h3 id="78-get-doctor-slots">7.8 Get Doctor Slots</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/doctors/{doctor_id}/slots</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Path Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>doctor_id</code></td>
+  <td>string</td>
+  <td>External doctor ID</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Default</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>start_date</code></td>
+  <td>date</td>
+  <td>today</td>
+  <td>Start date (YYYY-MM-DD)</td>
+</tr>
+<tr>
+  <td><code>end_date</code></td>
+  <td>date</td>
+  <td>today+14</td>
+  <td>End date (YYYY-MM-DD, max 90 days from start)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+    "doctor_name": "Dr. Mehmet Ozkan",
+    "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+    "clinic_name": "Main Clinic - Kadikoy",
+    "slot_duration": 30,
+    "timezone": "Europe/Istanbul",
+    "date_range": {
+        "start": "2026-01-20",
+        "end": "2026-02-03"
+    },
+    "available_slots": {
+      "2026-01-21": [
+          {
+              "start": "18:45",
+              "end": "19:00",
+              "duration": 15
+          },
+          {
+              "start": "19:00",
+              "end": "19:15",
+              "duration": 15
+          },
+          {
+              "start": "19:15",
+              "end": "19:30",
+              "duration": 15
+          },
+          {
+              "start": "19:30",
+              "end": "19:45",
+              "duration": 15
+          },
+          {
+              "start": "19:45",
+              "end": "20:00",
+              "duration": 15
+          },
+          {
+              "start": "20:00",
+              "end": "20:15",
+              "duration": 15
+          },
+          {
+              "start": "20:15",
+              "end": "20:30",
+              "duration": 15
+          },
+          {
+              "start": "20:30",
+              "end": "20:45",
+              "duration": 15
+          },
+          {
+              "start": "20:45",
+              "end": "21:00",
+              "duration": 15
+          }
+      ],
+      "2026-01-22": [
+          {
+              "start": "10:05",
+              "end": "10:20",
+              "duration": 15
+          },
+          {
+              "start": "10:20",
+              "end": "10:35",
+              "duration": 15
+          },
+          {
+              "start": "10:35",
+              "end": "10:50",
+              "duration": 15
+          },
+          {
+              "start": "10:50",
+              "end": "11:05",
+              "duration": 15
+          },
+          {
+              "start": "11:05",
+              "end": "11:20",
+              "duration": 15
+          },
+          {
+              "start": "11:20",
+              "end": "11:35",
+              "duration": 15
+          },
+          {
+              "start": "11:35",
+              "end": "11:50",
+              "duration": 15
+          },
+          {
+              "start": "11:50",
+              "end": "12:05",
+              "duration": 15
+          },
+          {
+              "start": "12:05",
+              "end": "12:20",
+              "duration": 15
+          },
+          {
+              "start": "12:20",
+              "end": "12:35",
+              "duration": 15
+          },
+          {
+              "start": "12:35",
+              "end": "12:50",
+              "duration": 15
+          },
+          {
+              "start": "12:50",
+              "end": "13:05",
+              "duration": 15
+          },
+          {
+              "start": "13:05",
+              "end": "13:20",
+              "duration": 15
+          },
+          {
+              "start": "13:20",
+              "end": "13:35",
+              "duration": 15
+          },
+          {
+              "start": "13:35",
+              "end": "13:50",
+              "duration": 15
+          }
+      ]
+    }
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<div class="callout "><strong>Note</strong><div>Only dates with at least one available slot are included. Fully booked or non-working days are omitted.</div></div>
+
+<hr>
+
+<h3 id="79-get-all-slots-company-wide">7.9 Get All Slots (Company-wide)</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/slots</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Required</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>company_id</code></td>
+  <td>string</td>
+  <td><strong>Yes</strong></td>
+  <td>External company ID</td>
+</tr>
+<tr>
+  <td><code>start_date</code></td>
+  <td>date</td>
+  <td>No</td>
+  <td>Start date (default: today)</td>
+</tr>
+<tr>
+  <td><code>end_date</code></td>
+  <td>date</td>
+  <td>No</td>
+  <td>End date (default: today+14, max 90 days)</td>
+</tr>
+<tr>
+  <td><code>clinic_id</code></td>
+  <td>string</td>
+  <td>No</td>
+  <td>Filter by clinic ID</td>
+</tr>
+<tr>
+  <td><code>page</code></td>
+  <td>integer</td>
+  <td>No</td>
+  <td>Page number (default: 1)</td>
+</tr>
+<tr>
+  <td><code>per_page</code></td>
+  <td>integer</td>
+  <td>No</td>
+  <td>Items per page (default: 20, max: 100)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response:</strong> Similar to doctor slots but grouped by doctor</p>
+
+<hr>
+
+<h3 id="710-list-company-treatment-types">7.10 List Company Treatment Types</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/companies/{company_id}/treatment-types</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Path Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>company_id</code></td>
+  <td>string</td>
+  <td>External company ID</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Default</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>page</code></td>
+  <td>integer</td>
+  <td>1</td>
+  <td>Page number</td>
+</tr>
+<tr>
+  <td><code>per_page</code></td>
+  <td>integer</td>
+  <td>20</td>
+  <td>Items per page (max 100)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "treatment_types": [
+      {
+        "id": "att_d68cd16f-f575-11f0-8c3e-fab7283a9596",
+        "name": "Diş Muayenesi",
+        "name_original": "Diş Muayenesi",
+        "duration_minutes": 30
+      },
+      {
+        "id": "att_d68cd16f-f775-11f0-8e3d-fab7285a7583",
+        "name": "Diş Temizliği",
+        "name_original": "Diş Temizliği",
+        "duration_minutes": 45
+      }
+    ],
+    "pagination": {
+      "total": 25,
+      "page": 1,
+      "per_page": 20,
+      "total_pages": 2
+    }
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Important - Empty Results:</strong> If this endpoint returns an empty <code>treatment_types</code> array, it means no treatment types are enabled for API visibility. To resolve this:</p>
+<ol>
+  <li>Log in to your DigiDentiS dashboard</li>
+  <li>Navigate to <strong>Settings &gt; System &gt; Customization</strong></li>
+  <li>Enable the "API Visible" option for the treatment types you want to expose via the API</li>
+  <li>If you need assistance, contact DigiDentiS support at <a href="mailto:destek@digidentis.com">destek@digidentis.com</a></li>
+</ol>
+
+<hr>
+
+<h3 id="711-full-sync-export">7.11 Full Sync Export</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/sync (or /all)</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Required</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>company_id</code></td>
+  <td>string</td>
+  <td><strong>Yes</strong></td>
+  <td>External company ID</td>
+</tr>
+<tr>
+  <td><code>start_date</code></td>
+  <td>date</td>
+  <td>No</td>
+  <td>Slot start date (default: today)</td>
+</tr>
+<tr>
+  <td><code>end_date</code></td>
+  <td>date</td>
+  <td>No</td>
+  <td>Slot end date (default: today+14, max 90 days)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "company_id": "cmp_550e8400-e29b-41d4-a716-446655440000",
+    "sync_timestamp": "2026-01-20T16:49:14+03:00",
+    "date_range": {
+      "start": "2026-01-20",
+      "end": "2026-02-03"
+    },
+    "clinics": [
+      {
+        "id": "cln_660e8400-e29b-41d4-a716-446655440001",
+        "name": "Main Clinic - Kadikoy",
+        "address": "Kadikoy, Istanbul",
+        "phone": "+90 216 555 1234",
+        "email": "kadikoy@clinic.com",
+        "doctor_count": 3
+      }
+    ],
+    "doctors": [
+      {
+        "id": "doc_770e8400-e29b-41d4-a716-446655440002",
+        "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+        "clinic_name": "Main Clinic - Kadikoy",
+        "name": "Dr. Mehmet Ozkan",
+        "first_name": "Mehmet",
+        "last_name": "Ozkan",
+        "email": "mehmet.ozkan@clinic.com",
+        "working_hours": {
+          "monday": { "start": "09:00", "end": "17:00" },
+          "tuesday": { "start": "09:00", "end": "17:00" },
+          "wednesday": { "start": "09:00", "end": "17:00" },
+          "thursday": { "start": "09:00", "end": "17:00" },
+          "friday": { "start": "09:00", "end": "14:00" },
+          "saturday": null,
+          "sunday": null
+        },
+        "slot_settings": {
+          "duration": 30,
+          "buffer_before": 0,
+          "buffer_after": 0,
+          "advance_booking_days": 30,
+          "min_notice_hours": 2,
+          "allow_same_day": true
+        }
+      }
+    ],
+    "available_slots": [
+      {
+        "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+        "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+        "clinic_name": "Main Clinic - Kadikoy",
+        "name": "Dr. Mehmet Ozkan",
+        "slot_duration": 30,
+        "available_slots": {
+          "2026-01-21": [
+            { "start": "09:00", "end": "09:30", "duration": 30 },
+            { "start": "09:30", "end": "10:00", "duration": 30 },
+            { "start": "10:00", "end": "10:30", "duration": 30 }
+          ],
+          "2026-01-22": [
+            { "start": "09:00", "end": "09:30", "duration": 30 },
+            { "start": "14:00", "end": "14:30", "duration": 30 }
+          ]
+        }
+      }
+    ]
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h3 id="712-create-appointment">7.12 Create Appointment</h3>
+
+<div class="endpoint"><span class="badge post">POST</span><span class="path">/appointments</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Required Headers:</strong><br>
+- <code>Content-Type: application/json</code><br>
+- <code>X-Idempotency-Key</code> (recommended to prevent duplicates)</p>
+
+<p><strong>Request Body:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Type</th>
+  <th>Required</th>
+  <th>Max Length</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>doctor_id</code></td>
+  <td>string</td>
+  <td><strong>Yes</strong></td>
+  <td>-</td>
+  <td>External doctor ID (e.g., <code>doc_xxx...</code>)</td>
+</tr>
+<tr>
+  <td><code>date</code></td>
+  <td>date</td>
+  <td><strong>Yes</strong></td>
+  <td>-</td>
+  <td>Appointment date (YYYY-MM-DD)</td>
+</tr>
+<tr>
+  <td><code>start_time</code></td>
+  <td>time</td>
+  <td><strong>Yes</strong></td>
+  <td>-</td>
+  <td>Start time (HH:MM format, 24-hour)</td>
+</tr>
+<tr>
+  <td><code>end_time</code></td>
+  <td>time</td>
+  <td>No</td>
+  <td>-</td>
+  <td>End time (HH:MM format, 24-hour). Must be after start_time and the resulting duration must be at least equal to the doctor's minimum slot_duration. If provided, overrides automatic duration calculation.</td>
+</tr>
+<tr>
+  <td><code>treatment_duration</code></td>
+  <td>integer</td>
+  <td>No</td>
+  <td>-</td>
+  <td>Treatment duration in minutes. Must be at least equal to the doctor's minimum slot_duration (and max 480 min). Used to calculate end_time if end_time is not provided. If neither end_time nor treatment_duration is provided, doctor's default slot_duration is used.</td>
+</tr>
+<tr>
+  <td><code>treatment_type</code></td>
+  <td>string</td>
+  <td><strong>Yes</strong></td>
+  <td>-</td>
+  <td>Treatment type public ID (fetch from <a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#710-list-company-treatment-types">7.10 List Company Treatment Types</a>)</td>
+</tr>
+<tr>
+  <td><code>patient_first_name</code></td>
+  <td>string</td>
+  <td><strong>Yes</strong></td>
+  <td>50</td>
+  <td>Patient first name</td>
+</tr>
+<tr>
+  <td><code>patient_last_name</code></td>
+  <td>string</td>
+  <td><strong>Yes</strong></td>
+  <td>50</td>
+  <td>Patient last name</td>
+</tr>
+<tr>
+  <td><code>patient_phone</code></td>
+  <td>string</td>
+  <td>No</td>
+  <td>30</td>
+  <td>Patient phone number</td>
+</tr>
+<tr>
+  <td><code>patient_email</code></td>
+  <td>string</td>
+  <td>No</td>
+  <td>100</td>
+  <td>Patient email address</td>
+</tr>
+<tr>
+  <td><code>patient_tc_no</code></td>
+  <td>string</td>
+  <td>No</td>
+  <td>11</td>
+  <td>Turkish ID number</td>
+</tr>
+<tr>
+  <td><code>patient_passport_no</code></td>
+  <td>string</td>
+  <td>No</td>
+  <td>20</td>
+  <td>Passport number</td>
+</tr>
+<tr>
+  <td><code>patient_birthday</code></td>
+  <td>date</td>
+  <td>No</td>
+  <td>-</td>
+  <td>Patient birthday (YYYY-MM-DD)</td>
+</tr>
+<tr>
+  <td><code>patient_nationality</code></td>
+  <td>integer</td>
+  <td>No</td>
+  <td>5</td>
+  <td>Patient Nationality (Default Turkey: 213)</td>
+</tr>
+<tr>
+  <td><code>patient_mobile_cc</code></td>
+  <td>string</td>
+  <td>No</td>
+  <td>5</td>
+  <td>Phone Country Code (Default Turkey: +90)</td>
+</tr>
+<tr>
+  <td><code>patient_gender</code></td>
+  <td>integer</td>
+  <td>No</td>
+  <td>1</td>
+  <td>Gender (Male: 1, Female: 2, Default: 0)</td>
+</tr>
+<tr>
+  <td><code>patient_hdyhau</code></td>
+  <td>integer</td>
+  <td>No</td>
+  <td>-</td>
+  <td>"How Did You Hear About Us" source ID. Only used when creating a <strong>new</strong> patient. If omitted, the patient is automatically tagged with the integrator's configured HDYHAU source (see note below).</td>
+</tr>
+<tr>
+  <td><code>notes</code></td>
+  <td>string</td>
+  <td>No</td>
+  <td>500</td>
+  <td>Appointment notes</td>
+</tr>
+<tr>
+  <td><code>booking_id</code></td>
+  <td>string</td>
+  <td>No</td>
+  <td>50</td>
+  <td>Your internal reference ID</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Request Example:</strong></p>
+
+<pre><code>{
+  "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+  "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+  "date": "2026-01-25",
+  "start_time": "10:30",
+  "end_time": "11:00",
+  "treatment_type": "att_550e8400-e29b-41d4-a716-446655440001",
+  "patient_first_name": "Ahmet",
+  "patient_last_name": "Yilmaz",
+  "patient_phone": "+905551234567",
+  "patient_email": "ahmet@email.com",
+  "patient_tc_no": "12345678901",
+  "patient_birthday": "1990-05-15",
+  "patient_nationality": 213,
+  "patient_mobile_cc": "+90",
+  "patient_gender": 1,
+  "notes": "İlk kontrol muayenesi",
+  "booking_id": "DT-12345"
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>End Time Calculation Priority:</strong></p>
+<ol>
+  <li>If <code>end_time</code> is provided, it is used directly (must be after start_time)</li>
+  <li>If <code>treatment_duration</code> is provided (minutes), end_time = start_time + treatment_duration</li>
+  <li>Otherwise, doctor's default slot_duration is used</li>
+</ol>
+
+<p><strong>HDYHAU ("How Did You Hear About Us") Source Assignment:</strong></p>
+<p>When a <strong>new</strong> patient is created as part of an appointment, a HDYHAU source is assigned using the following priority:</p>
+<ol>
+  <li>If <code>patient_hdyhau</code> is provided in the request, that source ID is used.</li>
+  <li>Otherwise, the integrator's configured HDYHAU source name is used. The source record is created automatically (per company) on first use and reused for all subsequent patients from the same integrator.</li>
+  <li>If the integrator has no configured source name, it falls back to the default <code>"DDS Takvim API"</code>.</li>
+</ol>
+<p>This only affects newly created patients. Existing patients matched by the search criteria keep their current HDYHAU value.</p>
+
+<p><strong>Alternative Request Examples:</strong></p>
+
+<pre><code>// Example with treatment_duration (45 minutes appointment)
+{
+  "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+  "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+  "date": "2026-01-25",
+  "start_time": "10:30",
+  "treatment_duration": 45,
+  "treatment_type": "att_550e8400-e29b-41d4-a716-446655440001",
+  "patient_first_name": "Ahmet",
+  "patient_last_name": "Yilmaz",
+  "patient_phone": "+905551234567"
+}
+
+// Example using doctor's default slot duration (no end_time or treatment_duration)
+{
+  "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+  "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+  "date": "2026-01-25",
+  "start_time": "10:30",
+  "treatment_type": "att_550e8400-e29b-41d4-a716-446655440001",
+  "patient_first_name": "Ahmet",
+  "patient_last_name": "Yilmaz",
+  "patient_phone": "+905551234567"
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Response Example (201 Created):</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "id": "apt_880e8400-e29b-41d4-a716-446655440003",
+    "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+    "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+    "date": "2026-01-25",
+    "start_time": "10:30",
+    "end_time": "11:00",
+    "duration": 30,
+    "status": "confirmed",
+    "patient": {
+      "first_name": "Ahmet",
+      "last_name": "Yilmaz",
+      "phone": "+905551234567",
+      "email": "ahmet@email.com"
+    },
+    "created_at": "2026-01-20T19:51:44+03:00"
+  },
+  "meta": {
+    "request_id": "req_a1b2c3d4e5f6a7b8c9d0e1f2",
+    "response_time_ms": 156.3,
+    "api_version": "3.0.0"
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Important Notes:</strong><br>
+- Always include <code>X-Idempotency-Key</code> header to prevent duplicate appointments<br>
+- The <code>treatment_type</code> must be fetched from <a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#710-list-company-treatment-types">7.10 List Company Treatment Types</a> endpoint first<br>
+- The treatment type must be active and valid for the company<br>
+- The slot must be available at the requested time<br>
+- Patient will be automatically created or matched based on company's clinic and first name, last name and TC number or phone<br>
+- If patient already exists, their information will be updated</p>
+
+<hr>
+
+<h3 id="713-list-appointments">7.13 List Appointments</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/appointments</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Required</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>company_id</code></td>
+  <td>string</td>
+  <td>Yes*</td>
+  <td>Filter by company ID</td>
+</tr>
+<tr>
+  <td><code>clinic_id</code></td>
+  <td>string</td>
+  <td>Yes*</td>
+  <td>Filter by clinic ID</td>
+</tr>
+<tr>
+  <td><code>doctor_id</code></td>
+  <td>string</td>
+  <td>Yes*</td>
+  <td>Filter by doctor ID</td>
+</tr>
+<tr>
+  <td><code>start_date</code></td>
+  <td>date</td>
+  <td><strong>Yes</strong></td>
+  <td>Start date (YYYY-MM-DD)</td>
+</tr>
+<tr>
+  <td><code>end_date</code></td>
+  <td>date</td>
+  <td><strong>Yes</strong></td>
+  <td>End date (YYYY-MM-DD, max 90 days from start)</td>
+</tr>
+<tr>
+  <td><code>page</code></td>
+  <td>integer</td>
+  <td>No</td>
+  <td>Page number (default: 1)</td>
+</tr>
+<tr>
+  <td><code>per_page</code></td>
+  <td>integer</td>
+  <td>No</td>
+  <td>Items per page (default: 20, max: 100)</td>
+</tr>
+</tbody>
+</table>
+
+<p>*One of <code>company_id</code>, <code>clinic_id</code>, or <code>doctor_id</code> is required.</p>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "appointments": [
+      {
+        "id": "apt_880e8400-e29b-41d4-a716-446655440003",
+        "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+        "doctor_name": "Dr. Mehmet Ozkan",
+        "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+        "clinic_name": "Main Clinic - Kadikoy",
+        "date": "2026-01-25",
+        "start_time": "10:30",
+        "end_time": "11:00",
+        "duration": 30,
+        "treatment_type": "att_550e8400-e29b-41d4-a716-446655440001",
+        "treatment_type_name": "İlk Muayene",
+        "status": "confirmed",
+        "patient": {
+          "first_name": "Ahmet",
+          "last_name": "Yilmaz",
+          "phone": "+905551234567"
+        },
+        "created_at": "2026-01-20T19:51:44+03:00"
+      }
+    ],
+    "pagination": {
+      "total": 45,
+      "page": 1,
+      "per_page": 20,
+      "total_pages": 3
+    }
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h3 id="714-get-appointment">7.14 Get Appointment</h3>
+
+<div class="endpoint"><span class="badge get">GET</span><span class="path">/appointments/{appointment_id}</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Path Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>appointment_id</code></td>
+  <td>string</td>
+  <td>External appointment ID (e.g., <code>apt_xxx...</code>)</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Response Example:</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "id": "apt_880e8400-e29b-41d4-a716-446655440003",
+    "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+    "doctor_name": "Dr. Mehmet Ozkan",
+    "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+    "clinic_name": "Main Clinic - Kadikoy",
+    "company_id": "cmp_550e8400-e29b-41d4-a716-446655440000",
+    "date": "2026-01-25",
+    "start_time": "10:30",
+    "end_time": "11:00",
+    "duration": 30,
+    "treatment_type": "att_550e8400-e29b-41d4-a716-446655440001",
+    "treatment_type_name": "İlk Muayene",
+    "status": "confirmed",
+    "patient": {
+      "first_name": "Ahmet",
+      "last_name": "Yilmaz",
+      "phone": "+905551234567",
+      "email": "ahmet@email.com"
+    },
+    "notes": "İlk kontrol muayenesi",
+    "created_at": "2026-01-20T19:51:44+03:00",
+    "updated_at": "2026-01-20T19:51:44+03:00"
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<div class="callout warning"><strong>Important</strong><div>This endpoint only returns appointments created through the DoktorTakvimi API. Appointments created directly in DigiDentiS are not accessible via this endpoint.</div></div>
+
+<hr>
+
+<h3 id="715-cancel-appointment">7.15 Cancel Appointment</h3>
+
+<div class="endpoint"><span class="badge delete">DELETE</span><span class="path">/appointments/{appointment_id}</span><span class="meta">Authenticated</span></div>
+
+<p><strong>Path Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>appointment_id</code></td>
+  <td>string</td>
+  <td>External appointment ID</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Required</th>
+  <th>Max Length</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>reason</code></td>
+  <td>string</td>
+  <td>No</td>
+  <td>500</td>
+  <td>Cancellation reason</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Request Headers:</strong>
+- <code>X-Idempotency-Key</code> (recommended for safe retries)</p>
+
+<p><strong>Request Example:</strong></p>
+
+<pre><code>DELETE /Api/v1/external_booking/appointments/apt_880e8400-e29b-41d4-a716-446655440003?reason=Hasta%20iptal%20etti
+X-Client-ID: dpapi_client_xxx...
+X-Timestamp: 1736694000
+X-Nonce: 990e8400-e29b-41d4-a716-446655440004
+X-Signature: abc123...
+X-Idempotency-Key: cancel-12345
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Response Example (200 OK):</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "id": "apt_880e8400-e29b-41d4-a716-446655440003",
+    "status": "cancelled",
+    "cancelled_at": "2026-01-20T20:15:30+03:00",
+    "cancellation_reason": "Hasta iptal etti"
+  },
+  "meta": {
+    "request_id": "req_b2c3d4e5f6a7b8c9d0e1f2a3",
+    "response_time_ms": 89.4,
+    "api_version": "3.0.0"
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Important Notes:</strong>
+- Cancelled appointments cannot be restored
+- Only appointments created through the DoktorTakvimi API can be cancelled via this endpoint
+- The slot becomes available again immediately after cancellation
+- A successful cancellation emits an <a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#11-webhooks"><code>appointment.cancelled</code> webhook</a> if your integrator is subscribed</p>
+
+<hr>
+
+<h3 id="716-reschedule-appointment">7.16 Reschedule Appointment</h3>
+
+<p><strong>Endpoint:</strong> <code>PUT /appointments/{appointment_id}</code> (<code>PATCH</code> is also accepted)
+<strong>Description:</strong> Moves an existing appointment to a new date/time
+<strong>Authentication:</strong> Required
+<strong>Idempotency:</strong> Supported (recommended)
+<strong>Rate Limit:</strong> Global write limits apply (a per-endpoint limit may be configured by the DigiDentiS team)
+<strong>Access:</strong> Only appointments created via API can be rescheduled</p>
+
+<p><strong>Path Parameters:</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>appointment_id</code></td>
+  <td>string</td>
+  <td>External appointment ID</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Body Parameters (JSON):</strong></p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Required</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>date</code></td>
+  <td>string</td>
+  <td>Yes</td>
+  <td>New appointment date, <code>YYYY-MM-DD</code></td>
+</tr>
+<tr>
+  <td><code>start_time</code></td>
+  <td>string</td>
+  <td>Yes</td>
+  <td>New start time, <code>HH:MM</code></td>
+</tr>
+<tr>
+  <td><code>end_time</code></td>
+  <td>string</td>
+  <td>No</td>
+  <td>New end time, <code>HH:MM</code> (must be after <code>start_time</code>)</td>
+</tr>
+<tr>
+  <td><code>treatment_duration</code></td>
+  <td>integer</td>
+  <td>No</td>
+  <td>New duration in minutes (1–480). Ignored if <code>end_time</code> is provided</td>
+</tr>
+</tbody>
+</table>
+
+<p>If neither <code>end_time</code> nor <code>treatment_duration</code> is supplied, the appointment keeps its existing duration.</p>
+
+<p><strong>Request Example:</strong></p>
+
+<pre><code>PUT /Api/v1/external_booking/appointments/apt_880e8400-e29b-41d4-a716-446655440003
+X-Client-ID: dpapi_client_xxx...
+X-Timestamp: 1736694000
+X-Nonce: 990e8400-e29b-41d4-a716-446655440004
+X-Signature: abc123...
+X-Idempotency-Key: reschedule-12345
+Content-Type: application/json
+
+{
+  "date": "2026-01-28",
+  "start_time": "09:00"
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Response Example (200 OK):</strong></p>
+
+<pre><code>{
+  "success": true,
+  "data": {
+    "id": "apt_880e8400-e29b-41d4-a716-446655440003",
+    "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+    "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+    "date": "2026-01-28",
+    "start_time": "09:00",
+    "end_time": "09:30",
+    "duration": 30,
+    "status": "confirmed",
+    "rescheduled_at": "2026-01-25T16:20:00+03:00"
+  },
+  "meta": {
+    "request_id": "req_b2c3d4e5f6a7b8c9d0e1f2a3",
+    "response_time_ms": 102.7,
+    "api_version": "3.2.0"
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Important Notes:</strong>
+- The new slot is validated against the doctor's availability; the appointment's own current slot is not treated as a conflict
+- If the requested slot is taken, the API returns <code>409 SLOT_NOT_AVAILABLE</code> and the appointment is left unchanged
+- A cancelled appointment cannot be rescheduled (<code>APPOINTMENT_CANCELLED</code>)
+- Only appointments created through the DoktorTakvimi API can be rescheduled via this endpoint
+- A successful reschedule emits an <a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#11-webhooks"><code>appointment.rescheduled</code> webhook</a> if your integrator is subscribed</p>
+
+<hr>
+
+<h2 id="8-error-codes">8. Error Codes</h2>
+
+<h3 id="http-status-codes">HTTP Status Codes</h3>
+
+<table>
+<thead>
+<tr>
+  <th>HTTP</th>
+  <th>Code</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>400</td>
+  <td><code>MISSING_FIELD</code></td>
+  <td>Required field is missing</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>FIELD_TOO_LONG</code></td>
+  <td>Field exceeds maximum length</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>INVALID_EMAIL</code></td>
+  <td>Invalid email format</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>INVALID_PHONE</code></td>
+  <td>Invalid phone format</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>INVALID_DATE_FORMAT</code></td>
+  <td>Date must be YYYY-MM-DD</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>INVALID_TIME_FORMAT</code></td>
+  <td>Time must be HH:MM</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>INVALID_END_TIME_FORMAT</code></td>
+  <td>End time must be in HH:MM format</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>INVALID_END_TIME</code></td>
+  <td>End time must be after start time</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>INVALID_TREATMENT_DURATION</code></td>
+  <td>Treatment duration must be between minimum slot duration and 480 minutes</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>DURATION_TOO_SHORT</code></td>
+  <td>Appointment duration cannot be less than doctor's minimum slot duration</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>INVALID_DATE_RANGE</code></td>
+  <td>Date range exceeds maximum or invalid</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>APPOINTMENT_CANCELLED</code></td>
+  <td>A cancelled appointment cannot be rescheduled</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>INVALID_REQUEST</code></td>
+  <td>Malformed request body</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>MISSING_PARAMETER</code></td>
+  <td>Required query parameter missing</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>INVALID_JSON</code></td>
+  <td>Request body must be valid JSON</td>
+</tr>
+<tr>
+  <td>400</td>
+  <td><code>PAYLOAD_TOO_LARGE</code></td>
+  <td>Request body exceeds 1MB limit</td>
+</tr>
+<tr>
+  <td>401</td>
+  <td><code>AUTH_MISSING_CLIENT_ID</code></td>
+  <td>X-Client-ID header missing</td>
+</tr>
+<tr>
+  <td>401</td>
+  <td><code>AUTH_INVALID_CREDENTIALS</code></td>
+  <td>Invalid Client ID or Secret</td>
+</tr>
+<tr>
+  <td>401</td>
+  <td><code>SIGNATURE_INVALID</code></td>
+  <td>Request signature verification failed</td>
+</tr>
+<tr>
+  <td>401</td>
+  <td><code>SIGNATURE_MISSING</code></td>
+  <td>X-Signature header missing</td>
+</tr>
+<tr>
+  <td>401</td>
+  <td><code>TIMESTAMP_MISSING</code></td>
+  <td>X-Timestamp header missing</td>
+</tr>
+<tr>
+  <td>401</td>
+  <td><code>TIMESTAMP_EXPIRED</code></td>
+  <td>Request timestamp too old (&gt;5 min)</td>
+</tr>
+<tr>
+  <td>401</td>
+  <td><code>NONCE_MISSING</code></td>
+  <td>X-Nonce header missing</td>
+</tr>
+<tr>
+  <td>401</td>
+  <td><code>NONCE_USED</code></td>
+  <td>Nonce has been used before (replay attack)</td>
+</tr>
+<tr>
+  <td>403</td>
+  <td><code>IP_NOT_ALLOWED</code></td>
+  <td>IP address not in whitelist</td>
+</tr>
+<tr>
+  <td>403</td>
+  <td><code>COMPANY_ACCESS_DENIED</code></td>
+  <td>No access to this company</td>
+</tr>
+<tr>
+  <td>404</td>
+  <td><code>ENDPOINT_NOT_FOUND</code></td>
+  <td>API endpoint does not exist</td>
+</tr>
+<tr>
+  <td>404</td>
+  <td><code>COMPANY_NOT_FOUND</code></td>
+  <td>Company does not exist</td>
+</tr>
+<tr>
+  <td>404</td>
+  <td><code>CLINIC_NOT_FOUND</code></td>
+  <td>Clinic does not exist</td>
+</tr>
+<tr>
+  <td>404</td>
+  <td><code>DOCTOR_NOT_FOUND</code></td>
+  <td>Doctor does not exist</td>
+</tr>
+<tr>
+  <td>404</td>
+  <td><code>APPOINTMENT_NOT_FOUND</code></td>
+  <td>Appointment does not exist</td>
+</tr>
+<tr>
+  <td>409</td>
+  <td><code>SLOT_NOT_AVAILABLE</code></td>
+  <td>Time slot already booked or unavailable</td>
+</tr>
+<tr>
+  <td>409</td>
+  <td><code>SLOT_IN_PAST</code></td>
+  <td>Cannot book appointment in the past</td>
+</tr>
+<tr>
+  <td>413</td>
+  <td><code>PAYLOAD_TOO_LARGE</code></td>
+  <td>Request body exceeds maximum size</td>
+</tr>
+<tr>
+  <td>429</td>
+  <td><code>RATE_LIMIT_EXCEEDED</code></td>
+  <td>Too many requests (see Retry-After header)</td>
+</tr>
+<tr>
+  <td>500</td>
+  <td><code>INTERNAL_ERROR</code></td>
+  <td>Server error (contact support)</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="error-response-format">Error Response Format</h3>
+
+<p>All errors follow this format:</p>
+
+<pre><code>{
+  "success": false,
+  "error": {
+    "code": "SLOT_NOT_AVAILABLE",
+    "message": "The requested time slot is no longer available"
+  },
+  "meta": {
+    "request_id": "req_a1b2c3d4e5f6a7b8c9d0e1f2",
+    "timestamp": "2026-01-20T19:51:44+03:00",
+    "api_version": "3.0.0"
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h2 id="9-examples">9. Examples</h2>
+
+<h3 id="91-complete-php-integration-example">9.1 Complete PHP Integration Example</h3>
+
+<pre><code>&lt;?php
+
+class TakvimApiClient
+{
+    private string $clientId;
+    private string $clientSecret;
+    private string $baseUrl;
+
+    public function __construct(string $clientId, string $clientSecret, string $baseUrl)
+    {
+        $this-&gt;clientId = $clientId;
+        $this-&gt;clientSecret = $clientSecret;
+        $this-&gt;baseUrl = rtrim($baseUrl, '/');
+    }
+
+    /**
+     * List all companies
+     */
+    public function listCompanies(int $page = 1, int $perPage = 20): array
+    {
+        return $this-&gt;get('/companies', [
+            'page' =&gt; $page,
+            'per_page' =&gt; $perPage
+        ]);
+    }
+
+    /**
+     * Get doctor slots
+     */
+    public function getDoctorSlots(
+        string $doctorId,
+        string $startDate,
+        string $endDate
+    ): array {
+        return $this-&gt;get("/doctors/{$doctorId}/slots", [
+            'start_date' =&gt; $startDate,
+            'end_date' =&gt; $endDate
+        ]);
+    }
+
+    /**
+     * Create appointment
+     */
+    public function createAppointment(array $data, string $idempotencyKey): array
+    {
+        return $this-&gt;post('/appointments', $data, $idempotencyKey);
+    }
+
+    /**
+     * Cancel appointment
+     */
+    public function cancelAppointment(
+        string $appointmentId,
+        ?string $reason = null,
+        string $idempotencyKey = null
+    ): array {
+        $query = $reason ? ['reason' =&gt; $reason] : [];
+        return $this-&gt;delete("/appointments/{$appointmentId}", $query, $idempotencyKey);
+    }
+
+    /**
+     * Generic GET request
+     */
+    private function get(string $path, array $params = []): array
+    {
+        $url = $this-&gt;baseUrl . $path;
+        if (!empty($params)) {
+            $url .= '?' . http_build_query($params);
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER =&gt; true,
+            CURLOPT_HTTPHEADER =&gt; $this-&gt;buildHeaders('GET', $path, ''),
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return $this-&gt;handleResponse($response, $httpCode);
+    }
+
+    /**
+     * Generic POST request
+     */
+    private function post(string $path, array $data, string $idempotencyKey): array
+    {
+        $body = json_encode($data);
+        $url = $this-&gt;baseUrl . $path;
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER =&gt; true,
+            CURLOPT_POST =&gt; true,
+            CURLOPT_POSTFIELDS =&gt; $body,
+            CURLOPT_HTTPHEADER =&gt; array_merge(
+                $this-&gt;buildHeaders('POST', $path, $body),
+                ["X-Idempotency-Key: {$idempotencyKey}"]
+            ),
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return $this-&gt;handleResponse($response, $httpCode);
+    }
+
+    /**
+     * Generic DELETE request
+     */
+    private function delete(
+        string $path,
+        array $params = [],
+        ?string $idempotencyKey = null
+    ): array {
+        $url = $this-&gt;baseUrl . $path;
+        if (!empty($params)) {
+            $url .= '?' . http_build_query($params);
+        }
+
+        $headers = $this-&gt;buildHeaders('DELETE', $path, '');
+        if ($idempotencyKey) {
+            $headers[] = "X-Idempotency-Key: {$idempotencyKey}";
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER =&gt; true,
+            CURLOPT_CUSTOMREQUEST =&gt; 'DELETE',
+            CURLOPT_HTTPHEADER =&gt; $headers,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return $this-&gt;handleResponse($response, $httpCode);
+    }
+
+    /**
+     * Build request headers with signature
+     */
+    private function buildHeaders(string $method, string $path, string $body): array
+    {
+        $timestamp = time();
+        $nonce = bin2hex(random_bytes(16));
+        $bodyHash = hash('sha256', $body);
+
+        // Sign the endpoint path relative to the base URL: no leading slash,
+        // no query string (the server strips the base prefix before verifying).
+        $signPath = ltrim(parse_url($path, PHP_URL_PATH), '/');
+
+        // Build signing string
+        $signingString = "{$timestamp}.{$nonce}.{$method}.{$signPath}.{$bodyHash}";
+
+        // Calculate signature
+        $signature = hash_hmac('sha256', $signingString, $this-&gt;clientSecret);
+
+        $headers = [
+            "X-Client-ID: {$this-&gt;clientId}",
+            "X-Timestamp: {$timestamp}",
+            "X-Nonce: {$nonce}",
+            "X-Signature: {$signature}",
+        ];
+
+        if ($method === 'POST') {
+            $headers[] = 'Content-Type: application/json';
+        }
+
+        return $headers;
+    }
+
+    /**
+     * Handle API response
+     */
+    private function handleResponse(string $response, int $httpCode): array
+    {
+        $data = json_decode($response, true);
+
+        if ($httpCode &gt;= 400) {
+            throw new Exception(
+                $data['error']['message'] ?? 'Unknown error',
+                $httpCode
+            );
+        }
+
+        return $data;
+    }
+}
+
+// Usage Example
+$client = new TakvimApiClient(
+    'dpapi_client_xxx...',
+    'dpapi_secret_xxx...',
+    'https://www.ddslogin.com/Api/v1/external_booking/'
+);
+
+try {
+    // List companies
+    $companies = $client-&gt;listCompanies();
+    print_r($companies);
+
+    // Get doctor slots
+    $slots = $client-&gt;getDoctorSlots(
+        'doc_770e8400-e29b-41d4-a716-446655440002',
+        '2026-01-25',
+        '2026-01-31'
+    );
+    print_r($slots);
+
+    // Create appointment
+    $appointment = $client-&gt;createAppointment([
+        'doctor_id' =&gt; 'doc_770e8400-e29b-41d4-a716-446655440002',
+        'date' =&gt; '2026-01-25',
+        'start_time' =&gt; '10:30',
+        'patient_first_name' =&gt; 'Ahmet',
+        'patient_last_name' =&gt; 'Yilmaz',
+        'patient_phone' =&gt; '+905551234567',
+        'patient_email' =&gt; 'ahmet@email.com'
+    ], 'booking-' . uniqid());
+    print_r($appointment);
+
+    // Cancel appointment
+    $result = $client-&gt;cancelAppointment(
+        'apt_880e8400-e29b-41d4-a716-446655440003',
+        'Hasta iptal etti',
+        'cancel-' . uniqid()
+    );
+    print_r($result);
+
+} catch (Exception $e) {
+    echo "Error: " . $e-&gt;getMessage() . "\n";
+    echo "Code: " . $e-&gt;getCode() . "\n";
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<hr>
+
+<h2 id="10-appendix">10. Appendix</h2>
+
+<h3 id="101-external-id-format">10.1 External ID Format</h3>
+
+<p>All entities use UUID v4 format with type prefixes:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Entity</th>
+  <th>Prefix</th>
+  <th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Company</td>
+  <td><code>cmp_</code></td>
+  <td><code>cmp_550e8400-e29b-41d4-a716-446655440000</code></td>
+</tr>
+<tr>
+  <td>Clinic</td>
+  <td><code>cln_</code></td>
+  <td><code>cln_660e8400-e29b-41d4-a716-446655440001</code></td>
+</tr>
+<tr>
+  <td>Doctor</td>
+  <td><code>doc_</code></td>
+  <td><code>doc_770e8400-e29b-41d4-a716-446655440002</code></td>
+</tr>
+<tr>
+  <td>Appointment</td>
+  <td><code>apt_</code></td>
+  <td><code>apt_880e8400-e29b-41d4-a716-446655440003</code></td>
+</tr>
+<tr>
+  <td>Treatment Type</td>
+  <td><code>att_</code></td>
+  <td><code>att_880e8400-e29b-41d4-a716-446655440004</code></td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="102-idempotency">10.2 Idempotency</h3>
+
+<p>The <code>X-Idempotency-Key</code> header ensures duplicate requests don't create duplicate resources.</p>
+
+<p><strong>How it works:</strong><br>
+1. Client generates a unique key (UUID recommended)<br>
+2. First request with this key creates the resource and caches the response<br>
+3. Subsequent requests with same key (within 24 hours) return cached response<br>
+4. Response includes <code>X-Idempotency-Hit: true</code> header for cache hits</p>
+
+<div class="callout "><strong>Best practice</strong><div>- Use UUID v4 for idempotency keys
+- Store keys in your database with your booking reference
+- Retry with the same key on network failures
+- Keys expire after 24 hours</div></div>
+
+<h3 id="103-timezone">10.3 Timezone</h3>
+
+<p>All dates and times are in <strong>Europe/Istanbul</strong> timezone (UTC+3).</p>
+
+<p><strong>Date Format:</strong> <code>YYYY-MM-DD</code> (e.g., <code>2026-01-20</code>)<br>
+<strong>Time Format:</strong> <code>HH:MM</code> (24-hour, e.g., <code>14:30</code>)<br>
+<strong>Timestamp Format:</strong> ISO 8601 with timezone offset (e.g., <code>2026-01-20T19:51:44+03:00</code>)</p>
+
+<h3 id="104-pagination">10.4 Pagination</h3>
+
+<p>List endpoints support pagination with these parameters:</p>
+
+<ul>
+<li><code>page</code> (integer, min: 1, default: 1) - Page number</li>
+<li><code>per_page</code> (integer, min: 1, max: 100, default: 20) - Items per page</li>
+</ul>
+
+<p><strong>Response includes:</strong></p>
+
+<pre><code>{
+  "pagination": {
+    "total": 145,
+    "page": 1,
+    "per_page": 20,
+    "total_pages": 8
+  }
+}
+</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<h3 id="105-date-range-limits">10.5 Date Range Limits</h3>
+
+<p>For slots and appointments endpoints:<br>
+- <strong>Maximum span:</strong> 90 days<br>
+- <strong>Default range:</strong> 14 days from start_date (or today if not specified)<br>
+- <strong>Format:</strong> YYYY-MM-DD</p>
+
+<h3 id="106-audit-logging">10.7 Audit Logging</h3>
+
+<p>The API logs all activities for compliance:<br>
+- <strong>Authentication attempts</strong> (success/failure)<br>
+- <strong>Data access</strong> (all GET requests)<br>
+- <strong>Data modifications</strong> (POST/DELETE operations)</p>
+
+<p>Logs include:<br>
+- Timestamp<br>
+- Client IP address<br>
+- User agent<br>
+- Request/response details<br>
+- Before/after states for modifications</p>
+
+<hr>
+
+<h2 id="11-webhooks">11. Webhooks</h2>
+
+<p>Webhooks let your system receive real-time notifications when appointment events occur in DigiDentiS, instead of polling the API. When an event fires, DigiDentiS sends an HTTP <code>POST</code> request with a JSON body to the webhook URL configured for your integrator.</p>
+
+<p>Webhooks are <strong>opt-in</strong> and configured per integrator by the DigiDentiS team. To enable them, provide:</p>
+<ul>
+  <li>A publicly reachable <strong>HTTPS</strong> endpoint URL.</li>
+  <li>A <strong>webhook secret</strong> (used to sign each request so you can verify authenticity).</li>
+  <li>The list of <strong>events</strong> you want to subscribe to.</li>
+</ul>
+
+<h3 id="111-events">11.1 Event Types</h3>
+
+<table>
+<thead>
+<tr><th>Event</th><th>Fired When</th><th>Status</th></tr>
+</thead>
+<tbody>
+<tr><td><code>appointment.created</code></td><td>A new appointment is created (e.g. via <code>POST /appointments</code>)</td><td>Available</td></tr>
+<tr><td><code>appointment.confirmed</code></td><td>An appointment is confirmed</td><td>Reserved</td></tr>
+<tr><td><code>appointment.cancelled</code></td><td>An appointment is cancelled (e.g. via <code>DELETE /appointments/{id}</code>)</td><td>Available</td></tr>
+<tr><td><code>appointment.rescheduled</code></td><td>An appointment's date/time changes (e.g. via <code>PUT /appointments/{id}</code>)</td><td>Available</td></tr>
+<tr><td><code>appointment.completed</code></td><td>An appointment is marked completed</td><td>Reserved</td></tr>
+<tr><td><code>appointment.no_show</code></td><td>A patient does not show up</td><td>Reserved</td></tr>
+</tbody>
+</table>
+
+<p><em>"Reserved" events are part of the webhook contract and may be enabled progressively. Subscribe to them now so your endpoint receives them automatically once activated.</em></p>
+
+<h3 id="112-request-format">11.2 Request Format</h3>
+
+<p>Each delivery is an HTTP <code>POST</code> with a JSON body and the following headers:</p>
+
+<table>
+<thead>
+<tr><th>Header</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Content-Type</code></td><td><code>application/json; charset=utf-8</code></td></tr>
+<tr><td><code>X-Webhook-Event</code></td><td>The event type (e.g. <code>appointment.created</code>)</td></tr>
+<tr><td><code>X-Webhook-Id</code></td><td>Unique delivery/log ID for this webhook attempt</td></tr>
+<tr><td><code>X-Webhook-Attempt</code></td><td>Attempt number (1-based; increments on retry)</td></tr>
+<tr><td><code>X-Webhook-Signature</code></td><td>HMAC-SHA256 signature of the raw body (see <a href="file:///Users/selim/Downloads/DigiDentiS_Takvim_API_Documentation_v3.2.html#114-signature-verification">11.4</a>). Only present when a secret is configured.</td></tr>
+</tbody>
+</table>
+
+<h3 id="113-payload">11.3 Payload Shape</h3>
+
+<p>Every payload shares the same envelope: a top-level <code>event</code>, an ISO-8601 <code>timestamp</code>, and an event-specific <code>data</code> object.</p>
+
+<pre><code>{
+  "event": "appointment.created",
+  "timestamp": "2026-01-25T10:30:00+03:00",
+  "data": {
+    "id": "apt_770e8400-e29b-41d4-a716-446655440003",
+    "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+    "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+    "date": "2026-01-25",
+    "start_time": "10:30",
+    "end_time": "11:00",
+    "duration": 30,
+    "treatment_type": "att_550e8400-e29b-41d4-a716-446655440001",
+    "booking_id": "DT-12345",
+    "patient": {
+      "first_name": "Ahmet",
+      "last_name": "Yilmaz",
+      "phone": "+905551234567",
+      "email": "ahmet@email.com"
+    },
+    "status": "confirmed",
+    "created_at": "2026-01-25T10:30:00+03:00"
+  }
+}</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p>The <code>data</code> object varies by event. An <code>appointment.cancelled</code> payload:</p>
+
+<pre><code>{
+  "event": "appointment.cancelled",
+  "timestamp": "2026-01-25T14:05:00+03:00",
+  "data": {
+    "id": "apt_770e8400-e29b-41d4-a716-446655440003",
+    "status": "cancelled",
+    "cancelled_by": "integrator",
+    "reason": "Hasta iptal etti",
+    "cancelled_at": "2026-01-25T14:05:00+03:00"
+  }
+}</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p>An <code>appointment.rescheduled</code> payload carries the new date/time in <code>data</code> and the prior values under <code>data.previous</code>:</p>
+
+<pre><code>{
+  "event": "appointment.rescheduled",
+  "timestamp": "2026-01-25T16:20:00+03:00",
+  "data": {
+    "id": "apt_770e8400-e29b-41d4-a716-446655440003",
+    "doctor_id": "doc_770e8400-e29b-41d4-a716-446655440002",
+    "clinic_id": "cln_660e8400-e29b-41d4-a716-446655440001",
+    "date": "2026-01-28",
+    "start_time": "09:00",
+    "end_time": "09:30",
+    "duration": 30,
+    "status": "confirmed",
+    "previous": {
+      "date": "2026-01-25",
+      "start_time": "10:30",
+      "end_time": "11:00"
+    },
+    "rescheduled_at": "2026-01-25T16:20:00+03:00"
+  }
+}</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p>All entity IDs in the payload are <strong>external UUIDs</strong> (the same opaque IDs used elsewhere in the API); internal numeric IDs are never exposed.</p>
+
+<h3 id="114-signature-verification">11.4 Signature Verification</h3>
+
+<p>When a webhook secret is configured, DigiDentiS signs the <strong>raw request body</strong> using HMAC-SHA256 and sends the result in the <code>X-Webhook-Signature</code> header, in the form:</p>
+
+<pre><code>X-Webhook-Signature: sha256=&lt;hex-digest&gt;</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p>To verify a request, recompute the HMAC over the exact raw body using your shared secret and compare it to the header value using a constant-time comparison. <strong>Always verify the signature before trusting the payload.</strong></p>
+
+<p><strong>PHP example:</strong></p>
+
+<pre><code>$payload   = file_get_contents('php://input');           // raw body, unmodified
+$signature = $_SERVER['HTTP_X_WEBHOOK_SIGNATURE'] ?? '';
+$expected  = 'sha256=' . hash_hmac('sha256', $payload, $WEBHOOK_SECRET);
+
+if (!hash_equals($expected, $signature)) {
+    http_response_code(401);
+    exit('Invalid signature');
+}
+
+$event = json_decode($payload, true);
+// ... process $event ...
+http_response_code(200);</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<p><strong>Node.js example:</strong></p>
+
+<pre><code>const crypto = require('crypto');
+
+function verify(rawBody, signatureHeader, secret) {
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret)
+    .update(rawBody).digest('hex');
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signatureHeader || '');
+  return a.length === b.length &amp;&amp; crypto.timingSafeEqual(a, b);
+}</code><button class="copy-btn" type="button">Copy</button></pre>
+
+<h3 id="115-delivery-retries">11.5 Delivery &amp; Retries</h3>
+
+<ul>
+  <li>Your endpoint should respond with a <strong>2xx</strong> status code to acknowledge receipt. Any non-2xx response, timeout, or connection error is treated as a failure.</li>
+  <li>Failed deliveries are retried with <strong>exponential backoff</strong>, up to <strong>5 attempts</strong> total (approximately: +1m, +5m, +15m, +1h, +6h).</li>
+  <li>After 5 failed attempts the delivery is marked <code>failed</code> and is not retried again.</li>
+  <li>Respond quickly (process asynchronously if needed). The delivery request times out after <strong>15 seconds</strong>.</li>
+  <li>Deliveries may arrive more than once in rare cases — use <code>X-Webhook-Id</code> (or <code>data.id</code>) to make your processing <strong>idempotent</strong>.</li>
+</ul>
+
+<h3 id="116-best-practices">11.6 Best Practices</h3>
+
+<ul>
+  <li>Always serve your webhook endpoint over HTTPS.</li>
+  <li>Verify <code>X-Webhook-Signature</code> on every request and reject unsigned/invalid ones.</li>
+  <li>Return <code>2xx</code> as soon as the payload is accepted; do heavy work in a background job.</li>
+  <li>Treat the <code>data</code> object as additive — new fields may be added over time without notice.</li>
+  <li>Keep your webhook secret confidential; rotate it via the DigiDentiS team if it is ever exposed.</li>
+</ul>
+
+<hr>
+
+<h2 id="support">Support</h2>
+
+<p>For technical support or integration assistance:
+- <strong>Email:</strong> digidentis@gmail.com
+
+</p><hr>
+
+<p><strong>DigiDentiS - Digital Dentistry Software</strong>
+© 2026 All Rights Reserved
+Document Version: 3.2.0 Complete</p>
+
+    </div>
+
+    
+        </article>
+
+        <footer class="footer">
+          <div>DigiDentiS – Digital Dentistry Software</div>
+          <div>© 2026 All Rights Reserved</div>
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const slugify = (s) => (s || "")
+      .toLowerCase()
+      .trim()
+      .replace(/&amp;|&/g, "and")
+      .replace(/[^a-z0-9\s\-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/\-+/g, "-");
+
+    const content = document.getElementById("content");
+    const nav = document.getElementById("nav");
+    const headings = Array.from(content.querySelectorAll("h1, h2, h3"));
+
+    headings.forEach((h) => { if (!h.id) h.id = slugify(h.textContent); });
+
+    const navItems = headings.map((h) => {
+      const lvl = h.tagName === "H1" ? 1 : h.tagName === "H2" ? 2 : 3;
+      const li = document.createElement("li");
+      li.className = "lvl-" + lvl;
+      const a = document.createElement("a");
+      a.href = "#" + h.id;
+      a.textContent = h.textContent;
+      a.dataset.target = h.id;
+      li.appendChild(a);
+      nav.appendChild(li);
+      return a;
+    });
+
+    const setActive = () => {
+      const fromTop = window.scrollY + 120;
+      let current = headings[0];
+      for (const h of headings) { if (h.offsetTop <= fromTop) current = h; }
+      navItems.forEach((a) => a.classList.toggle("active", a.dataset.target === (current && current.id)));
+    };
+    window.addEventListener("scroll", setActive, { passive: true });
+    setActive();
+
+    const search = document.getElementById("search");
+    search.addEventListener("input", () => {
+      const q = search.value.toLowerCase().trim();
+      nav.querySelectorAll("li").forEach((li) => {
+        const a = li.querySelector("a");
+        const ok = !q || a.textContent.toLowerCase().includes(q);
+        li.style.display = ok ? "" : "none";
+      });
+    });
+
+    // Code blocks: add copy buttons and wrap code if missing
+    content.querySelectorAll("pre").forEach((pre) => {
+      if (!pre.querySelector(".copy-btn")) {
+        const btn = document.createElement("button");
+        btn.className = "copy-btn";
+        btn.type = "button";
+        btn.textContent = "Copy";
+        btn.addEventListener("click", async () => {
+          const code = (pre.innerText || "").trimEnd();
+          try {
+            await navigator.clipboard.writeText(code);
+            btn.textContent = "Copied";
+            setTimeout(() => (btn.textContent = "Copy"), 900);
+          } catch (e) {
+            btn.textContent = "Failed";
+            setTimeout(() => (btn.textContent = "Copy"), 900);
+          }
+        });
+        pre.appendChild(btn);
+      }
+      if (!pre.querySelector("code")) {
+        const c = document.createElement("code");
+        c.textContent = pre.textContent;
+        pre.textContent = "";
+        pre.appendChild(c);
+      }
+    });
+
+    // Endpoint cards & badges from "Endpoint:" lines
+    const methodToClass = (m) => (m === "GET" ? "get" : (m === "POST" ? "post" : (m === "DELETE" ? "delete" : "")));
+    const isEndpointLine = (txt) => /^\s*Endpoint\s*:\s*/i.test(txt);
+
+    const paras = Array.from(content.querySelectorAll("p, li"));
+    paras.forEach((node) => {
+      const txt = (node.textContent || "").trim();
+      if (!isEndpointLine(txt)) return;
+
+      const rest = txt.replace(/^\s*Endpoint\s*:\s*/i, "").trim();
+      const m = rest.match(/\b(GET|POST|DELETE)\b\s+(.+)/i);
+      if (!m) return;
+
+      const method = m[1].toUpperCase();
+      const path = m[2].trim();
+
+      const wrap = document.createElement("div");
+      wrap.className = "endpoint";
+
+      const badge = document.createElement("span");
+      badge.className = "badge " + methodToClass(method);
+      badge.textContent = method;
+
+      const pathEl = document.createElement("span");
+      pathEl.className = "path";
+      pathEl.textContent = path;
+
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      meta.textContent = "Authenticated";
+
+      wrap.appendChild(badge);
+      wrap.appendChild(pathEl);
+      wrap.appendChild(meta);
+
+      node.replaceWith(wrap);
+    });
+
+    // Callouts from NOTE / IMPORTANT / WARNING / SECURITY / TIP prefixes
+    const calloutRules = [
+      { re: /^\s*(⚠️\s*)?warning\s*[:：]/i, cls: "warning", title: "Warning" },
+      { re: /^\s*(⚠️\s*)?important\s*[:：]/i, cls: "warning", title: "Important" },
+      { re: /^\s*(🔒\s*)?security\s*[:：]/i, cls: "security", title: "Security" },
+      { re: /^\s*(ℹ️\s*)?note\s*[:：]/i, cls: "", title: "Note" },
+      { re: /^\s*(✅\s*)?best\s*practices?\s*[:：]/i, cls: "", title: "Best practice" },
+      { re: /^\s*(💡\s*)?tip\s*[:：]/i, cls: "", title: "Tip" },
+    ];
+
+    Array.from(content.querySelectorAll("p")).forEach((p) => {
+      const t = (p.textContent || "").trim();
+      for (const rule of calloutRules) {
+        if (rule.re.test(t)) {
+          const box = document.createElement("div");
+          box.className = "callout " + rule.cls;
+          const title = document.createElement("strong");
+          title.textContent = rule.title;
+          const body = document.createElement("div");
+          body.textContent = t.replace(rule.re, "").trim();
+          box.appendChild(title);
+          box.appendChild(body);
+          p.replaceWith(box);
+          break;
+        }
+      }
+    });
+
+    // Scroll to Top Button - Initialize after DOM is ready
+    (function initScrollToTop() {
+      const scrollBtn = document.getElementById('scrollToTop');
+      if (!scrollBtn) {
+        // Button not found, wait for it
+        setTimeout(initScrollToTop, 100);
+        return;
+      }
+
+      window.addEventListener('scroll', function() {
+        const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+        if (scrollTop > 300) {
+          scrollBtn.classList.add('visible');
+        } else {
+          scrollBtn.classList.remove('visible');
+        }
+      });
+
+      scrollBtn.addEventListener('click', function() {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    })();
+  </script>
+
+  <!-- Scroll to Top Button -->
+  <button id="scrollToTop" class="scroll-to-top visible" type="button" title="Scroll to Top" aria-label="Scroll to top">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 4l-8 8h5v8h6v-8h5z"></path>
+    </svg>
+  </button>
+
+
+</body></html>

@@ -11,7 +11,7 @@ import prisma from '../db.js';
 import { Prisma } from '@prisma/client';
 
 export type EventSeverity = 'info' | 'warning' | 'error' | 'critical';
-export type EventSource = 'whatsapp' | 'meta_whatsapp' | 'instagram' | 'sms' | 'appointment' | 'finance' | 'auth' | 'system' | 'communication_consent';
+export type EventSource = 'whatsapp' | 'meta_whatsapp' | 'instagram' | 'sms' | 'appointment' | 'finance' | 'auth' | 'system' | 'communication_consent' | 'external_calendar';
 
 export interface OperationalEventInput {
   organizationId: string;

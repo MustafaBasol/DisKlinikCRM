@@ -71,7 +71,8 @@
       "system": "Système",
       "privacy": "Confidentialité / Données",
       "backups": "Sauvegardes",
-      "securityIncidents": "Incidents de sécurité"
+      "securityIncidents": "Incidents de sécurité",
+      "externalCalendar": "Calendrier externe"
     }
   },
   "dashboard": {
@@ -145,6 +146,62 @@
         "blocked": "Bloqué",
         "selectedProvider": "Fournisseur sélectionné"
       }
+    }
+  },
+  "externalCalendar": {
+    "title": "Intégration de calendrier externe",
+    "subtitle": "Sélectionnez une clinique pour configurer son intégration de calendrier externe (ex. DigiDentiS).",
+    "searchPlaceholder": "Rechercher des cliniques...",
+    "noClinics": "Aucune clinique trouvée",
+    "selectClinicPrompt": "Sélectionnez une clinique à gauche pour afficher ou configurer son intégration.",
+    "provider": {
+      "digidentis": "Fournisseur : DigiDentiS"
+    },
+    "status": {
+      "not_configured": "Non configuré",
+      "configured": "Configuré",
+      "connected": "Connecté",
+      "error": "Erreur"
+    },
+    "enabled": "Activé",
+    "configured": "Configuré",
+    "notConfigured": "Non configuré",
+    "fields": {
+      "clientId": "ID client",
+      "clientSecret": "Secret client",
+      "webhookSecret": "Secret du webhook",
+      "apiBaseUrl": "URL de base de l'API (optionnelle)",
+      "externalCompanyId": "ID société DigiDentiS",
+      "externalClinicId": "ID clinique DigiDentiS"
+    },
+    "testConnection": "Tester la connexion",
+    "lastSuccessfulCheck": "Dernière vérification réussie",
+    "lastCheckedAt": "Dernière vérification",
+    "lastError": "Dernière erreur",
+    "webhookUrl": "URL du webhook",
+    "webhookUrlHint": "Configurez cette URL dans les paramètres de webhook DigiDentiS de cette clinique.",
+    "rotateWebhookKey": "Renouveler la clé du webhook",
+    "rotateWebhookKeyConfirm": "Renouveler la clé du webhook ? L'URL du webhook actuelle cessera immédiatement de fonctionner et DigiDentiS devra être reconfiguré avec la nouvelle URL.",
+    "mappings": {
+      "title": "Correspondances praticiens / services",
+      "loadRemote": "Charger depuis DigiDentiS",
+      "type": "Type",
+      "local": "NoraMedi",
+      "external": "DigiDentiS",
+      "practitioner": "Praticien",
+      "service": "Service",
+      "empty": "Aucune correspondance configurée pour le moment",
+      "externalIdPlaceholder": "ID externe",
+      "blockingHint": "Un praticien ou un service sans correspondance active ne peut pas être synchronisé tant qu'un administrateur ne l'a pas associé ici."
+    },
+    "errors": {
+      "loadFailed": "Échec du chargement de la configuration de l'intégration",
+      "saveFailed": "Échec de l'enregistrement de la configuration",
+      "toggleFailed": "Échec de la mise à jour de l'état d'activation",
+      "testFailed": "Échec du test de connexion",
+      "remoteOptionsFailed": "Échec du chargement des médecins/types de traitement depuis DigiDentiS",
+      "mappingSaveFailed": "Échec de l'enregistrement de la correspondance",
+      "rotateFailed": "Échec du renouvellement de la clé du webhook"
     }
   },
   "organizations": {
