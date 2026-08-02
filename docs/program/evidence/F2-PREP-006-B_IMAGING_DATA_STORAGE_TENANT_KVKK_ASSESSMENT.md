@@ -22,7 +22,7 @@ Per task governance, CodeGraph/search was used only within the targeted paths be
 - `server/src/services/imaging/` (7 files: upload/release-metadata validation, request-transition rules, bridge pairing/token/onboarding/update config)
 - `server/src/routes/attachments.ts`, `server/src/routes/imaging.ts`, `server/src/routes/imagingBridgePublic.ts`
 - Imaging-adjacent privacy/export/anonymization/retention code (`server/src/services/privacy/*`) reached through concrete references
-- Authorization/audit helpers concretely imported by the above (`middleware/auth.ts`, `middleware/platformAuth.ts`, `utils/clinicScope.ts`, `utils/auditLog.ts`, `utils/activity.ts`)
+- Authorization/audit helpers concretely imported by the above (`server/src/middleware/auth.ts`, `server/src/middleware/platformAuth.ts`, `server/src/utils/clinicScope.ts`, `server/src/utils/auditLog.ts`, `server/src/utils/activity.ts`)
 - Related tests (title/structure level)
 
 **Three scope expansions** occurred, each forced by a concrete import and fully documented in the JSON (`scopeExpansions`):
@@ -130,7 +130,7 @@ Highest KVKK relevance: **R1** (backup copies outlive source erasure), **R2** (a
 - `fileBackupDestination.ts` encryption/SSE configuration not fully read.
 - Object-storage bucket-level configuration (region, default encryption, versioning, lifecycle) is infrastructure, not visible to a code-only pass.
 - `FileBackupRun` fields not extracted.
-- `services/security/securityDetectionRules.js` (cross-tenant denial signal logic) identified but not read.
+- `server/src/services/security/securityDetectionRules.ts` (cross-tenant denial signal logic) identified but not read.
 - `LabOrderAttachment`'s own authorization path was not verified (out of primary Imaging scope).
 
 Full detail, exact file:line citations, and the complete finding set are in the companion JSON.
