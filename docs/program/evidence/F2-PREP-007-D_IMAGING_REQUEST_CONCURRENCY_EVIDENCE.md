@@ -342,7 +342,7 @@ git diff --name-only origin/main...HEAD -> exactly the two originally-authorized
 
 **Review-thread resolution:** replied to Copilot review comment `3699990558` with a summary of this fix and marked the review thread resolved via the GitHub GraphQL `resolveReviewThread` mutation.
 
-**New commit:** *(recorded after commit — see the delivery report for this turn for the exact SHA)*.
+**New commit:** `6270ea281187c7a545fa05530440cec8d4cb3f6d` — `fix(imaging-tests): fail fast on invalid CT32_ROUNDS instead of silently running zero rounds`, same PR #296, same branch `test/f2-prep-007-d-imaging-request-concurrency`.
 
 ---
 
