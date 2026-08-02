@@ -197,7 +197,8 @@ No migration. Rollback is trivial: revert the single commit adding these two new
 
 ## 11. PR number and head SHA
 
-See PR opened against `main` from branch `test/f2-prep-007-a-imaging-auth-shape`. PR number and exact head commit SHA are recorded in the PR itself at open time (this evidence file is authored in the same commit as the test file, prior to push).
+- **PR:** [#293](https://github.com/MustafaBasol/DisKlinikCRM/pull/293), opened against `main` from branch `test/f2-prep-007-a-imaging-auth-shape`.
+- **Head SHA:** `7eafce5933265b1b2e7dd1b24ec8f0cb74220afb` (the commit adding the two files in §6; this line's own update is a follow-up documentation-only commit on the same branch).
 
 ---
 
