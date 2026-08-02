@@ -1,6 +1,8 @@
 # F2 — Modular Boundaries and Public Contracts
 
-Faz durumu: `TODO` · Son güncelleme: 2026-07-17 (F0-001)
+Faz durumu: `PREPARATION_IN_PROGRESS` (boundary/tooling/module **implementation** remains `TODO` — no implementation is authorized) · Son güncelleme: 2026-08-02 (F2-PREP-005)
+
+F2-PREP-001 through F2-PREP-004 (domain ownership inventory, cross-domain dependency/direct-access map, feature-intake/ClickUp mapping, modularization sequencing) are merged discovery/design evidence. F2-PREP-005 (Consolidated Modularization Charter, [../architecture/F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md](../architecture/F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md)) reconciles all four into one authoritative charter and **recommends, but does not itself approve,** Imaging as the first modularization pilot. **This phase remains preparation-only: no pilot, boundary tool, or implementation task has been approved.**
 
 ## Objective (Hedef)
 
@@ -84,3 +86,4 @@ Opsiyonel ticari modüller, hızlı etki-bazlı test ve güvenli paralel gelişt
 | Tarih | Görev | Değişiklik |
 |---|---|---|
 | 2026-07-17 | F0-001 | Faz dokümanı oluşturuldu (yüksek seviyeli). |
+| 2026-08-02 | F2-PREP-005 | Durum `TODO` → `PREPARATION_IN_PROGRESS` (implementation still `TODO`). Consolidated Modularization Charter reconciles F2-PREP-001..004; recommends (not approves) Imaging as first pilot. No implementation authorized. |

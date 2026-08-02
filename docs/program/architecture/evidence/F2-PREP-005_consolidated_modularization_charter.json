@@ -1,0 +1,344 @@
+{
+  "taskId": "F2-PREP-005",
+  "title": "Consolidated Modularization Charter",
+  "phase": "F2 PREPARATION — Modular Monolith Boundary Definition (F2 remains preparation-only; no implementation authorized by this task)",
+  "type": "DOCUMENTATION / CONSOLIDATION ONLY — no application code, schema, migration, boundary-tooling, or module-extraction change",
+  "executionBaseline": {
+    "sha": "3bd4014efb949a9a5cd413a8dc54018fa04b824a",
+    "description": "Merge commit of PR #268 (feature/f1-003-p3-layered-ci-workflows) into main",
+    "verifiedAtTaskStart": {
+      "originMainMatchesFrozenSha": true,
+      "gitCatFileExitCode0": true,
+      "verificationCommands": [
+        "git status --short",
+        "git branch --show-current",
+        "git rev-parse HEAD",
+        "git fetch origin --prune",
+        "git rev-parse origin/main",
+        "git cat-file -e 3bd4014efb949a9a5cd413a8dc54018fa04b824a^{commit}"
+      ]
+    },
+    "postMergeCiEvidence": {
+      "workflow": "ci-main-and-nightly",
+      "runId": "30748646885",
+      "verifiedVia": "gh run view 30748646885 --repo MustafaBasol/DisKlinikCRM --json headSha,headBranch,event,conclusion,status,displayTitle",
+      "result": {
+        "headSha": "3bd4014efb949a9a5cd413a8dc54018fa04b824a",
+        "headBranch": "main",
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "jobsGreen": "9/9 (Layer 1 x4, Layer 2, Layer 3, Layer 4, Layer 5 x2)"
+      },
+      "independentlyVerifiedByThisTask": true,
+      "note": "This run postdates the last narrative edit to CURRENT_PHASE.md (which still describes PR #268 as open, citing an earlier PR-branch run 30747523882). Both run IDs are real, sequential, distinct events — the docs-cited run is the pre-merge PR-branch run; 30748646885 is the genuine post-merge push-to-main run this task was instructed to rely on. No contradiction once the two are correctly distinguished."
+    }
+  },
+  "inputEvidence": {
+    "mandatoryProgramSources": [
+      "docs/program/NORAMEDI_MASTER_TRACKER.md",
+      "docs/program/CURRENT_PHASE.md",
+      "docs/program/phases/F2_MODULAR_BOUNDARIES.md",
+      "docs/program/ARCHITECTURE_DECISIONS.md",
+      "docs/program/RISK_REGISTER.md",
+      "docs/program/RELEASE_GATES.md",
+      "docs/program/LAUNCH_GATES.md",
+      "docs/program/evidence/README.md"
+    ],
+    "mandatoryPreparationEvidence": [
+      {"file": "docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md", "baseline": "70b1690c1a656c95cead7b42812cc9ae6447bfb7", "mergedAs": "PR #276, commit 0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83"},
+      {"file": "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json", "baseline": "70b1690c1a656c95cead7b42812cc9ae6447bfb7", "mergedAs": "PR #276, commit 0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83"},
+      {"file": "docs/program/evidence/F2-PREP-002_CROSS_DOMAIN_DEPENDENCY_AND_DIRECT_ACCESS_MAP.md", "baseline": "70b1690c1a656c95cead7b42812cc9ae6447bfb7 (R1 reconciled against merged F2-PREP-001)", "mergedAs": "PR #279, commit 97bdde6bc5e96a047f54ee2ec2647df5a9152bcc"},
+      {"file": "docs/program/evidence/F2-PREP-002_cross_domain_dependency_map.json", "baseline": "70b1690c1a656c95cead7b42812cc9ae6447bfb7 (R1 reconciled)", "mergedAs": "PR #279, commit 97bdde6bc5e96a047f54ee2ec2647df5a9152bcc"},
+      {"file": "docs/program/evidence/F2-PREP-003_FEATURE_INTAKE_AND_CLICKUP_DOMAIN_MAPPING.md", "baseline": "70b1690c1a656c95cead7b42812cc9ae6447bfb7 (R2 reconciled against merged F2-PREP-001)", "mergedAs": "PR #277, commit e8e05f669f049c4895e0c9a7f95db6f3fbd463fe"},
+      {"file": "docs/program/evidence/F2-PREP-003_feature_intake_domain_mapping.json", "baseline": "70b1690c1a656c95cead7b42812cc9ae6447bfb7 (R2 reconciled)", "mergedAs": "PR #277, commit e8e05f669f049c4895e0c9a7f95db6f3fbd463fe"},
+      {"file": "docs/program/evidence/F2-PREP-004_MODULARIZATION_SEQUENCE_AND_PILOT_SELECTION.md", "baseline": "70b1690c1a656c95cead7b42812cc9ae6447bfb7 (R2 reconciled against merged F2-PREP-001/003)", "mergedAs": "PR #278, commit 83701882bd0f48a34ca8f8b02beb8a779003e638"},
+      {"file": "docs/program/evidence/F2-PREP-004_modularization_sequence.json", "baseline": "70b1690c1a656c95cead7b42812cc9ae6447bfb7 (R2 reconciled)", "mergedAs": "PR #278, commit 83701882bd0f48a34ca8f8b02beb8a779003e638"}
+    ],
+    "note": "Sibling evidence files were read in full (not modified). Their execution baselines predate this task's frozen 3bd4014e baseline by a small number of commits (all four F2-PREP merge commits plus PR #280/#282/#268 sit between 70b1690c and 3bd4014e); no repository change in that gap invalidates any of the four evidence sets — confirmed by targeted diff review (no schema/route/service file touched by the intervening commits overlaps the F2-PREP-001..004 scope)."
+  },
+  "acceptedFindings": [
+    "38 domains confirmed canonical (37 inherited from F0-003/F0-004 baseline + External Calendar Integration [EXC], added by F2-PREP-001). Independently re-confirmed by direct count of the domains[] array in F2-PREP-001_domain_ownership_inventory.json: exactly 38 objects.",
+    "External Calendar Integration (EXC) is confirmed a distinct 38th domain, not a sub-component of Appointments or Integrations.",
+    "Imaging (IMG + BRG) is the strongest independent primary pilot candidate per F2-PREP-004's own scoring AND is independently reinforced by F2-PREP-002's route-to-Prisma evidence (15 edges, only 1 Low-risk violation, no ownership-ambiguity blocker).",
+    "Billing was F2-PREP-004's strongest fallback candidate, but this charter downgrades that framing from unconditional to conditional: F2-PREP-002 evidence (unavailable to F2-PREP-004 at scoring time) found 8 of 18 Billing-slice edges are CROSS_DOMAIN_VIOLATION, 3 Critical-priority non-atomic financial-write direct-access sites (installment payoff, payout create, payout delete), and the single largest ownership-ambiguity finding in the whole F2-PREP-002 audit (BIL-17, Service/AppointmentType dual identity, 'must be resolved before Billing/Treatment and Scheduling can be split at all').",
+    "External Calendar Integration was explicitly compared in this charter (per program instruction) but was not independently scored by F2-PREP-004 (it did not exist as a named candidate in that task's original research pass). This charter performs a first-pass, lower-confidence, explicitly-flagged derivation of EXC's candidate scores from F2-PREP-001/002 evidence only.",
+    "CC-04 (Appointment booking/cancellation command, per F0-004 / referenced by F2-PREP-003's F2P3-011 and F2-PREP-004 §1.7) is confirmed a narrower, contract-level candidate — never a domain-pilot candidate. ADR-015 itself already names CC-04 as a recommended pilot CONTRACT, independent of any domain-pilot decision.",
+    "dependency-cruiser remains only a candidate identified by F2-PREP-004, not an accepted program tooling decision. It is not mentioned anywhere in F2-PREP-001, F2-PREP-002, or F2-PREP-003.",
+    "ClickUp full backlog import remains incomplete: 0 of 17 F2-PREP-003 backlog items are ClickUp-derived; ClickUp MCP access is UNAVAILABLE_IN_THIS_ENVIRONMENT / PENDING_EXTERNAL_IMPORT. The 17-item set is repository-evidence-only and must never be read as the full NoraMedi feature backlog.",
+    "No pilot, boundary tool, implementation task, extraction task, or enforcement mechanism has been approved by any task prior to this charter, and none is approved by this charter either.",
+    "F1's CI prerequisite (layered CI, workflow ci-main-and-nightly) is now genuinely available at the frozen baseline: independently verified via `gh run view 30748646885`, headSha exact match, 9/9 jobs green, event=push to main.",
+    "F1's full phase-exit (including F1-003-P4, not yet started per governance docs at baseline) is a separate, unresolved matter outside this charter's scope — this charter relies only on the CI-availability prerequisite the master tracker's own prior entry conditioned F2-PREP-005 on, not on full F1 phase closure."
+  ],
+  "contradictions": [
+    {
+      "id": "C1",
+      "title": "CC-04 naming collision across evidence generations",
+      "description": "F0-004 (and F2-PREP-003/004, which cite it) use 'CC-04' to mean the Appointment booking/cancellation command contract. F2-PREP-002 independently defines its own 'F2-CC-04' as ContactRequestCommand.upsert() — a different, unrelated candidate. The bare string 'CC-04' does not appear anywhere in F2-PREP-002's two files.",
+      "resolution": "This charter uses 'CC-04' exclusively in the F0-004/ADR-015/F2-PREP-003/004 sense (Appointment booking/cancellation command). F2-PREP-002's 'F2-CC-04' is a distinct candidate and should be renumbered (e.g. to a non-colliding prefix) in any future consolidated contract catalog to prevent confusion. No sibling evidence file was edited to fix this — it is a naming-scheme collision between independently authored documents, not a factual error in either.",
+      "severity": "Low (documentation clarity only, no evidentiary conflict)"
+    },
+    {
+      "id": "C2",
+      "title": "F2-PREP-003's cached domain-taxonomy array shows 37 domains, not 38",
+      "description": "F2-PREP-003's JSON reproduces a domain_taxonomy_reference.domains array that contains only 37 entries; EXC is referenced only in narrative/reconciliation text within that same file, not as a row in the array.",
+      "resolution": "F2-PREP-001's own domains[] array (the authoritative source for domain count) independently and directly confirmed 38 entries. F2-PREP-003's array is treated as an incomplete cached mirror, not an authoritative recount. 38 stands as the canonical domain count.",
+      "severity": "Low (data-hygiene note, not a substantive dispute)"
+    },
+    {
+      "id": "C3",
+      "title": "F2-PREP-001's own ownership-ambiguity summary table disagrees with its own per-domain free-text field for 4 domains",
+      "description": "The F2-PREP-001 MD's summary table marks PAI, PIG, PCM, and IMG as ownership-ambiguity 'YES', but each domain's own JSON ownershipAmbiguity free-text field explicitly states the opposite ('none — clearly absent', 'none significant').",
+      "resolution": "This charter trusts the more specific free-text field over the summary table's binary column for these 4 domains, treating the table marks as a labeling artifact (conflating 'has a note in this field' with 'is genuinely ambiguous'). F2-PREP-001 is not edited — this is a table-vs-field-text nuance, not a proven factual error requiring correction of historical evidence.",
+      "severity": "Low (internal to F2-PREP-001, does not affect the pilot decision)"
+    },
+    {
+      "id": "C4",
+      "title": "F2-PREP-004 uses an informal 10-domain grouping, not the accepted 38-domain F2-PREP-001 taxonomy",
+      "description": "F2-PREP-004's original scoring pass (barred from reading F2-PREP-001 at the time) scored candidates named 'Imaging', 'Billing', 'Patients', 'Messaging', 'AI', etc. as informal groupings, not by F2-PREP-001's canonical domain codes. Its R1/R2 reconciliation passes confirmed no score changed against the merged inventory but did not remap its candidates onto exact domain codes.",
+      "resolution": "This charter performs that remapping explicitly: F2-PREP-004 'Imaging' = {IMG, BRG}; 'Billing' = {TRC, PAY, FIN} (approximately, per its own installment/payout/earnings-focused rationale — INS is not part of F2-PREP-004's 'Billing'); 'Messaging' = {WHA, IGM, SMS, EML}; 'AI' = {AIO, PAI}; 'Patients' = {PAT}; 'Privacy/retention/consent' = {PRV}; 'Appointments' = {APT}; 'Inventory' = {INV}; 'Notifications' = {NTF}; 'Integrations' = ambiguous/pre-EXC, likely a proxy for adapter-shaped domains generally (not a clean 1:1 match to any single F2-PREP-001 code).",
+      "severity": "Medium (necessary for the candidate matrix in this charter to cite F2-PREP-001 domain codes accurately)"
+    },
+    {
+      "id": "C5",
+      "title": "Billing's pilot favorability is materially contradicted between F2-PREP-004 and F2-PREP-002",
+      "description": "F2-PREP-004 scored Billing's boundary clarity and current coupling at 5/5 ('equal-lowest coupling by import analysis'), based on an import-level fan-in/fan-out pass. F2-PREP-002's later, deeper route-to-Prisma-model audit of the same functional area (BIL slice, 18 edges + 5 direct-Prisma-access sites) found 8 CROSS_DOMAIN_VIOLATION edges, 3 Critical-priority non-atomic financial-write sites, and the audit's single largest ownership-ambiguity finding (BIL-17).",
+      "resolution": "This is the most significant reconciliation in this charter. Billing's fallback-candidate status is preserved but downgraded from unconditional to conditional: it is NOT a clean fallback until BIL-17 (Service/AppointmentType dual identity) is resolved and BIL-08/BIL-09/BIL-10 (non-atomic installment/payout writes) are remediated. F2-PREP-004's favorable score is not treated as wrong — it measured a different, shallower signal (import-level coupling) — but it is superseded for pilot-selection purposes by F2-PREP-002's deeper evidence where the two conflict.",
+      "severity": "High (directly affects the pilot decision and fallback-candidate framing)"
+    },
+    {
+      "id": "C6",
+      "title": "External Calendar Integration was never scored by F2-PREP-004",
+      "description": "F2-PREP-004 explicitly excludes EXC from its 10-domain scoring table and defers it to F2-PREP-005 without independent research at the same depth as the other 10 candidates.",
+      "resolution": "This charter performs a first-pass qualitative scoring of EXC using only F2-PREP-001/002 evidence (Section C). This scoring is explicitly marked lower-confidence and F2-PREP-005-derived, not F2-PREP-004-sourced, and several criteria are marked 'insufficient evidence' rather than invented (notably: independent test coverage, and change cadence beyond the qualitative observation that EXC has had unusually high recent commit velocity — PRs #266, #271, #273, #275 all landed in the days immediately preceding this task's baseline, per `git log --grep=external.calendar`).",
+      "severity": "Medium (a genuine evidence gap this charter partially, not fully, closes)"
+    },
+    {
+      "id": "C7",
+      "title": "Governance documents are stale relative to actual merged F2-PREP work",
+      "description": "docs/program/phases/F2_MODULAR_BOUNDARIES.md still reads 'Faz durumu: TODO', last touched 2026-07-17 (before any F2-PREP task existed). docs/program/NORAMEDI_MASTER_TRACKER.md and docs/program/evidence/README.md contain zero dedicated entries for F2-PREP-001 through F2-PREP-004 despite all four being merged (PRs #276/277/278/279) — their PR/merge-commit facts exist only in git history and in later tasks' self-referential reconciliation notes.",
+      "resolution": "This charter adds minimal, additive entries to evidence/README.md and NORAMEDI_MASTER_TRACKER.md documenting F2-PREP-001..005 (facts sourced from git history, not invented), and updates F2_MODULAR_BOUNDARIES.md's status line to reflect that preparation work has occurred, while explicitly preserving 'F2 remains PREPARATION only, no implementation authorized' in every updated file.",
+      "severity": "Medium (documentation-tracking hygiene, not an evidentiary conflict)"
+    },
+    {
+      "id": "C8",
+      "title": "CURRENT_PHASE.md's last narrative entry still describes PR #268 as open",
+      "description": "The entry was authored before PR #268 was actually merged to main; it cannot retroactively know its own future merge status.",
+      "resolution": "Not a real contradiction — expected self-referential lag. Independently confirmed via `gh run view` and `git cat-file` that PR #268 is in fact merged as of this task's frozen baseline (3bd4014e), with a genuine green post-merge CI run. CURRENT_PHASE.md is updated by this task's own additive entry to close this lag going forward.",
+      "severity": "Low (resolved by direct verification, not by trusting either document's prose)"
+    }
+  ],
+  "reconciledDomainCount": 38,
+  "candidateScores": {
+    "scale": "1-5, 5 = most favorable for an early/first pilot, per F2-PREP-004's own convention (adopted for continuity)",
+    "criteria": [
+      "boundaryClarity", "currentCoupling", "directPrivateAccess", "tenantKvkkSecurityRisk",
+      "productionCriticality", "dataOwnershipClarity", "migrationComplexity", "rollbackFeasibility",
+      "testCoverage", "ciSuitability", "independentChangeCadence", "externalProtocolAdaptorPressure",
+      "futureDeploymentIndependence", "clickUpBusinessDemand", "abilityToDemonstrateBoundaryWithoutDistributedMonolith"
+    ],
+    "imaging": {
+      "domainCodes": ["IMG", "BRG"],
+      "source": "F2-PREP-004 §2 (boundaryClarity=5, currentCoupling=5, dataOwnershipClarity inferred from 'no ownership blocker'), cross-checked against F2-PREP-002 IMG-01..15 / PZ-IMG-01..03",
+      "scores": {
+        "boundaryClarity": 5, "currentCoupling": 5, "directPrivateAccess": 4, "tenantKvkkSecurityRisk": 4,
+        "productionCriticality": 4, "dataOwnershipClarity": 5, "migrationComplexity": 4, "rollbackFeasibility": 5,
+        "testCoverage": 3, "ciSuitability": 5, "independentChangeCadence": 5, "externalProtocolAdaptorPressure": 3,
+        "futureDeploymentIndependence": 4, "clickUpBusinessDemand": 1, "abilityToDemonstrateBoundaryWithoutDistributedMonolith": 3
+      },
+      "evidenceNotes": {
+        "directPrivateAccess": "F2P2 IMG-09 is the only CROSS_DOMAIN_VIOLATION among 15 edges (Low risk, read-only). PZ-IMG-01 (bridge token auth) is flagged High priority for record-keeping only — currently correct. PZ-IMG-02 (inventory-transaction race) and PZ-IMG-03 (backupService.ts whole-DB restore RBAC unverified, Critical) are real gaps but belong to Inventory/Storage, not Imaging's own boundary.",
+        "ciSuitability": "windows-bridge-pr.yml already exists as a path-filtered CI precedent scoped to imaging-bridge surfaces (F2P4 §3) — the only domain with an existing isolated-CI precedent.",
+        "independentChangeCadence": "F2P4: 'lowest change frequency of the FK-heavy domains (30 touches/10 files, full history)' — a stable, mature domain, favorable for freezing a pilot contract.",
+        "clickUpBusinessDemand": "F2P3: IMG has 0 backlog items; adjacent BRG has 1 (a CI-flakiness bug, not a feature-demand signal). Caveat: ClickUp import incomplete for all domains (see clickUpCoverage) — this score reflects absence of signal, not absence of demand.",
+        "abilityToDemonstrateBoundaryWithoutDistributedMonolith": "F2P4 explicitly scores Imaging's reusable-pattern value lower (3/5) than Billing's, because its content (Windows/.NET bridge, DICOM validation, device pairing) is idiosyncratic and will not generalize to the next module extracted — an accepted trade-off, not a disqualifier."
+      }
+    },
+    "billing": {
+      "domainCodes": ["TRC", "PAY", "FIN"],
+      "source": "F2-PREP-004 §2 (boundaryClarity=5, currentCoupling=5), materially revised downward by this charter (C5) using F2-PREP-002 BIL-01..18 / PZ-BIL-01..05",
+      "scores": {
+        "boundaryClarity": 3, "currentCoupling": 3, "directPrivateAccess": 2, "tenantKvkkSecurityRisk": 4,
+        "productionCriticality": 3, "dataOwnershipClarity": 2, "migrationComplexity": 4, "rollbackFeasibility": 5,
+        "testCoverage": 3, "ciSuitability": 3, "independentChangeCadence": 3, "externalProtocolAdaptorPressure": 5,
+        "futureDeploymentIndependence": 2, "clickUpBusinessDemand": 2, "abilityToDemonstrateBoundaryWithoutDistributedMonolith": 4
+      },
+      "evidenceNotes": {
+        "boundaryClarity_and_currentCoupling": "REVISED FROM F2-PREP-004's 5/5. F2P2 found 8 of 18 BIL-slice edges CROSS_DOMAIN_VIOLATION (BIL-05,06,08,09,10,13,14,16) — a materially higher violation density than Imaging's 1/15. F2-PREP-004's import-level analysis did not detect this (see contradiction C5).",
+        "directPrivateAccess": "5 direct-Prisma-access sites, 3 rated Critical/Immediate (PZ-BIL-01 installment payoff, PZ-BIL-02 payout create, PZ-BIL-03 payout delete — none wrapped in $transaction, all with documented partial-failure financial-integrity defects).",
+        "dataOwnershipClarity": "BIL-17 (Service/AppointmentType dual identity — one Prisma model serves both the billing/treatment pricing catalog and the scheduling-domain concept under two route names) is F2P2's single largest structural ownership-ambiguity finding: 'must be resolved before Billing/Treatment and Scheduling can be split at all.'",
+        "externalProtocolAdaptorPressure": "F2P4: 'zero external provider coupling (no payment gateway integration exists yet) — the cleanest pure backend module pattern instance of the 10 candidates.' Scored favorably here specifically because absence of external pressure means no adapter-boundary complexity to manage during a pilot.",
+        "abilityToDemonstrateBoundaryWithoutDistributedMonolith": "F2P4: reusable-pattern value 5/5, 'cleanest pure backend module pattern' — strongest signal for demonstrating a generalizable in-process module boundary, once BIL-17 and the 3 Critical sites are remediated first."
+      }
+    },
+    "externalCalendarIntegration": {
+      "domainCodes": ["EXC"],
+      "source": "Not scored by F2-PREP-004 (contradiction C6). Derived by this charter (F2P5) from F2-PREP-001 EXC domain profile and F2-PREP-002 INF-01..08 / APT-11 / APT-23 edges. Lower confidence than Imaging/Billing scores.",
+      "confidenceLevel": "MEDIUM-LOW — first-pass derivation, not independently researched at F2-PREP-004's depth",
+      "scores": {
+        "boundaryClarity": 4, "currentCoupling": 5, "directPrivateAccess": 4, "tenantKvkkSecurityRisk": 3,
+        "productionCriticality": 4, "dataOwnershipClarity": 4, "migrationComplexity": 5, "rollbackFeasibility": 5,
+        "testCoverage": null, "ciSuitability": 3, "independentChangeCadence": 2, "externalProtocolAdaptorPressure": 5,
+        "futureDeploymentIndependence": 4, "clickUpBusinessDemand": 1, "abilityToDemonstrateBoundaryWithoutDistributedMonolith": 5
+      },
+      "evidenceNotes": {
+        "boundaryClarity": "F2P1: 'of all 38 domains in this inventory, External Calendar Integration is the only one that already exhibits essentially the full target module shape' — but F2P1 also flags this as a factual observation, not a selection, and its dependency edges are 'not yet independently verified against the accepted F0-004 833-edge matrix.' Scored 4, not 5, to reflect that unverified-against-accepted-matrix caveat.",
+        "currentCoupling": "F2P2 INF-01/02/03/05/06 + APT-11/23 are SAME_DOMAIN_ALLOWED or PUBLIC_CONTRACT_CANDIDATE; only INF-04 (calling Messaging's appointmentRequestNotification.ts) is a soft CROSS_DOMAIN_VIOLATION, Medium risk. Net: ~7-8 touched edges, 1 soft violation — comparable to or better than Imaging.",
+        "tenantKvkkSecurityRisk": "F2P1 rates EXC securitySensitivity HIGH specifically due to encrypted OAuth2 client-secret + webhook-HMAC credential handling — a materially different (higher) security-sensitivity profile than Imaging or Billing, even though tenant isolation itself is clean (ExternalCalendarIntegration.clinicId is @unique).",
+        "dataOwnershipClarity": "EXC's own models (ExternalCalendarIntegration/Mapping/InboundEvent/AppointmentLink) are clearly EXC-owned. ExternalCalendarAppointmentLink.appointmentId is a direct FK into Appointment 'with no contract' — a formalization gap, not an ownership ambiguity per se.",
+        "migrationComplexity": "F2P1/F2P4 both describe EXC as 'clean-slate' — 'no legacy code to migrate, already provider-port-shaped' (F2P4 §3, quoting F2P1's own finding).",
+        "testCoverage": "NO EVIDENCE. Neither F2-PREP-001, F2-PREP-002, nor F2-PREP-004 gives an EXC-specific test-coverage figure. Marked null (insufficient evidence) rather than invented — this is itself a blocker for any future pilot-readiness claim about EXC.",
+        "independentChangeCadence": "SCORED UNFAVORABLY. `git log --grep=external.calendar -i --since=2026-07-20` shows PRs #266, #271, #273, #275 (outbound-sync phase 2, DigiDentiS v3.2.0 reconciliation, HMAC auth hardening) all landed in the days immediately preceding this task's baseline — the domain is under unusually active concurrent development, raising execution risk for freezing a pilot contract right now.",
+        "externalProtocolAdaptorPressure": "Highest of the three candidates by design — EXC's entire reason for being is the DigiDentiS external protocol adapter, already built with a provider-factory pattern (ExternalCalendarProvider.ts + externalCalendarProviderFactory.ts) intended for future providers.",
+        "clickUpBusinessDemand": "F2P3: 0 of 17 backlog items touch calendar-sync functionality ('None of the 17 items touch calendar-sync functionality, so EXC was not forced onto any item merely because the domain now exists').",
+        "abilityToDemonstrateBoundaryWithoutDistributedMonolith": "Scored highest of the three: EXC already demonstrates a real external-HTTP/webhook/OAuth adapter boundary entirely in-process, without any new deployment unit — arguably the clearest existing proof that the program's 'no new deployment unit without a measurable trigger' constraint is achievable in practice."
+      }
+    },
+    "cc04ContractLevelNote": "CC-04 (Appointment booking/cancellation command) appears in this matrix only as a contract-level candidate per program instruction — it is NOT scored as a fourth domain-pilot candidate. ADR-015 already names it as a recommended pilot CONTRACT, independent of any domain-pilot decision made here."
+  },
+  "selectedPilot": {
+    "decision": "Imaging (domain codes IMG + BRG) as primary pilot",
+    "status": "RECOMMENDED_BY_THIS_CHARTER_NOT_YET_EXTERNALLY_APPROVED — no implementation task is authorized by this charter alone; external review and explicit approval are required before any Stage 1 work begins."
+  },
+  "decisionConfidence": "MEDIUM-HIGH (not maximum: Imaging's own test-coverage gap is unresolved, the F2-PREP-002 V1-V5 security-validation sequence has not been triaged, and External Calendar Integration remains a legitimate, evidence-supported close alternative that simply was not scored as deeply)",
+  "pilotDependencies": [
+    "F1 phase fully closed is NOT a hard dependency for beginning pilot-contract design work, but F1-003-P4's outcome should be reviewed before any pilot implementation task starts (out of scope for this charter).",
+    "KVKK baseline-stable declaration (referenced by F2_MODULAR_BOUNDARIES.md entry condition) — status not independently re-verified by this charter; physical/architecture freeze remains ACTIVE.",
+    "Resolution or explicit acceptance of PZ-IMG-03 (backupService.ts whole-DB restore RBAC, Critical/unverified) — this is a Storage/Platform-Admin-owned defect, not Imaging's own boundary, but must be triaged (per F2-PREP-002's V3 validation sequence) before any pilot work that could be read as implicitly deprioritizing it.",
+    "A pilot-contract task (F2-PREP-006 or equivalent, see nextTask) must be separately authorized before any code changes begin."
+  ],
+  "pilotBlockers": [
+    "No test-coverage baseline exists for Imaging's currently-untested surfaces (F2P4 notes gaps; F2P2 does not independently re-verify).",
+    "V1-V5 security follow-up validation sequence from F2-PREP-002 has not been triaged by any task — F2-PREP-005 explicitly does not perform that triage, only records that it is required before implementation.",
+    "Boundary-enforcement tooling decision is only a POC-scope decision at this stage (see toolingDecision) — full CI-blocking enforcement is not authorized."
+  ],
+  "publicContractSummary": {
+    "domain": "Imaging (IMG + BRG)",
+    "ownedDataModels": ["ImagingStudy", "ImagingImage", "ImagingRequest", "ImagingDevice", "ImagingBridgeAgent", "ImagingBridgePairing (exact model names per server/prisma/schema.prisma, not independently re-verified by this charter beyond F2-PREP-001's ownedPrismaModels field)"],
+    "ownedCommands": ["Study/image ingest via routes/imaging.ts", "Bridge agent pairing/heartbeat/study-upload via routes/imagingBridgePublic.ts (already PUBLIC_CONTRACT_CANDIDATE per F2P2 IMG-01/PZ-IMG-01, well-hardened)"],
+    "ownedQueries": ["Study/image listing and retrieval via routes/imaging.ts"],
+    "ownedEvents": ["ImagingStudyReceived (F2-PREP-001 public-surface candidate, not yet implemented)"],
+    "allowedInboundCallers": ["Patients (patient-detail enrichment, read-only)", "Privacy (KVKK lifecycle fields on PatientAttachment/ImagingImage — F2-CC-14 AttachmentLifecyclePort/ImagingLifecyclePort candidate, currently a documented SHARED_INFRASTRUCTURE exception per F2P2 IMG-15)", "Notifications (overdue-lab-adjacent digest, low-severity CROSS_DOMAIN_VIOLATION IMG-09, to be formalized as a listOverdueLabOrders-style query)"],
+    "allowedOutboundDependencies": ["Patients/Appointments/TreatmentCase via relationGuards.ts (read-only scope validation, existing shared pattern)", "Storage abstraction (fileStorage.ts, SHARED_INFRASTRUCTURE)"],
+    "forbiddenDirectAccess": [
+      "No domain other than Imaging/Privacy (via the documented, to-be-formalized lifecycle exception) may write directly to prisma.imagingStudy / prisma.imagingImage / prisma.imagingDevice / prisma.imagingBridgeAgent / prisma.imagingBridgePairing.",
+      "Imaging routes/services must not write directly to another domain's tables beyond the existing, accepted read-only relationGuards.ts pattern.",
+      "The bridge-agent public API (imagingBridgePublic.ts) must continue to derive clinicId only from the server-side matched agent row, never from client-supplied input (PZ-IMG-01's current-correct behavior must not regress)."
+    ],
+    "transactionBoundary": "Imaging's own 5 prisma.$transaction sites are domain-internal only (F2P4 §3, point 2) — this property must be preserved; any future cross-domain write must go through a named port/contract, never an ad hoc join into a shared transaction.",
+    "tenantContextRequirement": "All Imaging queries/writes must continue deriving clinicId server-side (from resolved scope or bridge-agent identity), never from unvalidated client input.",
+    "authorizationRequirement": "Existing role-based authorize([...]) middleware pattern preserved; bridge public endpoints continue using bearer-token + status!='revoked' validation.",
+    "auditRequirement": "Any new lifecycle-affecting operation (e.g. a formalized AttachmentLifecyclePort/ImagingLifecyclePort) must write through the existing AUD-domain audit utility, not a new ad hoc logger.",
+    "errorContract": "Not yet designed — deferred to the pilot-contract task.",
+    "idempotencyRequirement": "Bridge study ingest already has dedup keyed on (clinicId, ingestKey) per F2P2 IMG-01 — this property must be preserved by any contract formalization.",
+    "backwardCompatibilityRequirement": "Any public contract introduced must be additive; existing route behavior must not change during Stage 1/2 of any future implementation.",
+    "stranglerPath": "Expand (introduce named port/contract alongside existing direct calls) -> migrate callers one at a time -> contract (remove the direct-access path once all callers migrated) — no big-bang cutover, per F2_MODULAR_BOUNDARIES.md's explicit prohibition on big-bang refactoring.",
+    "rollbackBoundary": "Each strangler step must be independently revertible via a single git revert, consistent with this program's established pattern (e.g. F1-003-B2's own stated rollback approach).",
+    "testContract": "Not yet defined — a characterization-test task must precede any contract formalization, given Imaging's currently-unresolved test-coverage gap.",
+    "observabilityRequirement": "Any new contract boundary should emit through the existing OBS-domain operationalEventService.ts, not a bespoke mechanism.",
+    "deploymentBoundaryDecision": "REMAIN INSIDE MODULAR MONOLITH. No separate-process candidate is proposed for Imaging's server-side ingest/viewer code. The Windows bridge agent already runs as a genuinely separate process on clinic-local hardware, communicating only via the existing public HTTP API — this is a pre-existing, accepted architecture, not a new deployment-boundary decision made by this charter."
+  },
+  "forbiddenDirectAccess": {
+    "principle": "No direct cross-domain private access may be accepted as the desired target anywhere in the program. Cross-domain interaction must move toward accepted public contracts (additive, expand-migrate-contract).",
+    "top20RemediationCarriedForward": "F2-PREP-002's ranked top-20 remediation list (8 Critical, 7 High, 5 Medium) is carried forward as unresolved program backlog by this charter, not resolved. The Critical tier (installment payoff, payout create/delete, patient anonymization non-atomicity, retention-sweep coupling, legacy WhatsApp tenant-resolution defect, WhatsApp/Instagram booking-concurrency race x2) requires separate authorization to remediate — none of it is authorized by this charter.",
+    "pilotSpecificForbidden": "See publicContractSummary.forbiddenDirectAccess for Imaging-specific rules."
+  },
+  "toolingDecision": {
+    "decision": "APPROVE_TOOL_SPECIFIC_POC",
+    "tool": "dependency-cruiser",
+    "scope": "Report-only, non-blocking, scoped initially to the Imaging pilot boundary only once its contract is formally defined (per F2-PREP-004's own M0 recommendation). This is explicitly a POC, not production enforcement.",
+    "rationale": [
+      "dependency-cruiser is the only tool evaluated in any depth by any F2-PREP task (F2-PREP-004 §5) — F2-PREP-001/002/003 do not mention boundary-enforcement tooling at all.",
+      "No functional ESLint setup currently exists in this repository (confirmed: no eslint.config.js anywhere), ruling out eslint-plugin-boundaries as an immediate option without first fixing that separately-scoped gap.",
+      "CodeGraph-based enforcement is confirmed unavailable in this environment (at least 7 independent prior tasks, per F2-PREP-002's own methodology note).",
+      "TypeScript path aliases alone cannot actually forbid an import — insufficient as an enforcement mechanism on their own.",
+      "madge is recommended by F2-PREP-004 only as a companion diagnostic, not primary enforcement (lacks a first-class forbidden-edge/contract concept).",
+      "A custom static import checker was explicitly not recommended first by F2-PREP-004 due to higher authorship/maintenance cost relative to an existing tool."
+    ],
+    "explicitCaveat": "This decision approves a bounded POC only. It does not commit the program to dependency-cruiser as final enforcement tooling, does not authorize CI-blocking mode, and does not apply to any domain other than the selected pilot's boundary."
+  },
+  "toolingAcceptanceCriteria": [
+    "TypeScript/ESM compatibility: must run cleanly against the existing server/ TypeScript + Node ESM setup with zero source changes required for the POC itself.",
+    "Monorepo/path compatibility: N/A in the strict sense (root + server/ are two npm projects, no npm workspaces) — must be verified to work correctly across that split without requiring workspace tooling to be introduced.",
+    "False-positive rate: must be near-zero against the Imaging pilot's already-documented clean boundary (F2P2 IMG-01..15) before being trusted for any other domain.",
+    "Support for allowed public contracts: must be able to express an explicit allowlist for the accepted transitional exceptions (e.g. Privacy's IMG-15 lifecycle-field access) without those being flagged as violations.",
+    "CI execution time: must add no more than a small, bounded amount of time to the existing Layer 1 static-check job (ci-layers.yml) — must not become a new slow layer.",
+    "Deterministic output: identical input must produce identical pass/fail output across runs (no flaky boundary findings).",
+    "Maintainability: config must be reviewable by someone without deep dependency-cruiser expertise (plain JSON/JS rule config, not a bespoke DSL requiring specialized knowledge).",
+    "Incremental adoption: must support scoping rules to only the pilot boundary initially, with a clear path to widen scope domain-by-domain later — never a repository-wide big-bang rule set.",
+    "Ability to enforce only new/changed code initially: report-only mode first; any future move to blocking mode must be a separate, explicitly approved decision, and even then should be evaluated for a warn-on-existing/block-on-new adoption path.",
+    "Rollback/removal path: must be removable by deleting its config file and CI step with zero impact on application runtime behavior (it is a dev-time static-analysis tool only, never a runtime dependency)."
+  ],
+  "sequencing": {
+    "note": "Every step below requires separate approval before execution. Nothing in this charter authorizes moving past step 1.",
+    "steps": [
+      {"step": 1, "name": "External review and approval of this charter", "requiresSeparateApproval": true, "status": "NOT_STARTED"},
+      {"step": 2, "name": "Pilot contract task: formalize Imaging's public contract (routes, commands, queries, events) per publicContractSummary above, no code change", "requiresSeparateApproval": true, "status": "NOT_AUTHORIZED"},
+      {"step": 3, "name": "Characterization tests: close Imaging's test-coverage gap for currently-unverified live-file-storage/live-DB paths (F2P4 §3 point 6) before any refactor", "requiresSeparateApproval": true, "status": "NOT_AUTHORIZED"},
+      {"step": 4, "name": "dependency-cruiser POC: report-only, scoped to Imaging boundary, per toolingDecision", "requiresSeparateApproval": true, "status": "NOT_AUTHORIZED"},
+      {"step": 5, "name": "Additive facade/public API: introduce named port/contract functions alongside existing direct-call paths (no removal yet)", "requiresSeparateApproval": true, "status": "NOT_AUTHORIZED"},
+      {"step": 6, "name": "Caller migration: move each known caller (Patients read, Privacy lifecycle exception, Notifications digest) onto the new contract one at a time", "requiresSeparateApproval": true, "status": "NOT_AUTHORIZED"},
+      {"step": 7, "name": "Enforcement in warning mode: dependency-cruiser (if POC accepted) flags any new direct-access attempt without failing CI", "requiresSeparateApproval": true, "status": "NOT_AUTHORIZED"},
+      {"step": 8, "name": "Enforcement in blocking mode: only after warning-mode POC demonstrates near-zero false positives over a meaningful period", "requiresSeparateApproval": true, "status": "NOT_AUTHORIZED"},
+      {"step": 9, "name": "Deprecation/contract cleanup: remove the old direct-access path once all callers are migrated and blocking enforcement is stable", "requiresSeparateApproval": true, "status": "NOT_AUTHORIZED"},
+      {"step": 10, "name": "Production verification: confirm no behavior change post-migration via existing test suites + manual spot-check, per program's established verification pattern", "requiresSeparateApproval": true, "status": "NOT_AUTHORIZED"}
+    ]
+  },
+  "risks": {
+    "tenantIsolation": "No new tenant-isolation risk introduced by this charter (documentation only). Existing risks (e.g. MSG-08's legacy WhatsApp getDefaultClinic() cross-tenant defect, F2P2's top remediation item) remain OPEN and are explicitly not addressed here.",
+    "kvkkPhysicalFreeze": "Remains ACTIVE, untouched by this charter. No physical/schema change is proposed or authorized.",
+    "authRbac": "No change proposed. Imaging pilot contract must preserve existing authorize([...]) role checks (see publicContractSummary).",
+    "audit": "No change proposed. Any future contract must route through existing AUD-domain audit utilities.",
+    "storage": "PZ-IMG-03 (backupService.ts whole-database restore, RBAC unverified, Critical) remains open and unresolved — explicitly flagged as a pilot dependency, not addressed by this charter.",
+    "queues": "EVQ domain (shared events/queue/idempotency contracts) not directly affected by the Imaging pilot selection; ADR-006/007 (queue/job platform) remain NEEDS_POC per prior evidence, unaffected.",
+    "ai": "Not affected. AIO/PAI remain out of scope for this pilot decision.",
+    "imaging": "Selected as pilot domain — see full risk treatment in publicContractSummary and pilotBlockers. Selection does not close any existing imaging-adjacent risk (PZ-IMG-02, PZ-IMG-03).",
+    "officialIntegrations": "PIG (Integration Platform) remains planned/not-implemented; unaffected by this charter.",
+    "transactionIntegrity": "Billing's non-atomic financial-write findings (BIL-08/09/10) remain OPEN and unresolved — explicitly called out as a Billing fallback-candidate blocker, not fixed by this charter.",
+    "deploymentTopology": "No new deployment unit proposed. Imaging pilot explicitly remains inside the modular monolith (see publicContractSummary.deploymentBoundaryDecision).",
+    "rollback": "This charter itself is fully revertible (documentation-only PR, not merged). Any future implementation step must independently satisfy the rollback principles in this charter (see Section 16 of the markdown charter)."
+  },
+  "unresolvedQuestions": [
+    "Whether External Calendar Integration should receive a full F2-PREP-004-depth scoring pass before being finally ruled out as a near-term pilot alternative.",
+    "Whether BIL-17 (Service/AppointmentType dual identity) should be resolved as a prerequisite to ANY future Billing-adjacent work, independent of pilot selection.",
+    "Whether the F2-PREP-002 V1-V5 security validation sequence should be triaged as a pre-F2 blocker, an F2-pilot prerequisite, or normal remediation backlog — F2-PREP-002 explicitly deferred this triage to F2-PREP-005, and this charter does not perform it (recording that as an open gap, not silently resolving it).",
+    "Whether ContactRequest's ownership (Appointments vs. a channel-agnostic intake domain, flagged OWNERSHIP_AMBIGUOUS by both F0-004 and F2-PREP-001/002) needs resolution before any Messaging-adjacent boundary work.",
+    "Whether Billing/Subscription Engine (PBL) and the Campaign/Invoicing group (PCM) are in scope for the program at all — no ADR or phase document currently claims ownership (F2-PREP-003 §6).",
+    "Whether F1-003-P4's eventual outcome could retroactively affect any assumption in this charter — not evaluated, out of scope."
+  ],
+  "clickUpCoverage": {
+    "status": "PENDING_EXTERNAL_IMPORT / UNAVAILABLE_IN_THIS_ENVIRONMENT",
+    "itemsClickUpDerived": 0,
+    "itemsRepositoryDerived": 17,
+    "supportedInference": "Repository-evidence-only sample of 17 items (GitHub issues, phase-document backlog categories, planned-domain epics, one legacy roadmap item), mapped to proposed owning domains. Useful only as a weak, partial signal.",
+    "unsupportedInference": "Total feature-backlog size, relative business priority across domains, or true customer/feature demand volume. The 17-item set must never be presented, cited, or reported as the full NoraMedi feature backlog total.",
+    "domainsWithAnyDemandSignal": ["TRC", "PAT", "APT", "BRG", "PAI", "PIG", "PBL", "PCM", "EVQ"],
+    "domainsExplicitlyZero": "All other 29 of the 38 domains, including IMG and EXC specifically — confirmed zero, not merely unmeasured, per F2-PREP-003's explicit reconciliation pass."
+  },
+  "migrationStatus": "NO_MIGRATION_PERFORMED. This charter is documentation-only. No schema, migration, application-runtime, or boundary-tooling file was changed.",
+  "runtimeImpact": "NONE. No route, service, job, middleware, or frontend file was modified by this task.",
+  "tenantImpact": "NONE. No tenant-scoping code changed. Existing tenant-isolation defects (e.g. MSG-08) remain open and are explicitly not remediated by this charter.",
+  "kvkkImpact": "NONE. KVKK physical/architecture freeze remains ACTIVE and untouched. No consent/retention/audit code changed.",
+  "rollback": {
+    "thisCharter": "Fully revertible — a documentation-only PR against main, not merged. Reverting removes only the new/updated documentation files listed in this task's diff.",
+    "futureImplementation": "Every future implementation step in the sequencing table must independently satisfy: single-commit-revertible where feasible, backward-compatible during any transition (additive-first), and no destructive schema change without a separate, explicitly approved expand-migrate-contract plan."
+  },
+  "nextTask": {
+    "id": "F2-PREP-006 (proposed identifier; exact numbering to be confirmed by program owner)",
+    "title": "Imaging Pilot Boundary Contract Definition",
+    "gatedOn": ["External review and approval of this charter (F2-PREP-005)", "Explicit approval of the Imaging pilot selection", "No code, schema, or migration change authorized until this gate is passed"],
+    "explicitlyNotAuthorizedByThisCharter": ["Imaging Stage 1 implementation or any other code/schema/migration change", "dependency-cruiser installation or configuration in the actual codebase", "Any boundary-enforcement CI job", "Billing or External Calendar Integration pilot work", "Resolution of BIL-17, PZ-IMG-03, or any other open finding"]
+  },
+  "statusSeparation": {
+    "agentCompleted": true,
+    "validationPassed": true,
+    "prOpened": true,
+    "merged": false,
+    "deployed": false,
+    "productionVerified": false,
+    "f2ImplementationAuthorized": false,
+    "g1Approved": false,
+    "g2Approved": false,
+    "overallStatus": "AGENT_COMPLETED / VALIDATION_PASSED / PR_OPENED_AWAITING_REVIEW"
+  }
+}
