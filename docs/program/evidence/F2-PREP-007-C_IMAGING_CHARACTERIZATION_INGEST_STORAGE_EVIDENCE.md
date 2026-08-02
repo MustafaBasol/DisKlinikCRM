@@ -141,7 +141,8 @@ Revert the two new files (`server/src/tests/imagingCharacterizationIngestStorage
 
 - **Base:** `main` @ `5dc5ad67c7e9feee11f6fece9a7d65e03033d2fb`.
 - **Branch:** `test/f2-prep-007-c-imaging-ingest-storage`.
-- **Head SHA:** `36a13cd691353e250434d5c4f47f38090faffeb4`.
+- **Head SHA (original submission):** `36a13cd691353e250434d5c4f47f38090faffeb4`.
+- **Head SHA (after corrective round, §16):** `39171db` corrective commit, followed by this doc-only SHA-recording commit — see the final pushed commit on this branch for the exact PR head SHA.
 - **PR URL:** https://github.com/MustafaBasol/DisKlinikCRM/pull/295 (open, awaiting review — not merged).
 
 ## 15. Next action
@@ -217,6 +218,7 @@ No CT scope or test semantics changed in this round; only `issueRawRequest()`'s 
 
 ### 16.4 Commit / PR
 
-- New commit (test fix + evidence doc update): recorded with its exact SHA in the immediately-following evidence-doc commit's own diff (this document is updated in the same corrective-round commit sequence as the code fix, so the commit log is the authoritative record — see `git log` on this branch for the exact SHA, also mirrored in §14 above once updated).
+- Corrective-round commit: `39171db` (`fix(imaging-tests): bound issueRawRequest() timeout, close debug-dir cleanup`) — test-harness fix + debug-directory cleanup + this evidence-doc update, all in one commit.
+- Follow-up doc-only commit records this exact SHA back into §14 above (same pattern as the original submission's PR-URL/head-SHA follow-up) — see `git log` on this branch for the final pushed head SHA.
 - PR review thread (comment id `3699989012`) replied to with this fix summary and marked resolved.
 - Branch/PR unchanged: `test/f2-prep-007-c-imaging-ingest-storage` / PR #295. Not merged.
