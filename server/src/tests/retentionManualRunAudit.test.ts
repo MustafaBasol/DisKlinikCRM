@@ -794,6 +794,11 @@ await test('race gate: 10 consecutive concurrent live-run rounds against real Po
   const ROUNDS = 10;
   let doubleSuccessCount = 0;
   let doubleBlockCount = 0;
+  // Every marker this round of the loop seeds, collected up front so the
+  // outer finally can best-effort clean up task-owned rows even if an
+  // assertion throws mid-loop (leaving that round's — or a later round's
+  // never-reached — marker behind for subsequent tests to trip over).
+  const seededMarkers: string[] = [];
 
   await setRuntimeEnabled(true);
   try {
@@ -802,6 +807,7 @@ await test('race gate: 10 consecutive concurrent live-run rounds against real Po
         await cleanAuditRows();
         await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
         const marker = `retention-audit-race-gate-${round}-${randomUUID()}`;
+        seededMarkers.push(marker);
         await seedOldOperationalEvent(marker);
 
         const chain = runChainForRoute();
@@ -830,6 +836,22 @@ await test('race gate: 10 consecutive concurrent live-run rounds against real Po
   } finally {
     await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
     await clearRuntimeSetting();
+    // Best-effort: delete exactly the marker rows this test generated. A
+    // successful round already deleted its own marker via the route's
+    // cleanup, so this is normally a no-op; it only matters when an
+    // assertion threw mid-loop and left a round's row behind. Scoped to
+    // this test's own markers only, and must never mask an assertion
+    // failure from the loop above — swallow (but log) any cleanup error.
+    if (seededMarkers.length > 0) {
+      try {
+        await prisma.operationalEvent.deleteMany({ where: { message: { in: seededMarkers } } });
+      } catch (cleanupErr) {
+        console.error(
+          '  ! race-gate marker cleanup failed (best-effort, not fatal):',
+          cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
+        );
+      }
+    }
   }
 
   assert.equal(doubleSuccessCount, 0, `${doubleSuccessCount}/${ROUNDS} rounds let both concurrent attempts succeed (the F1-003-B2 regression) — must be zero`);
