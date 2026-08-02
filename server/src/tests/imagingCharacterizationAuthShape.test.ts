@@ -37,9 +37,26 @@
  * synthetic buffer under a clearly-synthetic clinic id; it is deleted again in
  * a finally block so this suite leaves no residue.
  *
- * Synthetic data only. No real token, filename, or legalHoldReason content is
- * ever logged by this file — assertions on redacted/audited content compare
- * values in-memory and only report booleans/pass-fail, never the raw text.
+ * Synthetic data only (see SYNTHETIC_LEGAL_HOLD_REASON below) — nothing here
+ * is real PHI/secrets. That said, this file's own `test()` harness does print
+ * `err.stack` on a failure, and Node's AssertionError diff (from
+ * assert.deepEqual/assert.equal) can embed the actual/expected values being
+ * compared — so a naive "never logged" claim would be false for THIS
+ * synthetic text on a failing run. To keep failure output privacy-safe
+ * without hiding the failing test's name or its source location,
+ * `describeFailureLocation()` below deliberately omits the error's own
+ * message/diff and prints only the failing test's name (already logged by
+ * the caller), the error's type/code, and the first stack frame inside this
+ * file — never the compared values themselves, synthetic or otherwise.
+ *
+ * Storage-mode enforcement: CT-16/CT-28's CreateImagingStudy performs a real,
+ * unmocked fileStorage.ts write, which switches to S3 (real network I/O)
+ * whenever S3_BUCKET is set. `main()` clears S3_BUCKET for the lifetime of
+ * this process (restoring the original value in the same `finally` that runs
+ * cleanup) and then verifies, via fileStorage.ts's own `isRemoteStorageEnabled()`
+ * gate, that remote storage is actually disabled before any test runs —
+ * aborting immediately if not. See the "Storage-mode enforcement" block at
+ * the top of `main()` for the exact enforced condition.
  *
  * Cleanup contract: the local-disk directory CreateImagingStudy writes to is
  * removed by a real `finally` wrapped around the whole suite body — it does
@@ -63,6 +80,7 @@ import imagingRouter from '../routes/imaging.js';
 import imagingBridgePublicRouter from '../routes/imagingBridgePublic.js';
 import { generateToken, type AuthRequest } from '../middleware/auth.js';
 import { generateBridgeToken } from '../services/imaging/bridgeTokens.js';
+import { isRemoteStorageEnabled } from '../services/fileStorage.js';
 import type { Response } from 'express';
 
 // ─── Test harness (mirrors imaging.test.ts / communicationPreferencesRoute.test.ts) ──
@@ -76,9 +94,33 @@ async function test(name: string, fn: () => void | Promise<void>) {
     .then(() => { console.log(`  ✓ ${name}`); passed++; })
     .catch((err: unknown) => {
       console.error(`  ✗ ${name}`);
-      console.error(`      ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+      console.error(`      ${describeFailureLocation(err)}`);
       failed++;
     });
+}
+
+/**
+ * Privacy-safe failure reporter. Deliberately omits the error's own
+ * message/diff — for assert.deepEqual/assert.equal failures, Node's own
+ * AssertionError message/stack IS a rendered diff of the actual/expected
+ * values, which can embed compared fixture text (e.g.
+ * SYNTHETIC_LEGAL_HOLD_REASON). Nothing this file compares is real PHI, but
+ * the reporter treats every assertion failure as if its payload were
+ * sensitive, on principle, rather than relying on "it's only synthetic text
+ * this time." What it DOES print — the error's type/code plus the first
+ * stack frame located inside this file — is enough to find and fix the
+ * failing assertion; the failing test's own name (already logged by the
+ * caller, one line above) supplies the rest of the context a full diff would
+ * have added.
+ */
+function describeFailureLocation(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const kind = err.constructor?.name ?? err.name ?? 'Error';
+  const code = (err as NodeJS.ErrnoException).code ? ` [${(err as NodeJS.ErrnoException).code}]` : '';
+  const stackLines = (err.stack ?? '').split('\n').slice(1);
+  const ownFrame = stackLines.find(line => line.includes('imagingCharacterizationAuthShape.test.ts'));
+  const frame = (ownFrame ?? stackLines.find(line => /^\s*at /.test(line)) ?? '').trim();
+  return frame ? `${kind}${code} — ${frame}` : `${kind}${code}`;
 }
 
 function section(title: string) {
@@ -372,7 +414,31 @@ async function cleanupUploadDirs(): Promise<Array<{ dir: string; existedBeforeCl
 async function main() {
   let cleanupResults: Array<{ dir: string; existedBeforeCleanup: boolean }> = [];
 
+  // ─── Storage-mode enforcement ──────────────────────────────────────────────────
+  // CT-16/CT-28's CreateImagingStudy performs a real, unmocked fileStorage.ts write.
+  // fileStorage.ts's own isRemoteStorageEnabled() gate switches that write to S3 (real
+  // network I/O) whenever S3_BUCKET is set in the environment — this suite must never
+  // do that, regardless of what the host environment happens to have configured.
+  // S3_BUCKET is cleared here for the lifetime of this process (original value, if
+  // any, restored in the `finally` below alongside upload-directory cleanup) to force
+  // the local-disk path, and then verified — via the SAME gate function fileStorage.ts
+  // itself calls, not a reimplementation of its logic — as a deterministic, fail-fast
+  // precondition: if remote storage is somehow still enabled after clearing S3_BUCKET,
+  // the whole suite aborts right here, before CreateImagingStudy or any other test
+  // runs, rather than silently attempting real S3 I/O. No production code is modified
+  // by this — only this process's own environment variable, for this run only.
+  const originalS3Bucket = process.env.S3_BUCKET;
+  delete process.env.S3_BUCKET;
+
   try {
+    if (isRemoteStorageEnabled()) {
+      throw new Error(
+        'Storage-mode precondition failed: isRemoteStorageEnabled() is still true after ' +
+        'clearing S3_BUCKET. Refusing to run CreateImagingStudy (CT-16/CT-28) against S3 — ' +
+        'aborting before any test executes.',
+      );
+    }
+
   // ══ CT-06 — bridge Bearer auth rejects a clinic-session JWT ═══════════════════════
   section('CT-06 — bridge Bearer authentication does not cross-accept a clinic-session JWT');
 
@@ -463,23 +529,42 @@ async function main() {
     assert.deepEqual(bridgePublicDeleteRoutes, []);
   });
 
-  // Secondary, independent check: source-text regex over the raw file (catches the
-  // route registration even if this test's own router import/instantiation ever
-  // diverged from the on-disk source for any reason).
-  function extractDeleteRoutePaths(sourceText: string): string[] {
+  // Supplementary, independent check — NOT a replacement for the live route-table
+  // introspection above, which remains authoritative for "no DELETE route exists for
+  // ImagingStudy/ImagingImage." This only catches the route registration even if this
+  // test's own router import/instantiation ever diverged from the on-disk source for
+  // any reason. It deliberately does NOT require the source-derived DELETE path set to
+  // exactly equal the live-introspected one — that would be brittle: a refactor to the
+  // equivalent chained `router.route(path).delete(handler)` form (registering the SAME
+  // three existing, unrelated delete routes) would fail an exact-set-equality check
+  // even though nothing about the actual contract (no delete route for studies/images)
+  // changed. Instead it scans for a DELETE registration, in either call form, whose
+  // path specifically targets a prohibited ImagingStudy/ImagingImage resource.
+  function extractDeleteRoutePathsAnyForm(sourceText: string): string[] {
     const paths: string[] = [];
-    const re = /router\.delete\(\s*['"`]([^'"`]+)['"`]/g;
+    const directRe = /router\.delete\(\s*['"`]([^'"`]+)['"`]/g;
     let m: RegExpExecArray | null;
-    while ((m = re.exec(sourceText))) paths.push(m[1]!);
+    while ((m = directRe.exec(sourceText))) paths.push(m[1]!);
+
+    // Chained form: router.route('path')....delete(handler) — the path literal and
+    // the .delete( call are not adjacent, so this matches a route(path) declaration
+    // followed (within a bounded window, allowing other chained methods in between)
+    // by a .delete( call.
+    const chainedRe = /router\.route\(\s*['"`]([^'"`]+)['"`]\s*\)[^;]{0,300}?\.delete\(/g;
+    while ((m = chainedRe.exec(sourceText))) paths.push(m[1]!);
+
     return paths;
   }
 
-  await test('source-text regex over imaging.ts agrees with the live route-table introspection above (same DELETE path set)', () => {
-    assert.deepEqual(extractDeleteRoutePaths(imagingSrc).sort(), imagingDeleteRoutes.map(r => r.path).sort());
+  await test('source-text scan (both `router.delete(path, ...)` and chained `router.route(path).delete(...)` forms) finds no DELETE registration in imaging.ts targeting /imaging/studies or an images path — supplementary to, not a substitute for, the live route-table introspection above', () => {
+    for (const p of extractDeleteRoutePathsAnyForm(imagingSrc)) {
+      assert.ok(!p.startsWith('/imaging/studies'), `unexpected DELETE route (source scan) targeting a study path: ${p}`);
+      assert.ok(!/images/i.test(p), `unexpected DELETE route (source scan) targeting an images path: ${p}`);
+    }
   });
 
-  await test('source-text regex over imagingBridgePublic.ts also finds zero DELETE routes', () => {
-    assert.deepEqual(extractDeleteRoutePaths(bridgePublicSrc), []);
+  await test('source-text scan finds zero DELETE registrations (either call form) in imagingBridgePublic.ts', () => {
+    assert.deepEqual(extractDeleteRoutePathsAnyForm(bridgePublicSrc), []);
   });
 
   // ══ CT-21 — legal-hold audit metadata: actorRole + hold state, never the reason text ══
@@ -701,10 +786,16 @@ async function main() {
   } finally {
     // Real cleanup happens HERE, unconditionally — whether the try block above ran to
     // completion or an unexpected exception escaped partway through (e.g. a route
-    // lookup failing before any test() call could wrap it). This does not depend on
-    // reaching the "Cleanup" reporting section below, which only runs on the
-    // non-throwing path and only verifies/reports what this finally already did.
+    // lookup failing before any test() call could wrap it, or the storage-mode
+    // precondition above throwing). This does not depend on reaching the "Cleanup"
+    // reporting section below, which only runs on the non-throwing path and only
+    // verifies/reports what this finally already did.
     cleanupResults = await cleanupUploadDirs();
+    // Restore whatever S3_BUCKET was (or wasn't) set to before this run forced local
+    // mode above — unconditionally, for the same reason: this process's environment
+    // must not leak the forced-cleared state past this suite's own execution.
+    if (originalS3Bucket === undefined) delete process.env.S3_BUCKET;
+    else process.env.S3_BUCKET = originalS3Bucket;
   }
 
   // ── Cleanup (reporting only): confirm what the finally block above already removed.
