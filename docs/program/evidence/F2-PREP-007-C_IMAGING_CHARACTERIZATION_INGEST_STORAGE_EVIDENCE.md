@@ -141,7 +141,8 @@ Revert the two new files (`server/src/tests/imagingCharacterizationIngestStorage
 
 - **Base:** `main` @ `5dc5ad67c7e9feee11f6fece9a7d65e03033d2fb`.
 - **Branch:** `test/f2-prep-007-c-imaging-ingest-storage`.
-- **Head SHA / PR URL:** recorded after the commit and PR are created (see the PR description for the exact values — this document is finalized in the same commit as the PR, so the PR's own metadata is the authoritative record of its own head SHA).
+- **Head SHA:** `36a13cd691353e250434d5c4f47f38090faffeb4`.
+- **PR URL:** https://github.com/MustafaBasol/DisKlinikCRM/pull/295 (open, awaiting review — not merged).
 
 ## 15. Next action
 
