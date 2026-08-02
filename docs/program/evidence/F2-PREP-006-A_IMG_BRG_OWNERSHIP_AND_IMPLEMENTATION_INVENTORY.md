@@ -93,9 +93,9 @@ Full per-route table (file, line, method, path, auth mechanism, models touched, 
 
 ## 6. Test inventory
 
-5 dedicated files (3,739 lines total): `imaging.test.ts` (1023, `test:imaging`), `imagingBridgeOnboarding.test.ts` (236, `test:imaging-bridge-onboarding`), `imagingBridgePairing.test.ts` (485, `test:imaging-bridge-pairing`), `imagingBridgeUpdate.test.ts` (512, `test:imaging-bridge-update`), `kvkkAttachmentImagingLifecycle.test.ts` (1483, `test:kvkk-lifecycle` — cross-domain, Privacy-owned but exercises IMG's legal-hold/redaction lifecycle directly). 2 incidental, non-dedicated cross-domain test files touch Imaging models in passing (`clinicBulkExport.test.ts`, `dbVerification/fileBackupDbIntegration.test.ts`) and are not counted in the 5.
+**5 dedicated Imaging/Bridge test files** (3,739 lines total): `imaging.test.ts` (1023, `test:imaging`), `imagingBridgeOnboarding.test.ts` (236, `test:imaging-bridge-onboarding`), `imagingBridgePairing.test.ts` (485, `test:imaging-bridge-pairing`), `imagingBridgeUpdate.test.ts` (512, `test:imaging-bridge-update`), `kvkkAttachmentImagingLifecycle.test.ts` (1483, `test:kvkk-lifecycle` — cross-domain, Privacy-owned but exercises IMG's legal-hold/redaction lifecycle directly). **2 incidental cross-domain test files** touch Imaging models in passing (`clinicBulkExport.test.ts`, `dbVerification/fileBackupDbIntegration.test.ts`) and are not counted among the 5 dedicated files. **7 total relevant test files** (5 dedicated + 2 incidental) is the JSON companion's `tests[]` array length; the deterministic inventory counts in §13 use this same 7.
 
-**CI-coverage gap found:** `.github/workflows/windows-bridge-pr.yml`'s path filter includes `server/src/services/imaging/**` and `server/src/tests/imaging*.ts`, but its job step only runs `test:imaging`, `test:imaging-bridge-pairing`, `test:imaging-bridge-onboarding`, and `test:imaging-bridge-update` — **not** `test:kvkk-lifecycle**, even though a `services/imaging/**` change would be in scope for that test too (`kvkkAttachmentImagingLifecycle.test.ts` does not match the `imaging*.ts` glob). This is a gap this task observes and records; it is not fixed here (no workflow file may be changed by this task).
+**CI-coverage gap found:** `.github/workflows/windows-bridge-pr.yml`'s path filter includes `server/src/services/imaging/**` and `server/src/tests/imaging*.ts`, but its job step only runs `test:imaging`, `test:imaging-bridge-pairing`, `test:imaging-bridge-onboarding`, and `test:imaging-bridge-update` — **not** `test:kvkk-lifecycle`, even though a `services/imaging/**` change would be in scope for that test too (`kvkkAttachmentImagingLifecycle.test.ts` does not match the `imaging*.ts` glob). This is a gap this task observes and records; it is not fixed here (no workflow file may be changed by this task).
 
 ## 7. Cross-domain access (independently re-verified, not merely cited)
 
@@ -153,8 +153,34 @@ The **admin-facing edge** — `BRG-RT-01..08`, physically inside `imaging.ts` �
 ## 13. Validation performed
 
 ```
-node -e "JSON.parse(fs.readFileSync('docs/program/evidence/F2-PREP-006-A_img_brg_inventory.json'))" -> parsed OK
-routes: 32, services: 7, models: 8, tests: 7, helpers: 13, adapters: 5, findings: 10, overlaps: 4
+node -e "const fs=require('fs'); const p='docs/program/evidence/F2-PREP-006-A_img_brg_inventory.json'; const j=JSON.parse(fs.readFileSync(p,'utf8')); console.log(j)"
+-> exit 0, object printed (taskId 'F2-PREP-006-A', frozenBaseline '4cb334d213b4dbbac4193f1a8c1878deddb55714', ...)
+
+node -e "
+const fs=require('fs');
+const p='docs/program/evidence/F2-PREP-006-A_img_brg_inventory.json';
+const j=JSON.parse(fs.readFileSync(p,'utf8'));
+console.log('routes:', j.routes.length);
+console.log('services:', j.services.length);
+console.log('models:', j.models.length);
+console.log('tests total:', j.tests.length);
+console.log('helpers:', j.helpers.length);
+console.log('adapters:', j.adapters.length);
+console.log('findings:', j.findings.length);
+console.log('overlaps:', j.overlaps.length);
+console.log('testCounts:', j.testCounts);
+"
+-> exit 0
+   routes: 32
+   services: 7
+   models: 8
+   tests total: 7          (5 dedicated Imaging/Bridge test files + 2 incidental cross-domain test files)
+   helpers: 13
+   adapters: 5
+   findings: 10
+   overlaps: 4
+   testCounts: { dedicatedImagingTestFiles: 5, incidentalCrossDomainTestFiles: 2, totalRelevantTestFiles: 7, totalDedicatedLines: 3739 }
+
 git diff --check -> clean
 ```
 

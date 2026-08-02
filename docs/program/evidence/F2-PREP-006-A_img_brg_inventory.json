@@ -172,7 +172,7 @@
     { "path": "server/src/tests/clinicBulkExport.test.ts", "ownerCandidate": "Privacy-owned, incidental Imaging touch only", "classification": "not a dedicated Imaging test; not counted in the 5 dedicated files above" },
     { "path": "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts", "ownerCandidate": "Storage/backup-owned, incidental ImagingImage touch only (FileBackupEntry.sourceModel reference)", "classification": "not a dedicated Imaging test; not counted in the 5 dedicated files above" }
   ],
-  "testCounts": { "dedicatedImagingTestFiles": 5, "incidentalCrossDomainTestFiles": 2, "totalDedicatedLines": 3739 },
+  "testCounts": { "dedicatedImagingTestFiles": 5, "incidentalCrossDomainTestFiles": 2, "totalRelevantTestFiles": 7, "totalDedicatedLines": 3739 },
   "inboundCallers": [
     { "of": "server/src/routes/imaging.ts", "caller": "server/src/index.ts:255 app.use('/api', imagingRoutes)", "kind": "route mount" },
     { "of": "server/src/routes/imagingBridgePublic.ts", "caller": "server/src/index.ts:185 app.use('/api/public', imagingBridgePublicRoutes)", "kind": "route mount, pre-authenticate middleware" },
