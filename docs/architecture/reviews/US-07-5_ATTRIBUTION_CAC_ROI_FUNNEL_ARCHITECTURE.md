@@ -592,12 +592,16 @@ CAC(channel, period) = eligible_channel_cost(channel, period) / new_patient_coun
   `notes` field for this rather than a rigid schema assumption.
 - **Inactive channels:** cost history for a deactivated channel remains queryable for historical CAC —
   deactivation stops new cost-period entry, not historical reporting.
-- **Historical cost corrections:** because `AcquisitionChannelCostPeriod` rows are period-scoped and
-  immutable once a report has been generated against them (recommended convention, §7), a correction should
-  be modeled as a new row with a note, not an in-place edit of a historical amount — this preserves
-  reproducibility of previously-published reports. **Do not assume one mutable `costPerMonth` field is
+- **Historical cost corrections:** modeled via the formal supersede mechanism defined in §7.2 — a correction
+  inserts a new `active` row referencing the corrected row via `supersedesCostPeriodId`, and the prior row
+  transitions to `status: 'superseded'` in the same transaction. `eligible_channel_cost` sums only `status:
+  'active'` rows for a channel/clinic/currency/period, so a correction changes future report output without
+  altering the immutable audit trail and, critically, without the original and the correction ever being
+  summed together (§7.2 rule 6, §7.5 worked example). **Do not assume one mutable `costPerMonth` field is
   historically correct** — a single mutable field would silently rewrite every past CAC calculation the
   moment someone updates "this month's" cost, which is the exact trap this model is designed to avoid.
+- **Arithmetic:** `eligible_channel_cost` is computed using `Decimal` arithmetic per §7.1, never native
+  floating point — see required tests 1–3 (§7.6) for the specific drift scenarios this guards against.
 
 ### 4.6 ROI
 
@@ -613,6 +617,9 @@ ROI(channel, period) = (attributed_revenue(channel, period) - eligible_channel_c
 - **Negative values:** fully valid and expected (cost exceeded attributed revenue) — must render as a
   negative percentage, not clamped to zero.
 - **Currency consistency:** revenue and cost must share a currency per the same rule as CAC (§4.5).
+- **Arithmetic:** the revenue-minus-cost subtraction and the division by cost are both performed using
+  `Decimal` arithmetic (§7.1) over values already converted from `Payment.amount`'s native `Float`
+  representation — see required tests 2–3 (§7.6).
 - **Period alignment:** revenue is cohort-based (§4.3: patients acquired in `period`, revenue collected any
   time up to the report's "as of" date) while cost is period-incurred (§4.5) — this is an intentional,
   standard marketing-ROI shape (spend now, collect later), but it means ROI for a *recent* period will be
@@ -757,44 +764,288 @@ AcquisitionChannel
 
 ## 7. Recommended cost-period model
 
+**This section was revised after initial review to correct two defects identified before implementation
+could safely begin: (1) the original `amount Float` field is not decimal-safe for a financial model feeding
+CAC/ROI, exports, and branch allocations; (2) the original "overlapping rows, sum everything" reporting rule
+allows a correction row to be double-counted against the value it was meant to replace. Both are corrected
+below with an explicit, canonical design — not general guidance to "use Decimal where possible."**
+
+### 7.1 Monetary representation — canonical decimal-safe design
+
+**Canonical strategy: `Decimal @db.Decimal(18, 2)` (PostgreSQL `NUMERIC(18,2)`), not `Float`, and not integer
+minor units.**
+
+Integer minor units were evaluated and rejected as the default: they perform better at very high write
+volume, but this model is a low-volume, human-entered financial ledger (marketing spend line items entered
+by admin/finance staff, not a hot transactional path), and a minor-units design would require a
+cents-conversion layer at every one of this feature's many call sites (§13) — a real source of off-by-a-
+factor-of-100 bugs for a feature whose entire purpose is arithmetic correctness. `Decimal` keeps the model
+directly human-readable (`amount: 10000.00`) while remaining exact.
+
 ```
 AcquisitionChannelCostPeriod
-  id              String   @id
-  channelId       String              // FK -> AcquisitionChannel
-  clinicId        String?             // allocation scope: null = organization-wide spend, set = branch-specific spend
-  currency        String              // one of the existing validCurrencies set (§2.9), or org's reporting currency
-  amount          Float               // cost incurred in this period
-  effectiveFrom   DateTime
-  effectiveTo     DateTime            // half-open [effectiveFrom, effectiveTo) — no implicit "current" row
-  notes           String?             // tax treatment, campaign name, correction rationale, etc.
-  createdById     String
-  createdAt       DateTime @default(now())
-
-  @@index([channelId, effectiveFrom, effectiveTo])
+  amount   Decimal  @db.Decimal(18, 2)
 ```
 
-- **Overlapping periods:** the application layer should warn (not necessarily hard-block, since a genuine
-  correction may intentionally overlap) when a new row's `[effectiveFrom, effectiveTo)` overlaps an existing
-  row for the same `channelId`+`clinicId` — CAC/ROI computation over an overlapping range must sum all
-  overlapping rows rather than picking one arbitrarily, and the report should surface "overlapping cost data"
-  as a data-quality flag (§12 Phase G) rather than silently picking a winner.
-- **Organization-level costs allocated to branches:** an org-wide row (`clinicId: null`) is allocated at
-  report-time per the strategy decided in §4.5/§14 (recommended default: proportional to branch new-patient
-  count for that channel/period) — the allocation is a *reporting-time computation*, not a schema-time
-  fan-out into N branch-specific rows, so the allocation strategy can be changed later without rewriting
-  historical cost data.
-- **Immutable historical reporting:** rows are **append-only by convention** — a correction is a new row
-  with a `notes` explanation, not an in-place update, so that a report generated last month and a report
-  generated today over the same historical period return the same number unless a deliberate correction was
-  added (in which case the change itself is visible in the `notes` trail). This directly satisfies the task
-  brief's instruction not to assume one mutable `costPerMonth` field is historically correct — a mutable
-  field would let someone editing "this month's spend" silently rewrite every historical CAC/ROI number ever
-  computed against it.
-- **Currency:** per-row, matching `validCurrencies`; multi-currency channels require either separate rows per
-  currency (no cross-currency summing) or an FX decision (§14).
-- **Channel deactivation:** cost-period rows for a deactivated channel remain valid and queryable; only
-  *new* rows against an inactive channel should be blocked (or require explicit confirmation) at the
-  application layer.
+(Full model definition, including this field, is given in §7.2.) Existing `Payment.amount`,
+`TreatmentCase.estimatedAmount`, and `TreatmentCase.acceptedAmount` remain `Float` — those are pre-existing
+production columns on tables outside this document's scope to modify (§16, risk), and changing them would be
+a schema migration against live financial data, which this documentation-only task must not perform. This
+creates one unavoidable conversion seam, addressed explicitly below.
+
+- **Database representation:** `Decimal @db.Decimal(18, 2)` — up to 16 integer digits, 2 fractional digits,
+  matching every currently supported currency's minor unit (`validCurrencies`, §2.9: USD/EUR/TRY/GBP/CAD/CHF
+  are all 2-decimal currencies). If a zero-decimal currency (e.g. JPY) or three-decimal currency (e.g. BHD)
+  is ever added to `validCurrencies`, this precision/scale must be revisited before that currency is used in
+  a cost-period row — flagged as a follow-up decision (§14), not solved speculatively for currencies the
+  product does not support today.
+- **API serialization:** Prisma `Decimal` values must be serialized as JSON **strings** (e.g. `"10000.00"`),
+  never coerced through a native JS `number` in the HTTP response — that boundary is exactly where float
+  imprecision would otherwise re-enter the system after being correctly avoided in the database and in
+  server-side arithmetic.
+- **Parsing and validation:** on write, `amount` is parsed via a decimal-string-aware Zod schema (a string
+  matching a strict decimal pattern, transformed into `Prisma.Decimal`), never `parseFloat`/`Number()`.
+  Reject values with more fractional digits than the currency's minor unit supports, and reject
+  non-finite/`NaN` input and negative amounts on a normal (non-correction) row (see §7.2 for why corrections
+  are also expressed as positive amounts, not signed deltas).
+- **Arithmetic behavior:** every sum, allocation, and CAC/ROI numerator/denominator computation over
+  `AcquisitionChannelCostPeriod.amount` uses `Prisma.Decimal`/`Decimal.js` operations (`.plus()`, `.minus()`,
+  `.dividedBy()`) — never native `+`/`-`/`/` on a value that has passed through a JS `number`. Because
+  `attributed_revenue` (§4.3) sums the existing `Payment.amount` (`Float`), the aggregation layer must
+  explicitly convert each `Payment.amount` into a `Decimal` (e.g. `new Prisma.Decimal(payment.amount.toFixed(2))`)
+  before combining it with cost-period `Decimal` values in the CAC/ROI formulas (§4.5, §4.6) — this
+  conversion happens exactly once, at the aggregation layer (§13 slice G), never repeated or reimplemented
+  ad hoc per call site.
+- **Rounding policy:** intermediate arithmetic (sums, allocations, CAC/ROI numerator and denominator) is
+  never rounded mid-calculation. Only the final value returned by the API is rounded, to the currency's
+  minor-unit scale (2 decimal places for every currently supported currency), using round-half-up
+  (`ROUND_HALF_UP`) — applied identically across the report API, the UI, and the CSV export path, so the same
+  figure never differs across those three surfaces (§16, verification item, and required test 16 in §7.6).
+- **Display formatting:** the frontend formats the already-rounded decimal string using the existing
+  currency-formatting utility; it must not re-parse the value through `parseFloat`/`Number()` before
+  formatting, which would reintroduce float imprecision at the last possible moment.
+- **Branch-allocation rounding:** see §7.4 (deterministic largest-remainder allocation, no drift).
+- **Export behavior:** CSV export (mirroring the existing pattern at `reports.ts:207-270`) writes the exact
+  same rounded decimal-string value returned by the report API — never an independently re-derived or
+  re-rounded figure — so exported totals always reconcile to the cent with on-screen totals.
+- **Zero/negative values:** `amount = 0` is a valid, meaningful row (an explicit "no spend this period,"
+  distinct in the data model from *no row at all* — this distinction is exactly what §4.5's "zero-cost" vs.
+  "missing-cost" CAC/ROI behavior depends on). Negative `amount` is rejected at the schema boundary for a
+  normal cost-period row — a cost period represents money spent, not a signed adjustment. A correction that
+  reduces a prior total is expressed by superseding the row with a new, smaller **positive** amount (§7.2),
+  never by entering a negative number.
+- **Currency scale considerations:** `Decimal(18,2)` is sized for the currently supported `validCurrencies`
+  set only; it is not a speculative general-purpose any-currency design, consistent with this codebase's
+  preference against building for hypothetical future requirements.
+- **Tests preventing floating-point drift:** enumerated in full in §7.6.
+
+### 7.2 Correction and overlap semantics — canonical model
+
+**The original draft of this document allowed unrestricted overlapping cost-period rows and instructed
+reports to "sum all overlapping rows." That rule is wrong whenever a new row represents a corrected total
+rather than an additional cost — it silently double-counts. This is corrected below with one canonical,
+explicit model: append-only rows with an explicit `status` and a `supersedesCostPeriodId` link.**
+
+```
+AcquisitionChannelCostPeriod
+  id                      String   @id
+  channelId               String              // FK -> AcquisitionChannel
+  clinicId                String?             // allocation scope: null = organization-wide, set = branch-specific
+  currency                String              // one of validCurrencies (§2.9)
+  amount                  Decimal  @db.Decimal(18, 2)
+  effectiveFrom            DateTime
+  effectiveTo              DateTime            // half-open [effectiveFrom, effectiveTo)
+  status                   String   @default("active")   // active | superseded
+  supersedesCostPeriodId   String?             // self-relation FK -> AcquisitionChannelCostPeriod.id; set only when this row corrects a prior row
+  correctionReason         String?             // required at the application layer whenever supersedesCostPeriodId is set
+  componentType            String?             // e.g. ad_spend | agency_fee | other — null = single undifferentiated cost row (§7.3)
+  campaignId               String?             // reserved for future campaign-level tracking (§9, §14) — never populated retroactively
+  costCategory             String?             // free-text bookkeeping category, orthogonal to componentType's structural role
+  notes                    String?
+  createdById               String
+  createdAt                DateTime @default(now())
+
+  @@index([channelId, clinicId, status, effectiveFrom, effectiveTo])
+  @@index([supersedesCostPeriodId])
+```
+
+**A ledger-delta model (each correction stored as a signed +/- adjustment, e.g. `10,000 + (-2,000) = 8,000`)
+was evaluated and rejected as the default.** It is arithmetically equivalent, but it depends entirely on
+every user correctly entering the *delta* rather than the new *total* — the exact user error this brief
+warns against — and it makes "what is the current effective cost for this period" a running-sum query
+instead of a single-row lookup, adding complexity to every read path for a benefit (no `status` column) that
+doesn't materially simplify the write path. The supersede model below is the one canonical design; a
+ledger-delta model is not a supported alternative in this architecture.
+
+**Rules (canonical, all mandatory):**
+
+1. **A correction always creates a new, immutable row.** No cost-period row's `amount`, `currency`,
+   `effectiveFrom`, or `effectiveTo` is ever updated in place after creation.
+2. **The previous row becomes `superseded`.** Only the `status` field of the prior row transitions
+   (`active → superseded`); every other field on that row remains exactly as originally written, preserving
+   the audit trail intact. This is the one field mutation this model allows, and it never touches financial
+   values.
+3. **Exactly one `active` row may cover a given `(channelId, clinicId, currency, componentType)` scope for
+   any point in time.** Enforced at the application layer inside the write transaction (not a DB exclusion
+   constraint, since Postgres range-overlap exclusion constraints don't compose cleanly with this model's
+   nullable `clinicId`/`componentType` dimensions) — a pre-write overlap check runs inside the same
+   transaction as the insert.
+4. **Reports query `WHERE status = 'active'` only.** Superseded rows are never included in any CAC/ROI/cost
+   sum, ever, by construction of the query — not by a filter that could be forgotten at a new call site.
+5. **Historical audit retains all rows, forever.** An admin "cost history" view (§12 Phase G) shows the full
+   supersede chain for a channel/clinic scope via `supersedesCostPeriodId`, including every prior value and
+   its `correctionReason`.
+6. **A correction and the row it replaces are never both summed.** Guaranteed structurally by rules 2 and 4
+   together (the prior row is no longer `active` the instant the correction commits) — not by convention,
+   and covered by required tests 4–5 (§7.6).
+7. **Concurrent corrections are transactionally safe.** The "flag prior row superseded" + "insert new active
+   row" + "overlap check" sequence runs inside a single database transaction that takes a row-level lock
+   (`SELECT ... FOR UPDATE`) on the row being superseded, so two concurrent correction requests against the
+   same active row cannot both succeed and leave two active rows behind (required test 7, §7.6).
+8. **Same-period rows in different currencies are never aggregated.** The overlap check in rule 3 and every
+   reporting query are both scoped by `currency` in addition to `channelId`/`clinicId`/`componentType` — two
+   rows covering the same period in different currencies are never treated as overlapping for correction
+   purposes, and are never summed into one blended total (required test 10, §7.6).
+9. **Organization-wide and clinic-specific rows have explicit precedence.** When both an org-wide
+   (`clinicId: null`) and a clinic-specific (`clinicId: set`) `active` row exist for the same channel/period,
+   the clinic-specific row takes precedence for that clinic's reporting — the org-wide allocation (§7.4) is
+   **not** additionally applied on top of it for that clinic during the overlapping period. This precedence
+   must be explicit in the aggregation query; without it, a clinic could be double-charged under both its own
+   specific cost and a share of the org-wide cost.
+10. **Overlap detection at write time distinguishes three cases**, not a single "overlap" bucket:
+    - **Accidental duplicate** — same `(channelId, clinicId, currency, componentType)`, overlapping period,
+      `supersedesCostPeriodId` not set → **rejected** with a validation error prompting the user to either
+      supersede the existing row explicitly or adjust the period boundaries (required test 8, §7.6).
+    - **Replacement correction** — `supersedesCostPeriodId` explicitly set, referencing an existing `active`
+      row in the same scope → **allowed**, executes the rule-1/2/7 transaction.
+    - **Genuinely separate cost component** — a different `componentType` for the same channel/clinic/period
+      (e.g. `ad_spend` vs. `agency_fee`) → **allowed** to coexist as separate `active` rows; see §7.3.
+
+### 7.3 Separate cost components
+
+`componentType` (e.g. `ad_spend`, `agency_fee`, `other`) lets a channel/period's true cost be recorded as
+multiple distinct line items instead of forcing every cost into one undifferentiated number. Rows with
+different `componentType` values for the same `(channelId, clinicId, currency, effectiveFrom, effectiveTo)`
+are **not** overlap candidates under rule 3/10 — they coexist by design.
+
+`eligible_channel_cost(channel, clinic, period)` (§4.5, §4.6) is defined as the Decimal-safe sum of the
+`amount` of **every `active` row** matching that channel/clinic-per-precedence-rule-9/currency/period, across
+all `componentType` values. A replacement correction (§7.2) and a separate component (§7.3) are
+distinguishable in the data by one thing only: whether `supersedesCostPeriodId` links the new row to a prior
+row being replaced. If it does, the prior row is superseded and excluded. If it doesn't, both rows are
+`active` line items and both are summed. This is the single rule that must never be confused at
+implementation time, and is covered directly by required tests 4–5 and 9 (§7.6).
+
+### 7.4 Branch allocation
+
+An organization-wide `active` cost row (`clinicId: null`) is allocated across branches at **report time**
+(never as a schema-time fan-out into per-branch rows, so the allocation strategy remains changeable without
+rewriting historical cost data), using the recommended default from §4.5/§14 — proportional to each branch's
+new-patient count for that channel/period — with a **deterministic remainder rule** to avoid rounding drift:
+
+1. Compute the total `active` cost for the channel/period as a `Decimal` (§7.1).
+2. Compute each branch's new-patient count for that channel/period (§4.1's cohort definition).
+3. Compute each branch's raw proportional share as a `Decimal` and floor it to the currency's minor unit
+   (2 decimal places for all currently supported currencies).
+4. Compute the remainder: `total_cost − Σ(floored shares)` — always a small number of minor units (cents)
+   due to flooring.
+5. Assign the remainder's minor units one at a time, in a fixed deterministic order — largest raw share
+   first, ties broken by ascending `clinicId` string — until fully exhausted (the standard "largest
+   remainder method").
+6. This computation is pure and reproducible: identical inputs (cost, branch counts) always produce an
+   identical per-branch split, with no dependency on iteration order of an unordered collection or on
+   wall-clock time (required tests 11–12, §7.6).
+
+### 7.5 Worked examples
+
+**Initial cost, then a correction (the core double-counting fix):**
+
+```
+Row 1: channelId=Instagram, clinicId=null, currency=EUR, componentType=null,
+       effectiveFrom=2026-01-01, effectiveTo=2026-02-01,
+       amount=10,000.00, status=active, supersedesCostPeriodId=null
+```
+
+A bookkeeping error is discovered; the true January Instagram cost was 8,000.00 EUR. The correction commits
+in one transaction:
+
+```
+Row 1: status → superseded   (all other fields unchanged, retained forever for audit)
+Row 2: channelId=Instagram, clinicId=null, currency=EUR, componentType=null,
+       effectiveFrom=2026-01-01, effectiveTo=2026-02-01,
+       amount=8,000.00, status=active, supersedesCostPeriodId=Row1.id,
+       correctionReason="Initial entry overstated agency invoice; corrected per invoice #1234"
+```
+
+`eligible_channel_cost(Instagram, org-wide, January 2026)` queries `status = 'active'` only:
+
+```
+Expected report result:  8,000.00 EUR
+NOT:                     18,000.00 EUR
+```
+
+**Separate cost components (distinguishable from a correction because neither row supersedes the other):**
+
+```
+Row A: componentType=ad_spend,   amount=8,000.00,  status=active, supersedesCostPeriodId=null
+Row B: componentType=agency_fee, amount=1,500.00,  status=active, supersedesCostPeriodId=null
+```
+
+```
+Total eligible cost = 8,000.00 + 1,500.00 = 9,500.00 EUR
+```
+
+Both rows remain `active` simultaneously — this is not a correction of one another, per §7.3.
+
+**Branch allocation with a non-exact remainder (§7.4):**
+
+Org-wide Instagram cost for August 2026 = 10,000.00 EUR; new Instagram patients that month: Branch A = 7,
+Branch B = 6, Branch C = 2 (total 15).
+
+```
+Raw shares:    A = 4,666.666...  B = 4,000.000...  C = 1,333.333...
+Floored:       A = 4,666.66      B = 4,000.00      C = 1,333.33   (sum = 9,999.99)
+Remainder:     10,000.00 − 9,999.99 = 0.01
+Assigned to:   A (largest raw share)
+Final:         A = 4,666.67      B = 4,000.00      C = 1,333.33   (sum = 10,000.00 exactly)
+```
+
+### 7.6 Required tests for monetary correctness
+
+These are architectural test **requirements** for whoever implements §13 slice B/G — not tests executed as
+part of this documentation-only review (§16 confirms no code was written here).
+
+1. Decimal-safe summation of multiple `active` cost-period rows produces an exact result with no
+   floating-point representation error, using amounts known to be lossy under naive IEEE-754 float addition.
+2. CAC computed over several cost-period rows and a patient count matches a hand-computed `Decimal` result
+   to the cent, with zero drift versus a naive float re-implementation run against the same inputs.
+3. ROI's revenue-minus-cost subtraction and division show the same zero-drift property as test 2.
+4. A correction (§7.2) excludes the superseded row's amount entirely from report output.
+5. The original and its correction are never summed together in the same report output (regression test for
+   the exact double-counting defect this revision fixes).
+6. Querying the full supersede chain for a channel/clinic/period returns both superseded and active rows
+   with correct `status` values and an intact `supersedesCostPeriodId` link.
+7. Two concurrent correction requests against the same `active` row leave exactly one `active` row
+   afterward, verified under a transactional/row-locking test.
+8. An accidental duplicate (same scope, overlapping period, no `supersedesCostPeriodId`) is rejected with a
+   validation error, not silently accepted as a second `active` row.
+9. Two `active` rows with different `componentType` for the same channel/clinic/period both count toward
+   `eligible_channel_cost`, and their sum is correct.
+10. Two `active` rows in different currencies for the same channel/period are never summed into one blended
+    total.
+11. Branch allocation of an org-wide cost across branches with uneven new-patient counts is deterministic —
+    identical inputs always produce an identical split.
+12. The allocation remainder (§7.4) is assigned deterministically, and the sum of all branch allocations
+    always equals the original org-wide amount exactly — no cent lost or duplicated.
+13. ROI for a channel/period with an explicit `amount = 0` `active` row but nonzero attributed revenue
+    returns "undefined"/"no cost recorded," never a numeric percentage.
+14. A channel/period with **no** cost-period row at all (missing, not zero) returns CAC/ROI as **NOT
+    AVAILABLE**, distinguishable from the zero-cost case in test 13.
+15. A channel/period where cost exceeds attributed revenue returns a valid negative ROI value, never clamped
+    to zero and never rejected.
+16. The value shown in an exported CSV for a given channel/period equals, byte-for-byte on the formatted
+    decimal string, the value returned by the API/rendered in the UI for the same query — verified for at
+    least one case involving a correction (§7.2) and one involving multi-component summation (§7.3).
 
 ---
 
@@ -1044,9 +1295,12 @@ Ratify the metric definitions in §4, the source taxonomy in §9, and the funnel
 the team's shared reference (this document is the Phase A deliverable). No code changes.
 
 ### Phase B — Additive data model
-Add, without touching any existing table: `AcquisitionChannel` (§6), `AcquisitionChannelCostPeriod` (§7),
+Add, without touching any existing table: `AcquisitionChannel` (§6), `AcquisitionChannelCostPeriod` (§7) —
+with `amount` as `Decimal @db.Decimal(18, 2)` and the `status`/`supersedesCostPeriodId`/`componentType`
+correction-and-component fields from §7.2/§7.3 present from the first migration, not bolted on later —
 normalized source-reference fields (§9), and the optional `FunnelEvent` model (§8). All additive — no
-existing column is renamed, retyped, or dropped. Seed the `unknown` fallback channel per organization.
+existing column is renamed, retyped, or dropped; `Payment.amount`/`TreatmentCase.estimatedAmount`/
+`acceptedAmount` remain `Float` unchanged (§7.1). Seed the `unknown` fallback channel per organization.
 
 ### Phase C — New-write instrumentation
 Going forward only, instrument: patient creation (all paths — manual, import, WhatsApp, Instagram,
@@ -1101,12 +1355,12 @@ reviewers as the one line item in this entire sequence that isn't a pure schema/
 | Slice | Scope | Expected modules | Depends on | Migration | Authz implications | Privacy implications | Tests | Risk | Parallelizable? | Merge order | Prod verification |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | **A. Acquisition channel master** | `AcquisitionChannel` model + CRUD admin endpoint | `server/prisma/schema.prisma`, new `server/src/routes/acquisitionChannels.ts` | Phase A definitions ratified | Additive migration | Admin-only write (`OWNER/ORG_ADMIN`) | None beyond standard tenant scoping | Unit + route tests for CRUD + uniqueness constraint | Low | Yes, first | 1st | Confirm seeded `unknown` channel exists per org after deploy |
-| **B. Historical channel cost periods** | `AcquisitionChannelCostPeriod` model + CRUD | Same route file or sibling; depends on A's `channelId` FK | A | Additive migration | Admin-only write, same roles as finance reports | Cost figures are business-confidential — same access tier as revenue reports | Unit tests for overlap-warning logic, currency validation | Low–Medium (overlap-handling logic) | After A | 2nd | Spot-check a manually entered cost period round-trips correctly |
+| **B. Historical channel cost periods** | `AcquisitionChannelCostPeriod` model (Decimal amount, status/supersede/component fields, §7.1–§7.3) + CRUD, including the correction (supersede) endpoint and the accidental-duplicate-vs-correction-vs-component overlap check (§7.2 rule 10) | Same route file or sibling; depends on A's `channelId` FK | A | Additive migration | Admin-only write, same roles as finance reports | Cost figures are business-confidential — same access tier as revenue reports | Required tests 1, 4–10 from §7.6 (Decimal-safe sums, correction exclusion, no double-counting, concurrent-correction locking, duplicate rejection, component summation, currency isolation) | Medium (Decimal handling + transactional supersede/lock logic, upgraded from the original "overlap-warning" design) | After A | 2nd | Manually enter a cost period, then correct it, and confirm the report reflects only the corrected value, not both |
 | **C. Patient and request source normalization** | `rawSource`/`normalizedChannelId`/mapping table (§9) | `server/src/services/sourceNormalization.ts` (new), touches `patients.ts`, `patientsImport.ts`, `appointmentRequests.ts`, all WhatsApp/Instagram writers | A | Additive columns | None new | Preserves raw values for audit (§9) — no new PII exposure | Unit tests per writer confirming raw value preserved + mapping resolution correctness | Medium (many call sites, §2.17's fragmentation makes this the most sprawling slice) | Can start once A exists; independent of B | 3rd, can overlap with D | Verify a sample of each writer's real production traffic maps correctly, not just tests |
 | **D. Lead/funnel identity and event semantics** | `FunnelEvent` model + `leadKey` derivation logic | `server/prisma/schema.prisma`, new `server/src/services/funnelEvents.ts` | A (for `channelId` FK) | Additive migration | Standard tenant scoping (§10), plus the cross-clinic `leadKey` grouping decision (§8, §14) | Normalized phone is still PII — retention policy must cover this table (§11.9) | Unit tests for idempotency key, leadKey normalization edge cases (missing phone, malformed number) | Medium–High (new identity concept, cross-clinic grouping decision must land before this ships) | No — needs the §14 product decision on cross-clinic leadKey grouping first | 4th | Confirm no duplicate events for the same `(sourceModel, sourceId, eventType)` in production after a burst of retries |
 | **E. New-write instrumentation** | Wire C's normalization + D's event emission into every creation path (§2.3's full table, plus appointment/treatmentCase transitions) | Every route/service file listed in §2.3/§2.4/§2.5's creation-path inventories | C, D | No new migration (uses C/D's models) | None new | None new beyond C/D | Integration tests per writer confirming an event is actually emitted, not just that a mapping function exists | High (this is the slice most likely to introduce a regression in existing hot-path routes — WhatsApp/Instagram webhook handlers are latency-sensitive) | No — sequenced after C and D | 5th | Watch webhook processing latency/error rate for the first 24–48h post-deploy per channel |
 | **F. Historical mapping/admin tooling** | Distinct-values sweep UI + bulk-mapping admin action (§9, Phase D) | New admin page under `src/pages/`, new backend endpoint | C | No schema change (data-only operation) | Admin-only | Must not fabricate timestamps (§12 Phase D) — enforce in code review, not just docs | Tests confirming bulk-map only touches `normalizedChannelId`, never rawSource or timestamps | Low–Medium | Yes, parallel to G | 6th, can overlap with G | Confirm mapped/unmapped counts sum correctly post-run |
-| **G. Server-side attribution aggregation** | New `GET /reports/attribution/*` endpoints implementing §4's formulas | New `server/src/routes/attribution.ts` reusing `clinicScope.ts` | A, B, C (D optional for revenue/CAC/ROI; required for funnel) | No schema change | Same role gate as `reports.ts` (§10), pending §14 confirmation | Small-cell suppression for anonymized patients (§11.7) must land here | Unit tests per formula (zero-denominator, missing-cost, currency-mismatch guards from §4) | Medium | No — needs A, B, C at minimum | 7th | Reconcile a known-good manually computed example against the endpoint's output before wider rollout |
+| **G. Server-side attribution aggregation** | New `GET /reports/attribution/*` endpoints implementing §4's formulas | New `server/src/routes/attribution.ts` reusing `clinicScope.ts` | A, B, C (D optional for revenue/CAC/ROI; required for funnel) | No schema change | Same role gate as `reports.ts` (§10), pending §14 confirmation | Small-cell suppression for anonymized patients (§11.7) must land here | Unit tests per formula (zero-denominator, missing-cost, currency-mismatch guards from §4), plus required tests 2, 3, 11–16 from §7.6 (Decimal-safe CAC/ROI, deterministic branch allocation and remainder, zero-vs-missing-cost distinction, negative ROI, export/UI/API parity) | Medium | No — needs A, B, C at minimum | 7th | Reconcile a known-good manually computed example against the endpoint's output before wider rollout, including at least one case with a cost correction applied |
 | **H. Funnel aggregation** | `GET /reports/funnel/*` implementing §5's stage classifications | Same route file as G, or sibling | D, E | No schema change | Same as G | Same as G | Unit tests confirming "contacted" never appears as measurable, "attended" never inferred from absent no-show | Medium–High (highest risk of accidentally implementing a prohibited inference, §5) | No — needs D and E | 8th | Manual review of funnel numbers against a small sample of real leads before trusting the dashboard |
 | **I. Reports frontend** | New "Attribution / CAC / ROI" tab(s) in `Reports.tsx` or a new page | `src/pages/`, `src/components/`, `src/services/api.ts` (`reportService` additions) | G, H | None | Drill-down authorization enforced server-side (§10), not just hidden in UI | Missing-data states must not silently show `0` (§4.4–§4.6) | Manual browser verification per this repo's UI-change testing standard, plus component tests | Medium | No — needs G/H | 9th | Load the tab against real org data in a staging-equivalent environment; verify negative ROI renders correctly |
 | **J. Referral analytics** | Depends entirely on the §4.8/§14 product decision (general count vs. `referredByPatientId`) | TBD pending decision | Product decision (§14) | TBD | TBD | High — see §4.8, §11.6 | TBD | High (blocked on decision, and privacy-sensitive once unblocked) | No — explicitly blocked | Last, after decision lands | TBD |
@@ -1135,8 +1389,9 @@ implementation-deadline pressure rather than deliberately.
    *default* UI/entry assumption (does a new clinic manager naturally think in "my branch's marketing spend"
    or is spend always entered at the org level) needs a product answer.
 4. **Branch allocation strategy for organization-level campaigns** — this document recommends
-   proportional-to-new-patient-count as a safe default (§4.5); confirm, or specify an alternative (e.g. equal
-   split, headcount-weighted).
+   proportional-to-new-patient-count as a safe default, with a deterministic largest-remainder rounding rule
+   so per-branch allocations always sum exactly to the original cost (§4.5, §7.4); confirm, or specify an
+   alternative (e.g. equal split, headcount-weighted).
 5. **Supported currencies for cost/revenue matching** — confirm whether multi-currency organizations are a
    real near-term case, and if so whether per-currency-only reporting (no cross-currency summing, this
    document's recommended default) is acceptable or whether FX-conversion infrastructure needs to be
@@ -1181,6 +1436,21 @@ implementation-deadline pressure rather than deliberately.
 - **Currency mixing:** every revenue aggregation in the current codebase, and every one proposed here, is
   currency-unsafe for multi-currency organizations unless the org-level currency decision (§14 item 5) is
   resolved before Phase E ships.
+- **Decimal/Float conversion seam (§7.1):** `AcquisitionChannelCostPeriod.amount` is `Decimal`, but
+  `Payment.amount` (and `TreatmentCase.estimatedAmount`/`acceptedAmount`) remain `Float` — a pre-existing
+  schema decision outside this document's scope to change. Every CAC/ROI computation must convert
+  `Payment.amount` to `Decimal` at exactly one point in the aggregation layer (§4.5, §4.6, §7.1); a future
+  contributor adding a new revenue query that skips this conversion, or that reintroduces native-float
+  arithmetic anywhere downstream of it, would silently reopen the exact precision problem this revision was
+  written to close. This should be enforced by required tests 1–3 (§7.6), not left to code-review vigilance
+  alone.
+- **Correction-model concurrency and misuse (§7.2):** the supersede model depends on transactional row
+  locking (rule 7) to stay correct under concurrent corrections, and on the write-time overlap check (rule
+  10) correctly distinguishing an accidental duplicate from a deliberate correction from a genuine separate
+  cost component. A defect in that classification logic — e.g. treating a same-scope correction as a new
+  independent component, or vice versa — reproduces the exact double-counting or silent-overwrite failure
+  modes this revision was written to prevent. Required tests 4–10 (§7.6) exist specifically to guard this
+  boundary and must not be treated as optional coverage.
 - **Fragmented source taxonomy is a moving target:** four independent vocabularies (§2.17) are actively
   written to by production code today; the normalization layer (§9) must be treated as an ongoing
   maintenance surface (new raw values will keep appearing), not a one-time migration.
@@ -1232,6 +1502,15 @@ slice-specific check. At the module level, once Phases E–H (§12) are live:
 7. **Historical-mapping audit trail (slice F):** confirm the bulk-mapping admin action only ever writes
    `normalizedChannelId`, never touches `rawSource`, `createdAt`, or any other historical field, by diffing a
    sample of rows before/after a mapping run.
+8. **Cost-correction double-counting check (slice B, §7.2):** enter a cost-period row, correct it via the
+   supersede endpoint, and confirm the CAC/ROI report for that channel/period reflects only the corrected
+   value — never the sum of the original and the correction, and never the original alone once superseded.
+9. **Export/UI/API decimal parity (slice G, §7.1, required test 16):** for a channel/period involving a
+   correction and one involving multiple `componentType` rows, confirm the CSV export, the report API
+   response, and the rendered UI figure are identical to the cent.
+10. **Concurrent-correction check (slice B, §7.2 rule 7):** issue two correction requests against the same
+    active cost-period row at effectively the same time and confirm exactly one `active` row exists
+    afterward, with no data loss and no duplicate `active` rows.
 
 No production database write, migration, or deploy was performed as part of this review — all of the above
 is a proposed verification plan for whoever implements §12–§13, not something executed here.
