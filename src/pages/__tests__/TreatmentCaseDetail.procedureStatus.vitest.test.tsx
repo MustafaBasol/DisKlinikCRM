@@ -158,9 +158,9 @@ describe('TreatmentCaseDetail — procedure status picker (ClickUp 86eyg85a3)', 
 
     const cancelledBtn = statusButton('cancelled');
     expect(cancelledBtn).toHaveAttribute('aria-pressed', 'false');
-    // Unselected state: plain gray, no dedicated "selected" border/background yet.
+    // Unselected state: plain gray, no dedicated "selected" red border/background yet.
     expect(cancelledBtn.className).toContain('border-gray-200');
-    expect(cancelledBtn.className).not.toContain('border-gray-400');
+    expect(cancelledBtn.className).not.toContain('border-red-400');
 
     await userEvent.click(cancelledBtn);
 
@@ -172,9 +172,9 @@ describe('TreatmentCaseDetail — procedure status picker (ClickUp 86eyg85a3)', 
     // Regression guard for the actual production bug: the selected style must be
     // visually distinct from the unselected one, not just aria-pressed=true.
     // These are the dedicated PROC_STATUS.cancelled.selected classes.
-    expect(cancelledBtn.className).toContain('bg-gray-100');
-    expect(cancelledBtn.className).toContain('text-gray-700');
-    expect(cancelledBtn.className).toContain('border-gray-400');
+    expect(cancelledBtn.className).toContain('bg-red-50');
+    expect(cancelledBtn.className).toContain('text-red-700');
+    expect(cancelledBtn.className).toContain('border-red-400');
     // The old conflicting-utility selected style (`${badge} border-current`) must be gone.
     expect(cancelledBtn.className).not.toContain('border-current');
   });

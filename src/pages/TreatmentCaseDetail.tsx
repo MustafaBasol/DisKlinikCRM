@@ -332,7 +332,7 @@ const TreatmentCaseDetail: React.FC = () => {
     planned:     { dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-100',   selected: 'bg-amber-50 text-amber-700 border-amber-400' },
     in_progress: { dot: 'bg-blue-500',    badge: 'bg-blue-50 text-blue-700 border-blue-100',      selected: 'bg-blue-50 text-blue-700 border-blue-400' },
     completed:   { dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', selected: 'bg-emerald-50 text-emerald-700 border-emerald-400' },
-    cancelled:   { dot: 'bg-gray-400',    badge: 'bg-gray-50 text-gray-500 border-gray-200',       selected: 'bg-gray-100 text-gray-700 border-gray-400' },
+    cancelled:   { dot: 'bg-red-500',     badge: 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800', selected: 'bg-red-50 text-red-700 border-red-400 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700' },
   };
 
   if (loading) {
