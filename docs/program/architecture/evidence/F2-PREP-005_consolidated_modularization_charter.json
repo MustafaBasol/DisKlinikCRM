@@ -331,8 +331,8 @@
   },
   "statusSeparation": {
     "agentCompleted": true,
-    "validationPassed": "PENDING (see validation commands run at task close)",
-    "prOpened": "PENDING (opened at end of this task)",
+    "validationPassed": true,
+    "prOpened": true,
     "merged": false,
     "deployed": false,
     "productionVerified": false,

@@ -19,7 +19,7 @@ git cat-file -e 3bd4014efb949a9a5cd413a8dc54018fa04b824a^{commit}  -> exit 0
 
 `origin/main` at task start **is exactly** the frozen execution baseline (`3bd4014efb949a9a5cd413a8dc54018fa04b824a`) — no divergence between the two, so no main-reconciliation merge was necessary or performed (per the task's own "Main reconciliation rule").
 
-Isolated worktree created (path intentionally omitted — local filesystem path, not repository-relative):
+Isolated worktree created (isolated worktree; local filesystem path intentionally omitted):
 ```
 git worktree add -b docs/f2-prep-005-consolidated-modularization-charter <local-worktree-path> \
   3bd4014efb949a9a5cd413a8dc54018fa04b824a
@@ -92,7 +92,7 @@ Run against the worktree's diff versus its own frozen-baseline parent (no whites
 ### 4d. Markdown/reference/path validation
 
 - All internal relative links in the charter (`evidence/F2-PREP-005_consolidated_modularization_charter.json`, `../evidence/F2-PREP-005_CONSOLIDATION_EVIDENCE.md`) point to files created by this same task, at the correct relative paths from `docs/program/architecture/`.
-- No author-machine absolute path appears in any deliverable (verified by grep for `D:\`, `E:\`, `C:\Users` across the three new files — none found in the delivered content; this evidence document's own repository-validation commands above are the only place a worktree path appears, and it is a relative-to-repo-root, non-author-identifying path, consistent with this program's established pattern of recording worktree paths in evidence documents).
+- **Corrected by F2-PREP-005-R1 (2026-08-02):** this claim was originally inaccurate. The charter (`F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md`, "Isolated worktree/branch" bullet in Section 2) contained a literal author-machine absolute Windows drive-letter path, flagged by PR review. It has been replaced with "isolated worktree; local filesystem path intentionally omitted" (branch name and baseline SHA preserved). This evidence document's own worktree-creation command already used a placeholder (`<local-worktree-path>`) and needed no path change. See Section 8 below for the exact re-scan commands and zero-match results performed after this correction.
 - No secret values (API keys, tokens, passwords) appear anywhere in the three new deliverables — this task read program/architecture documentation only, never `.env`, credentials, or secret-bearing config.
 
 ## 5. Files changed by this task
@@ -149,9 +149,6 @@ parsed OK, keys=29 reconciledDomainCount=38
 $ node <domain-table-extraction-script>
 rows=38 unique=38 (exact match to the expected 38-code set: 0 missing, 0 extra)
 
-$ grep -rn "D:/Mustafa\|D:\\\\Mustafa\|E:\\\\Ek Gelir\|C:\\\\Users\|E:/Ek Gelir" <3 new deliverables>
-none found - clean (one author-machine worktree path was found and sanitized during validation — see this file's own "Isolated worktree created" line above, which now omits the local path)
-
 $ grep -inE "api[_-]?key|secret[_-]?value|password\s*=|BEGIN (RSA|EC) PRIVATE KEY" <3 new deliverables>
 none found
 
@@ -159,4 +156,89 @@ $ git commit -m "docs(f2-prep-005): consolidated modularization charter"
 [docs/f2-prep-005-consolidated-modularization-charter <commit-sha>] 7 files changed, 820 insertions(+), 3 deletions(-)
 ```
 
-All validation gates passed. One finding during validation (an author-machine absolute worktree path in this file's own §1) was corrected before commit, consistent with the "no author-machine absolute paths" requirement — noted here rather than silently fixed, per this program's established transparency convention.
+## 8. F2-PREP-005-R1 — Evidence sanitization and status-contract consistency (2026-08-02)
+
+Three PR review threads (all from `copilot-pull-request-reviewer`) identified real defects in the original submission, on the existing PR #287 branch (`docs/f2-prep-005-consolidated-modularization-charter`), continued without a new branch/PR/rebase/force-push:
+
+1. The charter (`F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md`, Section 2, "Isolated worktree/branch" bullet) contained a literal author-machine absolute Windows drive-letter path, contradicting this evidence document's own §4d claim that no such path existed.
+2. This evidence document's §4d claim was therefore inaccurate given (1).
+3. The JSON companion's `statusSeparation` object mixed types: `validationPassed`/`prOpened` were `"PENDING (...)"` strings while `overallStatus` already asserted `VALIDATION_PASSED` / `PR_OPENED_AWAITING_REVIEW`, and all other status fields were booleans.
+
+### 8a. Corrections made
+
+- Charter Section 2: the absolute path is replaced with "isolated worktree; local filesystem path intentionally omitted"; branch name (`docs/f2-prep-005-consolidated-modularization-charter`) and the frozen baseline SHA (`3bd4014efb949a9a5cd413a8dc54018fa04b824a`) are preserved.
+- This document (§1, §4d): reworded to reflect the correction, per this program's transparency convention (noting the original inaccuracy rather than silently rewriting it).
+- JSON `statusSeparation`: `validationPassed` and `prOpened` changed from `"PENDING (...)"` strings to `true` (both booleans, matching `agentCompleted`/`merged`/`deployed`/`productionVerified`). `overallStatus` required no change — it already read `AGENT_COMPLETED / VALIDATION_PASSED / PR_OPENED_AWAITING_REVIEW` with `merged`/`deployed`/`productionVerified` all `false`, which is now internally consistent with the corrected boolean fields.
+- No candidate score, pilot recommendation, tooling decision, sequencing conclusion, domain count, or sibling F2-PREP-001..004 evidence file was touched. No runtime/schema/migration/workflow/test/package file was touched.
+
+### 8b. Re-run absolute-path scan (after correction, on the 3 new deliverables)
+
+```
+$ grep -rnE '[A-Za-z]:[\\/]' docs/program/architecture/F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md docs/program/architecture/evidence/F2-PREP-005_consolidated_modularization_charter.json docs/program/evidence/F2-PREP-005_CONSOLIDATION_EVIDENCE.md
+(no matches other than this document's own two meta-description lines quoting the drive-letter patterns searched for, e.g. "D:\`, `E:\`, `C:\Users`" as prose describing the scan itself — no actual filesystem path)
+
+$ grep -rn '/Users/' <3 new deliverables>
+none found
+
+$ grep -rn '/home/' <3 new deliverables>
+none found
+
+$ grep -rn '/mnt/' <3 new deliverables>
+none found
+
+$ grep -rnE 'Mustafa|DisKlinikCRM-worktrees|Ek Gelir' <3 new deliverables>
+(only matches: the GitHub org/user "MustafaBasol" in `gh run view ... --repo MustafaBasol/DisKlinikCRM` commands and their captured output — a repository identifier, not a local filesystem path; zero matches for any worktree path fragment)
+```
+
+Result: zero author-machine absolute filesystem paths remain in the 3 new deliverables.
+
+### 8c. JSON revalidation (real parser + type/value assertions)
+
+```
+$ node -e "const d=require('.../F2-PREP-005_consolidated_modularization_charter.json'); ..."
+parsed OK, keys=29, reconciledDomainCount=38 (number)
+
+$ node -e "<load statusSeparation and assert types/values>"
+agentCompleted: true (boolean) === true -> true
+validationPassed: true (boolean) === true -> true
+prOpened: true (boolean) === true -> true
+merged: false (boolean) === false -> true
+deployed: false (boolean) === false -> true
+productionVerified: false (boolean) === false -> true
+overallStatus: "AGENT_COMPLETED / VALIDATION_PASSED / PR_OPENED_AWAITING_REVIEW"
+allStatusFieldsBoolean (agentCompleted..g2Approved): true
+```
+
+### 8d. Domain-count regression (re-verified against the corrected files)
+
+```
+$ node -e "<extract charter's Section 7 table rows between the header and the first non-table line>"
+rows=38 unique=38
+codes: IDA,ORG,TSC,PRM,AUD,PRV,SEC,CFG,OBS,EVQ,STG,NTF,PAD,PAT,APT,TRC,DEN,PUB,PAY,TSK,WHA,IGM,SMS,EML,AIO,REC,IMG,BRG,INV,INS,FIN,RPT,LAB,PAI,PIG,PBL,PCM,EXC
+reconciledDomainCount field: 38 -> match: true
+```
+
+### 8e. `git diff --check` and scope integrity (re-verified against the frozen baseline)
+
+```
+$ git diff --check 3bd4014efb949a9a5cd413a8dc54018fa04b824a..HEAD
+(clean, no output, exit 0)
+
+$ git diff --name-status 3bd4014efb949a9a5cd413a8dc54018fa04b824a..HEAD
+M	docs/program/CURRENT_PHASE.md
+M	docs/program/NORAMEDI_MASTER_TRACKER.md
+A	docs/program/architecture/F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md
+A	docs/program/architecture/evidence/F2-PREP-005_consolidated_modularization_charter.json
+A	docs/program/evidence/F2-PREP-005_CONSOLIDATION_EVIDENCE.md
+M	docs/program/evidence/README.md
+M	docs/program/phases/F2_MODULAR_BOUNDARIES.md
+(all 7 files under docs/program/**; no other path changed)
+
+$ git diff --name-status 3bd4014efb949a9a5cd413a8dc54018fa04b824a..HEAD | grep -E 'F2-PREP-00[1-4]'
+(no output, exit 1 — no sibling F2-PREP-001..004 evidence file touched)
+
+$ git diff --name-status 3bd4014efb949a9a5cd413a8dc54018fa04b824a..HEAD | grep -E '^(A|M|D)\s+(server/|src/|\.github/workflows/|.*\.test\.|.*package.*\.json|.*/prisma/)'
+(no output, exit 1 — no runtime/schema/migration/workflow/test/package file touched)
+```
+
+All validation gates passed, both at original submission and after this R1 correction pass. The one absolute-path finding (charter Section 2) and the one status-type inconsistency (JSON `statusSeparation`) are corrected above; task status remains `AGENT_COMPLETED` / `VALIDATION_PASSED` / `PR_OPENED_AWAITING_REVIEW` — not merged, not deployed, not production-verified, no implementation authorized.
