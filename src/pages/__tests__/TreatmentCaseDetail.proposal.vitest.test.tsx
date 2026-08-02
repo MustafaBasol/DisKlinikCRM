@@ -151,6 +151,69 @@ describe('TreatmentCaseDetail — treatment proposal PDF download', () => {
     expect(errorNode.textContent).toEqual(expect.any(String));
   });
 
+  it('a Blob error body (the real shape for a responseType:"blob" request) with { error } renders the server message, not the generic Axios fallback', async () => {
+    const blob = new Blob([JSON.stringify({ error: 'Proposal generation failed' })], { type: 'application/json' });
+    treatmentSvc.getProposalPdf.mockRejectedValue({
+      message: 'Request failed with status code 500',
+      response: { data: blob },
+    });
+    await renderDetail('owner');
+
+    const button = await screen.findByRole('button', { name: 'treatmentCases:proposal.download' });
+    await userEvent.click(button);
+
+    const errorNode = await screen.findByText('Proposal generation failed');
+    expect(errorNode.textContent).toEqual(expect.any(String));
+  });
+
+  it('a Blob error body with { message } also renders the server message', async () => {
+    const blob = new Blob([JSON.stringify({ message: 'Case not found' })], { type: 'application/json' });
+    treatmentSvc.getProposalPdf.mockRejectedValue({ response: { data: blob } });
+    await renderDetail('owner');
+
+    const button = await screen.findByRole('button', { name: 'treatmentCases:proposal.download' });
+    await userEvent.click(button);
+
+    expect(await screen.findByText('Case not found')).toBeInTheDocument();
+  });
+
+  it('a malformed (non-JSON) Blob error body falls back safely to a string, without crashing', async () => {
+    const blob = new Blob(['{not valid json'], { type: 'application/json' });
+    treatmentSvc.getProposalPdf.mockRejectedValue({ response: { data: blob } });
+    await renderDetail('owner');
+
+    const button = await screen.findByRole('button', { name: 'treatmentCases:proposal.download' });
+    await userEvent.click(button);
+
+    const errorNode = await screen.findByText('treatmentCases:proposal.downloadFailed');
+    expect(errorNode.textContent).toEqual(expect.any(String));
+  });
+
+  it('a Blob error body shaped as { error: {...object...} } never crashes the render and still shows a string', async () => {
+    const blob = new Blob([JSON.stringify({ error: { code: 'PDF_GENERATION_FAILED' } })], { type: 'application/json' });
+    treatmentSvc.getProposalPdf.mockRejectedValue({ response: { data: blob } });
+    await renderDetail('owner');
+
+    const button = await screen.findByRole('button', { name: 'treatmentCases:proposal.download' });
+    await userEvent.click(button);
+
+    const errorNode = await screen.findByText('treatmentCases:proposal.downloadFailed');
+    expect(errorNode.textContent).toEqual(expect.any(String));
+  });
+
+  it('loading state resets and the button is re-enabled after a Blob error is parsed', async () => {
+    const blob = new Blob([JSON.stringify({ error: 'Proposal generation failed' })], { type: 'application/json' });
+    treatmentSvc.getProposalPdf.mockRejectedValue({ response: { data: blob } });
+    await renderDetail('owner');
+
+    const button = await screen.findByRole('button', { name: 'treatmentCases:proposal.download' });
+    await userEvent.click(button);
+
+    await screen.findByText('Proposal generation failed');
+    const resetButton = await screen.findByRole('button', { name: 'treatmentCases:proposal.download' });
+    expect(resetButton).not.toBeDisabled();
+  });
+
   it('duplicate clicks are disabled while the request is pending', async () => {
     let resolveRequest: (value: { data: Blob }) => void = () => {};
     treatmentSvc.getProposalPdf.mockReturnValue(

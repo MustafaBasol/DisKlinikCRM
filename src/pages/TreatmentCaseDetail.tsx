@@ -30,7 +30,7 @@ import { treatmentCaseService, paymentService, insuranceProvisionService, treatm
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { useAuth } from '../context/AuthContext';
 import { canDownloadTreatmentProposal } from '../utils/permissions';
-import { getErrorMessage } from '../utils/errors';
+import { getApiErrorMessage } from '../utils/errors';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import TaskForm from '../components/TaskForm';
 import PaymentForm from '../components/PaymentForm';
@@ -180,7 +180,7 @@ const TreatmentCaseDetail: React.FC = () => {
       a.click();
       document.body.removeChild(a);
     } catch (err) {
-      setProposalError(getErrorMessage(err, t('treatmentCases:proposal.downloadFailed')));
+      setProposalError(await getApiErrorMessage(err, t('treatmentCases:proposal.downloadFailed')));
     } finally {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       setProposalDownloading(false);

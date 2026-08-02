@@ -20,6 +20,10 @@
  *   2. Avoids float drift (0.1 + 0.2 style inputs) via minor-unit rounding
  *   3. Ignores null/undefined/non-finite entries
  *   4. Deterministic regardless of summation order
+ *   4a-4g. Boundary rounding via toFixed(6) digit parsing, not Math.round(amount * 100):
+ *      1.005->1.01, 2.675->2.68, 10.005->10.01, 99.999->100.00 (whole-unit carry), negative
+ *      values round consistently, per-item rounding (not sum-then-round-once), zero, and
+ *      null/undefined/NaN/Infinity safety
  *
  *  ── generateTreatmentProposalPdf (real PDFKit output) ───────────────────
  *   5. Produces a non-empty Buffer starting with the "%PDF" magic bytes
@@ -134,6 +138,47 @@ await test('deterministic regardless of summation order', () => {
   const a = [12.34, 56.78, 9.01, 100];
   const b = [100, 9.01, 56.78, 12.34];
   assert.equal(sumMoney(a), sumMoney(b));
+});
+
+await test('rounds 1.005 up to 1.01 (Math.round(amount * 100) would drift down to 1.00)', () => {
+  // Raw JS: 1.005 * 100 === 100.49999999999999, so Math.round(...) wrongly gives 100 (1.00).
+  assert.equal(sumMoney([1.005]), 1.01);
+});
+
+await test('rounds 2.675 up to 2.68', () => {
+  assert.equal(sumMoney([2.675]), 2.68);
+});
+
+await test('rounds 10.005 up to 10.01', () => {
+  assert.equal(sumMoney([10.005]), 10.01);
+});
+
+await test('rounds 99.999 up to 100.00, carrying into the whole-unit place', () => {
+  assert.equal(sumMoney([99.999]), 100);
+});
+
+await test('negative decimal values round consistently (away from zero, mirroring the positive case)', () => {
+  assert.equal(sumMoney([-1.005]), -1.01);
+  assert.equal(sumMoney([-2.675]), -2.68);
+  assert.equal(sumMoney([-99.999]), -100);
+});
+
+await test('rounds each amount individually before summing, not the raw sum once', () => {
+  // Each 0.005 rounds up to 0.01 on its own -> 0.02 total. A sum-then-round-once approach
+  // would add the raw floats first (0.005 + 0.005 = 0.01) and round that ONCE to 0.01 —
+  // a different (wrong, per this helper's documented per-item policy) result.
+  assert.equal(sumMoney([0.005, 0.005]), 0.02);
+  assert.equal(sumMoney([1.005, 1.005]), 2.02);
+});
+
+await test('zero is a safe, valid input', () => {
+  assert.equal(sumMoney([0]), 0);
+  assert.equal(sumMoney([0, 0, 0]), 0);
+});
+
+await test('null/undefined/NaN/Infinity never contaminate the total', () => {
+  assert.equal(sumMoney([null, undefined, NaN, Infinity, -Infinity]), 0);
+  assert.equal(sumMoney([1.005, null, undefined, NaN, Infinity, -Infinity, 2.675]), 3.69);
 });
 
 console.log('\n=== generateTreatmentProposalPdf: real PDFKit output ===');
@@ -328,7 +373,7 @@ await test('decimal rounding: minor-unit rounding applies to the case-level amou
     [{ toothFdi: 11, procedureName: 'A', status: 'planned', estimatedCost: 10.005 }],
     { acceptedAmount: 99.999, estimatedAmount: null },
   );
-  assert.equal(totals.procedureSubtotal, 10.01); // sumMoney rounds 10.005 -> 10.01 (Math.round half-up)
+  assert.equal(totals.procedureSubtotal, 10.01); // sumMoney rounds 10.005 -> 10.01 (see money.ts boundary tests)
   assert.equal(totals.proposalTotal, 100); // sumMoney rounds 99.999 -> 100.00
 });
 
