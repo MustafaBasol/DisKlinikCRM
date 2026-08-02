@@ -1,0 +1,260 @@
+# F2-PREP-007-A — Imaging Characterization: Auth, Redaction, Audit, and Wire Shape
+
+**Phase:** F2 — Imaging Stage 0 characterization coverage.
+**Parent contract:** [F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md](../architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md) §14 (characterization-test gate) and its JSON companion's `characterizationTests[]`.
+**Type:** TEST-ONLY. No application code, Prisma schema/migration, dependency, package.json, workflow, or program-control-file change is made or authorized by this task.
+**Status:** `AGENT_COMPLETED` / `VALIDATION_PASSED` / `PR_OPENED_AWAITING_REVIEW`. Not merged, not deployed, not production-verified.
+
+---
+
+## 1. Task and phase
+
+F2-PREP-007-A implements five of the eighteen Stage-1-gating characterization tests defined by F2-PREP-006-E's contract (§14 / JSON `characterizationTests[]`):
+
+| CT ID | Area | Target |
+|---|---|---|
+| CT-06 | rbac / auth boundary | `imagingBridgePublic.ts` Bearer auth must reject a clinic-session JWT (401) |
+| CT-16 | secure-url-authorization | `legalHoldReason` redaction uniform across `GetImagingStudy`, `ListPatientImaging`, `ListUnlinkedImagingStudies`, `CreateImagingStudy` |
+| CT-19 | archive-deletion | No `DELETE` route exists for `ImagingStudy` or `ImagingImage` |
+| CT-21 | audit | Legal-hold audit metadata carries `actorRole` + hold-state booleans, never `legalHoldReason` text |
+| CT-28 | backward-compatibility | Deterministic response-shape snapshots for `GetImagingStudy`, `ListPatientImaging`, `CreateImagingStudy` |
+
+This is Stage 0 (characterization) only. Per the contract's §15 sequencing table, Stage 1 (additive facade) may not begin until all 18 Stage-1-gating tests exist and pass against current behavior; this task delivers 5 of those 18. The remaining 13 (CT-02, 03, 05, 07, 08, 10–14, 17, 26, 27, 32) are out of scope for this task and remain open.
+
+---
+
+## 2. Baseline / worktree proof
+
+```
+git fetch origin --prune
+git rev-parse origin/main
+-> 5dc5ad67c7e9feee11f6fece9a7d65e03033d2fb
+
+git status --short
+-> (clean)
+
+git worktree add ../DisKlinikCRM-f2prep007a -b test/f2-prep-007-a-imaging-auth-shape origin/main
+-> HEAD is now at 5dc5ad6 Merge pull request #292 from MustafaBasol/docs/f2-prep-006-e-imaging-boundary-consolidation
+```
+
+Exact baseline SHA: `5dc5ad67c7e9feee11f6fece9a7d65e03033d2fb` (`origin/main` tip at task start, matching the SHA specified in the task brief). Worktree is fresh and isolated at `../DisKlinikCRM-f2prep007a`; no sibling worktree was reused, read, merged, or rebased onto. No rebase, no force-push.
+
+Environment setup performed in the fresh worktree (no `node_modules`/generated Prisma client are checked into git):
+
+```
+cd server && npm ci --no-audit --no-fund
+-> added 400 packages (package.json / package-lock.json unchanged — npm ci installs
+   exactly what the existing lockfile specifies, never modifies it)
+
+npx prisma generate
+-> Generated Prisma Client (v7.8.0) to .\node_modules\@prisma\client
+```
+
+---
+
+## 3. Files read and targeted CodeGraph scope
+
+Read in full before writing any test code:
+
+- `AGENTS.md`
+- `docs/program/architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md` (full)
+- `docs/program/architecture/evidence/F2-PREP-006-E_imaging_boundary_contract.json` (full)
+- `docs/program/evidence/F2-PREP-006-D_imaging_contract_test_design.json` (`characterizationTests[]` entries for CT-01 through CT-31, `blockingTests`/`nonBlockingTests`, `backwardCompatibilityRequirements`)
+- `server/src/routes/imaging.ts` (full — 1303 lines: route table, redaction helpers, `CreateImagingStudy`, `ListUnlinkedImagingStudies`, `ListPatientImaging`, `GetImagingStudy`, `SetImagingLegalHold`, `auditImaging`, `studyInclude`/`studyImageSelect`)
+- `server/src/routes/imagingBridgePublic.ts` (full — `authenticateBridgeAgent`, all five public routes)
+- `server/src/utils/auditLog.ts` (full — `writeAuditLog`, `AuditLogInput` shape, confirms `actorRole` is a top-level field, not nested under `metadata`)
+- `server/src/middleware/auth.ts` (full — `authenticate`, `authorize`, `generateToken`, `AuthRequest` shape, `JWT_SECRET` handling)
+- `server/src/utils/clinicScope.ts` (full — `validateAndGetClinicIdScope`/`buildClinicIdScope`/`resolveEffectiveClinicId`, needed to correctly mock the scope-resolution calls every read/write route makes)
+- `server/src/services/fileStorage.ts` (full — confirmed `saveFile`/`deleteFile` default to local disk with no S3/DB dependency when `S3_BUCKET` is unset, informing the CreateImagingStudy test's real-but-synthetic local file write)
+- `server/src/services/imaging/bridgeTokens.ts` (full — `generateBridgeToken`/`hashBridgeToken`)
+- `server/src/services/imaging/imagingUploadValidation.ts` (full — `normalizeDeclaredMime`, `IMAGING_EXTENSIONS_BY_MIME`, confirms `'image/jpeg'` passes through unchanged)
+- `server/src/utils/helpers.ts` (`getParam`, `createRateLimiter` — confirmed the rate limiter defaults to an in-memory store with no Redis/DB dependency)
+- `server/src/tests/imaging.test.ts`, `imagingBridgePairing.test.ts`, `imagingBridgeOnboarding.test.ts`, `imagingBridgeUpdate.test.ts` (existing conventions: hand-rolled `test`/`section` harness, `src()` source-regression helper)
+- `server/src/tests/communicationPreferencesRoute.test.ts`, `treatmentCasesProposalPdfRoute.test.ts`, `externalCalendarWebhookRouteE2E.test.ts` (established repo convention for route-level testing — **this repo has no supertest/live-listening-server pattern anywhere**; route handlers are extracted directly from the real router's internal `stack` and invoked against a constructed request/response, and `prisma`'s model delegates are swapped for in-memory fakes as plain writable properties on the shared singleton)
+- `server/src/schemas/index.ts` (`imagingStudyUploadSchema`, `IMAGING_MODALITIES` — confirmed `{ modality: 'OTHER' }` is a minimal valid `CreateImagingStudy` body)
+
+**Targeted CodeGraph scope:** limited to the Imaging/Bridge route files above, their directly-imported helpers (`clinicScope.ts`, `auditLog.ts`, `fileStorage.ts`, `bridgeTokens.ts`, `imagingUploadValidation.ts`), and the existing Imaging test suite. No scan of the whole repository was performed or needed; no scope expansion beyond this list occurred.
+
+---
+
+## 4. CT IDs implemented
+
+All five (CT-06, CT-16, CT-19, CT-21, CT-28) are implemented as **executable, passing tests** in `server/src/tests/imagingCharacterizationAuthShape.test.ts` — none are documentation-only placeholders.
+
+Per F2-PREP-006-D's own test-level classification, none of these five requires disposable-Postgres/live-storage infrastructure (`CT-06`: integration-supertest → adapted to this repo's handler-extraction convention; `CT-16`: unit-mock; `CT-19`: static-route-inventory; `CT-21`: unit-mock; `CT-28`: snapshot/unit-mock). All five run standalone, in-process, with no live Postgres. No network I/O occurs, but this is an **enforced** condition, not an assumption: `main()` clears `S3_BUCKET` for the process and asserts, via `fileStorage.ts`'s own `isRemoteStorageEnabled()` gate, that remote (S3) storage is disabled before any test runs — see §6/§8 and §16.
+
+---
+
+## 5. Current behavior findings
+
+**No `VERIFIED_DEFECT` was found.** All five CTs' accepted assertions (per F2-PREP-006-D's `characterizationTests[]`) matched current, running production behavior on first execution — no reproduction-twice-and-report path was triggered. Specifically:
+
+- **CT-06:** `imagingBridgePublic.ts`'s `authenticateBridgeAgent` never inspects JWT structure at all — it treats the `Authorization: Bearer` value as an opaque string, SHA-256-hashes it, and looks up an `ImagingBridgeAgent` row by `tokenHash`. A clinic-session JWT (even a genuine, correctly-signed one, minted via the real `generateToken()`) never collides with a seeded agent's hash, so it is rejected 401 with the same generic body as every other rejection reason (revoked, unknown, missing). Confirmed with both a real signed JWT and, as a positive control, a genuine bridge credential for a seeded agent (accepted 200) — proving the fake DB lookup is a real match, not an always-null stub.
+- **CT-16:** `redactStudyLegalHoldReason(study, canSeeLegalHoldReason(req))` is applied identically at all four response sites (`imaging.ts:681, 704, 730, 741`). Confirmed by exercising the real, unmodified route handlers (not a reimplementation) for `CLINIC_MANAGER`/`DENTIST`/`RECEPTIONIST` (redacted to `null`, `legalHold` boolean still visible) and `OWNER`/`ORG_ADMIN` (reason text preserved) across all four surfaces, plus a source-regression guard asserting the exact `redactStudyLegalHoldReason(full!, canSeeLegalHoldReason(req))` call text at `CreateImagingStudy`'s response line.
+- **CT-19:** Live route-table introspection of the real, imported `imaging.ts` and `imagingBridgePublic.ts` Express routers (not just a source-text grep) confirms zero `DELETE` routes target any `/imaging/studies*` path or any path containing `images`. The three real `DELETE` routes that do exist (`/imaging/devices/:id`, `/imaging/bridges/:id`, `/imaging/bridge-pairings/:id`) are unrelated to `ImagingStudy`/`ImagingImage`. A sanity check confirms the introspection genuinely finds delete routes (not a vacuous always-pass). This live introspection is the **authoritative** check; a supplementary source-text scan (both the direct `router.delete(path, ...)` and chained `router.route(path).delete(...)` call forms) independently confirms no DELETE registration targets a prohibited `ImagingStudy`/`ImagingImage` path — it does not require the source-derived DELETE path set to exactly equal the live-introspected one, so an equivalent Express registration-style refactor of the three unrelated existing delete routes cannot fail it (see §16).
+- **CT-21:** `SetImagingLegalHold`'s `auditImaging(...)` call passes `metadata: { legalHold, previousLegalHold }` only — confirmed by capturing the real `prisma.auditLog.create` call (via `writeAuditLog`, unmodified) across both placing (OWNER) and releasing (ORG_ADMIN) a hold, and asserting the full serialized audit entry never contains the reason text, for either role. `actorRole` is written as a **top-level** `AuditLog` column (via `writeAuditLog`'s `actorRole` input), not nested inside `metadata` — this is the current, correct shape and satisfies the contract's assertion that "audit entry records actorRole."
+- **CT-28:** Snapshots recorded for `GetImagingStudy` (OWNER and RECEPTIONIST — the redacted case), `ListPatientImaging` (array-of-study-shape), and `CreateImagingStudy` (real handler invocation, real local-disk file save, real `$transaction`/create/find-unique call sequence, redacted response). Field names, `images[]` nesting, and the seven `studyInclude` relations (`device`, `patient`, `appointment`, `treatmentCase`, `imagingRequest`, `createdBy`, plus `images`) are all captured.
+
+No contradiction between the accepted contract's assertions and observed behavior was found for any of the five CTs in this task's scope.
+
+---
+
+## 6. Files changed
+
+Created only — no existing file modified:
+
+- `server/src/tests/imagingCharacterizationAuthShape.test.ts` (new, self-contained)
+- `docs/program/evidence/F2-PREP-007-A_IMAGING_CHARACTERIZATION_AUTH_SHAPE_EVIDENCE.md` (this file)
+
+No shared test helper was modified. No production file (`server/src/routes/**`, `server/src/services/**`, `server/src/utils/**`, `server/src/middleware/**`) was touched. No Prisma schema/migration. No `package.json`/`package-lock.json` change (`npm ci` in the worktree installs from the existing, unmodified lockfile). No `CURRENT_PHASE.md`, master tracker, phase document, evidence `README.md`, workflow, or package-script file touched.
+
+### Design notes on test technique
+
+- **No supertest / live HTTP server**, matching this repo's own established, documented convention (`treatmentCasesProposalPdfRoute.test.ts`, `communicationPreferencesRoute.test.ts`, `externalCalendarWebhookRouteE2E.test.ts`): the real, unmodified route handlers are extracted from the real routers' `router.stack` and invoked directly against a constructed request/response. `authorize()`/`handleUpload` (multer) middleware layers are deliberately skipped in favor of directly constructing `req.user`/`req.file`, exactly as the cited precedent files document doing.
+- **No live Postgres.** `prisma`'s model delegates (`auditLog`, `clinic`, `patient`, `imagingStudy`, `imagingImage`, `imagingRequest`, `imagingBridgeAgent`, `imagingBridgeBinding`) and `$transaction` are swapped for small in-memory fakes as plain writable properties on the shared `prisma` singleton — the same technique `externalCalendarWebhookRouteE2E.test.ts` documents using. A single canned study fixture (shaped exactly like `imaging.ts`'s `studyInclude` result) is returned by the read fakes regardless of the `where` clause's filter details — this is a deliberate unit-mock/snapshot-level design matching CT-16/CT-28's own designated test level (`unit-mock`/`snapshot`, not `db-integration`); tenant-isolation correctness of the `where` clause itself is CT-01/CT-02's job, explicitly out of this task's scope.
+- **`CreateImagingStudy` is exercised as real, running code**, including a genuine (tiny, synthetic-JPEG-magic-bytes) local-disk file write via the real, unmodified `fileStorage.ts` — not a stub. The written file is deleted by a real `try`/`finally` wrapped around the whole suite body (`main()`'s `try { ... } finally { cleanupResults = await cleanupUploadDirs(); }`) — the deletion itself runs unconditionally, whether the suite completes normally or an unexpected exception escapes partway through, and does not depend on execution reaching the "Cleanup" section as a final test case. That section, which runs only on the non-throwing path, asserts the directory no longer exists purely as a report/verification of what the `finally` block already did.
+- **Storage mode is enforced, not assumed (see §16).** `fileStorage.ts` switches `CreateImagingStudy`'s write to S3 (real network I/O) whenever `S3_BUCKET` is set. `main()` clears `S3_BUCKET` for the lifetime of this process — forcing the local-disk path regardless of what the host environment has configured — restores the original value in the same `finally` that runs upload-directory cleanup, and asserts, via `fileStorage.ts`'s own exported `isRemoteStorageEnabled()` gate (not a reimplementation of its logic), that remote storage is actually disabled before any test executes. If that assertion is ever false, the suite throws and aborts before `CreateImagingStudy` runs, rather than silently attempting S3 I/O.
+- **Deterministic fixtures, not post-hoc normalization of randomness.** Per the task's "normalize UUIDs/timestamps/paths before snapshots" constraint: rather than generating real `crypto.randomUUID()`/`new Date()` values and normalizing them after the fact, every fixture ID and timestamp is a fixed, deterministic literal string from the start (e.g. `study-f2prep007a-0000`, `2026-01-01T00:00:00.000Z`) — there is no nondeterministic value for any assertion to depend on. A `normalizeForSnapshot()` walker (UUID/ISO-timestamp/absolute-path → placeholder) is still included and applied as a defensive second layer, so a future regression that introduces a real generated UUID/Date/path into a response would be caught rather than silently producing a flaky snapshot.
+- **Failure reporting is privacy-safe by design, not by an unenforced "never logged" claim (see §16).** All fixture data is synthetic (e.g. `SYNTHETIC_TEST_ONLY_LEGAL_HOLD_JUSTIFICATION_TEXT`) — nothing here is real PHI/secrets. That said, this suite's own `test()` harness does print diagnostic output on a failure, and Node's `AssertionError` message/stack (from `assert.deepEqual`/`assert.equal`) is itself a rendered diff that can embed the actual/expected values being compared. Rather than relying on "it's only synthetic text," the harness's `describeFailureLocation()` helper deliberately omits the error's own message/diff on every failure and prints only the failing test's name (already logged separately), the error's type/code, and the first stack frame located inside this file — enough to find and fix the failing assertion, without ever printing the compared values themselves.
+
+---
+
+## 7. Exact test commands and counts
+
+All commands run from the worktree's `server/` directory.
+
+```
+npx tsx src/tests/imagingCharacterizationAuthShape.test.ts
+-> 36 passed, 0 failed
+```
+
+Breakdown: CT-06 (5 tests), CT-19 (5 tests), CT-21 (4 tests), CT-16 (17 tests: 3 redacted roles × 4 surfaces + 2 unredacted roles × 2 surfaces + 1 source-regression guard), CT-28 (4 tests), cleanup (1 test) = 36.
+
+Relevant existing Imaging/Bridge tests (unmodified, re-run to confirm no regression from this task's presence):
+
+```
+npx tsx src/tests/imaging.test.ts                    -> 103 passed, 0 failed
+npx tsx src/tests/imagingBridgeOnboarding.test.ts     -> 14 passed, 0 failed
+npx tsx src/tests/imagingBridgePairing.test.ts        -> 50 passed, 0 failed
+npx tsx src/tests/imagingBridgeUpdate.test.ts         -> 44 passed, 0 failed
+```
+
+Relevant audit/KVKK test:
+
+```
+npx tsx src/tests/kvkkAttachmentImagingLifecycle.test.ts   -> 110 passed, 0 failed
+```
+
+(This is the directly Imaging-relevant KVKK/audit suite — it already covers legal-hold redaction/audit-PII source regression across `imaging.ts` and `attachments.ts`. `retentionManualRunAudit.test.ts` was also considered but is a Platform-Admin retention-run audit test unrelated to Imaging and requires a live disposable Postgres not available in this sandboxed run — it was not exercised, and its absence does not affect this task's scope.)
+
+Backend typecheck:
+
+```
+npx prisma generate && npx tsc --noEmit
+-> exit 0, no diagnostics
+```
+
+`git diff --check`:
+
+```
+git diff --cached --check
+-> exit 0 (one informational CRLF-normalization notice on the new file, not a whitespace error)
+```
+
+Changed-file scope verification:
+
+```
+git status --short
+-> ?? server/src/tests/imagingCharacterizationAuthShape.test.ts
+-> ?? docs/program/evidence/F2-PREP-007-A_IMAGING_CHARACTERIZATION_AUTH_SHAPE_EVIDENCE.md
+```
+
+Only these two new files exist in the diff — no existing file (production, test, or program-control) was modified.
+
+**Infrastructure:** in-process Node/tsx only; no live Postgres, no Redis (rate limiters fall back to their in-memory store), one real local-disk write/delete pair under a synthetic clinic id, cleaned up within the suite itself. No network I/O occurs — enforced (not assumed): `main()` clears `S3_BUCKET` and asserts `fileStorage.ts`'s own `isRemoteStorageEnabled() === false` before any test runs, aborting the suite otherwise (§6, §16). **Duration:** full new-suite run completes in under 2 seconds; combined with the four existing Imaging/Bridge suites and the KVKK suite, well under 30 seconds total.
+
+---
+
+## 8. Cleanup and fixture isolation
+
+- All prisma model-delegate fakes are process-local (reassigned properties on the shared `prisma` singleton for the lifetime of this one `tsx` process); they do not persist and do not touch any real database.
+- The one real filesystem side effect — `CreateImagingStudy`'s local-disk file save under `uploads/clinic-f2prep007a-0000/...` — is removed **unconditionally** by a real `try`/`finally` wrapped around the entire suite body in `main()` (`fs.promises.rm(..., { recursive: true, force: true })` inside `finally`), so it runs whether the suite completes normally or an unexpected exception escapes partway through — it does not depend on reaching the "Cleanup" section as a final test case. That section, reached only on the non-throwing path, asserts `fs.existsSync(dir) === false` as a report of what the `finally` block already removed, not as the removal mechanism itself. Confirmed post-run: `ls uploads` in `server/` shows no such directory.
+- No organization/clinic/patient/user row is ever created in a real database (no live Postgres was used) — all identifiers are synthetic, fixed literal strings clearly namespaced `*-f2prep007a-*`.
+- `S3_BUCKET` is cleared for the duration of the run and restored to its original value (or left unset) in the same `finally` that runs upload-directory cleanup — this process's environment does not leak the forced-local-mode state past this suite's own execution (§6, §16).
+- On an assertion failure, this suite's `describeFailureLocation()` reporter prints only the failing test's name, the error's type/code, and a source file:line — never the error's own message/diff, which for `assert.deepEqual`/`assert.equal` can otherwise embed the compared fixture text (see §6, §16).
+
+---
+
+## 9. Tenant/KVKK/security impact
+
+None. This is a test-only change; zero application code was modified. No production authorization, redaction, audit, or route-table behavior changed — this task only adds tests that observe and pin down the current, already-deployed behavior of `imaging.ts`/`imagingBridgePublic.ts`. The KVKK legal-hold redaction and audit-PII-minimization invariants this suite characterizes were already enforced by production code before this task and remain unchanged after it (confirmed by the existing `kvkkAttachmentImagingLifecycle.test.ts` suite passing unmodified, §7).
+
+---
+
+## 10. Migration and rollback
+
+No migration. Rollback is trivial: revert the single commit adding these two new files; nothing else depends on them, and no production code path references this test file.
+
+---
+
+## 11. PR number and head SHA
+
+- **PR:** [#293](https://github.com/MustafaBasol/DisKlinikCRM/pull/293), opened against `main` from branch `test/f2-prep-007-a-imaging-auth-shape`.
+- **Head SHA:** `7eafce5933265b1b2e7dd1b24ec8f0cb74220afb` (the commit adding the two files in §6; this line's own update is a follow-up documentation-only commit on the same branch).
+
+---
+
+## 12. Status
+
+- **Agent completed:** yes.
+- **Tests passed:** yes — new suite 36/36; four existing Imaging/Bridge suites 211/211 combined (103+14+50+44); KVKK/audit suite 110/110; typecheck clean; `git diff --check` clean; changed-file scope verified as exactly the two new files listed in §6.
+- **PR opened:** yes, against `main`, test-only.
+- **Merged:** no.
+- **Deployed:** no.
+- **Production verified:** no (test-only change; nothing to production-verify).
+
+---
+
+## 13. Rejected or unverified claims
+
+None. All five implemented CTs' assertions were verified as currently true on first execution; no `VERIFIED_DEFECT` was reported, and no claim in this task's scope was rejected or left unverified.
+
+---
+
+## 14. What should happen next
+
+- The remaining 13 Stage-1-gating characterization tests (CT-02, CT-03, CT-05, CT-07, CT-08, CT-10 through CT-14, CT-17, CT-26, CT-27, CT-32) still need implementation before Stage 1 (additive facade) of the F2-PREP-006-E expand-migrate-contract sequence may begin. Most of these require disposable-Postgres/live-storage infrastructure (per F2-PREP-006-D's own test-level classification) not exercised by this task.
+- The 3 caller-migration-gating tests (CT-05, CT-23, CT-30) and the 11 non-blocking regression-coverage tests (CT-01, CT-04, CT-09, CT-15, CT-18, CT-20, CT-22, CT-24, CT-25, CT-29, CT-31) also remain open.
+- This task does not update `CURRENT_PHASE.md`, `NORAMEDI_MASTER_TRACKER.md`, `phases/F2_MODULAR_BOUNDARIES.md`, or `docs/program/evidence/README.md` by design (per the task brief, these are reserved for a final consolidation task to avoid parallel-task conflicts) — that consolidation task should record this task's 5 completed CT IDs against the contract's 18-item Stage-1 gate once this PR is reviewed/merged.
+
+---
+
+## 15. Follow-up correction — unconditional upload-directory cleanup
+
+A follow-up review on this same PR/branch found that the original cleanup design (§6/§8 as first delivered) removed `CreateImagingStudy`'s synthetic local-disk upload directory only from a `test()` call inside the suite's final "Cleanup" section. Every earlier `test()` call already catches its own assertion failures internally and does not re-throw, so this was not exposed by any assertion failure in this suite as written — but any genuinely unexpected exception thrown outside a `test()` wrapper earlier in `main()` (e.g. a `getRouteHandler(...)` lookup failing) would have skipped the Cleanup section entirely, leaving the directory on disk.
+
+**Correction applied** (`server/src/tests/imagingCharacterizationAuthShape.test.ts`):
+
+- `createdUploadClinicDirs` (tracking which synthetic clinic directories `invokeCreateStudy` actually wrote to) is now declared above `main()`'s `try` block, not inside the CT-16 section, so it stays in scope for the `finally` regardless of where in the suite an exception might occur.
+- The entire suite body (CT-06 through CT-28) now runs inside `main()`'s `try { ... }`.
+- A real `finally { cleanupResults = await cleanupUploadDirs(); }` performs the actual `fs.promises.rm(dir, { recursive: true, force: true })` for every directory that was created — this runs unconditionally, whether the `try` block completes normally or an exception escapes it.
+- The "Cleanup" section (now reached only on the non-throwing path, after the `try`/`finally`) keeps its `test()` call, but that call now only **asserts** `fs.existsSync(dir) === false` — it reports/verifies what the `finally` block already did; it no longer performs the deletion itself.
+- Every mention of "finally-style"/"final `Cleanup` section performs the removal" in §6 and §8 above has been corrected to describe this exact `try`/`finally` mechanism.
+
+No CT scope, snapshot value, mock, fixture, or assertion changed — only the cleanup mechanism's placement. Re-run after the fix: identical 36/36 pass count (§7), same test names, same order. See the commit history on this branch for the exact diff.
+
+This correction does not change §1 (CT IDs), §4, §5 (current-behavior findings), §9 (KVKK/security impact), §10 (migration/rollback), or §13 (no rejected/unverified claims) — all remain as originally reported.
+
+---
+
+## 16. Follow-up correction — three open PR review threads
+
+A second round of PR review on this same PR/branch opened three threads, all now resolved. None changed CT scope, snapshot values, mocks, fixtures, or assertion outcomes; the new suite run remains **36/36 passed** with the same test names and order.
+
+**1. Logging claim (privacy-safe failure reporting).** The original header comment (§6, last bullet, as first delivered) claimed synthetic `legalHoldReason` content was "never logged," but the suite's `test()` harness printed `err.stack` on a failure, and Node's `AssertionError` message/stack (from `assert.deepEqual`/`assert.equal`) is itself a rendered diff that can embed the actual/expected values being compared — so the claim was false for a *failing* run, even though every compared value here is synthetic (no real PHI/secrets are used anywhere in this file). **Correction applied:** a new `describeFailureLocation(err)` helper replaces the raw `err.stack`/`err.message` print in `test()`'s catch handler. It deliberately omits the error's own message/diff and prints only the error's type/code plus the first stack frame located inside this file — never the compared values. The failing test's own name (needed for triage) is unaffected: it is logged on the line above by the existing `console.error(\`  ✗ ${name}\`)` call, which this change does not touch, so failure location remains just as discoverable as before. Verified with a standalone reproduction: an `assert.deepEqual` failure comparing the synthetic `legalHoldReason` string against a different value produces output containing the error kind/code and a `file:line:col` location, with the compared string absent from the output. Header comment (top of file) and §6/§8 below corrected to describe this actual, enforced behavior instead of the prior overstated claim.
+
+**2. CT-19 (brittle source-text cross-check).** The original secondary check (§5, as first delivered) asserted that a `router.delete('path', ...)`-only source-text regex produced the *exact same* DELETE path set as the live route-table introspection. This was brittle: it did not require the regex to catch prohibited paths specifically — it required exact-set-equality with the live table, so a refactor of any of the three real, unrelated existing DELETE routes (`/imaging/devices/:id`, `/imaging/bridges/:id`, `/imaging/bridge-pairings/:id`) to the equivalent chained `router.route(path).delete(handler)` form would fail this check even though nothing about the actual CT-19 contract (no delete route for `ImagingStudy`/`ImagingImage`) changed. **Correction applied:** the live route-table introspection (`listRoutesByMethod`) is unchanged and remains the authoritative check. The secondary check is now `extractDeleteRoutePathsAnyForm()`, which scans for a DELETE registration in *either* call form (`router.delete(path, ...)` directly, or `router.route(path)....delete(handler)` chained) and asserts only that no matched path targets `/imaging/studies*` or contains `images` — it no longer requires the matched path set to equal the live-introspected set at all, so an equivalent Express registration-style refactor of the unrelated existing delete routes cannot fail it. Both CT-19 sub-tests (imaging.ts scan, imagingBridgePublic.ts scan) still pass, same 5-test CT-19 count as before.
+
+**3. Storage mode (prevent accidental S3 use).** The original evidence text (§4, §7, as first delivered) claimed the suite runs with "no network I/O," but `CreateImagingStudy`'s real, unmocked `fileStorage.ts` write switches to S3 whenever `S3_BUCKET` is set in the environment — an unconditional claim the suite did not actually enforce. **Correction applied:** `main()` now clears `process.env.S3_BUCKET` at the start of its `try` block (original value, if any, saved beforehand) and immediately asserts `isRemoteStorageEnabled() === false` — calling `fileStorage.ts`'s own exported gate function directly, not a reimplementation of its logic — throwing and aborting the entire suite before any test runs if that assertion is ever false. The original `S3_BUCKET` value (or its absence) is restored in the same `finally` block that performs upload-directory cleanup, so this process's environment does not leak the forced-local-mode state past this run. **Exact enforced condition:** `isRemoteStorageEnabled()` (`server/src/services/fileStorage.ts`) returns `false`, meaning `process.env.S3_BUCKET` is unset/empty, for the entire duration of this suite's execution — verified live by running the corrected suite with `S3_BUCKET=fake-bucket-for-verification` set in the shell beforehand: the suite still completed 36/36 with no network attempt and no hang (which a real S3 call against that fake bucket/no credentials would have produced), and the variable was confirmed unset in the parent shell afterward, unaffected. §4 and §7 corrected to state this exact enforced condition rather than an unconditional "no network I/O" claim.
+
+**Files touched:** only `server/src/tests/imagingCharacterizationAuthShape.test.ts` (header comment, `test()` harness, CT-19 secondary-check function, storage-mode enforcement block in `main()`) and this evidence document (§4, §5, §6, §7, §8, this §16). No production code, CT scope, schema, migration, package file, dependency, workflow, or program-control document was touched. Re-run after all three fixes: identical 36/36 pass count, same breakdown as §7.
