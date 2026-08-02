@@ -260,7 +260,8 @@ This task **confirms** (does not merely repeat) the contract's own prediction: "
 
 Branch: `test/f2-prep-007-d-imaging-request-concurrency`, based on `origin/main` at `5dc5ad67c7e9feee11f6fece9a7d65e03033d2fb`.
 
-*(Filled in after push/PR creation — see the delivery report for the exact head commit SHA and PR URL.)*
+- **PR:** https://github.com/MustafaBasol/DisKlinikCRM/pull/296 (open, not merged).
+- **Head commit introducing CT-32 (test + this evidence doc):** `b4d386d535567259ea763de0d4d6221307a62842`.
 
 ---
 
