@@ -6,7 +6,7 @@
 | Phase | F1 — CI and Test Architecture |
 | Parent task | F1-003 — Baseline CI Test Execution and Disposable Runtime Readiness |
 | Type | Blocking production-behavior defect, discovered by F1-003-P3's Layer 5 compatibility CI (PR #268, still `AGENT_COMPLETED`/`PR_OPENED_AWAITING_REVIEW`, **left open and unmodified by this task**) |
-| Branch/worktree | `fix/f1-003-b2-retention-run-lock-race`, isolated worktree `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f1-003-b2-retention-run-lock-race`, created fresh from `origin/main` — **not** the F1-003-P3 worktree, not PR #268 |
+| Branch/worktree | `fix/f1-003-b2-retention-run-lock-race`, fresh isolated worktree; local filesystem path intentionally omitted — created fresh from `origin/main` — **not** the F1-003-P3 worktree, not PR #268 |
 | Baseline | `origin/main` @ `70b1690c1a656c95cead7b42812cc9ae6447bfb7` (merge commit for PR #275, `feature/external-calendar-outbound-sync-phase2`), `git merge-base --is-ancestor` implicit — worktree created directly from `origin/main` with zero intervening commits |
 | Maximum status | `AGENT_COMPLETED` / `PR_OPENED_AWAITING_REVIEW` — not merged, not deployed, not production-verified |
 
@@ -117,8 +117,8 @@ All against a disposable PostgreSQL container (`postgres@sha256:57c72fd2a128e416
 
 ## 9. Residual limitations (explicitly not claimed as solved)
 
-- The fix makes the pre-lock unprotected window *much* smaller (one shared `getPlatformSetting` read, identical in shape for both racers, instead of that plus a full audit-write transaction), not provably zero. A sufficiently pathological scheduler could theoretically still stagger two requests' `getPlatformSetting` reads by more than the new critical section's duration. This is accepted as the practical limit of a DB-lease-based distributed lock without a new locking subsystem (explicitly prohibited by the task brief) — the empirical race-gate result (§6, 210+ trials, 0 failures) is offered as evidence of practical robustness, not a mathematical proof of zero probability.
-- Crash/connection-loss recovery paths described in §8 rely on the pre-existing 2-hour TTL lease-expiry mechanism, unchanged and untouched by this fix, and were not independently re-verified by this task.
+- ~~The fix makes the pre-lock unprotected window *much* smaller (one shared `getPlatformSetting` read, identical in shape for both racers, instead of that plus a full audit-write transaction), not provably zero. A sufficiently pathological scheduler could theoretically still stagger two requests' `getPlatformSetting` reads by more than the new critical section's duration. This is accepted as the practical limit of a DB-lease-based distributed lock without a new locking subsystem (explicitly prohibited by the task brief) — the empirical race-gate result (§6, 210+ trials, 0 failures) is offered as evidence of practical robustness, not a mathematical proof of zero probability.~~ **[SUPERSEDED 2026-08-02 by F1-003-B2-R1]:** this residual gap is now closed — `acquireJobLock` was moved ahead of `getPlatformSetting` entirely, so admission is decided before ANY variable-latency DB operation a live attempt performs, not merely before the audit write. See `docs/program/evidence/F1-003-B2-R1_ADMISSION_LOCK_CLOSURE.md` for the deterministic (barrier-based, non-timing-luck) proof and its own residual-limitation statement. This sentence is preserved verbatim as dated historical evidence, not silently rewritten.
+- Crash/connection-loss recovery paths described in §8 rely on the pre-existing 2-hour TTL lease-expiry mechanism, unchanged and untouched by this fix, and were not independently re-verified by this task. **Unchanged by F1-003-B2-R1** — see that document's own §9 for the current statement.
 
 ## 10. Status (unchanged by this task, explicitly reaffirmed)
 
