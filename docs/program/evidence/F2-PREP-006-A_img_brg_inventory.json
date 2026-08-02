@@ -1,0 +1,288 @@
+{
+  "taskId": "F2-PREP-006-A",
+  "taskName": "IMG/BRG Ownership and Implementation Inventory",
+  "phase": "F2 - Modularization Preparation",
+  "parentTask": "F2-PREP-006 - Imaging Pilot Boundary Contract Definition",
+  "frozenBaseline": "4cb334d213b4dbbac4193f1a8c1878deddb55714",
+  "isolatedWorktreeBranch": "docs/f2-prep-006-a-imaging-ownership-inventory",
+  "taskType": "discovery/evidence-only, no application code, schema, migration, test, workflow, package, route, service, or storage-behavior change authorized or performed",
+  "inspectedPaths": [
+    "server/src/routes/imaging.ts",
+    "server/src/routes/imagingBridgePublic.ts",
+    "server/src/services/imaging/bridgeOnboardingConfig.ts",
+    "server/src/services/imaging/bridgePairing.ts",
+    "server/src/services/imaging/bridgeTokens.ts",
+    "server/src/services/imaging/bridgeUpdateConfig.ts",
+    "server/src/services/imaging/imagingRequestTransitions.ts",
+    "server/src/services/imaging/imagingUploadValidation.ts",
+    "server/src/services/imaging/releaseMetadataValidation.ts",
+    "server/src/jobs/imagingBridgeOfflineJob.ts",
+    "server/src/tests/imaging.test.ts",
+    "server/src/tests/imagingBridgeOnboarding.test.ts",
+    "server/src/tests/imagingBridgePairing.test.ts",
+    "server/src/tests/imagingBridgeUpdate.test.ts",
+    "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+    "server/prisma/schema.prisma (ImagingDevice, ImagingRequest, ImagingStudy, ImagingImage, ImagingBridgeAgent, ImagingBridgePairing, ImagingBridgePairingDevice, ImagingBridgeBinding models only)",
+    "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json",
+    "docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md",
+    "docs/program/evidence/F2-PREP-002_cross_domain_dependency_map.json",
+    "docs/program/evidence/F2-PREP-004_MODULARIZATION_SEQUENCE_AND_PILOT_SELECTION.md",
+    "docs/program/architecture/F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md"
+  ],
+  "scopeExpansions": [
+    {
+      "path": "server/src/index.ts (lines 66-67, 185, 255 only)",
+      "reason": "Confirm exact mount prefixes and pre-auth vs authenticated placement of the two imaging route files.",
+      "triggeredBy": "Concrete import/registration of imagingRoutes and imagingBridgePublicRoutes.",
+      "classification": "route mounting evidence, read-only, no edit"
+    },
+    {
+      "path": "server/src/schemas/index.ts (imaging*/Imaging* exports only, lines 533-671)",
+      "reason": "Every route file imports named Zod schemas from this shared module; needed to confirm DTO ownership and that no dedicated per-domain schema file exists.",
+      "triggeredBy": "Concrete import statements in imaging.ts and imagingBridgePublic.ts.",
+      "classification": "DTO/schema boundary evidence, read-only"
+    },
+    {
+      "path": "server/src/jobs/startBackgroundJobs.ts (imagingBridgeOfflineJob registration lines only)",
+      "reason": "Confirm the offline job is actually wired into process startup, not dead code.",
+      "triggeredBy": "Concrete import of startImagingBridgeOfflineJob found while inventorying jobs/imagingBridgeOfflineJob.ts.",
+      "classification": "job-registration evidence, read-only"
+    },
+    {
+      "path": "server/src/services/privacy/clinicBulkExportConfig.ts, deletionReviewInventory.ts, orphanFileInspection.ts, patientAnonymization.ts",
+      "reason": "Independently verify F2-PREP-002's PAT-14/PAT-16/F2-CC-14 cross-domain direct-Prisma-access findings against ImagingImage by tracing actual outbound callers of the Imaging Prisma models, not merely citing prior evidence.",
+      "triggeredBy": "grep hit for prisma.imagingImage outside server/src/routes/imaging*.ts and server/src/services/imaging/**.",
+      "classification": "cross-domain direct-access confirmation, read-only"
+    },
+    {
+      "path": "server/src/tests/clinicBulkExport.test.ts, server/src/tests/dbVerification/fileBackupDbIntegration.test.ts",
+      "reason": "These non-imaging-owned test files were found importing imaging routes/models incidentally; recorded as incidental consumers, not counted as dedicated Imaging tests.",
+      "triggeredBy": "grep hit while enumerating callers of routes/imaging and services/imaging.",
+      "classification": "incidental test-coverage evidence, read-only"
+    },
+    {
+      "path": "server/package.json (imaging-related script names only, lines 48, 85-88)",
+      "reason": "Confirm the exact npm script name mapped to each test file for deterministic, reproducible test identification.",
+      "triggeredBy": "Need to cite an exact, re-runnable command per test file.",
+      "classification": "test-script mapping evidence, read-only"
+    },
+    {
+      "path": ".github/workflows/windows-bridge-pr.yml (path-filter and job-step lines only)",
+      "reason": "Independently verify F2-PREP-004's claim that a dedicated, path-filtered CI workflow already treats the imaging/bridge surface as semi-independent, and to check exactly which of the 5 imaging test scripts that workflow actually runs.",
+      "triggeredBy": "Direct citation check of a prior task's evidence claim.",
+      "classification": "CI-coverage confirmation, read-only"
+    },
+    {
+      "path": "windows-bridge/ and bridge-agent/ (top-level directory listing only, no file content read)",
+      "reason": "Confirm the external Windows Bridge Manager / bridge-agent deployables exist as separate codebases per F2-PREP-001's own scope note.",
+      "triggeredBy": "Objective 1's 'external protocol integration' inventory requirement.",
+      "classification": "existence confirmation only; internals remain unverified/out of scope, consistent with F2-PREP-001"
+    }
+  ],
+  "routes": [
+    { "id": "IMG-RT-01", "file": "server/src/routes/imaging.ts", "line": 262, "method": "GET", "path": "/api/imaging/devices", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingDevice"], "responsibility": "List imaging devices for the caller's clinic scope." },
+    { "id": "IMG-RT-02", "file": "server/src/routes/imaging.ts", "line": 285, "method": "POST", "path": "/api/imaging/devices", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingDevice"], "responsibility": "Register a new imaging device (validated by imagingDeviceSchema)." },
+    { "id": "IMG-RT-03", "file": "server/src/routes/imaging.ts", "line": 310, "method": "PUT", "path": "/api/imaging/devices/:id", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingDevice"], "responsibility": "Update an imaging device (imagingDeviceUpdateSchema)." },
+    { "id": "IMG-RT-04", "file": "server/src/routes/imaging.ts", "line": 339, "method": "DELETE", "path": "/api/imaging/devices/:id", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingDevice"], "responsibility": "Delete an imaging device; F2-PREP-002 TX-09 records row-locked existence/count check before delete." },
+    { "id": "IMG-RT-05", "file": "server/src/routes/imaging.ts", "line": 413, "method": "GET", "path": "/api/imaging/requests", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingRequest"], "responsibility": "List imaging acquisition requests for the clinic scope." },
+    { "id": "IMG-RT-06", "file": "server/src/routes/imaging.ts", "line": 435, "method": "POST", "path": "/api/imaging/requests", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingRequest"], "responsibility": "Create an imaging acquisition request (imagingRequestSchema)." },
+    { "id": "IMG-RT-07", "file": "server/src/routes/imaging.ts", "line": 487, "method": "PATCH", "path": "/api/imaging/requests/:id", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingRequest"], "responsibility": "Update a request; delegates to validateRequestTransition (imagingRequestTransitions.ts) for status-change legality." },
+    { "id": "IMG-RT-08", "file": "server/src/routes/imaging.ts", "line": 530, "method": "PATCH", "path": "/api/imaging/requests/:id/cancel", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingRequest"], "responsibility": "Cancel a request (terminal-state transition)." },
+    { "id": "IMG-RT-09", "file": "server/src/routes/imaging.ts", "line": 559, "method": "POST", "path": "/api/imaging/studies", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES) + handleUpload (multer)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingStudy", "ImagingImage", "ImagingRequest"], "responsibility": "Manual clinical-staff study/image upload: validates file signature, saves to storage, opens prisma.$transaction creating ImagingStudy+ImagingImage and conditionally advancing a linked ImagingRequest to 'received'. DUPLICATES the transaction skeleton of BRG-RT-02 (see overlaps).", "evidence": "server/src/routes/imaging.ts:559-689" },
+    { "id": "IMG-RT-10", "file": "server/src/routes/imaging.ts", "line": 692, "method": "GET", "path": "/api/imaging/unlinked", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingStudy"], "responsibility": "List studies with patientId=null (unlinked ingest queue, includes bridge-sourced studies)." },
+    { "id": "IMG-RT-11", "file": "server/src/routes/imaging.ts", "line": 711, "method": "GET", "path": "/api/patients/:patientId/imaging", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingStudy"], "responsibility": "List a patient's imaging studies." },
+    { "id": "IMG-RT-12", "file": "server/src/routes/imaging.ts", "line": 737, "method": "GET", "path": "/api/imaging/studies/:id", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingStudy"], "responsibility": "Get one study with its images (studyInclude)." },
+    { "id": "IMG-RT-13", "file": "server/src/routes/imaging.ts", "line": 796, "method": "GET", "path": "/api/imaging/studies/:id/images/:imageId/preview", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingImage"], "responsibility": "Authenticated inline-preview byte stream via streamStudyImage(); never a public URL.", "evidence": "server/src/routes/imaging.ts:749 streamStudyImage()" },
+    { "id": "IMG-RT-14", "file": "server/src/routes/imaging.ts", "line": 800, "method": "GET", "path": "/api/imaging/studies/:id/images/:imageId/download", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingImage"], "responsibility": "Authenticated attachment-download byte stream via streamStudyImage()." },
+    { "id": "IMG-RT-15", "file": "server/src/routes/imaging.ts", "line": 807, "method": "PATCH", "path": "/api/imaging/studies/:id/link", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingStudy"], "responsibility": "Link an unlinked study to patient/appointment/treatmentCase (validateClinicalLinks)." },
+    { "id": "IMG-RT-16", "file": "server/src/routes/imaging.ts", "line": 859, "method": "PATCH", "path": "/api/imaging/studies/:id/unlink", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingStudy"], "responsibility": "Remove a study's patient/appointment/case links, returning it to the unlinked queue." },
+    { "id": "IMG-RT-17", "file": "server/src/routes/imaging.ts", "line": 916, "method": "PATCH", "path": "/api/imaging/studies/:id/archive", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingStudy"], "responsibility": "setStudyStatus(...,'archived'); never a hard delete (diagnostic data retained)." },
+    { "id": "IMG-RT-18", "file": "server/src/routes/imaging.ts", "line": 920, "method": "PATCH", "path": "/api/imaging/studies/:id/unarchive", "authMechanism": "user JWT + authorize(IMAGING_CLINICAL_ROLES)", "ownerCandidate": "IMG", "modelsTouched": ["ImagingStudy"], "responsibility": "setStudyStatus(...,'active')." },
+    { "id": "IMG-RT-19", "file": "server/src/routes/imaging.ts", "line": 927, "method": "PATCH", "path": "/api/imaging/studies/:id/legal-hold", "authMechanism": "user JWT + authorize(['OWNER','ORG_ADMIN']) - narrower than IMAGING_MANAGE_ROLES", "ownerCandidate": "IMG", "modelsTouched": ["ImagingStudy"], "responsibility": "KVKK lifecycle legal-hold set/clear (docs/compliance/53); the study's only manual, no-auto-trigger compliance gate." },
+    { "id": "BRG-RT-01", "file": "server/src/routes/imaging.ts", "line": 992, "method": "GET", "path": "/api/imaging/bridges", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "BRG", "modelsTouched": ["ImagingBridgeAgent"], "responsibility": "Admin-facing list of bridge agents. NOTE: BRG-owned data, physically located in the file named imaging.ts, not imagingBridgePublic.ts." },
+    { "id": "BRG-RT-02", "file": "server/src/routes/imaging.ts", "line": 1013, "method": "POST", "path": "/api/imaging/bridges", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "BRG", "modelsTouched": ["ImagingBridgeAgent"], "responsibility": "Admin-initiated direct bridge-agent registration (generateBridgeToken), distinct from the self-service pairing flow (BRG-RT-05/PUB-RT-03)." },
+    { "id": "BRG-RT-03", "file": "server/src/routes/imaging.ts", "line": 1044, "method": "POST", "path": "/api/imaging/bridges/:id/revoke", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "BRG", "modelsTouched": ["ImagingBridgeAgent"], "responsibility": "Revoke a bridge agent's token (status='revoked')." },
+    { "id": "BRG-RT-04", "file": "server/src/routes/imaging.ts", "line": 1080, "method": "DELETE", "path": "/api/imaging/bridges/:id", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "BRG", "modelsTouched": ["ImagingBridgeAgent", "ImagingStudy (F2-PREP-002 TX-09 row-lock check)"], "responsibility": "Delete a bridge agent registration." },
+    { "id": "BRG-RT-05", "file": "server/src/routes/imaging.ts", "line": 1178, "method": "POST", "path": "/api/imaging/bridge-pairings", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "BRG", "modelsTouched": ["ImagingBridgePairing", "ImagingBridgePairingDevice"], "responsibility": "Clinic staff creates a short-lived pairing session (generatePairingCode/hashPairingCode) shown once for the Windows Manager app to redeem." },
+    { "id": "BRG-RT-06", "file": "server/src/routes/imaging.ts", "line": 1248, "method": "GET", "path": "/api/imaging/bridge-pairings/:id", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "BRG", "modelsTouched": ["ImagingBridgePairing"], "responsibility": "Poll a pairing session's status (pending/redeemed/expired/cancelled/locked)." },
+    { "id": "BRG-RT-07", "file": "server/src/routes/imaging.ts", "line": 1268, "method": "DELETE", "path": "/api/imaging/bridge-pairings/:id", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "BRG", "modelsTouched": ["ImagingBridgePairing"], "responsibility": "Cancel a pending pairing session." },
+    { "id": "BRG-RT-08", "file": "server/src/routes/imaging.ts", "line": 1299, "method": "GET", "path": "/api/imaging/bridge-onboarding/config", "authMechanism": "user JWT + authorize(IMAGING_MANAGE_ROLES)", "ownerCandidate": "BRG", "modelsTouched": [], "responsibility": "Return getBridgeOnboardingConfig() - installer download metadata for the self-service onboarding card. No Prisma model access; env-var-only." },
+    { "id": "PUB-RT-01", "file": "server/src/routes/imagingBridgePublic.ts", "line": 130, "method": "POST", "path": "/api/public/imaging/bridge/heartbeat", "authMechanism": "bridge Bearer token (authenticateBridgeAgent), pre-user-auth", "ownerCandidate": "BRG", "modelsTouched": ["ImagingBridgeAgent"], "responsibility": "Agent liveness heartbeat (~every 60s); updates lastSeenAt/status='online'." },
+    { "id": "PUB-RT-02", "file": "server/src/routes/imagingBridgePublic.ts", "line": 199, "method": "POST", "path": "/api/public/imaging/bridge/studies", "authMechanism": "bridge Bearer token (authenticateBridgeAgent), pre-user-auth", "ownerCandidate": "BRG (channel) writing IMG-owned models (data)", "modelsTouched": ["ImagingStudy", "ImagingImage", "ImagingRequest", "ImagingBridgeAgent", "ImagingDevice (read)"], "responsibility": "Device-agent study/image ingest: recomputes ingestKey server-side, dedups by (clinicId, ingestKey) independent of bridgeAgentId, opens its own prisma.$transaction creating ImagingStudy+ImagingImage and conditionally advancing a linked ImagingRequest. DUPLICATES the transaction skeleton of IMG-RT-09 (see overlaps) while adding bridge-specific concerns (P2002 race handling, agent status touch).", "evidence": "server/src/routes/imagingBridgePublic.ts:199-392" },
+    { "id": "PUB-RT-03", "file": "server/src/routes/imagingBridgePublic.ts", "line": 399, "method": "POST", "path": "/api/public/imaging/bridge/pair", "authMechanism": "pairing-code Bearer, no bridge token yet (agent does not exist until this call succeeds)", "ownerCandidate": "BRG", "modelsTouched": ["ImagingBridgePairing", "ImagingBridgePairingDevice", "ImagingBridgeAgent", "ImagingBridgeBinding", "ImagingDevice (read)"], "responsibility": "Redeem a pairing code inside a row-locked (SELECT...FOR UPDATE) transaction: creates the ImagingBridgeAgent + its ImagingBridgeBinding rows, marks the pairing 'redeemed'. F2-PREP-002 TX-06: LEGITIMATE, all-BRG-model transaction, no cross-domain write.", "evidence": "server/src/routes/imagingBridgePublic.ts:399-554" },
+    { "id": "PUB-RT-04", "file": "server/src/routes/imagingBridgePublic.ts", "line": 558, "method": "GET", "path": "/api/public/imaging/bridge/bootstrap", "authMechanism": "bridge Bearer token (authenticateBridgeAgent)", "ownerCandidate": "BRG", "modelsTouched": ["ImagingBridgeBinding", "Clinic (read, name only)"], "responsibility": "Initial post-pairing config fetch (bindings, supported file types, max upload size). NOTE: returns a hardcoded updatePolicy stub instead of calling getBridgeUpdateConfig() - see overlaps/findings." },
+    { "id": "PUB-RT-05", "file": "server/src/routes/imagingBridgePublic.ts", "line": 590, "method": "GET", "path": "/api/public/imaging/bridge/update", "authMechanism": "bridge Bearer token (authenticateBridgeAgent)", "ownerCandidate": "BRG", "modelsTouched": [], "responsibility": "Return getBridgeUpdateConfig({bridgeAgentId, updateChannel}) - the single source of truth for release/rollout eligibility. No Prisma model access beyond auth." }
+  ],
+  "routeCounts": {
+    "totalRoutes": 32,
+    "imagingTsRoutes": 27,
+    "imagingBridgePublicTsRoutes": 5,
+    "imgOwnedRoutes": 19,
+    "brgOwnedRoutes": 13,
+    "brgRoutesPhysicallyInImagingTs": 8,
+    "note": "27 route count for imaging.ts independently reproduces F2-PREP-001's/F2-PREP-004's own '1303 lines/27 routes' citation via ^router\\.(get|post|put|patch|delete)\\( grep, not merely copied from it."
+  },
+  "services": [
+    { "path": "server/src/services/imaging/bridgeTokens.ts", "exportedSymbols": ["hashBridgeToken", "generateBridgeToken"], "lines": 23, "responsibility": "Bridge Bearer-token generation and one-way sha256 hashing; plaintext token shown once at creation/pairing-redemption time only.", "inboundCallers": ["server/src/routes/imaging.ts (BRG-RT-02)", "server/src/routes/imagingBridgePublic.ts (PUB-RT-01, PUB-RT-03)"], "outboundDependencies": ["node:crypto"], "ownerCandidate": "BRG", "uncertainty": "none" },
+    { "path": "server/src/services/imaging/bridgePairing.ts", "exportedSymbols": ["PAIRING_CODE_TTL_MS", "PAIRING_MAX_ATTEMPTS", "generatePairingCode", "formatPairingCodeForDisplay", "hashPairingCode", "normalizePairingCodeInput"], "lines": 46, "responsibility": "8-digit pairing-code generation, HMAC-SHA256 hashing with a server-side pepper, and user-input normalization.", "inboundCallers": ["server/src/routes/imaging.ts (BRG-RT-05)", "server/src/routes/imagingBridgePublic.ts (PUB-RT-03)"], "outboundDependencies": ["node:crypto", "server/src/utils/secrets.ts (getSecret)"], "ownerCandidate": "BRG", "uncertainty": "none" },
+    { "path": "server/src/services/imaging/bridgeOnboardingConfig.ts", "exportedSymbols": ["BridgeOnboardingInstallerMetadata", "BridgeOnboardingConfig", "getBridgeOnboardingConfig"], "lines": 67, "responsibility": "Fail-closed, env-var-driven self-service Windows installer metadata for the onboarding card (enabled flag, download URL, version, sha256, signed flag, minimum Windows build).", "inboundCallers": ["server/src/routes/imaging.ts (BRG-RT-08)"], "outboundDependencies": ["server/src/services/imaging/releaseMetadataValidation.ts"], "ownerCandidate": "BRG", "uncertainty": "none" },
+    { "path": "server/src/services/imaging/bridgeUpdateConfig.ts", "exportedSymbols": ["BridgeUpdateRollbackPackage", "BridgeUpdateRelease", "BridgeUpdateConfig", "BridgeUpdateEligibility", "computeRolloutBucket", "getBridgeUpdateConfig"], "lines": 209, "responsibility": "Canonical server-side release descriptor for the bridge auto-updater: fail-closed mode parsing, production signing requirement, deterministic (never random) staged-rollout cohorting by sha256(bridgeAgentId:releaseId), channel exact-match eligibility, opt-in rollback-package descriptor.", "inboundCallers": ["server/src/routes/imagingBridgePublic.ts (PUB-RT-05)"], "outboundDependencies": ["node:crypto", "server/src/services/imaging/releaseMetadataValidation.ts"], "ownerCandidate": "BRG", "uncertainty": "computeRolloutBucket is exported but this task found no non-test inbound caller besides the internal isBridgeInRolloutCohort() use inside the same file; may be exported only for the file's own tests." },
+    { "path": "server/src/services/imaging/imagingRequestTransitions.ts", "exportedSymbols": ["ImagingRequestStatus", "ALLOWED_REQUEST_TRANSITIONS", "RequestTransitionResult", "validateRequestTransition", "canAttachStudyToRequest"], "lines": 47, "responsibility": "ImagingRequest state-machine (requested/scheduled/received/cancelled/failed) and study-attachability rule, mirroring the labOrderStatusTransitions.ts pattern cited in its own header comment.", "inboundCallers": ["server/src/routes/imaging.ts (IMG-RT-07, IMG-RT-08, IMG-RT-09)", "server/src/routes/imagingBridgePublic.ts (PUB-RT-02) - cross-domain: a BRG route imports IMG domain logic directly, no facade"], "outboundDependencies": ["server/src/schemas/index.ts (IMAGING_REQUEST_STATUSES)"], "ownerCandidate": "IMG", "uncertainty": "none on ownership; the BRG->IMG import path itself is flagged under overlaps/missingPublicSurfaces" },
+    { "path": "server/src/services/imaging/imagingUploadValidation.ts", "exportedSymbols": ["IMAGING_ALLOWED_MIME", "IMAGING_EXTENSIONS_BY_MIME", "DICOM_EXTENSIONS", "MAX_FILE_MB", "normalizeDeclaredMime"], "lines": 37, "responsibility": "The single MIME/extension/size/DICOM-normalization rule set for image uploads, explicitly documented in its own header as shared by both the manual (imaging.ts) and bridge (imagingBridgePublic.ts) upload paths.", "inboundCallers": ["server/src/routes/imaging.ts (IMG-RT-09)", "server/src/routes/imagingBridgePublic.ts (PUB-RT-02, PUB-RT-04)"], "outboundDependencies": ["node:path"], "ownerCandidate": "SHARED (IMG+BRG) - explicitly documented as shared in its own header, not ambiguous by omission", "uncertainty": "none on the sharing fact; ambiguous only in that its physical location (services/imaging/, no shared/ or common/ marker) does not communicate the sharing" },
+    { "path": "server/src/services/imaging/releaseMetadataValidation.ts", "exportedSymbols": ["isAcceptableDownloadUrl", "isValidSha256", "isValidVersion", "isValidCertThumbprint", "UPDATE_MODES", "UpdateMode", "parseUpdateMode", "UPDATE_CHANNELS", "UpdateChannel", "parseUpdateChannel", "isValidRolloutPercent", "isValidReleaseId"], "lines": 81, "responsibility": "Generic release-descriptor field parsing (URL/version/sha256/cert-thumbprint/mode/channel/rollout-percent/release-id). Contains zero imaging-domain-specific logic - every function would work unchanged for any downloadable-installer feature in the application.", "inboundCallers": ["server/src/services/imaging/bridgeOnboardingConfig.ts", "server/src/services/imaging/bridgeUpdateConfig.ts"], "outboundDependencies": [], "ownerCandidate": "SHARED INFRASTRUCTURE (generic), currently nested under BRG's own folder with no consumer outside BRG", "uncertainty": "Whether a future non-imaging installer/update feature exists that should also consume this file cannot be determined from this task's scope; flagged as a promotion candidate, not a confirmed requirement." }
+  ],
+  "helpers": [
+    { "path": "server/src/routes/imaging.ts", "symbol": "handleUpload", "line": 83, "kind": "route-local multer middleware wrapper", "ownerCandidate": "IMG", "responsibility": "Normalizes multer errors (file-too-large, bad type) into the route's JSON error shape." },
+    { "path": "server/src/routes/imaging.ts", "symbol": "auditImaging", "line": 103, "kind": "route-local audit helper", "ownerCandidate": "IMG", "responsibility": "Writes an audit-log entry with only id/modality/counters, never PHI/DICOM tags, per the file's own header security principles." },
+    { "path": "server/src/routes/imaging.ts", "symbol": "clinicScopeSql", "line": 128, "kind": "route-local SQL-scope helper", "ownerCandidate": "IMG", "responsibility": "Builds a Prisma.Sql clinic-scope fragment for raw-query paths." },
+    { "path": "server/src/routes/imaging.ts", "symbol": "isPrismaKnownError", "line": 138, "kind": "route-local error-classification helper", "ownerCandidate": "IMG (generic Prisma error check, not imaging-specific logic)" },
+    { "path": "server/src/routes/imaging.ts", "symbol": "canSeeLegalHoldReason", "line": 154, "kind": "route-local authorization helper", "ownerCandidate": "IMG", "responsibility": "Gates visibility of legalHoldReason text to the same role set permitted to set it." },
+    { "path": "server/src/routes/imaging.ts", "symbol": "redactStudyLegalHoldReason", "line": 158, "kind": "EXPORTED route-file helper (not in services/imaging/)", "ownerCandidate": "IMG", "responsibility": "Strips legalHoldReason from a study payload unless the caller is permitted to see it. Exported from a route file rather than a service; this task found no cross-file importer, but its exported status means it is a de-facto public symbol of a file the program otherwise treats as HTTP-layer-only.", "uncertainty": "flagged under missingPublicSurfaces - a KVKK-relevant redaction rule with no home in a service or contract module" },
+    { "path": "server/src/routes/imaging.ts", "symbol": "studyInclude", "line": 172, "kind": "route-local Prisma include shape constant", "ownerCandidate": "IMG" },
+    { "path": "server/src/routes/imaging.ts", "symbol": "findStudyInScope / findRequestInScope", "line": 186, "kind": "route-local clinic-scoped lookup helpers", "ownerCandidate": "IMG" },
+    { "path": "server/src/routes/imaging.ts", "symbol": "validateClinicalLinks", "line": 212, "kind": "route-local FK-validation helper", "ownerCandidate": "IMG", "responsibility": "Validates patientId/appointmentId/treatmentCaseId/deviceId against the resolved clinic scope before any transaction opens - the mechanism F2-PREP-004 cites for imaging's 'cleanest transactional profile' claim.", "outboundDependencies": ["server/src/utils/relationGuards.ts (findPatientInClinic, findAppointmentInClinic, findTreatmentCaseInClinic)"] },
+    { "path": "server/src/routes/imaging.ts", "symbol": "streamStudyImage", "line": 749, "kind": "route-local file-stream helper", "ownerCandidate": "IMG", "responsibility": "Shared body for the preview/download routes (IMG-RT-13/14); opens an authenticated stream via services/fileStorage.ts, never a redirect/public URL." },
+    { "path": "server/src/routes/imaging.ts", "symbol": "setStudyStatus", "line": 894, "kind": "route-local status-change helper", "ownerCandidate": "IMG", "responsibility": "Shared body for archive/unarchive (IMG-RT-17/18)." },
+    { "path": "server/src/routes/imagingBridgePublic.ts", "symbol": "tryAcquireUploadSlot / releaseUploadSlot", "line": 76, "kind": "route-local in-process concurrency guard", "ownerCandidate": "BRG", "responsibility": "Per-token-hash concurrent-upload limiter, in addition to the rate limiters." },
+    { "path": "server/src/routes/imagingBridgePublic.ts", "symbol": "authenticateBridgeAgent", "line": 114, "kind": "route-local authentication helper", "ownerCandidate": "BRG", "responsibility": "The actual bridge Bearer-token authentication mechanism (hash lookup, revoked/pending/status checks, generic 401 on every rejection reason per the file's own anti-corruption-layer header principles). This is BRG's true authentication boundary and currently has no existence outside this one route file.", "uncertainty": "flagged under missingPublicSurfaces - no dedicated services/imaging auth module wraps this." }
+  ],
+  "adapters": [
+    { "path": "server/src/services/fileStorage.ts", "ownerCandidate": "SHARED INFRASTRUCTURE (not imaging-owned)", "responsibility": "buildStorageKey/saveFile/deleteFile/openFileStream/fileNameFromKey - generic clinic-scoped blob storage, consumed by both imaging.ts and imagingBridgePublic.ts identically.", "inboundCallers": ["server/src/routes/imaging.ts", "server/src/routes/imagingBridgePublic.ts", "(other domains, not re-verified by this task's narrow scope)"] },
+    { "path": "server/src/utils/fileSignature.ts", "ownerCandidate": "SHARED INFRASTRUCTURE (not imaging-owned)", "responsibility": "isAllowedFileSignature/detectMimeFromBuffer - generic magic-byte file-type verification (DICOM Part-10 offset-128 'DICM' check lives here), consumed by both imaging.ts and imagingBridgePublic.ts." },
+    { "path": "server/src/utils/filePreview.ts", "ownerCandidate": "SHARED INFRASTRUCTURE (not imaging-owned)", "responsibility": "isInlinePreviewable - used only by imaging.ts among the inspected files." },
+    { "path": "windows-bridge/ (external .NET deployable: Directory.Build.props, NoraMedi.Bridge.sln, src/, tests/, installer/, release/, docs/)", "ownerCandidate": "BRG (external counterpart), internals unverified", "responsibility": "The paired Windows Manager application that redeems pairing codes (PUB-RT-03), sends heartbeats (PUB-RT-01), ingests studies (PUB-RT-02), and checks for updates (PUB-RT-05). Top-level directory listing only confirmed to exist in this task; internal structure not scanned, consistent with F2-PREP-001's own scope limit.", "uncertainty": "internals unverified by this task" },
+    { "path": "bridge-agent/ (separate top-level Node/TS project: package.json, src/, tests/, scripts/, config/)", "ownerCandidate": "BRG (external counterpart), internals unverified", "responsibility": "A second, apparently distinct bridge-agent deployable coexisting with windows-bridge/. This task did not determine the relationship between the two (e.g. predecessor/successor, or two different integration modes) - out of its targeted CodeGraph scope.", "uncertainty": "relationship between bridge-agent/ and windows-bridge/ is UNRESOLVED by this task" }
+  ],
+  "models": [
+    { "name": "ImagingDevice", "schemaLines": "2547-2567", "ownerCandidate": "IMG", "tenantScoping": "clinicId direct column, @@index([clinicId, isActive])", "kvkkSensitivity": "LOW (device metadata only, no patient data)", "notes": "connectionType default 'manual'; 'bridge'/'dicomweb' values reserved for future phases per its own schema comment." },
+    { "name": "ImagingRequest", "schemaLines": "2571-2596", "ownerCandidate": "IMG", "tenantScoping": "clinicId direct column, @@index([clinicId, status]), @@index([clinicId, patientId])", "kvkkSensitivity": "HIGH (linked to Patient)", "notes": "Its own header comment records this as a deliberately minimal placeholder for a future DICOM Modality Worklist / bridge job model." },
+    { "name": "ImagingStudy", "schemaLines": "2598-2645", "ownerCandidate": "IMG", "tenantScoping": "clinicId direct column, 3 clinicId-prefixed indexes incl. legalHold", "kvkkSensitivity": "HIGH", "notes": "Carries bridgeAgentId (BRG foreign key) and ingestKey for bridge-sourced rows; @@unique([clinicId, ingestKey]) is the idempotency guarantee both PUB-RT-02 and the offline dedup path rely on. legalHold/legalHoldReason are this model's own KVKK lifecycle fields (docs/compliance/53)." },
+    { "name": "ImagingImage", "schemaLines": "2751-2770", "ownerCandidate": "IMG", "tenantScoping": "clinicId direct column, @@index([clinicId, studyId])", "kvkkSensitivity": "HIGH", "notes": "No legalHold field of its own - inherits the parent ImagingStudy's, per its own doc-comment cross-reference to PatientAttachment.storageVerifiedMissingAt. filePath is a storage key, never a public URL (both route files' header comments assert this independently)." },
+    { "name": "ImagingBridgeAgent", "schemaLines": "2652-2688", "ownerCandidate": "BRG", "tenantScoping": "clinicId direct column, @@index([clinicId])", "kvkkSensitivity": "MEDIUM (device/installation metadata; explicit schema comment lists what must never be stored: Windows username, hardware serial, MAC, local paths, filenames, patient identity)", "notes": "tokenHash unique; installationId unique; createdWithPairingId unique 1:1 back-reference to the pairing that created it." },
+    { "name": "ImagingBridgePairing", "schemaLines": "2693-2716", "ownerCandidate": "BRG", "tenantScoping": "clinicId direct column, @@index([clinicId]), @@index([expiresAt])", "kvkkSensitivity": "LOW", "notes": "codeHash unique (HMAC, never the plaintext code); bridgeAgentId unique 1:1 forward reference." },
+    { "name": "ImagingBridgePairingDevice", "schemaLines": "2718-2727", "ownerCandidate": "BRG", "tenantScoping": "NO clinicId/organizationId column - scoped only transitively via pairingId -> ImagingBridgePairing.clinicId", "kvkkSensitivity": "LOW", "notes": "Independently reconfirms F2-PREP-004's own finding of this tenant-scoping gap by direct schema inspection in this task, not by citation alone." },
+    { "name": "ImagingBridgeBinding", "schemaLines": "2731-2749", "ownerCandidate": "BRG", "tenantScoping": "clinicId direct column, @@index([clinicId]), @@unique([bridgeAgentId, deviceId])", "kvkkSensitivity": "LOW", "notes": "Its own schema comment states local folder paths are intentionally never stored server-side." }
+  ],
+  "tests": [
+    { "path": "server/src/tests/imaging.test.ts", "lines": 1023, "npmScript": "test:imaging", "coverageAreas": ["DICOM Part-10/signature validation", "ImagingRequest transition rules", "Zod schema validation", "role-exclusion regression (BILLING/ASSISTANT)", "clinic isolation (mock-based)", "bridge-agent token contract basics"], "ownerCandidate": "IMG (with BRG-contract-basics overlap)", "runtimeClass": "mock/unit-level per F1-002-P2 baseline, not independently re-verified by this task" },
+    { "path": "server/src/tests/imagingBridgeOnboarding.test.ts", "lines": 236, "npmScript": "test:imaging-bridge-onboarding", "ownerCandidate": "BRG" },
+    { "path": "server/src/tests/imagingBridgePairing.test.ts", "lines": 485, "npmScript": "test:imaging-bridge-pairing", "ownerCandidate": "BRG" },
+    { "path": "server/src/tests/imagingBridgeUpdate.test.ts", "lines": 512, "npmScript": "test:imaging-bridge-update", "ownerCandidate": "BRG" },
+    { "path": "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts", "lines": 1483, "npmScript": "test:kvkk-lifecycle", "ownerCandidate": "CROSS-DOMAIN (Privacy-owned test file exercising IMG's ImagingImage/ImagingStudy legal-hold and redaction lifecycle)", "note": "NOT run by .github/workflows/windows-bridge-pr.yml's path-filtered job even though it exercises Imaging models and its path filter includes server/src/services/imaging/** - see findings." },
+    { "path": "server/src/tests/clinicBulkExport.test.ts", "ownerCandidate": "Privacy-owned, incidental Imaging touch only", "classification": "not a dedicated Imaging test; not counted in the 5 dedicated files above" },
+    { "path": "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts", "ownerCandidate": "Storage/backup-owned, incidental ImagingImage touch only (FileBackupEntry.sourceModel reference)", "classification": "not a dedicated Imaging test; not counted in the 5 dedicated files above" }
+  ],
+  "testCounts": { "dedicatedImagingTestFiles": 5, "incidentalCrossDomainTestFiles": 2, "totalRelevantTestFiles": 7, "totalDedicatedLines": 3739 },
+  "inboundCallers": [
+    { "of": "server/src/routes/imaging.ts", "caller": "server/src/index.ts:255 app.use('/api', imagingRoutes)", "kind": "route mount" },
+    { "of": "server/src/routes/imagingBridgePublic.ts", "caller": "server/src/index.ts:185 app.use('/api/public', imagingBridgePublicRoutes)", "kind": "route mount, pre-authenticate middleware" },
+    { "of": "server/src/services/imaging/* (as a whole)", "caller": "server/src/routes/imaging.ts, server/src/routes/imagingBridgePublic.ts", "kind": "direct named import, no facade" },
+    { "of": "server/src/services/imaging/imagingRequestTransitions.ts (canAttachStudyToRequest)", "caller": "server/src/routes/imagingBridgePublic.ts (PUB-RT-02)", "kind": "cross-owner (BRG route -> IMG service) direct named import" },
+    { "of": "ImagingImage (Prisma model, read+update)", "caller": "server/src/services/privacy/patientAnonymization.ts, orphanFileInspection.ts, deletionReviewInventory.ts", "kind": "cross-domain direct Prisma access, independently confirmed by this task; matches F2-PREP-002 PAT-14/PAT-16/F2-CC-14", "evidence": "grep for prisma.imagingImage in each file" },
+    { "of": "ImagingImage (as FileBackupEntry.sourceModel reference)", "caller": "server/src/services/fileBackupService.ts (cited by F2-PREP-002 INF-07, not independently re-read in full by this task)", "kind": "cross-domain read-only ledger reference" },
+    { "of": "jobs/imagingBridgeOfflineJob.ts", "caller": "server/src/jobs/startBackgroundJobs.ts:15,29", "kind": "job registration at process startup" }
+  ],
+  "outboundDependencies": [
+    "server/src/db.ts (prisma client)",
+    "server/src/middleware/auth.ts (authorize, AuthRequest)",
+    "server/src/utils/fileSignature.ts",
+    "server/src/utils/filePreview.ts",
+    "server/src/services/fileStorage.ts",
+    "server/src/utils/helpers.ts (getParam, createRateLimiter)",
+    "server/src/utils/activity.ts (logActivity)",
+    "server/src/utils/auditLog.ts (writeAuditLog)",
+    "server/src/utils/clinicScope.ts (validateAndGetClinicIdScope, resolveEffectiveClinicId)",
+    "server/src/utils/relationGuards.ts (findPatientInClinic, findAppointmentInClinic, findTreatmentCaseInClinic)",
+    "server/src/utils/secrets.ts (getSecret, via bridgePairing.ts)",
+    "server/src/utils/jobLock.ts (withJobLock, via imagingBridgeOfflineJob.ts)",
+    "server/src/schemas/index.ts (all imaging*/Imaging* DTOs)",
+    "node-cron (via imagingBridgeOfflineJob.ts)",
+    "multer (both route files)"
+  ],
+  "imgCandidates": [
+    { "path": "server/src/routes/imaging.ts (IMG-RT-01..19 only)" },
+    { "path": "server/src/services/imaging/imagingRequestTransitions.ts" },
+    { "path": "Prisma models: ImagingDevice, ImagingRequest, ImagingStudy, ImagingImage" },
+    { "path": "server/src/tests/imaging.test.ts (majority share)" }
+  ],
+  "brgCandidates": [
+    { "path": "server/src/routes/imaging.ts (BRG-RT-01..08 only - physically co-located, logically BRG)" },
+    { "path": "server/src/routes/imagingBridgePublic.ts (all 5 routes)" },
+    { "path": "server/src/services/imaging/bridgeTokens.ts" },
+    { "path": "server/src/services/imaging/bridgePairing.ts" },
+    { "path": "server/src/services/imaging/bridgeOnboardingConfig.ts" },
+    { "path": "server/src/services/imaging/bridgeUpdateConfig.ts" },
+    { "path": "server/src/jobs/imagingBridgeOfflineJob.ts" },
+    { "path": "Prisma models: ImagingBridgeAgent, ImagingBridgePairing, ImagingBridgePairingDevice, ImagingBridgeBinding" },
+    { "path": "server/src/tests/imagingBridgeOnboarding.test.ts, imagingBridgePairing.test.ts, imagingBridgeUpdate.test.ts" },
+    { "path": "windows-bridge/, bridge-agent/ (external deployables, internals unverified)" }
+  ],
+  "sharedInfrastructure": [
+    { "path": "server/src/services/imaging/imagingUploadValidation.ts", "sharedBy": ["IMG", "BRG"], "confidence": "HIGH - explicitly documented in the file's own header comment" },
+    { "path": "server/src/services/imaging/releaseMetadataValidation.ts", "sharedBy": ["bridgeOnboardingConfig.ts (BRG)", "bridgeUpdateConfig.ts (BRG)"], "confidence": "HIGH for BRG-internal sharing; generic/domain-agnostic logic makes it a candidate for promotion out of services/imaging/ entirely, not merely a BRG-internal shared file" },
+    { "path": "server/src/services/fileStorage.ts", "sharedBy": ["IMG", "BRG", "other domains per F2-PREP-001 (not re-verified here)"], "confidence": "HIGH, pre-existing program-wide shared infrastructure" },
+    { "path": "server/src/utils/fileSignature.ts", "sharedBy": ["IMG", "BRG"], "confidence": "HIGH, generic file-signature utility" }
+  ],
+  "unresolvedOwnership": [
+    { "item": "The 8 admin/management bridge routes physically inside routes/imaging.ts (BRG-RT-01..08)", "question": "Are these BRG's true administrative surface, or should IMG's own route file continue to host clinic-staff-facing bridge management because the caller identity (authenticated clinic user) matches IMG's other routes more than it matches imagingBridgePublic.ts's device-Bearer-token callers?", "notDecidedByThisTask": true },
+    { "item": "bridge-agent/ vs windows-bridge/ relationship", "question": "Are these two separate, both-live external integrations, or is one superseded/experimental? Unverified by this task's scope.", "notDecidedByThisTask": true },
+    { "item": "releaseMetadataValidation.ts's long-term home", "question": "Promote to a program-wide shared/platform module (it has zero imaging-specific content), or keep as a BRG-internal shared file since both its current consumers are BRG?", "notDecidedByThisTask": true },
+    { "item": "redactStudyLegalHoldReason (exported from routes/imaging.ts)", "question": "Should this KVKK-relevant redaction rule move into a service/contract module given it is already exported (de-facto public) but currently has no non-route-file home?", "notDecidedByThisTask": true }
+  ],
+  "overlaps": [
+    { "id": "OVL-01", "title": "Duplicated study-ingest transaction skeleton", "locations": ["server/src/routes/imaging.ts:614-656 (IMG-RT-09)", "server/src/routes/imagingBridgePublic.ts:301-341 (PUB-RT-02)"], "description": "Both routes independently implement: file-signature validation -> storage save -> prisma.$transaction(create ImagingStudy, create ImagingImage, conditionally advance a linked ImagingRequest to 'received') -> rollback-delete-file on failure -> audit log. The bridge path adds ingestKey recomputation/dedup/P2002-race handling and an agent status touch; the manual path adds request-driven patient/appointment/case link resolution. No shared 'ingest a study' function exists for either to call.", "riskIfUnaddressed": "A future business-rule change to study creation (e.g. a new required field, a new audit event, a new KVKK constraint) must be applied twice by hand; the two paths have already diverged in minor ways (error-message wording, whether patientId-name-matching is attempted) that a shared function would prevent." },
+    { "id": "OVL-02", "title": "Update-policy computed two different ways", "locations": ["server/src/routes/imagingBridgePublic.ts:579 (PUB-RT-04 bootstrap, hardcoded stub)", "server/src/routes/imagingBridgePublic.ts:600 (PUB-RT-05 update, calls getBridgeUpdateConfig())"], "description": "bootstrap returns a literal { channel: 'stable', mandatory: false } instead of calling the same bridgeUpdateConfig.ts the dedicated update endpoint uses.", "riskIfUnaddressed": "If the update subsystem's mode/channel defaults ever change, bootstrap's hardcoded stub silently drifts out of sync with the real policy." },
+    { "id": "OVL-03", "title": "BRG's public HTTP surface is split across two route files by caller identity, not by domain", "locations": ["server/src/routes/imaging.ts (BRG-RT-01..08, user-JWT-authenticated)", "server/src/routes/imagingBridgePublic.ts (all 5 routes, bridge-Bearer-token-authenticated)"], "description": "This is a deliberate, documented split (admin/clinic-staff endpoints vs device-agent endpoints) rather than an accident, but it means neither file is 'the BRG module' - a reader looking for BRG's full surface must read both, and the file named for the boundary ('imagingBridgePublic.ts') only covers the device-facing half." },
+    { "id": "OVL-04", "title": "\"public\" naming collision", "locations": ["server/src/routes/imagingBridgePublic.ts", "docs/program/architecture/F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md target module shape (domain/application/infrastructure/http/public/internal)"], "description": "'Public' in the existing filename means 'reachable before user-session authentication, mounted under /api/public' - an HTTP-trust-boundary sense. The program's own target module shape (per F2-PREP-001/005) uses 'public' to mean 'application-layer public contract surface for other domains to call.' These are different concepts sharing one word; a future module-boundary public.ts contract file would collide in name/intent with the existing route file." }
+  ],
+  "missingPublicSurfaces": [
+    { "domain": "IMG", "gap": "No public.ts/contract module exists. F2-PREP-005 §10 already records this: IMG's only 'public contract candidate' is a proposed, not-yet-implemented ImagingStudyReceived event, plus a forward-looking ImagingLifecyclePort/AttachmentLifecyclePort for Privacy's cross-domain writes (F2-PREP-002 F2-CC-14). Every current cross-domain consumer of Imaging (Privacy's 3 services) reaches prisma.imagingImage directly.", "evidence": "grep confirmed zero prisma.imagingImage callers going through any services/imaging/ export; grep confirmed no public.ts/facade.ts/contract.ts file under services/imaging/ or routes/." },
+    { "domain": "BRG", "gap": "No dedicated authentication/adapter module for authenticateBridgeAgent() - the entire device-trust boundary (hash lookup, revoked/pending checks, uniform 401) lives inline in routes/imagingBridgePublic.ts with no importable, independently testable module.", "evidence": "server/src/routes/imagingBridgePublic.ts:114" },
+    { "domain": "BRG", "gap": "No shared 'ingest a study' application service (see OVL-01) - the closest thing to a BRG/IMG public contract today is duplicated inline logic, not a named function either side calls." }
+  ],
+  "findings": [
+    { "id": "F-01", "summary": "routes/imaging.ts's name does not match its actual responsibility: 8 of its 27 routes (30%) manage BRG-owned models (ImagingBridgeAgent, ImagingBridgePairing) with zero ImagingDevice/Request/Study/Image access.", "evidence": "BRG-RT-01..08 route table above." },
+    { "id": "F-02", "summary": "imagingBridgePublic.ts is correctly named for its own content (100% BRG, all device-facing) but does not represent BRG's full surface - the admin half lives elsewhere (OVL-03).", "evidence": "route table above." },
+    { "id": "F-03", "summary": "Study/image ingest business logic is duplicated, not shared, between the manual and bridge upload paths (OVL-01).", "evidence": "server/src/routes/imaging.ts:614-656 vs server/src/routes/imagingBridgePublic.ts:301-341, both read directly in this task." },
+    { "id": "F-04", "summary": "releaseMetadataValidation.ts contains zero imaging-specific logic and is a generic release-descriptor parser nested inside services/imaging/ purely because its only two current consumers happen to be BRG files.", "evidence": "server/src/services/imaging/releaseMetadataValidation.ts full read, this task." },
+    { "id": "F-05", "summary": "The only genuinely IMG+BRG shared service file (imagingUploadValidation.ts) is explicit and well-documented about the sharing in its own header - this is a positive finding, not a gap.", "evidence": "server/src/services/imaging/imagingUploadValidation.ts:1-6." },
+    { "id": "F-06", "summary": "Cross-domain direct Prisma access into ImagingImage from three Privacy-domain services is real and independently reconfirmed by this task (not merely cited from F2-PREP-002), and is bounded/documented KVKK-lifecycle behavior (redaction, anonymization, deletion review) rather than an accidental violation - but it means IMG has no enforced facade today.", "evidence": "grep + direct read of clinicBulkExportConfig.ts, deletionReviewInventory.ts, orphanFileInspection.ts, patientAnonymization.ts." },
+    { "id": "F-07", "summary": "ImagingBridgePairingDevice has no clinicId/organizationId column, independently reconfirmed by direct schema read (matches F2-PREP-004's prior finding).", "evidence": "server/prisma/schema.prisma:2718-2727." },
+    { "id": "F-08", "summary": "windows-bridge-pr.yml's path filter includes server/src/services/imaging/** and server/src/tests/imaging*.ts, but its job step only runs test:imaging, test:imaging-bridge-pairing, test:imaging-bridge-onboarding, and test:imaging-bridge-update - NOT test:kvkk-lifecycle, even though kvkkAttachmentImagingLifecycle.test.ts exercises ImagingStudy/ImagingImage legal-hold and would be affected by a services/imaging/** change. This is a CI-coverage gap, not corrected by this task.", "evidence": ".github/workflows/windows-bridge-pr.yml lines 11-51, server/package.json line 48." },
+    { "id": "F-09", "summary": "redactStudyLegalHoldReason is an exported (de-facto public) KVKK-relevant symbol with no home outside a route file - it is not in any services/imaging/ module and has no test file of its own beyond imaging.test.ts's route-level assertions.", "evidence": "server/src/routes/imaging.ts:158." },
+    { "id": "F-10", "summary": "BRG's device-facing half (imagingBridgePublic.ts) is a textbook anti-corruption/adapter layer by its own explicit header-comment design constraints (no PHI/token/filename logging, uniform 401 on every rejection reason, no storage URL ever returned, content-addressed idempotency independent of agent identity); BRG's admin-facing half (embedded in imaging.ts) is ordinary same-process application logic with no comparable adapter framing. A single 'is BRG an ACL, adapter, or part of IMG' answer is therefore inaccurate - the honest classification is a split: ACL/adapter at the external (device) edge, ordinary domain logic at the internal (admin) edge, both operating on the same 4 BRG-owned models.", "evidence": "server/src/routes/imagingBridgePublic.ts:1-21 header comment; server/src/routes/imaging.ts BRG-RT-01..08." }
+  ],
+  "brgRoleClassification": {
+    "options": ["anti-corruption layer", "adapter/integration layer", "conversion/transport layer", "shared infrastructure", "part of IMG", "unresolved combination"],
+    "selected": "unresolved combination (split by edge)",
+    "rationale": "See finding F-10. BRG is neither cleanly 'part of IMG' (it owns 4 distinct Prisma models, a distinct job, distinct tests, and a distinct external deployable) nor cleanly a pure ACL/adapter (its admin-management half is ordinary CRUD indistinguishable in style from IMG's own routes, and it directly writes IMG-owned models during ingest, PUB-RT-02). This task does not resolve the split further; F2-PREP-006-E and/or the eventual pilot-contract task must decide whether to formalize the two edges as distinct sub-modules (e.g. BRG-Admin and BRG-Device) or keep BRG as one module with two entry surfaces."
+  },
+  "proposedImgBrgSplit": {
+    "status": "PROPOSED, NOT APPROVED - no implementation, file move, or code change authorized by this task",
+    "img": {
+      "ownedModels": ["ImagingDevice", "ImagingRequest", "ImagingStudy", "ImagingImage"],
+      "ownedRoutes": ["IMG-RT-01..19 (routes/imaging.ts)"],
+      "ownedServices": ["imagingRequestTransitions.ts"],
+      "sharedWithBrg": ["imagingUploadValidation.ts"],
+      "proposedNewSurface": "A named application-service function for study ingest (e.g. createImagingStudy()) that both IMG-RT-09 and BRG's PUB-RT-02 call, replacing OVL-01's duplicated transaction; and a named IMG facade (e.g. ImagingLifecyclePort, per F2-PREP-002's F2-CC-14 proposal) for Privacy's 3 existing direct-Prisma callers to move onto - proposal only, not scheduled by this task."
+    },
+    "brg": {
+      "ownedModels": ["ImagingBridgeAgent", "ImagingBridgePairing", "ImagingBridgePairingDevice", "ImagingBridgeBinding"],
+      "ownedRoutesDevice": ["PUB-RT-01..05 (routes/imagingBridgePublic.ts)"],
+      "ownedRoutesAdmin": ["BRG-RT-01..08 (currently in routes/imaging.ts)"],
+      "ownedServices": ["bridgeTokens.ts", "bridgePairing.ts", "bridgeOnboardingConfig.ts", "bridgeUpdateConfig.ts"],
+      "ownedJob": ["imagingBridgeOfflineJob.ts"],
+      "genericInfraToConsiderPromoting": ["releaseMetadataValidation.ts"],
+      "proposedNewSurface": "A dedicated authenticateBridgeAgent module extracted from imagingBridgePublic.ts, and a decision (deferred to F2-PREP-006-E) on whether BRG-RT-01..08 should physically relocate alongside PUB-RT-01..05 or remain caller-identity-split - proposal only."
+    }
+  },
+  "limitations": [
+    "CodeGraph was used only within this task's own targeted paths; no project-wide scan was performed, consistent with the wave's CODEGRAPH DISCIPLINE instruction.",
+    "windows-bridge/ and bridge-agent/ internals were not read - only top-level directory listings were confirmed to exist, matching F2-PREP-001's own stated limitation.",
+    "Frontend consumers (src/pages/ImagingQueue.tsx, src/components/imaging/**) were not independently re-scanned by this task; this document defers to F2-PREP-001's own frontend enumeration for those paths since they fall outside this task's targeted server-side CodeGraph scope.",
+    "server/src/services/fileBackupService.ts (F2-PREP-002 INF-07's citation for ImagingImage read access) was not independently re-read in full by this task; its existence and the specific citation are taken from F2-PREP-002 and cross-checked only via the FileBackupEntry.sourceModel comment already visible in schema.prisma.",
+    "This task does not authorize, schedule, or recommend a timeline for any file move, module creation, dependency-cruiser rule, or contract implementation - all such items are proposals for F2-PREP-006-E and/or a future, separately-authorized implementation task.",
+    "Route responsibility descriptions are derived from HTTP method+path+imports+the surrounding role-array/header-comment context; not every one of the 32 route handler bodies was read line-by-line (the two upload/ingest routes, the pair/bootstrap/update routes, and all local helper functions were read in full; the remaining CRUD-shaped routes were not, since their behavior is fully determined by their path/model/role-array and reading them in full would not change any ownership or overlap conclusion)."
+  ],
+  "nextConsolidationOwner": "F2-PREP-006-E"
+}
