@@ -27,8 +27,31 @@ This evidence was reconciled against current `origin/main` in a follow-up pass (
 - **Merge performed:** `git merge --no-ff origin/main` (no rebase, no force push, no reset, no blanket `--ours`/`--theirs`). Result: a clean merge with **zero conflicts** — the merge only added two new files (F2-PREP-001's own evidence MD+JSON); nothing this task authored or touched had been modified by `origin/main` since this task's baseline. No semantic conflict resolution was required.
 - **Merge commit:** `1fbd362231359b52dfacf5499a913b96c76e0f0`.
 - **Post-merge ancestor check:** `git merge-base --is-ancestor origin/main HEAD` → confirmed ancestor.
-- **What was read for reconciliation:** only the two merged F2-PREP-001 evidence files (`docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md`, `docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json`) — both already-merged main-branch documents, not unmerged F2-PREP-002/003 branches, so this does not violate the independence rule. F2-PREP-002 and F2-PREP-003 remain unmerged and were **not** read.
+- **What was read for reconciliation:** only the two merged F2-PREP-001 evidence files (`docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md`, `docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json`) — both already-merged main-branch documents, not unmerged F2-PREP-002/003 branches, so this does not violate the independence rule. At the time of this R1 pass, F2-PREP-002 and F2-PREP-003 remained unmerged and were **not** read. (F2-PREP-003 has since merged — see §0.2 below.)
 - **Impact on this task's own findings** is recorded in full in the new §1.6 below; the short version: the Imaging/Billing scores and rationale are **unchanged**, one useful scope nuance is added for Imaging/Bridge, and one new candidate (External Calendar Integration) is added to the set F2-PREP-005 must compare — nothing here overturns this task's original evidence.
+
+### 0.2 Reconciliation with current main (F2-PREP-004-R2)
+
+A second follow-up pass, continuing the same branch and PR (#278), reconciled this evidence against current `origin/main` after **F2-PREP-003** merged.
+
+- **Pre-merge HEAD:** `8aafb137fd1ca6313336289182769a085f0dea20` (this task's R1 evidence commit).
+- **Current `origin/main` at this reconciliation:** `e8e05f669f049c4895e0c9a7f95db6f3fbd463fe` — includes merged **F2-PREP-003** (PR #277, same merge commit SHA).
+- **Ancestor check before merge:** not an ancestor (main had advanced again).
+- **Merge performed:** `git merge --no-ff origin/main` (no rebase, no force push, no reset, no blanket `--ours`/`--theirs`). Result: a clean merge with **zero conflicts** — the merge only added two new files (F2-PREP-003's own evidence MD+JSON); nothing this task authored or touched had been modified by `origin/main` since the R1 reconciliation.
+- **Merge commit:** `faa4a725fa5576d98561b38b5248299de342767d`.
+- **Post-merge ancestor check:** confirmed ancestor.
+- **What was read for this reconciliation:** only the two merged F2-PREP-003 evidence files (`docs/program/evidence/F2-PREP-003_FEATURE_INTAKE_AND_CLICKUP_DOMAIN_MAPPING.md`, `docs/program/evidence/F2-PREP-003_feature_intake_domain_mapping.json`) — both already-merged main-branch documents. F2-PREP-002-R1 remains unmerged/pending and was **not** read.
+- **Impact on this task's own findings** is recorded in full in the new §1.7 below; the short version: **no candidate-score change** — Imaging, Billing, the External Calendar Integration comparison requirement, and this document's own M0–M5 wave ordering are all unchanged. Full detail in §1.7.
+
+**Upstream/sibling task status as of this reconciliation (F2-PREP-004-R2):**
+
+| Task | Status |
+|---|---|
+| F2-PREP-001 | **MERGED** (PR #276) |
+| F2-PREP-002-R1 | pending |
+| F2-PREP-003 | **MERGED** (PR #277) |
+| F1-003-B2 | pending review/remediation status |
+| F2-PREP-005 | not started |
 
 ## 1. Sources inspected (independent evidence base)
 
@@ -71,6 +94,24 @@ F2-PREP-001 (merged, PR #276) independently produced a 99-Prisma-model, 38-domai
 - **Imaging/Bridge scope nuance.** F2-PREP-001 splits "imaging" into two domains — `IMG` (Imaging — Server Ingest and Viewer) and `BRG` (Imaging — Device Bridge / Windows Bridge). Its domain-summary table marks **both** `Ownership ambiguity: YES`, but its own per-domain JSON detail clarifies this is not a true ownership dispute: `IMG` = "none significant on the ownership question itself"; `BRG` = "bridge-agent/ and windows-bridge/ internal structure is unverified by this task" — those are separate deployables outside the CODEGRAPH-DISCIPLINE-scoped root set both this task and F2-PREP-001 used, a shared pre-existing scope limit, not a new gap. This task's own "imaging" bucket already spanned both `IMG` and `BRG` (it cites the `ImagingBridgePairingDevice` tenant-scoping gap, a `BRG`-owned model, in §3). **No change to the score or the recommendation** — F2-PREP-005 should simply treat the Device Bridge's external `bridge-agent/`/`windows-bridge/` deployable internals as an explicit due-diligence item before any Stage 1 work on that sub-scope.
 - **Billing vs. `PBL` distinction confirmed.** F2-PREP-001 independently confirms `PBL` ("Billing / Subscription Engine") is a **separate, unimplemented** domain (0 Prisma models, 0 routes, 0 services, classification "planned/not implemented") — distinct from this task's "billing" bucket, which is the implemented clinic-facing payments/finance surface (`PAY`/`FIN`/`INS`-equivalent in the 37/38-domain taxonomy). This task's §2 already made this distinction (see the Billing evidence note); F2-PREP-001 corroborates it. No score change.
 - **Net effect on this task's conclusions:** Imaging candidate score — unchanged. Billing fallback score — unchanged. Integrations score — potentially understated by this task's original scoring (since `EXC` didn't exist as a named candidate at that time), not retroactively changed here; flagged for F2-PREP-005. Migration wave order — unchanged by this task; `EXC`'s clean-slate shape is flagged as a possible factor for F2-PREP-005 to weigh, since its cross-domain edges are not yet coded into the accepted `DEPENDENCY_MAP.md` matrix. Pilot risk assumptions for the already-excluded domains (Appointments, Privacy) — reinforced, not changed.
+
+### 1.7 Reconciliation with merged F2-PREP-003 (feature intake and ClickUp domain mapping)
+
+F2-PREP-003 (merged, PR #277) classified 17 repository-derived backlog items against the F0-003/F0-004 domain taxonomy, rechecked against F2-PREP-001's merged 38-domain inventory, and built the intake framework a future ClickUp import will populate. Per this task's own §3 instruction, this reconciliation **confirms** the following four points from F2-PREP-003's own text rather than rescoring anything, since nothing in F2-PREP-003 contradicts this document's sequencing evidence:
+
+- **The 17 items are not the full ClickUp backlog.** F2-PREP-003 §3 states this explicitly: "The 17-item repository-derived backlog... is not a substitute for the full ClickUp backlog... must not be presented, cited, or reported anywhere as the full NoraMedi feature backlog total." Confirmed.
+- **ClickUp import remains pending.** F2-PREP-003's `clickup_derived_backlog` is an empty array, explicitly marked `PENDING_EXTERNAL_IMPORT` — no ClickUp MCP server was available in that task's execution environment either. Confirmed.
+- **No backlog item was assigned to External Calendar Integration.** F2-PREP-003 §5's ownership-counts table states directly: "No item is currently owned by `PRV`, `PAD`, `STG`, or the new `EXC` domain." Confirmed.
+- **Final pilot selection remains deferred to F2-PREP-005.** F2-PREP-003 §4.1.C: "No pilot module is selected by this task... F2-PREP-005 makes that call." Confirmed — matches this document's own §3 deferral exactly.
+
+**Effect on this document's conclusions — no scoring change:**
+
+- **Imaging recommendation:** unchanged. F2-PREP-003 does include one item touching this document's "imaging" bucket — `F2P3-005` (Windows Bridge .NET test flakiness), owned by `BRG`, readiness `SAFE_NOW_IN_EXISTING_BOUNDARY`, delivery wave 0. This **corroborates** (does not contradict) this document's low-risk-pilot reasoning: an independent classification pass also found the Device Bridge sub-scope stable enough for a small isolated fix with no new contract required.
+- **Billing fallback:** unchanged. None of F2-PREP-003's 17 items are owned by the `PAY`/`FIN`/`INS`-equivalent surface this document calls "billing." The one billing-adjacent item, `F2P3-015` ("Billing / Subscription Engine"), is owned by `PBL` — the separate, unimplemented domain §1.6 above already distinguished from this document's own "billing" bucket. F2-PREP-003 independently corroborates that distinction (`PBL` classified `DISCOVERY_REQUIRED`, `inferred` confidence — not an existing implemented surface).
+- **External Calendar Integration comparison requirement:** unchanged, reconfirmed. Zero of F2-PREP-003's 17 items touch `EXC`, and F2-PREP-003 independently confirms pilot selection (including whether `EXC` is accepted) is F2-PREP-005's job. This document's existing requirement — that F2-PREP-005 compare `EXC` alongside Imaging/Billing — stands.
+- **Wave ordering:** unchanged. F2-PREP-003 defines its own, differently-scoped "delivery wave" numbering (0–4) for backlog-item readiness/dependency ordering — **a distinct concept from this document's M0–M5 domain-migration waves (§6)**; the two should not be conflated when F2-PREP-005 reconciles them. F2-PREP-003's `F2P3-011` ("CC-04", an Appointment booking/cancellation command contract; delivery wave 2; `SAFE_AFTER_CONTRACT`) is a narrower, contract-level recommendation — not a claim that Appointments should be the first domain-level migration pilot. It does not contradict this document's §3 exclusion of Appointments as a first pilot; it is noted here as a concrete future candidate for this document's Stage 2 (public-contract introduction, §4) once Appointments' own boundary work begins (this document's M3, §6).
+
+**Net result: no candidate-score change** — the expected outcome anticipated by this reconciliation's own task instruction.
 
 ## 2. Candidate domain scoring
 
@@ -162,7 +203,7 @@ Scoring uses qualitative Low/Medium/High labels grounded in cited evidence, not 
 
 ## 3. Pilot selection
 
-**This section records independently recommended pilot *candidates*, not a selection.** No pilot has been approved or chosen by this task or any task before it. Final pilot selection is deferred to **F2-PREP-005 — Consolidated Modularization Charter**, which must compare Imaging, Billing, External Calendar Integration (§1.6), and any pilot candidate emerging from F2-PREP-002/F2-PREP-003 before selecting one. No implementation task — including Imaging Stage 1 — is authorized by this evidence alone.
+**This section records independently recommended pilot *candidates*, not a selection.** No pilot has been approved or chosen by this task or any task before it. Final pilot selection is deferred to **F2-PREP-005 — Consolidated Modularization Charter**, which must compare Imaging, Billing, External Calendar Integration (§1.6), the CC-04 Appointment booking/cancellation command contract (§1.7, per merged F2-PREP-003 — a contract-level candidate, not a domain-migration-order claim), and any pilot candidate emerging from F2-PREP-002-R1 (still pending) before selecting one. No implementation task — including Imaging Stage 1 — is authorized by this evidence alone.
 
 ### Independently recommended primary pilot candidate: **Imaging**
 
@@ -304,7 +345,7 @@ Waves are defined by measurable entry/exit gates, not calendar dates, per the ta
 - Exit gate: `dependency-cruiser` runs successfully (non-blocking, report-only) against the whole repository in CI at least once, producing a baseline violation count per domain (expected: 9 `X` edges pre-known from F0-004, plus whatever additional `R/W` edges `dependency-cruiser`'s own scan surfaces that the manual F0-004 pass didn't enumerate).
 
 **M1 — Pilot module (recommended candidate: Imaging; recommended fallback: Billing; final choice made by F2-PREP-005)**
-- Entry gate: M0 exit gate met; F2-PREP-005 has selected the pilot domain (from Imaging, Billing, External Calendar Integration, or an F2-PREP-002/003 candidate — §3); Stage 1 (ownership freeze) complete for the selected domain.
+- Entry gate: M0 exit gate met; F2-PREP-005 has selected the pilot domain (from Imaging, Billing, External Calendar Integration, or a candidate from F2-PREP-002-R1 once it lands — §3); Stage 1 (ownership freeze) complete for the selected domain.
 - Exit gate: Stages 1–7 (§4) all complete for the selected domain; `dependency-cruiser`'s CI check is **blocking** for that domain's own folder (zero tolerated new violations); the domain's route/service tests include at least one real-HTTP (`supertest` or equivalent) smoke test where none existed before (closing the gap noted in §1); one full business day of stable production metrics post-Stage-5 route move, documented.
 
 **M2 — Low-coupling operational modules (Billing (if not already M1), Notifications, Integrations)**
@@ -326,10 +367,14 @@ Waves are defined by measurable entry/exit gates, not calendar dates, per the ta
 
 ## 7. Corrected next task
 
-Await: **F2-PREP-002-R1**, **F2-PREP-003-R2**, and **F1-003-B2** status.
+Await:
+- **F2-PREP-002-R1**
+- **F1-003-B2** completion/review status
+
+(F2-PREP-001 and F2-PREP-003 have already merged — PR #276 and PR #277 respectively — and are no longer a dependency of this hand-off.)
 
 Then execute: **F2-PREP-005 — Consolidated Modularization Charter**, which must:
-- compare all pilot candidates (Imaging, Billing, External Calendar Integration, and any pilot candidate emerging from F2-PREP-002/F2-PREP-003);
+- compare all pilot candidates (Imaging, Billing, External Calendar Integration, the CC-04 Appointment booking/cancellation command contract per merged F2-PREP-003, and any pilot candidate emerging from F2-PREP-002-R1);
 - select the accepted pilot;
 - select the first boundary-enforcement mechanism;
 - define M0 entry criteria;

@@ -25,6 +25,7 @@
       "F2-PREP-002 branch/evidence",
       "F2-PREP-003 branch/evidence"
     ],
+    "excludedFromReadingNote": "This list reflects the independence rule as applied during this task's original evidence-gathering pass (R0), when none of the three had merged. F2-PREP-001 has since merged (PR #276) and was read only during the R1 reconciliation pass (see reconciliation.mergedOwnershipInventoryRead). F2-PREP-003 has since merged (PR #277) and was read only during this R2 reconciliation pass (see reconciliationR2.mergedFeatureIntakeEvidenceRead). F2-PREP-002-R1 remains unmerged/pending and has not been read by any pass of this task.",
     "permittedCrossValidationSources": [
       "docs/program/MODULE_MAP.md (F0-003, merged to main)",
       "docs/program/DEPENDENCY_MAP.md (F0-004, merged to main)",
@@ -49,9 +50,12 @@
     ],
     "mergedMainDocsReadDuringReconciliation": [
       "docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md (merged via PR #276)",
-      "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json (merged via PR #276)"
+      "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json (merged via PR #276)",
+      "docs/program/evidence/F2-PREP-003_FEATURE_INTAKE_AND_CLICKUP_DOMAIN_MAPPING.md (merged via PR #277)",
+      "docs/program/evidence/F2-PREP-003_feature_intake_domain_mapping.json (merged via PR #277)"
     ],
-    "independenceNoteR1": "F2-PREP-002 and F2-PREP-003 remain unmerged and were not read by this reconciliation task, per the independence rule."
+    "independenceNoteR1": "As of the F2-PREP-004-R1 revision, F2-PREP-002 and F2-PREP-003 remained unmerged and were not read, per the independence rule.",
+    "independenceNoteR2": "As of this F2-PREP-004-R2 revision, F2-PREP-003 has since merged (PR #277) and was read as repository evidence (see reconciliationR2). F2-PREP-002-R1 remains unmerged/pending and was not read."
   },
   "domainScoring": {
     "scale": "1-5, 5 = most favorable for an early/first pilot (safe, simple, low blast radius)",
@@ -367,7 +371,8 @@
       "imaging",
       "billing",
       "external_calendar_integration",
-      "any pilot candidate emerging from F2-PREP-002/F2-PREP-003"
+      "CC-04 (Appointment booking/cancellation command contract, per merged F2-PREP-003 - a contract-level candidate, not a domain-migration-order claim)",
+      "any pilot candidate emerging from F2-PREP-002-R1 (still pending)"
     ],
     "externalCalendarIntegrationNote": "Not independently scored by this task (did not exist as a named candidate in this task's own 10-domain brief or independent research pass). Added to the F2-PREP-005 comparison set per F2-PREP-004-R1 reconciliation against merged F2-PREP-001 evidence, which observes EXC 'already exhibits essentially the full target module shape' as a factual, evidence-based observation - explicitly not a selection, per F2-PREP-001 itself."
   },
@@ -610,12 +615,11 @@
   "correctedNextTask": {
     "await": [
       "F2-PREP-002-R1",
-      "F2-PREP-003-R2",
-      "F1-003-B2 status"
+      "F1-003-B2 completion/review status"
     ],
     "then": "Execute F2-PREP-005 - Consolidated Modularization Charter",
     "f2Prep005MustDo": [
-      "compare all pilot candidates (Imaging, Billing, External Calendar Integration, any from F2-PREP-002/003)",
+      "compare all pilot candidates (Imaging, Billing, External Calendar Integration, CC-04 per merged F2-PREP-003, any from F2-PREP-002-R1)",
       "select the accepted pilot",
       "select the first boundary-enforcement mechanism",
       "define M0 entry criteria",
@@ -623,5 +627,44 @@
       "authorize the first implementation task"
     ],
     "notAuthorizedByThisTask": "Imaging Stage 1 implementation, or any other code/schema/migration change."
+  },
+  "upstreamTaskStatus": {
+    "asOf": "F2-PREP-004-R2",
+    "F2-PREP-001": "MERGED (PR #276, merge commit 0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83)",
+    "F2-PREP-002-R1": "pending",
+    "F2-PREP-003": "MERGED (PR #277, merge commit e8e05f669f049c4895e0c9a7f95db6f3fbd463fe)",
+    "F1-003-B2": "pending review/remediation status",
+    "F2-PREP-005": "not started"
+  },
+  "reconciliationR2": {
+    "task": "F2-PREP-004-R2",
+    "purpose": "Reconcile this branch with current origin/main (which now includes merged F2-PREP-003), correct stale sibling-task status wording, and confirm (not rescore) against F2-PREP-003's feature-intake evidence.",
+    "preMergeHead": "8aafb137fd1ca6313336289182769a085f0dea20",
+    "originMainShaAtReconciliation": "e8e05f669f049c4895e0c9a7f95db6f3fbd463fe",
+    "f2Prep003": {
+      "pr": 277,
+      "mergeCommit": "e8e05f669f049c4895e0c9a7f95db6f3fbd463fe"
+    },
+    "mergeStrategy": "git merge --no-ff origin/main (no rebase, no force push, no reset, no blanket -ours/-theirs)",
+    "mergeCommitCreatedByThisTask": "faa4a725fa5576d98561b38b5248299de342767d",
+    "conflicts": "none - the merge added two new files only (F2-PREP-003's evidence MD+JSON); no file this task authored or touched was modified by origin/main since the R1 reconciliation",
+    "postMergeAncestorCheck": "origin/main confirmed an ancestor of HEAD after the merge (git merge-base --is-ancestor origin/main HEAD)",
+    "mergedFeatureIntakeEvidenceRead": [
+      "docs/program/evidence/F2-PREP-003_FEATURE_INTAKE_AND_CLICKUP_DOMAIN_MAPPING.md",
+      "docs/program/evidence/F2-PREP-003_feature_intake_domain_mapping.json (referenced via the MD companion; not independently re-parsed field-by-field)"
+    ],
+    "confirmedFromF2Prep003": {
+      "seventeenItemsNotFullBacklog": "Confirmed - F2-PREP-003 section 3 states explicitly: 'The 17-item repository-derived backlog in section 5 is not a substitute for the full ClickUp backlog... The 17 items must not be presented, cited, or reported anywhere as the full NoraMedi feature backlog total.'",
+      "clickupImportPending": "Confirmed - F2-PREP-003 recorded clickup_derived_backlog as an empty array, explicitly marked PENDING_EXTERNAL_IMPORT; no ClickUp MCP server was available in that task's execution environment.",
+      "noBacklogItemAssignedToExternalCalendarIntegration": "Confirmed - F2-PREP-003 section 5 ownership counts table explicitly states 'No item is currently owned by PRV, PAD, STG, or the new EXC domain' across all 17 repository-derived backlog items.",
+      "finalPilotSelectionDeferredToF2Prep005": "Confirmed - F2-PREP-003 section 4.1.C states 'No pilot module is selected by this task... F2-PREP-005 makes that call' and section 10 names F2-PREP-005 as the task that 'select[s] the pilot module.'"
+    },
+    "scoringChangeResult": {
+      "imagingRecommendation": "No change. F2-PREP-003's own backlog does include one item touching this task's 'imaging' bucket - F2P3-005 (Windows Bridge .NET test flakiness), owned by BRG, readiness SAFE_NOW_IN_EXISTING_BOUNDARY, wave 0 - which is corroborating, not contradicting: it independently confirms the Device Bridge sub-scope is currently stable enough for a small isolated fix with no new contract required, consistent with (not contrary to) this document's low-risk-pilot reasoning for Imaging.",
+      "billingFallback": "No change. None of F2-PREP-003's 17 items are owned by PAY/FIN/INS (this task's 'billing' bucket). The one billing-adjacent item, F2P3-015 'Billing / Subscription Engine', is owned by PBL - the separate, unimplemented domain this document's section 1.6 already distinguished from its own 'billing' bucket. F2-PREP-003 corroborates that distinction (PBL classified DISCOVERY_REQUIRED / inferred confidence, not an existing implemented surface).",
+      "externalCalendarIntegrationComparisonRequirement": "No change, reconfirmed. F2-PREP-003 independently confirms zero of its 17 backlog items touch EXC, and independently confirms final pilot selection (including whether EXC is accepted) is F2-PREP-005's job, not any preparation task's. This document's existing requirement that F2-PREP-005 compare EXC alongside Imaging/Billing stands unchanged.",
+      "waveOrdering": "No change to this document's M0-M5 migration-sequencing waves. Note for F2-PREP-005: F2-PREP-003 defines its own, differently-scoped 'delivery wave' numbering (0-4) for backlog-item readiness/dependency ordering - a distinct concept from this document's M0-M5 domain-migration waves. The two should not be conflated when F2-PREP-005 reconciles them. F2-PREP-003's F2P3-011 (CC-04, an Appointment booking/cancellation command contract, delivery wave 2, SAFE_AFTER_CONTRACT) is a narrower, contract-level recommendation - not a claim that Appointments should be the first domain-level migration pilot; it does not contradict this document's section 3 exclusion of Appointments as a first pilot, and is noted as a concrete future candidate for this document's Stage 2 (public-contract introduction) once Appointments' own boundary work begins (M3 in section 6)."
+    },
+    "netResult": "No candidate-score change. All four items F2-PREP-003 was read to confirm are confirmed. This is the expected 'no scoring change' outcome anticipated by the R2 task instruction."
   }
 }
