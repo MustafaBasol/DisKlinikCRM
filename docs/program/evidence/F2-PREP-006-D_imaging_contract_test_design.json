@@ -36,18 +36,21 @@
     "server/src/services/privacy/orphanFileInspection.ts (imaging section)",
     "server/src/services/privacy/deletionReviewInventory.ts (imaging section)",
     "server/src/services/privacy/dataRetentionPolicy.ts (imaging reference)",
-    "server/src/routes/patientPrivacy.ts (imagingResults redaction counters)"
+    "server/src/routes/patientPrivacy.ts (imagingResults redaction counters)",
+    "server/src/routes/attachments.ts (lines 1-60: imports, roleCanSeeLegalHoldReason/redactLegalHoldReason definition at lines 24-35, ALLOWED_MIME/ALLOWED_EXTENSIONS_BY_MIME)",
+    "server/src/routes/notifications.ts (line 10: PRE_RECEIPT_STATUSES import from services/labOrders/labOrderStatusTransitions.ts; line 165: prisma.labWorkOrder.findMany for the overdue-lab digest; full prisma.* call-site grep confirms no Imaging-owned model — imagingStudy/imagingImage/imagingRequest/imagingDevice/imagingBridgeAgent/imagingBridgePairing — is read or written anywhere in this file)",
+    "server/src/routes/imaging.ts (lines 894-913: setStudyStatus shared helper backing archive/unarchive, incl. its same-status early-return short-circuit; lines 927-970: legal-hold PATCH handler full body)"
   ],
   "scopeExpansions": [
     {
-      "trigger": "routes/imaging.ts explicitly cites routes/attachments.ts as its own design precedent (\"attachments.ts emsali\", imaging.ts line 10) and both independently define matching redactStudyLegalHoldReason/roleCanSeeLegalHoldReason logic.",
-      "expandedTo": "server/src/services/fileStorage.ts and the legal-hold redaction convention pattern (read-only, comparison purposes only, no attachments.ts contract drafted here)",
+      "trigger": "routes/imaging.ts's own top-of-file security-principles comment (lines 9-10: \"BILLING ve ASSISTANT rolleri klinik goruntulere HICBIR endpoint'te erisemez (attachments.ts emsali)\" — cites attachments.ts as the precedent for the BILLING/ASSISTANT role-exclusion rule).",
+      "expandedTo": "server/src/routes/attachments.ts, read directly (lines 1-60) to verify the cited precedent and confirm it independently defines a matching roleCanSeeLegalHoldReason/redactLegalHoldReason pair (attachments.ts:24-35); server/src/services/fileStorage.ts, the shared storage abstraction both files import — read-only, comparison purposes only, no attachments.ts contract drafted here.",
       "documented": true,
       "resultedInCodeChange": false
     },
     {
-      "trigger": "F2-PREP-002 edge IMG-09 groups routes/notifications.ts (overdue-lab digest) under the same dependency-map slice ('IMG') as Imaging, but the actual read target is prisma.labWorkOrder, a Labs-owned model, not an Imaging-owned model.",
-      "expandedTo": "server/src/routes/notifications.ts (read-only, to confirm it is out of scope for this contract; see characterizationTests CT-31)",
+      "trigger": "F2-PREP-002 edge IMG-09 groups routes/notifications.ts (overdue-lab digest) under the same dependency-map slice ('IMG') as Imaging; this task independently read the file to confirm the F2-PREP-002 claim rather than taking it on faith.",
+      "expandedTo": "server/src/routes/notifications.ts, read directly and grepped for every prisma.*.(findMany|findFirst|findUnique|create|update|delete|count) call site (lines 80, 120, 141, 165) — confirms the only lab-adjacent read is prisma.labWorkOrder.findMany at line 165 (a Labs-owned model, via the shared PRE_RECEIPT_STATUSES import at line 10) and that no Imaging-owned Prisma model is touched anywhere in the file; see characterizationTests CT-31.",
       "documented": true,
       "resultedInCodeChange": false
     },
@@ -207,9 +210,14 @@
       "verifiedAgainst": "server/prisma/schema.prisma:2598-2650 comment; server/src/schemas/index.ts:605-616 (imagingStudyUploadSchema has no ingestKey field)"
     },
     {
-      "command": "SetImagingLegalHold / ArchiveImagingStudy / UnarchiveImagingStudy",
-      "rule": "Naturally idempotent (repeat calls with the same target state are no-op-equivalent single-field writes); not enforced by a dedicated idempotency key, just by the field being a simple enum/boolean.",
-      "verifiedAgainst": "server/src/routes/imaging.ts:916-931 (route bodies not fully read line-by-line for this task; inferred from schema shape — flagged in unresolvedQuestions)"
+      "command": "ArchiveImagingStudy / UnarchiveImagingStudy",
+      "rule": "Idempotent by explicit short-circuit: the shared setStudyStatus helper returns immediately (no DB write) when the study is already in the requested target status.",
+      "verifiedAgainst": "server/src/routes/imaging.ts:894-913 (setStudyStatus body, fully read; same-status early return at line 901) and :915-921 (archive/unarchive route bindings)"
+    },
+    {
+      "command": "SetImagingLegalHold",
+      "rule": "Idempotent by convergent effect, not by short-circuit: the handler always executes a fresh prisma.imagingStudy.update regardless of the study's current legalHold value, but repeat calls with the same {legalHold, reason} converge to the same end state and the same audit metadata shape.",
+      "verifiedAgainst": "server/src/routes/imaging.ts:927-970 (legal-hold PATCH handler, full body read; no same-value short-circuit present, confirmed by the absence of any pre-write comparison against study.legalHold)"
     }
   ],
   "characterizationTests": [
@@ -289,7 +297,6 @@
   "evidenceGaps": [
     "No auditImaging() (or any audit) call was found in the IngestImagingStudy route handler (server/src/routes/imagingBridgePublic.ts:199-360+), unlike CreateImagingStudy's explicit auditImaging('imaging_study_uploaded') call — this asymmetry is not explained by any doc read for this task and should be confirmed as intentional (bridge ingest volume may be considered non-audit-worthy) or flagged as a real gap by F2-PREP-006-E.",
     "GetImagingStudy, ListPatientImaging, ListImagingRequests, and ListUnlinkedImagingStudies show no evidence of pagination; for clinics with large imaging volumes this may already be a real (pre-existing, not contract-introduced) scalability gap, out of scope to fix here but worth flagging.",
-    "Idempotency behavior for SetImagingLegalHold/ArchiveImagingStudy/UnarchiveImagingStudy is inferred from the field/schema shape, not from a line-by-line read of every route body — flagged as a soft gap, not a hard unresolved question.",
     "The exact deleteFile() orphan-detection story when a storage-compensation delete itself fails (imaging.ts:684, .catch(() => {})) was not traced end-to-end against orphanFileInspection.ts to confirm the forward case (orphaned file with no DB row) is eventually detected the same way the inverse case (DB row with a missing file) is via storageVerifiedMissingAt."
   ],
   "unresolvedQuestions": [

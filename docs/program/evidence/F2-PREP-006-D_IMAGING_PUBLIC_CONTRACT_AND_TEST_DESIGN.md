@@ -7,7 +7,7 @@
 **Frozen wave baseline:** `4cb334d213b4dbbac4193f1a8c1878deddb55714`
 **Branch:** `docs/f2-prep-006-d-imaging-contract-test-design`
 
-## Non-authority statement
+## Non-authoritative draft statement
 
 This document drafts a **candidate** public command/query/event contract and a **candidate** characterization-test catalogue for the Imaging domain (`IMG` + `BRG` per the F2-PREP-005 charter). **Nothing in this document is authoritative.** Every command, query, event, and test is marked `candidate`, never `accepted`. Final reconciliation across all F2-PREP-006 sibling discovery tasks (A/B/C/D) is owned exclusively by **F2-PREP-006-E**. This task did not read, merge, or depend on sibling branches A, B, or C, and does not update sibling status.
 
@@ -27,9 +27,11 @@ This task authorizes **no application code, no Prisma schema/migration changes, 
 
 Inspection was limited to the paths listed in the companion JSON's `inspectedPaths` — Imaging's own routes, schemas, services, tests, jobs, and Prisma models. Three scope expansions occurred, each triggered by a concrete import/reference and documented in `scopeExpansions`:
 
-1. `routes/imaging.ts` explicitly names `routes/attachments.ts` as its own design precedent and duplicates its legal-hold redaction logic — read for comparison only, no attachments.ts contract drafted here.
-2. F2-PREP-002 edge `IMG-09` groups `routes/notifications.ts` under the same dependency-map slice as Imaging, but its actual read target is `prisma.labWorkOrder` (a Labs-owned model) — read to confirm this caller is genuinely out of Imaging's contract surface (see test `CT-31`).
+1. `routes/imaging.ts`'s own top-of-file comment (lines 9-10) cites `routes/attachments.ts` as the precedent for its BILLING/ASSISTANT role-exclusion rule ("attachments.ts emsali"). `routes/attachments.ts` was read directly (lines 1-60) to verify that precedent and confirm it independently defines a matching `roleCanSeeLegalHoldReason`/`redactLegalHoldReason` pair (attachments.ts:24-35) — comparison purposes only, no attachments.ts contract drafted here. Both `routes/attachments.ts` and `routes/imaging.ts`'s `setStudyStatus`/legal-hold handler bodies (imaging.ts:894-970) are now listed in `inspectedPaths`.
+2. F2-PREP-002 edge `IMG-09` groups `routes/notifications.ts` under the same dependency-map slice as Imaging. `routes/notifications.ts` was read directly and every `prisma.*` call site was grepped (lines 80, 120, 141, 165) to independently verify — not merely repeat — the F2-PREP-002 claim: the only lab-adjacent read is `prisma.labWorkOrder.findMany` at line 165 (a Labs-owned model, via the shared `PRE_RECEIPT_STATUSES` import at line 10), and no Imaging-owned Prisma model is touched anywhere in the file (see test `CT-31`). It is now listed in `inspectedPaths`.
 3. The Privacy-domain callers named as an accepted exception in the charter (`patientAnonymization.ts`, `orphanFileInspection.ts`, `deletionReviewInventory.ts`, `dataRetentionPolicy.ts`) were read to catalogue that exception precisely.
+
+**R1 correction note:** the previous revision of this document referenced `attachments.ts` and `notifications.ts` in this section without listing them in the companion JSON's `inspectedPaths`, and `scopeExpansions[0]`'s `expandedTo` field named `fileStorage.ts` instead of the `attachments.ts` file its own `trigger` field described — both were flagged in review and are corrected in this revision: both files were read directly (citations above and in `inspectedPaths`), and `scopeExpansions[0]`/`scopeExpansions[1]` now name the concrete files actually added to scope.
 
 No project-wide scan was performed.
 
@@ -61,7 +63,7 @@ A single consolidated error contract (status codes 400/401/403/404/409/413/415/4
 
 ## Idempotency rules
 
-Three rules are documented in `idempotencyRules`. The most significant: `IngestImagingStudy` is idempotent per `(clinicId, ingestKey)` via a **defense-in-depth pair** — a fast pre-check read, and an authoritative Postgres `@@unique([clinicId, ingestKey])` constraint that catches races (`P2002`), with the race loser's just-written file deleted before it returns the winner's `studyId`. `CreateImagingStudy` (manual upload) is deliberately **not** idempotent — it has no `ingestKey` field, and `NULL` values never collide under the unique index.
+Four rules are documented in `idempotencyRules`, all fully verified against route bodies read directly (no rule in this revision is left as a schema-shape inference). The most significant: `IngestImagingStudy` is idempotent per `(clinicId, ingestKey)` via a **defense-in-depth pair** — a fast pre-check read, and an authoritative Postgres `@@unique([clinicId, ingestKey])` constraint that catches races (`P2002`), with the race loser's just-written file deleted before it returns the winner's `studyId`. `CreateImagingStudy` (manual upload) is deliberately **not** idempotent — it has no `ingestKey` field, and `NULL` values never collide under the unique index. `ArchiveImagingStudy`/`UnarchiveImagingStudy` are idempotent by explicit short-circuit — the shared `setStudyStatus` helper returns immediately with no DB write when the study is already in the requested status (`imaging.ts:901`, confirmed by reading the full helper body). `SetImagingLegalHold` is idempotent by convergent effect rather than short-circuit — it always issues a fresh `prisma.imagingStudy.update` regardless of the current value, but repeat calls with the same input converge to the same end state (confirmed by reading the full handler body, `imaging.ts:927-970`).
 
 ## Characterization-test catalogue
 
