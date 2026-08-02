@@ -1,0 +1,496 @@
+{
+  "taskId": "F2-PREP-006-E",
+  "title": "Imaging Boundary Contract Consolidation",
+  "phase": "F2 - Modularization Preparation",
+  "parentTask": "F2-PREP-006 - Imaging Pilot Boundary Contract Definition",
+  "type": "DOCUMENTATION, ARCHITECTURE RECONCILIATION, AND PROGRAM-CONTROL ONLY",
+  "status": "AGENT_COMPLETED",
+  "baseline": {
+    "branch": "docs/f2-prep-006-e-imaging-boundary-consolidation",
+    "createdDirectlyFromOriginMainAt": "46ba7b219002c8267bf127b39718efea091657b4",
+    "verification": [
+      "git fetch origin --prune",
+      "git rev-parse origin/main -> 46ba7b219002c8267bf127b39718efea091657b4",
+      "git merge-base --is-ancestor 38249af95f3975af1088e03c856c1443a034f517 origin/main -> exit 0 (PR #289)",
+      "git merge-base --is-ancestor 5a90eb3edd3842d107825169423bb10db53ee403 origin/main -> exit 0 (PR #290)",
+      "git merge-base --is-ancestor 8e77f2fe4d82b9b6e5e1364e18c8a16bfba1711b origin/main -> exit 0 (PR #291)",
+      "git merge-base --is-ancestor 46ba7b219002c8267bf127b39718efea091657b4 origin/main -> exit 0 (PR #288)",
+      "gh pr view 288/289/290/291 --json mergeCommit,state -> all MERGED, mergeCommit.oid matches exactly",
+      "git worktree add <path> -b docs/f2-prep-006-e-imaging-boundary-consolidation origin/main"
+    ],
+    "ciPrerequisite": {
+      "runId": "30756005546",
+      "headSha": "46ba7b219002c8267bf127b39718efea091657b4",
+      "event": "push",
+      "workflow": "ci-main-and-nightly",
+      "result": "success",
+      "jobs": "9/9 success",
+      "note": "Recorded exactly as supplied by the task brief; this task did not independently re-query gh run view (no new CI-relevant code exists to re-verify; all inputs are already-merged docs-only PRs)."
+    },
+    "noSiblingWorktreeReused": true,
+    "noRebaseOrForcePush": true
+  },
+  "inputsReconciled": [
+    "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md + F2-PREP-006-A_img_brg_inventory.json",
+    "docs/program/evidence/F2-PREP-006-B_IMAGING_DATA_STORAGE_TENANT_KVKK_ASSESSMENT.md + F2-PREP-006-B_imaging_data_storage_kvkk.json",
+    "docs/program/evidence/F2-PREP-006-C_IMAGING_CALLER_DIRECT_ACCESS_AND_TRANSACTION_MAP.md + F2-PREP-006-C_imaging_callers_transactions.json",
+    "docs/program/evidence/F2-PREP-006-D_IMAGING_PUBLIC_CONTRACT_AND_TEST_DESIGN.md + F2-PREP-006-D_imaging_contract_test_design.json",
+    "docs/program/architecture/F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md + evidence/F2-PREP-005_consolidated_modularization_charter.json",
+    "docs/program/evidence/F2-PREP-002_CROSS_DOMAIN_DEPENDENCY_AND_DIRECT_ACCESS_MAP.md",
+    "docs/program/evidence/F2-PREP-004_MODULARIZATION_SEQUENCE_AND_PILOT_SELECTION.md",
+    "docs/program/NORAMEDI_MASTER_TRACKER.md",
+    "docs/program/CURRENT_PHASE.md",
+    "docs/program/phases/F2_MODULAR_BOUNDARIES.md",
+    "docs/program/ARCHITECTURE_DECISIONS.md (ADR-015 excerpt)",
+    "docs/program/RISK_REGISTER.md (R-070, R-046, R-071 rows)"
+  ],
+  "sourceScopeExpansions": [
+    {
+      "expansion": "None beyond reading the 4 evidence packages + program-control docs listed above.",
+      "reason": "All contradictions found (see contradictions[]) were resolvable by comparing A/B/C/D/charter text against each other; none required reading current server/src source directly, since A/B/C/D already independently re-verified the relevant source at the shared frozen baseline and this task's job is reconciliation, not re-discovery.",
+      "codeGraphUsed": false
+    }
+  ],
+  "contradictions": [
+    {
+      "id": "CTR-01",
+      "title": "F2-PREP-005's Selected Pilot Boundary Charter (Sec.10) lists Notifications as an allowed inbound caller of Imaging (\"overdue-lab-adjacent digest, currently a Low-risk violation to be formalized\"); F2-PREP-006-C (SE-03) and F2-PREP-006-D (scope expansion 2) both independently re-read routes/notifications.ts in full plus grepped every prisma.* call site and found ZERO references to any Imaging-owned Prisma model anywhere in that file - only prisma.labWorkOrder.findMany (a Labs-owned model) at line 165.",
+      "severity": "Medium",
+      "resolution": "RESOLVED. F2-PREP-002's original IMG-09 edge (which the charter's Sec.10 traces back to) grouped Imaging together with Attachments/Inventory/Labs/Storage under one research-convenience cluster code also spelled \"IMG\" - a naming collision with F2-PREP-001/005's actual IMG domain code, not a real Imaging caller. Two independent, deeper, source-re-reading passes (006-C, 006-D) confirm notifications.ts's overdue-lab digest reads Labs' own labWorkOrder model, never an Imaging model. Notifications is REMOVED from the accepted-inbound-caller list. The charter's Sec.10 text is superseded by this consolidation on this specific point; F2-PREP-002's IMG-09 edge itself is not incorrect, only its cluster-label was ambiguous - no correction to F2-PREP-002's own file is made or required by this task."
+    },
+    {
+      "id": "CTR-02",
+      "title": "F2-PREP-006-A's file inventory names the JSON companion 'F2-PREP-006-B_imaging_data_storage_tenant_kvkk.json' in its own inspectedPaths list, while the actual merged filename on origin/main is 'F2-PREP-006-B_imaging_data_storage_kvkk.json' (no 'tenant' in the name); the task brief handed to this consolidation task also uses the 'tenant_kvkk' spelling.",
+      "severity": "Low",
+      "resolution": "RESOLVED. Confirmed via git ls-tree against origin/main that the real, merged filename omits 'tenant'. This document and its JSON companion cite the real filename throughout. No sibling evidence file is modified to fix this cosmetic reference."
+    },
+    {
+      "id": "CTR-03",
+      "title": "F2-PREP-006-A's brgRoleClassification.selected records BRG's role as an 'unresolved combination (split by edge)' and explicitly defers the module-vs-submodule-vs-two-separate-modules question to this task; F2-PREP-006-B independently treats IMG+BRG as 'two sub-domains within the single modular-monolith Imaging boundary' without further split; F2-PREP-006-C's migration order (step 4) treats imagingBridgePublic.ts as already a complete, sufficient module boundary requiring only documentation, silently leaving BRG-RT-01..08's admin edge unaddressed.",
+      "severity": "Medium",
+      "resolution": "RESOLVED by this task's own decision (Sec. below): BRG remains ONE module (a named sub-module of the Imaging domain boundary, not a separate deployable, not merged into IMG), organized internally as two documented edges (device-facing adapter/ACL edge = imagingBridgePublic.ts; admin-facing domain-logic edge = BRG-RT-01..08, today physically inside imaging.ts). Physical relocation of the admin edge alongside the device edge is scheduled as additive Stage 5 work, not required before the contract itself is defined."
+    },
+    {
+      "id": "CTR-04",
+      "title": "F2-PREP-002's original F2-CC-14 candidate names only two write-side methods (markStorageMissing, redactForAnonymization). F2-PREP-006-C independently found and evidenced two additional cross-domain read-side direct-Prisma-access sites (DAV-01, DAV-02) and one direct-storage-access site (SB-01) that map onto the same Privacy callers but are not covered by F2-CC-14's original write-only scope.",
+      "severity": "Low",
+      "resolution": "RESOLVED by revising F2-CC-14's scope (see f2cc14Decision.revisedScope for the unchanged original command methods markStorageMissing(imageId)/redactForAnonymization(imageId), which belong to the ImagingLifecyclePort facade and are not separately numbered entries in acceptedContractCatalogue.commands[]; see acceptedContractCatalogue.queries IMG-QRY-13/IMG-QRY-14 for the two new query methods added by this revision) to add query-side methods alongside the original two commands, rather than proposing a second, competing port. This is the 'accepted, revised' outcome for F2-CC-14 required by the task brief."
+    },
+    {
+      "id": "CTR-05",
+      "title": "F2-PREP-006-A's overlaps[] (OVL-01) and F2-PREP-006-C's headline finding #3/#6 both independently document the duplicated ingest transaction (manual vs bridge) and the ImagingRequest PATCH concurrency gap, but neither task states whether either is a 'blocker' in the same vocabulary the other uses ('risk' vs 'blocking prerequisite').",
+      "severity": "Low",
+      "resolution": "RESOLVED by this task assigning each an explicit blocker classification (see blockerDecisions[]) using one consistent vocabulary across the whole contract."
+    }
+  ],
+  "acceptedOwnership": {
+    "img": {
+      "ownedModels": ["ImagingDevice", "ImagingRequest", "ImagingStudy", "ImagingImage"],
+      "ownedRoutes": ["IMG-RT-01..19 (server/src/routes/imaging.ts)"],
+      "ownedServices": ["server/src/services/imaging/imagingRequestTransitions.ts"],
+      "ownedHelpers": ["validateClinicalLinks", "streamStudyImage", "setStudyStatus", "findStudyInScope/findRequestInScope", "canSeeLegalHoldReason/redactStudyLegalHoldReason (Stage 1: relocate into a services/imaging module, currently a route-file export)"],
+      "proposedNewSurface": "A named application service for study ingest (replacing OVL-01's duplication) and an ImagingLifecyclePort facade (F2-CC-14, revised) for Privacy's existing direct callers.",
+      "forbiddenDirectAccess": "No domain outside IMG (and the documented Privacy exception, see acceptedCallers.privacy) may read or write ImagingDevice/ImagingRequest/ImagingStudy/ImagingImage directly."
+    },
+    "brg": {
+      "moduleStructureDecision": "ONE module, two internally documented edges. Not split into two separate deployables/modules; not merged into IMG.",
+      "deviceEdge": {
+        "description": "Anti-corruption-layer/adapter edge, already correctly shaped per its own header-comment design invariants (no PHI/token/filename logging, uniform 401, no storage URL ever returned, content-addressed idempotency independent of caller identity).",
+        "ownedRoutes": ["PUB-RT-01..05 (server/src/routes/imagingBridgePublic.ts)"]
+      },
+      "adminEdge": {
+        "description": "Ordinary same-process domain logic, currently physically co-located inside imaging.ts, stylistically indistinguishable from IMG's own routes. Scheduled for physical relocation alongside the device edge at Stage 5 (additive, URL paths unchanged).",
+        "ownedRoutes": ["BRG-RT-01..08 (physically in server/src/routes/imaging.ts today)"]
+      },
+      "ownedModels": ["ImagingBridgeAgent", "ImagingBridgePairing", "ImagingBridgePairingDevice", "ImagingBridgeBinding"],
+      "ownedServices": ["bridgeTokens.ts", "bridgePairing.ts", "bridgeOnboardingConfig.ts", "bridgeUpdateConfig.ts"],
+      "ownedJob": ["imagingBridgeOfflineJob.ts"],
+      "proposedNewSurface": "Extract authenticateBridgeAgent() into its own importable, independently testable module (Stage 5).",
+      "forbiddenDirectAccess": "No domain outside BRG may read or write ImagingBridgeAgent/ImagingBridgePairing/ImagingBridgePairingDevice/ImagingBridgeBinding directly; imagingBridgePublic.ts must keep deriving clinicId only from the server-matched agent record, never client input."
+    },
+    "sharedInfrastructure": [
+      { "path": "server/src/services/imaging/imagingUploadValidation.ts", "ownedBy": "SHARED (IMG+BRG), explicitly documented in its own header - preserve as-is." },
+      { "path": "server/src/services/imaging/releaseMetadataValidation.ts", "ownedBy": "BRG-internal shared (bridgeOnboardingConfig.ts + bridgeUpdateConfig.ts). Promotion to a program-wide shared module is DEFERRED - no consumer outside BRG exists today; revisit only if a future non-imaging installer/update feature needs it." },
+      { "path": "server/src/services/fileStorage.ts", "ownedBy": "Program-wide shared infrastructure, not Imaging-owned. Consumed identically by IMG and BRG; not part of this contract's ownership claim." },
+      { "path": "server/src/utils/fileSignature.ts", "ownedBy": "Program-wide shared infrastructure, generic magic-byte file-type verification." },
+      { "path": "server/src/utils/filePreview.ts", "ownedBy": "Program-wide shared infrastructure." }
+    ]
+  },
+  "acceptedCallers": {
+    "privacyKvkk": {
+      "status": "ACCEPTED, DOCUMENTED, TO-BE-FORMALIZED EXCEPTION - not a violation to remediate as a violation, but a contract to introduce.",
+      "currentDirectCallers": [
+        "server/src/services/privacy/deletionReviewInventory.ts (read, DAV-01)",
+        "server/src/services/privacy/orphanFileInspection.ts (read + direct storage fileExists check, DAV-02/SB-01; metadata write markConfirmedMissing, SMB-01)",
+        "server/src/services/privacy/patientAnonymization.ts (metadata write redactForAnonymization, SMB-02)"
+      ],
+      "targetContract": "ImagingLifecyclePort (F2-CC-14, REVISED - see acceptedContractCatalogue)"
+    },
+    "backupStorage": {
+      "status": "ACCEPTED AS SHARED-INFRASTRUCTURE/ADAPTER EXCEPTION (DAV-03/DAV-07), lowest priority migration item.",
+      "currentDirectCallers": ["server/src/services/fileBackupService.ts (read-only, cross-tenant sweep, iterateSourceRows()/runFileBackupLocked())"],
+      "note": "Never mutates Imaging models (explicit invariant in fileBackupService.ts's own header). PZ-IMG-03 (backup RBAC) is a Storage/Platform-Admin boundary concern, not an Imaging-boundary concern, but is tracked here as a closure dependency for the Backup/Storage migration stage's KVKK safeguard claim - see blockerDecisions.PZ_IMG_03."
+    },
+    "patientsReadOnly": {
+      "status": "ACCEPTED, UNCHANGED.",
+      "currentCallers": ["ListPatientImaging (GET /api/patients/:patientId/imaging) - read-only enrichment, already Imaging-owned and Imaging-served, not a Patients-domain direct-Prisma call."]
+    },
+    "notificationsRemoved": {
+      "status": "REMOVED from the accepted-caller list per CTR-01 - notifications.ts does not touch any Imaging-owned model."
+    }
+  },
+  "forbiddenDirectAccess": [
+    "Any domain outside IMG/BRG writing directly to ImagingDevice/ImagingRequest/ImagingStudy/ImagingImage/ImagingBridgeAgent/ImagingBridgePairing/ImagingBridgePairingDevice/ImagingBridgeBinding, except the two accepted exceptions above.",
+    "Any caller deriving imagingBridgePublic.ts's clinicId from anything other than the server-matched bridge-agent DB row.",
+    "Any route or service returning a signed URL, static file path, or redirect for imaging binary content (must remain a live, re-authenticated stream response)."
+  ],
+  "allowedTemporaryCompatibilityPaths": [
+    {
+      "id": "TC-01",
+      "need": "A thin pass-through compatibility facade with an identical return shape to today's direct Prisma reads, if DAV-01/DAV-02 (Privacy's reads) migrate to ImagingLifecyclePort on a different release cadence than Privacy's own consuming code.",
+      "appliesTo": ["DAV-01", "DAV-02"]
+    },
+    {
+      "id": "TC-02",
+      "need": "None identified for the write side (SMB-01/SMB-02) - F2-CC-14 already fully specifies the target command shape and both call sites are internal service functions, not routes, so no external client compatibility window is needed."
+    }
+  ],
+  "brgStructureDecision": "ONE_MODULE_TWO_EDGES",
+  "duplicateIngestConvergenceDecision": {
+    "decision": "CONVERGE",
+    "detail": "Introduce one shared internal application-service function (e.g. ingestImagingStudyCore()) called by both IMG-RT-09 (manual upload) and PUB-RT-02 (bridge ingest), carrying the common skeleton (file-signature validation already shared via imagingUploadValidation.ts -> storage save -> prisma.$transaction creating ImagingStudy+ImagingImage and conditionally advancing a linked ImagingRequest -> rollback-delete-file on failure -> audit log), while each route keeps its own distinct pre/post logic (manual: patient/appointment/case link resolution via validateClinicalLinks; bridge: ingestKey recomputation/dedup/P2002-race handling and agent-status touch). Also fixes OVL-02 (bootstrap's hardcoded update-policy stub) by having it call getBridgeUpdateConfig() like the dedicated update route.",
+    "targetStage": "Stage 2"
+  },
+  "blockerDecisions": {
+    "imagingRequestPatchConcurrency": {
+      "id": "CR-03/BLK-02/FP-06",
+      "decision": "PRE-CONTRACT-EXPOSURE BLOCKER",
+      "detail": "Blocking before UpdateImagingRequest/CancelImagingRequest are exposed as commands any external caller (beyond imaging.ts itself) can invoke through the new facade. NOT blocking for Stage 0 (characterization tests may and should characterize the current unlocked-clobber behavior) or Stage 1 (additive facade with no new external caller yet).",
+      "targetStageToResolveBy": "Before Stage 3 (Privacy/KVKK caller migration) if request-mutation is ever included in that migration; must be resolved no later than Stage 2."
+    },
+    "storageDbCompensationGap": {
+      "id": "CR-01/CR-02/BLK-01",
+      "decision": "NOT A BLOCKER for modular-monolith-internal boundary work (Stages 0-7 as scoped by this contract, since no network/process boundary is introduced by any of them).",
+      "detail": "IS a blocker before any FUTURE, separately-authorized decision to extract Imaging's storage responsibility behind a real network boundary - explicitly out of scope for this contract and for F2-PREP-005's own non-goals. Tracked as a deferred, evidenced gap, not resolved here.",
+      "targetStageToResolveBy": "Not scheduled by this contract; a prerequisite only if/when a future separate-deployment decision is proposed."
+    },
+    "pzImg03": {
+      "id": "PZ-IMG-03",
+      "decision": "REMAINS OPEN - not resolved by this task.",
+      "detail": "F2-PREP-006-B refined its status from 'location unverified' to 'location resolved, authentication confirmed, RBAC granularity unproven'. Backup RBAC proof is INSUFFICIENT (single-tier authenticatePlatformAdmin only, no role/tier field on the platform-admin principal, no step-up authentication on the restore-capable endpoints specifically). Not a blocker for Stages 0-3. IS a blocker for the Backup/Storage migration stage (Stage 4) fully closing its KVKK-safeguard claim - the migration (formalizing fileBackupService as an accepted shared-infrastructure/adapter exception) may proceed on schedule, but this contract does not and cannot claim that migration closes any KVKK safeguard until PZ-IMG-03 is independently resolved by a separately-authorized security task.",
+      "backupRbacProofSufficient": false
+    },
+    "unboundedListQueries": {
+      "decision": "DEFERRED GAP, NON-BLOCKING.",
+      "detail": "GetImagingStudy/ListPatientImaging/ListImagingRequests/ListUnlinkedImagingStudies show no evidence of pagination. Pre-existing, program-wide-pattern scalability gap, not introduced by this contract. Tracked for a future, separately-scoped pagination task; does not gate any stage in this contract's sequence."
+    },
+    "imagingBridgePairingDeviceTenantColumn": {
+      "decision": "AFTER boundary preparation (this document), BEFORE Stage 5.",
+      "detail": "The contract itself (Stages 0-4) can proceed without this additive schema change, since CT-03 already characterizes the current pairingId-transitive join-scoping as correct. The additive clinicId/organizationId column should be added as its own, separately-authorized migration before Stage 5's BRG admin-edge relocation is considered complete, so the relocated admin routes and the schema both reflect BRG's true tenant model at the same time. This is a schema/migration change and is explicitly NOT authorized or performed by this task."
+    }
+  },
+  "f2cc14Decision": {
+    "outcome": "ACCEPTED_AND_REVISED",
+    "revisedScope": "ImagingLifecyclePort now specifies both command methods (markStorageMissing(imageId), redactForAnonymization(imageId) - unchanged from the original F2-PREP-002 proposal) AND two new query methods (getImagesForLifecycleReview(clinicId, patientId) for DAV-01/DAV-02's read side, checkImageStorageExists(imageId) for SB-01's direct storage check) so all five of Privacy's current direct-access touchpoints (DAV-01, DAV-02, SB-01, SMB-01, SMB-02) converge on one named port instead of a write-only port plus three unaddressed reads.",
+    "notSplitNotRejected": true
+  },
+  "dependencyCruiserDecision": {
+    "decision": "APPROVED_TO_PROCEED",
+    "mode": "report-only",
+    "scope": "Imaging pilot boundary only (server/src/routes/imaging.ts, server/src/routes/imagingBridgePublic.ts, server/src/services/imaging/**, server/src/jobs/imagingBridgeOfflineJob.ts)",
+    "allowedRoots": [
+      "server/src/routes/imaging.ts",
+      "server/src/routes/imagingBridgePublic.ts",
+      "server/src/services/imaging/**",
+      "server/src/jobs/imagingBridgeOfflineJob.ts"
+    ],
+    "forbiddenEdges": [
+      "Any module outside the allowed roots importing/calling prisma.imagingStudy | imagingImage | imagingRequest | imagingDevice | imagingBridgeAgent | imagingBridgePairing | imagingBridgePairingDevice | imagingBridgeBinding directly, once the named ImagingLifecyclePort / application-service contract exists to call instead."
+    ],
+    "allowList": [
+      "services/privacy/{patientAnonymization,orphanFileInspection,deletionReviewInventory,dataRetentionPolicy}.ts -> Imaging Prisma models (accepted KVKK lifecycle exception, migrating to ImagingLifecyclePort per this contract, not removed until Stage 3 completes)",
+      "services/fileBackupService.ts -> ImagingImage (read-only accepted shared-infrastructure/adapter exception, DAV-03/DAV-07)",
+      "routes/attachments.ts, routes/labOrders.ts -> services/fileStorage.ts (shared infrastructure, not Imaging-owned, not a forbidden edge)"
+    ],
+    "explicitlyNotInScopeOfThisTask": "Installing the dependency-cruiser package, adding any config file, or wiring any CI step. This is a decision-to-proceed only.",
+    "notInstalledOrConfiguredByThisTask": true,
+    "targetStage": "Stage 6"
+  },
+  "acceptedContractCatalogue": {
+    "commandsAccepted": 20,
+    "commandsRejected": 6,
+    "queriesAccepted": 12,
+    "queriesAddedByRevision": 2,
+    "eventsAccepted": 1,
+    "totalAcceptedContractItems": 35,
+    "rejectedItems": [
+      { "name": "RequestImagingProcessing", "reason": "No imaging AI/processing pipeline exists; F10 future scope only.", "disposition": "EXCLUDED_FUTURE_F10" },
+      { "name": "GetImagingProcessingResult", "reason": "Same as above.", "disposition": "EXCLUDED_FUTURE_F10" },
+      { "name": "UpdateProcessingStatus (as a distinct concept)", "reason": "No such concept exists; already covered by UpdateImagingRequest/CancelImagingRequest.", "disposition": "REJECTED_NOT_MODELED" },
+      { "name": "FinalizeImagingUpload (as a separate two-phase step)", "reason": "Both upload paths are single-shot; introducing a register-then-finalize protocol would be a real behavior change, out of scope.", "disposition": "REJECTED_NOT_MODELED" },
+      { "name": "RequestSecureImagingAccess (token/descriptor-issuing)", "reason": "Contradicts the current never-a-public-URL design invariant (source-regression-tested). Must not be introduced without a separate, explicit decision to change that invariant.", "disposition": "REJECTED" },
+      { "name": "ExportImagingEvidence (as an Imaging-owned command)", "reason": "Imaging-data export is Privacy-domain-owned today (patientPrivacyExportPackage.ts/clinicBulkExportPackage.ts), an accepted cross-domain read per the charter. This contract formally documents export as permanently Privacy-owned; Imaging exposes only the read queries Privacy already calls (via ImagingLifecyclePort).", "disposition": "REJECTED_AS_IMAGING_OWNED" }
+    ],
+    "commands": [
+      { "id": "IMG-CMD-01", "name": "RegisterImagingDevice", "owner": "IMG", "allowedCaller": "IMG routes only (staff, IMAGING_MANAGE_ROLES)", "route": "POST /api/imaging/devices", "currentImplementationMapping": "server/src/routes/imaging.ts:285", "migrationStage": "Stage 1 (facade wrap)", "blockerStatus": "none" },
+      { "id": "IMG-CMD-02", "name": "UpdateImagingDevice", "owner": "IMG", "allowedCaller": "IMG routes only", "route": "PUT /api/imaging/devices/:id", "currentImplementationMapping": "server/src/routes/imaging.ts:310", "migrationStage": "Stage 1", "blockerStatus": "none" },
+      { "id": "IMG-CMD-03", "name": "DeleteImagingDevice", "owner": "IMG", "allowedCaller": "IMG routes only", "route": "DELETE /api/imaging/devices/:id", "currentImplementationMapping": "server/src/routes/imaging.ts:339", "migrationStage": "Stage 1", "blockerStatus": "none (already lock-guarded $transaction, AT-01)" },
+      { "id": "IMG-CMD-04", "name": "CreateImagingRequest", "owner": "IMG", "allowedCaller": "IMG routes only", "route": "POST /api/imaging/requests", "currentImplementationMapping": "server/src/routes/imaging.ts:435", "migrationStage": "Stage 1", "blockerStatus": "none" },
+      { "id": "IMG-CMD-05", "name": "UpdateImagingRequest", "owner": "IMG", "allowedCaller": "IMG routes only", "route": "PATCH /api/imaging/requests/:id", "currentImplementationMapping": "server/src/routes/imaging.ts:487", "migrationStage": "Stage 2 (blocked on CR-03 before wider exposure)", "blockerStatus": "PRE_CONTRACT_EXPOSURE_BLOCKER (CR-03/BLK-02)" },
+      { "id": "IMG-CMD-06", "name": "CancelImagingRequest", "owner": "IMG", "allowedCaller": "IMG routes only", "route": "PATCH /api/imaging/requests/:id/cancel", "currentImplementationMapping": "server/src/routes/imaging.ts:530", "migrationStage": "Stage 2", "blockerStatus": "PRE_CONTRACT_EXPOSURE_BLOCKER (CR-03/BLK-02, shares handler pattern)" },
+      { "id": "IMG-CMD-07", "name": "CreateImagingStudy", "owner": "IMG", "allowedCaller": "IMG routes only (staff upload)", "route": "POST /api/imaging/studies", "currentImplementationMapping": "server/src/routes/imaging.ts:559-689", "migrationStage": "Stage 2 (converges behind ingestImagingStudyCore())", "blockerStatus": "none (duplication is a convergence target, not a correctness blocker)" },
+      { "id": "IMG-CMD-08", "name": "LinkImagingStudy", "owner": "IMG", "allowedCaller": "IMG routes only", "route": "PATCH /api/imaging/studies/:id/link", "currentImplementationMapping": "server/src/routes/imaging.ts:807", "migrationStage": "Stage 1", "blockerStatus": "none" },
+      { "id": "IMG-CMD-09", "name": "UnlinkImagingStudy", "owner": "IMG", "allowedCaller": "IMG routes only", "route": "PATCH /api/imaging/studies/:id/unlink", "currentImplementationMapping": "server/src/routes/imaging.ts:859", "migrationStage": "Stage 1", "blockerStatus": "none" },
+      { "id": "IMG-CMD-10", "name": "ArchiveImagingStudy", "owner": "IMG", "allowedCaller": "IMG routes only", "route": "PATCH /api/imaging/studies/:id/archive", "currentImplementationMapping": "server/src/routes/imaging.ts:916", "migrationStage": "Stage 1", "blockerStatus": "none" },
+      { "id": "IMG-CMD-11", "name": "UnarchiveImagingStudy", "owner": "IMG", "allowedCaller": "IMG routes only", "route": "PATCH /api/imaging/studies/:id/unarchive", "currentImplementationMapping": "server/src/routes/imaging.ts:920", "migrationStage": "Stage 1", "blockerStatus": "none" },
+      { "id": "IMG-CMD-12", "name": "SetImagingLegalHold", "owner": "IMG", "allowedCaller": "IMG routes only, OWNER/ORG_ADMIN only", "route": "PATCH /api/imaging/studies/:id/legal-hold", "currentImplementationMapping": "server/src/routes/imaging.ts:927-970", "migrationStage": "Stage 1", "blockerStatus": "none" },
+      { "id": "BRG-CMD-01", "name": "RegisterImagingBridgeAgent", "owner": "BRG (admin edge)", "allowedCaller": "BRG admin routes only", "route": "POST /api/imaging/bridges", "currentImplementationMapping": "server/src/routes/imaging.ts:1013", "migrationStage": "Stage 5 (physical relocation)", "blockerStatus": "none" },
+      { "id": "BRG-CMD-02", "name": "RevokeImagingBridgeAgent", "owner": "BRG (admin edge)", "allowedCaller": "BRG admin routes only", "route": "POST /api/imaging/bridges/:id/revoke", "currentImplementationMapping": "server/src/routes/imaging.ts:1044", "migrationStage": "Stage 5", "blockerStatus": "none (narrow FP-08 race vs heartbeat, non-blocking)" },
+      { "id": "BRG-CMD-03", "name": "DeleteImagingBridgeAgent", "owner": "BRG (admin edge)", "allowedCaller": "BRG admin routes only", "route": "DELETE /api/imaging/bridges/:id", "currentImplementationMapping": "server/src/routes/imaging.ts:1080", "migrationStage": "Stage 5", "blockerStatus": "none (already lock-guarded $transaction, AT-02)" },
+      { "id": "BRG-CMD-04", "name": "CreateImagingBridgePairing", "owner": "BRG (admin edge)", "allowedCaller": "BRG admin routes only", "route": "POST /api/imaging/bridge-pairings", "currentImplementationMapping": "server/src/routes/imaging.ts:1178", "migrationStage": "Stage 5", "blockerStatus": "none" },
+      { "id": "BRG-CMD-05", "name": "CancelImagingBridgePairing", "owner": "BRG (admin edge)", "allowedCaller": "BRG admin routes only", "route": "DELETE /api/imaging/bridge-pairings/:id", "currentImplementationMapping": "server/src/routes/imaging.ts:1268", "migrationStage": "Stage 5", "blockerStatus": "none (FP-07 narrow cancel-vs-redeem race, non-blocking)" },
+      { "id": "BRG-CMD-06", "name": "RecordImagingBridgeHeartbeat", "owner": "BRG (device edge)", "allowedCaller": "external bridge-agent client only (bridge Bearer token)", "route": "POST /api/public/imaging/bridge/heartbeat", "currentImplementationMapping": "server/src/routes/imagingBridgePublic.ts:130", "migrationStage": "Stage 1 (already isolated; formalize as documented boundary)", "blockerStatus": "none" },
+      { "id": "BRG-CMD-07", "name": "IngestImagingStudy", "owner": "BRG (device edge, writes IMG-owned models)", "allowedCaller": "external bridge-agent client only", "route": "POST /api/public/imaging/bridge/studies", "currentImplementationMapping": "server/src/routes/imagingBridgePublic.ts:199-392", "migrationStage": "Stage 2 (converges behind ingestImagingStudyCore())", "blockerStatus": "none; audit-call asymmetry (no auditImaging call, unlike CreateImagingStudy) is an OPEN QUESTION forwarded to the next task, not resolved here" },
+      { "id": "BRG-CMD-08", "name": "RedeemImagingBridgePairing", "owner": "BRG (device edge)", "allowedCaller": "external bridge-agent client only (pairing-code Bearer)", "route": "POST /api/public/imaging/bridge/pair", "currentImplementationMapping": "server/src/routes/imagingBridgePublic.ts:399-554", "migrationStage": "Stage 1", "blockerStatus": "none (already lock-guarded $transaction, AT-03)" }
+    ],
+    "commandsNote": "All 20 accepted commands (IMG-CMD-01..12, BRG-CMD-01..08) are enumerated in full below in the commands[] array, each carrying the same base field set (id, name, owner, allowedCaller, route, currentImplementationMapping, migrationStage, blockerStatus). No subset of these 20 carries additional extended/full-detail fields beyond this base set in this JSON representation - enumeration here is complete for all 20, and none is a placeholder or summary-only entry. The narrative full-detail schema described in the MD companion's Sec. 13 (input, output, tenant context, actor/RBAC requirement, authorization-failure behavior, validation, idempotency, transaction expectation, audit requirement, storage side effects, backward compatibility) is not yet represented as structured fields for any command in this JSON; where relevant, that detail is captured in prose elsewhere in this document (contradictions[], blockerDecisions[], expandMigrateContractStages[]). This array is adopted unchanged from F2-PREP-006-D's candidateCommands array except for the 6 explicit rejections above (see rejectedItems); the two F2-CC-14 revisions add query methods (IMG-QRY-13/IMG-QRY-14 in queries[]), not new commands, so commands[] itself is unchanged by that revision.",
+    "queries": [
+      { "id": "IMG-QRY-01", "name": "GetImagingStudy", "owner": "IMG", "route": "GET /api/imaging/studies/:id", "migrationStage": "Stage 1" },
+      { "id": "IMG-QRY-02", "name": "ListPatientImaging", "owner": "IMG", "allowedCaller": "IMG routes + Patients read-only enrichment", "route": "GET /api/patients/:patientId/imaging", "migrationStage": "Stage 1" },
+      { "id": "IMG-QRY-03", "name": "ListImagingRequests", "owner": "IMG", "route": "GET /api/imaging/requests", "migrationStage": "Stage 1" },
+      { "id": "IMG-QRY-04", "name": "ListUnlinkedImagingStudies", "owner": "IMG", "route": "GET /api/imaging/unlinked", "migrationStage": "Stage 1" },
+      { "id": "IMG-QRY-05", "name": "ListImagingDevices", "owner": "IMG", "route": "GET /api/imaging/devices", "migrationStage": "Stage 1" },
+      { "id": "IMG-QRY-06", "name": "StreamImagingImagePreview", "owner": "IMG", "route": "GET /api/imaging/studies/:id/images/:imageId/preview", "migrationStage": "Stage 1" },
+      { "id": "IMG-QRY-07", "name": "StreamImagingImageDownload", "owner": "IMG", "route": "GET /api/imaging/studies/:id/images/:imageId/download", "migrationStage": "Stage 1" },
+      { "id": "BRG-QRY-08", "name": "ListImagingBridgeAgents", "owner": "BRG (admin edge)", "route": "GET /api/imaging/bridges", "migrationStage": "Stage 5" },
+      { "id": "BRG-QRY-09", "name": "GetImagingBridgePairingStatus", "owner": "BRG (admin edge)", "route": "GET /api/imaging/bridge-pairings/:id", "migrationStage": "Stage 5" },
+      { "id": "BRG-QRY-10", "name": "GetImagingBridgeOnboardingConfig", "owner": "BRG (admin edge)", "route": "GET /api/imaging/bridge-onboarding/config", "migrationStage": "Stage 5" },
+      { "id": "BRG-QRY-11", "name": "GetImagingBridgeBootstrap", "owner": "BRG (device edge)", "route": "GET /api/public/imaging/bridge/bootstrap", "migrationStage": "Stage 1" },
+      { "id": "BRG-QRY-12", "name": "GetImagingBridgeUpdateDescriptor", "owner": "BRG (device edge)", "route": "GET /api/public/imaging/bridge/update", "migrationStage": "Stage 1" },
+      { "id": "IMG-QRY-13", "name": "GetImagesForLifecycleReview", "owner": "IMG", "allowedCaller": "Privacy/KVKK only (ImagingLifecyclePort)", "route": "no route today - replaces DAV-01/DAV-02's direct Prisma reads", "migrationStage": "Stage 3", "status": "NEW, added by F2-CC-14 revision" },
+      { "id": "IMG-QRY-14", "name": "CheckImageStorageExists", "owner": "IMG", "allowedCaller": "Privacy/KVKK only (ImagingLifecyclePort)", "route": "no route today - replaces SB-01's direct fileStorage.fileExists() call", "migrationStage": "Stage 3", "status": "NEW, added by F2-CC-14 revision" }
+    ],
+    "events": [
+      {
+        "id": "IMG-EVT-01",
+        "name": "ImagingStudyReceived",
+        "status": "candidate, NOT_IMPLEMENTED",
+        "mechanism": "DEFERRED - no event bus/queue/outbox exists in the codebase today. Mechanism choice (in-process synchronous call vs. a Postgres-backed outbox table matching an existing program pattern) is explicitly not decided by this task and is left to the Stage 1 implementation task."
+      }
+    ]
+  },
+  "characterizationTestGate": {
+    "totalTestsReconciled": 32,
+    "totalBlocking": 21,
+    "totalNonBlocking": 11,
+    "newTestsAddedByThisConsolidation": [
+      {
+        "id": "CT-32",
+        "area": "retry-failure / concurrency",
+        "contractTarget": "UpdateImagingRequest / CancelImagingRequest (IMG-CMD-05/06)",
+        "testLevel": "db-integration",
+        "infrastructure": "disposable Postgres, two concurrent requests against the same running server instance",
+        "tenantFixtures": "single clinic, single ImagingRequest row seeded in 'requested' status",
+        "storageFixtures": "none required (no file involved in this path)",
+        "expectedAssertions": [
+          "two concurrent PATCH requests against the same ImagingRequest, transitioning to different terminal-adjacent statuses, do not both succeed silently - the losing request's write is either rejected or the final state is deterministic, not a last-write-wins clobber of an intervening status change",
+          "characterizes CURRENT behavior (today: both can succeed, clobbering each other, per FP-06) - this test is written to first PROVE the current gap exists, then re-run and must be updated (not deleted) once CR-03's guard is implemented"
+        ],
+        "cleanupMethod": "disposable Postgres schema/container teardown per the existing F1-003-P2A pattern",
+        "ciLayer": "same disposable-Postgres CI layer as CT-02/CT-03/CT-07/CT-08 (Layer 3/4 per F1-003-P3's ci-layers.yml)",
+        "failureInterpretation": "If this test observes [200,200] with a silently-clobbered final state today, that is the EXPECTED baseline (confirms FP-06); if it observes a guarded, deterministic outcome, CR-03 has already been fixed elsewhere and this contract's blocker note (blockerDecisions.imagingRequestPatchConcurrency) should be updated by the task that made the fix.",
+        "status": "blocking",
+        "blockedStageGate": "Stage 1 (must exist and characterize current behavior before the facade is built, per the same rule applied to CT-02/03/06/etc.)"
+      }
+    ],
+    "bucketed": {
+      "mandatoryBeforeRefactor": {
+        "gate": "Stage 1 (additive facade) may not begin until these pass against current behavior",
+        "count": 18,
+        "tests": ["CT-02","CT-03","CT-06","CT-07","CT-08","CT-10","CT-11","CT-12","CT-13","CT-14","CT-16","CT-17","CT-19","CT-21","CT-26","CT-27","CT-28","CT-32"]
+      },
+      "mandatoryBeforeCallerMigration": {
+        "gate": "Stage 3 (Privacy/KVKK caller migration onto ImagingLifecyclePort) may not begin until these pass",
+        "count": 3,
+        "tests": ["CT-05","CT-23","CT-30"]
+      },
+      "mandatoryBeforeDirectAccessRemoval": {
+        "gate": "Stage 7 (contract removal/cleanup) may not remove the old direct-Prisma compatibility path until this still passes",
+        "count": 1,
+        "tests": ["CT-30"],
+        "note": "CT-30 is required at both the caller-migration gate and the removal gate (it must keep passing through the whole transition, not merely at one checkpoint); it is not double-counted in totalBlocking."
+      },
+      "nonBlockingRegressionCoverage": {
+        "count": 11,
+        "tests": ["CT-01","CT-04","CT-09","CT-15","CT-18","CT-20","CT-22","CT-24","CT-25","CT-29","CT-31"]
+      },
+      "deferredF10": {
+        "count": 0,
+        "note": "No characterization test targets F10 (imaging AI/processing) directly, since no such code exists yet to characterize. CT-29 (ImagingBridgePairingDevice forward-compat placeholder) remains classified non-blocking, not deferred/F10, since it targets a present-day schema gap, not F10 scope."
+      }
+    },
+    "openQuestionForwardedNotResolved": "Whether IngestImagingStudy's missing audit call (no auditImaging invocation, unlike CreateImagingStudy) is an intentional bridge-volume design choice or a real gap is NOT resolved by this task; forwarded to the next implementation task as a product/security decision to make before or during Stage 2."
+  },
+  "expandMigrateContractStages": [
+    {
+      "stage": 0,
+      "name": "Characterization coverage",
+      "dependencies": ["This contract document approved by the program owner"],
+      "filesAffected": ["server/src/tests/imaging*.test.ts (new/extended, exact files TBD by the implementing task)"],
+      "compatibilityRequirements": "None - test-only, zero application code changed.",
+      "rollbackMethod": "Revert the test-only commit(s); zero production risk.",
+      "tenantKvkkImpact": "None - characterization only, no behavior change.",
+      "testsRequired": "All 18 Stage-1-gating tests plus CT-32; may be implemented incrementally but Stage 1 cannot start until all 18+CT-32 exist and pass against current behavior.",
+      "mergeGate": "Normal PR review; must not modify any non-test file.",
+      "deploymentGate": "None required - test-only.",
+      "productionVerificationRequirement": "None."
+    },
+    {
+      "stage": 1,
+      "name": "Additive public contract/facade",
+      "dependencies": ["Stage 0 complete"],
+      "filesAffected": ["server/src/services/imaging/public.ts (new, IMG)", "server/src/routes/imagingBridgePublic.ts (documentation-only formalization, device edge)", "relocate redactStudyLegalHoldReason into a services/imaging module"],
+      "compatibilityRequirements": "Total - old internal import paths remain fully functional; the new contract layer is additive only.",
+      "rollbackMethod": "Delete the new public.ts/facade file(s); nothing else depends on them yet.",
+      "tenantKvkkImpact": "None - wraps existing checks unchanged.",
+      "testsRequired": "New seam tests asserting the facade's input/output matches the wrapped internal function 1:1; full Stage-0 suite re-run green.",
+      "mergeGate": "Full existing Imaging/Bridge test suite green; zero behavior change verified by seam tests.",
+      "deploymentGate": "Standard release process; additive/unused-in-production code path initially.",
+      "productionVerificationRequirement": "None required (additive, no new caller yet)."
+    },
+    {
+      "stage": 2,
+      "name": "Duplicate ingest convergence + ImagingRequest PATCH concurrency hardening",
+      "dependencies": ["Stage 1 complete", "CR-03 guard implemented before this stage's UpdateImagingRequest/CancelImagingRequest paths are considered contract-complete"],
+      "filesAffected": ["server/src/routes/imaging.ts", "server/src/routes/imagingBridgePublic.ts", "new shared ingestImagingStudyCore() function location TBD by implementing task"],
+      "compatibilityRequirements": "Total for callers - route paths and response shapes unchanged; only the internal implementation converges.",
+      "rollbackMethod": "Revert the convergence commit; both routes' prior independent implementations are restored verbatim from version control.",
+      "tenantKvkkImpact": "None expected if convergence is behavior-preserving; CT-28's snapshot test is the explicit regression guard.",
+      "testsRequired": "CT-07, CT-08, CT-10, CT-11, CT-12, CT-13, CT-14, CT-28, CT-32 all green post-convergence.",
+      "mergeGate": "All Stage-1-gating tests plus CT-32 still green; no route-path or response-shape diff outside what CT-28 already snapshots.",
+      "deploymentGate": "One full business day of stable error-rate metrics on both upload routes before Stage 3.",
+      "productionVerificationRequirement": "Confirm no new 5xx/error-rate change on POST /api/imaging/studies and POST /api/public/imaging/bridge/studies."
+    },
+    {
+      "stage": 3,
+      "name": "Privacy/KVKK caller migration onto ImagingLifecyclePort (F2-CC-14, revised)",
+      "dependencies": ["Stage 2 complete", "CT-30 passing"],
+      "filesAffected": ["server/src/services/privacy/deletionReviewInventory.ts", "server/src/services/privacy/orphanFileInspection.ts", "server/src/services/privacy/patientAnonymization.ts", "new server/src/services/imaging/imagingLifecyclePort.ts"],
+      "compatibilityRequirements": "TC-01 pass-through facade available if Privacy's own release cadence differs from Imaging's.",
+      "rollbackMethod": "Revert each Privacy caller's import-path change individually; the port implementation itself can remain even if a caller is reverted.",
+      "tenantKvkkImpact": "None expected - identical read/write semantics behind the new port; CT-30 is the explicit non-negotiable compatibility guard for this exact concern.",
+      "testsRequired": "CT-30 (blocking), full existing kvkkAttachmentImagingLifecycle.test.ts suite green.",
+      "mergeGate": "CT-30 green; no change to any KVKK-relevant field name, redaction rule, or legal-hold interaction.",
+      "deploymentGate": "One full business day stable post-migration before Stage 4.",
+      "productionVerificationRequirement": "Confirm anonymization/orphan-inspection/deletion-review flows still behave identically in a production-safe smoke check."
+    },
+    {
+      "stage": 4,
+      "name": "Backup/Storage caller migration (formalize accepted exception)",
+      "dependencies": ["Stage 3 complete"],
+      "filesAffected": ["server/src/services/fileBackupService.ts (documentation-only formalization, no code change required since it never mutates Imaging models)"],
+      "compatibilityRequirements": "None - read-only exception, no interface change needed.",
+      "rollbackMethod": "N/A - documentation-only stage.",
+      "tenantKvkkImpact": "This stage's migration does NOT itself close PZ-IMG-03 or make any KVKK safeguard-sufficiency claim - see blockerDecisions.pzImg03.",
+      "testsRequired": "None new; existing fileBackupService tests unaffected.",
+      "mergeGate": "Explicit documentation that this exception is formalized, not closed for KVKK purposes.",
+      "deploymentGate": "None required - no code change.",
+      "productionVerificationRequirement": "None required for this stage; PZ-IMG-03's own resolution requires a separate, security-focused production verification not scheduled here."
+    },
+    {
+      "stage": 5,
+      "name": "Internal IMG/BRG route/service boundary cleanup",
+      "dependencies": ["Stage 2 complete", "ImagingBridgePairingDevice clinicId/organizationId column added (separately authorized migration) recommended complete before this stage closes"],
+      "filesAffected": ["server/src/routes/imaging.ts (BRG-RT-01..08 relocation)", "new bridge-admin route file location TBD", "extracted authenticateBridgeAgent module", "server/src/jobs/startBackgroundJobs.ts (if job registration path changes)"],
+      "compatibilityRequirements": "Total - URL paths unchanged, only file location of handlers moves.",
+      "rollbackMethod": "Revert the index.ts/route-file-relocation commit; same-day, low-risk since URLs are unchanged.",
+      "tenantKvkkImpact": "None expected - no authorization/scoping logic changes, only file location.",
+      "testsRequired": "Full existing BRG test suite green; a real-HTTP smoke test hitting each relocated route.",
+      "mergeGate": "npm run typecheck clean (a missed import is a compile error, not a silent failure).",
+      "deploymentGate": "One full business day stable post-relocation.",
+      "productionVerificationRequirement": "Confirm each relocated route's health/error-rate is unchanged for one full business day."
+    },
+    {
+      "stage": 6,
+      "name": "Direct-access enforcement/reporting (dependency-cruiser)",
+      "dependencies": ["Stage 5 complete (or at least Stages 1-3, since the tool's forbidden-edge rule targets the Privacy/Storage exceptions being on the allowlist, not the BRG relocation)"],
+      "filesAffected": ["NOT installed/configured by this task - a future implementation task adds one new devDependency, one config file, one CI job, per dependencyCruiserDecision"],
+      "compatibilityRequirements": "Report-only initially; zero CI-blocking impact.",
+      "rollbackMethod": "Delete the devDependency, config file, and CI step - single, trivially revertible PR.",
+      "tenantKvkkImpact": "None - CI/build-time only.",
+      "testsRequired": "The tool's own report run, reviewed manually for false positives before any promotion to warning/blocking mode.",
+      "mergeGate": "First report reviewed by the task owner; confirmed false positives added to the allowlist with a one-line justification.",
+      "deploymentGate": "None - CI-only change.",
+      "productionVerificationRequirement": "None."
+    },
+    {
+      "stage": 7,
+      "name": "Contract removal/cleanup",
+      "dependencies": ["Stage 3 complete", "Full-repository grep confirms zero remaining imports of pre-Stage-3 internal direct-Prisma paths", "CT-30 still passing"],
+      "filesAffected": ["Deletion of TC-01's compatibility pass-through facade, if it was ever added"],
+      "compatibilityRequirements": "Intentionally broken for the old internal path, only after typecheck proves nothing still uses it.",
+      "rollbackMethod": "Revert the deletion commit; trivial.",
+      "tenantKvkkImpact": "None expected - this stage removes dead code paths only.",
+      "testsRequired": "Full existing test suite; npm run typecheck as the primary safety net.",
+      "mergeGate": "npm run typecheck clean.",
+      "deploymentGate": "None expected behavior change - verification limited to confirming the deploy succeeded and gates stayed green.",
+      "productionVerificationRequirement": "None beyond confirming the deploy itself succeeded."
+    }
+  ],
+  "finalReadinessDecision": {
+    "decision": "READY_FOR_CHARACTERIZATION_TEST_IMPLEMENTATION",
+    "rationale": "Evidence across all four discovery packages (A/B/C/D) is deep, mutually corroborating, and resolves cleanly into one contract with only 5 contradictions, all Low/Medium severity and all resolved above. Imaging's structural profile remains the cleanest in the program (zero live cross-domain transaction coupling, DAV-06; only 2 real cross-domain violations, both metadata-only and already mapped to a named port). However, real, named blockers exist before Stage 1+ (CR-03/BLK-02 before request-mutation exposure; PZ-IMG-03 before any Backup/Storage KVKK-safeguard closure claim; a schema migration recommended before Stage 5 closes) - these do not block writing and running the characterization-test suite itself (Stage 0), which by design characterizes current behavior INCLUDING these known gaps. Runtime modularization (Stage 1 and beyond) is explicitly NOT approved by this decision.",
+    "runtimeModularizationApproved": false,
+    "notApprovedItems": [
+      "Any Stage 1+ code/route/service/schema change",
+      "dependency-cruiser installation or configuration",
+      "Caller migration of any kind",
+      "Closure of PZ-IMG-03, R-070, R-046, or R-071",
+      "G1/G2 approval"
+    ]
+  },
+  "programControlUpdates": {
+    "created": [
+      "docs/program/architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md",
+      "docs/program/architecture/evidence/F2-PREP-006-E_imaging_boundary_contract.json",
+      "docs/program/evidence/F2-PREP-006-E_CONSOLIDATION_EVIDENCE.md"
+    ],
+    "updated": [
+      "docs/program/CURRENT_PHASE.md",
+      "docs/program/NORAMEDI_MASTER_TRACKER.md",
+      "docs/program/phases/F2_MODULAR_BOUNDARIES.md",
+      "docs/program/evidence/README.md"
+    ],
+    "notModified": [
+      "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md",
+      "docs/program/evidence/F2-PREP-006-A_img_brg_inventory.json",
+      "docs/program/evidence/F2-PREP-006-B_IMAGING_DATA_STORAGE_TENANT_KVKK_ASSESSMENT.md",
+      "docs/program/evidence/F2-PREP-006-B_imaging_data_storage_kvkk.json",
+      "docs/program/evidence/F2-PREP-006-C_IMAGING_CALLER_DIRECT_ACCESS_AND_TRANSACTION_MAP.md",
+      "docs/program/evidence/F2-PREP-006-C_imaging_callers_transactions.json",
+      "docs/program/evidence/F2-PREP-006-D_IMAGING_PUBLIC_CONTRACT_AND_TEST_DESIGN.md",
+      "docs/program/evidence/F2-PREP-006-D_imaging_contract_test_design.json"
+    ],
+    "adrBacklogChange": "None - no genuinely new ADR candidate identified. ADR-015 (module boundaries and public contracts, ACCEPTED_WITH_CONDITIONS) already covers contract syntax/versioning/enforcement as a deferred-to-F2 decision; this contract operates within that ADR's existing framework and does not require a new or amended ADR.",
+    "riskRegisterChange": "None - R-070 (OPEN), R-046 (OPEN), R-071 (CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION) are all general program-level risks unrelated to Imaging specifically; this task's evidence does not materially change any of their status or evidence basis. PZ-IMG-03 is not a numbered RISK_REGISTER.md row (it is an F2-PREP-002 finding ID) and remains OPEN per this task's own refinement above."
+  },
+  "statusSeparation": {
+    "agentCompleted": true,
+    "validationsPassed": "see validationCommands[]",
+    "prOpened": "true (recorded by the calling task after PR creation)",
+    "merged": false,
+    "deployed": false,
+    "productionVerified": false,
+    "runtimeImplementationComplete": false,
+    "characterizationTestsComplete": false,
+    "callerMigrationComplete": false,
+    "f2Complete": false
+  },
+  "validationCommands": [
+    "node -e \"JSON.parse(require('fs').readFileSync('docs/program/architecture/evidence/F2-PREP-006-E_imaging_boundary_contract.json','utf8'))\" -> exit 0",
+    "node -e \"const j=require('./docs/program/architecture/evidence/F2-PREP-006-E_imaging_boundary_contract.json'); console.log(j.acceptedContractCatalogue.commandsAccepted, j.characterizationTestGate.totalTestsReconciled, j.characterizationTestGate.totalBlocking)\" -> 20 32 21",
+    "git diff --check -> clean",
+    "git status --short -- docs/program -> only new/modified files under docs/program/**",
+    "git status --short -- server src .github -> empty (no non-docs path touched)"
+  ]
+}
