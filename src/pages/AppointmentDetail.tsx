@@ -19,7 +19,7 @@ import {
   Edit
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { appointmentService, taskService, treatmentCaseService } from '../services/api';
+import { appointmentService, taskService, treatmentCaseService, noShowService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
 import { useAuth } from '../context/AuthContext';
 import TaskForm from '../components/TaskForm';
@@ -27,7 +27,7 @@ import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import PrepareMessageModal from '../components/PrepareMessageModal';
 import AppointmentForm from '../components/AppointmentForm';
 import { getErrorMessage } from '../utils/errors';
-import { canCreateAppointment } from '../utils/permissions';
+import { canCreateAppointment, canManageNoShows } from '../utils/permissions';
 
 const AppointmentDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -46,6 +46,7 @@ const AppointmentDetail: React.FC = () => {
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canEdit = canCreateAppointment(user);
+  const canMarkNoShow = canManageNoShows(user);
 
   const fetchDetail = async () => {
     if (!id) return;
@@ -72,7 +73,14 @@ const AppointmentDetail: React.FC = () => {
   const handleStatusUpdate = async (newStatus: string) => {
     if (!id) return;
     try {
-      await appointmentService.updateStatus(id, newStatus);
+      if (newStatus === 'no_show') {
+        // Dedicated no-show endpoint records noShowMarkedAt/noShowMarkedById,
+        // initializes recoveryStatus, and writes the no-show activity/audit
+        // trail — the generic status PUT does none of that.
+        await noShowService.markNoShow(id);
+      } else {
+        await appointmentService.updateStatus(id, newStatus);
+      }
       fetchDetail();
     } catch (err) {
       console.error(err);
@@ -324,12 +332,14 @@ const AppointmentDetail: React.FC = () => {
           <div className="card p-6">
             <h3 className="font-bold mb-4">{t('common:actions')}</h3>
             <div className="space-y-3">
-              <button 
-                onClick={() => handleStatusUpdate('no_show')}
-                className="w-full btn-secondary text-gray-600 hover:bg-gray-50"
-              >
-                {t('appointments:actions.noShow')}
-              </button>
+              {canMarkNoShow && (
+                <button
+                  onClick={() => handleStatusUpdate('no_show')}
+                  className="w-full btn-secondary text-gray-600 hover:bg-gray-50"
+                >
+                  {t('appointments:actions.noShow')}
+                </button>
+              )}
               <button 
                 onClick={() => handleStatusUpdate('rescheduled')}
                 className="w-full btn-secondary text-gray-600 hover:bg-gray-50"

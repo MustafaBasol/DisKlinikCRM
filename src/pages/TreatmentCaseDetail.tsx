@@ -22,11 +22,15 @@ import {
   Circle,
   Link as LinkIcon,
   Unlink,
-  Package
+  Package,
+  Download
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService, appointmentService, inventoryService, serviceService, treatmentPackageService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+import { useAuth } from '../context/AuthContext';
+import { canDownloadTreatmentProposal } from '../utils/permissions';
+import { getApiErrorMessage } from '../utils/errors';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import TaskForm from '../components/TaskForm';
 import PaymentForm from '../components/PaymentForm';
@@ -34,9 +38,12 @@ import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
 import AppointmentForm from '../components/AppointmentForm';
 
+type ProcedureStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
+
 const TreatmentCaseDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { t } = useTranslation(['treatmentCases', 'common', 'tasks', 'appointments', 'messages', 'insurance', 'payments', 'patients']);
   const { defaultCurrency, formatCurrency, formatDate, formatTime, formatDateTime } = useClinicPreferences();
   
@@ -58,6 +65,8 @@ const TreatmentCaseDetail: React.FC = () => {
   const [stageSaving, setStageSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proceduresError, setProceduresError] = useState<string | null>(null);
+  const [proposalDownloading, setProposalDownloading] = useState(false);
+  const [proposalError, setProposalError] = useState<string | null>(null);
 
   // Treatment procedures
   const [procedures, setProcedures] = useState<any[]>([]);
@@ -65,7 +74,15 @@ const TreatmentCaseDetail: React.FC = () => {
   const [isProcFormOpen, setIsProcFormOpen] = useState(false);
   const [editingProc, setEditingProc] = useState<any | null>(null);
   const [procSaving, setProcSaving] = useState(false);
-  const [procForm, setProcForm] = useState({
+  const [procForm, setProcForm] = useState<{
+    procedureName: string;
+    serviceId: string;
+    toothFdi: string;
+    status: ProcedureStatus;
+    estimatedCost: string;
+    notes: string;
+    scheduledDate: string;
+  }>({
     procedureName: '',
     serviceId: '',
     toothFdi: '',
@@ -154,6 +171,29 @@ const TreatmentCaseDetail: React.FC = () => {
       alert(err.response?.data?.error || t('common:errorGeneric'));
     } finally {
       setStageSaving(false);
+    }
+  };
+
+  const handleDownloadProposal = async () => {
+    if (!tCase || proposalDownloading) return;
+    setProposalDownloading(true);
+    setProposalError(null);
+    let objectUrl: string | null = null;
+    try {
+      const response = await treatmentCaseService.getProposalPdf(tCase.id);
+      const blob = response.data as Blob;
+      objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `treatment-proposal-${tCase.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      setProposalError(await getApiErrorMessage(err, t('treatmentCases:proposal.downloadFailed')));
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setProposalDownloading(false);
     }
   };
 
@@ -288,12 +328,12 @@ const TreatmentCaseDetail: React.FC = () => {
       alert(err.response?.data?.error || t('treatmentCases:appointments.unlinkFailed'));
     }
   };
-  const PROC_STATUS = {
-    planned:     { dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-100' },
-    in_progress: { dot: 'bg-blue-500',    badge: 'bg-blue-50 text-blue-700 border-blue-100' },
-    completed:   { dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-    cancelled:   { dot: 'bg-gray-400',    badge: 'bg-gray-50 text-gray-500 border-gray-200' },
-  } as const;
+  const PROC_STATUS: Record<ProcedureStatus, { dot: string; badge: string; selected: string }> = {
+    planned:     { dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-100',   selected: 'bg-amber-50 text-amber-700 border-amber-400' },
+    in_progress: { dot: 'bg-blue-500',    badge: 'bg-blue-50 text-blue-700 border-blue-100',      selected: 'bg-blue-50 text-blue-700 border-blue-400' },
+    completed:   { dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', selected: 'bg-emerald-50 text-emerald-700 border-emerald-400' },
+    cancelled:   { dot: 'bg-gray-400',    badge: 'bg-gray-50 text-gray-500 border-gray-200',       selected: 'bg-gray-100 text-gray-700 border-gray-400' },
+  };
 
   if (loading) {
     return (
@@ -383,19 +423,33 @@ const TreatmentCaseDetail: React.FC = () => {
               </button>
             </>
           )}
-          <button 
+          <button
             onClick={() => setIsMessageModalOpen(true)}
             className="btn-secondary"
           >
             <MessageSquare size={18} />
             {t('messages:prepare', { defaultValue: 'Prepare Follow-up' })}
           </button>
+          {canDownloadTreatmentProposal(user) && (
+            <button
+              onClick={handleDownloadProposal}
+              disabled={proposalDownloading}
+              className="btn-secondary disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {proposalDownloading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+              {proposalDownloading ? t('treatmentCases:proposal.preparing') : t('treatmentCases:proposal.download')}
+            </button>
+          )}
           <button onClick={() => setIsEditOpen(true)} className="btn-primary">
             <Edit2 size={18} />
             {t('common:edit')}
           </button>
         </div>
       </div>
+
+      {proposalError && (
+        <div className="px-1 -mt-2 text-sm text-red-600">{proposalError}</div>
+      )}
 
       {/* Progress Bar */}
       {tCase.stage !== 'lost' && (
@@ -1339,13 +1393,15 @@ const TreatmentCaseDetail: React.FC = () => {
               <div>
                 <label className="label">{t('treatmentCases:procedures.fields.status')}</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {(Object.entries(PROC_STATUS) as [string, typeof PROC_STATUS[keyof typeof PROC_STATUS]][]).map(([s, cfg]) => (
+                  {(Object.entries(PROC_STATUS) as [ProcedureStatus, typeof PROC_STATUS[ProcedureStatus]][]).map(([s, cfg]) => (
                     <button
                       key={s}
+                      type="button"
+                      aria-pressed={procForm.status === s}
                       onClick={() => setProcForm((f) => ({ ...f, status: s }))}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-xs font-medium transition-all ${
                         procForm.status === s
-                          ? `${cfg.badge} border-current`
+                          ? cfg.selected
                           : 'bg-gray-50 dark:bg-gray-700 text-gray-500 border-gray-200 dark:border-gray-600 hover:border-gray-300'
                       }`}
                     >

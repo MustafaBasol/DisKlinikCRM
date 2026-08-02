@@ -256,10 +256,20 @@ export async function cleanupAllFixtures(): Promise<void> {
   const clinicIds = clinics.map((c) => c.id);
 
   await prisma.activityLog.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  // ExternalCalendarAppointmentLink.appointmentId references Appointment.id —
+  // must clear before Appointment (and before AppointmentRequest, since a
+  // link may also reference the clinic independently of the appointment FK).
+  await prisma.externalCalendarAppointmentLink.deleteMany({ where: { clinicId: { in: clinicIds } } });
   // AppointmentRequest before Appointment: AppointmentRequest.convertedAppointmentId
   // references Appointment.id.
   await prisma.appointmentRequest.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.appointment.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  // ExternalCalendarMapping/InboundEvent reference ExternalCalendarIntegration,
+  // which itself references Clinic — clear children first, then the
+  // integration row, before Clinic can be deleted below.
+  await prisma.externalCalendarMapping.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  await prisma.externalCalendarInboundEvent.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  await prisma.externalCalendarIntegration.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.sentMessage.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.messageTemplate.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.postTreatmentMessageQueue.deleteMany({ where: { clinicId: { in: clinicIds } } });

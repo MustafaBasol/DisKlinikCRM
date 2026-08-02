@@ -133,10 +133,15 @@ const PatientDetail: React.FC = () => {
   const [messageChannel, setMessageChannel] = useState<'all' | 'whatsapp' | 'instagram' | 'post-treatment'>('all');
   const [postTreatmentQueue, setPostTreatmentQueue] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [tasksError, setTasksError] = useState(false);
   const [treatmentCases, setTreatmentCases] = useState<any[]>([]);
+  const [treatmentCasesError, setTreatmentCasesError] = useState(false);
   const [payments, setPayments] = useState<any[]>([]);
+  const [paymentsError, setPaymentsError] = useState(false);
   const [paymentPlans, setPaymentPlans] = useState<any[]>([]);
   const [insuranceProvisions, setInsuranceProvisions] = useState<any[]>([]);
+  const [insuranceError, setInsuranceError] = useState(false);
+  const [attachmentsError, setAttachmentsError] = useState(false);
   const paymentCurrency = payments[0]?.currency || treatmentCases[0]?.currency || defaultCurrency;
   const patientFullName = patient
     ? String(
@@ -150,18 +155,38 @@ const PatientDetail: React.FC = () => {
   const fetchPatient = async () => {
     if (!id) return;
     setLoading(true);
+    setTasksError(false);
+    setTreatmentCasesError(false);
+    setPaymentsError(false);
+    setInsuranceError(false);
+    setAttachmentsError(false);
     try {
       const response = await patientService.getById(id);
       setPatient(response.data);
-      
-      const tasksRes = await taskService.getAll({ patientId: id });
-      setTasks(tasksRes.data);
 
-      const treatmentsRes = await treatmentCaseService.getAll({ patientId: id });
-      setTreatmentCases(treatmentsRes.data);
+      try {
+        const tasksRes = await taskService.getAll({ patientId: id });
+        setTasks(tasksRes.data);
+      } catch {
+        setTasks([]);
+        setTasksError(true);
+      }
 
-      const paymentsRes = await paymentService.getAll({ patientId: id });
-      setPayments(paymentsRes.data);
+      try {
+        const treatmentsRes = await treatmentCaseService.getAll({ patientId: id });
+        setTreatmentCases(treatmentsRes.data);
+      } catch {
+        setTreatmentCases([]);
+        setTreatmentCasesError(true);
+      }
+
+      try {
+        const paymentsRes = await paymentService.getAll({ patientId: id });
+        setPayments(paymentsRes.data);
+      } catch {
+        setPayments([]);
+        setPaymentsError(true);
+      }
 
       try {
         const plansRes = await paymentPlanService.getAll({ patientId: id });
@@ -170,11 +195,21 @@ const PatientDetail: React.FC = () => {
         setPaymentPlans([]);
       }
 
-      const insuranceRes = await insuranceProvisionService.getAll({ patient_id: id });
-      setInsuranceProvisions(insuranceRes.data);
+      try {
+        const insuranceRes = await insuranceProvisionService.getAll({ patient_id: id });
+        setInsuranceProvisions(insuranceRes.data);
+      } catch {
+        setInsuranceProvisions([]);
+        setInsuranceError(true);
+      }
 
-      const attachRes = await attachmentService.getAll(id);
-      setAttachments(attachRes.data);
+      try {
+        const attachRes = await attachmentService.getAll(id);
+        setAttachments(attachRes.data);
+      } catch {
+        setAttachments([]);
+        setAttachmentsError(true);
+      }
 
       try {
         const ptRes = await (api as any).get('/post-treatment-queue', { params: { patientId: id, limit: 100 } });
@@ -448,6 +483,9 @@ const PatientDetail: React.FC = () => {
                 const lastPmt = payments.find((p: any) => p.paymentStatus === 'paid');
                 const currency = paymentCurrency;
                 const fmt = (n: number) => formatCurrency(n, currency, { maximumFractionDigits: 0 });
+                if (paymentsError || treatmentCasesError) {
+                  return <p role="alert" className="text-sm text-red-500 italic">{t('common:errorGeneric')}</p>;
+                }
                 if (totalTreatment === 0 && payments.length === 0) {
                   return <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noPayments')}</p>;
                 }
@@ -522,6 +560,9 @@ const PatientDetail: React.FC = () => {
                     const lastPmt = payments.find((p: any) => p.paymentStatus === 'paid');
                     const currency = paymentCurrency;
                     const fmt = (n: number) => formatCurrency(n, currency, { maximumFractionDigits: 0 });
+                    if (paymentsError || treatmentCasesError) {
+                      return <p role="alert" className="text-sm text-red-500 italic">{t('common:errorGeneric')}</p>;
+                    }
                     if (totalTreatment === 0 && payments.length === 0) {
                       return <p className="text-sm text-gray-400 italic">{t('patients:detail.overview.noPayments')}</p>;
                     }
@@ -797,7 +838,7 @@ const PatientDetail: React.FC = () => {
                   </div>
                 )) : (
                   <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed">
-                    {t('common:noData')}
+                    {tasksError ? <span role="alert" className="text-red-500">{t('common:errorGeneric')}</span> : t('common:noData')}
                   </div>
                 )}
               </div>
@@ -842,7 +883,11 @@ const PatientDetail: React.FC = () => {
                       </p>
                     </div>
                   </Link>
-                )) : (
+                )) : treatmentCasesError ? (
+                  <div role="alert" className="text-center py-12 text-red-500 bg-gray-50 rounded-xl border-2 border-dashed">
+                    <p>{t('common:errorGeneric')}</p>
+                  </div>
+                ) : (
                   <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed">
                     <p>{t('common:noData')}</p>
                     <p className="text-xs mt-1">{t('patients:detail.createTreatmentCaseHint')}</p>
@@ -939,7 +984,11 @@ const PatientDetail: React.FC = () => {
                           </td>
                           <td className="p-3 text-gray-500">{formatDate(p.paidAt)}</td>
                         </tr>
-                      )) : (
+                      )) : paymentsError ? (
+                        <tr>
+                          <td role="alert" colSpan={4} className="p-8 text-center text-red-500 italic">{t('common:errorGeneric')}</td>
+                        </tr>
+                      ) : (
                         <tr>
                           <td colSpan={4} className="p-8 text-center text-gray-400 italic">{t('payments:empty')}</td>
                         </tr>
@@ -1042,7 +1091,9 @@ const PatientDetail: React.FC = () => {
                       <p className="text-xs text-gray-500 mt-2">{formatCurrency(provision.requestedAmount, provision.currency || paymentCurrency)}</p>
                     </div>
                   </Link>
-                )) : (
+                )) : insuranceError ? (
+                  <div role="alert" className="text-center py-12 text-red-500 bg-gray-50 rounded-xl border-2 border-dashed">{t('common:errorGeneric')}</div>
+                ) : (
                   <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed">{t('common:noData')}</div>
                 )}
               </div>
@@ -1190,6 +1241,11 @@ const PatientDetail: React.FC = () => {
             </div>
             {attachmentsLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary-500" /></div>
+            ) : attachmentsError ? (
+              <div role="alert" className="text-center py-10 text-red-500">
+                <Paperclip size={36} className="mx-auto mb-2 opacity-30" />
+                <p>{t('common:errorGeneric')}</p>
+              </div>
             ) : attachments.length === 0 ? (
               <div className="text-center py-10 text-gray-400">
                 <Paperclip size={36} className="mx-auto mb-2 opacity-30" />

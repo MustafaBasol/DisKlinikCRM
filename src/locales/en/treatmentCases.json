@@ -62,6 +62,11 @@
     "markLost": "Mark as Lost",
     "viewDetails": "View Details"
   },
+  "proposal": {
+    "download": "Download Treatment Proposal",
+    "preparing": "Preparing proposal…",
+    "downloadFailed": "Proposal download failed."
+  },
   "detail": {
     "backToPipeline": "Back to Pipeline",
     "closedOn": "Closed on {{date}}",

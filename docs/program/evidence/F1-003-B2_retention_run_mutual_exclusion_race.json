@@ -1,0 +1,151 @@
+{
+  "taskId": "F1-003-B2",
+  "title": "Retention Manual/Scheduled Run Mutual-Exclusion Race",
+  "phase": "F1",
+  "parentTask": "F1-003",
+  "type": "blocking_production_behavior_defect",
+  "discoveredBy": {
+    "task": "F1-003-P3",
+    "pr": 268,
+    "prBranch": "feature/f1-003-p3-layered-ci-workflows",
+    "prHeadSha": "930cc70620c6431da9425df5d7ad3ee6971c156a",
+    "githubRunId": "30542271302",
+    "githubJobId": "90872034493",
+    "jobName": "ci-layers / Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)",
+    "prStatus": "AGENT_COMPLETED_PR_OPENED_AWAITING_REVIEW_left_open_and_unmodified"
+  },
+  "baseline": {
+    "ref": "origin/main",
+    "sha": "70b1690c1a656c95cead7b42812cc9ae6447bfb7",
+    "branch": "fix/f1-003-b2-retention-run-lock-race",
+    "worktreeReused": false,
+    "p3WorktreeReused": false
+  },
+  "failingAssertion": {
+    "file": "server/src/tests/retentionManualRunAudit.test.ts",
+    "testName": "concurrent live runs: the shared job lock serializes execution — only one run actually deletes; both attempts get their own started+terminal audit pair, the loser terminal is manual_run_blocked/concurrent_run_in_progress",
+    "assertionMessage": "exactly one concurrent live run must execute (200) and the other must be rejected as already-in-progress (409)",
+    "actual": [200, 200],
+    "expected": [200, 409],
+    "preFixSuiteResult": "Toplam: 20  ✓ 19  ✗ 1"
+  },
+  "rootCause": {
+    "summary": "jobLock.ts's acquire/release primitive is atomic and race-free (empirically stress-tested: 130 concurrent-acquisition trials against real PostgreSQL with the production Prisma 7.8.0 + @prisma/adapter-pg driver-adapter stack, 0 double-grants). The actual defect is structural ordering in platformAdmin.ts's manual-run route: the shared JobLock was acquired only AFTER two other variable-latency DB round trips (getPlatformSetting policy-gate read, recordManualRunStarted audit-write transaction) that both racers perform independently. Because live-run cleanup against a small dataset completes in single-digit milliseconds, a fast racer's entire acquire-cleanup-release cycle could finish before a simultaneously-fired second racer even reached its own lock attempt, letting both legitimately (sequentially, not concurrently) acquire the lock and both return 200.",
+    "provenNotTheLockPrimitive": true,
+    "provenIsRouteOrdering": true,
+    "isTestSchedulingAssumption": false,
+    "isGenuineApplicationContractViolation": true,
+    "lockKeyIdenticalBetweenScheduledAndManualPaths": true,
+    "lockKey": "data-retention-cleanup",
+    "lockScope": "global_job_type_scoped_not_tenant_scoped",
+    "advisoryLockUsed": false,
+    "lockMechanism": "db_row_lease_prisma_jobLock_table_primary_key_on_name"
+  },
+  "fix": {
+    "approach": "reorder_acquire_before_audit_write_no_new_locking_subsystem",
+    "filesChanged": [
+      "server/src/utils/jobLock.ts",
+      "server/src/routes/platformAdmin.ts",
+      "server/src/tests/retentionManualRunAudit.test.ts"
+    ],
+    "jobLockChanges": "acquireJobLock and releaseJobLock exported (were private, internal to withJobLock). withJobLock itself unchanged, still used unchanged by the scheduled cron and every other job in the codebase.",
+    "routeChanges": "POST /privacy/data-retention/run live-run branch now calls acquireJobLock() first, before recordManualRunStarted(); both winner and loser still write their own started row (audit-shape contract unchanged); loser branches directly to blocked terminal + 409 with no cleanup call; cleanup wrapped in try/finally releasing the lock on success, throw, or any other exit; a NEW edge case (lock acquired, then started-write fails) releases the lock before returning 500.",
+    "migrationRequired": false,
+    "newLockingSubsystemIntroduced": false,
+    "processLocalMutexUsed": false,
+    "sleepsAdded": false,
+    "assertionWeakened": false,
+    "testOnlySerializationAdded": false
+  },
+  "testsAddedOrStrengthened": [
+    {
+      "name": "race gate: 10 consecutive concurrent live-run rounds against real PostgreSQL — zero double-success, zero double-block observations",
+      "type": "new",
+      "rounds": 10,
+      "usesRealPostgres": true,
+      "simulatedConcurrency": false
+    },
+    {
+      "name": "acquireJobLock(): N-way (4) truly-concurrent acquisition on a fresh lock name grants to exactly one caller",
+      "type": "new"
+    },
+    {
+      "name": "acquireJobLock()/releaseJobLock(): after release, the lock is immediately free again — no orphaning after a normal successful completion",
+      "type": "new"
+    },
+    {
+      "name": "acquireJobLock()/releaseJobLock(): a try/finally around a throwing callback (mirroring the route's cleanup wrapper) still releases the lock — no orphan after a thrown exception",
+      "type": "new"
+    },
+    {
+      "name": "lock acquired but the \"started\" audit write then fails: the lock is released immediately, not orphaned for its full TTL",
+      "type": "new"
+    },
+    {
+      "name": "scheduled/manual lock collision: a live manual run is rejected 409 when the shared lock is already held...",
+      "type": "strengthened_existing",
+      "addedAssertions": [
+        "seeded eligible row is untouched after the 409 (no cleanup performed)",
+        "the simulated scheduled-cron's lock ownership (lockedBy) is untouched by the rejected manual attempt"
+      ]
+    }
+  ],
+  "testCounts": {
+    "retentionManualRunAuditTestFile": { "before": 20, "after": 25, "postFixResult": "25/25 passing" },
+    "postFixConsecutiveFullSuiteRuns": 8,
+    "postFixTotalRaceGateRounds": 80,
+    "postFixDoubleSuccessObservations": 0,
+    "postFixDoubleBlockObservations": 0,
+    "isolatedPrimitiveStressTestRounds": 130,
+    "isolatedPrimitiveDoubleGrantObservations": 0,
+    "combinedConcurrentAcquisitionTrialsPostFix": 210
+  },
+  "regressionCommands": [
+    { "command": "npm run typecheck", "cwd": "server", "exitCode": 0 },
+    { "command": "npm run test:retention-manual-run-audit", "cwd": "server", "exitCode": 0, "result": "25 passed, 0 failed", "runs": 8 },
+    { "command": "npm run test:data-retention", "cwd": "server", "exitCode": 0, "result": "42 passed, 0 failed" },
+    { "command": "npm run server:test:non-disposable", "cwd": "server", "exitCode": 0, "result": "0 failure markers across combined log" },
+    { "command": "npm run test:runtime:postgres", "cwd": "root", "exitCode": 0, "result": "server:test:disposable-db exit 0, cleanup succeeded, zero residual docker resources" },
+    { "command": "git diff --check", "cwd": "root", "result": "clean" }
+  ],
+  "dockerResidualCheck": {
+    "containersAfterAllRuns": 0,
+    "networksAfterAllRuns": 0,
+    "filterLabel": "com.noramedi.test-runtime=true"
+  },
+  "legacyDbRequiredScriptNote": "server:test:legacy-db-required does not exist on origin/main; it is defined only inside PR #268's (not merged) .github/workflows/ci-layers.yml. This task did not copy the P3 CI aggregate onto this branch; it ran the exact failing test directly against a disposable PostgreSQL provisioned the same way F1-003-P2's accepted runtime provisions one.",
+  "migrationStatus": {
+    "schemaChanged": false,
+    "newMigrationCreated": false,
+    "prismaMigrationsTableTouched": false,
+    "existingJobLockModelReused": true
+  },
+  "rollback": "single git revert of this task's commit; no data migration, no schema change, no lock-table cleanup required",
+  "securityTenantKvkk": {
+    "tenantScopedBehaviorChanged": false,
+    "lockScopeJustification": "global/job-type-scoped is correct because a single live retention-cleanup pass spans all tenants in one run (no clinicId/organizationId filter in the underlying category queries)",
+    "auditImpact": "every attempt (winner, loser, and both new failure edge-cases) still writes the required started/terminal audit pair with correct action/outcome/errorCategory; no audit row newly lost or duplicated",
+    "kvkkImpact": "closes a real (though never observed to cause actual double-deletion) concurrent-execution risk in manual retention triggers, directly relevant to retention operational integrity",
+    "concurrentDeletionRiskExisted": "narrow sense only: sequential-but-not-overlapping double execution was possible pre-fix; true simultaneous deletion of the same rows was always prevented by the already-atomic lock (proven in root-cause investigation)",
+    "backwardCompatible": true,
+    "crashGuaranteesTested": false,
+    "crashGuaranteesClaimed": "unchanged pre-existing 2-hour TTL lease-expiry mechanism only, not independently re-verified by this task"
+  },
+  "statusPreserved": {
+    "F1": "IN_PROGRESS",
+    "F1-003": "IN_PROGRESS",
+    "F1-003-P3_PR268": "open_blocked_not_merged_not_modified",
+    "F1-003-P4": "blocked",
+    "R-070": "OPEN",
+    "R-046": "OPEN",
+    "R-071": "unchanged",
+    "G1": "NOT_APPROVED",
+    "G2": "NOT_APPROVED",
+    "kvkkFreeze": "ACTIVE",
+    "kvkkBaselineStableDeclaration": "NOT_GRANTED"
+  },
+  "maximumStatus": "AGENT_COMPLETED_PR_OPENED_AWAITING_REVIEW",
+  "mergeRecommendation": "external_review_required",
+  "deploymentRecommendation": "not_authorized",
+  "nextTask": "after this bugfix PR is reviewed and merged, return to PR #268 for F1-003-P3-R2 main reconciliation and full-green CI closure"
+}
