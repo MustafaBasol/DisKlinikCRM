@@ -1,0 +1,537 @@
+{
+  "taskId": "F1-003-P3",
+  "title": "Layered CI Workflows and Full-Suite Fail-Safe",
+  "phase": "F1",
+  "parentTask": "F1-003",
+  "maxAuthorizedStatus": "AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW",
+  "baseline": {
+    "originMainSha": "04723f9add600b6c432fb517f0607235944d6c2e",
+    "isPr260MergeCommit": true,
+    "pr260": {
+      "number": 260,
+      "state": "MERGED",
+      "mergedAt": "2026-07-30T09:45:38Z",
+      "mergeCommit": "04723f9add600b6c432fb517f0607235944d6c2e",
+      "base": "main",
+      "head": "feature/f1-003-p2-disposable-runtime",
+      "headSha": "64aa152311238aba7d7ec90a33021a168f7bce67"
+    },
+    "ancestorCheck": {
+      "command": "git merge-base --is-ancestor 04723f9add600b6c432fb517f0607235944d6c2e origin/main",
+      "exitCode": 0
+    }
+  },
+  "worktree": {
+    "primaryRepo": "E:\\Ek Gelir\\Siteler\\DisKlinikCRM-git",
+    "primaryBranch": "fix/revenue-report-group-by",
+    "primaryCleanAtStart": true,
+    "isolatedPath": "E:\\Ek Gelir\\Siteler\\DisKlinikCRM-worktrees\\f1-003-p3-layered-ci-workflows",
+    "branch": "feature/f1-003-p3-layered-ci-workflows",
+    "initialHead": "04723f9add600b6c432fb517f0607235944d6c2e"
+  },
+  "existingWorkflowInventory": [
+    { "file": ".github/workflows/windows-bridge-pr.yml", "touched": false },
+    { "file": ".github/workflows/windows-bridge-release.yml", "touched": false }
+  ],
+  "newWorkflows": [
+    {
+      "file": ".github/workflows/ci-layers.yml",
+      "type": "reusable (workflow_call)",
+      "jobs": [
+        "frontend-typecheck-and-build",
+        "server-typecheck",
+        "tooling-typecheck-and-unit",
+        "workflow-and-syntax-lint",
+        "non-disposable-backend-tests",
+        "disposable-postgres-tests",
+        "storage-integration-tests",
+        "full-suite-compatibility-failsafe-frontend",
+        "full-suite-compatibility-failsafe-backend"
+      ]
+    },
+    {
+      "file": ".github/workflows/ci-pr.yml",
+      "trigger": "pull_request -> main",
+      "concurrency": { "group": "ci-pr-${{ github.event.pull_request.number }}", "cancelInProgress": true }
+    },
+    {
+      "file": ".github/workflows/ci-main-and-nightly.yml",
+      "trigger": "push:main, schedule:'17 2 * * *', workflow_dispatch",
+      "concurrency": { "group": "ci-main-and-nightly", "cancelInProgress": false }
+    }
+  ],
+  "layerToJobMapping": {
+    "layer1_static": ["frontend-typecheck-and-build", "server-typecheck", "tooling-typecheck-and-unit", "workflow-and-syntax-lint"],
+    "layer2_nonDisposableBackend": ["non-disposable-backend-tests"],
+    "layer3_disposablePostgres": ["disposable-postgres-tests"],
+    "layer4_storageIntegration": ["storage-integration-tests"],
+    "layer5_fullSuiteFailsafe": ["full-suite-compatibility-failsafe-frontend", "full-suite-compatibility-failsafe-backend"]
+  },
+  "scriptToJobMapping": [
+    { "job": "frontend-typecheck-and-build", "script": "npm run build" },
+    { "job": "server-typecheck", "script": "npm run typecheck", "cwd": "server" },
+    { "job": "tooling-typecheck-and-unit", "scripts": ["npm run typecheck:runtime", "npm run test:runtime:unit"] },
+    { "job": "non-disposable-backend-tests", "scripts": ["npx prisma generate (P3-R1 fix)", "npm run server:test:non-disposable"], "cwd": "server" },
+    { "job": "disposable-postgres-tests", "scripts": ["npm run test:runtime:postgres -- --summary-file=postgres-run-summary.json", "npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01"] },
+    { "job": "storage-integration-tests", "scripts": ["npm run test:runtime:storage -- --summary-file=storage-run-summary.json", "npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01"] },
+    { "job": "full-suite-compatibility-failsafe-frontend", "scripts": [
+      "npm run test:dicom-helpers",
+      "npm run test:onboarding-helpers",
+      "npm run test:pairing-poller",
+      "npm run test:booking-widget-helpers",
+      "npm run test:clinic-bulk-export-selection",
+      "npm run test:communication-consent-matrix",
+      "npm run test:patient-detail-tabs-helpers",
+      "npm run test:vitest"
+    ] },
+    { "job": "full-suite-compatibility-failsafe-backend", "scripts": [
+      "npm run test:runtime:postgres-compat -- --summary-file=postgres-compat-run-summary.json (P3-R1, new)",
+      "npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01"
+    ] }
+  ],
+  "orchestratorAndServerPackageJsonUnchanged": false,
+  "p3r1BackendCompatibilityClosure": {
+    "status": "IMPLEMENTED",
+    "exactUncoveredScriptsBeforeThisTask": [
+      "test:auth", "test:instagram", "test:overlap-safety", "test:availability-service",
+      "test:public-booking", "test:public-booking-slots", "test:notice-evidence",
+      "test:payments-list-field-scope", "test:kvkk-lifecycle", "test:clinic-bulk-export",
+      "test:security-incidents", "test:communication-consent", "test:communication-consent-backfill",
+      "test:communication-consent-reconciliation-report", "test:communication-consent-reconciliation",
+      "test:communication-consent-audit-report", "test:communication-consent-matrix-route",
+      "test:legacy-consent-correction", "test:kvkk-high007-high008-schema-integrity",
+      "test:messages-consent-gate", "test:recall-consent-gate", "test:messaging-connection-scope",
+      "test:retention-manual-run-audit"
+    ],
+    "exactUncoveredCount": 23,
+    "previousEstimateInOriginalP3Evidence": "roughly 14 (incorrect, corrected here to the exact, machine-verified figure of 23)",
+    "allUncoveredScriptsPostgresRequired": true,
+    "allUncoveredScriptsMinioRequired": false,
+    "closureDesign": {
+      "newServerPackageJsonScript": "server:test:legacy-db-required",
+      "newServerPackageJsonScriptMemberCount": 23,
+      "legacyServerTestItselfModified": false,
+      "newOrchestratorProfile": "postgres-compat",
+      "newOrchestratorProfileReusesP2Provisioning": true,
+      "newRootPackageJsonScript": "test:runtime:postgres-compat",
+      "newCiJob": "full-suite-compatibility-failsafe-backend",
+      "secondPostgresImplementationCreated": false
+    },
+    "localLiveExecutionResult": {
+      "runId": "20260730T112148Z-3727a2b5-2980",
+      "membersRun": 23,
+      "assertionsPassed": 116,
+      "assertionsFailed": 1,
+      "failingAssertion": "test:clinic-bulk-export > status DTO never serializes sensitive fields",
+      "failureRootCause": "Windows-local-only CRLF line-ending conversion (core.autocrlf=true) breaks an exact LF-based substring match against routes/clinicBulkExport.ts; proven via direct Node reproduction (indexOf returns -1 against the CRLF file, >-1 after LF normalization); not reproducible on GitHub Actions ubuntu-latest checkout, confirmed by the post-remediation run in ghActionsEvidence.postR1Run",
+      "cleanupSuccess": true,
+      "residualResourcesAfter": 0
+    }
+  },
+  "designDecisionNoOrchestratorFullSuiteFlag": {
+    "status": "SUPERSEDED_BY_P3R1 - see p3r1BackendCompatibilityClosure",
+    "originalConsideration": "adding a --full-suite CLI flag directly to the existing postgres profile so Layer 5 could run legacy server:test against a disposable Postgres",
+    "originallyRejectedBecause": "would modify the existing postgres profile's conditional behavior in scripts/test-runtime/orchestrator.ts/lib/profiles.ts, outside the original P3 task's CI-workflow-only authorized scope",
+    "p3r1Resolution": "F1-003-P3-R1 was explicitly authorized and instructed to close this gap; implemented via a NEW, additive profile (postgres-compat) rather than modifying the existing postgres profile's behavior - preserves the original design concern (no behavioral change to the existing postgres/storage profiles) while closing the coverage gap"
+  },
+  "actionPinning": [
+    { "action": "actions/checkout", "tag": "v4.2.2", "sha": "11bd71901bbe5b1630ceea73d27597364c9af683", "reusedFrom": "windows-bridge-pr.yml", "independentlyVerified": true },
+    { "action": "actions/setup-node", "tag": "v4.4.0", "sha": "49933ea5288caeca8642d1e84afbd3f7d6820020", "reusedFrom": "windows-bridge-pr.yml", "independentlyVerified": true },
+    { "action": "actions/upload-artifact", "tag": "v4.6.2", "sha": "ea165f8d65b6e75b540449e92b4886f43607fa02", "reusedFrom": "windows-bridge-pr.yml", "independentlyVerified": true }
+  ],
+  "actionlint": {
+    "version": "v1.7.12",
+    "source": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz",
+    "sha256": "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
+    "checksumVerified": true,
+    "localExecution": {
+      "command": "actionlint -color (against all 5 .github/workflows/*.yml)",
+      "exitCode": 0,
+      "findings": 0
+    },
+    "wiredIntoCi": true
+  },
+  "containerImages": {
+    "postgres": { "ref": "postgres@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777", "observedVersion": "16.14", "changedByThisTask": false },
+    "minio": { "ref": "minio/minio@sha256:8834ae47a2de3509b83e0e70da9369c24bbbc22de42f2a2eddc530eee88acd1b", "changedByThisTask": false }
+  },
+  "timeouts": {
+    "frontend-typecheck-and-build": 15,
+    "server-typecheck": 15,
+    "tooling-typecheck-and-unit": 10,
+    "workflow-and-syntax-lint": 10,
+    "non-disposable-backend-tests": 20,
+    "disposable-postgres-tests": 15,
+    "storage-integration-tests": 15,
+    "full-suite-compatibility-failsafe-frontend": 10,
+    "full-suite-compatibility-failsafe-backend": 20
+  },
+  "p3r1RootCausedCiDefect": {
+    "discoveredVia": "actual GitHub Actions run 30536185063 on the original PR #268 head SHA e99dd096d2d6d1222c9f7c7f59c0735ab4380979 - NOT reproduced by local validation",
+    "failingJob": "non-disposable-backend-tests",
+    "errorMessage": "SyntaxError: The requested module '@prisma/client' does not provide an export named 'PrismaClient'",
+    "rootCause": "the job ran `npm ci` then directly invoked `npm run server:test:non-disposable` without ever running `npx prisma generate`; server/package.json has no postinstall hook that does this; the only two places generate happens are the separate server-typecheck job (different runner/checkout, does not share state) and the F1-003-P2 orchestrator's runMigrations() (used by Layers 3/4 and the new backend-compat job, which is exactly why those succeeded on the same run)",
+    "whyNotCaughtLocally": "this task's local working directory had already generated the Prisma Client via earlier, unrelated commands in the same persistent environment; a from-scratch checkout reproduces the failure every time",
+    "fix": "added an explicit 'npx prisma generate' step to non-disposable-backend-tests in ci-layers.yml, before the test-aggregate step",
+    "filesChanged": [".github/workflows/ci-layers.yml"],
+    "testOrApplicationCodeChanged": false
+  },
+  "p3r1ArtifactGenerationFix": {
+    "problem": "npm run test:runtime:postgres | tee postgres-run-summary.json captured combined human-readable stdout, not valid standalone JSON",
+    "optionChosen": "Option 1 (preferred) - dedicated machine-readable summary file produced by the runtime itself",
+    "implementation": {
+      "newModule": "scripts/test-runtime/lib/summaryFile.ts",
+      "newFunction": "maybeWriteSummaryFile(args, data)",
+      "newCliFlag": "--summary-file=<path>",
+      "wiredInto": ["postgres/postgres-compat/storage summary output", "verify-parallel result output", "cleanup-stale report output"]
+    },
+    "secondDefectFoundAndFixedDuringThisWork": {
+      "description": "an initial implementation let writeFileSync throw on a bad path, propagating out of main() to the top-level catch handler and overriding the real, already-determined test-outcome exit code with a generic fatal-error exit 1",
+      "discoveredVia": "this task's own local verification (an accidental invalid path during testing), before reaching CI",
+      "fix": "maybeWriteSummaryFile now catches and logs any write failure to stderr and never throws - an artifact-handling failure must never conceal the real exit code",
+      "unitTestsAdded": 4
+    },
+    "ciWiring": {
+      "jsonValidationStep": "node -e JSON.parse(...) on the summary file, failure-only",
+      "secretPatternScanStep": "grep -EiI for postgresql://, AKIA[0-9A-Z]{16}, PEM key headers, secretAccessKey, accessKeyId/password key-value shapes - failure-only, refuses upload if matched",
+      "uploadCondition": "if: failure()",
+      "retentionDays": 7
+    }
+  },
+  "localValidation": {
+    "nodeVersionLocal": "v24.18.0",
+    "nodeVersionCi": "20",
+    "nodeVersionCrossCheckPerformed": false,
+    "npmVersion": "11.16.0",
+    "dockerVersion": "29.6.2",
+    "results": [
+      { "command": "git diff --check", "exitCode": 0 },
+      { "command": "node -e JSON.parse package.json", "exitCode": 0 },
+      { "command": "node -e JSON.parse server/package.json", "exitCode": 0 },
+      { "command": "actionlint -color (5 workflow files)", "exitCode": 0, "findings": 0 },
+      { "command": "bash -n scripts/test-runtime/provision.sh", "exitCode": 0 },
+      { "command": "bash -n scripts/test-runtime/sweep.sh", "exitCode": 0 },
+      { "command": "PowerShell Parser::ParseFile provision.ps1", "errorCount": 0 },
+      { "command": "PowerShell Parser::ParseFile sweep.ps1", "errorCount": 0 },
+      { "command": "npm run typecheck:runtime", "exitCode": 0 },
+      { "command": "npm run test:runtime:unit", "exitCode": 0, "passed": 68, "failed": 0 },
+      { "command": "npm run build", "exitCode": 0, "durationSeconds": 13.26 },
+      { "command": "npm run lint", "exitCode": 2, "note": "confirmed non-functional: ESLint 9.39.4 cannot find eslint.config.js; no such file exists in the repository; not wired into CI" },
+      { "command": "server: npm run typecheck", "exitCode": 0 },
+      { "command": "server: npm run server:test:non-disposable", "exitCode": 0, "members": 68, "lastMemberResult": "test:overdue-installments 9/9" },
+      { "command": "npm run test:runtime:postgres", "exitCode": 0, "runId": "20260730T101740Z-9126f60f-11424", "migrationCode": 0, "testScript": "server:test:disposable-db", "testCode": 0, "cleanupSuccess": true, "cleanupErrors": [] },
+      { "command": "npm run test:runtime:storage", "exitCode": 0, "runId": "20260730T101823Z-9e006cd9-22716", "migrationCode": 0, "testScript": "server:test:storage-integration", "testCode": 0, "assertionsPassed": 21, "cleanupSuccess": true, "cleanupErrors": [] },
+      { "command": "docker ps/network ls, label=com.noramedi.test-runtime=true, post postgres+storage runs", "residualResources": 0 },
+      { "command": "npm run test:vitest", "exitCode": 0, "testFiles": 2, "testsPassed": 29 },
+      { "command": "7x frontend leaf scripts", "exitCode": 0, "passedCounts": { "test:dicom-helpers": 36, "test:onboarding-helpers": 21, "test:pairing-poller": 8, "test:booking-widget-helpers": 26, "test:clinic-bulk-export-selection": 24, "test:communication-consent-matrix": 29, "test:patient-detail-tabs-helpers": 12 } },
+      { "command": "npm run test:runtime:parallel (verify-parallel regression)", "exitCode": 0, "generationSucceeded": true, "childrenExitCodes": [0, 0, 0, 0], "collisionCheck": { "uniqueRunIds": true, "uniqueContainerNames": true, "uniqueDatabaseNames": true, "uniqueHostPorts": true }, "prismaGenerationCount": 1, "ebusyCount": 0, "residualResourcesAfter": 0 }
+    ],
+    "fullSuiteCompatibilityCommandStatus": "locally executed (Layer 5 frontend content), exit 0 - superseded, see p3r1LocalValidation for the backend half",
+    "legacyServerTestStatus": "legacy server:test itself never executed by this task anywhere (unchanged) - but its own 23 additional DB-required members are now covered indirectly via server:test:legacy-db-required, see p3r1BackendCompatibilityClosure"
+  },
+  "p3r1LocalValidation": {
+    "mergeCommit": "7ab630c9a5a54acc7bb757b06c908b772c5f138d",
+    "results": [
+      { "command": "git merge --no-ff origin/main", "mergeCommit": "7ab630c9a5a54acc7bb757b06c908b772c5f138d", "conflicts": 0 },
+      { "command": "npm run typecheck:runtime (post profiles.ts/orchestrator.ts/summaryFile.ts changes)", "exitCode": 0 },
+      { "command": "npm run test:runtime:unit", "exitCode": 0, "passed": 74, "failed": 0 },
+      { "command": "npm run test:runtime:postgres-compat", "exitCode": 1, "runId": "20260730T112148Z-3727a2b5-2980", "assertionsPassed": 116, "assertionsFailed": 1, "seeP3r1BackendCompatibilityClosure": true },
+      { "command": "npm run test:runtime:postgres-compat -- --summary-file=postgres-compat-run-summary.json (2nd run, artifact-fix proof)", "exitCode": 1, "summaryFileValidJson": true },
+      { "command": "docker ps/network ls after postgres-compat run with real test failure", "residualResources": 0, "note": "cleanup ran and succeeded despite the test-phase failure" },
+      { "command": "npm run test:runtime:postgres (regression)", "exitCode": 0, "stillResolvesTo": "server:test:disposable-db", "testCode": 0, "cleanupSuccess": true },
+      { "command": "npm run test:runtime:storage (regression)", "exitCode": 0, "assertionsPassed": 21, "cleanupSuccess": true },
+      { "command": "npm run test:runtime:parallel (regression)", "exitCode": 0, "collisionCheck": { "uniqueRunIds": true, "uniqueContainerNames": true, "uniqueDatabaseNames": true, "uniqueHostPorts": true }, "prismaGenerationCount": 1, "ebusyCount": 0, "residualResourcesAfter": 0 },
+      { "command": "server: npx prisma generate && tsc --noEmit", "exitCode": 0 },
+      { "command": "server: npm run server:test:non-disposable (regression)", "exitCode": 0, "members": 68 },
+      { "command": "npm run build (post-merge, includes new CalendarTimelineView)", "exitCode": 0, "durationSeconds": 23.43 },
+      { "command": "npm run lint", "exitCode": 2, "note": "unchanged, still non-functional" },
+      { "command": "npm run test:vitest (post-merge)", "exitCode": 0, "testFiles": 3, "testsPassed": 35, "note": "was 2 files/29 tests before the main-reconciliation merge added CalendarTimelineView.vitest.test.tsx" },
+      { "command": "7x frontend leaf scripts (regression)", "exitCode": 0, "totalAssertions": 156 },
+      { "command": "actionlint -color (3 workflow files, post-fix)", "exitCode": 0, "findings": 0 },
+      { "command": "git diff --check", "exitCode": 0 }
+    ]
+  },
+  "migrationStatus": {
+    "schemaChanged": false,
+    "migrationFilesCreated": 0,
+    "existingMigrationsAppliedTo": "disposable databases only, during local validation (67 migrations per disposable-postgres invocation)",
+    "productionMigrationRun": false,
+    "productionAccessed": false
+  },
+  "riskAndGateStatus": {
+    "r070": "OPEN",
+    "r046": "OPEN",
+    "r071": "CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION",
+    "g1": "NOT_APPROVED",
+    "g2": "NOT_APPROVED",
+    "kvkkFreeze": "ACTIVE",
+    "kvkkBaselineStable": false
+  },
+  "githubActionsEvidence": {
+    "prNumber": 268,
+    "prUrl": "https://github.com/MustafaBasol/DisKlinikCRM/pull/268",
+    "preR1Run": {
+      "headSha": "e99dd096d2d6d1222c9f7c7f59c0735ab4380979",
+      "runId": 30536185063,
+      "url": "https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/30536185063",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "failure",
+      "jobs": [
+        { "name": "Layer 1: frontend typecheck + build", "conclusion": "success" },
+        { "name": "Layer 1: server typecheck", "conclusion": "success" },
+        { "name": "Layer 1: test-runtime tooling typecheck + unit tests", "conclusion": "success" },
+        { "name": "Layer 1: workflow YAML, shell, PowerShell, and JSON validation", "conclusion": "success" },
+        { "name": "Layer 2: non-disposable backend tests", "conclusion": "failure", "rootCause": "see p3r1RootCausedCiDefect" },
+        { "name": "Layer 3: disposable PostgreSQL tests", "conclusion": "success" },
+        { "name": "Layer 4: disposable PostgreSQL + MinIO storage integration tests", "conclusion": "success" },
+        { "name": "Layer 5: full-suite/compatibility fail-safe (frontend, original)", "conclusion": "success" }
+      ],
+      "usedAsAcceptanceEvidence": false,
+      "note": "historical - superseded by postR1Run below, which is the actual acceptance evidence for this remediation"
+    },
+    "postR1Run": {
+      "headSha": "930cc70620c6431da9425df5d7ad3ee6971c156a",
+      "runId": 30542271302,
+      "url": "https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/30542271302",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "failure",
+      "attempts": 2,
+      "attempt1": {
+        "conclusion": "failure",
+        "jobs": [
+          { "name": "Layer 1: frontend typecheck + build", "conclusion": "success" },
+          { "name": "Layer 1: server typecheck", "conclusion": "success" },
+          { "name": "Layer 1: test-runtime tooling typecheck + unit tests", "conclusion": "success" },
+          { "name": "Layer 1: workflow YAML, shell, PowerShell, and JSON validation", "conclusion": "success" },
+          { "name": "Layer 2: non-disposable backend tests", "conclusion": "success", "note": "P3-R1's prisma-generate fix confirmed working - this job failed on the pre-R1 run" },
+          { "name": "Layer 3: disposable PostgreSQL tests", "conclusion": "success" },
+          { "name": "Layer 4: disposable PostgreSQL + MinIO storage integration tests", "conclusion": "success" },
+          { "name": "Layer 5: full-suite/compatibility fail-safe (frontend)", "conclusion": "success" },
+          { "name": "Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)", "conclusion": "failure", "rootCause": "see p3r1NewFindingRetentionLockRace" }
+        ]
+      },
+      "attempt2": {
+        "note": "gh run rerun --failed, to distinguish a one-off flake from a deterministic environment-specific failure",
+        "conclusion": "failure",
+        "onlyRerunJob": "Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)",
+        "result": "failed again, same exact assertion - confirms reproducible, not a one-off flake",
+        "otherJobsRerun": ["Layer 1 (all 4)"],
+        "otherJobsConclusion": "success (cached/rerun, unaffected)"
+      },
+      "confirmedFixed": ["p3r1RootCausedCiDefect (Layer 2 Prisma generate)", "the CRLF-only local test:clinic-bulk-export failure (117/117 passed on Linux, confirming the §17.8 root-cause hypothesis)"],
+      "confirmedNewFinding": "p3r1NewFindingRetentionLockRace - NOT fixed, out of this task's authorized scope, see that field"
+    },
+    "p3r1NewFindingRetentionLockRace": {
+      "discoveredVia": "the actual GitHub Actions run(s) on the post-remediation head SHA - NOT reproduced in this task's own local validation on Windows (0 failures across 2 local postgres-compat runs)",
+      "script": "test:retention-manual-run-audit",
+      "failingAssertion": "concurrent live runs: the shared job lock serializes execution - only one run actually deletes; both attempts get their own started+terminal audit pair, the loser terminal is manual_run_blocked/concurrent_run_in_progress",
+      "observedBehavior": "both concurrent POST /privacy/data-retention/run requests returned 200 (both executed) instead of one 200 + one 409 - the shared job lock did not serialize the two requests in this environment/timing",
+      "reproducibility": "2/2 on GitHub Actions ubuntu-latest (initial run + one rerun via gh run rerun --failed), 0/2 on this task's local Windows + Docker Desktop environment - a genuine, deterministic environment-specific timing difference, not a one-off flake",
+      "significance": "this is the FIRST time this script has ever executed against a live disposable PostgreSQL in ANY CI environment - legacy server:test (which silently contains it) was never wired into any workflow before this task; this finding is a direct, positive consequence of this task's own closure work exposing a previously-invisible behavior",
+      "rootCauseCharacterization": "a race-condition-sensitive test/lock-acquisition timing window; likely sensitive to the relative scheduling of two near-simultaneous HTTP requests and their underlying lock-acquisition SQL, which appears to behave differently under GitHub Actions' container/runner scheduling than on this task's local machine",
+      "correctionMade": false,
+      "whyNoCorrectionMade": "fixing this would require modifying the actual job-lock/concurrency implementation in server/src (application runtime code) and/or the test's own timing assumptions - both explicitly outside F1-003-P3-R1's CI-workflow-only authorized scope ('do not modify application runtime', 'do not weaken tests')",
+      "recommendation": "a separate, explicitly-authorized follow-up task should investigate the data-retention job-lock's concurrency guarantees under real (not just same-process) concurrent load, and/or evaluate this specific test for the F1 phase's own already-planned 'flaky test detection and quarantine' backlog item (F1 Initial task backlog item 4, not yet started)",
+      "impactOnThisTasksAcceptance": "the full-suite-compatibility-failsafe-backend job's overall CI conclusion is honestly reported as failing on real CI; this does not indicate a defect in this task's own CI-workflow implementation (Layers 1-4 and Layer 5-frontend are all green, and the backend-compat mechanism's own provisioning/execution/cleanup all worked correctly - see cleanup:{success:true,errors:[]} in the run's own summary JSON, uploaded as an artifact)"
+    },
+    "runIds": [30536185063, 30542271302],
+    "note": "preR1Run is historical; postR1Run (populated after this task's remediation push) is the actual acceptance evidence per this task's own instruction to use only the new-head-SHA run."
+  },
+  "rollback": {
+    "method": "git revert of this task's single commit (or PR merge commit)",
+    "databaseRollback": false,
+    "deploymentRollback": false,
+    "productionRollback": false
+  },
+  "statusSeparation": {
+    "agentCompleted": true,
+    "testsPassedLocally": true,
+    "localWorkflowSyntaxValidated": true,
+    "actualGithubActionsPassed": false,
+    "actualGithubActionsPassedDetail": "8 of 9 jobs pass on the post-remediation head SHA (930cc706...), confirmed across 2 attempts; the 9th (full-suite-compatibility-failsafe-backend) fails reproducibly due to a newly-discovered, pre-existing application-level concurrency race in the data-retention job-lock (see p3r1NewFindingRetentionLockRace) - not a defect in this task's own CI-workflow implementation, not fixed by this task as it is outside CI-workflow-only authorized scope",
+    "prOpened": true,
+    "prNumber": 268,
+    "merged": false,
+    "deployed": false,
+    "productionVerified": false
+  },
+  "p3r2MainReconciliationAndCiClosure": {
+    "taskId": "F1-003-P3-R2",
+    "title": "Main Reconciliation and Full-Green Layered CI Closure",
+    "continuation": "existing open PR #268 branch feature/f1-003-p3-layered-ci-workflows, no new branch, no new PR, not merged, not rebased, not force-pushed",
+    "preFlightVerified": {
+      "oldPrHeadSha": "e292e677b4065af098cf8b0b8a6688c4e31ae04f",
+      "oldOriginMainSha": "cc31aeb7a0c379a641e7ab4558031e9adcdf1e59",
+      "newOriginMainSha": "c68317f76bd682381864e895de5a784e54b90538",
+      "mergeBase": "cc31aeb7a0c379a641e7ab4558031e9adcdf1e59",
+      "aheadBehindBeforeMerge": "4 ahead, 61 behind",
+      "oldGithubMergeable": false,
+      "oldPrCheckStatus": "8 of 9 jobs pass on run 30543893952; full-suite-compatibility-failsafe-backend fails (retention concurrency race, closed by PR #280)"
+    },
+    "blockerClosurePreserved": {
+      "pr280": {
+        "mergeCommit": "c68317f76bd682381864e895de5a784e54b90538",
+        "description": "F1-003-B2 + F1-003-B2-R1: global retention JobLock acquired before the live-path policy read; dry-run does not acquire the lock; deterministic barrier-based concurrency proof; policy-disabled/policy-read-failure/audit-failure/cleanup-failure lock-release coverage; isolated race-gate OperationalEvent cleanup; no schema migration",
+        "verifiedPresentOnMainViaGitLog": true
+      },
+      "npmAuditRemediation": {
+        "pr": 282,
+        "branch": "fix/npm-audit-nonbreaking-remediation",
+        "verifiedPreservedViaNonMutatingNpmCi": true
+      },
+      "f2PrepDocs": ["F2-PREP-001 (PR #276)", "F2-PREP-002 (PR #279)", "F2-PREP-003 (PR #277)", "F2-PREP-004 (PR #278)"],
+      "f2PrepDocsPreserved": true,
+      "f2Prep005Started": false
+    },
+    "mergeCommit": "6da0bf43234e2dbb0b7ef1a4db80090e12a047b6",
+    "mergeCommand": "git merge --no-ff origin/main",
+    "conflicts": [
+      {
+        "file": "docs/program/CURRENT_PHASE.md",
+        "intent": "both branches independently prepended their own newest-first log entries onto an identical shared tail (starting at the F1-003-P2-R3 entry) - PR268's own P3/P3-R1 entries (2026-07-30) vs main's B2/B2-R1 entries (2026-08-02)",
+        "resolution": "layered both sets chronologically: main's newer 2026-08-02 entries (B2-R1 as the new top 'Son guncelleme', B2 below it) placed above PR268's own 2026-07-30 entries (P3-R1 demoted from 'Son guncelleme' to 'Prior update', P3 below it), all above the identical shared tail - no content deleted from either side"
+      },
+      {
+        "file": "docs/program/NORAMEDI_MASTER_TRACKER.md",
+        "intent": "identical structural conflict to CURRENT_PHASE.md at the top log entries",
+        "resolution": "same chronological layering as CURRENT_PHASE.md; the mid-document F1 phase status table row (auto-merged to PR268's less-stale but still pre-B2 text) further corrected in this same commit to reflect the true post-reconciliation, CI-green state"
+      },
+      {
+        "file": "docs/program/evidence/README.md",
+        "intent": "both branches appended one new table row each (PR268: F1-003-P3/P3-R1 evidence row; main: F1-003-B2 and F1-003-B2-R1 evidence rows) at the same insertion point",
+        "resolution": "kept all three rows, PR268's row first (chronologically earlier work), then main's two rows - purely additive, no overlapping content"
+      },
+      {
+        "file": "docs/program/phases/F1_CI_AND_TEST_ARCHITECTURE.md",
+        "intent": "two independent additive conflicts: (1) both branches appended a new subsection block at the same location (PR268: F1-003-P3 + F1-003-P3-R1 subsections; main: F1-003-B2 + F1-003-B2-R1 subsections); (2) both appended a row to the change-history table at the same location",
+        "resolution": "for both conflicts, concatenated PR268's block/rows first then main's block/rows, matching chronological order (P3/P3-R1 on 2026-07-30 before B2/B2-R1 on 2026-08-02); the top 'Faz durumu' line and status-table rows PR268 had already updated (main's own diff did not touch those lines) auto-merged cleanly with no conflict"
+      },
+      {
+        "file": "server/package.json",
+        "intent": "both branches added new script keys inside the same scripts object - PR268 added test:runtime:postgres-compat-consuming server:test:legacy-db-required; main added test:treatment-proposal-pdf/-route leaf scripts and expanded server:test:non-disposable/server:test:disposable-db with new external-calendar/digidentis/proposal-pdf test members",
+        "resolution": "kept main's expanded server:test:non-disposable and server:test:disposable-db aggregates (preserving every new test main added) plus main's two new leaf scripts, and added PR268's own server:test:legacy-db-required aggregate unchanged as an additional key - no script definition from either side was dropped or altered"
+      }
+    ],
+    "ancestryProof": "git merge-base --is-ancestor origin/main HEAD exit 0",
+    "diffCheckClean": true,
+    "dependencyInstall": {
+      "rootNpmCi": { "exitCode": 0, "mutatedTrackedFiles": false },
+      "serverNpmCi": { "exitCode": 0, "mutatedTrackedFiles": false },
+      "prismaGenerate": { "exitCode": 0 }
+    },
+    "staticValidation": {
+      "actionlintVersion": "v1.7.12",
+      "actionlintPlatform": "windows_amd64 (local validation only; CI itself uses linux_amd64 per its own pinned step)",
+      "actionlintChecksumVerified": true,
+      "actionlintChecksum": "6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9",
+      "actionlintExitCode": 0,
+      "actionlintFindings": 0,
+      "bashSyntaxCheck": { "files": ["scripts/test-runtime/provision.sh", "scripts/test-runtime/sweep.sh"], "allExitCode0": true },
+      "powershellParserValidation": { "files": ["scripts/test-runtime/provision.ps1", "scripts/test-runtime/sweep.ps1"], "allErrorCount0": true },
+      "jsonValidation": { "files": ["package.json", "server/package.json"], "allValid": true },
+      "pullRequestTargetUsage": false,
+      "permissionsLeastPrivilegeAllWorkflows": true,
+      "pathFiltersOnRequiredJobs": false,
+      "windowsBridgeWorkflowsUntouched": true,
+      "everyJobHasTimeoutMinutes": true
+    },
+    "localValidation": [
+      { "command": "npm run typecheck:runtime", "cwd": "repo root", "exitCode": 0 },
+      { "command": "npm run test:runtime:unit", "cwd": "repo root", "exitCode": 0, "result": "74/74 passed" },
+      { "command": "npm run typecheck (npx prisma generate && tsc --noEmit)", "cwd": "server", "exitCode": 0 },
+      { "command": "npm run build", "cwd": "repo root", "exitCode": 0, "mutatedTrackedFiles": false },
+      { "command": "npm run server:test:non-disposable", "cwd": "server", "exitCode": 0, "result": "68 member scripts, 0 failure markers across combined log" },
+      { "command": "npm run test:runtime:postgres", "cwd": "repo root", "exitCode": 0, "result": "server:test:disposable-db 9/9, cleanup success:true", "usedDisposablePostgres": true },
+      { "command": "npm run test:runtime:storage", "cwd": "repo root", "exitCode": 0, "result": "server:test:storage-integration 21/21, cleanup success:true", "usedDisposablePostgresAndMinio": true },
+      { "command": "7 frontend leaf scripts (test:dicom-helpers, test:onboarding-helpers, test:pairing-poller, test:booking-widget-helpers, test:clinic-bulk-export-selection, test:communication-consent-matrix, test:patient-detail-tabs-helpers)", "cwd": "repo root", "exitCode": 0, "result": "36+21+8+26+24+29+12 = 156 assertions, 0 failed" },
+      { "command": "npm run test:vitest", "cwd": "repo root", "exitCode": 0, "result": "7 files, 64/64 passed (grew from 3/35 pre-merge due to main's own external-calendar/patient-detail vitest suites)" },
+      { "command": "npm run test:runtime:postgres-compat", "cwd": "repo root", "exitCode": 1, "result": "116/117; chain stopped at test:clinic-bulk-export (Windows-local-only CRLF checkout artifact, see localOnlyEnvironmentFinding below), never reached test:retention-manual-run-audit locally", "usedDisposablePostgres": true },
+      { "command": "npm run test:runtime:parallel (verify-parallel)", "cwd": "repo root", "exitCode": 0, "result": "collisionCheck all 4 fields true, exactly 1 'Generated Prisma Client' line, 0 EBUSY, zero residual resources", "usedDisposablePostgresAndMinio": true },
+      { "command": "npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01", "cwd": "repo root", "exitCode": 0, "result": "0 candidates" },
+      { "command": "npm run lint", "cwd": "repo root", "exitCode": 0, "result": "confirmed still non-functional (no eslint.config.js), consistent with prior findings, not wired into CI" }
+    ],
+    "localOnlyEnvironmentFinding": {
+      "description": "server:test:legacy-db-required is an && (shell-AND) chain of 23 scripts; test:clinic-bulk-export (member 10 of 23) has one assertion ('status DTO never serializes sensitive fields') that fails only on this Windows machine because git checks the file out as CRLF (core.autocrlf=true) while the test does an exact LF-based substring match - confirmed via git ls-files --eol showing i/lf w/crlf on server/src/routes/clinicBulkExport.ts. This is the exact same root cause previously documented in F1-003-P3-R1 (see p3r1LocalValidation above) and is NOT a regression introduced by this reconciliation. Because the aggregate uses && chaining, this pre-existing Windows-only failure stops the chain before it reaches test:retention-manual-run-audit (member 23, last in the chain) locally on this machine. GitHub Actions runs on ubuntu-latest, which does not perform this CRLF conversion, so the real CI run (see githubActionsEvidence below) executes the full chain including the retention test.",
+      "classification": "environment-only, pre-existing, not a regression",
+      "reproducedTimes": 2,
+      "retentionTestNeverReachedByLocalAggregateForThisReason": true
+    },
+    "retentionConcurrencyDirectVerification": {
+      "method": "test:retention-manual-run-audit run directly, 5 consecutive times, against a manually-provisioned disposable PostgreSQL container mirroring the accepted orchestrator's own image/labels/naming (digest postgres@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777, label com.noramedi.test-runtime=true, migrations applied via prisma migrate deploy)",
+      "runs": [
+        { "run": 1, "exitCode": 0, "assertions": "29/29" },
+        { "run": 2, "exitCode": 0, "assertions": "29/29" },
+        { "run": 3, "exitCode": 0, "assertions": "29/29" },
+        { "run": 4, "exitCode": 0, "assertions": "29/29" },
+        { "run": 5, "exitCode": 0, "assertions": "29/29" }
+      ],
+      "residualStateAfterRuns": { "jobLockRows": 0, "operationalEventRows": 0 },
+      "containerRemoved": true,
+      "zeroLabeledResourcesAfterCleanup": true
+    },
+    "dockerCleanupProof": {
+      "checkedAfterEveryDisposableCommand": true,
+      "checkedAtTaskEnd": true,
+      "containersFilterComNoramediTestRuntimeTrue": [],
+      "networksFilterComNoramediTestRuntimeTrue": [],
+      "volumesFilterComNoramediTestRuntimeTrue": [],
+      "unrelatedPreExistingContainersLeftUntouched": ["f1003b2r1-repro-pg", "ext-cal-verify-pg"]
+    },
+    "migrationAssessment": {
+      "schemaChangedByPr268Itself": false,
+      "migrationAddedByPr268Itself": false,
+      "migrationsBroughtInFromMainByReconciliation": [
+        "20260730120000_add_external_calendar_integration",
+        "20260731000000_add_external_calendar_webhook_receiver_key",
+        "20260731100000_add_external_calendar_outbound_sync"
+      ],
+      "migrationDeployRequired": false,
+      "productionPrismaMigrationsTouched": false,
+      "disposableDbMigrationsAppliedDuringTesting": 4
+    },
+    "pushedHeadSha": "6da0bf43234e2dbb0b7ef1a4db80090e12a047b6",
+    "githubActionsEvidence": {
+      "runId": 30747523882,
+      "runUrl": "https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/30747523882",
+      "event": "pull_request",
+      "headSha": "6da0bf43234e2dbb0b7ef1a4db80090e12a047b6",
+      "headShaMatchesPushedHead": true,
+      "overallStatus": "completed",
+      "overallConclusion": "success",
+      "jobs": [
+        { "name": "ci-layers / Layer 1: frontend typecheck + build", "conclusion": "success", "duration": "41s" },
+        { "name": "ci-layers / Layer 1: server typecheck", "conclusion": "success", "duration": "52s" },
+        { "name": "ci-layers / Layer 1: test-runtime tooling typecheck + unit tests", "conclusion": "success", "duration": "22s" },
+        { "name": "ci-layers / Layer 1: workflow YAML, shell, PowerShell, and JSON validation", "conclusion": "success", "duration": "9s" },
+        { "name": "ci-layers / Layer 2: non-disposable backend tests", "conclusion": "success", "duration": "1m17s" },
+        { "name": "ci-layers / Layer 3: disposable PostgreSQL tests", "conclusion": "success", "duration": "5m0s" },
+        { "name": "ci-layers / Layer 4: disposable PostgreSQL + MinIO storage integration tests", "conclusion": "success", "duration": "34s" },
+        { "name": "ci-layers / Layer 5: full-suite/compatibility fail-safe (frontend)", "conclusion": "success", "duration": "26s" },
+        { "name": "ci-layers / Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)", "conclusion": "success", "duration": "5m54s" }
+      ],
+      "allNineJobsSuccess": true,
+      "retentionRaceRegressionOnRealCi": false,
+      "note": "the previously-failing job (Layer 5 backend) now passes on real GitHub Actions ubuntu-latest, confirming PR #280's fix holds through the actual CI-reachable execution path this task restores"
+    },
+    "reviewThreads": { "checked": true, "totalThreads": 0, "unresolvedThreads": 0 },
+    "prMetadataAfterPush": {
+      "state": "OPEN",
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "UNSTABLE"
+    },
+    "statusSeparation": {
+      "agentCompleted": true,
+      "currentMainReconciled": true,
+      "localCiEquivalentValidationPassed": true,
+      "retentionConcurrencyProven": true,
+      "disposableResourceCleanupClean": true,
+      "remoteCiVerified": true,
+      "prMerged": false,
+      "deployed": false,
+      "productionVerified": false,
+      "maxAuthorizedStatus": "AGENT_COMPLETED / TESTS_PASSED / REMOTE_CI_VERIFIED / PR_OPENED_AWAITING_REVIEW"
+    }
+  }
+}

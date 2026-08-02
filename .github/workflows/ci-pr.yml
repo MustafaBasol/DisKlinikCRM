@@ -1,0 +1,34 @@
+name: ci
+
+# F1-003-P3 — pull-request trigger for the layered CI model. All layer/job
+# definitions live in the reusable workflow ci-layers.yml (single source of
+# truth, no duplication between this and ci-main-and-nightly.yml). See
+# docs/program/evidence/F1-003-P3_LAYERED_CI_WORKFLOWS_AND_FULL_SUITE_FAIL_SAFE.md.
+#
+# No path filter is applied deliberately: the whole point of Layer 5 (the
+# full-suite/compatibility fail-safe) is that no layer here can be silently
+# narrowed by a changed-paths condition.
+
+on:
+  pull_request:
+    branches: [main]
+
+# A superseded push to the same PR cancels the still-running check for the
+# prior push, same pattern as the existing windows-bridge-pr.yml workflow.
+# The disposable-runtime jobs' own cleanup is fail-fatal and label-scoped
+# (F1-003-P2), so a cancelled run cannot corrupt a later run's resources -
+# but cancellation is NOT guaranteed to let that cleanup finish; see the P3
+# evidence document's "Cleanup and failure behavior" section for the exact,
+# honestly-documented limitation.
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci-layers:
+    uses: ./.github/workflows/ci-layers.yml
+    permissions:
+      contents: read

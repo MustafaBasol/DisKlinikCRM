@@ -18,6 +18,7 @@
     "test:vitest": "vitest run",
     "test:runtime:unit": "tsx scripts/test-runtime/__tests__/orchestratorUnit.test.ts",
     "test:runtime:postgres": "tsx scripts/test-runtime/orchestrator.ts postgres",
+    "test:runtime:postgres-compat": "tsx scripts/test-runtime/orchestrator.ts postgres-compat",
     "test:runtime:storage": "tsx scripts/test-runtime/orchestrator.ts storage",
     "test:runtime:parallel": "tsx scripts/test-runtime/orchestrator.ts verify-parallel",
     "test:runtime:cleanup-stale": "tsx scripts/test-runtime/orchestrator.ts cleanup-stale",
