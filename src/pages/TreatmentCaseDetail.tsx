@@ -38,6 +38,8 @@ import PrepareMessageModal from '../components/PrepareMessageModal';
 import InsuranceProvisionForm from '../components/InsuranceProvisionForm';
 import AppointmentForm from '../components/AppointmentForm';
 
+type ProcedureStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
+
 const TreatmentCaseDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -72,7 +74,15 @@ const TreatmentCaseDetail: React.FC = () => {
   const [isProcFormOpen, setIsProcFormOpen] = useState(false);
   const [editingProc, setEditingProc] = useState<any | null>(null);
   const [procSaving, setProcSaving] = useState(false);
-  const [procForm, setProcForm] = useState({
+  const [procForm, setProcForm] = useState<{
+    procedureName: string;
+    serviceId: string;
+    toothFdi: string;
+    status: ProcedureStatus;
+    estimatedCost: string;
+    notes: string;
+    scheduledDate: string;
+  }>({
     procedureName: '',
     serviceId: '',
     toothFdi: '',
@@ -318,12 +328,12 @@ const TreatmentCaseDetail: React.FC = () => {
       alert(err.response?.data?.error || t('treatmentCases:appointments.unlinkFailed'));
     }
   };
-  const PROC_STATUS = {
-    planned:     { dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-100' },
-    in_progress: { dot: 'bg-blue-500',    badge: 'bg-blue-50 text-blue-700 border-blue-100' },
-    completed:   { dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-    cancelled:   { dot: 'bg-gray-400',    badge: 'bg-gray-50 text-gray-500 border-gray-200' },
-  } as const;
+  const PROC_STATUS: Record<ProcedureStatus, { dot: string; badge: string; selected: string }> = {
+    planned:     { dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-100',   selected: 'bg-amber-50 text-amber-700 border-amber-400' },
+    in_progress: { dot: 'bg-blue-500',    badge: 'bg-blue-50 text-blue-700 border-blue-100',      selected: 'bg-blue-50 text-blue-700 border-blue-400' },
+    completed:   { dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', selected: 'bg-emerald-50 text-emerald-700 border-emerald-400' },
+    cancelled:   { dot: 'bg-gray-400',    badge: 'bg-gray-50 text-gray-500 border-gray-200',       selected: 'bg-gray-100 text-gray-700 border-gray-400' },
+  };
 
   if (loading) {
     return (
@@ -1383,13 +1393,15 @@ const TreatmentCaseDetail: React.FC = () => {
               <div>
                 <label className="label">{t('treatmentCases:procedures.fields.status')}</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {(Object.entries(PROC_STATUS) as [string, typeof PROC_STATUS[keyof typeof PROC_STATUS]][]).map(([s, cfg]) => (
+                  {(Object.entries(PROC_STATUS) as [ProcedureStatus, typeof PROC_STATUS[ProcedureStatus]][]).map(([s, cfg]) => (
                     <button
                       key={s}
+                      type="button"
+                      aria-pressed={procForm.status === s}
                       onClick={() => setProcForm((f) => ({ ...f, status: s }))}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-xs font-medium transition-all ${
                         procForm.status === s
-                          ? `${cfg.badge} border-current`
+                          ? cfg.selected
                           : 'bg-gray-50 dark:bg-gray-700 text-gray-500 border-gray-200 dark:border-gray-600 hover:border-gray-300'
                       }`}
                     >
