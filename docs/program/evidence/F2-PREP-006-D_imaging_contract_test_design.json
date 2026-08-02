@@ -1,0 +1,302 @@
+{
+  "taskId": "F2-PREP-006-D",
+  "status": "AGENT_COMPLETED",
+  "documentationOnly": true,
+  "authoritative": false,
+  "frozenBaseline": "4cb334d213b4dbbac4193f1a8c1878deddb55714",
+  "branch": "docs/f2-prep-006-d-imaging-contract-test-design",
+  "inputs": {
+    "acceptedCharter": "docs/program/architecture/F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md",
+    "ownershipEvidence": "docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md",
+    "dependencyEvidence": "docs/program/evidence/F2-PREP-002_CROSS_DOMAIN_DEPENDENCY_AND_DIRECT_ACCESS_MAP.md",
+    "sequencingEvidence": "docs/program/evidence/F2-PREP-004_MODULARIZATION_SEQUENCE_AND_PILOT_SELECTION.md",
+    "phaseDoc": "docs/program/phases/F10_IMAGING_DICOM_AND_AI.md",
+    "excludedSiblingBranches": ["F2-PREP-006-A", "F2-PREP-006-B", "F2-PREP-006-C"]
+  },
+  "inspectedPaths": [
+    "server/src/routes/imaging.ts",
+    "server/src/routes/imagingBridgePublic.ts",
+    "server/src/schemas/index.ts (imaging* schemas, lines 533-672)",
+    "server/src/services/imaging/imagingRequestTransitions.ts",
+    "server/src/services/imaging/imagingUploadValidation.ts",
+    "server/src/services/imaging/bridgeTokens.ts",
+    "server/src/services/imaging/bridgePairing.ts",
+    "server/src/services/imaging/bridgeOnboardingConfig.ts",
+    "server/src/services/imaging/bridgeUpdateConfig.ts",
+    "server/src/services/imaging/releaseMetadataValidation.ts",
+    "server/src/services/fileStorage.ts",
+    "server/src/jobs/imagingBridgeOfflineJob.ts",
+    "server/prisma/schema.prisma (lines 2541-2770, Imaging models)",
+    "server/src/tests/imaging.test.ts",
+    "server/src/tests/imagingBridgeOnboarding.test.ts",
+    "server/src/tests/imagingBridgePairing.test.ts",
+    "server/src/tests/imagingBridgeUpdate.test.ts",
+    "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts",
+    "server/src/services/privacy/patientAnonymization.ts (imaging redaction section)",
+    "server/src/services/privacy/orphanFileInspection.ts (imaging section)",
+    "server/src/services/privacy/deletionReviewInventory.ts (imaging section)",
+    "server/src/services/privacy/dataRetentionPolicy.ts (imaging reference)",
+    "server/src/routes/patientPrivacy.ts (imagingResults redaction counters)"
+  ],
+  "scopeExpansions": [
+    {
+      "trigger": "routes/imaging.ts explicitly cites routes/attachments.ts as its own design precedent (\"attachments.ts emsali\", imaging.ts line 10) and both independently define matching redactStudyLegalHoldReason/roleCanSeeLegalHoldReason logic.",
+      "expandedTo": "server/src/services/fileStorage.ts and the legal-hold redaction convention pattern (read-only, comparison purposes only, no attachments.ts contract drafted here)",
+      "documented": true,
+      "resultedInCodeChange": false
+    },
+    {
+      "trigger": "F2-PREP-002 edge IMG-09 groups routes/notifications.ts (overdue-lab digest) under the same dependency-map slice ('IMG') as Imaging, but the actual read target is prisma.labWorkOrder, a Labs-owned model, not an Imaging-owned model.",
+      "expandedTo": "server/src/routes/notifications.ts (read-only, to confirm it is out of scope for this contract; see characterizationTests CT-31)",
+      "documented": true,
+      "resultedInCodeChange": false
+    },
+    {
+      "trigger": "Privacy-domain callers (patientAnonymization.ts, orphanFileInspection.ts, deletionReviewInventory.ts, dataRetentionPolicy.ts) are named in F2-PREP-005 Section 10 as an accepted, documented exception to Imaging's forbidden-direct-access rule.",
+      "expandedTo": "server/src/services/privacy/{patientAnonymization,orphanFileInspection,deletionReviewInventory,dataRetentionPolicy}.ts (read-only, to catalogue the exception precisely; see backwardCompatibilityRequirements and CT-30)",
+      "documented": true,
+      "resultedInCodeChange": false
+    }
+  ],
+  "candidateCommands": [
+    { "name": "RegisterImagingDevice", "suggestedTaxonomyMapping": "RegisterImagingAsset", "mappingStatus": "PARTIAL", "route": "POST /api/imaging/devices", "evidence": "server/src/routes/imaging.ts:285", "status": "candidate" },
+    { "name": "UpdateImagingDevice", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "PUT /api/imaging/devices/:id", "evidence": "server/src/routes/imaging.ts:310", "status": "candidate" },
+    { "name": "DeleteImagingDevice", "suggestedTaxonomyMapping": "DeleteImagingAsset", "mappingStatus": "PARTIAL", "route": "DELETE /api/imaging/devices/:id", "evidence": "server/src/routes/imaging.ts:339", "status": "candidate" },
+    { "name": "CreateImagingRequest", "suggestedTaxonomyMapping": "CreateImagingRecord", "mappingStatus": "PARTIAL", "route": "POST /api/imaging/requests", "evidence": "server/src/routes/imaging.ts:435", "status": "candidate" },
+    { "name": "UpdateImagingRequest", "suggestedTaxonomyMapping": "UpdateImagingMetadata / UpdateProcessingStatus", "mappingStatus": "PARTIAL", "route": "PATCH /api/imaging/requests/:id", "evidence": "server/src/routes/imaging.ts:487", "status": "candidate" },
+    { "name": "CancelImagingRequest", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "PATCH /api/imaging/requests/:id/cancel", "evidence": "server/src/routes/imaging.ts:530", "status": "candidate" },
+    { "name": "CreateImagingStudy", "suggestedTaxonomyMapping": "CreateImagingRecord / FinalizeImagingUpload", "mappingStatus": "PARTIAL", "route": "POST /api/imaging/studies", "evidence": "server/src/routes/imaging.ts:559", "status": "candidate" },
+    { "name": "LinkImagingStudy", "suggestedTaxonomyMapping": "LinkImagingToEntity", "mappingStatus": "SUPPORTED", "route": "PATCH /api/imaging/studies/:id/link", "evidence": "server/src/routes/imaging.ts:807", "status": "candidate" },
+    { "name": "UnlinkImagingStudy", "suggestedTaxonomyMapping": "LinkImagingToEntity", "mappingStatus": "SUPPORTED_INVERSE", "route": "PATCH /api/imaging/studies/:id/unlink", "evidence": "server/src/routes/imaging.ts:859", "status": "candidate" },
+    { "name": "ArchiveImagingStudy", "suggestedTaxonomyMapping": "ArchiveImaging", "mappingStatus": "SUPPORTED", "route": "PATCH /api/imaging/studies/:id/archive", "evidence": "server/src/routes/imaging.ts:916", "status": "candidate" },
+    { "name": "UnarchiveImagingStudy", "suggestedTaxonomyMapping": "ArchiveImaging", "mappingStatus": "SUPPORTED_INVERSE", "route": "PATCH /api/imaging/studies/:id/unarchive", "evidence": "server/src/routes/imaging.ts:920", "status": "candidate" },
+    { "name": "SetImagingLegalHold", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "PATCH /api/imaging/studies/:id/legal-hold", "evidence": "server/src/routes/imaging.ts:927", "status": "candidate" },
+    { "name": "RegisterImagingBridgeAgent", "suggestedTaxonomyMapping": "RegisterImagingAsset", "mappingStatus": "PARTIAL_ALTERNATE", "route": "POST /api/imaging/bridges", "evidence": "server/src/routes/imaging.ts:1013", "status": "candidate" },
+    { "name": "RevokeImagingBridgeAgent", "suggestedTaxonomyMapping": "RevokeImagingAccess", "mappingStatus": "PARTIAL", "route": "POST /api/imaging/bridges/:id/revoke", "evidence": "server/src/routes/imaging.ts:1044", "status": "candidate" },
+    { "name": "DeleteImagingBridgeAgent", "suggestedTaxonomyMapping": "DeleteImagingAsset", "mappingStatus": "PARTIAL_ALTERNATE", "route": "DELETE /api/imaging/bridges/:id", "evidence": "server/src/routes/imaging.ts:1080", "status": "candidate" },
+    { "name": "CreateImagingBridgePairing", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "POST /api/imaging/bridge-pairings", "evidence": "server/src/routes/imaging.ts:1178", "status": "candidate" },
+    { "name": "CancelImagingBridgePairing", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "DELETE /api/imaging/bridge-pairings/:id", "evidence": "server/src/routes/imaging.ts:1268", "status": "candidate" },
+    { "name": "RecordImagingBridgeHeartbeat", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "POST /api/public/imaging/bridge/heartbeat", "evidence": "server/src/routes/imagingBridgePublic.ts:130", "status": "candidate" },
+    { "name": "IngestImagingStudy", "suggestedTaxonomyMapping": "FinalizeImagingUpload / RegisterImagingAsset", "mappingStatus": "PARTIAL", "route": "POST /api/public/imaging/bridge/studies", "evidence": "server/src/routes/imagingBridgePublic.ts:199", "status": "candidate" },
+    { "name": "RedeemImagingBridgePairing", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "POST /api/public/imaging/bridge/pair", "evidence": "server/src/routes/imagingBridgePublic.ts:399", "status": "candidate" }
+  ],
+  "candidateCommandDetails": [
+    {
+      "name": "CreateImagingStudy",
+      "inputDto": "imagingStudyUploadSchema (server/src/schemas/index.ts:605) + multipart file field",
+      "tenantContext": "resolveEffectiveClinicId(req.user, body.clinicId ?? query.clinicId); 403 if unresolvable",
+      "actorContext": "req.user (session JWT); createdById set to actor",
+      "authorization": "IMAGING_CLINICAL_ROLES (OWNER, ORG_ADMIN, CLINIC_MANAGER, DENTIST, RECEPTIONIST)",
+      "validation": "Zod schema + validateClinicalLinks (patient/appointment/treatmentCase/device same-clinic check) + file-signature/MIME allowlist check (isAllowedFileSignature)",
+      "idempotency": "none (manual path has no ingestKey; NULL ingestKey values never collide under the [clinicId, ingestKey] unique index)",
+      "transactionExpectation": "prisma.$transaction wraps ImagingStudy.create + ImagingImage.create + conditional ImagingRequest status advance (updateMany with open-status guard, 409 on race loss); storage write happens outside the DB transaction, before it",
+      "audit": "auditImaging('imaging_study_uploaded'); metadata limited to modality/fileSize/mimeType/imagingRequestId/linked boolean, no filename/PHI",
+      "sideEffects": "logActivity() only if patientId is set (patient-facing timeline)",
+      "candidateEvents": ["ImagingStudyReceived (proposed, not implemented)"],
+      "errors": "400 (no file / schema invalid / signature mismatch), 403 (clinic access), 404 (imagingRequestId not found in clinic), 400 (patient mismatch vs request), 409 (request not open for new studies, incl. race-lost 409 from the transaction), 500 (unexpected)",
+      "backwardCompatibility": "response is the full study object incl. images[], through redactStudyLegalHoldReason; any future contract layer must preserve this exact shape (see CT-28) until callers migrate"
+    },
+    {
+      "name": "IngestImagingStudy",
+      "inputDto": "imagingBridgeStudyUploadSchema (server/src/schemas/index.ts:666) + multipart file field",
+      "tenantContext": "clinicId derived exclusively from the authenticated bridge agent record (agent.clinicId); never from client input",
+      "actorContext": "bridge agent (token-authenticated, not a user); createdById is null on the resulting study",
+      "authorization": "authenticateBridgeAgent (sha256 token-hash lookup) + per-IP and per-token rate limiters + per-token concurrency slot (max 3)",
+      "validation": "Zod schema; server-recomputed sha256(file buffer) must equal client-declared ingestKey (400 on mismatch, never trusts client hash); file-signature/MIME allowlist check",
+      "idempotency": "primary: pre-check findFirst({clinicId, ingestKey}) returns duplicate:true with existing studyId; authoritative: @@unique([clinicId, ingestKey]) DB constraint catches races (P2002), storage file from the race loser is deleted and the pre-existing study id is returned",
+      "transactionExpectation": "prisma.$transaction wraps ImagingStudy.create + ImagingImage.create + conditional ImagingRequest advance, identical pattern to CreateImagingStudy; storage write precedes the transaction",
+      "audit": "no auditImaging() call found in this route (gap — see evidenceGaps); agent lastSeenAt/status updated on duplicate short-circuit",
+      "sideEffects": "none patient-facing (createdById null, no logActivity call found)",
+      "candidateEvents": ["ImagingStudyReceived (proposed, not implemented)"],
+      "errors": "401 (bad/missing bridge token, generic — no enumeration oracle), 429 (IP limiter, token limiter, or concurrency-slot exhaustion), 400 (no file, schema invalid, ingestKey/hash mismatch, unsupported file type), 413 (Multer file-size limit), 404 (deviceId or imagingRequestId not found in agent's clinic), 409 (request not open), 500 (unexpected upload-middleware or handler failure)",
+      "backwardCompatibility": "response shape {ok, studyId, duplicate} is minimal by design (bridge client, not a UI consumer); any future contract layer must preserve this minimal shape separately from CreateImagingStudy's full-object response"
+    },
+    {
+      "name": "SetImagingLegalHold",
+      "inputDto": "{ legalHold: boolean, legalHoldReason?: string }",
+      "tenantContext": "validateAndGetClinicIdScope-style clinic resolution (study must resolve within actor's scope)",
+      "actorContext": "req.user",
+      "authorization": "OWNER, ORG_ADMIN only (stricter than IMAGING_MANAGE_ROLES which also includes CLINIC_MANAGER)",
+      "validation": "study existence within scope",
+      "idempotency": "none (each call is a direct status write; setting the same value twice is a no-op-equivalent write, not rejected)",
+      "transactionExpectation": "single prisma.update, no multi-row transaction needed (ImagingImage has no own legalHold field, it inherits from the parent study)",
+      "audit": "auditImaging expected (see CT-21 — audit metadata must not leak legalHoldReason text to non-privileged log readers)",
+      "sideEffects": "downstream: patientAnonymization.ts and deletionReviewInventory.ts both honor this flag as a hard retention/redaction blocker",
+      "candidateEvents": [],
+      "errors": "403 (role or clinic), 404 (study not found in scope)",
+      "backwardCompatibility": "legalHoldReason must continue to be stripped from every response surface for non-OWNER/ORG_ADMIN roles (roleCanSeeLegalHoldReason), independent of any future contract layer"
+    }
+  ],
+  "candidateQueries": [
+    { "name": "GetImagingStudy", "suggestedTaxonomyMapping": "GetImagingMetadata / GetImagingStatus", "mappingStatus": "PARTIAL", "route": "GET /api/imaging/studies/:id", "evidence": "server/src/routes/imaging.ts:737", "status": "candidate",
+      "input": "studyId (path)", "output": "full study object incl. images[], with legalHoldReason redacted per role",
+      "tenantAndRbac": "IMAGING_CLINICAL_ROLES + findStudyInScope clinic-scoped lookup, 404 (not 403) on cross-clinic id to avoid an existence oracle",
+      "fieldMinimization": "legalHoldReason stripped for non-OWNER/ORG_ADMIN via redactStudyLegalHoldReason",
+      "paginationOrder": "n/a (single entity)", "cachingRestriction": "not cached today (no cache-control header set on this endpoint)",
+      "auditReadAccessRequirement": "no read-audit entry currently written for this GET (gap — see evidenceGaps)", "errors": "403, 404, 500" },
+    { "name": "ListPatientImaging", "suggestedTaxonomyMapping": "ListPatientImaging", "mappingStatus": "SUPPORTED", "route": "GET /api/patients/:patientId/imaging", "evidence": "server/src/routes/imaging.ts:711", "status": "candidate",
+      "input": "patientId (path)", "output": "array of study objects, redacted", "tenantAndRbac": "IMAGING_CLINICAL_ROLES + clinic scope on patient",
+      "fieldMinimization": "same redaction as GetImagingStudy", "paginationOrder": "not evidenced as paginated (gap — likely unbounded list, see evidenceGaps)", "cachingRestriction": "none observed",
+      "auditReadAccessRequirement": "not evidenced", "errors": "403, 404 (patient not in scope), 500" },
+    { "name": "ListImagingRequests", "suggestedTaxonomyMapping": "GetImagingStatus", "mappingStatus": "PARTIAL", "route": "GET /api/imaging/requests", "evidence": "server/src/routes/imaging.ts:413", "status": "candidate",
+      "input": "status filter?, patientId filter? (query)", "output": "array of ImagingRequest rows", "tenantAndRbac": "IMAGING_CLINICAL_ROLES + clinic scope",
+      "fieldMinimization": "none needed (no PHI beyond IDs/notes)", "paginationOrder": "not evidenced as paginated (gap)", "cachingRestriction": "none observed",
+      "auditReadAccessRequirement": "not evidenced", "errors": "403, 500" },
+    { "name": "ListUnlinkedImagingStudies", "suggestedTaxonomyMapping": "ListImagingLinks", "mappingStatus": "PARTIAL", "route": "GET /api/imaging/unlinked", "evidence": "server/src/routes/imaging.ts:692", "status": "candidate",
+      "input": "clinic scope only", "output": "studies where patientId is null", "tenantAndRbac": "IMAGING_CLINICAL_ROLES + clinic scope",
+      "fieldMinimization": "same redaction convention", "paginationOrder": "not evidenced as paginated (gap)", "cachingRestriction": "none observed",
+      "auditReadAccessRequirement": "not evidenced", "errors": "403, 500" },
+    { "name": "ListImagingDevices", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "GET /api/imaging/devices", "evidence": "server/src/routes/imaging.ts:262", "status": "candidate",
+      "input": "clinic scope only", "output": "devices with derived canDelete flag", "tenantAndRbac": "IMAGING_CLINICAL_ROLES + clinic scope",
+      "fieldMinimization": "none needed", "paginationOrder": "small bounded list by nature (devices per clinic), not evidenced as paginated", "cachingRestriction": "none observed",
+      "auditReadAccessRequirement": "not evidenced", "errors": "403, 500" },
+    { "name": "StreamImagingImagePreview", "suggestedTaxonomyMapping": "GetSecureAccessDescriptor", "mappingStatus": "PARTIAL", "route": "GET /api/imaging/studies/:id/images/:imageId/preview", "evidence": "server/src/routes/imaging.ts:796", "status": "candidate",
+      "input": "studyId, imageId (path)", "output": "binary stream, inline disposition; 415 if MIME not preview-allowlisted (DICOM special-cased to a dedicated viewer path)",
+      "tenantAndRbac": "IMAGING_CLINICAL_ROLES + validateAndGetClinicIdScope join against the parent study", "fieldMinimization": "n/a (binary)",
+      "paginationOrder": "n/a", "cachingRestriction": "Cache-Control: private, no-store; X-Content-Type-Options: nosniff — set explicitly, must be preserved",
+      "auditReadAccessRequirement": "auditImaging('imaging_study_viewed') fires on every stream, incl. previews", "errors": "403, 404 (image or file-in-storage not found), 415, 500" },
+    { "name": "StreamImagingImageDownload", "suggestedTaxonomyMapping": "GetSecureAccessDescriptor", "mappingStatus": "PARTIAL", "route": "GET /api/imaging/studies/:id/images/:imageId/download", "evidence": "server/src/routes/imaging.ts:800", "status": "candidate",
+      "input": "studyId, imageId (path)", "output": "binary stream, attachment disposition", "tenantAndRbac": "identical to preview",
+      "fieldMinimization": "n/a", "paginationOrder": "n/a", "cachingRestriction": "identical to preview", "auditReadAccessRequirement": "auditImaging('imaging_study_viewed', mode:'download')", "errors": "403, 404, 500" },
+    { "name": "ListImagingBridgeAgents", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "GET /api/imaging/bridges", "evidence": "server/src/routes/imaging.ts:992", "status": "candidate",
+      "input": "clinic scope only", "output": "agents, tokenHash never returned", "tenantAndRbac": "IMAGING_MANAGE_ROLES (OWNER, ORG_ADMIN, CLINIC_MANAGER only)",
+      "fieldMinimization": "token/secret fields excluded by construction", "paginationOrder": "not evidenced as paginated", "cachingRestriction": "none observed", "auditReadAccessRequirement": "not evidenced", "errors": "403, 500" },
+    { "name": "GetImagingBridgePairingStatus", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "GET /api/imaging/bridge-pairings/:id", "evidence": "server/src/routes/imaging.ts:1248", "status": "candidate",
+      "input": "pairingId (path)", "output": "pairing status/expiry, never the plaintext code", "tenantAndRbac": "IMAGING_MANAGE_ROLES + clinic scope",
+      "fieldMinimization": "codeHash never returned", "paginationOrder": "n/a", "cachingRestriction": "must remain uncached (short-lived, security-sensitive)", "auditReadAccessRequirement": "not evidenced", "errors": "403, 404, 500" },
+    { "name": "GetImagingBridgeOnboardingConfig", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "GET /api/imaging/bridge-onboarding/config", "evidence": "server/src/routes/imaging.ts:1299", "status": "candidate",
+      "input": "none (not clinic-scoped)", "output": "installer metadata, fail-closed on missing env", "tenantAndRbac": "IMAGING_MANAGE_ROLES; no PHI, not clinic-scoped by design",
+      "fieldMinimization": "n/a", "paginationOrder": "n/a", "cachingRestriction": "not evidenced", "auditReadAccessRequirement": "not evidenced", "errors": "403, 500 (fail-closed on invalid config)" },
+    { "name": "GetImagingBridgeBootstrap", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "GET /api/public/imaging/bridge/bootstrap", "evidence": "server/src/routes/imagingBridgePublic.ts:558", "status": "candidate",
+      "input": "bridge token (header)", "output": "agent's own clinic name + device bindings only", "tenantAndRbac": "bridge-token authenticated; scope is the single authenticated agent, never other clinics",
+      "fieldMinimization": "no cross-clinic or PHI data", "paginationOrder": "n/a", "cachingRestriction": "not evidenced", "auditReadAccessRequirement": "not evidenced", "errors": "401, 500" },
+    { "name": "GetImagingBridgeUpdateDescriptor", "suggestedTaxonomyMapping": null, "mappingStatus": "ADDITIONAL", "route": "GET /api/public/imaging/bridge/update", "evidence": "server/src/routes/imagingBridgePublic.ts:590", "status": "candidate",
+      "input": "bridge token (header)", "output": "staged-rollout update/rollback descriptor, deterministic bucket by agent id", "tenantAndRbac": "bridge-token authenticated",
+      "fieldMinimization": "n/a", "paginationOrder": "n/a", "cachingRestriction": "not evidenced", "auditReadAccessRequirement": "not evidenced", "errors": "401, 500 (fail-closed on invalid release metadata)" }
+  ],
+  "candidateEvents": [
+    {
+      "name": "ImagingStudyReceived",
+      "status": "candidate",
+      "evidenceSource": "docs/program/architecture/F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md:202 (\"Owned events: ImagingStudyReceived (proposed, not yet implemented)\")",
+      "currentImplementationStatus": "NOT_IMPLEMENTED",
+      "proposedTrigger": "successful commit of CreateImagingStudy or IngestImagingStudy's inner $transaction",
+      "mechanismNote": "No event bus, message queue, or outbox table exists anywhere in the codebase today (confirmed by grep across server/src for Queue|EventEmitter|outbox|bullmq scoped to imaging paths — the only hits are the 'unlinked queue' UI concept, a DB filter, not a real queue). This task does not propose Kafka or any new event platform, per governance constraints. If adopted, the only backward-compatible starting mechanism consistent with the rest of the codebase would be an in-process synchronous call or a Postgres-backed outbox table matching a pattern already used elsewhere in the program (see F2-PREP-002's TX-01 reference pattern) — neither is asserted as decided here; mechanism selection is out of this task's scope and is deferred to F2-PREP-006-E."
+    }
+  ],
+  "errorContract": {
+    "400": "Zod schema validation failure; malformed multipart (missing boundary); file-signature/MIME mismatch; ingestKey does not match recomputed file hash; patient/appointment/treatmentCase mismatch against a bound ImagingRequest",
+    "401": "bridge token missing/invalid/revoked — always a generic message, never distinguishes 'agent not found' from 'token wrong' (no enumeration oracle, per IMG-01 evidence)",
+    "403": "clinic access denied (resolveEffectiveClinicId / validateAndGetClinicIdScope failure) or role not in the route's required role set",
+    "404": "entity not found within the resolved clinic scope (device, request, study, image, pairing, bridge agent, or file-in-storage) — used deliberately in place of 403 for cross-tenant lookups to avoid confirming existence to an unauthorized caller",
+    "409": "state-machine conflict (ImagingRequest not open for new studies; device/bridge-agent has dependents preventing delete; pairing already redeemed/expired/locked) — several of these are re-checked inside a row-locked $transaction, not just at the initial read",
+    "413": "Multer file-size limit exceeded (bridge upload path)",
+    "415": "preview requested for a MIME type not on the inline-preview allowlist (download is always allowed regardless of type)",
+    "429": "rate limit exceeded — IP-scoped and token-scoped heartbeat/upload limiters, plus an in-process per-token concurrency slot cap (bridge upload path only)",
+    "500": "unexpected failure; response body is a generic {error} with no stack trace; server-side console.error carries the detail"
+  },
+  "idempotencyRules": [
+    {
+      "command": "IngestImagingStudy",
+      "rule": "Idempotent per (clinicId, ingestKey) where ingestKey = sha256(file bytes), enforced first as a pre-check read (returns duplicate:true fast path) and authoritatively by a @@unique([clinicId, ingestKey]) Postgres constraint (P2002 caught, race loser's just-written storage file is deleted, the pre-existing winner's studyId is returned).",
+      "verifiedAgainst": "server/src/routes/imagingBridgePublic.ts:257-267, 343-358; server/prisma/schema.prisma:2598-2650 (@@unique)"
+    },
+    {
+      "command": "CreateImagingStudy",
+      "rule": "Not idempotent by design. ingestKey is not collected on this path (manual upload); NULL values in a Postgres unique index never collide with each other, so uploading the same file twice via this route creates two independent ImagingStudy/ImagingImage rows.",
+      "verifiedAgainst": "server/prisma/schema.prisma:2598-2650 comment; server/src/schemas/index.ts:605-616 (imagingStudyUploadSchema has no ingestKey field)"
+    },
+    {
+      "command": "SetImagingLegalHold / ArchiveImagingStudy / UnarchiveImagingStudy",
+      "rule": "Naturally idempotent (repeat calls with the same target state are no-op-equivalent single-field writes); not enforced by a dedicated idempotency key, just by the field being a simple enum/boolean.",
+      "verifiedAgainst": "server/src/routes/imaging.ts:916-931 (route bodies not fully read line-by-line for this task; inferred from schema shape — flagged in unresolvedQuestions)"
+    }
+  ],
+  "characterizationTests": [
+    { "id": "CT-01", "area": "tenant-isolation", "contractTarget": "GetImagingStudy", "testLevel": "unit-mock", "infrastructure": "in-memory Prisma mock", "fixtureIsolation": "per-test mock client, no shared state", "assertions": ["cross-clinic studyId resolves to 404, never 403 or the record"], "status": "non-blocking", "existingCoverage": "server/src/tests/imaging.test.ts (clinic isolation, mock-based, per source survey)" },
+    { "id": "CT-02", "area": "tenant-isolation", "contractTarget": "ListPatientImaging", "testLevel": "db-integration", "infrastructure": "disposable Postgres (per F1-003-P2A pattern)", "fixtureIsolation": "two clinics, two patients, seeded per test in isolated transaction/schema", "assertions": ["studies belonging to a patient in clinic B never appear when queried with a clinic-A-scoped user, even given B's valid patientId"], "status": "blocking", "existingCoverage": "none (gap)" },
+    { "id": "CT-03", "area": "tenant-isolation", "contractTarget": "ImagingBridgePairingDevice (no own clinicId column)", "testLevel": "db-integration", "infrastructure": "disposable Postgres", "fixtureIsolation": "two clinics with pairings/devices of the same deviceId string", "assertions": ["every query path that reads ImagingBridgePairingDevice correctly scopes through the parent ImagingBridgePairing.clinicId join; no query reads this table unscoped"], "status": "blocking", "existingCoverage": "none (gap; structural risk noted in F2-PREP-004 point 6 recommendation to add an own clinicId column)" },
+    { "id": "CT-04", "area": "rbac", "contractTarget": "all routes/imaging.ts routes", "testLevel": "unit-mock", "infrastructure": "in-memory role fixtures", "fixtureIsolation": "n/a", "assertions": ["BILLING and ASSISTANT roles receive 403 on every route in the file"], "status": "non-blocking", "existingCoverage": "server/src/tests/imaging.test.ts (source regression check, per source survey)" },
+    { "id": "CT-05", "area": "rbac", "contractTarget": "SetImagingLegalHold", "testLevel": "unit-mock", "infrastructure": "in-memory role fixtures", "fixtureIsolation": "n/a", "assertions": ["CLINIC_MANAGER, DENTIST, RECEPTIONIST all receive 403; only OWNER/ORG_ADMIN succeed"], "status": "blocking", "existingCoverage": "none confirmed (gap)" },
+    { "id": "CT-06", "area": "rbac", "contractTarget": "imagingBridgePublic.ts routes", "testLevel": "integration-supertest", "infrastructure": "in-process express app", "fixtureIsolation": "n/a", "assertions": ["a valid user-session JWT presented as the bridge Authorization header is rejected (401), confirming the two auth mechanisms do not cross-accept each other's credentials"], "status": "blocking", "existingCoverage": "none confirmed (gap)" },
+    { "id": "CT-07", "area": "upload-finalization", "contractTarget": "CreateImagingStudy", "testLevel": "db-integration+live-storage", "infrastructure": "disposable Postgres + local-disk fileStorage in a temp uploads dir", "fixtureIsolation": "per-test temp storage root, per-test DB schema", "assertions": ["ImagingImage.fileSize/mimeType/filePath match the uploaded bytes exactly; the physical file is readable back via openFileStream"], "status": "blocking", "existingCoverage": "existing tests are mock/unit-level only per F2-PREP-004 point 6 (no live-DB or live-file-storage verification exists today)" },
+    { "id": "CT-08", "area": "upload-finalization", "contractTarget": "IngestImagingStudy", "testLevel": "db-integration+live-storage", "infrastructure": "disposable Postgres + local-disk fileStorage", "fixtureIsolation": "per-test temp storage root, per-test DB schema, seeded bridge agent+token", "assertions": ["ImagingRequest transitions requested/scheduled -> received atomically with study creation when imagingRequestId is supplied"], "status": "blocking", "existingCoverage": "none live (gap, same F2-PREP-004 point-6 basis)" },
+    { "id": "CT-09", "area": "upload-finalization", "contractTarget": "CreateImagingStudy / IngestImagingStudy", "testLevel": "unit-mock", "infrastructure": "in-memory buffer fixtures", "fixtureIsolation": "n/a", "assertions": ["a file whose magic bytes do not match its declared MIME/extension is rejected with 400 before any storage write"], "status": "non-blocking", "existingCoverage": "server/src/tests/imaging.test.ts (DICOM Part-10 signature validation, per source survey)" },
+    { "id": "CT-10", "area": "duplicate-idempotency", "contractTarget": "IngestImagingStudy", "testLevel": "db-integration", "infrastructure": "disposable Postgres", "fixtureIsolation": "per-test DB schema", "assertions": ["second sequential call with the same ingestKey returns {duplicate:true, studyId: <first id>} and creates no second ImagingImage row"], "status": "blocking", "existingCoverage": "unit-mock version exists; live-DB confirmation is the gap" },
+    { "id": "CT-11", "area": "duplicate-idempotency", "contractTarget": "IngestImagingStudy", "testLevel": "db-integration", "infrastructure": "disposable Postgres, two concurrent requests fired against the same running server instance", "fixtureIsolation": "per-test DB schema", "assertions": ["concurrent identical-ingestKey uploads: exactly one ImagingStudy row persists; the losing request's uploaded file is deleted (no orphan); the losing request's response still returns 200 with the winner's studyId, not an error"], "status": "blocking", "existingCoverage": "none (gap; this is the P2002 race path, not previously exercised under real concurrency per source survey)" },
+    { "id": "CT-12", "area": "duplicate-idempotency", "contractTarget": "CreateImagingStudy", "testLevel": "db-integration", "infrastructure": "disposable Postgres", "fixtureIsolation": "per-test DB schema", "assertions": ["uploading byte-identical files twice via the manual path creates two independent ImagingStudy rows (NULL ingestKey never collides)"], "status": "blocking", "existingCoverage": "none (gap; documents intentional non-idempotency to prevent future regressions from assuming manual uploads dedupe)" },
+    { "id": "CT-13", "area": "storage-compensation", "contractTarget": "CreateImagingStudy", "testLevel": "db-integration+live-storage", "infrastructure": "disposable Postgres with an injected DB-transaction failure (e.g. a violated FK/constraint), live temp storage", "fixtureIsolation": "per-test temp storage root", "assertions": ["when the $transaction throws after saveFile succeeded, the just-written file is deleted via the catch-block compensation path; no orphaned file remains"], "status": "blocking", "existingCoverage": "none live (gap; behavior confirmed present in source at server/src/routes/imaging.ts:682-688, not yet exercised end-to-end)" },
+    { "id": "CT-14", "area": "storage-compensation", "contractTarget": "IngestImagingStudy", "testLevel": "db-integration+live-storage", "infrastructure": "disposable Postgres, two concurrent requests, live temp storage", "fixtureIsolation": "per-test temp storage root", "assertions": ["on a P2002 race loss, the race-loser's own file is deleted (server/src/routes/imagingBridgePublic.ts:346-348) before it returns the winner's studyId"], "status": "blocking", "existingCoverage": "none live (gap)" },
+    { "id": "CT-15", "area": "secure-url-authorization", "contractTarget": "StreamImagingImagePreview / StreamImagingImageDownload", "testLevel": "unit-mock", "infrastructure": "in-memory fixtures", "fixtureIsolation": "n/a", "assertions": ["no route in the imaging domain ever returns a public/static/signed URL string; every access is a live, re-authenticated stream response with Cache-Control: private, no-store"], "status": "non-blocking", "existingCoverage": "server/src/tests/imaging.test.ts (source regression: no public/static URLs, per source survey)" },
+    { "id": "CT-16", "area": "secure-url-authorization", "contractTarget": "GetImagingStudy, ListPatientImaging, ListUnlinkedImagingStudies, CreateImagingStudy response", "testLevel": "unit-mock", "infrastructure": "in-memory fixtures", "fixtureIsolation": "n/a", "assertions": ["legalHoldReason is absent/redacted for CLINIC_MANAGER/DENTIST/RECEPTIONIST across all four response surfaces uniformly, not just the ones currently exercised by existing tests"], "status": "blocking", "existingCoverage": "partial (redaction helper exists and is unit-tested; uniform application across all four response sites not confirmed as a single characterization test)" },
+    { "id": "CT-17", "area": "archive-deletion", "contractTarget": "ArchiveImagingStudy / UnarchiveImagingStudy", "testLevel": "db-integration", "infrastructure": "disposable Postgres + temp storage", "fixtureIsolation": "per-test DB schema and storage root", "assertions": ["archiving/unarchiving only changes ImagingStudy.status; no ImagingImage row or physical file is touched, moved, or deleted"], "status": "blocking", "existingCoverage": "none (gap)" },
+    { "id": "CT-18", "area": "archive-deletion", "contractTarget": "DeleteImagingDevice", "testLevel": "unit-mock", "infrastructure": "in-memory Prisma mock simulating FOR UPDATE locking", "fixtureIsolation": "n/a", "assertions": ["delete is rejected 409 if any ImagingStudy/ImagingRequest references the device; row-locked transaction re-checks eligibility, not just an initial read"], "status": "non-blocking", "existingCoverage": "implied by source pattern per survey; treated as characterized, not newly gapped" },
+    { "id": "CT-19", "area": "archive-deletion", "contractTarget": "ImagingStudy / ImagingImage (no delete endpoint)", "testLevel": "static-route-inventory", "infrastructure": "route table introspection (no live server needed)", "fixtureIsolation": "n/a", "assertions": ["no DELETE route exists for ImagingStudy or ImagingImage anywhere in the router; this is a regression guard so a future generic entity-delete utility elsewhere in the codebase is never silently wired to these tables"], "status": "blocking", "existingCoverage": "none (gap; new regression guard)" },
+    { "id": "CT-20", "area": "audit", "contractTarget": "all mutating routes/imaging.ts routes", "testLevel": "unit-mock", "infrastructure": "in-memory audit-log capture", "fixtureIsolation": "n/a", "assertions": ["auditImaging() metadata objects never contain filename, DICOM patient tags, or free-text PHI, across every call site"], "status": "non-blocking", "existingCoverage": "server/src/tests/imaging.test.ts (source regression: no PII in audit metadata, per source survey)" },
+    { "id": "CT-21", "area": "audit", "contractTarget": "SetImagingLegalHold", "testLevel": "unit-mock", "infrastructure": "in-memory audit-log capture", "fixtureIsolation": "n/a", "assertions": ["audit entry records actorRole and hold boolean; legalHoldReason text is never written into audit metadata regardless of actor role"], "status": "blocking", "existingCoverage": "none confirmed (gap)" },
+    { "id": "CT-22", "area": "linked-entity-ownership", "contractTarget": "LinkImagingStudy", "testLevel": "unit-mock", "infrastructure": "in-memory Prisma mock", "fixtureIsolation": "n/a", "assertions": ["linking to a patientId/appointmentId/treatmentCaseId belonging to a different clinic than the study is rejected (validateClinicalLinks)"], "status": "non-blocking", "existingCoverage": "implied by existing relationGuards test coverage referenced across attachments.ts/imaging.ts/labOrders.ts pattern" },
+    { "id": "CT-23", "area": "linked-entity-ownership", "contractTarget": "LinkImagingStudy", "testLevel": "db-integration", "infrastructure": "disposable Postgres", "fixtureIsolation": "per-test DB schema", "assertions": ["a study created from an ImagingRequest cannot be relinked to an appointmentId/treatmentCaseId that is inconsistent with the originating request's own patient"], "status": "blocking", "existingCoverage": "none confirmed (gap)" },
+    { "id": "CT-24", "area": "malformed-metadata", "contractTarget": "imagingStudyUploadSchema", "testLevel": "unit", "infrastructure": "Zod schema invocation, no DB/storage", "fixtureIsolation": "n/a", "assertions": ["invalid modality enum, non-ISO studyDate, and missing required fields are all rejected with a 400 shape matching validation.error.format()"], "status": "non-blocking", "existingCoverage": "server/src/tests/imaging.test.ts (Zod schema validation, per source survey)" },
+    { "id": "CT-25", "area": "malformed-metadata", "contractTarget": "imagingBridgeStudyUploadSchema", "testLevel": "unit", "infrastructure": "Zod schema invocation", "fixtureIsolation": "n/a", "assertions": ["ingestKey values that are not exactly 64 lowercase hex characters are rejected before any DB or storage call is attempted"], "status": "non-blocking", "existingCoverage": "server/src/tests/imaging.test.ts (bridge ingest schema validation, per source survey)" },
+    { "id": "CT-26", "area": "retry-failure", "contractTarget": "RecordImagingBridgeHeartbeat", "testLevel": "db-integration", "infrastructure": "disposable Postgres, rate limiter with a controllable clock", "fixtureIsolation": "per-test DB schema and limiter state", "assertions": ["once the IP or token limiter is exhausted, further heartbeats return 429 and do not mutate ImagingBridgeAgent.lastSeenAt/status"], "status": "blocking", "existingCoverage": "none confirmed at db-integration level (gap)" },
+    { "id": "CT-27", "area": "retry-failure", "contractTarget": "IngestImagingStudy upload middleware", "testLevel": "integration-supertest", "infrastructure": "in-process express app with Multer wired", "fixtureIsolation": "n/a", "assertions": ["oversized file yields 413; disallowed type yields 400; a thrown middleware error yields 500 — none of the three paths leaves a partial ImagingStudy/ImagingImage row"], "status": "blocking", "existingCoverage": "none confirmed (gap)" },
+    { "id": "CT-28", "area": "backward-compatibility", "contractTarget": "GetImagingStudy, ListPatientImaging, CreateImagingStudy response shapes", "testLevel": "snapshot", "infrastructure": "unit-mock", "fixtureIsolation": "n/a", "assertions": ["current field names, images[] nesting, and redaction behavior are snapshotted so a future contract/service layer cannot silently change the wire shape without an explicit, reviewed diff"], "status": "blocking", "existingCoverage": "none (gap; this is the primary regression net for any future expand-migrate-contract step per F2-PREP-005 Section 14)" },
+    { "id": "CT-29", "area": "backward-compatibility", "contractTarget": "ImagingBridgePairingDevice", "testLevel": "documentation-placeholder", "infrastructure": "n/a", "assertions": ["if/when an own clinicId/organizationId column is added to this table (F2-PREP-004's recommended additive fix), CT-03's join-based scoping test must be re-run and must still pass, not merely replaced"], "status": "non-blocking", "existingCoverage": "n/a (forward-looking placeholder, not a defect in current behavior)" },
+    { "id": "CT-30", "area": "current-direct-access-callers", "contractTarget": "Privacy-domain exception callers", "testLevel": "unit-mock", "infrastructure": "in-memory Prisma mock", "fixtureIsolation": "n/a", "assertions": ["patientAnonymization.ts, orphanFileInspection.ts, and deletionReviewInventory.ts continue to read/write the same ImagingImage/ImagingStudy fields unchanged if a named contract layer is introduced later; this test exists to make that non-negotiable, not to validate current correctness"], "status": "blocking", "existingCoverage": "none as a dedicated cross-domain compatibility test (gap); individual privacy behaviors are covered elsewhere by kvkkAttachmentImagingLifecycle.test.ts" },
+    { "id": "CT-31", "area": "current-direct-access-callers", "contractTarget": "routes/notifications.ts overdue-lab digest (IMG-09)", "testLevel": "static-import-check", "infrastructure": "source grep / import-graph check, no live server needed", "fixtureIsolation": "n/a", "assertions": ["confirms this caller reads prisma.labWorkOrder (Labs-slice), never an Imaging-owned model (ImagingStudy/Image/Request/Device/BridgeAgent/Pairing) directly, and is therefore out of this contract's caller surface entirely"], "status": "non-blocking", "existingCoverage": "confirmed by this task's own source reading (F2-PREP-002 IMG-09); framed here as a regression guard, not a new investigation" }
+  ],
+  "blockingTests": ["CT-02","CT-03","CT-05","CT-06","CT-07","CT-08","CT-10","CT-11","CT-12","CT-13","CT-14","CT-16","CT-17","CT-19","CT-21","CT-23","CT-26","CT-27","CT-28","CT-30"],
+  "nonBlockingTests": ["CT-01","CT-04","CT-09","CT-15","CT-18","CT-20","CT-22","CT-24","CT-25","CT-29","CT-31"],
+  "backwardCompatibilityRequirements": [
+    "No existing route path, method, request shape, or response shape may change as a side effect of drafting or later adopting this contract — this task changes documentation only.",
+    "Expand-migrate-contract only: any future implementation introduces a named contract alongside existing direct-call paths (expand), migrates callers one at a time (migrate), and removes the old path only once every caller has moved (contract) — never a simultaneous cutover, per F2-PREP-005 Section 14.",
+    "Allowed inbound callers to Imaging's owned models, per F2-PREP-005 Section 10, must remain functionally unchanged: Patients (read-only enrichment via ListPatientImaging), Privacy (KVKK lifecycle fields on ImagingImage/ImagingStudy — an accepted, documented exception, not a violation to be closed by this contract).",
+    "Forbidden direct access rule must be preserved: no domain outside Imaging (and the documented Privacy exception) may write directly to Imaging's owned Prisma models; imagingBridgePublic.ts must keep deriving clinicId only from the server-matched agent record, never client input.",
+    "All of Imaging's own $transaction sites remain domain-internal (a property already true today) and must not regress.",
+    "legalHoldReason redaction (roleCanSeeLegalHoldReason / redactStudyLegalHoldReason) must be preserved on every response surface, independent of any future contract layer.",
+    "Storage-key derivation (clinicId-prefixed) and the never-a-public-URL streaming access pattern must be preserved; fileStorage.ts remains shared infrastructure, not something this contract takes ownership of.",
+    "This contract's own PZ-IMG-02 (inventory race, out of Imaging's boundary) and PZ-IMG-03 (backup/restore RBAC, unverified) are explicitly not resolved or claimed resolved by this task, per F2-PREP-005 Section 10/14."
+  ],
+  "toolingPocDraft": {
+    "tool": "dependency-cruiser",
+    "mode": "report-only",
+    "candidateAllowedRoots": [
+      "server/src/routes/imaging.ts",
+      "server/src/routes/imagingBridgePublic.ts",
+      "server/src/services/imaging/**",
+      "server/src/jobs/imagingBridgeOfflineJob.ts"
+    ],
+    "forbiddenEdges": [
+      "any module outside the allowed roots importing/calling prisma.imagingStudy | imagingImage | imagingRequest | imagingDevice | imagingBridgeAgent | imagingBridgePairing | imagingBridgePairingDevice | imagingBridgeBinding directly, once a named contract exists to call instead"
+    ],
+    "allowList": [
+      "services/privacy/{patientAnonymization,orphanFileInspection,deletionReviewInventory,dataRetentionPolicy}.ts -> Imaging Prisma models (accepted KVKK lifecycle exception, F2-PREP-005 Section 10)",
+      "routes/attachments.ts, routes/labOrders.ts -> services/fileStorage.ts (shared infrastructure, not Imaging-owned)",
+      "services/privacy/patientPrivacyExportPackage.ts -> routes/attachments.ts constant import (IMG-07, pre-existing reversed-layering issue, unrelated to the Imaging boundary itself; tracked separately, not by this POC)"
+    ],
+    "reportFormat": "dependency-cruiser --output-type json, summarized into a markdown table for the CI job's step summary; no SARIF/GitHub code-annotation wiring at POC stage",
+    "falsePositiveReview": "first report is manually reviewed by the task owner before any promotion decision; confirmed false positives are added to the allow-list with a one-line justification comment in the config file, never silently ignored",
+    "ciBudget": "path-filtered trigger reusing the existing windows-bridge-pr.yml precedent (imaging/bridge paths only), so unrelated PRs see ~0 added CI time; target added wall-clock under 30s (assumption based on typical dependency-cruiser run times at this repo's scale, not measured by this task)",
+    "removalPath": "delete the dependency-cruiser devDependency, its config file, and the CI step; it is analysis-time only and nothing at runtime depends on it, so removal is a single, trivially revertible PR",
+    "promotionCriteria": "report-only for at least one full review cycle with zero unexplained findings, plus explicit written approval from the program owner, before flipping to blocking mode; blocking mode remains scoped to the Imaging paths only, never repository-wide, per F2-PREP-005 Section 12",
+    "explicitlyNotInScope": "installing the dependency-cruiser package, adding any config file, or wiring any CI step — this task drafts the spec only, per governance constraints (no dependency-cruiser implementation authorized)"
+  },
+  "assumptions": [
+    "The suggested command/query taxonomy in the task prompt is illustrative, not authoritative — this document maps each suggested name to the closest evidence-grounded reality and explicitly flags names with no current backing (RequestImagingProcessing, UpdateProcessingStatus as a distinct concept, GetImagingProcessingResult, ExportImagingEvidence as an Imaging-owned command, RequestSecureImagingAccess as a token-issuing command) rather than inventing unevidenced behavior.",
+    "Route line numbers cited throughout are accurate as of the frozen baseline commit 4cb334d213b4dbbac4193f1a8c1878deddb55714 and may drift on main; F2-PREP-006-E should re-verify before final adoption.",
+    "Test-level assignments (unit-mock vs db-integration vs live-storage) assume the disposable-Postgres runtime pattern already established by F1-003-P2A is reusable as-is for Imaging; this was not independently re-verified against that task's exact provisioning script."
+  ],
+  "evidenceGaps": [
+    "No auditImaging() (or any audit) call was found in the IngestImagingStudy route handler (server/src/routes/imagingBridgePublic.ts:199-360+), unlike CreateImagingStudy's explicit auditImaging('imaging_study_uploaded') call — this asymmetry is not explained by any doc read for this task and should be confirmed as intentional (bridge ingest volume may be considered non-audit-worthy) or flagged as a real gap by F2-PREP-006-E.",
+    "GetImagingStudy, ListPatientImaging, ListImagingRequests, and ListUnlinkedImagingStudies show no evidence of pagination; for clinics with large imaging volumes this may already be a real (pre-existing, not contract-introduced) scalability gap, out of scope to fix here but worth flagging.",
+    "Idempotency behavior for SetImagingLegalHold/ArchiveImagingStudy/UnarchiveImagingStudy is inferred from the field/schema shape, not from a line-by-line read of every route body — flagged as a soft gap, not a hard unresolved question.",
+    "The exact deleteFile() orphan-detection story when a storage-compensation delete itself fails (imaging.ts:684, .catch(() => {})) was not traced end-to-end against orphanFileInspection.ts to confirm the forward case (orphaned file with no DB row) is eventually detected the same way the inverse case (DB row with a missing file) is via storageVerifiedMissingAt."
+  ],
+  "unresolvedQuestions": [
+    "Should ImagingBridgePairingDevice gain its own clinicId/organizationId column (F2-PREP-004's recommended additive fix) before or independently of this contract's eventual adoption? This task takes no position — it is a schema change, explicitly out of scope here.",
+    "Is the audit-call asymmetry between CreateImagingStudy and IngestImagingStudy intentional? See evidenceGaps.",
+    "Should ExportImagingEvidence exist as an Imaging-owned command at all, or should the contract formally document imaging-data export as permanently Privacy-owned (current reality) with Imaging exposing only the read queries Privacy already calls? This task leans toward the latter but defers the final call to F2-PREP-006-E.",
+    "What is the correct forward-compatible mechanism for ImagingStudyReceived (in-process call vs. outbox table vs. something else) given no event infrastructure exists today? Explicitly deferred, not decided, by this task."
+  ],
+  "nextConsolidationOwner": "F2-PREP-006-E"
+}
