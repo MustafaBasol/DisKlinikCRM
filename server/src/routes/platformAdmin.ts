@@ -11,7 +11,7 @@ import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies
 import { loadDataRetentionConfig, DATA_RETENTION_RUNTIME_SETTING_KEY } from '../services/privacy/dataRetentionPolicy.js';
 import type { DataRetentionSummary } from '../jobs/dataRetentionCleanupJob.js';
 import { DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS } from '../jobs/dataRetentionCleanupJob.js';
-import { withJobLock } from '../utils/jobLock.js';
+import { acquireJobLock, releaseJobLock } from '../utils/jobLock.js';
 import {
   recordManualRunStarted,
   recordManualRunTerminal,
@@ -1338,14 +1338,57 @@ router.post('/privacy/data-retention/run', async (req: PlatformAdminRequest, res
   }
 
   // ── Live run: genuine attempt — from here on, a delete/anonymize batch
-  // may actually execute. Write the durable "started" row FIRST, before the
-  // job lock is even attempted. If it cannot be persisted, refuse to run
-  // cleanup at all: a destructive run must never begin with zero durable
-  // trace. ──────────────────────────────────────────────────────────────
+  // may actually execute.
+  //
+  // F1-003-B2: the shared job lock is acquired FIRST, before either audit
+  // write — not after the "started" row as before. Under the old ordering,
+  // two genuinely-simultaneous manual attempts (fired with no await between
+  // them, exactly as the concurrency test does) each first paid the
+  // variable-latency cost of loadDataRetentionConfig/getPlatformSetting and
+  // a `recordManualRunStarted` DB transaction, and only then contended for
+  // the lock. Because this cleanup routinely completes in single-digit
+  // milliseconds against a small/disposable dataset, a fast attempt's
+  // entire acquire→cleanup→release cycle could finish before a
+  // simultaneously-fired second attempt ever reached its own lock attempt —
+  // so the second attempt found the lock already free and legitimately (if
+  // sequentially, not concurrently) acquired it too, producing two 200s
+  // instead of the required exactly-one-200/one-409 outcome. It was never a
+  // flaw in the lock's own atomicity (verified directly against real
+  // PostgreSQL: 200+ concurrent acquire attempts, zero double-grants) —
+  // acquiring first closes almost all of the unprotected window by making
+  // the lock attempt the very first DB operation of the "genuine attempt"
+  // path, shared identically by both racers. See
+  // docs/program/evidence/F1-003-B2_RETENTION_RUN_MUTUAL_EXCLUSION_RACE.md.
+  //
+  // Same shared lease lock as the scheduled cron (dataRetentionCleanupJob.ts):
+  // a manual live run must never execute its delete/anonymize batches
+  // concurrently with the scheduled job OR another manual live run.
+  let holdingLock: boolean;
+  try {
+    holdingLock = await acquireJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS);
+  } catch (lockErr: unknown) {
+    // Cannot even determine whether the lock is free (e.g. DB unreachable) —
+    // fail safe exactly like an already-held lock: never assume exclusivity
+    // that could not be proven. Matches the pre-existing withJobLock()
+    // behavior this route relied on before F1-003-B2 (see jobLock.ts).
+    const msg = lockErr instanceof Error ? lockErr.message : 'Unknown error';
+    console.error(`[data-retention] Failed to acquire '${DATA_RETENTION_JOB_LOCK_NAME}' lock: ${msg}`);
+    holdingLock = false;
+  }
+
+  // Every attempt — winner or loser — writes its own durable "started" row
+  // next, still strictly before any mutation. If it cannot be persisted,
+  // refuse to run cleanup at all: a destructive run must never begin with
+  // zero durable trace.
   let runId: string;
   try {
     ({ runId } = await recordManualRunStarted(gateCtx));
   } catch (startErr: unknown) {
+    if (holdingLock) {
+      // We reserved the lock but can't durably record the attempt — release
+      // it immediately rather than orphaning it for the full TTL.
+      await releaseJobLock(DATA_RETENTION_JOB_LOCK_NAME);
+    }
     // Sanitized: only the failure message from the audit-insert itself is
     // logged — never patient/clinic data, none of which is ever in scope
     // at this point (no cleanup has run).
@@ -1357,29 +1400,7 @@ router.post('/privacy/data-retention/run', async (req: PlatformAdminRequest, res
     return;
   }
 
-  let summary: DataRetentionSummary | undefined;
-  let lockUnavailable = false;
-
-  try {
-    const { runDataRetentionCleanup } = await import('../jobs/dataRetentionCleanupJob.js');
-    // Same shared lease lock as the scheduled cron (dataRetentionCleanupJob.ts):
-    // a manual live run must never execute its delete/anonymize batches
-    // concurrently with the scheduled job OR another manual live run.
-    const acquired = await withJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS, async () => {
-      summary = await runDataRetentionCleanup({ dryRun: false, config });
-    });
-    lockUnavailable = !acquired;
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`[data-retention] manual run failed: ${msg}`);
-    await tryRecordTerminalForRun(runId, { dryRun: false, outcome: 'error', errorCategory: 'unexpected_exception' });
-    // The raw error message is logged above but never echoed to the caller —
-    // it can carry driver/query-fragment detail this endpoint must not leak.
-    res.status(500).json({ error: 'Data retention run failed. See server logs for detail.' });
-    return;
-  }
-
-  if (lockUnavailable) {
+  if (!holdingLock) {
     await tryRecordTerminalForRun(runId, {
       dryRun: false,
       outcome: 'blocked',
@@ -1388,6 +1409,28 @@ router.post('/privacy/data-retention/run', async (req: PlatformAdminRequest, res
     res.status(409).json({
       error: 'Another data retention run (scheduled or manual) is already in progress. Try again shortly.',
     });
+    return;
+  }
+
+  let summary: DataRetentionSummary | undefined;
+
+  try {
+    const { runDataRetentionCleanup } = await import('../jobs/dataRetentionCleanupJob.js');
+    try {
+      summary = await runDataRetentionCleanup({ dryRun: false, config });
+    } finally {
+      // Release on success, on a thrown error, and (via this finally) on any
+      // other exceptional exit from this block — the lock must never be
+      // held any longer than the cleanup it protects.
+      await releaseJobLock(DATA_RETENTION_JOB_LOCK_NAME);
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error(`[data-retention] manual run failed: ${msg}`);
+    await tryRecordTerminalForRun(runId, { dryRun: false, outcome: 'error', errorCategory: 'unexpected_exception' });
+    // The raw error message is logged above but never echoed to the caller —
+    // it can carry driver/query-fragment detail this endpoint must not leak.
+    res.status(500).json({ error: 'Data retention run failed. See server logs for detail.' });
     return;
   }
 

@@ -25,7 +25,15 @@ import prisma from '../db.js';
 // release yalnızca kendi kilidimizi bıraksın diye.
 const LOCK_OWNER = `${hostname()}:${process.pid}:${randomUUID().slice(0, 8)}`;
 
-async function acquireJobLock(name: string, ttlMs: number): Promise<boolean> {
+/**
+ * Kilidi tek başına almayı dener (fn çalıştırmadan). withJobLock'un iç
+ * adımı ile aynı SQL'i paylaşır — F1-003-B2: manuel retention rotası, audit
+ * "started" satırını yazmadan ÖNCE kilidi almak için bunu doğrudan
+ * kullanır (bkz. platformAdmin.ts). Kilit alınamazsa fn hiç çağrılmadığı
+ * için release de gerekmez; çağıran taraf `false` durumunda kilit tutmuyor
+ * demektir ve releaseJobLock çağırmamalıdır.
+ */
+export async function acquireJobLock(name: string, ttlMs: number): Promise<boolean> {
   const now = new Date();
   const lockedUntil = new Date(now.getTime() + ttlMs);
 
@@ -45,9 +53,13 @@ async function acquireJobLock(name: string, ttlMs: number): Promise<boolean> {
   }
 }
 
-async function releaseJobLock(name: string): Promise<void> {
-  // Yalnızca kendi kilidimizi bırak: lease dolup başka süreç devraldıysa
-  // onun kilidini sıfırlamayalım.
+/**
+ * acquireJobLock() ile alınmış bir kilidi bırakır. Yalnızca kendi kilidimizi
+ * bırak: lease dolup başka süreç devraldıysa onun kilidini sıfırlamayalım.
+ * Çağıran taraf, kilidi gerçekten aldıysa (acquireJobLock true döndüyse)
+ * her koşulda (başarı/hata/exception) bunu çağırmaktan sorumludur.
+ */
+export async function releaseJobLock(name: string): Promise<void> {
   await prisma.jobLock
     .updateMany({
       where: { name, lockedBy: LOCK_OWNER },
