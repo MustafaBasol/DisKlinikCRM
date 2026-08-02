@@ -438,6 +438,10 @@ router.post('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', '
         reason: 'treatment_use',
         notes: notes ? String(notes) : null,
         performedById: userId,
+        // Manually recorded usage is already expressed directly against
+        // currentStock's base unit — no purchase-unit conversion applies here.
+        unitId: item.consumptionUnitId,
+        quantityInBaseUnit: qty,
       },
       include: { item: { select: { id: true, name: true, unit: true, category: true } } },
     });

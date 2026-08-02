@@ -5,7 +5,36 @@
   "tabs": {
     "list": "Stock List",
     "alerts": "Low Stock",
-    "history": "Transaction History"
+    "history": "Transaction History",
+    "units": "Units"
+  },
+  "unitManagement": {
+    "newUnit": "New Unit",
+    "createTitle": "New Unit",
+    "editTitle": "Edit Unit",
+    "empty": "No units defined yet.",
+    "fields": {
+      "name": "Unit Name",
+      "abbreviation": "Abbreviation",
+      "status": "Status"
+    },
+    "placeholders": {
+      "name": "e.g. Box",
+      "abbreviation": "e.g. Box"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    }
+  },
+  "unitConversion": {
+    "sectionTitle": "Unit Conversion (Optional)",
+    "sectionHint": "Define this if the purchase and consumption units differ (e.g. Box / Piece).",
+    "purchaseUnit": "Purchase Unit",
+    "consumptionUnit": "Consumption Unit",
+    "conversionFactor": "Conversion Factor",
+    "none": "Not used (legacy unit field)",
+    "inactiveSuffix": " (inactive)"
   },
   "actions": {
     "newItem": "New Item",
@@ -71,10 +100,12 @@
   "transaction": {
     "title": "Stock Transaction - {{item}}",
     "quantityLabel": "Quantity ({{unit}}) - Current: {{current}}",
+    "normalizedPreview": "= {{amount}} {{unit}}",
     "fields": {
       "type": "Transaction Type",
       "reason": "Reason",
-      "quantity": "Quantity"
+      "quantity": "Quantity",
+      "unit": "Unit"
     },
     "types": {
       "in": "In",
@@ -92,11 +123,25 @@
     "errors": {
       "quantityPositive": "Quantity must be greater than 0.",
       "insufficientStock": "Insufficient stock. Current: {{current}} {{unit}}",
+      "insufficientStockGeneric": "Insufficient stock.",
       "actionFailed": "An error occurred during the transaction."
     }
   },
   "errors": {
     "nameRequired": "Item name is required.",
-    "saveFailed": "An error occurred while saving."
+    "saveFailed": "An error occurred while saving.",
+    "unitInactive": "This unit is inactive and cannot be used for new records.",
+    "unitNotAssigned": "The selected unit does not match this item's purchase or consumption unit.",
+    "unitCrossClinic": "The selected unit does not belong to this clinic.",
+    "conversionFactorMissing": "This item has no valid conversion factor configured.",
+    "conversionFactorInvalid": "Conversion factor must be a number greater than 0.",
+    "conversionFactorLocked": "The conversion factor cannot be changed once purchase-unit transactions have been recorded for this item.",
+    "unitConfigIncomplete": "Purchase unit, consumption unit, and conversion factor must be provided together.",
+    "adjustmentUnitUnsupported": "Adjustment transactions must use the consumption unit, not the purchase unit.",
+    "unitFieldsRequired": "Unit name and abbreviation are required.",
+    "unitDuplicate": "A unit with this name or abbreviation already exists.",
+    "unitClinicMismatch": "Clinic selection is inconsistent. Please refresh the page and try again.",
+    "transactionUnitRequired": "A unit must be selected for this item's stock transaction.",
+    "consumptionUnitLocked": "The consumption unit cannot be changed or cleared once stock, minimum stock, or transaction history exists for this item."
   }
 }

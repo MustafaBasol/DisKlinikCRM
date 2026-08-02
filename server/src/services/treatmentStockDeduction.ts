@@ -49,6 +49,7 @@ type StockItem = {
   minimumStock: number;
   unit: string;
   unitCost: number | null;
+  consumptionUnitId: string | null;
 };
 
 export class TreatmentStockDeductionError extends Error {
@@ -99,7 +100,7 @@ async function deductInventoryRequirements(
   const itemIds = aggregated.map(requirement => requirement.inventoryItemId);
   const items = await tx.inventoryItem.findMany({
     where: { id: { in: itemIds }, clinicId: context.clinicId, isActive: true },
-    select: { id: true, name: true, currentStock: true, minimumStock: true, unit: true, unitCost: true },
+    select: { id: true, name: true, currentStock: true, minimumStock: true, unit: true, unitCost: true, consumptionUnitId: true },
   }) as StockItem[];
   const itemById = new Map<string, StockItem>(items.map(item => [item.id, item]));
 
@@ -178,6 +179,11 @@ async function deductInventoryRequirements(
         packageApplicationId: context.packageApplicationId ?? null,
         performedById: context.userId,
         notes: `${context.notesPrefix}: ${requirement.sourceLabel}`,
+        // Recipe quantities (AppointmentTypeMaterial/TreatmentPackageMaterial)
+        // are already expressed directly against currentStock's base unit —
+        // no purchase-unit conversion applies here.
+        unitId: item.consumptionUnitId,
+        quantityInBaseUnit: requirement.quantity,
       },
     });
 

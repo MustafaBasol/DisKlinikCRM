@@ -5,7 +5,36 @@
   "tabs": {
     "list": "Liste du stock",
     "alerts": "Stock faible",
-    "history": "Historique des mouvements"
+    "history": "Historique des mouvements",
+    "units": "Unités"
+  },
+  "unitManagement": {
+    "newUnit": "Nouvelle unité",
+    "createTitle": "Nouvelle unité",
+    "editTitle": "Modifier l'unité",
+    "empty": "Aucune unité définie pour le moment.",
+    "fields": {
+      "name": "Nom de l'unité",
+      "abbreviation": "Abréviation",
+      "status": "Statut"
+    },
+    "placeholders": {
+      "name": "ex. Boîte",
+      "abbreviation": "ex. Boîte"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    }
+  },
+  "unitConversion": {
+    "sectionTitle": "Conversion d'unité (facultatif)",
+    "sectionHint": "À définir si l'unité d'achat et l'unité de consommation diffèrent (ex. Boîte / Pièce).",
+    "purchaseUnit": "Unité d'achat",
+    "consumptionUnit": "Unité de consommation",
+    "conversionFactor": "Facteur de conversion",
+    "none": "Non utilisé (champ d'unité existant)",
+    "inactiveSuffix": " (inactive)"
   },
   "actions": {
     "newItem": "Nouvel article",
@@ -71,10 +100,12 @@
   "transaction": {
     "title": "Mouvement de stock - {{item}}",
     "quantityLabel": "Quantité ({{unit}}) - Actuel : {{current}}",
+    "normalizedPreview": "= {{amount}} {{unit}}",
     "fields": {
       "type": "Type de mouvement",
       "reason": "Raison",
-      "quantity": "Quantité"
+      "quantity": "Quantité",
+      "unit": "Unité"
     },
     "types": {
       "in": "Entrée",
@@ -92,11 +123,25 @@
     "errors": {
       "quantityPositive": "La quantité doit être supérieure à 0.",
       "insufficientStock": "Stock insuffisant. Actuel : {{current}} {{unit}}",
+      "insufficientStockGeneric": "Stock insuffisant.",
       "actionFailed": "Une erreur est survenue pendant le mouvement."
     }
   },
   "errors": {
     "nameRequired": "Le nom de l'article est obligatoire.",
-    "saveFailed": "Une erreur est survenue lors de l'enregistrement."
+    "saveFailed": "Une erreur est survenue lors de l'enregistrement.",
+    "unitInactive": "Cette unité est inactive et ne peut pas être utilisée pour de nouveaux enregistrements.",
+    "unitNotAssigned": "L'unité sélectionnée ne correspond pas à l'unité d'achat ou de consommation de cet article.",
+    "unitCrossClinic": "L'unité sélectionnée n'appartient pas à cette clinique.",
+    "conversionFactorMissing": "Aucun facteur de conversion valide n'est configuré pour cet article.",
+    "conversionFactorInvalid": "Le facteur de conversion doit être un nombre supérieur à 0.",
+    "conversionFactorLocked": "Le facteur de conversion ne peut plus être modifié une fois que des transactions en unité d'achat ont été enregistrées pour cet article.",
+    "unitConfigIncomplete": "L'unité d'achat, l'unité de consommation et le facteur de conversion doivent être définis ensemble.",
+    "adjustmentUnitUnsupported": "Les transactions d'ajustement doivent utiliser l'unité de consommation, pas l'unité d'achat.",
+    "unitFieldsRequired": "Le nom et l'abréviation de l'unité sont obligatoires.",
+    "unitDuplicate": "Une unité portant ce nom ou cette abréviation existe déjà.",
+    "unitClinicMismatch": "La sélection de clinique est incohérente. Veuillez actualiser la page et réessayer.",
+    "transactionUnitRequired": "Une unité doit être sélectionnée pour le mouvement de stock de cet article.",
+    "consumptionUnitLocked": "L'unité de consommation ne peut pas être modifiée ou supprimée tant qu'il existe un stock, un stock minimum ou un historique de mouvements pour cet article."
   }
 }
