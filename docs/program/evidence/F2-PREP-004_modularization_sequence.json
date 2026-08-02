@@ -12,11 +12,11 @@
     "commitDate": "2026-08-01T22:13:44+02:00"
   },
   "worktree": {
-    "path": "E:/Ek Gelir/Siteler/DisKlinikCRM-worktrees/f2-prep-004-modularization-sequence",
+    "path": "fresh isolated worktree; local filesystem path intentionally omitted",
     "branch": "docs/f2-prep-004-modularization-sequence",
     "createdVia": [
       "git fetch origin",
-      "git worktree add -b docs/f2-prep-004-modularization-sequence \"E:/Ek Gelir/Siteler/DisKlinikCRM-worktrees/f2-prep-004-modularization-sequence\" origin/main"
+      "git worktree add -b docs/f2-prep-004-modularization-sequence <local-path-omitted> origin/main"
     ]
   },
   "independenceRule": {
@@ -46,7 +46,12 @@
       "docs/program/DEPENDENCY_MAP.md",
       "docs/program/CURRENT_PHASE.md",
       "docs/program/RISK_REGISTER.md"
-    ]
+    ],
+    "mergedMainDocsReadDuringReconciliation": [
+      "docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md (merged via PR #276)",
+      "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json (merged via PR #276)"
+    ],
+    "independenceNoteR1": "F2-PREP-002 and F2-PREP-003 remain unmerged and were not read by this reconciliation task, per the independence rule."
   },
   "domainScoring": {
     "scale": "1-5, 5 = most favorable for an early/first pilot (safe, simple, low blast radius)",
@@ -72,7 +77,9 @@
         "importFanOut": 0,
         "importFanIn": 0,
         "crossDomainTransactionSites": 0,
-        "tenantScopingGaps": ["ImagingBridgePairingDevice missing clinicId/organizationId"],
+        "tenantScopingGaps": [
+          "ImagingBridgePairingDevice missing clinicId/organizationId"
+        ],
         "dedicatedTestFiles": 5,
         "note": "Cleanest transactional profile of any FK-heavy domain: patientId/appointmentId/treatmentCaseId are validated by a read before the transaction opens, never written cross-domain inside it. Already has a path-filtered CI workflow (windows-bridge-pr.yml)."
       },
@@ -96,7 +103,9 @@
         "importFanOut": 0,
         "importFanIn": 1,
         "crossDomainTransactionSites": 0,
-        "tenantScopingGaps": ["PaymentPlanInstallment missing clinicId"],
+        "tenantScopingGaps": [
+          "PaymentPlanInstallment missing clinicId"
+        ],
         "dedicatedTestFiles": 10,
         "note": "No cross-domain prisma.$transaction touches billing models at all. earningService.ts/practitionerEarnings.ts/practitionerPayouts.ts/compensationRules.ts have zero dedicated tests - a gap to close in Stage 1/2, not a disqualifier."
       },
@@ -168,7 +177,9 @@
         "importFanOut": 3,
         "importFanIn": 2,
         "crossDomainTransactionSites": 1,
-        "tenantScopingGaps": ["LabWorkOrderStatusHistory missing clinicId"],
+        "tenantScopingGaps": [
+          "LabWorkOrderStatusHistory missing clinicId"
+        ],
         "dedicatedTestFiles": 14,
         "note": "labOrders/* subfolder is internally clean (zero external fan-out). Includes the one genuine transport-level route E2E test in the whole suite (externalCalendarWebhookRouteE2E.test.ts). Heavy real external-provider coupling (DigiDentiS, external calendar providers, Meta webhook transport)."
       },
@@ -220,7 +231,7 @@
         "crossDomainTransactionSites": 1,
         "tenantScopingGaps": [],
         "dedicatedTestFiles": 30,
-        "note": "Zero cross-domain file-import fan-out but real schema-level R/W into Patient (legacyConsetCorrection.ts:302 mutates Patient.smsOptOut directly), corroborated by F0-004 PRV row (R/W/S into PAT, R/W into APT, R into TRC/DEN). 2nd-highest fan-out of F0-004's 37 domains (97 edges). Best-tested domain in the repo (~30 files, only domain with real-Postgres dbVerification coverage). Under active, in-flight KVKK regulatory remediation per RISK_REGISTER.md/CURRENT_PHASE.md (R-061 OPEN). This is the evidence basis for NOT selecting privacy as pilot despite it being the current blocker domain."
+        "note": "Zero cross-domain file-import fan-out but real schema-level R/W into Patient (server/src/services/communicationConsent/legacyConsentCorrection.ts:302 mutates Patient.smsOptOut directly), corroborated by F0-004 PRV row (R/W/S into PAT, R/W into APT, R into TRC/DEN). 2nd-highest fan-out of F0-004's 37 domains (97 edges). Best-tested domain in the repo (~30 files, only domain with real-Postgres dbVerification coverage). Under active, in-flight KVKK regulatory remediation per RISK_REGISTER.md/CURRENT_PHASE.md (R-061 OPEN). This is the evidence basis for NOT selecting privacy as pilot despite it being the current blocker domain."
       },
       {
         "id": "appointments",
@@ -309,7 +320,8 @@
         "Lowest change frequency of the FK-heavy domains (30 touches/120d)",
         "Already has a path-filtered CI workflow (windows-bridge-pr.yml) - organizational precedent for isolated CI treatment"
       ],
-      "caveat": "Reusable-pattern value scored lower (3/5) than billing's (5/5) because of idiosyncratic hardware/Windows-bridge/DICOM content that won't generalize to the next module; the reusable part is the process (Stage 1-7), not the domain content."
+      "caveat": "Reusable-pattern value scored lower (3/5) than billing's (5/5) because of idiosyncratic hardware/Windows-bridge/DICOM content that won't generalize to the next module; the reusable part is the process (Stage 1-7), not the domain content.",
+      "status": "independently_recommended_primary_pilot_candidate"
     },
     "fallback": {
       "domain": "billing",
@@ -319,7 +331,8 @@
         "Zero external provider coupling - cleanest 'pure backend module' pattern instance, highest reusable-pattern value (5/5)",
         "One small tenant-scoping gap (PaymentPlanInstallment.clinicId), additive fix"
       ],
-      "whenToPreferOverPrimary": "If reviewers judge imaging's hardware-bridge idiosyncrasies make it a poor template for subsequent pure-TypeScript modules"
+      "whenToPreferOverPrimary": "If reviewers judge imaging's hardware-bridge idiosyncrasies make it a poor template for subsequent pure-TypeScript modules",
+      "status": "independently_recommended_fallback_pilot_candidate"
     },
     "explicitlyUnsuitableAsFirstPilot": [
       {
@@ -343,17 +356,101 @@
         "reason": "No Prisma models, zero prisma.* calls, no data-layer footprint to extract (F0-004's PAI row/column entirely empty); bidirectionally entangled with messaging with no existing interface boundary; modularizing it first would really be a disguised, premature attempt to modularize messaging."
       }
     ],
-    "deferredNotFirstWaveButNotUnsuitable": ["notifications", "inventory", "integrations"],
-    "waitingFeaturesAxis": "NO_REPOSITORY_EVIDENCE for all 10 domains - not used as a pilot-selection factor"
+    "deferredNotFirstWaveButNotUnsuitable": [
+      "notifications",
+      "inventory",
+      "integrations"
+    ],
+    "waitingFeaturesAxis": "NO_REPOSITORY_EVIDENCE for all 10 domains - not used as a pilot-selection factor",
+    "recommendationStatus": "INDEPENDENTLY_RECOMMENDED_CANDIDATES_ONLY - not an approved or selected pilot. Final pilot selection is deferred to F2-PREP-005 (Consolidated Modularization Charter). No implementation task is authorized by this evidence alone.",
+    "mustBeComparedByF2Prep005": [
+      "imaging",
+      "billing",
+      "external_calendar_integration",
+      "any pilot candidate emerging from F2-PREP-002/F2-PREP-003"
+    ],
+    "externalCalendarIntegrationNote": "Not independently scored by this task (did not exist as a named candidate in this task's own 10-domain brief or independent research pass). Added to the F2-PREP-005 comparison set per F2-PREP-004-R1 reconciliation against merged F2-PREP-001 evidence, which observes EXC 'already exhibits essentially the full target module shape' as a factual, evidence-based observation - explicitly not a selection, per F2-PREP-001 itself."
   },
   "migrationStages": [
-    {"stage": 1, "name": "Freeze ownership and add dependency rules", "changedFileCategories": ["documentation only"], "backwardCompatible": true, "rollback": "revert documentation commit, zero risk", "productionVerification": "none required"},
-    {"stage": 2, "name": "Introduce public contract without moving behavior", "changedFileCategories": ["new public.ts wrapper file(s) inside existing folder"], "backwardCompatible": true, "rollback": "delete new file(s), nothing depends on them yet", "productionVerification": "none required (additive, unused code path)"},
-    {"stage": 3, "name": "Move application service behind contract", "changedFileCategories": ["consumer import path change", "internal file relocation within same top-level folder (not into server/src/modules)"], "backwardCompatible": true, "rollback": "revert consumer import-path change", "productionVerification": "one full business day stable metrics before Stage 4"},
-    {"stage": 4, "name": "Move infrastructure/data access", "changedFileCategories": ["own repository/data-access layer consolidation, same PrismaClient/schema", "new no-cross-module-direct-Prisma regression test"], "backwardCompatible": true, "rollback": "revert consolidation commit, no data/schema touched", "productionVerification": "one full business day stable metrics before Stage 5"},
-    {"stage": 5, "name": "Move HTTP routes/jobs", "changedFileCategories": ["route file relocation", "index.ts import/app.use line update", "job registration update in startBackgroundJobs.ts if applicable"], "backwardCompatible": true, "backwardCompatibleNote": "total if URLs unchanged - only file location moves", "rollback": "revert index.ts + relocation commit, same-day low-risk since URLs unchanged", "productionVerification": "one full business day stable route health/error-rate + confirm job still fires on schedule"},
-    {"stage": 6, "name": "Remove temporary compatibility imports", "changedFileCategories": ["deletion of Stage-3 compatibility re-export(s)"], "backwardCompatible": false, "backwardCompatibleNote": "intentionally broken for old internal path, only after Stage 5 typecheck proved nothing else uses it", "rollback": "revert deletion commit, trivial", "productionVerification": "confirm deploy succeeded and typecheck/build gates stayed green"},
-    {"stage": 7, "name": "Enforce boundary in CI", "changedFileCategories": ["one new devDependency (root and/or server package.json)", "one new tool config file", "one new/updated CI job"], "backwardCompatible": true, "backwardCompatibleNote": "total for runtime, CI/build-time only", "rollback": "revert CI job addition, no application code touched", "productionVerification": "none required (CI-only); exercise once with a throwaway test PR"}
+    {
+      "stage": 1,
+      "name": "Freeze ownership and add dependency rules",
+      "changedFileCategories": [
+        "documentation only"
+      ],
+      "backwardCompatible": true,
+      "rollback": "revert documentation commit, zero risk",
+      "productionVerification": "none required"
+    },
+    {
+      "stage": 2,
+      "name": "Introduce public contract without moving behavior",
+      "changedFileCategories": [
+        "new public.ts wrapper file(s) inside existing folder"
+      ],
+      "backwardCompatible": true,
+      "rollback": "delete new file(s), nothing depends on them yet",
+      "productionVerification": "none required (additive, unused code path)"
+    },
+    {
+      "stage": 3,
+      "name": "Move application service behind contract",
+      "changedFileCategories": [
+        "consumer import path change",
+        "internal file relocation within same top-level folder (not into server/src/modules)"
+      ],
+      "backwardCompatible": true,
+      "rollback": "revert consumer import-path change",
+      "productionVerification": "one full business day stable metrics before Stage 4"
+    },
+    {
+      "stage": 4,
+      "name": "Move infrastructure/data access",
+      "changedFileCategories": [
+        "own repository/data-access layer consolidation, same PrismaClient/schema",
+        "new no-cross-module-direct-Prisma regression test"
+      ],
+      "backwardCompatible": true,
+      "rollback": "revert consolidation commit, no data/schema touched",
+      "productionVerification": "one full business day stable metrics before Stage 5"
+    },
+    {
+      "stage": 5,
+      "name": "Move HTTP routes/jobs",
+      "changedFileCategories": [
+        "route file relocation",
+        "index.ts import/app.use line update",
+        "job registration update in startBackgroundJobs.ts if applicable"
+      ],
+      "backwardCompatible": true,
+      "backwardCompatibleNote": "total if URLs unchanged - only file location moves",
+      "rollback": "revert index.ts + relocation commit, same-day low-risk since URLs unchanged",
+      "productionVerification": "one full business day stable route health/error-rate + confirm job still fires on schedule"
+    },
+    {
+      "stage": 6,
+      "name": "Remove temporary compatibility imports",
+      "changedFileCategories": [
+        "deletion of Stage-3 compatibility re-export(s)"
+      ],
+      "backwardCompatible": false,
+      "backwardCompatibleNote": "intentionally broken for old internal path, only after Stage 5 typecheck proved nothing else uses it",
+      "rollback": "revert deletion commit, trivial",
+      "productionVerification": "confirm deploy succeeded and typecheck/build gates stayed green"
+    },
+    {
+      "stage": 7,
+      "name": "Enforce boundary in CI",
+      "changedFileCategories": [
+        "one new devDependency (root and/or server package.json)",
+        "one new tool config file",
+        "one new/updated CI job"
+      ],
+      "backwardCompatible": true,
+      "backwardCompatibleNote": "total for runtime, CI/build-time only",
+      "rollback": "revert CI job addition, no application code touched",
+      "productionVerification": "none required (CI-only); exercise once with a throwaway test PR"
+    }
   ],
   "preferredPattern": "expand-migrate-contract",
   "boundaryEnforcement": {
@@ -373,28 +470,105 @@
       "codeGraphNote": "RISK_REGISTER.md/CURRENT_PHASE.md record at least six independent prior program tasks finding CodeGraph unavailable in their execution environment"
     },
     "optionsAssessed": [
-      {"option": "TypeScript paths aliases alone", "maintenanceCost": "low", "windowsLinuxCompat": "full", "ciCost": "none", "falsePositiveRisk": "n/a - cannot enforce, only conventions", "contractExpressiveness": "none - convenience only", "lockfileImpact": "zero"},
-      {"option": "ESLint + eslint-plugin-boundaries", "maintenanceCost": "medium - requires first fixing currently-broken lint setup", "windowsLinuxCompat": "full", "ciCost": "low-medium", "falsePositiveRisk": "medium, tunable", "contractExpressiveness": "good - zones/element-types config", "lockfileImpact": "one new devDependency tree, dual-install (root+server) caveat"},
-      {"option": "dependency-cruiser", "maintenanceCost": "medium - one config file, standalone CLI", "windowsLinuxCompat": "full - pure Node, no native deps", "ciCost": "low", "falsePositiveRisk": "low-medium, explicit regex/path rules", "contractExpressiveness": "good - explicit forbidden rules + visual graph output", "lockfileImpact": "one new devDependency, dual-install caveat"},
-      {"option": "madge", "maintenanceCost": "low", "windowsLinuxCompat": "full", "ciCost": "low", "falsePositiveRisk": "low but narrow scope (circular-dep detector, not a rule engine)", "contractExpressiveness": "weak - no first-class public/private contract concept", "lockfileImpact": "one new devDependency, dual-install caveat"},
-      {"option": "custom static import checker", "maintenanceCost": "medium-high upfront, low ongoing", "windowsLinuxCompat": "full", "ciCost": "low", "falsePositiveRisk": "depends entirely on bespoke code quality - highest risk", "contractExpressiveness": "fully customizable to repo's own P/R/W/S/X vocabulary", "lockfileImpact": "zero new runtime dependency if built on existing TS compiler API"},
-      {"option": "CodeGraph-based evidence checks", "notEvaluated": true, "reason": "confirmed unavailable in this program's execution environment by at least six independent prior tasks"}
+      {
+        "option": "TypeScript paths aliases alone",
+        "maintenanceCost": "low",
+        "windowsLinuxCompat": "full",
+        "ciCost": "none",
+        "falsePositiveRisk": "n/a - cannot enforce, only conventions",
+        "contractExpressiveness": "none - convenience only",
+        "lockfileImpact": "zero"
+      },
+      {
+        "option": "ESLint + eslint-plugin-boundaries",
+        "maintenanceCost": "medium - requires first fixing currently-broken lint setup",
+        "windowsLinuxCompat": "full",
+        "ciCost": "low-medium",
+        "falsePositiveRisk": "medium, tunable",
+        "contractExpressiveness": "good - zones/element-types config",
+        "lockfileImpact": "one new devDependency tree, dual-install (root+server) caveat"
+      },
+      {
+        "option": "dependency-cruiser",
+        "maintenanceCost": "medium - one config file, standalone CLI",
+        "windowsLinuxCompat": "full - pure Node, no native deps",
+        "ciCost": "low",
+        "falsePositiveRisk": "low-medium, explicit regex/path rules",
+        "contractExpressiveness": "good - explicit forbidden rules + visual graph output",
+        "lockfileImpact": "one new devDependency, dual-install caveat"
+      },
+      {
+        "option": "madge",
+        "maintenanceCost": "low",
+        "windowsLinuxCompat": "full",
+        "ciCost": "low",
+        "falsePositiveRisk": "low but narrow scope (circular-dep detector, not a rule engine)",
+        "contractExpressiveness": "weak - no first-class public/private contract concept",
+        "lockfileImpact": "one new devDependency, dual-install caveat"
+      },
+      {
+        "option": "custom static import checker",
+        "maintenanceCost": "medium-high upfront, low ongoing",
+        "windowsLinuxCompat": "full",
+        "ciCost": "low",
+        "falsePositiveRisk": "depends entirely on bespoke code quality - highest risk",
+        "contractExpressiveness": "fully customizable to repo's own P/R/W/S/X vocabulary",
+        "lockfileImpact": "zero new runtime dependency if built on existing TS compiler API"
+      },
+      {
+        "option": "CodeGraph-based evidence checks",
+        "notEvaluated": true,
+        "reason": "confirmed unavailable in this program's execution environment by at least six independent prior tasks"
+      }
     ],
     "recommendation": {
       "minimalFirst": "dependency-cruiser",
       "minimalFirstRationale": "No prior working ESLint setup required; pure Node with no Windows-compatibility risk; rule model maps directly onto DEPENDENCY_MAP.md's existing P/R/W/S/X vocabulary; ship scoped to the pilot domain only at first with an allowlist/baseline for all other domains' pre-existing edges (notably messaging's 9 known X violations) so Stage 7 does not silently require fixing unrelated domains.",
       "futureOption": "ESLint + eslint-plugin-boundaries",
       "futureOptionRationale": "More expressive long-term choice (public.ts/private-module contract modeling, ecosystem-standard, editor-integrated real-time feedback) but requires first fixing the repository's currently non-functional ESLint setup - a separate, currently-unbudgeted piece of work not recommended to bundle into the first pilot's Stage 7.",
-      "companionDiagnostic": "madge - for circular-dependency detection and visual dependency graphs, not primary enforcement"
+      "companionDiagnostic": "madge - for circular-dependency detection and visual dependency graphs, not primary enforcement",
+      "status": "independently_recommended_minimal_candidate - not an accepted program decision",
+      "decisionOwner": "F2-PREP-005 must decide whether to adopt dependency-cruiser, a custom import checker, TypeScript path-based restrictions, or a future ESLint boundary-enforcement setup, and must record the resulting package/lockfile/supply-chain implications as an implementation concern at that time."
     }
   },
   "releaseWaves": [
-    {"wave": "M0", "name": "Preparation and boundary rules", "entryGate": "This evidence document + JSON merged; DEPENDENCY_MAP.md target rules accepted baseline; dependency-cruiser installed with config", "exitGate": "dependency-cruiser runs successfully (non-blocking, report-only) against whole repo in CI at least once, producing baseline violation count per domain"},
-    {"wave": "M1", "name": "Pilot module (Imaging, Billing as documented fallback)", "entryGate": "M0 exit gate met; Stage 1 complete for pilot domain", "exitGate": "Stages 1-7 all complete for pilot domain; dependency-cruiser CI check blocking for pilot's folder with zero tolerated new violations; at least one real-HTTP smoke test added; one full business day stable production metrics post-Stage-5 documented"},
-    {"wave": "M2", "name": "Low-coupling operational modules (Billing if not M1, Notifications, Integrations)", "entryGate": "M1 exit gate met; Stage 1-7 pattern validated end-to-end at least once", "exitGate": "all three modules pass Stages 1-7; dependency-cruiser blocking check covers M1+M2 folders; PaymentPlanInstallment.clinicId and LabWorkOrderStatusHistory.clinicId gaps closed; notifications zero-test-coverage gap closed to baseline", "explicitExclusion": "Inventory deliberately NOT included by default despite low import-level coupling - its real coupling is transactional and tied to patients, not yet modularized at this point"},
-    {"wave": "M3", "name": "Patient/appointment core", "entryGate": "M2 exit gate met; separately-authorized design work exists for the 9 cross-domain transactions (outbox/saga/accepted-shared-boundary decision) - NOT part of this task's scope, explicitly flagged as a prerequisite", "exitGate": "patients and appointments both pass Stages 1-7 (adapted per transaction design decision); inventory included once its patients dependency is resolved; dependency-cruiser extends coverage; zero new X-class edges introduced, CI-verified"},
-    {"wave": "M4", "name": "Messaging/integrations (remaining)", "entryGate": "M3 exit gate met; messaging's KVKK-HIGH-007-class remediation work (tracked separately) has reached a stable, non-actively-churning state", "exitGate": "messaging's 9 pre-existing X edges resolved or individually accepted with documented compensating control; messaging passes Stages 1-7; AI service-layer (prompt/NLU/schema, already DB-free) extraction completed as a service module"},
-    {"wave": "M5", "name": "Imaging (if deferred)/AI data-adjacent parts/high-risk providers", "entryGate": "M4 exit gate met", "exitGate": "dependency-cruiser blocking check covers full server/src tree; all 10 candidate domains have a defined, enforced boundary; ESLint+eslint-plugin-boundaries future option re-evaluated given proven pattern maturity"}
+    {
+      "wave": "M0",
+      "name": "Preparation and boundary rules",
+      "entryGate": "This evidence document + JSON merged; DEPENDENCY_MAP.md target rules accepted baseline; dependency-cruiser installed with config",
+      "exitGate": "dependency-cruiser runs successfully (non-blocking, report-only) against whole repo in CI at least once, producing baseline violation count per domain"
+    },
+    {
+      "wave": "M1",
+      "name": "Pilot module (recommended candidate: Imaging; recommended fallback: Billing; final choice - including whether External Calendar Integration should be considered instead - made by F2-PREP-005)",
+      "entryGate": "M0 exit gate met; Stage 1 complete for pilot domain",
+      "exitGate": "Stages 1-7 all complete for pilot domain; dependency-cruiser CI check blocking for pilot's folder with zero tolerated new violations; at least one real-HTTP smoke test added; one full business day stable production metrics post-Stage-5 documented"
+    },
+    {
+      "wave": "M2",
+      "name": "Low-coupling operational modules (Billing if not M1, Notifications, Integrations)",
+      "entryGate": "M1 exit gate met; Stage 1-7 pattern validated end-to-end at least once",
+      "exitGate": "all three modules pass Stages 1-7; dependency-cruiser blocking check covers M1+M2 folders; PaymentPlanInstallment.clinicId and LabWorkOrderStatusHistory.clinicId gaps closed; notifications zero-test-coverage gap closed to baseline",
+      "explicitExclusion": "Inventory deliberately NOT included by default despite low import-level coupling - its real coupling is transactional and tied to patients, not yet modularized at this point"
+    },
+    {
+      "wave": "M3",
+      "name": "Patient/appointment core",
+      "entryGate": "M2 exit gate met; separately-authorized design work exists for the 9 cross-domain transactions (outbox/saga/accepted-shared-boundary decision) - NOT part of this task's scope, explicitly flagged as a prerequisite",
+      "exitGate": "patients and appointments both pass Stages 1-7 (adapted per transaction design decision); inventory included once its patients dependency is resolved; dependency-cruiser extends coverage; zero new X-class edges introduced, CI-verified"
+    },
+    {
+      "wave": "M4",
+      "name": "Messaging/integrations (remaining)",
+      "entryGate": "M3 exit gate met; messaging's KVKK-HIGH-007-class remediation work (tracked separately) has reached a stable, non-actively-churning state",
+      "exitGate": "messaging's 9 pre-existing X edges resolved or individually accepted with documented compensating control; messaging passes Stages 1-7; AI service-layer (prompt/NLU/schema, already DB-free) extraction completed as a service module"
+    },
+    {
+      "wave": "M5",
+      "name": "Imaging (if deferred)/AI data-adjacent parts/high-risk providers",
+      "entryGate": "M4 exit gate met",
+      "exitGate": "dependency-cruiser blocking check covers full server/src tree; all 10 candidate domains have a defined, enforced boundary; ESLint+eslint-plugin-boundaries future option re-evaluated given proven pattern maturity"
+    }
   ],
   "filesChanged": [
     "docs/program/evidence/F2-PREP-004_MODULARIZATION_SEQUENCE_AND_PILOT_SELECTION.md",
@@ -406,5 +580,48 @@
     "noImportRewrite": true,
     "noSchemaMigration": true,
     "noFrameworkRewrite": true
+  },
+  "reconciliation": {
+    "task": "F2-PREP-004-R1",
+    "purpose": "Reconcile this branch with current origin/main (which now includes merged F2-PREP-001), sanitize evidence, and calibrate pilot-selection language from authoritative to recommendation-only.",
+    "preMergeHead": "61d54ff37f323ead538408c5164384d7a16bc15",
+    "originMainShaAtReconciliation": "0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83",
+    "f2Prep001": {
+      "pr": 276,
+      "mergeCommit": "0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83"
+    },
+    "mergeStrategy": "git merge --no-ff origin/main (no rebase, no force push, no reset, no blanket -ours/-theirs)",
+    "mergeCommitCreatedByThisTask": "1fbd362231359b52dfacf5499a913b96c76e0f0",
+    "conflicts": "none - the merge added two new files only (F2-PREP-001's evidence MD+JSON); no file this task authored or touched was modified by origin/main since baseline",
+    "semanticConflictResolution": "not needed - no overlapping files",
+    "postMergeAncestorCheck": "origin/main confirmed an ancestor of HEAD after the merge (git merge-base --is-ancestor origin/main HEAD)",
+    "mergedOwnershipInventoryRead": [
+      "docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md",
+      "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json"
+    ],
+    "impactOnThisTasksFindings": {
+      "imagingCandidateScore": "Unchanged numerically. Refinement only: F2-PREP-001 splits 'imaging' into two 38-domain-taxonomy entries - IMG (Imaging - Server Ingest and Viewer) and BRG (Imaging - Device Bridge / Windows Bridge). This task's own 'imaging' bucket already spanned both (it cites the ImagingBridgePairingDevice tenant-scoping gap, a BRG-owned model). F2-PREP-001's domain-summary table flags 'Ownership ambiguity: YES' for both IMG and BRG, but its own per-domain JSON detail clarifies this is not a true ownership dispute: IMG = 'none significant on the ownership question itself'; BRG = 'bridge-agent/ and windows-bridge/ internal structure is unverified by this task' (those are separate deployables outside the CODEGRAPH-DISCIPLINE-scoped root set both tasks used - a shared, pre-existing scope limit, not a new gap). Net effect: no change to the primary-candidate recommendation; F2-PREP-005 should treat the Device Bridge's external deployable internals as an explicit due-diligence item before any Stage 1 work on that sub-scope.",
+      "billingFallbackScore": "Unchanged. F2-PREP-001 independently confirms this task's 'billing' bucket (routes/payments.ts, paymentPlans.ts, insuranceProvisions.ts, compensationRules.ts, practitionerEarnings.ts, practitionerPayouts.ts, financeDashboard.ts, services/earningService.ts) is a distinct concept from the separately-tracked, unimplemented 'PBL - Billing / Subscription Engine' domain (0 Prisma models, 0 routes, 0 services, classification 'planned/not implemented' per F2-PREP-001). No score change; this reconciliation makes the distinction explicit to prevent future readers conflating the two.",
+      "integrationsScore": "Potentially understated, not changed by this task. This task's independent 'integrations' bucket (scored 3s across most criteria, see domainScoring) was assembled from pieces of the old 37-domain taxonomy with no single clean analogue (per this task's own methodological note). F2-PREP-001 now names a formal 38th domain, External Calendar Integration (EXC), with its own dedicated routes/services/jobs/provider-factory pattern that did not exist at this task's independent-research scope and is not the same thing this task scored as 'integrations'. F2-PREP-001 itself observes EXC 'already exhibits essentially the full target module shape' (explicitly flagged there as an observation, not a selection). This task does not retroactively score EXC across all 14 criteria - that would require the same depth of independent transaction/coupling/test analysis given to the other 10 domains, which is out of scope for a reconciliation pass. EXC is instead added to the set F2-PREP-005 must compare (see pilotSelection.mustBeComparedByF2Prep005).",
+      "migrationWaveOrder": "Unchanged by this task. Flagged for F2-PREP-005: EXC's clean-slate shape (no legacy code to migrate, already provider-port-shaped) may make it a stronger M1/M2 candidate than this task's original wave plan anticipated, but EXC's cross-domain dependency edges are not yet coded into the accepted DEPENDENCY_MAP.md matrix (per F2-PREP-001 itself), so this task does not unilaterally reorder waves to include it.",
+      "pilotRiskAssumptions": "Reinforced, not changed. F2-PREP-001's ContactRequest OWNERSHIP_AMBIGUOUS finding (Appointments vs. a channel-agnostic intake domain, unresolved) reinforces (does not newly introduce) this task's existing exclusion of Appointments as a first-pilot candidate. F2-PREP-001's Privacy ownership deltas (+4 Prisma models, +10 services since the F0-003/F0-004 baseline, all under the Privacy/Consent/Retention/DSR domain) reinforce this task's existing exclusion of privacy as a first-pilot candidate (an actively-growing domain is not a safer pilot than this task already concluded)."
+    }
+  },
+  "correctedNextTask": {
+    "await": [
+      "F2-PREP-002-R1",
+      "F2-PREP-003-R2",
+      "F1-003-B2 status"
+    ],
+    "then": "Execute F2-PREP-005 - Consolidated Modularization Charter",
+    "f2Prep005MustDo": [
+      "compare all pilot candidates (Imaging, Billing, External Calendar Integration, any from F2-PREP-002/003)",
+      "select the accepted pilot",
+      "select the first boundary-enforcement mechanism",
+      "define M0 entry criteria",
+      "update authoritative tracker/phase/index documents",
+      "authorize the first implementation task"
+    ],
+    "notAuthorizedByThisTask": "Imaging Stage 1 implementation, or any other code/schema/migration change."
   }
 }

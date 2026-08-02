@@ -7,16 +7,28 @@ Type: READ-ONLY sequencing design + new evidence files only (no code movement, n
 
 - **Phase:** F2 PREPARATION — Modular Monolith Boundary Definition.
 - **Baseline:** fresh worktree from `origin/main`, commit `70b1690c1a656c95cead7b42812cc9ae6447bfb7` ("Merge pull request #275 from MustafaBasol/feature/external-calendar-outbound-sync-phase2"), committed 2026-08-01T22:13:44+02:00.
-- **Worktree/branch:** `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f2-prep-004-modularization-sequence`, branch `docs/f2-prep-004-modularization-sequence`, tracking `origin/main`. Created via:
+- **Worktree/branch:** fresh isolated worktree; local filesystem path intentionally omitted. Branch `docs/f2-prep-004-modularization-sequence`, tracking `origin/main`. Created via:
   ```
   git fetch origin
-  git worktree add -b docs/f2-prep-004-modularization-sequence \
-    "E:/Ek Gelir/Siteler/DisKlinikCRM-worktrees/f2-prep-004-modularization-sequence" origin/main
+  git worktree add -b docs/f2-prep-004-modularization-sequence <local-path-omitted> origin/main
   ```
   Working tree confirmed clean at HEAD `70b1690` before any file was written.
 - **Independence rule applied literally:** this task did **not** read any unmerged branch or any evidence file authored by F2-PREP-001, F2-PREP-002, or F2-PREP-003. All ten candidate-domain scoring below was produced by fresh, independent repository research (four parallel research passes: Prisma schema/transaction analysis, cross-domain import coupling, test coverage mapping, change-frequency and tooling audit — see §1).
 - **What this task additionally, permissibly read:** already-**merged**, main-branch program documents that are not part of the F2-PREP-00{1,2,3} lineage — `docs/program/MODULE_MAP.md` (F0-003, merged), `docs/program/DEPENDENCY_MAP.md` (F0-004, merged), `docs/program/CURRENT_PHASE.md`, and `docs/program/RISK_REGISTER.md`. These are prior, already-accepted baseline artifacts on `main`, not in-flight F2-PREP-001/002/003 work product, so reading them does not violate the independence rule. They were used only to **cross-validate** this task's own independently-derived findings (see §1.5) and to surface program-level context (active KVKK remediation churn) relevant to pilot selection — never as a substitute for this task's own evidence-gathering.
-- **Methodological note on domain taxonomy:** the task brief's 10 candidate buckets (privacy, notifications, inventory, billing, appointments, patients, messaging, integrations, imaging, AI) do not map one-to-one onto the pre-existing, already-merged 37-domain F0-003/F0-004 taxonomy (e.g. this task's "messaging" spans F0-003's `WHA`/`IGM`/`SMS`/`EML`; this task's "integrations" spans parts of `PUB`/`LAB`/`REC` plus an external-calendar surface that F0-003 does not name as its own row/column; this task's "AI" corresponds to F0-003's `AIO` "Messaging AI Orchestration" plus the empty, planned-only `PAI`). Where the two taxonomies overlap, findings are cross-validated explicitly below. Where they diverge, this task's own independent evidence is treated as authoritative for this task's own bucket definitions.
+- **Methodological note on domain taxonomy:** the task brief's 10 candidate buckets (privacy, notifications, inventory, billing, appointments, patients, messaging, integrations, imaging, AI) do not map one-to-one onto the pre-existing, already-merged 37-domain F0-003/F0-004 taxonomy (e.g. this task's "messaging" spans F0-003's `WHA`/`IGM`/`SMS`/`EML`; this task's "integrations" spans parts of `PUB`/`LAB`/`REC` plus an external-calendar surface that, at this task's original baseline, F0-003 did not yet name as its own row/column; this task's "AI" corresponds to F0-003's `AIO` "Messaging AI Orchestration" plus the empty, planned-only `PAI`). As of the F2-PREP-004-R1 reconciliation below, that external-calendar surface **is** now formally named — F2-PREP-001 (merged) identifies it as a 38th domain, "External Calendar Integration" (`EXC`) — see §0.1. Where the two taxonomies overlap, findings are cross-validated explicitly below. Where they diverge, this task's own independent evidence is treated as authoritative for this task's own bucket definitions.
+
+### 0.1 Reconciliation with current main (F2-PREP-004-R1)
+
+This evidence was reconciled against current `origin/main` in a follow-up pass (task F2-PREP-004-R1), continuing the same branch (`docs/f2-prep-004-modularization-sequence`) and PR (#278) rather than opening a new one.
+
+- **Pre-merge HEAD:** `61d54ff37f323ead538408c5164384d7a16bc15` (this task's original evidence commit).
+- **Current `origin/main` at reconciliation:** `0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83` — includes merged **F2-PREP-001** (PR #276, same merge commit SHA).
+- **Ancestor check before merge:** `git merge-base --is-ancestor origin/main HEAD` → **not** an ancestor (main had advanced).
+- **Merge performed:** `git merge --no-ff origin/main` (no rebase, no force push, no reset, no blanket `--ours`/`--theirs`). Result: a clean merge with **zero conflicts** — the merge only added two new files (F2-PREP-001's own evidence MD+JSON); nothing this task authored or touched had been modified by `origin/main` since this task's baseline. No semantic conflict resolution was required.
+- **Merge commit:** `1fbd362231359b52dfacf5499a913b96c76e0f0`.
+- **Post-merge ancestor check:** `git merge-base --is-ancestor origin/main HEAD` → confirmed ancestor.
+- **What was read for reconciliation:** only the two merged F2-PREP-001 evidence files (`docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md`, `docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json`) — both already-merged main-branch documents, not unmerged F2-PREP-002/003 branches, so this does not violate the independence rule. F2-PREP-002 and F2-PREP-003 remain unmerged and were **not** read.
+- **Impact on this task's own findings** is recorded in full in the new §1.6 below; the short version: the Imaging/Billing scores and rationale are **unchanged**, one useful scope nuance is added for Imaging/Bridge, and one new candidate (External Calendar Integration) is added to the set F2-PREP-005 must compare — nothing here overturns this task's original evidence.
 
 ## 1. Sources inspected (independent evidence base)
 
@@ -45,6 +57,20 @@ This task's independent findings and the already-merged F0-004 matrix agree on e
 - **One important refinement this task adds to the merged evidence:** F0-004's `PRV` row shows real `R/W/S` edges into `PAT`/`APT`/`TRC`/`DEN` (Privacy directly reads/writes Patient, Appointment, TreatmentCase, DentalChart models — e.g. via `server/src/services/communicationConsent/legacyConsentCorrection.ts:302`, which mutates `Patient.smsOptOut`/`smsOptOutAt` directly). This task's own independent **import-level** analysis found privacy has **zero cross-domain file imports** (fan-out = 0 at the code-dependency level). Both are true simultaneously and are not a contradiction: privacy is decoupled at the *service-import* layer but **not** decoupled at the *Prisma schema* layer. This distinction is the central reason privacy is not selected as the pilot (see §3).
 
 No contradiction between this task's independent findings and the already-merged evidence was found anywhere it was checked.
+
+### 1.6 Reconciliation with merged F2-PREP-001 (38-domain ownership inventory)
+
+F2-PREP-001 (merged, PR #276) independently produced a 99-Prisma-model, 38-domain ownership inventory (37 domains inherited from F0-003/F0-004 plus one new domain, External Calendar Integration). Reconciling this task's own findings against it:
+
+- **External Calendar Integration (`EXC`) — new domain, not in this task's original candidate set.** F2-PREP-001 names a formal 38th domain with its own dedicated routes (`externalCalendarWebhook.ts`, `platformExternalCalendar.ts`, `externalCalendarOutboundSyncStatus.ts`), 13 services (including a `digidentis/` provider subdirectory behind a provider-factory port), 2 scheduled jobs, and 4 owned Prisma models, all new since the F0-003/F0-004 baseline. F2-PREP-001 itself records, as a factual observation and explicitly **not** a selection: "of all 38 domains in this inventory, External Calendar Integration is the only one that already exhibits essentially the full target module shape... this is **not** a selected or approved F2 pilot module." This task's own "integrations" bucket (§2) was scored before this domain was named and does not isolate it. Per §0.1, EXC is added to the set F2-PREP-005 must compare — see §3.
+- **Privacy ownership deltas.** F2-PREP-001 records +4 Prisma models (`PatientCommunicationPreference`, `PatientCommunicationConsentEvent`, `CommunicationConsentConflictBucket`, `PatientLegacyConsentCorrection`) and +10 services under `server/src/services/communicationConsent/`, all committed since the F0-003/F0-004 baseline and all within the Privacy/Consent/Retention/DSR domain this task already excluded as a first pilot (§3). This **reinforces**, and does not change, that exclusion — the domain is demonstrably still growing.
+- **Platform Administration ownership deltas.** F2-PREP-001 records +1 Prisma model (`PlatformAdminAuditEvent`) and +1 service (`platformAdminAudit.ts`). Platform Administration was not part of this task's original 10-domain candidate set; no impact on this task's scoring.
+- **Storage ownership deltas.** F2-PREP-001 records +2 Prisma models (`FileBackupRun`, `FileBackupEntry`), +2 services, +1 scheduled job (backup subsystem, closing an ADR-013/F0-011 gap). Storage was not part of this task's original 10-domain candidate set; no impact on this task's scoring.
+- **`ContactRequest` ownership ambiguity.** F2-PREP-001 flags `ContactRequest` as `OWNERSHIP_AMBIGUOUS` — unresolved between Appointments and a channel-agnostic intake domain. This **reinforces** (does not newly introduce) this task's existing exclusion of Appointments as a first-pilot candidate (§3): an ownership-ambiguous model on top of Appointments' already-highest fan-out/fan-in profile is one more reason, not a new one.
+- **99-model 4-bucket ownership classification (`DOMAIN_OWNED`/`SHARED_KERNEL_CANDIDATE`/`PLATFORM_INFRASTRUCTURE`/`OWNERSHIP_AMBIGUOUS`).** All of Imaging's and Billing's owned models (`ImagingDevice`/`ImagingRequest`/`ImagingStudy`/`ImagingImage`; `Payment`/`PaymentPlan`/`PaymentPlanInstallment`/`PractitionerEarning`/`PractitionerPayout`/`InsuranceProvision`) are classified `DOMAIN_OWNED` with no ambiguity flag — corroborates, does not contradict, this task's own scoring.
+- **Imaging/Bridge scope nuance.** F2-PREP-001 splits "imaging" into two domains — `IMG` (Imaging — Server Ingest and Viewer) and `BRG` (Imaging — Device Bridge / Windows Bridge). Its domain-summary table marks **both** `Ownership ambiguity: YES`, but its own per-domain JSON detail clarifies this is not a true ownership dispute: `IMG` = "none significant on the ownership question itself"; `BRG` = "bridge-agent/ and windows-bridge/ internal structure is unverified by this task" — those are separate deployables outside the CODEGRAPH-DISCIPLINE-scoped root set both this task and F2-PREP-001 used, a shared pre-existing scope limit, not a new gap. This task's own "imaging" bucket already spanned both `IMG` and `BRG` (it cites the `ImagingBridgePairingDevice` tenant-scoping gap, a `BRG`-owned model, in §3). **No change to the score or the recommendation** — F2-PREP-005 should simply treat the Device Bridge's external `bridge-agent/`/`windows-bridge/` deployable internals as an explicit due-diligence item before any Stage 1 work on that sub-scope.
+- **Billing vs. `PBL` distinction confirmed.** F2-PREP-001 independently confirms `PBL` ("Billing / Subscription Engine") is a **separate, unimplemented** domain (0 Prisma models, 0 routes, 0 services, classification "planned/not implemented") — distinct from this task's "billing" bucket, which is the implemented clinic-facing payments/finance surface (`PAY`/`FIN`/`INS`-equivalent in the 37/38-domain taxonomy). This task's §2 already made this distinction (see the Billing evidence note); F2-PREP-001 corroborates it. No score change.
+- **Net effect on this task's conclusions:** Imaging candidate score — unchanged. Billing fallback score — unchanged. Integrations score — potentially understated by this task's original scoring (since `EXC` didn't exist as a named candidate at that time), not retroactively changed here; flagged for F2-PREP-005. Migration wave order — unchanged by this task; `EXC`'s clean-slate shape is flagged as a possible factor for F2-PREP-005 to weigh, since its cross-domain edges are not yet coded into the accepted `DEPENDENCY_MAP.md` matrix. Pilot risk assumptions for the already-excluded domains (Appointments, Privacy) — reinforced, not changed.
 
 ## 2. Candidate domain scoring
 
@@ -77,7 +103,7 @@ Scoring uses qualitative Low/Medium/High labels grounded in cited evidence, not 
 - KVKK risk is present but bounded and already governed (immutable-image design, documented legal-hold fields on `PatientAttachment`/imaging tables) rather than actively contested; not zero, hence 3/5, not 5/5.
 
 **Billing** (`routes/payments.ts`, `paymentPlans.ts`, `insuranceProvisions.ts`, `compensationRules.ts`, `practitionerEarnings.ts`, `practitionerPayouts.ts`, `financeDashboard.ts`, `services/earningService.ts`)
-- Zero cross-domain file-import fan-out; exactly one fan-in edge (`routes/treatmentCases.ts:7` → `services/earningService.js`).
+- Zero cross-domain file-import fan-out; exactly one fan-in edge (`routes/treatmentCases.ts:7` → `server/src/services/earningService.ts`, imported there via ESM/TS import syntax as `../services/earningService.js` — the `.js` extension is the NodeNext-module-resolution import-specifier convention, not the actual file extension; the file on disk is `.ts`).
 - No cross-domain `prisma.$transaction` site touches billing models at all — billing's only cross-domain dependency is a two-phase **read-then-write** pattern (`earningService.ts` reads `Payment.treatmentCase.practitionerId`/`appointmentTypeId`, then separately writes `PractitionerEarning`), which is safely splittable without a shared transaction.
 - One tenant-scoping gap: `PaymentPlanInstallment` has no `clinicId` (scoped only via `planId → PaymentPlan`) — additive fix.
 - No external provider coupling found (no payment-gateway integration exists in the repository; `Payment`/`PaymentPlan` are internally tracked ledgers, consistent with MODULE_MAP's "Billing / Subscription Engine (planned, not implemented)" finding for the separate concept of a *subscription* billing engine — this task's "billing" bucket is the clinic-facing patient billing/finance surface, which does exist and is implemented).
@@ -136,7 +162,9 @@ Scoring uses qualitative Low/Medium/High labels grounded in cited evidence, not 
 
 ## 3. Pilot selection
 
-### Primary pilot: **Imaging**
+**This section records independently recommended pilot *candidates*, not a selection.** No pilot has been approved or chosen by this task or any task before it. Final pilot selection is deferred to **F2-PREP-005 — Consolidated Modularization Charter**, which must compare Imaging, Billing, External Calendar Integration (§1.6), and any pilot candidate emerging from F2-PREP-002/F2-PREP-003 before selecting one. No implementation task — including Imaging Stage 1 — is authorized by this evidence alone.
+
+### Independently recommended primary pilot candidate: **Imaging**
 
 Evidence-based rationale (safest and, given file count, also fast):
 1. **Zero cross-domain coupling in both directions** — the only FK-heavy domain in the repository with 0 import fan-out AND 0 import fan-in from the other 9 candidate domains (§2). F0-004 independently corroborates: the `IMG` column has no inbound edges from any domain other than its own `BRG` (bridge) sub-component.
@@ -148,10 +176,10 @@ Evidence-based rationale (safest and, given file count, also fast):
 
 **Caveat honestly recorded:** imaging's "reusable pattern value" is scored lower (3/5) than billing's, because its domain content includes a Windows/.NET bridge, DICOM signature validation, and device pairing — idiosyncratic concerns that will not generalize to the next module extracted (e.g. appointments or messaging will not have a hardware bridge). What *is* reusable is the **process** (Stage 1–7 pattern, §4), not the domain-specific content. This is an accepted trade-off, not an oversight.
 
-### Fallback pilot: **Billing**
+### Independently recommended fallback pilot candidate: **Billing**
 
 If imaging's hardware/Windows-bridge idiosyncrasies are judged by reviewers to make it a poor template for the *next* modules (which will mostly be pure-TypeScript business domains with no hardware component), billing is the strongest alternative:
-1. Equal-lowest coupling by import analysis (0 fan-out, exactly 1 read-only fan-in edge, `treatmentCases.ts:7` → `earningService.js`).
+1. Equal-lowest coupling by import analysis (0 fan-out, exactly 1 read-only fan-in edge, `treatmentCases.ts:7` → `server/src/services/earningService.ts`).
 2. **No cross-domain transaction touches billing models at all** — its only cross-domain dependency is a safely-splittable two-phase read-then-write.
 3. **Zero external provider coupling** (no payment gateway integration exists yet) — the cleanest "pure backend module" pattern instance of the 10 candidates, maximizing reusable-pattern value (5/5).
 4. One tenant-scoping gap (`PaymentPlanInstallment` missing `clinicId`) is a small additive fix.
@@ -169,12 +197,14 @@ Billing scores slightly lower than imaging only on business criticality (revenue
 
 **Domains not scored as primary/fallback but also not flagged unsuitable** (candidates for later waves, §6): notifications, inventory (real transactional coupling with patients makes it a poor *first* pilot despite flattering import-level numbers — see §2), integrations.
 
+**Added by F2-PREP-004-R1 reconciliation (§1.6), not scored by this task, not flagged unsuitable:** External Calendar Integration (`EXC`) — a newly-named domain (merged F2-PREP-001) that this task did not independently research at the same depth as the 10 candidates above. It must be included in F2-PREP-005's comparison set (see the deferral note at the top of this section) rather than defaulted into or out of the pilot role by this document.
+
 ## 4. Migration pattern — expand/migrate/contract, 7 stages
 
 All 7 stages are **additive-first** (expand → migrate → contract), matching `DEPENDENCY_MAP.md §1–§9`'s already-defined target dependency rules (public-contract-only cross-module reads, event/outbox for cross-module side effects, no direct cross-module Prisma access, core-dependency-only-inward). No stage below requires deleting or renaming anything until Stage 6, and Stage 6 itself only removes now-provably-unused compatibility shims.
 
 ### Stage 1 — Freeze ownership and add dependency rules
-- **Entry criteria:** pilot domain selected and its evidence file (this document) reviewed; `DEPENDENCY_MAP.md §1–§9` target rules already exist and are reused, not rewritten.
+- **Entry criteria:** pilot domain selected by F2-PREP-005 (§3) and this evidence document reviewed for that domain; `DEPENDENCY_MAP.md §1–§9` target rules already exist and are reused, not rewritten.
 - **Changed-file categories:** documentation only (a per-module `OWNERSHIP.md` or an addition to `MODULE_MAP.md` naming the pilot's file list as frozen/owned; no `.ts` file changes).
 - **Tests:** none required (no runtime behavior exists yet to test); a documentation-lint/link-check pass is sufficient.
 - **Backward compatibility:** total — nothing runtime changes.
@@ -256,7 +286,9 @@ All 7 stages are **additive-first** (expand → migrate → contract), matching 
 | Custom static import checker (small Node script using TS's own compiler API or a regex/AST walk over `import` statements) | Medium-high upfront (bespoke code to write and maintain), low ongoing once written | Full (plain Node/TS, no native deps) | Low (fast, no external tool startup overhead) | Depends entirely on the quality of the bespoke script — highest risk of the checker itself having bugs, since it isn't a maintained, widely-used package | Fully customizable to this repository's exact taxonomy (e.g. can encode `DEPENDENCY_MAP.md`'s own `P`/`R`/`W`/`S`/`X` vocabulary directly) but that customization is also the maintenance burden | Zero new runtime dependency if built on the TS compiler API already in `devDependencies`; minimal supply-chain footprint |
 | CodeGraph-based evidence checks | N/A | N/A | N/A | N/A | N/A | **Not evaluated as a candidate** — `RISK_REGISTER.md`/`CURRENT_PHASE.md` record at least six independent prior tasks in this program finding CodeGraph unavailable in their execution environment (e.g. "CodeGraph confirmed unavailable — `ToolSearch` zero matches, sixth+ independent confirmation this program"); recommending a mechanism already repeatedly confirmed unavailable in this environment would not be a credible recommendation. |
 
-**Recommendation:**
+**Recommendation (independently recommended minimal candidate, not an accepted program decision):**
+
+F2-PREP-005 must decide whether to adopt `dependency-cruiser`, a custom import checker, TypeScript path-based restrictions, or a future ESLint boundary-enforcement setup, and must record the resulting package/lockfile/supply-chain implications as an implementation concern at that time — nothing below commits the program to a tool.
 
 - **Minimal first enforcement mechanism: `dependency-cruiser`.** It requires no prior working ESLint setup (avoiding the real cost of first fixing the repository's currently-broken `lint` script before boundary rules could even run), is pure Node with no native/Windows-compatibility risk, and its rule model maps directly onto the `P`/`R`/`W`/`S`/`X` vocabulary `DEPENDENCY_MAP.md` already defines — a `dependency-cruiser` "forbidden" rule per non-`P` cross-domain edge is a natural, low-friction translation of evidence this program has already produced, not a new taxonomy to invent. Ship it scoped to the Stage 7 pilot domain only at first (an allowlist/baseline covering every other domain's existing edges, most importantly messaging's 9 known `X` violations, so Stage 7 does not silently become "fix all of DEPENDENCY_MAP's findings" as an unplanned side effect).
 - **Future option once the pilot(s) prove the pattern and appetite exists for a heavier setup: ESLint + `eslint-plugin-boundaries`.** This is the more expressive, more ecosystem-standard long-term choice (better `public.ts`/private-module contract modeling, wider community support, integrates with editor tooling for real-time developer feedback rather than only a CI-time check) — but it requires first fixing the repository's currently-non-functional ESLint setup, a real, separate, currently-unbudgeted piece of work this task does not recommend bundling into Stage 7 of the *first* pilot.
@@ -271,9 +303,9 @@ Waves are defined by measurable entry/exit gates, not calendar dates, per the ta
 - Entry gate: this evidence document (F2-PREP-004) and its companion JSON exist and are merged; `DEPENDENCY_MAP.md §1–§9` target rules (already merged, F0-004) are the accepted baseline; `dependency-cruiser` is installed and its config exists (even if not yet CI-blocking).
 - Exit gate: `dependency-cruiser` runs successfully (non-blocking, report-only) against the whole repository in CI at least once, producing a baseline violation count per domain (expected: 9 `X` edges pre-known from F0-004, plus whatever additional `R/W` edges `dependency-cruiser`'s own scan surfaces that the manual F0-004 pass didn't enumerate).
 
-**M1 — Pilot module (Imaging, with Billing as the documented fallback)**
-- Entry gate: M0 exit gate met; Stage 1 (ownership freeze) complete for the pilot domain.
-- Exit gate: Stages 1–7 (§4) all complete for the pilot domain; `dependency-cruiser`'s CI check is **blocking** for the pilot domain's own folder (zero tolerated new violations); the pilot domain's route/service tests include at least one real-HTTP (`supertest` or equivalent) smoke test where none existed before (closing the gap noted in §1); one full business day of stable production metrics post-Stage-5 route move, documented.
+**M1 — Pilot module (recommended candidate: Imaging; recommended fallback: Billing; final choice made by F2-PREP-005)**
+- Entry gate: M0 exit gate met; F2-PREP-005 has selected the pilot domain (from Imaging, Billing, External Calendar Integration, or an F2-PREP-002/003 candidate — §3); Stage 1 (ownership freeze) complete for the selected domain.
+- Exit gate: Stages 1–7 (§4) all complete for the selected domain; `dependency-cruiser`'s CI check is **blocking** for that domain's own folder (zero tolerated new violations); the domain's route/service tests include at least one real-HTTP (`supertest` or equivalent) smoke test where none existed before (closing the gap noted in §1); one full business day of stable production metrics post-Stage-5 route move, documented.
 
 **M2 — Low-coupling operational modules (Billing (if not already M1), Notifications, Integrations)**
 - Entry gate: M1 exit gate met; the Stage 1–7 pattern has been exercised at least once end-to-end without a Stage-level stop condition being triggered (i.e., the pattern itself is validated, not just the pilot domain's code).
@@ -292,7 +324,21 @@ Waves are defined by measurable entry/exit gates, not calendar dates, per the ta
 - This wave exists for two possible cases, not both required: (a) if imaging was **not** chosen as M1 (i.e., billing was chosen instead per the fallback), imaging is completed here instead, using the same evidence and stage plan in §2–§4 unchanged; (b) any remaining high-external-provider-coupling surfaces not already covered by M4 (e.g. further hardening of the Meta/WhatsApp/Instagram/DigiDentiS provider-adapter boundaries specifically, as opposed to the messaging *conversation* logic already covered in M4).
 - Exit gate: `dependency-cruiser`'s blocking check covers the full `server/src` tree; every one of the 10 candidate domains from this task's brief has a defined, enforced boundary; the ESLint+`eslint-plugin-boundaries` "future option" from §5 is re-evaluated at this point given the pattern's now-proven maturity, not committed to in advance.
 
-## 7. Files changed by this task
+## 7. Corrected next task
+
+Await: **F2-PREP-002-R1**, **F2-PREP-003-R2**, and **F1-003-B2** status.
+
+Then execute: **F2-PREP-005 — Consolidated Modularization Charter**, which must:
+- compare all pilot candidates (Imaging, Billing, External Calendar Integration, and any pilot candidate emerging from F2-PREP-002/F2-PREP-003);
+- select the accepted pilot;
+- select the first boundary-enforcement mechanism;
+- define M0 entry criteria;
+- update authoritative tracker/phase/index documents;
+- authorize the first implementation task.
+
+**This task does not authorize Imaging Stage 1 implementation, or any other code, schema, or migration change.**
+
+## 8. Files changed by this task
 
 Only the two evidence files below were created. No tracker/index/phase/code/manifest/schema/workflow file was modified.
 
