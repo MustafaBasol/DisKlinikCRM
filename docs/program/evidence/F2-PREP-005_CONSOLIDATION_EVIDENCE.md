@@ -117,4 +117,46 @@ Run against the worktree's diff versus its own frozen-baseline parent (no whites
 
 ## 7. Exact validation command output
 
-_Populated at the end of the task, immediately before commit — see the final delivery report for the literal command output of `git diff --check`, `git status --short`, `git diff --stat`, and `git diff --name-status`._
+```
+$ git status --short
+ M docs/program/CURRENT_PHASE.md
+ M docs/program/NORAMEDI_MASTER_TRACKER.md
+ M docs/program/evidence/README.md
+ M docs/program/phases/F2_MODULAR_BOUNDARIES.md
+?? docs/program/architecture/F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md
+?? docs/program/architecture/evidence/F2-PREP-005_consolidated_modularization_charter.json
+?? docs/program/evidence/F2-PREP-005_CONSOLIDATION_EVIDENCE.md
+
+$ git diff --stat
+ docs/program/CURRENT_PHASE.md                | 4 +++-
+ docs/program/NORAMEDI_MASTER_TRACKER.md      | 4 +++-
+ docs/program/evidence/README.md              | 5 +++++
+ docs/program/phases/F2_MODULAR_BOUNDARIES.md | 5 ++++-
+ 4 files changed, 15 insertions(+), 3 deletions(-)
+
+$ git diff --name-status
+M	docs/program/CURRENT_PHASE.md
+M	docs/program/NORAMEDI_MASTER_TRACKER.md
+M	docs/program/evidence/README.md
+M	docs/program/phases/F2_MODULAR_BOUNDARIES.md
+
+$ git diff --check
+(clean, no output)
+
+$ node -e "const d=require('.../F2-PREP-005_consolidated_modularization_charter.json'); ..."
+parsed OK, keys=29 reconciledDomainCount=38
+
+$ node <domain-table-extraction-script>
+rows=38 unique=38 (exact match to the expected 38-code set: 0 missing, 0 extra)
+
+$ grep -rn "D:/Mustafa\|D:\\\\Mustafa\|E:\\\\Ek Gelir\|C:\\\\Users\|E:/Ek Gelir" <3 new deliverables>
+none found - clean (one author-machine worktree path was found and sanitized during validation — see this file's own "Isolated worktree created" line above, which now omits the local path)
+
+$ grep -inE "api[_-]?key|secret[_-]?value|password\s*=|BEGIN (RSA|EC) PRIVATE KEY" <3 new deliverables>
+none found
+
+$ git commit -m "docs(f2-prep-005): consolidated modularization charter"
+[docs/f2-prep-005-consolidated-modularization-charter <commit-sha>] 7 files changed, 820 insertions(+), 3 deletions(-)
+```
+
+All validation gates passed. One finding during validation (an author-machine absolute worktree path in this file's own §1) was corrected before commit, consistent with the "no author-machine absolute paths" requirement — noted here rather than silently fixed, per this program's established transparency convention.
