@@ -8,7 +8,7 @@
     "sha": "70b1690c1a656c95cead7b42812cc9ae6447bfb7",
     "commit_date": "2026-08-01T22:13:44+02:00",
     "commit_subject": "Merge pull request #275 from MustafaBasol/feature/external-calendar-outbound-sync-phase2",
-    "worktree": "E:\\Ek Gelir\\Siteler\\DisKlinikCRM-worktrees\\f2-prep-001-domain-ownership-inventory",
+    "worktree_isolation": "A fresh isolated git worktree, separate from the primary worktree and from PR #268's worktree, was used for this task. The author-machine local filesystem path is deliberately omitted from this evidence — it is not portable/reproducible information and carries no evidentiary value beyond confirming isolation, which this field states directly.",
     "branch_created": "docs/f2-prep-001-domain-ownership-inventory"
   },
   "methodology": "This inventory does NOT re-derive domain ownership from zero. It inherits the already repository-evidence-verified, F0-008-reviewed baseline produced by F0-003 (MODULE_MAP.md / F0-003_module_ownership_inventory.json, pinned to commit 368bcc8d) and F0-004 (DEPENDENCY_MAP.md / F0-004_dependency_inventory.json) — 37 domains, 88 Prisma models, an 833-edge cross-domain dependency matrix, already cited as evidence by ADR-001/ADR-014/ADR-015 (ACCEPTED / ACCEPTED_WITH_CONDITIONS). Re-deriving that evidence from zero would duplicate already-accepted work and risks silently contradicting it. Instead, this task (1) reconciled the F0-003/F0-004 baseline commit (368bcc8d) against the current origin/main HEAD (70b1690c) via targeted `git diff --stat`/`--name-status` scoped to server/src/routes, server/src/services, server/prisma/schema.prisma, src/pages, src/components; (2) classified every file/model touched by that diff; (3) added one new domain (External Calendar Integration) and extended three existing domains (Privacy/Consent/Retention/DSR, Platform Administration, Storage Abstraction) whose evidence changed; (4) added the 4-bucket Prisma-model ownership-category classification (DOMAIN_OWNED/SHARED_KERNEL_CANDIDATE/PLATFORM_INFRASTRUCTURE/OWNERSHIP_AMBIGUOUS) required by this task, which F0-003 did not use; (5) added the target-module-shape recommendation required by this task. All 37 inherited domains are unchanged in identity/name/models from the accepted MODULE_MAP.md unless explicitly noted in that domain's `evidenceSource` field.",
@@ -2510,7 +2510,7 @@
         "digidentis/DigiDentisSigning.ts",
         "digidentis/digidentisConfig.ts (provider-specific internals — must stay behind ExternalCalendarProvider.ts)"
       ],
-      "ownershipAmbiguity": "Genuinely new since the F0-003/F0-004 accepted baseline (commit 368bcc8d) — this task's own repository-evidence classification, not yet independently reviewed the way F0-003/F0-004 were reviewed by F0-008. Recommend a follow-up F0-004-style incremental dependency-matrix update before this domain is treated as equally authoritative to the other 37.",
+      "ownershipAmbiguity": "Genuinely new since the F0-003/F0-004 accepted baseline (commit 368bcc8d) — this task's own repository-evidence classification, not yet independently reviewed the way F0-003/F0-004 were reviewed by F0-008. Dependency-edge coding for this domain should be reconciled through F2-PREP-002 evidence once available, and only split into a separate dependency-matrix task if the F2-PREP-005 external review proves it necessary, before this domain is treated as equally authoritative to the other 37.",
       "targetModuleShape": {
         "domain": true,
         "application": true,
@@ -2521,7 +2521,7 @@
         "backgroundJobs": true,
         "providerAdapters": true,
         "dtoSchemaBoundary": true,
-        "note": "Already the closest thing to a pre-built modular-monolith module shape in the repository (provider port + factory + idempotency ledger + orchestration + dedicated routes) — good pilot-module candidate per F2_MODULAR_BOUNDARIES.md \"Pilot module boundary application and evidence\" backlog item."
+        "note": "Already the closest thing to a pre-built modular-monolith module shape in the repository (provider port + factory + idempotency ledger + orchestration + dedicated routes) — a possible pilot-module candidate per F2_MODULAR_BOUNDARIES.md \"Pilot module boundary application and evidence\" backlog item. Candidate observation only — this domain has not been selected or approved as the F2 pilot module by this or any other task."
       },
       "crossDomainDirectAccess": "ExternalCalendarAppointmentLink.appointmentId is a direct FK read/write into Appointment (Appointments and Availability-owned) with no contract; ExternalCalendarMapping.localId resolves against User.id (Identity and Access) or AppointmentType.id (Appointments and Availability) by direct id lookup, not a contract call.",
       "evidenceSource": "New domain identified by F2-PREP-001 via git diff 368bcc8d..70b1690c (server/src/routes, server/src/services, server/prisma/schema.prisma) — not present in F0-003 (MODULE_MAP.md) or F0-004 (DEPENDENCY_MAP.md) baselines."
@@ -3923,5 +3923,5 @@
     "domains_new_this_task": 1,
     "domains_with_delta_evidence_this_task": 3
   },
-  "recommended_next_discovery_task": "F2-PREP-002 (per parallel-authorization list in this task's own brief) OR, if not already scoped by F2-PREP-002/003/004, a targeted \"F0-004-R1\" incremental dependency-matrix update limited to the External Calendar Integration domain and the Communication Consent / Legacy Consent Correction / File Backup / Platform Admin Audit deltas identified here — so those additions reach the same evidence tier (import/call-evidence-coded C/E/S/X matrix cells) as the other 37 domains before ADR-001/ADR-015 external review treats this inventory as equally authoritative."
+  "recommended_next_discovery_task": "Await completion of F2-PREP-002, F2-PREP-003, and F2-PREP-004 (already running/authorized in parallel per this task's own brief). Then execute F2-PREP-005 — Consolidated Modularization Charter. External Calendar Integration dependency-edge coding must be reconciled through F2-PREP-002 evidence and only split into a separate task if the F2-PREP-005 external review proves it necessary."
 }

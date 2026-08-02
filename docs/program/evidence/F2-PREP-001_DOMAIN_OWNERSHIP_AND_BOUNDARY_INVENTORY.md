@@ -12,7 +12,7 @@ The structured/machine-readable form of this same evidence is [`F2-PREP-001_doma
 - Baseline commit subject: "Merge pull request #275 from MustafaBasol/feature/external-calendar-outbound-sync-phase2"
 - Working tree at task start: clean (`git status --short` empty)
 - New branch: `docs/f2-prep-001-domain-ownership-inventory`
-- New isolated worktree: `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f2-prep-001-domain-ownership-inventory` (created via `git worktree add -b ... origin/main`; primary worktree and PR #268's worktree were not touched)
+- New isolated worktree: a fresh isolated git worktree was created via `git worktree add -b ... origin/main`, separate from the primary worktree and from PR #268's worktree (neither was touched). The author-machine local filesystem path is deliberately omitted from this evidence — it is not portable/reproducible information.
 - No rebase performed. No force push performed.
 
 ## 2. Methodology — this task inherits, reconciles, and extends prior evidence; it does not re-derive from zero
@@ -98,41 +98,41 @@ Full per-domain file lists (all routes, all services, all frontend files, all Pr
 | IDA | Identity and Access | auth.ts | 7 files — auth.ts; csrf.ts; authFallback.ts; totp.ts, … | 6 files — Login.tsx; Register.tsx; ForgotPassword.tsx, … |
 | ORG | Organization / Clinic / User Membership | clinicRegistration.ts; organizationBranches.ts; organizationDashboard.ts; users.ts; usersImport.ts | 2 files — clinicOperatingPreferences.ts; planLimits.ts | 7 files — Branches.tsx; OrganizationDashboard.tsx; Users.tsx, … |
 | TSC | Tenant Security and Scope | — | 4 files — clinicAccess.ts; clinicScope.ts; tenantGuard.ts; relationGuards.ts | — |
-| PRM | Permissions / Roles | — | 1 files — roles.ts | — |
+| PRM | Permissions / Roles | — | 1 file — roles.ts | — |
 | AUD | Audit and Activity | — | 2 files — activity.ts; auditLog.ts | — |
 | PRV | Privacy / Consent / Retention / Data Subject Rights | patientPrivacy.ts; gdprExport.ts; clinicBulkExport.ts; clinicLegalProfile.ts; publicClinicKvkk.ts; communicationPreferences.ts | 25 files — clinicBulkExportConfig.ts; clinicBulkExportFieldAllowlists.ts; clinicBulkExportPackage.ts; clinicBulkExportPasswordAttempts.ts, … | 17 files — ClinicKvkkPublicPage.tsx; CommunicationsNoticePage.tsx; ConsentTemplatePage.tsx, … |
-| SEC | Security Incident Response and Detection | platformSecurityIncidents.ts | 3 files — securityDetectionRules.ts; securityIncidentService.ts; securitySignalService.ts | 1 files — PlatformSecurityIncidents.tsx |
-| CFG | Configuration and Secrets | settings.ts | 3 files — platformSettings.ts; secrets.ts; encryption.ts | 1 files — Settings.tsx |
+| SEC | Security Incident Response and Detection | platformSecurityIncidents.ts | 3 files — securityDetectionRules.ts; securityIncidentService.ts; securitySignalService.ts | 1 file — PlatformSecurityIncidents.tsx |
+| CFG | Configuration and Secrets | settings.ts | 3 files — platformSettings.ts; secrets.ts; encryption.ts | 1 file — Settings.tsx |
 | OBS | Observability / Operational Events | operationalMonitoring.ts | 2 files — operationalEventService.ts; logger.ts | 2 files — PlatformSystem.tsx; Operations.tsx |
 | EVQ | Shared Events / Queue Contracts / Idempotency | — | 3 files — messagingInboundIdempotency.ts; jobLock.ts; concurrency.ts | — |
-| STG | Storage Abstraction | — | 5 files — fileStorage.ts; fileSignature.ts; filePreview.ts; fileBackupService.ts, … | 1 files — FilePreviewModal.tsx |
-| NTF | Notifications | notifications.ts | 2 files — notificationPreferences.ts; taskAssignmentNotifier.ts | 1 files — NotificationBell.tsx |
+| STG | Storage Abstraction | — | 5 files — fileStorage.ts; fileSignature.ts; filePreview.ts; fileBackupService.ts, … | 1 file — FilePreviewModal.tsx |
+| NTF | Notifications | notifications.ts | 2 files — notificationPreferences.ts; taskAssignmentNotifier.ts | 1 file — NotificationBell.tsx |
 | PAD | Platform Administration | platformAdmin.ts | 3 files — backupService.ts; platformAuth.ts; platformAdminAudit.ts | 8 files — PlatformAdmin.tsx; PlatformBackups.tsx; PlatformClinics.tsx, … |
 | PAT | Patients | patients.ts; patientsImport.ts; attachments.ts | 2 files — patientName.ts; excelImport.ts | 5 files — Patients.tsx; PatientDetail.tsx; PatientForm.tsx, … |
 | APT | Appointments and Availability | appointments.ts; appointmentRequests.ts; schedules.ts; contactRequests.ts; services.ts; noShows.ts | 4 files — appointmentAvailabilityService.ts; appointmentRequestSafety.ts; appointmentRequestNotification.ts; noShowFollowUp.ts | 11 files — Appointments.tsx; AppointmentDetail.tsx; AppointmentRequests.tsx, … |
 | TRC | Treatment Cases | treatmentCases.ts; treatmentPackages.ts | — | 4 files — TreatmentCases.tsx; TreatmentCaseDetail.tsx; TreatmentCaseForm.tsx, … |
-| DEN | Dental Chart / Procedures | dentalChart.ts; treatmentPlanProcedures.ts | 1 files — treatmentStockDeduction.ts | 5 files — DentalChart.tsx; dentalChart.types.ts; DentalChartFullscreenModal.tsx, … |
+| DEN | Dental Chart / Procedures | dentalChart.ts; treatmentPlanProcedures.ts | 1 file — treatmentStockDeduction.ts | 5 files — DentalChart.tsx; dentalChart.types.ts; DentalChartFullscreenModal.tsx, … |
 | PUB | Public Booking | publicBooking.ts | — | 4 files — BookingWidget.tsx; bookingWidgetHelpers.ts; LandingPage.tsx, … |
 | PAY | Basic Payments | payments.ts; paymentPlans.ts | 2 files — overdueInstallments.ts; overdueReceivables.ts | 5 files — Payments.tsx; PaymentPlans.tsx; PaymentForm.tsx, … |
 | TSK | Tasks and Follow-up | tasks.ts | — | 2 files — Tasks.tsx; TaskForm.tsx |
 | WHA | Messaging — WhatsApp | whatsapp.ts; whatsappInbox.ts; metaWhatsAppWebhook.ts; organizationWhatsApp.ts | 18 files — clinicResolver.ts; conversationMessageStore.ts; EvolutionWhatsAppProvider.ts; MetaCloudWhatsAppProvider.ts, … | 7 files — WhatsAppConnections.tsx; WhatsAppInbox.tsx; MetaCallbackPage.tsx, … |
 | IGM | Messaging — Instagram | instagramInbox.ts; instagramWebhook.ts; organizationInstagram.ts | 3 files — instagramAiConversationProcessor.ts; instagramClinicResolver.ts; InstagramMessagingProvider.ts | 2 files — InstagramConnections.tsx; InstagramInbox.tsx |
-| SMS | Messaging — SMS | sms.ts | 8 files — platformSmsProviders.ts; smsEntitlement.ts; SmsProvider.ts; smsProviders.ts, … | 1 files — SmsSettingsSection.tsx |
+| SMS | Messaging — SMS | sms.ts | 8 files — platformSmsProviders.ts; smsEntitlement.ts; SmsProvider.ts; smsProviders.ts, … | 1 file — SmsSettingsSection.tsx |
 | EML | Messaging — Email | — | 2 files — emailService.ts; emailTemplates.ts | — |
 | AIO | Messaging AI Orchestration | — | 12 files — whatsappAgentPrompt.ts; whatsappAgentSchema.ts; whatsappAvailability.ts; whatsappBookingFlow.ts, … | — |
 | REC | Automations / Reminders / Follow-up / Recall | recall.ts; postTreatment.ts | 4 files — recallCandidateService.ts; recallSettings.ts; postTreatmentMessaging.ts; noShowFollowUp.ts (shared with clinical-appointments-availability) | 8 files — RecallDashboard.tsx; RecallActionModal.tsx; RecallCandidateStatusBadge.tsx, … |
 | IMG | Imaging — Server Ingest and Viewer | imaging.ts | 3 files — imagingRequestTransitions.ts; imagingUploadValidation.ts; releaseMetadataValidation.ts | 5 files — ImagingQueue.tsx; DicomViewer.tsx; dicomHelpers.ts, … |
 | BRG | Imaging — Device Bridge / Windows Bridge | imagingBridgePublic.ts | 4 files — bridgeOnboardingConfig.ts; bridgePairing.ts; bridgeTokens.ts; bridgeUpdateConfig.ts | 6 files — bridgeHelpers.ts; BridgeOnboardingCard.tsx; BridgeSetupWizard.tsx, … |
-| INV | Inventory | inventory.ts | 2 files — inventoryAlerts.ts; treatmentStockDeduction.ts | 1 files — Inventory.tsx |
+| INV | Inventory | inventory.ts | 2 files — inventoryAlerts.ts; treatmentStockDeduction.ts | 1 file — Inventory.tsx |
 | INS | Insurance | insuranceProvisions.ts | — | 3 files — InsuranceProvisions.tsx; InsuranceProvisionDetail.tsx; InsuranceProvisionForm.tsx |
-| FIN | Advanced Finance — Compensation and Payouts | financeDashboard.ts; compensationRules.ts; practitionerEarnings.ts; practitionerPayouts.ts | 1 files — earningService.ts | 3 files — FinanceDashboard.tsx; MyEarnings.tsx; PractitionerEarnings.tsx |
+| FIN | Advanced Finance — Compensation and Payouts | financeDashboard.ts; compensationRules.ts; practitionerEarnings.ts; practitionerPayouts.ts | 1 file — earningService.ts | 3 files — FinanceDashboard.tsx; MyEarnings.tsx; PractitionerEarnings.tsx |
 | RPT | Reporting / Analytics | reports.ts; dashboard.ts; organizationDashboard.ts | — | 2 files — Reports.tsx; Dashboard.tsx |
-| LAB | Dental Laboratory / Prosthetics Tracking | laboratories.ts; labOrders.ts | 2 files — labOrderStatusTransitions.ts; labOrderSummary.ts | 1 files — LabOrders.tsx |
-| PAI | AI Platform / AI Gateway | — | 1 files — googleAiStudio.ts (only generic AI-provider file found) | — |
+| LAB | Dental Laboratory / Prosthetics Tracking | laboratories.ts; labOrders.ts | 2 files — labOrderStatusTransitions.ts; labOrderSummary.ts | 1 file — LabOrders.tsx |
+| PAI | AI Platform / AI Gateway | — | 1 file — googleAiStudio.ts (only generic AI-provider file found) | — |
 | PIG | Integration Platform (Official/Ministry Adapters) | — | — | — |
 | PBL | Billing / Subscription Engine | — | — | 2 files — PricingPage.tsx (marketing page, not a billing engine); comparison UI, not billing logic) |
 | PCM | Campaign Management / Health Tourism / Invoicing | — | — | — |
-| EXC | External Calendar Integration | externalCalendarWebhook.ts (public); platformExternalCalendar.ts (platform admin config); externalCalendarOutboundSyncStatusRoutes.ts (tenant API, exact filename externalCalendarOutboundSyncStatus.ts) | 13 files — ExternalCalendarProvider.ts; externalCalendarConnectionService.ts; externalCalendarErrors.ts; externalCalendarIdempotency.ts, … | 1 files — PlatformExternalCalendar.tsx |
+| EXC | External Calendar Integration | externalCalendarWebhook.ts (public); platformExternalCalendar.ts (platform admin config); externalCalendarOutboundSyncStatusRoutes.ts (tenant API, exact filename externalCalendarOutboundSyncStatus.ts) | 13 files — ExternalCalendarProvider.ts; externalCalendarConnectionService.ts; externalCalendarErrors.ts; externalCalendarIdempotency.ts, … | 1 file — PlatformExternalCalendar.tsx |
 
 ## 5. Complete Prisma model ownership table (99 models, current HEAD)
 
@@ -263,9 +263,9 @@ Not present in `MODULE_MAP.md` or `DEPENDENCY_MAP.md`. Identified via `git diff 
 
 **Cross-domain direct access (transitional, no contract exists yet):** `ExternalCalendarAppointmentLink.appointmentId` is a direct FK read/write into `Appointment` (owned by Appointments and Availability); `ExternalCalendarMapping.localId` resolves against `User.id` (Identity and Access) or `AppointmentType.id` (Appointments and Availability) by direct id lookup — deliberately never by name, per `externalCalendarMappingService.ts resolveMapping()`, which blocks synchronization with an administrative error when a mapping is missing or inactive. This is the same "transitional direct FK/read, no contract yet" pattern F0-004 already documented for other domains (e.g. Advanced Finance reading Payment) — not a new class of violation.
 
-**Why this is a strong F2 pilot-module candidate:** of all 38 domains in this inventory, External Calendar Integration is the only one that already exhibits essentially the full target module shape (provider port + factory, dedicated idempotency/retry ledger, orchestration layer, dedicated public/platform/webhook routes, no legacy code to migrate) — see `F2_MODULAR_BOUNDARIES.md`'s own backlog item "Pilot modül sınır uygulaması ve kanıtı." This is a factual observation from repository evidence, not a recommendation this task is authorized to act on.
+**Pilot-module candidate observation (not a selection):** of all 38 domains in this inventory, External Calendar Integration is the only one that already exhibits essentially the full target module shape (provider port + factory, dedicated idempotency/retry ledger, orchestration layer, dedicated public/platform/webhook routes, no legacy code to migrate) — see `F2_MODULAR_BOUNDARIES.md`'s own backlog item "Pilot modül sınır uygulaması ve kanıtı." This is a factual observation from repository evidence, not a recommendation this task is authorized to act on, and it is **not** a selected or approved F2 pilot module — no such selection has been made by this or any other task.
 
-**Explicitly flagged:** this domain's own cross-domain edges are **not yet coded into the F0-004 833-edge matrix** — before this domain is treated as equally authoritative to the other 37 (e.g. for ADR-015 external review), a follow-up F0-004-style incremental update should classify its edges with the same C/E/S/X evidence tier. See §11 (next task).
+**Explicitly flagged:** this domain's own cross-domain edges are **not yet coded into the F0-004 833-edge matrix**. Per §11, this is not an independent follow-up task — its dependency-edge coding should be reconciled through F2-PREP-002 evidence once available, and only split into a separate dependency-matrix task if the F2-PREP-005 external review proves it necessary, before this domain is treated as equally authoritative to the other 37.
 
 ## 8. Delta evidence for existing domains (Privacy, Platform Administration, Storage Abstraction)
 
@@ -354,9 +354,9 @@ The 4 planned/not-implemented domains (`PAI`/`PIG`/`PBL`/`PCM`) have no shape re
 
 ## 11. Recommended next discovery task
 
-Per this task's own parallel-authorization list, **F2-PREP-002 / F2-PREP-003 / F2-PREP-004** are already running or authorized in parallel and may independently cover adjacent ground. Distinct from those (and not claimed to duplicate them, since this task did not inspect their worktrees per its own instructions), the single most valuable next step this evidence surfaces is:
+Await completion of F2-PREP-002, F2-PREP-003, and F2-PREP-004 (already running/authorized in parallel per this task's own brief). Then execute **F2-PREP-005 — Consolidated Modularization Charter**.
 
-**F0-004-R1 — Incremental Cross-Module Dependency Matrix Update.** Scope: extend the existing, accepted 37×37 `DEPENDENCY_MAP.md` §10.2 matrix by exactly one row/column (`EXC` — External Calendar Integration) and re-verify the cells this task's §7/§8 already touch on qualitatively (`EXC`→`APT`, `EXC`→`IDA`, `EXC`→`ORG`, and the `PRV` row's new Communication Consent edges into `WHA`/`IGM`/`SMS`/`EML` send paths) with the same import/call-evidence-coded (C/E/S/X) rigor F0-004 used for the other 833 edges — so this inventory's new/delta domains reach the same evidence tier as the other 37 before ADR-001/ADR-015 external review treats this document as equally authoritative. This is a bounded, additive evidence task — no code, schema, or matrix-format change required.
+External Calendar Integration dependency-edge coding (the `EXC`→`APT`/`IDA`/`ORG` cells and the `PRV` row's new Communication Consent edges into `WHA`/`IGM`/`SMS`/`EML` send paths, both flagged qualitatively in §7/§8 above but not yet coded into the accepted 37×37 `DEPENDENCY_MAP.md` §10.2 matrix) must be reconciled through F2-PREP-002 evidence and only split into a separate task if the F2-PREP-005 external review proves it necessary. This document does not itself propose or authorize a new standalone dependency-matrix task.
 
 ## 12. Rollback
 
