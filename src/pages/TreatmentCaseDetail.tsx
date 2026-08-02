@@ -22,11 +22,15 @@ import {
   Circle,
   Link as LinkIcon,
   Unlink,
-  Package
+  Package,
+  Download
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { treatmentCaseService, paymentService, insuranceProvisionService, treatmentPlanProceduresService, appointmentService, inventoryService, serviceService, treatmentPackageService } from '../services/api';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+import { useAuth } from '../context/AuthContext';
+import { canDownloadTreatmentProposal } from '../utils/permissions';
+import { getApiErrorMessage } from '../utils/errors';
 import TreatmentCaseForm from '../components/TreatmentCaseForm';
 import TaskForm from '../components/TaskForm';
 import PaymentForm from '../components/PaymentForm';
@@ -37,6 +41,7 @@ import AppointmentForm from '../components/AppointmentForm';
 const TreatmentCaseDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { t } = useTranslation(['treatmentCases', 'common', 'tasks', 'appointments', 'messages', 'insurance', 'payments', 'patients']);
   const { defaultCurrency, formatCurrency, formatDate, formatTime, formatDateTime } = useClinicPreferences();
   
@@ -58,6 +63,8 @@ const TreatmentCaseDetail: React.FC = () => {
   const [stageSaving, setStageSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proceduresError, setProceduresError] = useState<string | null>(null);
+  const [proposalDownloading, setProposalDownloading] = useState(false);
+  const [proposalError, setProposalError] = useState<string | null>(null);
 
   // Treatment procedures
   const [procedures, setProcedures] = useState<any[]>([]);
@@ -154,6 +161,29 @@ const TreatmentCaseDetail: React.FC = () => {
       alert(err.response?.data?.error || t('common:errorGeneric'));
     } finally {
       setStageSaving(false);
+    }
+  };
+
+  const handleDownloadProposal = async () => {
+    if (!tCase || proposalDownloading) return;
+    setProposalDownloading(true);
+    setProposalError(null);
+    let objectUrl: string | null = null;
+    try {
+      const response = await treatmentCaseService.getProposalPdf(tCase.id);
+      const blob = response.data as Blob;
+      objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `treatment-proposal-${tCase.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      setProposalError(await getApiErrorMessage(err, t('treatmentCases:proposal.downloadFailed')));
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setProposalDownloading(false);
     }
   };
 
@@ -383,19 +413,33 @@ const TreatmentCaseDetail: React.FC = () => {
               </button>
             </>
           )}
-          <button 
+          <button
             onClick={() => setIsMessageModalOpen(true)}
             className="btn-secondary"
           >
             <MessageSquare size={18} />
             {t('messages:prepare', { defaultValue: 'Prepare Follow-up' })}
           </button>
+          {canDownloadTreatmentProposal(user) && (
+            <button
+              onClick={handleDownloadProposal}
+              disabled={proposalDownloading}
+              className="btn-secondary disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {proposalDownloading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+              {proposalDownloading ? t('treatmentCases:proposal.preparing') : t('treatmentCases:proposal.download')}
+            </button>
+          )}
           <button onClick={() => setIsEditOpen(true)} className="btn-primary">
             <Edit2 size={18} />
             {t('common:edit')}
           </button>
         </div>
       </div>
+
+      {proposalError && (
+        <div className="px-1 -mt-2 text-sm text-red-600">{proposalError}</div>
+      )}
 
       {/* Progress Bar */}
       {tCase.stage !== 'lost' && (

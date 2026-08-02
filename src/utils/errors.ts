@@ -52,3 +52,42 @@ export function getErrorMessage(err: unknown, fallback = 'Bir hata oluştu.'): s
 
   return fallback;
 }
+
+async function readBlobAsText(blob: Blob): Promise<string> {
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
+}
+
+/**
+ * Like getErrorMessage, but also handles Axios errors from a `responseType: 'blob'` request.
+ * When such a request fails with a JSON error body, Axios does not parse it — err.response.data
+ * arrives as an opaque Blob (not a parsed object), so getErrorMessage's shape checks never match
+ * and it silently falls back to Axios's generic "Request failed with status code NNN" message,
+ * hiding the real server error (e.g. "Proposal generation failed").
+ *
+ * This reads the Blob's text, parses it as JSON, and re-runs it through getErrorMessage as if
+ * Axios had parsed the body normally — so `{ error: "..." }`, `{ message: "..." }` and
+ * `{ error: { ... } }` (Zod format tree) all resolve the same way they do for a non-blob response.
+ * Any failure along the way (data isn't a Blob, unreadable, not JSON) falls back to the plain
+ * synchronous getErrorMessage result — this never throws and never resolves to a non-string.
+ */
+export async function getApiErrorMessage(err: unknown, fallback = 'Bir hata oluştu.'): Promise<string> {
+  const data = (err as any)?.response?.data;
+
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    try {
+      const text = await readBlobAsText(data);
+      const parsed = JSON.parse(text);
+      return getErrorMessage({ response: { data: parsed } }, fallback);
+    } catch {
+      // Not JSON, unreadable, or some other Blob-parsing failure — fall through safely below.
+    }
+  }
+
+  return getErrorMessage(err, fallback);
+}
