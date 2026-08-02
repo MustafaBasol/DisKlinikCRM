@@ -92,7 +92,7 @@ Both target statuses (`scheduled`, `cancelled`) are independently reachable from
 
 **Cleanup (deterministic `finally`):** `prisma.imagingRequest.deleteMany` (by `clinicId` — not covered by `cleanupAllFixtures`, whose header predates the `ImagingRequest` model) → `prisma.auditLog.deleteMany` (by `organizationId` — no FK, but avoids silent growth across repeated local runs) → `cleanupAllFixtures()` (existing harness function: deletes clinics/patients/users/organizations by tracked org id, FK-safe order). Runs even if an assertion inside the round loop throws, since it's in the `try/finally` wrapping `withServer(...)`.
 
-**Round count:** `ROUND_COUNT = 30` by default (overridable via `CT32_ROUNDS` env var for exploratory runs — an env-var read inside the test file itself, not a `package.json`/config change).
+**Round count:** `DEFAULT_ROUND_COUNT = 30` when `CT32_ROUNDS` is unset or empty/whitespace-only; otherwise `CT32_ROUNDS` must parse as a positive integer (`^[1-9]\d*$`) or `resolveRoundCount()` throws before any fixture/DB work starts — a deterministic configuration error, not a silent fallback (see §11 for the fix history and re-validation). An env-var read inside the test file itself, not a `package.json`/config change.
 
 ---
 
@@ -120,6 +120,8 @@ npx prisma generate
 Image: `postgres@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777` — the same digest-pinned `postgres:16-alpine` this repo's own `scripts/test-runtime/lib/postgres.ts` uses for every other disposable-Postgres run (`POSTGRES_IMAGE_DIGEST`). Database/user/password names and host port are unique to this validation run.
 
 ### 5.2 CT-32 — two independent full runs (fresh Node process each), 30 rounds each
+
+Original Stage-0 validation, performed against the version of this file predating the `CT32_ROUNDS`-parsing review fix (152 assertions/run — the review fix in §11 adds one more aggregate assertion, so a from-scratch run today reports 153). The underlying concurrency observations below (100% `BOTH_SUCCESS_SILENT_CLOBBER`, `scheduled` wins every round) are unaffected by that fix and were independently re-confirmed post-fix in §11.
 
 **Run 1:**
 ```
@@ -244,7 +246,7 @@ This task **confirms** (does not merely repeat) the contract's own prediction: "
 ## 9. Status separation
 
 - **Agent completed:** yes.
-- **Validations passed:** yes — CT-32 (2 independent runs, 152/152 assertions each), 211/211 existing Imaging suite tests, `tsc --noEmit` clean, `git diff --check` clean, changed-file scope confirmed to exactly the two authorized files.
+- **Validations passed:** yes — CT-32 original validation (2 independent runs, 152/152 assertions each) plus the §11 review-fix re-validation (default rounds 153/153, `CT32_ROUNDS=3` 18/18, invalid-value fail-fast confirmed), 211/211 existing Imaging suite tests, `tsc --noEmit` clean, `git diff --check` clean, changed-file scope confirmed to exactly the authorized files.
 - **PR opened:** yes, against `main`, test-only. See §10 for exact head SHA and PR URL.
 - **Merged:** no.
 - **Deployed:** no.
@@ -262,9 +264,88 @@ Branch: `test/f2-prep-007-d-imaging-request-concurrency`, based on `origin/main`
 
 - **PR:** https://github.com/MustafaBasol/DisKlinikCRM/pull/296 (open, not merged).
 - **Head commit introducing CT-32 (test + this evidence doc):** `b4d386d535567259ea763de0d4d6221307a62842`.
+- **Head commit for the §11 CT32_ROUNDS-parsing review fix:** see §11.
 
 ---
 
-## 11. Next action
+## 11. Follow-up — `CT32_ROUNDS` parsing correction (review response)
+
+**Trigger:** Copilot inline review comment on PR #296 (`server/src/tests/imagingRequestConcurrencyCharacterization.test.ts:264`, comment id `3699990558`): `ROUND_COUNT = Number(process.env.CT32_ROUNDS ?? 30)` turns an unparsable value (e.g. `"abc"`) into `NaN`. Since `round <= NaN` is always `false`, the round loop would execute **zero** times, `outcomes` would stay empty, and every aggregate assertion (`0 === 0`, `[].length === 0`) would pass **vacuously** — a misconfigured `CT32_ROUNDS` would report a green run while characterizing nothing.
+
+**Fix (test-only, `server/src/tests/imagingRequestConcurrencyCharacterization.test.ts`):**
+- Replaced the bare `Number(...)` coercion with `resolveRoundCount()`: unset or empty/whitespace-only `CT32_ROUNDS` → `DEFAULT_ROUND_COUNT` (30, unchanged default); any other value must match `^[1-9]\d*$` (positive integer, no zero, no negative sign, no decimal) or the function throws a descriptive `Error` — a deterministic configuration error, not a silent fallback to 30, per this task's explicit "prefer fail-fast" instruction.
+- `resolveRoundCount()` is called first thing inside `main()`, before any clinic/patient/user fixture is created, so an invalid value fails before any DB write — nothing to clean up.
+- The resolved count is logged once (`Effective round count: N`) — a bare integer, never a token, URL, or DB credential.
+- Added a new aggregate assertion, `aggregate: at least one round actually executed`, asserting `outcomes.length >= 1` — a second, independent guard against the same vacuous-pass failure mode surviving any future change to the loop/config logic.
+- No production code, concurrency semantics, schema, migration, package file, workflow, shared helper, or program-control document was touched — only this one test file and this evidence doc.
+
+**Re-validation (fresh disposable Postgres, digest-pinned `postgres:16-alpine`, same image as §5.1):**
+
+```
+CT32_ROUNDS unset (default):
+  Effective round count: 30
+  Rounds run: 30
+  BOTH_SUCCESS_SILENT_CLOBBER: 30/30 (PATCH/scheduled won 30, cancel/cancelled won 0)
+  SEQUENTIAL_SAFE_REJECTION: 0/30
+  UNEXPECTED: 0/30
+  CT-32 total: 153  ✓ 153  ✗ 0   (152 original + 1 new "at least one round executed" assertion)
+
+CT32_ROUNDS=3:
+  Effective round count: 3
+  Rounds run: 3
+  BOTH_SUCCESS_SILENT_CLOBBER: 3/3 (PATCH/scheduled won 3, cancel/cancelled won 0)
+  SEQUENTIAL_SAFE_REJECTION: 0/3
+  UNEXPECTED: 0/3
+  CT-32 total: 18  ✓ 18  ✗ 0
+
+CT32_ROUNDS=abc:
+  [CT-32] fatal error: Error: Invalid CT32_ROUNDS="abc": must be a positive integer (e.g. "30"),
+  or unset to use the default (30). Refusing to silently fall back, so a CI misconfiguration is
+  never masked as a vacuously-passing 0-round run.
+      at resolveRoundCount (.../imagingRequestConcurrencyCharacterization.test.ts:280:11)
+      at main (.../imagingRequestConcurrencyCharacterization.test.ts:294:22)
+  process exit code: 1
+
+Additional sweep (not in the task's minimum required set, run for extra confidence):
+  CT32_ROUNDS=0     -> same fail-fast shape, exit 1
+  CT32_ROUNDS=-5    -> same fail-fast shape, exit 1
+  CT32_ROUNDS=3.5   -> same fail-fast shape, exit 1
+  CT32_ROUNDS=NaN   -> same fail-fast shape, exit 1 (the literal string "NaN" is also rejected, not specially accepted)
+  CT32_ROUNDS=" "   -> whitespace-only, treated as unset -> Effective round count: 30 (default)
+```
+
+**Cleanup proof (post-fix):** direct row-count query against the disposable database after all of the above runs (default, 3-round, and every invalid-value attempt, which never reach fixture creation):
+```
+imagingRequest: 0
+organization:   1   <- pre-existing "Default Organization" migration seed row, unrelated to any test run
+clinic:         0
+patient:        0
+user:           0
+auditLog:       0
+```
+Identical to the original §5.3 result — zero residual rows from any run, valid or invalid-and-rejected. Validation container removed (`docker rm -f`) after the sweep.
+
+**Regression suites (unaffected, re-run against the fixed file):**
+```
+npm run test:imaging                    -> 103 passed, 0 failed
+npm run test:imaging-bridge-pairing     -> 50 passed, 0 failed
+npm run test:imaging-bridge-onboarding  -> 14 passed, 0 failed
+npm run test:imaging-bridge-update      -> 44 passed, 0 failed
+```
+
+**Typecheck / lint-adjacent:**
+```
+npm run typecheck   -> tsc --noEmit produced no errors/output.
+git diff --check    -> clean.
+git diff --name-only origin/main...HEAD -> exactly the two originally-authorized files (no new files, no scope creep).
+```
+
+**Review-thread resolution:** replied to Copilot review comment `3699990558` with a summary of this fix and marked the review thread resolved via the GitHub GraphQL `resolveReviewThread` mutation.
+
+**New commit:** *(recorded after commit — see the delivery report for this turn for the exact SHA)*.
+
+---
+
+## 12. Next action
 
 **Exact next task:** the next unclaimed item in the 18-test Stage-1-gating set (`CT-02,03,06,07,08,10,11,12,13,14,16,17,19,21,26,27,28` — `CT-32` now closed by this task), or F2-PREP-007's own consolidation once all 32 characterization tests exist, per the contract's Stage 0 gate. Not started, not authorized to start by this document. Runtime modularization (Stage 1+) remains explicitly not approved by this task or by the F2-PREP-006-E contract it operates within.

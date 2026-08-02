@@ -261,10 +261,38 @@ async function runRound(port: number, token: string, clinicId: string, patientId
 
 // ─── Main ───
 
-const ROUND_COUNT = Number(process.env.CT32_ROUNDS ?? 30);
+const DEFAULT_ROUND_COUNT = 30;
+
+/**
+ * CT32_ROUNDS must be a positive integer or unset — `Number(process.env.X ?? 30)`
+ * previously turned an unparsable value (e.g. "abc") into NaN, which made
+ * `round <= ROUND_COUNT` false on the very first iteration: zero rounds ran,
+ * `outcomes` stayed empty, and every aggregate assertion below (`0 === 0`,
+ * `[].length === 0`) passed vacuously — a misconfigured CI run would report
+ * green while characterizing nothing. Fail fast instead: an invalid value is
+ * a configuration error, not something to silently coerce to the default.
+ */
+function resolveRoundCount(): number {
+  const raw = process.env.CT32_ROUNDS;
+  if (raw === undefined || raw.trim() === '') return DEFAULT_ROUND_COUNT;
+  const trimmed = raw.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) {
+    throw new Error(
+      `Invalid CT32_ROUNDS="${raw}": must be a positive integer (e.g. "30"), or unset to use the default (${DEFAULT_ROUND_COUNT}). ` +
+        'Refusing to silently fall back, so a CI misconfiguration is never masked as a vacuously-passing 0-round run.',
+    );
+  }
+  return Number.parseInt(trimmed, 10);
+}
 
 async function main() {
   section('CT-32 — ImagingRequest PATCH concurrency characterization (F2-PREP-007-D)');
+
+  // Resolved and logged before any fixture/DB work starts, so an invalid
+  // CT32_ROUNDS fails fast without leaving any test data behind. Only the
+  // resolved round count is logged — never a token, URL, or DB credential.
+  const roundCount = resolveRoundCount();
+  console.log(`  Effective round count: ${roundCount}`);
 
   const fixtures = await createClinicFixtureSet('ct32-imaging-concurrency');
   const staffUser = await createStaffUser({
@@ -289,7 +317,7 @@ async function main() {
 
   try {
     await withServer(async (port) => {
-      for (let round = 1; round <= ROUND_COUNT; round++) {
+      for (let round = 1; round <= roundCount; round++) {
         const outcome = await runRound(port, token, fixtures.defaultClinicId, patient.id, staffUser.id, round);
         outcomes.push(outcome);
 
@@ -350,6 +378,14 @@ async function main() {
 
   // ─── Aggregate determinism report ───
   section('Aggregate — determinism across repeated rounds');
+
+  // Guards against the exact vacuous-pass failure mode resolveRoundCount()
+  // exists to prevent: if the round loop above somehow ran zero times,
+  // every filter/count below would be trivially "0 === 0" and pass without
+  // characterizing anything. Fails loudly instead of silently.
+  await test('aggregate: at least one round actually executed (guards against a vacuously-passing 0-round run)', () => {
+    assert.ok(outcomes.length >= 1, `expected roundCount=${roundCount} to produce at least 1 outcome, got ${outcomes.length}`);
+  });
 
   const clobberRounds = outcomes.filter((o) => o.classification === 'BOTH_SUCCESS_SILENT_CLOBBER');
   const sequentialRounds = outcomes.filter((o) => o.classification === 'SEQUENTIAL_SAFE_REJECTION');
