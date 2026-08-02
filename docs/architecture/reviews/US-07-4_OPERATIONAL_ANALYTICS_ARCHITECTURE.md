@@ -1340,7 +1340,7 @@ status-history gap, and every day that instrumentation is delayed permanently en
 - Task name: US-07.4 · Operational analytics dashboard
 - Execution baseline: `5dc5ad67c7e9feee11f6fece9a7d65e03033d2fb`
 - Branch: `docs/us-07-4-operational-analytics-architecture`
-- Worktree: `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\us-07-4-operational-analytics-architecture`
+- Worktree: task-local isolated worktree (not repository metadata)
 - Commit SHA / PR: recorded after commit and push (see chat response for this run)
 - File changed: `docs/architecture/reviews/US-07-4_OPERATIONAL_ANALYTICS_ARCHITECTURE.md` (this file, the
   only file this task modifies)
