@@ -240,7 +240,9 @@ Revert this task's single commit (or close the PR without merging). Zero product
 
 ## 12. PR / head SHA
 
-Filled in immediately after PR creation in this same task run — see the delivery report in the conversation for the exact PR URL and head commit SHA.
+- PR: https://github.com/MustafaBasol/DisKlinikCRM/pull/294 (`test/f2-prep-007-b-imaging-tenant-lifecycle` → `main`), opened, not merged.
+- Head commit SHA at PR open: `0a1a6acb3b6a8641666fd3fd8633cd0e96e842f2`.
+- Base: `origin/main` at `5dc5ad67c7e9feee11f6fece9a7d65e03033d2fb` (§1) — the PR's single commit is a linear child of that exact SHA, no rebase/merge commit involved.
 
 ## 13. Unverified claims
 
