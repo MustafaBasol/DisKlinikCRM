@@ -11,7 +11,7 @@ import { clearAuthCookies, createCsrfToken, createSessionId, issueSessionCookies
 import { loadDataRetentionConfig, DATA_RETENTION_RUNTIME_SETTING_KEY } from '../services/privacy/dataRetentionPolicy.js';
 import type { DataRetentionSummary } from '../jobs/dataRetentionCleanupJob.js';
 import { DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS } from '../jobs/dataRetentionCleanupJob.js';
-import { withJobLock } from '../utils/jobLock.js';
+import { acquireJobLock, releaseJobLock } from '../utils/jobLock.js';
 import {
   recordManualRunStarted,
   recordManualRunTerminal,
@@ -1195,17 +1195,114 @@ router.delete('/privacy/legacy-consent-correction/settings', async (req: Platfor
 
 // RETENTION-MANUAL-RUN-AUDIT-001: a destructive *live* retention run must
 // never begin deleting/anonymizing rows without a durable audit trace
-// already committed. Every live-run attempt (dryRun=false, cleanup enabled)
-// therefore writes TWO immutable PlatformAdminAuditEvent rows sharing one
-// runId: a "started" event BEFORE the job lock is attempted, and exactly
-// one terminal event once the attempt concludes. Dry runs and the
-// policy-gate ("blocked") rejection below never reach a lock acquisition or
-// a mutation, so a single terminal-only event is correct and sufficient for
-// them. See services/privacy/dataRetentionManualRunAudit.ts for the full
-// model and the findIncompleteManualRuns() reconciliation query. All of
-// this is written server-side inside the handler itself, never behind a
-// separate "confirm" call, so the audit trail can never depend on what the
-// calling frontend does with the HTTP response.
+// already committed. Every genuine live-run attempt (dryRun=false, past the
+// lock/policy gates) therefore writes TWO immutable PlatformAdminAuditEvent
+// rows sharing one runId: a "started" event, and exactly one terminal event
+// once the attempt concludes. Dry runs and the policy-gate ("blocked")
+// rejection never reach a mutation, so a single terminal-only event is
+// correct and sufficient for them. See
+// services/privacy/dataRetentionManualRunAudit.ts for the full model and the
+// findIncompleteManualRuns() reconciliation query. All of this is written
+// server-side inside the handler itself, never behind a separate "confirm"
+// call, so the audit trail can never depend on what the calling frontend
+// does with the HTTP response.
+//
+// F1-003-B2-R1: for a live attempt, the shared job lock is now acquired as
+// the FIRST variable-latency DB operation — before the policy/runtime-toggle
+// read that used to precede it. F1-003-B2 had already moved the lock ahead
+// of the "started" audit write, which closed most of the original race, but
+// its own evidence documented one residual gap: `getPlatformSetting` still
+// ran before `acquireJobLock`, so two genuinely-simultaneous attempts could
+// still be staggered by that one remaining DB round trip before either
+// reached admission. Moving admission ahead of policy evaluation entirely
+// removes it — admission is now decided before any other DB coordination
+// call a live attempt makes, so no policy-lookup latency, however large,
+// can change who holds the lock. See
+// docs/program/evidence/F1-003-B2-R1_ADMISSION_LOCK_CLOSURE.md.
+
+export type DataRetentionRunRouteDeps = {
+  /**
+   * Overridable only for deterministic concurrency testing (see
+   * retentionManualRunAudit.test.ts) — proves that admission (lock
+   * acquisition) is fully resolved before either concurrent attempt's
+   * policy read completes, regardless of how long that read is deliberately
+   * held open via a test-controlled barrier. Production always uses the
+   * real getPlatformSetting.
+   */
+  getPlatformSetting: typeof getPlatformSetting;
+};
+
+const defaultDataRetentionRunRouteDeps: DataRetentionRunRouteDeps = { getPlatformSetting };
+
+type DataRetentionRunGateCtx = {
+  actorPlatformAdminId: string | null;
+  config: ReturnType<typeof loadDataRetentionConfig>;
+  runtimeCleanupEnabled: boolean;
+  effectiveCleanupEnabled: boolean;
+  cleanupEnabledSource: 'env_disabled' | 'runtime_disabled' | 'enabled';
+};
+
+type DataRetentionTerminalAuditInput = {
+  dryRun: boolean;
+  outcome: DataRetentionManualRunTerminalOutcome;
+  errorCategory?: string;
+  resultCounts?: Record<string, number>;
+  skippedCategories?: string[];
+};
+
+// Only categorical/numeric fields ever land in a terminal (or started) audit
+// row: config values, booleans, static category labels (e.g.
+// "conversationMessages"), result counts, and a random correlation runId.
+// Never the deleted/anonymized rows themselves, never a raw error message
+// (which could echo back query fragments) — only a fixed errorCategory code.
+function logDataRetentionTerminalAuditFailure(
+  input: DataRetentionTerminalAuditInput,
+  runId: string | undefined,
+  auditErr: unknown,
+): void {
+  const auditMsg = auditErr instanceof Error ? auditErr.message : 'Unknown error';
+  console.error(
+    `[data-retention] CRITICAL: manual run terminal audit persistence failed` +
+    ` (outcome=${input.outcome}, dryRun=${input.dryRun}, runId=${runId ?? 'n/a'}` +
+    (input.resultCounts ? `, resultCounts=${JSON.stringify(input.resultCounts)}` : '') +
+    `): ${auditMsg}`,
+  );
+}
+
+// Best-effort terminal-audit write for the no-"started"-precursor cases (dry
+// run, policy-gate block): a persistence failure here must never escape as
+// an uncaught rejection, and must never silently retry under a different
+// (mislabeled, evidence-losing) outcome.
+async function tryRecordDataRetentionTerminalOnly(
+  gateCtx: DataRetentionRunGateCtx,
+  input: DataRetentionTerminalAuditInput,
+): Promise<boolean> {
+  try {
+    await recordManualRunTerminalOnly({ ...gateCtx, ...input });
+    return true;
+  } catch (auditErr: unknown) {
+    logDataRetentionTerminalAuditFailure(input, undefined, auditErr);
+    return false;
+  }
+}
+
+// Best-effort terminal-audit write sharing `runId` with an already-durably
+// committed "started" row. If this throws, the "started" row is completely
+// unaffected — it was committed in its own transaction before this is ever
+// called, and this function never touches it.
+async function tryRecordDataRetentionTerminalForRun(
+  gateCtx: DataRetentionRunGateCtx,
+  runId: string,
+  input: DataRetentionTerminalAuditInput,
+): Promise<boolean> {
+  try {
+    await recordManualRunTerminal({ ...gateCtx, ...input, runId });
+    return true;
+  } catch (auditErr: unknown) {
+    logDataRetentionTerminalAuditFailure(input, runId, auditErr);
+    return false;
+  }
+}
 
 // POST /api/platform/privacy/data-retention/run
 // Trigger or dry-run the data retention cleanup. Platform-admin only.
@@ -1219,213 +1316,236 @@ router.delete('/privacy/legacy-consent-correction/settings', async (req: Platfor
 // job while this manual endpoint kept deleting data anyway — a
 // runtime-toggle/requested-execution inconsistency this check exists to
 // catch and reject rather than silently execute.
-router.post('/privacy/data-retention/run', async (req: PlatformAdminRequest, res: Response) => {
-  const dryRun = req.body?.dryRun !== false; // default to dry-run for safety
-  const config = loadDataRetentionConfig();
-  const runtimeVal = await getPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY);
-  const runtimeCleanupEnabled = runtimeVal === 'true';
-  const { effectiveCleanupEnabled, cleanupEnabledSource } = buildPolicyResponse(config, runtimeCleanupEnabled);
-  const actorPlatformAdminId = req.platformAdmin?.id ?? null;
+//
+// Exported as a factory (not a plain handler) so tests can inject a
+// controllable `getPlatformSetting` for deterministic concurrency proofs;
+// the router below always uses the real, default dependency.
+export function createDataRetentionRunHandler(
+  overrides: Partial<DataRetentionRunRouteDeps> = {},
+) {
+  const deps: DataRetentionRunRouteDeps = { ...defaultDataRetentionRunRouteDeps, ...overrides };
 
-  const gateCtx = {
-    actorPlatformAdminId,
-    config,
-    runtimeCleanupEnabled,
-    effectiveCleanupEnabled,
-    cleanupEnabledSource,
-  };
+  return async function handleDataRetentionRun(req: PlatformAdminRequest, res: Response): Promise<void> {
+    const dryRun = req.body?.dryRun !== false; // default to dry-run for safety
+    const config = loadDataRetentionConfig();
+    const actorPlatformAdminId = req.platformAdmin?.id ?? null;
 
-  type TerminalAuditInput = {
-    dryRun: boolean;
-    outcome: DataRetentionManualRunTerminalOutcome;
-    errorCategory?: string;
-    resultCounts?: Record<string, number>;
-    skippedCategories?: string[];
-  };
-
-  // Only categorical/numeric fields ever land in a terminal (or started)
-  // audit row: config values, booleans, static category labels (e.g.
-  // "conversationMessages"), result counts, and a random correlation runId.
-  // Never the deleted/anonymized rows themselves, never a raw error message
-  // (which could echo back query fragments) — only a fixed errorCategory code.
-  function logTerminalAuditFailure(input: TerminalAuditInput, runId: string | undefined, auditErr: unknown): void {
-    const auditMsg = auditErr instanceof Error ? auditErr.message : 'Unknown error';
-    console.error(
-      `[data-retention] CRITICAL: manual run terminal audit persistence failed` +
-      ` (outcome=${input.outcome}, dryRun=${input.dryRun}, runId=${runId ?? 'n/a'}` +
-      (input.resultCounts ? `, resultCounts=${JSON.stringify(input.resultCounts)}` : '') +
-      `): ${auditMsg}`,
-    );
-  }
-
-  // Best-effort terminal-audit write for the no-"started"-precursor cases
-  // (dry run, policy-gate block): a persistence failure here must never
-  // escape as an uncaught rejection, and must never silently retry under a
-  // different (mislabeled, evidence-losing) outcome.
-  async function tryRecordTerminalOnly(input: TerminalAuditInput): Promise<boolean> {
-    try {
-      await recordManualRunTerminalOnly({ ...gateCtx, ...input });
-      return true;
-    } catch (auditErr: unknown) {
-      logTerminalAuditFailure(input, undefined, auditErr);
-      return false;
+    // ── Dry run: read-only, never mutates, never contends for the live-run
+    // lock — a single terminal event is sufficient (no "started" precursor;
+    // see dataRetentionManualRunAudit.ts module docstring for why). Policy
+    // is read unconditionally here (needed for audit metadata even though
+    // dry runs never check effectiveCleanupEnabled), exactly as before —
+    // this path never touches the lock, so there is no admission race to
+    // protect against. ────────────────────────────────────────────────────
+    if (dryRun) {
+      const runtimeVal = await deps.getPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY);
+      const runtimeCleanupEnabled = runtimeVal === 'true';
+      const { effectiveCleanupEnabled, cleanupEnabledSource } = buildPolicyResponse(config, runtimeCleanupEnabled);
+      const gateCtx: DataRetentionRunGateCtx = {
+        actorPlatformAdminId, config, runtimeCleanupEnabled, effectiveCleanupEnabled, cleanupEnabledSource,
+      };
+      try {
+        const { runDataRetentionCleanup } = await import('../jobs/dataRetentionCleanupJob.js');
+        const summary = await runDataRetentionCleanup({ dryRun: true, config });
+        const hadErrors = summary.errors.length > 0;
+        await tryRecordDataRetentionTerminalOnly(gateCtx, {
+          dryRun: true,
+          outcome: hadErrors ? 'partial_failure' : 'success',
+          errorCategory: hadErrors ? 'category_execution_error' : undefined,
+          resultCounts: {
+            deletedConversationMessages: summary.deletedConversationMessages,
+            deletedConversationStates: summary.deletedConversationStates,
+            deletedOperationalEvents: summary.deletedOperationalEvents,
+            deletedInboundEvents: summary.deletedInboundEvents,
+            anonymizedContactRequests: summary.anonymizedContactRequests,
+            redactedInboxEntries: summary.redactedInboxEntries,
+            deletedCommunicationConsentConflictBuckets: summary.deletedCommunicationConsentConflictBuckets,
+          },
+          skippedCategories: summary.skippedCategories,
+        });
+        res.json({ success: true, summary });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`[data-retention] manual dry run failed: ${msg}`);
+        await tryRecordDataRetentionTerminalOnly(gateCtx, { dryRun: true, outcome: 'error', errorCategory: 'unexpected_exception' });
+        res.status(500).json({ error: 'Data retention run failed. See server logs for detail.' });
+      }
+      return;
     }
-  }
 
-  // Best-effort terminal-audit write sharing `runId` with an already-durably
-  // committed "started" row. If this throws, the "started" row is completely
-  // unaffected — it was committed in its own transaction before this is ever
-  // called, and this function never touches it.
-  async function tryRecordTerminalForRun(runId: string, input: TerminalAuditInput): Promise<boolean> {
+    // ── Live attempt: admission FIRST. This is now the very first
+    // variable-latency DB operation a live attempt performs — strictly
+    // before the policy/runtime-toggle read, so two genuinely-simultaneous
+    // attempts are decided by one atomic DB write before either one's own
+    // (independently variable) policy-lookup latency can matter. ─────────
+    let holdingLock: boolean;
     try {
-      await recordManualRunTerminal({ ...gateCtx, ...input, runId });
-      return true;
-    } catch (auditErr: unknown) {
-      logTerminalAuditFailure(input, runId, auditErr);
-      return false;
+      holdingLock = await acquireJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS);
+    } catch (lockErr: unknown) {
+      // Cannot even determine whether the lock is free (e.g. DB unreachable)
+      // — fail safe exactly like an already-held lock: never assume
+      // exclusivity that could not be proven.
+      const msg = lockErr instanceof Error ? lockErr.message : 'Unknown error';
+      console.error(`[data-retention] Failed to acquire '${DATA_RETENTION_JOB_LOCK_NAME}' lock: ${msg}`);
+      holdingLock = false;
     }
-  }
 
-  // ── Dry run: read-only, never mutates, never contends for the live-run
-  // lock — a single terminal event is sufficient (no "started" precursor;
-  // see dataRetentionManualRunAudit.ts module docstring for why). ─────────
-  if (dryRun) {
+    // Policy is read AFTER admission is already decided. Every live attempt
+    // — winner or loser — still needs it for accurate, honest audit
+    // metadata (the SharedGateContext the audit service requires), but by
+    // this point it can no longer influence who holds the lock. If this
+    // read itself fails, neither branch below can build a valid audit
+    // record, so this is treated as a fatal, unaudited failure — consistent
+    // with "never fabricate audit metadata" and with the existing
+    // "started"-write-failure precedent of leaving no partial/misleading
+    // trace when nothing could be durably, accurately recorded.
+    let runtimeVal: string | null;
+    try {
+      runtimeVal = await deps.getPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY);
+    } catch (policyErr: unknown) {
+      if (holdingLock) await releaseJobLock(DATA_RETENTION_JOB_LOCK_NAME);
+      const msg = policyErr instanceof Error ? policyErr.message : 'Unknown error';
+      console.error(`[data-retention] manual run: policy lookup failed after lock acquisition (holdingLock=${holdingLock}): ${msg}`);
+      res.status(500).json({ error: 'Unable to evaluate the retention policy configuration. See server logs for detail.' });
+      return;
+    }
+    const runtimeCleanupEnabled = runtimeVal === 'true';
+    const { effectiveCleanupEnabled, cleanupEnabledSource } = buildPolicyResponse(config, runtimeCleanupEnabled);
+    const gateCtx: DataRetentionRunGateCtx = {
+      actorPlatformAdminId, config, runtimeCleanupEnabled, effectiveCleanupEnabled, cleanupEnabledSource,
+    };
+
+    // ── Lock contention: another manual run or the scheduled cron already
+    // holds it. Same shared lease lock as the scheduled cron
+    // (dataRetentionCleanupJob.ts) — a manual live run must never execute
+    // its delete/anonymize batches concurrently with the scheduled job OR
+    // another manual live run. Still write the required started+blocked
+    // audit pair — this attempt genuinely happened and was genuinely
+    // rejected; that must be as durably evidenced as a successful one. ────
+    if (!holdingLock) {
+      let runId: string;
+      try {
+        ({ runId } = await recordManualRunStarted(gateCtx));
+      } catch (startErr: unknown) {
+        const msg = startErr instanceof Error ? startErr.message : 'Unknown error';
+        console.error(
+          `[data-retention] CRITICAL: manual run 'started' audit write failed (lock-contention path) — refusing further action: ${msg}`,
+        );
+        res.status(500).json({ error: 'Unable to record a durable audit trail for this run. The run was not executed.' });
+        return;
+      }
+      await tryRecordDataRetentionTerminalForRun(gateCtx, runId, {
+        dryRun: false,
+        outcome: 'blocked',
+        errorCategory: 'concurrent_run_in_progress',
+      });
+      res.status(409).json({
+        error: 'Another data retention run (scheduled or manual) is already in progress. Try again shortly.',
+      });
+      return;
+    }
+
+    // ── We hold the lock. Evaluate the policy gate while still holding it
+    // — if it rejects, release immediately and preserve the exact
+    // pre-existing policy-block response/audit shape (single terminal-only
+    // row, no "started" precursor; nothing was ever going to run). ───────
+    if (!effectiveCleanupEnabled) {
+      await releaseJobLock(DATA_RETENTION_JOB_LOCK_NAME);
+      await tryRecordDataRetentionTerminalOnly(gateCtx, {
+        dryRun: false,
+        outcome: 'blocked',
+        errorCategory: cleanupEnabledSource === 'env_disabled' ? 'blocked_env_disabled' : 'blocked_runtime_disabled',
+      });
+      res.status(403).json({
+        error: cleanupEnabledSource === 'env_disabled'
+          ? 'Live cleanup is disabled at the environment level (DATA_RETENTION_CLEANUP_ENABLED=false).'
+          : 'Live cleanup is disabled at the runtime level (privacy.dataRetention.runtimeEnabled is not true).',
+        cleanupEnabledSource,
+      });
+      return;
+    }
+
+    // ── Genuine attempt — from here on, a delete/anonymize batch may
+    // actually execute. Write the durable "started" row next, still
+    // strictly before any mutation. If it cannot be persisted, release the
+    // lock and refuse to run cleanup at all: a destructive run must never
+    // begin with zero durable trace, and the lock must never be orphaned
+    // for its full TTL just because this write failed. ───────────────────
+    let runId: string;
+    try {
+      ({ runId } = await recordManualRunStarted(gateCtx));
+    } catch (startErr: unknown) {
+      await releaseJobLock(DATA_RETENTION_JOB_LOCK_NAME);
+      const msg = startErr instanceof Error ? startErr.message : 'Unknown error';
+      console.error(
+        `[data-retention] CRITICAL: manual run 'started' audit write failed — refusing to execute cleanup: ${msg}`,
+      );
+      res.status(500).json({ error: 'Unable to record a durable audit trail for this run. The run was not executed.' });
+      return;
+    }
+
+    let summary: DataRetentionSummary | undefined;
+
     try {
       const { runDataRetentionCleanup } = await import('../jobs/dataRetentionCleanupJob.js');
-      const summary = await runDataRetentionCleanup({ dryRun: true, config });
-      const hadErrors = summary.errors.length > 0;
-      await tryRecordTerminalOnly({
-        dryRun: true,
-        outcome: hadErrors ? 'partial_failure' : 'success',
-        errorCategory: hadErrors ? 'category_execution_error' : undefined,
-        resultCounts: {
-          deletedConversationMessages: summary.deletedConversationMessages,
-          deletedConversationStates: summary.deletedConversationStates,
-          deletedOperationalEvents: summary.deletedOperationalEvents,
-          deletedInboundEvents: summary.deletedInboundEvents,
-          anonymizedContactRequests: summary.anonymizedContactRequests,
-          redactedInboxEntries: summary.redactedInboxEntries,
-          deletedCommunicationConsentConflictBuckets: summary.deletedCommunicationConsentConflictBuckets,
-        },
-        skippedCategories: summary.skippedCategories,
-      });
-      res.json({ success: true, summary });
+      try {
+        summary = await runDataRetentionCleanup({ dryRun: false, config });
+      } finally {
+        // Release on success, on a thrown error, and (via this finally) on
+        // any other exceptional exit from this block — the lock must never
+        // be held any longer than the cleanup it protects.
+        await releaseJobLock(DATA_RETENTION_JOB_LOCK_NAME);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      console.error(`[data-retention] manual dry run failed: ${msg}`);
-      await tryRecordTerminalOnly({ dryRun: true, outcome: 'error', errorCategory: 'unexpected_exception' });
+      console.error(`[data-retention] manual run failed: ${msg}`);
+      await tryRecordDataRetentionTerminalForRun(gateCtx, runId, { dryRun: false, outcome: 'error', errorCategory: 'unexpected_exception' });
+      // The raw error message is logged above but never echoed to the
+      // caller — it can carry driver/query-fragment detail this endpoint
+      // must not leak.
       res.status(500).json({ error: 'Data retention run failed. See server logs for detail.' });
+      return;
     }
-    return;
-  }
 
-  // ── Live run: policy gate — rejected synchronously, before any lock
-  // attempt or mutation, so (like dry run) a single terminal event is
-  // correct; nothing was ever going to run. ───────────────────────────────
-  if (!effectiveCleanupEnabled) {
-    await tryRecordTerminalOnly({
+    const finalSummary = summary as DataRetentionSummary;
+    const hadErrors = finalSummary.errors.length > 0;
+
+    const auditPersisted = await tryRecordDataRetentionTerminalForRun(gateCtx, runId, {
       dryRun: false,
-      outcome: 'blocked',
-      errorCategory: cleanupEnabledSource === 'env_disabled' ? 'blocked_env_disabled' : 'blocked_runtime_disabled',
+      outcome: hadErrors ? 'partial_failure' : 'success',
+      errorCategory: hadErrors ? 'category_execution_error' : undefined,
+      resultCounts: {
+        deletedConversationMessages: finalSummary.deletedConversationMessages,
+        deletedConversationStates: finalSummary.deletedConversationStates,
+        deletedOperationalEvents: finalSummary.deletedOperationalEvents,
+        deletedInboundEvents: finalSummary.deletedInboundEvents,
+        anonymizedContactRequests: finalSummary.anonymizedContactRequests,
+        redactedInboxEntries: finalSummary.redactedInboxEntries,
+        deletedCommunicationConsentConflictBuckets: finalSummary.deletedCommunicationConsentConflictBuckets,
+      },
+      skippedCategories: finalSummary.skippedCategories,
     });
-    res.status(403).json({
-      error: cleanupEnabledSource === 'env_disabled'
-        ? 'Live cleanup is disabled at the environment level (DATA_RETENTION_CLEANUP_ENABLED=false).'
-        : 'Live cleanup is disabled at the runtime level (privacy.dataRetention.runtimeEnabled is not true).',
-      cleanupEnabledSource,
-    });
-    return;
-  }
 
-  // ── Live run: genuine attempt — from here on, a delete/anonymize batch
-  // may actually execute. Write the durable "started" row FIRST, before the
-  // job lock is even attempted. If it cannot be persisted, refuse to run
-  // cleanup at all: a destructive run must never begin with zero durable
-  // trace. ──────────────────────────────────────────────────────────────
-  let runId: string;
-  try {
-    ({ runId } = await recordManualRunStarted(gateCtx));
-  } catch (startErr: unknown) {
-    // Sanitized: only the failure message from the audit-insert itself is
-    // logged — never patient/clinic data, none of which is ever in scope
-    // at this point (no cleanup has run).
-    const msg = startErr instanceof Error ? startErr.message : 'Unknown error';
-    console.error(
-      `[data-retention] CRITICAL: manual run 'started' audit write failed — refusing to execute cleanup: ${msg}`,
-    );
-    res.status(500).json({ error: 'Unable to record a durable audit trail for this run. The run was not executed.' });
-    return;
-  }
+    if (!auditPersisted) {
+      // The cleanup itself already completed (and may have deleted/anonymized
+      // real rows) but the terminal audit record failed to persist. The
+      // "started" row for this runId remains intact and durable — valid
+      // partial evidence an attempt was made — and the actual counts were
+      // logged above (sanitized, counts only) for out-of-band reconciliation.
+      // This must never look like an ordinary fully-evidenced 200 to the
+      // caller, and must never claim cleanup did not happen when it did.
+      res.status(500).json({
+        error: 'Data retention run completed but the audit record failed to persist. See server logs.',
+        summary: finalSummary,
+      });
+      return;
+    }
 
-  let summary: DataRetentionSummary | undefined;
-  let lockUnavailable = false;
+    res.json({ success: true, summary: finalSummary });
+  };
+}
 
-  try {
-    const { runDataRetentionCleanup } = await import('../jobs/dataRetentionCleanupJob.js');
-    // Same shared lease lock as the scheduled cron (dataRetentionCleanupJob.ts):
-    // a manual live run must never execute its delete/anonymize batches
-    // concurrently with the scheduled job OR another manual live run.
-    const acquired = await withJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS, async () => {
-      summary = await runDataRetentionCleanup({ dryRun: false, config });
-    });
-    lockUnavailable = !acquired;
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`[data-retention] manual run failed: ${msg}`);
-    await tryRecordTerminalForRun(runId, { dryRun: false, outcome: 'error', errorCategory: 'unexpected_exception' });
-    // The raw error message is logged above but never echoed to the caller —
-    // it can carry driver/query-fragment detail this endpoint must not leak.
-    res.status(500).json({ error: 'Data retention run failed. See server logs for detail.' });
-    return;
-  }
-
-  if (lockUnavailable) {
-    await tryRecordTerminalForRun(runId, {
-      dryRun: false,
-      outcome: 'blocked',
-      errorCategory: 'concurrent_run_in_progress',
-    });
-    res.status(409).json({
-      error: 'Another data retention run (scheduled or manual) is already in progress. Try again shortly.',
-    });
-    return;
-  }
-
-  const finalSummary = summary as DataRetentionSummary;
-  const hadErrors = finalSummary.errors.length > 0;
-
-  const auditPersisted = await tryRecordTerminalForRun(runId, {
-    dryRun: false,
-    outcome: hadErrors ? 'partial_failure' : 'success',
-    errorCategory: hadErrors ? 'category_execution_error' : undefined,
-    resultCounts: {
-      deletedConversationMessages: finalSummary.deletedConversationMessages,
-      deletedConversationStates: finalSummary.deletedConversationStates,
-      deletedOperationalEvents: finalSummary.deletedOperationalEvents,
-      deletedInboundEvents: finalSummary.deletedInboundEvents,
-      anonymizedContactRequests: finalSummary.anonymizedContactRequests,
-      redactedInboxEntries: finalSummary.redactedInboxEntries,
-      deletedCommunicationConsentConflictBuckets: finalSummary.deletedCommunicationConsentConflictBuckets,
-    },
-    skippedCategories: finalSummary.skippedCategories,
-  });
-
-  if (!auditPersisted) {
-    // The cleanup itself already completed (and may have deleted/anonymized
-    // real rows) but the terminal audit record failed to persist. The
-    // "started" row for this runId remains intact and durable — valid
-    // partial evidence an attempt was made — and the actual counts were
-    // logged above (sanitized, counts only) for out-of-band reconciliation.
-    // This must never look like an ordinary fully-evidenced 200 to the caller.
-    res.status(500).json({
-      error: 'Data retention run completed but the audit record failed to persist. See server logs.',
-      summary: finalSummary,
-    });
-    return;
-  }
-
-  res.json({ success: true, summary: finalSummary });
-});
+router.post('/privacy/data-retention/run', createDataRetentionRunHandler());
 
 // ─── Backups ──────────────────────────────────────────────────────────────────
 

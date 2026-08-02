@@ -35,7 +35,7 @@ process.env.PLATFORM_BEARER_FALLBACK_ENABLED = 'true';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import prisma from '../db.js';
-import platformAdminRouter from '../routes/platformAdmin.js';
+import platformAdminRouter, { createDataRetentionRunHandler } from '../routes/platformAdmin.js';
 import { authenticatePlatformAdmin } from '../middleware/platformAuth.js';
 import { generatePlatformToken } from '../middleware/platformAuth.js';
 import jwt from 'jsonwebtoken';
@@ -43,7 +43,8 @@ import {
   DATA_RETENTION_RUNTIME_SETTING_KEY,
   loadDataRetentionConfig,
 } from '../services/privacy/dataRetentionPolicy.js';
-import { DATA_RETENTION_JOB_LOCK_NAME } from '../jobs/dataRetentionCleanupJob.js';
+import { DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS } from '../jobs/dataRetentionCleanupJob.js';
+import { acquireJobLock, releaseJobLock } from '../utils/jobLock.js';
 import { getPlatformSetting, setPlatformSetting, unsetPlatformSetting } from '../services/platformSettings.js';
 import {
   DATA_RETENTION_MANUAL_RUN_STARTED_ACTION,
@@ -110,6 +111,16 @@ async function runChain(chain: Array<(req: any, res: any, next: () => void) => v
     await fn(req, res, () => { calledNext = true; });
     if (!calledNext) return;
   }
+}
+
+// F1-003-B2-R1: a real, controllable barrier (never a `setTimeout`/sleep) —
+// used to deterministically hold a concurrent request's policy lookup open
+// for as long as the test needs, so the admission-ordering proof below does
+// not depend on any real-time race window.
+function createDeferred<T = void>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => { resolve = res; });
+  return { promise, resolve };
 }
 
 function mockRes() {
@@ -733,6 +744,10 @@ await test('scheduled/manual lock collision: a live manual run is rejected 409 w
   await cleanAuditRows();
   await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
   await setRuntimeEnabled(true);
+  // F1-003-B2: seed an eligible row so a false "success" (the loser silently
+  // running cleanup anyway) would be observable, not just a status-code check.
+  const marker = `retention-audit-schedcollision-${randomUUID()}`;
+  await seedOldOperationalEvent(marker);
 
   // Simulate the scheduled cron currently holding the shared lease lock —
   // same JobLock row/name the cron (dataRetentionCleanupJob.ts) and this
@@ -749,6 +764,7 @@ await test('scheduled/manual lock collision: a live manual run is rejected 409 w
 
       assert.equal(res.statusCode, 409, 'a manual live run must be rejected while the scheduled job holds the shared lock');
       assert.equal(res.body.error, 'Another data retention run (scheduled or manual) is already in progress. Try again shortly.');
+      assert.equal(await countOperationalEventsBySubstring(marker), 1, 'the rejected/losing attempt must perform no cleanup at all — the seeded row is untouched');
 
       const rows = await auditRows();
       assert.equal(rows.length, 2, 'the manual attempt still writes started + blocked, even though the scheduled job (not another manual run) held the lock');
@@ -759,8 +775,363 @@ await test('scheduled/manual lock collision: a live manual run is rejected 409 w
       assert.equal(terminal[0].outcome, 'blocked');
       assert.equal((terminal[0].safeMetadata as any).errorCategory, 'concurrent_run_in_progress');
       assert.equal(runIdOf(startedRows(rows)[0]), runIdOf(terminal[0]));
+
+      // The scheduled job's own (simulated) lock ownership must be untouched
+      // by the rejected manual attempt — it never called releaseJobLock.
+      const lockRow = await prisma.jobLock.findUnique({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+      assert.equal(lockRow?.lockedBy, 'simulated-scheduled-cron', 'a rejected manual attempt must never release a lock it does not own');
     });
   } finally {
+    await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+    await prisma.operationalEvent.deleteMany({ where: { message: { contains: marker } } });
+  }
+  await clearRuntimeSetting();
+});
+
+section('POST /privacy/data-retention/run — race gate (F1-003-B2: repeated concurrent live-run rounds)');
+
+await test('race gate: 10 consecutive concurrent live-run rounds against real PostgreSQL — zero double-success, zero double-block observations', async () => {
+  const ROUNDS = 10;
+  let doubleSuccessCount = 0;
+  let doubleBlockCount = 0;
+  // Every marker this round of the loop seeds, collected up front so the
+  // outer finally can best-effort clean up task-owned rows even if an
+  // assertion throws mid-loop (leaving that round's — or a later round's
+  // never-reached — marker behind for subsequent tests to trip over).
+  const seededMarkers: string[] = [];
+
+  await setRuntimeEnabled(true);
+  try {
+    await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: undefined }, async () => {
+      for (let round = 1; round <= ROUNDS; round++) {
+        await cleanAuditRows();
+        await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+        const marker = `retention-audit-race-gate-${round}-${randomUUID()}`;
+        seededMarkers.push(marker);
+        await seedOldOperationalEvent(marker);
+
+        const chain = runChainForRoute();
+        const resA = mockRes();
+        const resB = mockRes();
+        // No await between the two dispatches — genuine, not simulated,
+        // concurrency against the same disposable Postgres instance, same
+        // as the primary concurrent-runs test above, repeated to gate
+        // against the exact flake observed in CI run 30542271302 (PR #268).
+        await Promise.all([
+          runChain(chain, mockReq({ dryRun: false }), resA),
+          runChain(chain, mockReq({ dryRun: false }), resB),
+        ]);
+
+        const statusCodes = [resA.statusCode, resB.statusCode].sort();
+        if (statusCodes[0] === 200 && statusCodes[1] === 200) doubleSuccessCount++;
+        if (statusCodes[0] === 409 && statusCodes[1] === 409) doubleBlockCount++;
+        assert.deepEqual(
+          statusCodes,
+          [200, 409],
+          `round ${round}/${ROUNDS}: exactly one 200 and one 409 required, got [${statusCodes.join(',')}]`,
+        );
+        assert.equal(await countOperationalEventsBySubstring(marker), 0, `round ${round}/${ROUNDS}: the seeded row must be deleted exactly once`);
+      }
+    });
+  } finally {
+    await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+    await clearRuntimeSetting();
+    // Best-effort: delete exactly the marker rows this test generated. A
+    // successful round already deleted its own marker via the route's
+    // cleanup, so this is normally a no-op; it only matters when an
+    // assertion threw mid-loop and left a round's row behind. Scoped to
+    // this test's own markers only, and must never mask an assertion
+    // failure from the loop above — swallow (but log) any cleanup error.
+    if (seededMarkers.length > 0) {
+      try {
+        await prisma.operationalEvent.deleteMany({ where: { message: { in: seededMarkers } } });
+      } catch (cleanupErr) {
+        console.error(
+          '  ! race-gate marker cleanup failed (best-effort, not fatal):',
+          cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
+        );
+      }
+    }
+  }
+
+  assert.equal(doubleSuccessCount, 0, `${doubleSuccessCount}/${ROUNDS} rounds let both concurrent attempts succeed (the F1-003-B2 regression) — must be zero`);
+  assert.equal(doubleBlockCount, 0, `${doubleBlockCount}/${ROUNDS} rounds blocked both concurrent attempts (no executor ran at all) — must be zero`);
+});
+
+section('POST /privacy/data-retention/run — admission ordering (F1-003-B2-R1: lock acquired before policy evaluation)');
+
+await test('deterministic admission proof: two concurrent live requests, BOTH deliberately parked mid-policy-lookup via a controllable barrier (no sleep) — admission is already fully resolved (one JobLock row held) before either policy lookup is allowed to complete, and the outcome is still exactly one 200 and one 409', async () => {
+  await cleanAuditRows();
+  await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+  await setRuntimeEnabled(true);
+  const marker = `retention-audit-admission-order-${randomUUID()}`;
+  await seedOldOperationalEvent(marker);
+
+  await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: undefined }, async () => {
+    const barriers = [createDeferred<void>(), createDeferred<void>()];
+    const reachedPolicyStep = [createDeferred<void>(), createDeferred<void>()];
+    let callIndex = 0;
+
+    // Wraps the REAL getPlatformSetting: signals "I've reached the
+    // post-admission policy step" immediately, then blocks on its own
+    // barrier until the test explicitly releases it — proving whatever
+    // happens next cannot influence which racer already won the lock.
+    const barrieredGetPlatformSetting: typeof getPlatformSetting = async (key, client) => {
+      const i = callIndex++;
+      reachedPolicyStep[i].resolve();
+      await barriers[i].promise;
+      return getPlatformSetting(key, client);
+    };
+
+    const chain = [createDataRetentionRunHandler({ getPlatformSetting: barrieredGetPlatformSetting })];
+    const resA = mockRes();
+    const resB = mockRes();
+
+    const p1 = runChain(chain, mockReq({ dryRun: false }), resA);
+    const p2 = runChain(chain, mockReq({ dryRun: false }), resB);
+
+    // Wait until BOTH racers have reached their post-admission policy step —
+    // i.e. both have already completed acquireJobLock() and are now merely
+    // waiting on the (test-controlled) policy read.
+    await Promise.all([reachedPolicyStep[0].promise, reachedPolicyStep[1].promise]);
+
+    // Admission must already be fully decided at this point: exactly one
+    // held JobLock row exists, well before either policy lookup is allowed
+    // to resolve.
+    const lockRowWhileParked = await prisma.jobLock.findUnique({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+    assert.ok(lockRowWhileParked, 'a JobLock row must already exist — admission was decided before either policy lookup completed');
+    assert.ok(
+      lockRowWhileParked!.lockedUntil.getTime() > Date.now(),
+      'the JobLock row must be actively held (not expired) while both racers are parked mid-policy-lookup',
+    );
+
+    // Release both barriers — order doesn't matter, since admission is
+    // already fixed and cannot be changed by finishing the policy read now.
+    barriers[0].resolve();
+    barriers[1].resolve();
+    await Promise.all([p1, p2]);
+
+    const statusCodes = [resA.statusCode, resB.statusCode].sort();
+    assert.deepEqual(statusCodes, [200, 409], 'admission ordering must produce exactly one 200 and one 409 regardless of policy-lookup timing');
+    assert.equal(await countOperationalEventsBySubstring(marker), 0, 'the seeded row is deleted exactly once');
+
+    const rows = await auditRows();
+    assert.equal(startedRows(rows).length, 2, 'both racers still reach their own "started" write');
+    const terminal = terminalRows(rows);
+    assert.deepEqual(terminal.map((r) => r.outcome).sort(), ['blocked', 'success']);
+  });
+  await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+  await clearRuntimeSetting();
+});
+
+await test('policy disabled after live lock acquisition: 403, no cleanup, the lock is released and immediately reusable', async () => {
+  await cleanAuditRows();
+  await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+  await clearRuntimeSetting(); // runtime toggle absent -> effectiveCleanupEnabled=false, discovered only AFTER admission now
+  const marker = `retention-audit-policy-after-lock-${randomUUID()}`;
+  await seedOldOperationalEvent(marker);
+
+  await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: undefined }, async () => {
+    const chain = runChainForRoute();
+    const res = mockRes();
+    await runChain(chain, mockReq({ dryRun: false }), res);
+
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.body.cleanupEnabledSource, 'runtime_disabled');
+    assert.equal(await countOperationalEventsBySubstring(marker), 1, 'no cleanup must have run — the seeded row is untouched');
+
+    // Policy-block audit shape is unchanged from before this task: single
+    // terminal-only row, no "started" precursor.
+    const rows = await auditRows();
+    assert.equal(rows.length, 1);
+    assert.equal(startedRows(rows).length, 0);
+    assert.equal(rows[0].action, DATA_RETENTION_MANUAL_RUN_BLOCKED_ACTION);
+    assert.equal((rows[0].safeMetadata as any).errorCategory, 'blocked_runtime_disabled');
+
+    // The lock was briefly held (to evaluate policy under admission) and
+    // must now be fully released — immediately reusable, not orphaned.
+    const acquiredAgain = await acquireJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS);
+    assert.equal(acquiredAgain, true, 'the lock must be immediately reusable after a policy-gate rejection releases it');
+  });
+  await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+  await prisma.operationalEvent.deleteMany({ where: { message: { contains: marker } } });
+});
+
+await test('policy lookup throws after lock acquisition: no cleanup, the lock is released (not orphaned), sanitized 500, no fabricated audit row', async () => {
+  await cleanAuditRows();
+  await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+  await setRuntimeEnabled(true);
+  const marker = `retention-audit-policy-throws-${randomUUID()}`;
+  await seedOldOperationalEvent(marker);
+
+  const failingGetPlatformSetting: typeof getPlatformSetting = async () => {
+    throw new Error('simulated PlatformSetting lookup failure');
+  };
+
+  await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: undefined }, async () => {
+    const chain = [createDataRetentionRunHandler({ getPlatformSetting: failingGetPlatformSetting })];
+    const res = mockRes();
+    await runChain(chain, mockReq({ dryRun: false }), res);
+
+    assert.equal(res.statusCode, 500);
+    assert.deepEqual(res.body, { error: 'Unable to evaluate the retention policy configuration. See server logs for detail.' });
+    assert.equal(await countOperationalEventsBySubstring(marker), 1, 'no cleanup must have run — the seeded row is untouched');
+
+    // No valid gateCtx could ever be built (policy values unknown) — the
+    // established "never fabricate audit metadata" discipline means no
+    // audit row of any kind is written for this failure.
+    const rows = await auditRows();
+    assert.equal(rows.length, 0, 'no audit row of any kind is left behind when the policy lookup itself fails');
+
+    // The lock was acquired before the failing policy read and must be
+    // released immediately, not orphaned for its full TTL.
+    const acquiredAgain = await acquireJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS);
+    assert.equal(acquiredAgain, true, 'the lock must be immediately reusable after a policy-lookup failure releases it');
+  });
+  await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+  await prisma.operationalEvent.deleteMany({ where: { message: { contains: marker } } });
+  await clearRuntimeSetting();
+});
+
+section('POST /privacy/data-retention/run — releaseJobLock failure semantics (F1-003-B2-R1)');
+
+await test('releaseJobLock() never rejects even when the underlying DB update fails — a completed cleanup\'s success must never be reported as a failure just because the release afterward could not be confirmed', async () => {
+  const lockName = `f1-003-b2-r1-release-failure-${randomUUID()}`;
+  await prisma.jobLock.deleteMany({ where: { name: lockName } });
+  const acquired = await acquireJobLock(lockName, DATA_RETENTION_JOB_LOCK_TTL_MS);
+  assert.equal(acquired, true);
+
+  // Force the underlying release UPDATE to fail genuinely (not simulated):
+  // temporarily rename the table out from under it, same fault-injection
+  // technique used by the existing started/terminal-audit-write-failure
+  // tests above.
+  await prisma.$executeRawUnsafe('ALTER TABLE "JobLock" RENAME TO "JobLock_test_disabled"');
+  let releaseThrew = false;
+  try {
+    await releaseJobLock(lockName);
+  } catch {
+    releaseThrew = true;
+  } finally {
+    await prisma.$executeRawUnsafe('ALTER TABLE "JobLock_test_disabled" RENAME TO "JobLock"');
+  }
+
+  assert.equal(releaseThrew, false, 'releaseJobLock() must never reject — a caller that already completed and reported a successful cleanup must not have that success retroactively turned into an error just because this cleanup call failed');
+
+  // Documented consequence of "never reject": the lock remains held (not
+  // released) until its own TTL expires, since the release genuinely could
+  // not be confirmed. This is a deliberate, logged (see jobLock.ts) trade-off,
+  // not a silent data-loss risk — no audit/business data is affected, only
+  // the lock's own availability window.
+  const stillHeld = await acquireJobLock(lockName, DATA_RETENTION_JOB_LOCK_TTL_MS);
+  assert.equal(stillHeld, false, 'the lock remains held after a genuinely failed release attempt — it was not silently cleared');
+
+  // Force-clear for test hygiene.
+  await prisma.jobLock.deleteMany({ where: { name: lockName } });
+});
+
+section('POST /privacy/data-retention/run — shared JobLock primitive (server/src/utils/jobLock.ts), exercised directly against real PostgreSQL');
+
+await test('acquireJobLock(): N-way (4) truly-concurrent acquisition on a fresh lock name grants to exactly one caller', async () => {
+  const lockName = `f1-003-b2-primitive-${randomUUID()}`;
+  await prisma.jobLock.deleteMany({ where: { name: lockName } });
+  try {
+    const results = await Promise.all(
+      Array.from({ length: 4 }, (_, i) => acquireJobLock(lockName, DATA_RETENTION_JOB_LOCK_TTL_MS).then((ok) => ({ i, ok }))),
+    );
+    const winners = results.filter((r) => r.ok);
+    assert.equal(winners.length, 1, `exactly one of 4 truly-concurrent acquireJobLock() calls must succeed, got ${winners.length}`);
+  } finally {
+    await releaseJobLock(lockName);
+    await prisma.jobLock.deleteMany({ where: { name: lockName } });
+  }
+});
+
+await test('acquireJobLock()/releaseJobLock(): after release, the lock is immediately free again — no orphaning after a normal successful completion', async () => {
+  const lockName = `f1-003-b2-primitive-release-${randomUUID()}`;
+  await prisma.jobLock.deleteMany({ where: { name: lockName } });
+  try {
+    const first = await acquireJobLock(lockName, DATA_RETENTION_JOB_LOCK_TTL_MS);
+    assert.equal(first, true);
+    const contended = await acquireJobLock(lockName, DATA_RETENTION_JOB_LOCK_TTL_MS);
+    assert.equal(contended, false, 'a second acquire while the first is still held must fail');
+
+    await releaseJobLock(lockName);
+
+    const afterRelease = await acquireJobLock(lockName, DATA_RETENTION_JOB_LOCK_TTL_MS);
+    assert.equal(afterRelease, true, 'the lock must be immediately acquirable again after release — this is what the route relies on after a successful live run');
+  } finally {
+    await releaseJobLock(lockName);
+    await prisma.jobLock.deleteMany({ where: { name: lockName } });
+  }
+});
+
+await test('acquireJobLock()/releaseJobLock(): a try/finally around a throwing callback (mirroring the route\'s cleanup wrapper) still releases the lock — no orphan after a thrown exception', async () => {
+  const lockName = `f1-003-b2-primitive-throw-${randomUUID()}`;
+  await prisma.jobLock.deleteMany({ where: { name: lockName } });
+  try {
+    const acquired = await acquireJobLock(lockName, DATA_RETENTION_JOB_LOCK_TTL_MS);
+    assert.equal(acquired, true);
+
+    let threw = false;
+    try {
+      // Mirrors platformAdmin.ts's `try { await runDataRetentionCleanup(...) } finally { await releaseJobLock(...) }`.
+      try {
+        await Promise.reject(new Error('simulated cleanup failure'));
+      } finally {
+        await releaseJobLock(lockName);
+      }
+    } catch {
+      threw = true;
+    }
+    assert.equal(threw, true, 'the simulated failure must still propagate to the caller (the route catches it and writes an error terminal row)');
+
+    const afterThrow = await acquireJobLock(lockName, DATA_RETENTION_JOB_LOCK_TTL_MS);
+    assert.equal(afterThrow, true, 'the lock must not be orphaned for its full TTL just because the protected work threw — it must be free immediately');
+  } finally {
+    await releaseJobLock(lockName);
+    await prisma.jobLock.deleteMany({ where: { name: lockName } });
+  }
+});
+
+section('POST /privacy/data-retention/run — lock reserved-then-abandoned edge case (F1-003-B2: lock now acquired before the "started" write)');
+
+await test('lock acquired but the "started" audit write then fails: the lock is released immediately, not orphaned for its full TTL', async () => {
+  await cleanAuditRows('retention-manual-run-ghost-admin-lockrelease');
+  await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+  await setRuntimeEnabled(true);
+
+  // Same forced-FK-violation technique as the existing "started-audit-write
+  // failure" test above, but this one specifically proves the NEW ordering
+  // introduced by F1-003-B2 (lock acquired before the started-write) does
+  // not orphan the lock when that started-write fails.
+  const ghostActorId = 'retention-manual-run-ghost-admin-lockrelease';
+  const req = mockReq({ dryRun: false });
+  req.platformAdmin = { id: ghostActorId, email: 'ghost-lockrelease@platform.test' };
+
+  try {
+    await withEnv({ DATA_RETENTION_CLEANUP_ENABLED: undefined }, async () => {
+      const chain = runChainForRoute();
+      const res = mockRes();
+      await runChain(chain, req, res);
+
+      assert.equal(res.statusCode, 500);
+      assert.deepEqual(res.body, { error: 'Unable to record a durable audit trail for this run. The run was not executed.' });
+
+      const ghostRows = await prisma.platformAdminAuditEvent.findMany({ where: { actorPlatformAdminId: ghostActorId } });
+      assert.equal(ghostRows.length, 0, 'no audit row of any kind must be left behind');
+
+      const lockRow = await prisma.jobLock.findUnique({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
+      assert.ok(
+        !lockRow || lockRow.lockedUntil.getTime() <= Date.now(),
+        'the lock reserved before the failed started-write must be released immediately, not held for its full 2-hour TTL',
+      );
+
+      // Confirm it is genuinely re-acquirable, not merely "looks expired".
+      const reacquired = await acquireJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS);
+      assert.equal(reacquired, true, 'a subsequent attempt must be able to acquire the lock immediately');
+    });
+  } finally {
+    await releaseJobLock(DATA_RETENTION_JOB_LOCK_NAME);
     await prisma.jobLock.deleteMany({ where: { name: DATA_RETENTION_JOB_LOCK_NAME } });
   }
   await clearRuntimeSetting();

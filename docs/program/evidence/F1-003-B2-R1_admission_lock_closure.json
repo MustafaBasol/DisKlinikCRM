@@ -1,0 +1,168 @@
+{
+  "taskId": "F1-003-B2-R1",
+  "title": "Admission-Point Lock Closure, Current-Main Reconciliation, Remote CI Verification, and Evidence Sanitization",
+  "phase": "F1",
+  "parentTask": "F1-003-B2",
+  "continuesBranch": "fix/f1-003-b2-retention-run-lock-race",
+  "continuesPr": 280,
+  "newBranchCreated": false,
+  "newPrCreated": false,
+  "statusLanguageLegend": {
+    "CODE_PATH_CONFIRMED": "verified by direct source-code read and/or tsc typecheck",
+    "TEST_REPRODUCED": "verified by actually running a test locally against real PostgreSQL",
+    "REMOTE_CI_VERIFIED": "a GitHub Actions workflow run on this PR's branch actually executed and passed — not claimed in this task",
+    "PRODUCTION_VERIFIED": "not claimed anywhere in this task"
+  },
+  "mainReconciliation": {
+    "preMergeHead": "5811d39ecaecdd93d00c9156a3cb6a929956b5b5",
+    "originMainAtFetch": "e8e05f669f049c4895e0c9a7f95db6f3fbd463fe",
+    "isAncestorBeforeMerge": false,
+    "pr276MergeCommit": "0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83",
+    "pr276IsAncestorOfOriginMain": true,
+    "pr277MergeCommit": "e8e05f669f049c4895e0c9a7f95db6f3fbd463fe",
+    "pr277IsAncestorOfOriginMain": true,
+    "mergeStrategy": "no-ff",
+    "conflicts": 0,
+    "filesAddedByMerge": [
+      "docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md",
+      "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json",
+      "docs/program/evidence/F2-PREP-003_FEATURE_INTAKE_AND_CLICKUP_DOMAIN_MAPPING.md",
+      "docs/program/evidence/F2-PREP-003_feature_intake_domain_mapping.json"
+    ],
+    "mergeCommit": "2fc2d9b1985a33125d14251bca6077c149f589c4",
+    "isAncestorAfterMerge": true,
+    "secondReconciliation": {
+      "reason": "origin/main advanced again mid-session after this task's own code/docs commits",
+      "originMainAtSecondFetch": "83701882bd0f48a34ca8f8b02beb8a779003e638",
+      "newlyMergedPrsSinceFirstReconciliation": [270, 279, 278],
+      "conflicts": 0,
+      "secondMergeCommit": "2aff72e744148a207723ff6e9c07619ddbc611cb",
+      "newDependencyPickedUp": "pdfkit / @types/pdfkit (from PR #270)",
+      "npmCiRerun": true,
+      "fullRegressionSuiteRerunAfterSecondMerge": true,
+      "fullRegressionSuiteResultAfterSecondMerge": "29/29 retention suite, 42/42 test:data-retention, exit 0 server:test:non-disposable, exit 0 test:runtime:postgres",
+      "isAncestorAfterSecondMerge": true
+    },
+    "schemaChangedByMerge": false,
+    "evidenceClassification": "CODE_PATH_CONFIRMED"
+  },
+  "residualRaceRootCause": {
+    "summary": "F1-003-B2 moved the JobLock acquisition ahead of the 'started' audit write but left it AFTER the getPlatformSetting policy/runtime-toggle read. That one remaining DB round trip, performed independently by both concurrent racers, could in principle still stagger two genuinely-simultaneous requests enough for the first's full admission-cleanup-release cycle to finish before the second ever attempted admission.",
+    "evidenceClassification": "CODE_PATH_CONFIRMED"
+  },
+  "fix": {
+    "approach": "move_lock_acquisition_ahead_of_policy_read_entirely",
+    "routeRefactor": "createDataRetentionRunHandler(overrides?) factory exported from platformAdmin.ts; getPlatformSetting is now the first thing read AFTER admission, for both the lock-holder and lock-contention-loser branches, purely for audit-metadata accuracy",
+    "newFailureModeHandled": "policy lookup throwing after lock acquisition now releases the lock and returns a sanitized 500 with no fabricated audit row",
+    "releaseJobLockChange": "now logs (previously fully silent) when the underlying DB release update itself fails; still never rejects",
+    "newLockingSubsystemIntroduced": false,
+    "processLocalMutexUsed": false,
+    "sleepsAdded": false,
+    "lockKeyChanged": false,
+    "lockTtlChanged": false,
+    "scheduledCronLockingChanged": false,
+    "schemaOrMigrationChanged": false
+  },
+  "admissionSequence": [
+    "1. acquire shared data-retention-cleanup lock",
+    "2. if unavailable: read policy for audit metadata only, write started+blocked, return 409, no cleanup",
+    "3. if acquired: read policy, evaluate runtime/policy gate while holding the lock",
+    "4. if policy gate rejects: release lock, preserve existing policy-block response/audit shape, return 403",
+    "5. if policy lookup itself throws: release lock if held, no audit row (no valid metadata could be built), sanitized 500",
+    "6. record manual_run_started; if it fails, release lock, sanitized 500",
+    "7. run cleanup wrapped in try/finally releasing the lock",
+    "8. record terminal outcome",
+    "9. lock is released on every code path"
+  ],
+  "deterministicConcurrencyTest": {
+    "name": "deterministic admission proof: two concurrent live requests, BOTH deliberately parked mid-policy-lookup via a controllable barrier",
+    "mechanism": "createDataRetentionRunHandler({ getPlatformSetting: barrieredGetPlatformSetting }) where the override signals a per-call Deferred immediately upon entry (proving admission already completed) then blocks on another Deferred (never a timer) until the test releases it",
+    "usesSleep": false,
+    "usesRealTimingLuck": false,
+    "provesAdmissionDecidedBeforePolicyResolves": true,
+    "assertsSingleHeldJobLockRowWhileBothPolicyLookupsAreParked": true
+  },
+  "newTests": [
+    { "name": "deterministic admission proof (barrier-based)", "type": "new" },
+    { "name": "policy disabled after live lock acquisition: 403, no cleanup, lock immediately reusable", "type": "new" },
+    { "name": "policy lookup throws after lock acquisition: no cleanup, lock released, sanitized 500, no fabricated audit row", "type": "new" },
+    { "name": "releaseJobLock() never rejects even when the underlying DB update genuinely fails; documents the held-until-TTL trade-off", "type": "new" }
+  ],
+  "testCounts": {
+    "retentionManualRunAuditTestFile": { "before": 25, "after": 29, "postFixResult": "29/29 passing" },
+    "consecutiveFullSuiteRunsThisTask": 6,
+    "consecutiveFullSuiteRunsResult": "29/29 every time, zero failures"
+  },
+  "regressionCommands": [
+    { "command": "npm run typecheck", "cwd": "server", "exitCode": 0, "evidenceClassification": "CODE_PATH_CONFIRMED" },
+    { "command": "npm run test:retention-manual-run-audit", "cwd": "server", "exitCode": 0, "result": "29 passed, 0 failed", "runs": 6, "evidenceClassification": "TEST_REPRODUCED" },
+    { "command": "npm run test:data-retention", "cwd": "server", "exitCode": 0, "result": "42 passed, 0 failed", "evidenceClassification": "TEST_REPRODUCED" },
+    { "command": "npm run server:test:non-disposable", "cwd": "server", "exitCode": 0, "result": "0 failure markers across combined log", "evidenceClassification": "TEST_REPRODUCED" },
+    { "command": "npm run test:runtime:postgres", "cwd": "root", "exitCode": 0, "result": "server:test:disposable-db exit 0, cleanup succeeded, zero residual docker resources", "evidenceClassification": "TEST_REPRODUCED" },
+    { "command": "git diff --check", "cwd": "root", "result": "clean" }
+  ],
+  "dockerResidualCheck": {
+    "containersAfterAllRuns": 0,
+    "networksAfterAllRuns": 0,
+    "filterLabel": "com.noramedi.test-runtime=true"
+  },
+  "remoteCi": {
+    "codeCommitPushed": "2b71750",
+    "branch": "fix/f1-003-b2-retention-run-lock-race",
+    "prNumber": 280,
+    "checksReported": false,
+    "checksCommandOutput": "no checks reported on the 'fix/f1-003-b2-retention-run-lock-race' branch",
+    "statusCheckRollup": [],
+    "runsObserved": [
+      { "name": "Running Copilot Code Review", "status": "completed", "conclusion": "success", "isTestWorkflow": false }
+    ],
+    "remoteCiVerifiedClaimed": false,
+    "diagnosis": "origin/main has exactly two workflow files: windows-bridge-pr.yml (pull_request-triggered but paths-filtered to windows-bridge/imaging-only paths this PR does not touch) and windows-bridge-release.yml (workflow_dispatch only, never auto-triggers). The layered CI system that would run test:retention-manual-run-audit in CI (ci-layers.yml / ci-pr.yml / ci-main-and-nightly.yml) exists only on PR #268 (F1-003-P3), not yet merged to main. This is a pre-existing structural gap, not introduced by this task, and not this task's job to fix.",
+    "pr268Status": "OPEN, unmodified, not merged, not closed by this task"
+  },
+  "migrationStatus": {
+    "schemaChanged": false,
+    "newMigrationCreated": false,
+    "prismaMigrationsTableTouched": false,
+    "byThisTaskOrTheMainReconciliationMerge": false
+  },
+  "tenantKvkkSecurityImpact": {
+    "tenantScopedBehaviorChanged": false,
+    "lockScopeUnchanged": "global/job-type-scoped ('data-retention-cleanup')",
+    "auditShapePreservedForEveryBranch": true,
+    "noAuditRowFabricatedWhenInputsUnavailable": true,
+    "backwardCompatible": true
+  },
+  "crashTtlLimitations": {
+    "reliesOnPreExisting2HourTtlLeaseExpiry": true,
+    "independentlyReVerifiedThisTask": false,
+    "mathematicalImpossibilityClaimed": false,
+    "newAcceptedTradeoff": "releaseJobLock never rejects even on a genuine DB release failure; the lock is honestly left held until TTL expiry (now logged, previously silent), not silently cleared"
+  },
+  "evidenceSanitization": {
+    "searchPatterns": ["D:\\\\", "D:/", "C:\\\\", "C:/", "E:\\\\", "E:/", "DisKlinikCRM-worktrees", "local usernames/home paths"],
+    "occurrencesFoundInTaskOwnedFiles": 1,
+    "occurrenceLocation": "F1-003-B2_RETENTION_RUN_MUTUAL_EXCLUSION_RACE.md, 'Branch/worktree' field",
+    "replacementText": "fresh isolated worktree; local filesystem path intentionally omitted",
+    "branchNamesAndShasPreserved": true,
+    "unrelatedHistoricalEvidenceFilesTouched": false
+  },
+  "rollback": "single git revert of this task's commit fully restores F1-003-B2's own admission ordering; no data migration, no schema change, no lock-table cleanup required",
+  "statusPreserved": {
+    "F1": "IN_PROGRESS",
+    "F1-003": "IN_PROGRESS",
+    "F1-003-P3_PR268": "open_blocked_not_merged_not_modified",
+    "F1-003-P4": "blocked",
+    "R-070": "OPEN",
+    "R-046": "OPEN",
+    "R-071": "unchanged",
+    "G1": "NOT_APPROVED",
+    "G2": "NOT_APPROVED",
+    "kvkkFreeze": "ACTIVE",
+    "kvkkBaselineStableDeclaration": "NOT_GRANTED"
+  },
+  "maximumStatus": "AGENT_COMPLETED_PR_OPENED_AWAITING_REVIEW",
+  "mergeRecommendation": "external_review_required",
+  "deploymentRecommendation": "not_authorized",
+  "nextTask": "after PR #280 is reviewed and merged, return to PR #268 for F1-003-P3-R2 main reconciliation and full-green CI closure"
+}
