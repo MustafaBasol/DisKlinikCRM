@@ -114,7 +114,7 @@ organization (non-default): 0, clinic (non-default): 0, patient: 0, user: 0, aud
 
 Every row this suite creates (`ImagingStudy`, `ImagingImage`, `ImagingRequest`, `ImagingBridgeAgent`, `AuditLog`, `Patient`, `User`, `Clinic`, `Organization`) is removed in `localCleanup()`, called from `main()`'s success path and from the top-level `main().catch(...)` fatal-error path, so teardown runs even if an assertion throws mid-suite. The suite's own per-run temp storage root is removed in the same call (`fs.rmSync(..., {recursive:true, force:true})`), after `process.chdir()`s out of it.
 
-One artifact remains from a debugging run that predates the Windows `EPERM` fix (§8): `%LOCALAPPDATA%\Temp\imaging-char-ingest-storage-eiNseb`, containing only synthetic PNG test fixture bytes (no real patient data — this suite never touches a live/staging/production database). Its corresponding database rows were already confirmed removed (database cleanup runs, and completes, before the `fs.rmSync` line that later failed). This sandbox environment did not grant permission to `rm -rf` an OS temp path directly; the directory is flagged here for the user/operator to remove manually if desired (`Remove-Item -Recurse -Force` on Windows). All three post-fix validation runs left no such residue — this is a one-time debugging artifact, not a defect in the delivered suite.
+**Update (corrective round, §16):** the one artifact that previously remained from a pre-`EPERM`-fix debugging run, `%LOCALAPPDATA%\Temp\imaging-char-ingest-storage-eiNseb`, has since been removed and its removal independently verified. See §16 for the exact command and verification output. This was always debugging residue only (synthetic PNG test fixture bytes, no real patient data, and its database rows were already confirmed removed at the time it was first reported) — it is not, and never was, a defect in the delivered suite's own cleanup path, which left zero residue on every one of the (now six total, across two validation rounds) full-suite runs.
 
 Disposable Postgres container `imaging-char-007c-pg` and its database were created solely for this task's validation and are stopped/removed as part of closing out this task (ephemeral, `--rm`, no volume — nothing persists after `docker stop`).
 
@@ -147,3 +147,76 @@ Revert the two new files (`server/src/tests/imagingCharacterizationIngestStorage
 ## 15. Next action
 
 Program-owner review of this PR. If approved, this task's 8 CT IDs join the already-passing set toward the 18-test `mandatoryBeforeRefactor` gate F2-PREP-006-E defined (`characterizationTestGate.bucketed.mandatoryBeforeRefactor`, count 18: CT-02,03,06,07,08,10,11,12,13,14,16,17,19,21,26,27,28,32). This task newly proves CT-07/08/10/11/12/13/14/27 green; CT-02/03/06/16/17/19/21/26/28/32 remain open for future sibling tasks. No Stage 0–7 modularization work is authorized by this task.
+
+## 16. Corrective round — Copilot review fix + debug-directory cleanup closure
+
+This section records a follow-up correction pass on the same PR/branch (no new branch or PR was created), addressing one open Copilot review finding and closing out the one outstanding cleanup item from §9.
+
+### 16.1 Review finding fixed
+
+**GitHub review comment** (PR #295, `copilot-pull-request-reviewer`, comment id `3699989012`, `server/src/tests/imagingCharacterizationIngestStorage.test.ts:624`):
+
+> issueRawRequest() has no timeout, so if the router/middleware ever stops responding (e.g., multipart parsing edge case), this characterization suite can hang indefinitely and stall CI/local runs. Adding a bounded timeout and clearing it on both success and error makes the test runner fail fast instead of hanging.
+
+**Fix:** `issueRawRequest()` (used only by CT-27's real-HTTP sub-cases) now:
+- Uses a bounded **10,000 ms (10 s)** timeout (`RAW_REQUEST_TIMEOUT_MS`) — generous relative to this suite's actual sub-second, in-process requests, while staying well inside typical CI step/job timeouts, so a genuine hang still fails the run fast rather than exhausting a much longer outer CI timeout.
+- On timeout: calls `req.destroy()` (kills the request/socket), rejects with a deterministic `Error` (`"issueRawRequest: <path> timed out after 10000ms with no response"`), and sets a `settled` guard so any later event (e.g. the `error` this `destroy()` itself triggers) is a no-op instead of a second resolve/reject.
+- Clears the timer (`clearTimeout(timer)`) on both normal completion (`res.on('end', ...)`) and on `req.on('error', ...)` — the only path that does *not* explicitly call `clearTimeout` is the timeout callback itself, since by definition that timer has already fired and requires no further clearing.
+- CT-27's behavior/assertions and every production code path are unchanged — this is a test-harness-only correction, confirmed by re-running CT-27 (and the full suite) three consecutive times, all green (§16.3).
+
+### 16.2 Debug-directory cleanup closure
+
+The one item §9 previously flagged as needing manual removal, `%LOCALAPPDATA%\Temp\imaging-char-ingest-storage-eiNseb`, has been removed and independently re-verified as gone:
+
+```
+# Removal (Node fs.rmSync, forward-slash path — this Windows/Git-Bash hybrid
+# shell was found to mis-handle backslash-escaped Windows paths passed through
+# `node -e "..."`, which silently no-op'd force:true on a first attempt; a
+# forward-slash path resolves correctly on Windows and avoids that ambiguity
+# entirely):
+node -e "
+const fs = require('fs');
+const p = 'C:/Users/Mustafa/AppData/Local/Temp/imaging-char-ingest-storage-eiNseb';
+console.log('exists before:', fs.existsSync(p));
+if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true });
+console.log('exists after:', fs.existsSync(p));
+"
+# -> exists before: true
+# -> exists after: false
+
+# Independent second verification (separate tool/process, Bash-native, not Node):
+ls "C:\Users\Mustafa\AppData\Local\Temp" | grep -i "imaging-char"
+# -> (no output; explicit fallback check printed) CONFIRMED_REMOVED
+```
+
+Both checks agree: the directory no longer exists. No file from it remains anywhere on disk. This closes the item §9 previously left open — §9 has been updated in place to reflect this.
+
+### 16.3 Re-validation performed after the corrective changes
+
+| Check | Result |
+|---|---|
+| New disposable Postgres (`postgres:16-alpine`, container `imaging-char-007c-pg-v2`, ephemeral, non-default port `55441`) + `prisma migrate deploy` | All migrations applied cleanly, no drift |
+| New suite, corrective run 1/3 | 13 passed, 0 failed |
+| New suite, corrective run 2/3 | 13 passed, 0 failed |
+| New suite, corrective run 3/3 | 13 passed, 0 failed |
+| Explicit temp-root residue check after run 1 | `NO_RESIDUE` |
+| Explicit temp-root residue check after run 2 | `NO_RESIDUE` |
+| Explicit temp-root residue check after run 3 | `NO_RESIDUE` |
+| DB residual counts after all 3 corrective runs | `imagingStudy:0, imagingImage:0, imagingRequest:0, imagingBridgeAgent:0, organization(non-default):0, clinic(non-default):0, patient:0, user:0, auditLog:0` |
+| `npx tsc --noEmit` (server) | Clean, zero errors |
+| `server/src/tests/imaging.test.ts` | 103 passed, 0 failed |
+| `server/src/tests/imagingBridgePairing.test.ts` | 50 passed, 0 failed |
+| `server/src/tests/imagingBridgeOnboarding.test.ts` | 14 passed, 0 failed |
+| `server/src/tests/imagingBridgeUpdate.test.ts` | 44 passed, 0 failed |
+| `server/src/tests/kvkkAttachmentImagingLifecycle.test.ts` (DB-backed) | 110 passed, 0 failed |
+| `git diff --check` | Clean |
+| `git diff --name-only origin/main...HEAD` | Exactly two files: the test suite and this evidence doc — no production code, Prisma schema/migration, dependency, lockfile, workflow, package file, shared helper, or program-control document touched |
+| Disposable Postgres teardown | `docker stop imaging-char-007c-pg-v2` (ephemeral `--rm`, no volume — fully destroyed) |
+
+No CT scope or test semantics changed in this round; only `issueRawRequest()`'s timeout handling was added, and the one debug-directory cleanup item was closed.
+
+### 16.4 Commit / PR
+
+- New commit (test fix + evidence doc update): recorded with its exact SHA in the immediately-following evidence-doc commit's own diff (this document is updated in the same corrective-round commit sequence as the code fix, so the commit log is the authoritative record — see `git log` on this branch for the exact SHA, also mirrored in §14 above once updated).
+- PR review thread (comment id `3699989012`) replied to with this fix summary and marked resolved.
+- Branch/PR unchanged: `test/f2-prep-007-c-imaging-ingest-storage` / PR #295. Not merged.

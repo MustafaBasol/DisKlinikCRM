@@ -605,20 +605,53 @@ async function withRealServer(fn: (port: number) => Promise<void>): Promise<void
   }
 }
 
+// Bounded so a stalled/hanging response (e.g. an unexpected multipart-parsing
+// edge case in the router under test) fails this suite fast instead of
+// hanging CI or a local run indefinitely. Generous relative to this suite's
+// actual (small, in-process, sub-second) requests, while staying well inside
+// typical CI job/step timeouts.
+const RAW_REQUEST_TIMEOUT_MS = 10_000;
+
 function issueRawRequest(
   port: number,
   opts: { path: string; headers: Record<string, string>; body: Buffer },
 ): Promise<{ statusCode: number; bodyText: string }> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+
     const req = http.request(
       { host: '127.0.0.1', port, method: 'POST', path: opts.path, headers: opts.headers },
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (c) => chunks.push(c));
-        res.on('end', () => resolve({ statusCode: res.statusCode ?? 0, bodyText: Buffer.concat(chunks).toString('utf8') }));
+        res.on('end', () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve({ statusCode: res.statusCode ?? 0, bodyText: Buffer.concat(chunks).toString('utf8') });
+        });
       },
     );
-    req.on('error', reject);
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      // Destroy the request/socket so the underlying connection cannot keep
+      // the process (or a later test in this suite) waiting on it.
+      req.destroy();
+      reject(new Error(`issueRawRequest: ${opts.path} timed out after ${RAW_REQUEST_TIMEOUT_MS}ms with no response`));
+    }, RAW_REQUEST_TIMEOUT_MS);
+
+    req.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      // A destroy() triggered by the timeout above surfaces here too (e.g.
+      // ECONNRESET) — `settled` already being true makes this a no-op in
+      // that case, so the timeout's own rejection is never overwritten.
+      reject(err);
+    });
+
     req.write(opts.body);
     req.end();
   });
