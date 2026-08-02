@@ -5,7 +5,36 @@
   "tabs": {
     "list": "Bestandsliste",
     "alerts": "Niedriger Bestand",
-    "history": "Bewegungsverlauf"
+    "history": "Bewegungsverlauf",
+    "units": "Einheiten"
+  },
+  "unitManagement": {
+    "newUnit": "Neue Einheit",
+    "createTitle": "Neue Einheit",
+    "editTitle": "Einheit bearbeiten",
+    "empty": "Es sind noch keine Einheiten definiert.",
+    "fields": {
+      "name": "Einheitsname",
+      "abbreviation": "Abkuerzung",
+      "status": "Status"
+    },
+    "placeholders": {
+      "name": "z. B. Karton",
+      "abbreviation": "z. B. Karton"
+    },
+    "status": {
+      "active": "Aktiv",
+      "inactive": "Inaktiv"
+    }
+  },
+  "unitConversion": {
+    "sectionTitle": "Einheitenumrechnung (optional)",
+    "sectionHint": "Festlegen, wenn sich Einkaufs- und Verbrauchseinheit unterscheiden (z. B. Karton / Stueck).",
+    "purchaseUnit": "Einkaufseinheit",
+    "consumptionUnit": "Verbrauchseinheit",
+    "conversionFactor": "Umrechnungsfaktor",
+    "none": "Nicht verwendet (bisheriges Einheitenfeld)",
+    "inactiveSuffix": " (inaktiv)"
   },
   "actions": {
     "newItem": "Neuer Artikel",
@@ -71,10 +100,12 @@
   "transaction": {
     "title": "Bestandsbewegung - {{item}}",
     "quantityLabel": "Menge ({{unit}}) - Aktuell: {{current}}",
+    "normalizedPreview": "= {{amount}} {{unit}}",
     "fields": {
       "type": "Bewegungstyp",
       "reason": "Grund",
-      "quantity": "Menge"
+      "quantity": "Menge",
+      "unit": "Einheit"
     },
     "types": {
       "in": "Eingang",
@@ -92,11 +123,22 @@
     "errors": {
       "quantityPositive": "Die Menge muss groesser als 0 sein.",
       "insufficientStock": "Nicht genuegend Bestand. Aktuell: {{current}} {{unit}}",
+      "insufficientStockGeneric": "Nicht genuegend Bestand.",
       "actionFailed": "Bei der Bewegung ist ein Fehler aufgetreten."
     }
   },
   "errors": {
     "nameRequired": "Artikelname ist erforderlich.",
-    "saveFailed": "Beim Speichern ist ein Fehler aufgetreten."
+    "saveFailed": "Beim Speichern ist ein Fehler aufgetreten.",
+    "unitInactive": "Diese Einheit ist inaktiv und kann nicht fuer neue Datensaetze verwendet werden.",
+    "unitNotAssigned": "Die ausgewaehlte Einheit entspricht weder der Einkaufs- noch der Verbrauchseinheit dieses Artikels.",
+    "unitCrossClinic": "Die ausgewaehlte Einheit gehoert nicht zu dieser Klinik.",
+    "conversionFactorMissing": "Fuer diesen Artikel ist kein gueltiger Umrechnungsfaktor konfiguriert.",
+    "conversionFactorInvalid": "Der Umrechnungsfaktor muss eine Zahl groesser als 0 sein.",
+    "conversionFactorLocked": "Der Umrechnungsfaktor kann nicht mehr geaendert werden, nachdem Transaktionen in der Einkaufseinheit fuer diesen Artikel erfasst wurden.",
+    "unitConfigIncomplete": "Einkaufseinheit, Verbrauchseinheit und Umrechnungsfaktor muessen zusammen angegeben werden.",
+    "adjustmentUnitUnsupported": "Korrekturbuchungen muessen die Verbrauchseinheit verwenden, nicht die Einkaufseinheit.",
+    "unitFieldsRequired": "Einheitsname und Abkuerzung sind erforderlich.",
+    "unitDuplicate": "Eine Einheit mit diesem Namen oder dieser Abkuerzung existiert bereits."
   }
 }

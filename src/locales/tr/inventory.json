@@ -5,7 +5,36 @@
   "tabs": {
     "list": "Stok Listesi",
     "alerts": "Düşük Stok",
-    "history": "İşlem Geçmişi"
+    "history": "İşlem Geçmişi",
+    "units": "Birimler"
+  },
+  "unitManagement": {
+    "newUnit": "Yeni Birim",
+    "createTitle": "Yeni Birim",
+    "editTitle": "Birimi Düzenle",
+    "empty": "Henüz birim tanımlanmadı.",
+    "fields": {
+      "name": "Birim Adı",
+      "abbreviation": "Kısaltma",
+      "status": "Durum"
+    },
+    "placeholders": {
+      "name": "ör. Koli",
+      "abbreviation": "ör. Koli"
+    },
+    "status": {
+      "active": "Aktif",
+      "inactive": "Pasif"
+    }
+  },
+  "unitConversion": {
+    "sectionTitle": "Birim Dönüşümü (İsteğe Bağlı)",
+    "sectionHint": "Alış ve sarf birimleri farklıysa (ör. Koli / Adet) burada tanımlayın.",
+    "purchaseUnit": "Alış Birimi",
+    "consumptionUnit": "Sarf Birimi",
+    "conversionFactor": "Dönüşüm Katsayısı",
+    "none": "Kullanılmıyor (eski birim alanı)",
+    "inactiveSuffix": " (pasif)"
   },
   "actions": {
     "newItem": "Yeni Malzeme",
@@ -71,10 +100,12 @@
   "transaction": {
     "title": "Stok Hareketi - {{item}}",
     "quantityLabel": "Miktar ({{unit}}) - Mevcut: {{current}}",
+    "normalizedPreview": "= {{amount}} {{unit}}",
     "fields": {
       "type": "İşlem Tipi",
       "reason": "Neden",
-      "quantity": "Miktar"
+      "quantity": "Miktar",
+      "unit": "Birim"
     },
     "types": {
       "in": "Giriş",
@@ -92,11 +123,22 @@
     "errors": {
       "quantityPositive": "Miktar 0'dan büyük olmalıdır.",
       "insufficientStock": "Yetersiz stok. Mevcut: {{current}} {{unit}}",
+      "insufficientStockGeneric": "Yetersiz stok.",
       "actionFailed": "İşlem sırasında hata oluştu."
     }
   },
   "errors": {
     "nameRequired": "Malzeme adı zorunludur.",
-    "saveFailed": "Kayıt sırasında hata oluştu."
+    "saveFailed": "Kayıt sırasında hata oluştu.",
+    "unitInactive": "Bu birim pasif durumda ve yeni kayıtlarda kullanılamaz.",
+    "unitNotAssigned": "Seçilen birim bu malzemenin alış veya sarf birimiyle eşleşmiyor.",
+    "unitCrossClinic": "Seçilen birim bu klinige ait değil.",
+    "conversionFactorMissing": "Bu malzeme için geçerli bir dönüşüm katsayısı tanımlanmamış.",
+    "conversionFactorInvalid": "Dönüşüm katsayısı 0'dan büyük bir sayı olmalıdır.",
+    "conversionFactorLocked": "Bu malzeme için alış birimiyle işlem kaydedildikten sonra dönüşüm katsayısı değiştirilemez.",
+    "unitConfigIncomplete": "Alış birimi, sarf birimi ve dönüşüm katsayısı birlikte tanımlanmalıdır.",
+    "adjustmentUnitUnsupported": "Düzeltme işlemleri alış birimiyle değil sarf birimiyle yapılmalıdır.",
+    "unitFieldsRequired": "Birim adı ve kısaltması zorunludur.",
+    "unitDuplicate": "Bu isimde veya kısaltmada bir birim zaten mevcut."
   }
 }
