@@ -686,3 +686,21 @@ export function canManageImagingDevices(user: UserForPermission | null | undefin
   const role = getRole(user);
   return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
 }
+
+// ── US-02.2 Phase 1: Treatment Proposal PDF ───────────────────────────────────
+
+/**
+ * Tedavi teklifi PDF indirme: aynı roller tedavi dosyası detayını görebiliyor
+ * (BILLING hariç — klinik veriler içeriyor).
+ * server/src/routes/treatmentCases.ts GET /:id/proposal-pdf authorize() ile senkron.
+ */
+export function canDownloadTreatmentProposal(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return (
+    role === 'OWNER' ||
+    role === 'ORG_ADMIN' ||
+    role === 'CLINIC_MANAGER' ||
+    role === 'DENTIST' ||
+    role === 'RECEPTIONIST'
+  );
+}

@@ -7,11 +7,18 @@ import { treatmentCaseSchema } from '../schemas/index.js';
 import { generateEarningFromTreatmentCase } from '../services/earningService.js';
 import { validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
+import { safeErrorFields } from '../utils/safeError.js';
 import {
   findAppointmentTypeInClinic,
   findPatientInClinic,
   findUserAssignedToClinic,
 } from '../utils/relationGuards.js';
+import {
+  MAX_PROPOSAL_PROCEDURES,
+  buildProposalPdfFilename,
+  generateTreatmentProposalPdf,
+  type ProposalLocale,
+} from '../services/treatmentProposalPdf.js';
 
 const router = express.Router();
 
@@ -126,6 +133,84 @@ router.get('/treatment-cases/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANA
     res.json(tc);
   } catch {
     res.status(500).json({ error: 'Failed to fetch treatment case' });
+  }
+});
+
+// GET /api/treatment-cases/:id/proposal-pdf
+// US-02.2 Phase 1: deterministic, server-generated treatment proposal PDF.
+// Same authorization/clinic-scope/DENTIST-ownership rules as the detail GET above —
+// no new authorization mechanism. Route stays thin: it only resolves/authorizes data
+// and delegates rendering to services/treatmentProposalPdf.ts (no auth/tenant logic there).
+router.get('/treatment-cases/:id/proposal-pdf', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const { normalizedRole, id: userId } = req.user!;
+
+  try {
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const tc = await prisma.treatmentCase.findFirst({
+      where: { id, clinicId: { in: accessibleIds } },
+      include: {
+        patient: { select: { firstName: true, lastName: true } },
+        practitioner: { select: { firstName: true, lastName: true } },
+        clinic: { select: { name: true, address: true, phone: true, currency: true, defaultLanguage: true } },
+        procedures: {
+          // Cancelled procedures must never appear on the patient proposal or contribute to
+          // its total — filtered here at the Prisma level (preferred); the PDF service also
+          // filters defense-in-depth, per the project's `status !== 'cancelled'` convention.
+          where: { status: { not: 'cancelled' } },
+          select: { toothFdi: true, procedureName: true, status: true, estimatedCost: true },
+          orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
+    });
+
+    if (!tc) return res.status(404).json({ error: 'Treatment case not found' });
+
+    if (normalizedRole === 'DENTIST' && tc.practitionerId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (tc.procedures.length > MAX_PROPOSAL_PROCEDURES) {
+      return res.status(400).json({ error: 'Too many procedures for a proposal PDF export' });
+    }
+
+    const locale: ProposalLocale = (['tr', 'en', 'fr', 'de'] as const).includes(tc.clinic.defaultLanguage as ProposalLocale)
+      ? (tc.clinic.defaultLanguage as ProposalLocale)
+      : 'en';
+    const generatedAt = new Date();
+
+    const pdfBuffer = await generateTreatmentProposalPdf({
+      locale,
+      clinic: { name: tc.clinic.name, address: tc.clinic.address, phone: tc.clinic.phone },
+      patient: { fullName: `${tc.patient.firstName} ${tc.patient.lastName}` },
+      treatmentCase: {
+        title: tc.title,
+        stage: tc.stage,
+        practitionerName: tc.practitioner ? `${tc.practitioner.firstName} ${tc.practitioner.lastName}` : null,
+        currency: tc.currency || tc.clinic.currency,
+        estimatedAmount: tc.estimatedAmount,
+        acceptedAmount: tc.acceptedAmount,
+      },
+      procedures: tc.procedures.map((p) => ({
+        toothFdi: p.toothFdi,
+        procedureName: p.procedureName,
+        status: p.status,
+        estimatedCost: p.estimatedCost,
+      })),
+      generatedAt,
+    });
+
+    const filename = buildProposalPdfFilename(id, generatedAt);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Proposal PDF generation failed', { treatmentCaseId: id, ...safeErrorFields(err) });
+    res.status(500).json({ error: 'Failed to generate proposal PDF' });
   }
 });
 
