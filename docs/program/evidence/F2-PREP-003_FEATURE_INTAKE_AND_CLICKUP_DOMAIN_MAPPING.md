@@ -5,17 +5,20 @@
 **Status:** `AGENT_COMPLETED` / `PR_OPENED_AWAITING_REVIEW` (maximum status per task instruction — never claim more)
 **Authorized in parallel with:** F1-003-B2, PR #268 (`feature/f1-003-p3-layered-ci-workflows`, OPEN), and the other F2-PREP discovery tasks (F2-PREP-001 Domain Ownership Inventory, F2-PREP-002 Cross-Domain Dependency Map, F2-PREP-004 Modularization Sequence). At this task's start, `git worktree list` showed all three sibling worktrees sitting at `origin/main` tip with zero commits ahead of it — a **start-time observation only**, not a current program-status claim about those tasks; no sibling worktree content was read into or copied by this document at any point, then or now.
 
-> **R1 reconciliation note (this revision):** sanitizes author-machine filesystem paths from both evidence files; reconciles wording against externally supplied F2-PREP-001 delivery facts (now PR #276, `AGENT_COMPLETED`/`PR_OPENED_AWAITING_REVIEW`, not merged, proposing a candidate 38-domain inventory); corrects sibling-task wording to a start-time observation; corrects the status/next-task sections; and tightens the ClickUp scope-boundary language. No repository content was re-read for this revision beyond the externally supplied PR #276 metadata named in the R1 task instructions themselves — no F2-PREP-001 worktree or branch content was read or copied.
+> **R1 reconciliation note:** sanitized author-machine filesystem paths from both evidence files; reconciled wording against externally supplied F2-PREP-001 delivery facts as they stood at that time (PR #276, then `AGENT_COMPLETED`/`PR_OPENED_AWAITING_REVIEW`, not yet merged, proposing a candidate 38-domain inventory); corrected sibling-task wording to a start-time observation; corrected the status/next-task sections; tightened the ClickUp scope-boundary language. No repository content was re-read for that revision beyond the externally supplied PR #276 metadata named in the R1 task instructions themselves.
 
-### Status (R1)
+> **R2 reconciliation note (this revision):** merged current `origin/main` — which now includes F2-PREP-001's **merged** output, PR #276, merge commit `0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83` — into this branch (merge commit `a15812f07f6588a7ed4beff210cee247a0c94848`, clean, no conflicts; see §1.1). Read the merged F2-PREP-001 evidence files directly from the reconciled branch (no longer an externally supplied claim — repository evidence now). Rechecked all 17 repository-derived backlog items' `proposed_owning_domain` against the now-merged 38-domain inventory: **no reassignment was needed** (see §5). Removed all wording that described PR #276 as open/unmerged/candidate-only, and all wording that described F2-PREP-001 or F2-PREP-001-R1 as still pending. Updated status and exact-next-task accordingly.
+
+### Status (R2)
 
 | Item | Status |
 |---|---|
 | Feature intake framework | completed |
 | Repository-derived backlog classification | completed |
 | ClickUp-derived backlog import | pending external import |
-| Taxonomy reconciliation | pending reviewed F2-PREP-001 result |
-| Merged | no |
+| Merged F2-PREP-001 taxonomy reconciliation | completed |
+| F2 consolidated charter | pending F2-PREP-005 |
+| PR #277 merged | no |
 | Deployed | no |
 | Production verified | no |
 
@@ -31,9 +34,26 @@ Machine-readable companion: [F2-PREP-003_feature_intake_domain_mapping.json](F2-
 | Baseline SHA | `70b1690c1a656c95cead7b42812cc9ae6447bfb7` (exact tip of `origin/main` at task start — merge commit for PR #275, `feature/external-calendar-outbound-sync-phase2`) |
 | Worktree | fresh isolated worktree; local filesystem path intentionally omitted |
 | Branch | `docs/f2-prep-003-feature-intake-domain-mapping` |
-| Intervening commits between baseline and HEAD | 0 (fresh worktree cut directly from `origin/main`) |
+| Intervening commits between baseline and HEAD | 0 at original task start (fresh worktree cut directly from `origin/main`); see §1.1 for the R2 merge reconciliation that has since brought current `origin/main` into this branch |
 
-`git worktree list` at task start confirmed three sibling F2-PREP worktrees already existed as isolated worktrees (task IDs F2-PREP-001, F2-PREP-002, F2-PREP-004), all sitting at `origin/main` HEAD `70b1690` with zero commits ahead of it. **This was a start-time observation only, not a current program-status claim** — it describes the state at the moment this task began, not the state of those tasks now or at any later point. This task did not enter, read the working tree of, or depend on the content of any of those worktrees beyond this `git worktree list` observation, then or in this revision. See §4.1 below for the externally supplied, current F2-PREP-001 delivery status (PR #276).
+`git worktree list` at task start confirmed three sibling F2-PREP worktrees already existed as isolated worktrees (task IDs F2-PREP-001, F2-PREP-002, F2-PREP-004), all sitting at `origin/main` HEAD `70b1690` with zero commits ahead of it. **This was a start-time observation only, not a current program-status claim** — it describes the state at the moment this task began, not the state of those tasks now or at any later point. This task did not enter, read the working tree of, or depend on the content of any of those worktrees beyond this `git worktree list` observation, then or in either revision. See §4.1 below for F2-PREP-001's current, merged delivery status (PR #276), now read directly from the reconciled branch rather than supplied externally.
+
+### 1.1 Branch reconciliation with current main (R2)
+
+`origin/main` had advanced past this branch's original cut point — it now includes F2-PREP-001's merged output (PR #276). Per this revision's own instruction, `origin/main` was merged into this branch (no rebase, no force push, no reset, no blanket `--ours`/`--theirs`):
+
+| Field | Value |
+|---|---|
+| Pre-merge HEAD (R1 head) | `5bbe7be550037ff872952cda08d90dff1ace8b8b` |
+| `origin/main` SHA (post-fetch) | `0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83` (merge commit for PR #276, `docs/f2-prep-001-domain-ownership-inventory`) |
+| Merge command | `git merge --no-ff origin/main` |
+| Merge commit | `a15812f07f6588a7ed4beff210cee247a0c94848` |
+| Conflicts | none — clean merge (`git merge --no-ff` reported "Merge made by the 'ort' strategy", no conflict markers) |
+| Per-file conflict resolution | not applicable (no conflicts) |
+| Files brought in by the merge | `docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md`, `docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json` (both new, additive — no existing file in this branch was touched by the merge) |
+| Post-merge ancestor check | `git merge-base --is-ancestor origin/main HEAD` → true (`origin/main` is now an ancestor of this branch's HEAD) |
+
+No file owned by this task (the two F2-PREP-003 evidence files) was touched by the merge itself — only the two new F2-PREP-001 evidence files were brought into this branch's history, exactly as `origin/main` already had them.
 
 ---
 
@@ -81,12 +101,14 @@ Machine-readable companion: [F2-PREP-003_feature_intake_domain_mapping.json](F2-
 
 **A. Historical task-start basis.** At the time this task originally ran, the parallel F2-PREP-001 (Domain Ownership Inventory) sibling task had not delivered any output (its worktree was observed at `origin/main` tip with zero commits — see §1). This task therefore used the existing 37-domain, repository-evidence-verified taxonomy from `MODULE_MAP.md`/`DEPENDENCY_MAP.md` (F0-003/F0-004) as its domain vocabulary. Full list with codes is in the JSON companion's `domain_taxonomy_reference`.
 
-**B. Current reconciliation note (this revision, R1).** F2-PREP-001 has since delivered: it is now **PR #276**, status `AGENT_COMPLETED` / `PR_OPENED_AWAITING_REVIEW`, **not merged**. Per the externally supplied delivery facts for this revision, PR #276 proposes a **38-domain inventory** — one candidate domain beyond the 37 used here, **External Calendar Integration** — plus deltas to the existing Privacy, Platform Administration, and Storage domain entries. This revision explicitly does **not** treat the 38-domain inventory as accepted or merged, and does **not** silently reassign any backlog item's `proposed_owning_domain` on that basis:
+**B. Current repository state (this revision, R2).** F2-PREP-001 (PR #276) is now **merged** into `origin/main` (merge commit `0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83`), and this branch has itself merged that current `origin/main` (§1.1). The 38-domain inventory — the 37 F0-003/F0-004 domains plus one new domain, **External Calendar Integration** (`EXC`) — is therefore now **repository-merged evidence**, read directly from `docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md` §3 on this reconciled branch, not an externally supplied claim. F2-PREP-001 also delivered delta evidence to three existing domains (Privacy / Consent / Retention / DSR, Platform Administration, Storage Abstraction) and a 99-Prisma-model ownership classification in which `ContactRequest` ownership remains explicitly flagged `OWNERSHIP_AMBIGUOUS` (unresolved by F2-PREP-001 itself, not by this task).
 
-- Every `proposed_owning_domain` value in §5 below **remains valid against the accepted 37-domain baseline** (F0-003/F0-004, still the only externally-accepted taxonomy as of this revision).
-- **External Calendar Integration is a candidate taxonomy delta, not yet authoritative** — no backlog item in §5 references it, since doing so would assume an outcome PR #276 has not yet been given.
-- Every `proposed_owning_domain` value **must be rechecked during F2-PREP-005** against the reviewed/merged F2-PREP-001 result (the 38-domain inventory, or whatever form it takes after review) — this is an open dependency, not a closed one.
-- No backlog item was silently reassigned in this revision without repository evidence; this revision changed wording and path sanitization only, not any `proposed_owning_domain`, `readiness`, `suggested_implementation_wave`, or `classification_confidence` field value in the JSON companion.
+**C. Program-decision boundary.** Merged repository evidence is not the same as a final, program-accepted charter:
+
+- The 38-domain inventory is now repository evidence, but it is **not yet the final consolidated F2 charter** — that reconciliation is F2-PREP-005's job, not this task's.
+- **F2-PREP-005 — Consolidated Modularization Charter** will reconcile the 38-domain inventory with F2-PREP-002 (cross-domain dependency map) and F2-PREP-004 (modularization sequence), and make the final domain-ownership determinations (including whether `EXC` and the Privacy/Platform-Administration/Storage deltas are accepted as-is).
+- **No pilot module is selected by this task** — §5's CC-04 pilot candidate remains a recommendation, not a selection; F2-PREP-005 makes that call.
+- Every `proposed_owning_domain` value in §5 below was **rechecked against the merged 38-domain inventory in this revision** (§5's recheck note) — no item required reassignment, and none was reassigned merely because `EXC` now exists as a domain.
 
 ### 4.2 Readiness values (definitions)
 
@@ -150,6 +172,8 @@ No dates are assigned to any wave or item — none exist in repository evidence,
 
 **17 items total, all repository-derived, 0 ClickUp-derived.** Full detail (all ~20 fields per item) is in the JSON companion; this table is the compact index. **This is not the full NoraMedi feature backlog** — see the ClickUp claim boundary in §3.
 
+**Recheck against the merged 38-domain inventory (R2):** every item's `proposed_owning_domain` below was individually re-evaluated against F2-PREP-001's merged domain list (§4.1.B) — checking whether `EXC` (External Calendar Integration) applies, and whether the Privacy/Platform-Administration/Storage delta evidence changes ownership. **Result: zero reassignments.** None of the 17 items touch calendar-sync functionality, so `EXC` was not forced onto any item merely because the domain now exists (per this revision's own instruction). None of the 17 items are currently owned by Privacy, Platform Administration, or Storage, so those domains' delta evidence does not affect any existing assignment. `proposed_owning_domain`, `readiness`, `suggested_implementation_wave`, and `classification_confidence` are therefore unchanged from R1 for all 17 items — recomputed ownership/readiness/wave/confidence/source counts (below and in the JSON companion) match the R1 values exactly.
+
 | ID | Title | Domain | Readiness | Wave | Confidence |
 |---|---|---|---|---|---|
 | F2P3-001 | US-02.2 Treatment proposal PDF (Issue #262, PR #270 DRAFT) | TRC | SAFE_NOW_IN_EXISTING_BOUNDARY | 0 | repository_derived_verified |
@@ -184,6 +208,23 @@ No dates are assigned to any wave or item — none exist in repository evidence,
 
 `BLOCKED_BY_F1 = 0` is deliberate, not an oversight: F1's only remaining item (F1-003-P3, PR #268) is a CI/test-architecture PR in review, and this task's own parallel-authorization line explicitly permits F2-PREP work to proceed alongside it.
 
+### Ownership (`proposed_owning_domain`) counts (R2 recheck)
+
+| Domain | Count |
+|---|---|
+| TRC (Treatment Cases) | 1 |
+| PAT (Patients) | 1 |
+| APT (Appointments and Availability) | 3 |
+| BRG (Imaging — Device Bridge) | 1 |
+| OUT_OF_DOMAIN_TAXONOMY | 6 |
+| PAI (AI Platform / AI Gateway) | 1 |
+| PIG (Integration Platform) | 1 |
+| PBL (Billing / Subscription Engine) | 1 |
+| PCM (Campaign/Health Tourism/Invoicing group) | 1 |
+| EVQ (Shared Events / Queue) | 1 |
+
+No item is currently owned by `PRV`, `PAD`, `STG`, or the new `EXC` domain — consistent with the "zero reassignments" recheck result above. Total: 17, matching `total_items`.
+
 ### Highest-risk items (Wave 4 / KVKK-or-security-sensitive)
 
 1. **F2P3-006** (ClickUp orchestration bootstrap) — external-credential automation, `HIGH` auth/security sensitivity, does not fit the product domain taxonomy at all.
@@ -196,7 +237,7 @@ No dates are assigned to any wave or item — none exist in repository evidence,
 
 ## 6. Missing decisions (explicitly not made by this task)
 
-- **Domain taxonomy authority**: F2-PREP-001 (Domain Ownership Inventory) has now delivered as **PR #276** (`AGENT_COMPLETED`/`PR_OPENED_AWAITING_REVIEW`, not merged), proposing a candidate 38-domain inventory (adds External Calendar Integration; deltas to Privacy, Platform Administration, Storage). This task's `proposed_owning_domain` values remain valid against the accepted 37-domain baseline and must be rechecked during **F2-PREP-005** against the reviewed/merged F2-PREP-001 result — see §4.1.
+- **Domain taxonomy authority**: F2-PREP-001 (Domain Ownership Inventory) has now delivered **and merged** as **PR #276** (merge commit `0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83`), establishing a 38-domain inventory as repository evidence (adds External Calendar Integration; deltas to Privacy, Platform Administration, Storage). This task's `proposed_owning_domain` values have been rechecked against that merged inventory (§5) with zero reassignments. The 38-domain inventory is still **not the final consolidated F2 charter** — that final reconciliation, including whether `EXC` and the Privacy/Platform-Administration/Storage deltas are accepted as-is, is **F2-PREP-005's** job — see §4.1.C.
 - **Contract syntax** (ADR-015 open question): TypeScript interface vs. interface + runtime validation — not decided; blocks F2P3-007/008/009/011/012.
 - **Queue/job platform** (ADR-006/007 `NEEDS_POC`): blocks F2P3-010.
 - **AI Gateway architecture** (ADR-009, F8) and **Official Integration Platform** (ADR-010, F9): both require external decisions outside this task's authority.
@@ -267,17 +308,17 @@ No other file in the working tree was created, modified, or deleted by this task
 
 ## 10. Exact next task
 
-**Do not restart F2-PREP-001** — it has already delivered (PR #276, `AGENT_COMPLETED`/`PR_OPENED_AWAITING_REVIEW`).
+**Do not mention F2-PREP-001 or F2-PREP-001-R1 as pending** — it has already delivered and **merged** (PR #276, merge commit `0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83`); it is not a dependency of the next task below.
 
-**Await completion/review of:**
+**Await:**
 
-- F2-PREP-001-R1 on PR #276
-- F2-PREP-002
+- F2-PREP-002-R1
 - F2-PREP-004
+- F1-003-B2 status
 
 **Then execute F2-PREP-005 — Consolidated Modularization Charter**, which must:
 
-- reconcile the reviewed domain inventory (the 37- vs. 38-domain question, and any further deltas from F2-PREP-001-R1)
+- reconcile the merged domain inventory (the 38-domain inventory, including `EXC` and the Privacy/Platform-Administration/Storage deltas) into a final, accepted charter
 - reconcile the cross-domain dependency map (F2-PREP-002's output)
 - import, or separately authorize, the real ClickUp backlog reconciliation (this document's framework is ready to receive it; it does not perform it)
 - resolve candidate domain ownership (including whether External Calendar Integration is accepted)
@@ -285,4 +326,4 @@ No other file in the working tree was created, modified, or deleted by this task
 - update the authoritative tracker/phase/index documents (explicitly out of this task's own write scope)
 - authorize the first modularization implementation task
 
-This task does not authorize the start of any Wave 1+ backlog item, F2-PREP-001 restart, or the F2-PREP-005 charter itself — it only classifies backlog and hands off the open dependencies above.
+This task does not authorize the start of any Wave 1+ backlog item, or the F2-PREP-005 charter itself — it only classifies backlog and hands off the open dependencies above. F2-PREP-001 is not a dependency of this hand-off; it has already delivered and merged.

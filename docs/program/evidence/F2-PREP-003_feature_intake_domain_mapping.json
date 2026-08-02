@@ -44,11 +44,22 @@
     "source": "docs/program/MODULE_MAP.md + docs/program/DEPENDENCY_MAP.md §10.1 (F0-003/F0-004, repository-evidence-verified as of 2026-07-18)",
     "note": "Historical (task-start) basis: F2-PREP-001 (Domain Ownership Inventory) had not delivered any output at this task's original start (worktree observed at origin/main tip, zero commits) — a start-time observation only, not a later status claim. This task used the existing F0-003/F0-004 37-domain taxonomy as the authoritative baseline and flagged reliance on it explicitly rather than waiting.",
     "reconciliation_r1": {
-      "f2_prep_001_status": "PR #276, AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW, not merged",
-      "proposed_inventory": "38 domains (candidate, not authoritative)",
+      "f2_prep_001_status": "PR #276, AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW, not merged (historical, as of R1)",
+      "proposed_inventory": "38 domains (candidate, not authoritative, as of R1)",
       "new_candidate_domain": "External Calendar Integration",
       "other_proposed_deltas": ["Privacy", "Platform Administration", "Storage"],
-      "treatment": "The 38-domain inventory is NOT treated as accepted or merged. Every proposed_owning_domain value in this file remains valid against the accepted 37-domain baseline and must be rechecked during F2-PREP-005 against the reviewed/merged F2-PREP-001 result. No backlog item was reassigned in this revision without repository evidence."
+      "treatment": "As of R1, the 38-domain inventory was NOT treated as accepted or merged. Superseded by reconciliation_r2 below, which reflects the now-merged state."
+    },
+    "reconciliation_r2": {
+      "f2_prep_001_status": "PR #276, MERGED into origin/main (merge commit 0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83)",
+      "merged_into_this_branch_via": "merge commit a15812f07f6588a7ed4beff210cee247a0c94848 (git merge --no-ff origin/main, clean, no conflicts)",
+      "current_inventory": "38 domains (37 inherited F0-003/F0-004 + External Calendar Integration) — now repository-merged evidence, read directly from F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md on this reconciled branch",
+      "new_domain": "External Calendar Integration (code EXC)",
+      "delta_domains": ["Privacy / Consent / Retention / Data Subject Rights", "Platform Administration", "Storage Abstraction"],
+      "contact_request_ownership": "OWNERSHIP_AMBIGUOUS per F2-PREP-001's own 4-bucket Prisma-model classification — unresolved by F2-PREP-001 itself, not by this task",
+      "prisma_models_classified_by_f2_prep_001": 99,
+      "backlog_recheck_result": "All 17 repository_derived_backlog (+ sub-array) items' proposed_owning_domain rechecked against this merged inventory. Zero reassignments — no item touches External Calendar Integration functionality, and no item is currently owned by Privacy, Platform Administration, or Storage.",
+      "program_decision_boundary": "The 38-domain inventory is now repository-merged evidence but is NOT yet the final consolidated F2 charter. F2-PREP-005 (Consolidated Modularization Charter) reconciles it with F2-PREP-002/004 and makes final domain-ownership and pilot-module determinations."
     },
     "domains": [
       {"code": "IDA", "name": "Identity and Access", "classification": "core platform", "criticality": "regulatory/tenant-critical"},
@@ -601,7 +612,20 @@
       "inferred": 4,
       "unverified_ownership": 1
     },
-    "note_on_blocked_by_f1": "0 by design — F1's remaining item (F1-003-P3, PR #268) is a CI/test-architecture PR in review, not a live blocker for any of this backlog's product-facing items; this parallel task set (per its own authorization line) is explicitly allowed to run alongside it."
+    "by_proposed_owning_domain": {
+      "TRC": 1,
+      "PAT": 1,
+      "APT": 3,
+      "BRG": 1,
+      "OUT_OF_DOMAIN_TAXONOMY": 6,
+      "PAI": 1,
+      "PIG": 1,
+      "PBL": 1,
+      "PCM": 1,
+      "EVQ": 1
+    },
+    "note_on_blocked_by_f1": "0 by design — F1's remaining item (F1-003-P3, PR #268) is a CI/test-architecture PR in review, not a live blocker for any of this backlog's product-facing items; this parallel task set (per its own authorization line) is explicitly allowed to run alongside it.",
+    "note_on_by_proposed_owning_domain_r2": "Added in R2. Programmatically re-derived from all 17 items' proposed_owning_domain field after the merged-inventory recheck (§5 of the Markdown companion) — identical to what the field would have computed pre-recheck, since zero reassignments occurred. No item is owned by PRV, PAD, STG, or the new EXC domain."
   },
   "validation": {
     "distinguishes_repository_vs_clickup": true,
@@ -609,7 +633,25 @@
     "distinguishes_unverified_ownership": true,
     "clickup_tasks_invented": 0,
     "domain_taxonomy_source_at_task_start": "F2-PREP-001 (Domain Ownership Inventory) had not delivered at task start — this task used F0-003/F0-004's existing repository-evidence-verified 37-domain taxonomy instead of waiting",
-    "domain_taxonomy_source_current_r1": "F2-PREP-001 has since delivered as PR #276 (AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW, not merged), proposing a candidate 38-domain inventory — not treated as accepted; see domain_taxonomy_reference.reconciliation_r1"
+    "domain_taxonomy_source_current_r1": "As of R1: F2-PREP-001 had delivered as PR #276 (AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW, not merged), proposing a candidate 38-domain inventory — not treated as accepted at that time. Superseded by domain_taxonomy_source_current_r2.",
+    "domain_taxonomy_source_current_r2": "F2-PREP-001 (PR #276) is now MERGED into origin/main (merge commit 0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83), which this branch has itself merged (merge commit a15812f07f6588a7ed4beff210cee247a0c94848). The 38-domain inventory is now repository-merged evidence, read directly from the reconciled branch — see domain_taxonomy_reference.reconciliation_r2. Still not the final F2 charter — that is F2-PREP-005's job."
+  },
+  "merge_reconciliation_r2": {
+    "pre_merge_head": "5bbe7be550037ff872952cda08d90dff1ace8b8b",
+    "origin_main_sha": "0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83",
+    "merge_command": "git merge --no-ff origin/main",
+    "merge_commit": "a15812f07f6588a7ed4beff210cee247a0c94848",
+    "conflicts": [],
+    "per_file_conflict_resolution": "not applicable — clean merge, zero conflicts",
+    "files_brought_in_by_merge": [
+      "docs/program/evidence/F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md",
+      "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json"
+    ],
+    "post_merge_ancestor_check": "git merge-base --is-ancestor origin/main HEAD -> true",
+    "rebase_used": false,
+    "force_push_used": false,
+    "reset_used": false,
+    "blanket_ours_or_theirs_used": false
   },
   "status_r1": {
     "feature_intake_framework": "completed",
@@ -626,6 +668,31 @@
     "then_execute": "F2-PREP-005 — Consolidated Modularization Charter",
     "f2_prep_005_must": [
       "reconcile the reviewed domain inventory",
+      "reconcile the cross-domain dependency map",
+      "import or separately authorize the real ClickUp backlog reconciliation",
+      "resolve candidate domain ownership",
+      "select the pilot module",
+      "update authoritative tracker/phase/index documents",
+      "authorize the first modularization implementation task"
+    ]
+  },
+  "status_r2": {
+    "feature_intake_framework": "completed",
+    "repository_derived_backlog_classification": "completed",
+    "clickup_derived_backlog_import": "pending external import",
+    "merged_f2_prep_001_taxonomy_reconciliation": "completed",
+    "f2_consolidated_charter": "pending F2-PREP-005",
+    "pr_277_merged": false,
+    "deployed": false,
+    "production_verified": false
+  },
+  "exact_next_task_r2": {
+    "do_not_mention_as_pending": ["F2-PREP-001", "F2-PREP-001-R1"],
+    "reason": "F2-PREP-001 already delivered and merged as PR #276 (merge commit 0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83); it is not a dependency of the next task",
+    "await": ["F2-PREP-002-R1", "F2-PREP-004", "F1-003-B2 status"],
+    "then_execute": "F2-PREP-005 — Consolidated Modularization Charter",
+    "f2_prep_005_must": [
+      "reconcile the merged domain inventory (38 domains, including EXC and the Privacy/Platform-Administration/Storage deltas) into a final, accepted charter",
       "reconcile the cross-domain dependency map",
       "import or separately authorize the real ClickUp backlog reconciliation",
       "resolve candidate domain ownership",
