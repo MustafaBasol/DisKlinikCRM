@@ -31,25 +31,44 @@ Sibling task status: intentionally not evaluated
 Final reconciliation owner: ChatGPT / Mustafa
 ```
 
+## Revision note (PR #297 follow-up)
+
+The first version of this document (reviewed head `7836aed05ab2dbafb9cb12b2112f90910c04d057`) stated in §1
+that `Appointment.startTime`/`endTime` were "immutable planned-time fields," directly contradicting §4.1 and
+§5 of the same document, which correctly stated they are mutable on reschedule. This revision corrects that
+contradiction throughout, introduces an explicit two-mode framework (§5.1) distinguishing current-schedule
+snapshot analytics from historical lifecycle analytics, adds a direct code audit confirming reschedule old/new
+times are captured **nowhere** in the current codebase (§8.5), and revises the proposed event model's
+idempotency design away from a timestamp-collision-prone key toward a `sourceMutationId`-anchored one (§9.5).
+No other scope was expanded beyond what this correction required; the baseline remains frozen at
+`5dc5ad67c7e9feee11f6fece9a7d65e03033d2fb`.
+
 ---
 
 ## 1. Executive decision
 
-**NoraMedi can build a first, honest "operational status distribution" report today** — appointment counts by
-status, by weekday, by month, and by practitioner/clinic/organization are all directly derivable from
-`Appointment.status`/`startTime`/`clinicId` with no schema change (§6). Everything past that first slice
-requires either a **data-quality warning label** on an existing but biased field, or **new additive schema
-work**, before it can be shown to a clinic owner as a number they can trust.
+**NoraMedi can build a first, honest "current-schedule status distribution" report today** — appointment
+counts by *current* status, by *current* weekday, by *current* month, and by practitioner/clinic/organization
+are all directly derivable from `Appointment.status`/`startTime`/`clinicId` with no schema change (§6), **as
+long as every response is explicit that it reflects the current mutable state of the schedule, not a
+historically-immutable reconstruction** (§5.1). Everything past that first slice requires either a
+**data-quality warning label** on an existing but biased field, or **new additive schema work**, before it
+can be shown to a clinic owner as a number they can trust.
 
 Four structural findings drive every recommendation in this document:
 
-1. **`Appointment` has exactly one planned-time field pair (`startTime`/`endTime`) and one mutable
-   `status` string** (`schema.prisma:317-366`). There is no `completedAt`, no `cancelledAt`, no
-   `actualStartAt`, no `checkedInAt`, no `checkedOutAt`. `noShowMarkedAt` (`schema.prisma:335`) is the
-   **only** lifecycle timestamp that exists beyond `createdAt`/`updatedAt`. "Busy hour," "weekday
-   distribution," and "status distribution" are safe today because they key off `startTime`, an immutable
-   planned-time field. Anything that needs to know **when a status changed** is not safe off `Appointment`
-   alone.
+1. **`Appointment` has exactly one planned-time field pair (`startTime`/`endTime`) — both mutable in place on
+   every reschedule — and one mutable `status` string** (`schema.prisma:317-366`). There is no `completedAt`,
+   no `cancelledAt`, no `actualStartAt`, no `checkedInAt`, no `checkedOutAt`. `noShowMarkedAt`
+   (`schema.prisma:335`) is the **only** lifecycle timestamp that exists beyond `createdAt`/`updatedAt`.
+   "Busy hour," "weekday distribution," and "status distribution" are exact only as **current-schedule
+   snapshot analytics** (§5.1 Mode A) — they answer "what does the schedule look like right now," not "what
+   did it look like historically," because a reschedule overwrites `startTime`/`endTime` in place with no
+   prior value retained anywhere (confirmed by direct audit of the write path, §8.5), and a status change
+   overwrites `status` in place. Anything that needs to know **when a status changed, or what a slot's time
+   was before a reschedule,** is not safe off `Appointment` alone — that is historical lifecycle analytics
+   (§5.1 Mode B), which today only partially exists (status transitions, reconstructible from `AuditLog`) or
+   does not exist at all (reschedule old/new times — §8.5 confirms no source captures them).
 2. **A reliable status-transition trail already exists, but it lives in `AuditLog`, not on `Appointment`.**
    Every appointment status change writes both an `ActivityLog` row (`appointments.ts:590-594`) and an
    `AuditLog` row carrying `metadata: { previousStatus, newStatus }` (`appointments.ts:595-606`). This is
@@ -66,13 +85,17 @@ Four structural findings drive every recommendation in this document:
    no check-in, actual-service-start, or checkout timestamp anywhere in the schema. Per the task's explicit
    decision rule, this document does **not** claim these are measurable (§7 candidates C/D/E).
 
-The recommended path is additive and staged (§16): ship a **current-data slice** (status distribution, busy
-hours by `startTime`, weekday/month trend, booking lead time, cancellation lead time, no-show rate, average
-duration) behind an explicit `quality` object on every response (§13), then add a purpose-built
-**`AppointmentLifecycleEvent`** append-only table (§9) — deliberately *not* named `OperationalEvent`, because
-that model name is already taken by an unrelated system-health-monitoring table (§4.4) — to unlock
-request-response time, cancellation-event time, and (only after a product decision, §20) check-in/checkout
-timing.
+The recommended path is additive and staged (§16): ship a **current-schedule-snapshot slice** (status
+distribution, busy hours by `startTime`, weekday/month trend, booking lead time, cancellation lead time,
+no-show rate, average duration — every one of these defined explicitly as "current state of appointments
+whose current planned `startTime` falls in range," never presented as a historical reconstruction, §5.1)
+behind an explicit `quality` object carrying reason codes such as `CURRENT_STATE_ONLY` and
+`MUTABLE_PERIOD_COHORT` on every response (§13/§14), then add a purpose-built **`AppointmentLifecycleEvent`**
+append-only table (§9) — deliberately *not* named `OperationalEvent`, because that model name is already
+taken by an unrelated system-health-monitoring table (§4.4) — capturing appointment creation, reschedule
+(with old/new times), status transitions, and request response/conversion, to unlock true historical
+lifecycle analytics (original-slot cohorts, reschedule counts, request-response time) and, only after a
+product decision (§20), check-in/checkout timing.
 
 ---
 
@@ -161,8 +184,8 @@ append-only status-history model in the schema and is the direct template for §
 | `patientId` | String | No (FK) | — | Patient | indexed `[patientId]` |
 | `practitionerId` | String | No (FK) | — | User | indexed `[practitionerId, startTime]` |
 | `appointmentTypeId` | String | No (FK) | — | Clinic | drives `durationMinutes` |
-| `startTime` | DateTime | **Yes** (reschedule) | Planned start | — | UTC instant in DB; not clinic-local by itself |
-| `endTime` | DateTime | **Yes** (reschedule) | Planned end | — | `endTime - startTime` = planned duration |
+| `startTime` | DateTime | **Yes** (reschedule) | Planned start — **current** slot, not a historical record | — | UTC instant in DB; not clinic-local by itself; overwritten in place on reschedule, no prior value retained (§8.5) |
+| `endTime` | DateTime | **Yes** (reschedule) | Planned end — **current** slot, not a historical record | — | `endTime - startTime` = planned duration; same in-place-overwrite caveat as `startTime` |
 | `status` | String, default `"scheduled"` | **Yes**, overwritten in place | Current state only | — | comment enumerates `scheduled, confirmed, completed, cancelled, no_show, etc.` — **not** a DB enum, no CHECK constraint |
 | `cancellationReason` | String? | Yes | — | — | free text |
 | `noShowReason` | String? | Yes | — | — | free text |
@@ -179,6 +202,12 @@ append-only status-history model in the schema and is the direct template for §
 **No `completedAt` or `cancelledAt` field exists.** The only way to learn *when* an appointment became
 `completed` or `cancelled` is `Appointment.updatedAt` (unreliable — see §5) or the `AuditLog` row created at
 `appointments.ts:595-606` (reliable but not indexed for this access pattern — see §10).
+
+**Likewise, no `previousStartTime`/`previousEndTime` or reschedule-count field exists anywhere on this
+model.** `startTime`/`endTime` are overwritten unconditionally in the same `tx.appointment.update` call that
+applies every other field change (`appointments.ts:538-549`, `data: validation.data`) — the prior value is
+never retained on the row. §8.5 confirms this gap is not merely a schema gap but a **write-path gap**: the
+audit trail that *does* exist for status changes does **not** exist for time-only reschedules.
 
 ### 4.2 `AppointmentRequest` (`schema.prisma:368-405`)
 
@@ -210,7 +239,12 @@ Two overlapping but distinct logs exist:
   `[entityType, entityId]`, `[createdAt]` individually — **no composite index** covering
   `(organizationId/clinicId, entityType, createdAt)` together, which is exactly the access pattern a
   date-ranged "time from confirmed to completed, this month, all appointments" query needs (§10 flags this
-  as required before any lifecycle-metric endpoint reads `AuditLog` at scale).
+  as required before any lifecycle-metric endpoint reads `AuditLog` at scale). **This structured payload
+  exists only for the status-change branch.** The sibling branch that fires when `startTime`/`endTime` change
+  but `status` does not (a pure reschedule) writes a **different** `AuditLog` row —
+  `action: 'appointment_updated'`, `description: 'Appointment updated'`, **no `metadata` field at all**
+  (`appointments.ts:625-635`) — so no old/new time value is captured anywhere for a reschedule. §8.5 examines
+  this gap in full.
 
 Per `server/src/services/privacy/dataRetentionPolicy.ts:20-23`, **neither `AuditLog` nor `ActivityLog` is
 ever cleaned up** by the retention job — both are retained indefinitely (`AuditLog` explicitly because it is
@@ -301,32 +335,70 @@ Explicit separation of every timestamp concept named in the task brief:
 completion/cancellation/conversion event without this labeled-approximation caveat attached at the point of
 use (§6, §7).
 
+### 5.1 Two analytic modes: current-schedule snapshot vs. historical lifecycle
+
+Every metric in this document falls into exactly one of two analytic modes, and every API response (§14)
+must declare which one it is answering. The two are never interchangeable and no API consumer should be able
+to mistake one for the other (§17 test 11) — this distinction is the single correction this revision makes
+throughout the document.
+
+**Mode A — Current-schedule snapshot analytics.** Reads `Appointment.startTime`/`endTime`/`status` (and
+`AppointmentRequest.status`) **as they exist in the database right now**. Exact for "what does the schedule
+look like today," including for appointments whose slot or status has since changed. **Not** an immutable
+historical reconstruction: a query for "appointments in March" run today returns whichever appointments
+**currently** have `startTime` in March — not necessarily the same set of appointments that were scheduled
+for March at any point during March itself, because a reschedule moves an appointment's row into a different
+period's bucket with no trace of where it used to be (§8.5). This is the mode every metric in §6 marked **M**
+or **P** operates in today, unless explicitly noted otherwise, and it is what Slice A (§16) ships.
+
+**Mode B — Historical lifecycle analytics.** Answers "what was true at time T" or "what happened to this
+appointment over its lifetime" — original booked slot, number of times rescheduled, slot displacement (how
+far a reschedule moved the appointment), status as-of a historical date, true historical outcome cohorts.
+Requires an append-only record of every create/reschedule/status event (§9). **Only partially available
+today:** status transitions are reconstructible from `AuditLog` (§4.3, with the completeness caveat in §8.1);
+reschedule old/new times are **not reconstructible at all** from any existing data source (§8.5) — a strictly
+larger gap than the status-history gap, and the primary justification for the `appointment_rescheduled`
+event type in §9.3.
+
+**No metric in §6 is Mode B today.** §9's `AppointmentLifecycleEvent` is what turns applicable Mode-A metrics
+into Mode-B-capable ones **going forward** — never retroactively for appointments rescheduled before that
+capture ships (§8.5, §9.6 backfill limitation). Every quality-reason-code registry entry defined in §14
+maps onto this split: `CURRENT_STATE_ONLY`/`MUTABLE_PERIOD_COHORT` mark Mode A output;
+`STATUS_HISTORY_PARTIAL`/`RESCHEDULE_HISTORY_UNAVAILABLE`/`HISTORICAL_BACKFILL_INCOMPLETE` mark the specific
+ways Mode B is presently incomplete.
+
 ---
 
 ## 6. Metric measurability matrix
 
-Legend: **M** = measurable now (exact), **P** = partially measurable (approximation with a named bias),
-**N** = not measurable (no source field exists).
+Legend: **M** = measurable now (exact for the mode stated), **P** = partially measurable (approximation with
+a named bias), **N** = not measurable (no source field exists). Every row also carries a **Mode** column
+(§5.1): **A** = current-schedule snapshot, **B** = historical lifecycle. No row is Mode B today — the column
+states what mode the *current* implementation actually delivers, not what the metric name might imply.
 
-| # | Metric | Business definition | Numerator/denominator | Required timestamps/statuses | Current source | Status | Bias / ambiguity | Remediation |
-|---|---|---|---|---|---|---|---|---|
-| 1 | Appointment count by status | Count of appointments per current `status` value, in a date range | `COUNT(*) GROUP BY status` | `Appointment.status`, `startTime` | `Appointment` table | **M** | Reflects *current* status only — a rescheduled-then-cancelled appointment shows as `cancelled` even for the original slot's busy-hour bucket (survivorship, §8) | None needed for a *current-status* view; label explicitly as "current status," not "outcome at the time" |
-| 2 | Completed/cancelled/no-show distribution | Share of `completed` vs `cancelled` vs `no_show` vs other, in a period | Same as #1, filtered | Same as #1 | `Appointment` table; existing precedent in `reports.ts:445-555` (`/reports/no-show-analysis`) | **M** | Same survivorship caveat as #1 | Same |
-| 3 | Busy hour by appointment start time | Count of appointments per clinic-local hour-of-day, keyed by `startTime` | `COUNT(*) GROUP BY hour(startTime, clinic tz)` | `startTime`, `Clinic.timezone` | `Appointment.startTime` + `Clinic.timezone` | **P** | Existing precedent (`reports.ts:528-541`, `no-show-analysis`'s `byHour`) uses raw SQL `EXTRACT(HOUR FROM "startTime")`, which extracts in the **database session's timezone (effectively UTC in this deployment)**, not clinic-local time — a clinic in `Europe/Istanbul` (UTC+3) would see its 9am appointments bucketed as hour 6. This is a **real, present bug/gap** in the only existing hour-bucketing code, not a hypothetical. | New endpoint must compute the clinic-local hour using the app-layer `getZonedDateParts`/clinic-timezone pattern already used in `appointmentAvailabilityService.ts` (via `helpers.ts`), not raw SQL `EXTRACT` |
-| 4 | Busy hour by request/creation time | Count of `AppointmentRequest` (or `Appointment`) created per clinic-local hour | `COUNT(*) GROUP BY hour(createdAt, clinic tz)` | `createdAt`, `Clinic.timezone` | `AppointmentRequest.createdAt` / `Appointment.createdAt` | **M** | `createdAt` is immutable and reliable; same timezone-bucketing requirement as #3 (must not reuse the UTC-`EXTRACT` pattern) | Reuse the clinic-local bucketing helper |
-| 5 | Weekday distribution | Count of appointments per clinic-local weekday | `COUNT(*) GROUP BY weekday(startTime, clinic tz)` | `startTime`, `Clinic.timezone` | `Appointment.startTime` | **P** | Existing precedent (`reports.ts:512-525`, `byDayOfWeek`) uses `EXTRACT(DOW FROM "startTime")` — same UTC-vs-clinic-local bug as #3. Also: Postgres `DOW` is `0=Sunday`, matching the schema's `DoctorAvailability.weekday` convention (`schema.prisma:192`) but must be documented explicitly per the task's locale-independence requirement (§11) | Same as #3; also must respect `firstDayOfWeek` clinic preference (`clinicOperatingPreferences.ts:35`) for **display** only, never for the underlying bucket key |
-| 6 | Monthly trend | Count of appointments per clinic-local month | `COUNT(*) GROUP BY month(startTime, clinic tz)` | `startTime`, `Clinic.timezone` | `Appointment.startTime`; existing precedent `reports.ts:464-478` (`monthlyTrend`, `DATE_TRUNC('month', "startTime")`) | **P** | `DATE_TRUNC` also runs in DB-session timezone — same bias as #3/#5, smaller magnitude (month boundaries shift by at most a few hours near month start/end for a clinic near UTC, but the shift is systematic and non-zero for any non-UTC clinic) | Compute month boundary from clinic-local date parts, not raw `DATE_TRUNC` on the UTC instant |
-| 7 | Seasonal comparison | Same-period-prior-year comparison of any of the above | Two monthly/weekly series, offset by 12 months | Same as #6, run twice | Derivable once #6 is correctly clinic-local | **P** (inherits #6's bias until fixed) | Requires enough historical data — `Appointment` rows are retained indefinitely (no cleanup job touches them, §4.3), so historical depth is **not** the limiting factor; correctness of the bucketing is | Fix #6 first; no schema change needed |
-| 8 | Practitioner utilization | Booked minutes / bookable minutes, per practitioner, per period | `SUM(endTime-startTime) FILTER (status not cancelled)` / (bookable minutes from `DoctorAvailability` − `DoctorOffDay`) | `startTime`, `endTime`, `status`, `DoctorAvailability`, `DoctorOffDay` | `Appointment` + `DoctorAvailability` (`schema.prisma:186-200`) + `DoctorOffDay` (`schema.prisma:202-215`) | **P** | Numerator is exact; denominator ("bookable minutes") requires summing weekly recurring availability windows minus off-days minus clinic-wide `ClinicWorkingHours` intersection — non-trivial but fully derivable from existing models. No schema gap, only a computation-complexity gap. | Build as a dedicated aggregation query (§10), not a naive per-row scan |
-| 9 | Room/chair utilization | Same as #8, per physical resource | — | Room/chair model | **Does not exist** (§4.7) | **N** | No source field at any level | Requires a new `Room`/`Chair` model and an `Appointment.roomId`/`chairId` FK — explicitly out of scope for this review; flagged as a product decision (§20) |
-| 10 | Appointment lead time | `startTime - createdAt`, per booked appointment | Distribution/average of the interval | `startTime`, `createdAt` | `Appointment` (both fields reliable, `schema.prisma:328,343`) | **M** | If `startTime` is later rescheduled, the *lead time relative to the original slot* is lost — only lead time relative to the **current** `startTime` is computable. Must be labeled "lead time to current scheduled time," not "original lead time," unless the appointment was never rescheduled (unknowable without `AuditLog` inspection) | Label explicitly; do not silently assume no reschedule occurred |
-| 11 | Patient waiting-room time | `serviceStartAt - checkedInAt` | — | Check-in + service-start timestamps | **Does not exist** (§4.1, §4.2) | **N** | No check-in concept anywhere in the schema | New fields/model required (§7 candidate C, §9); explicit product decision needed before building (§20) |
-| 12 | Appointment request response time | First staff action time − `AppointmentRequest.createdAt` | — | Request creation + first-response event timestamp | **Does not exist** as a dedicated field; only `updatedAt`, which fires on *any* edit, not specifically "first response" | **N** (exact) / **P** (rough proxy) | `updatedAt` conflates "first staff touch" with "any subsequent edit" — cannot distinguish a request touched once vs. edited five times before response | Requires `AppointmentLifecycleEvent`-style capture at the moment `status` first leaves `pending` (§9) |
-| 13 | Request-to-booking conversion rate | `COUNT(status='converted') / COUNT(*)`, per period, per source | `AppointmentRequest.status`, `createdAt`, `source` | `AppointmentRequest.status='converted'`, `createdAt`, `source` — all exist (`schema.prisma:368-405`) | **M** | Simple ratio, reliable; `source` already indexed (`@@index([source, status, createdAt])`, `schema.prisma:403`) | None — safe to ship in the current-data slice |
-| 14 | Cancellation lead time | Cancellation event time − `startTime` (how far in advance the cancellation happened relative to the slot) | Time delta | Cancellation event time (§5), `startTime` | `AuditLog` (`metadata.newStatus='cancelled'`) as approximation; `startTime` reliable | **P** | The cancellation-event time itself is a labeled approximation via `AuditLog` (§5); once that's accepted, the lead-time computation itself is exact arithmetic | Document the `AuditLog`-sourced approximation explicitly in the API's `quality` object (§13) |
-| 15 | No-show rate | `COUNT(status='no_show') / COUNT(status != 'cancelled')`, per period | `Appointment.status`, `startTime` | `Appointment.status`, `startTime` | `Appointment`; existing precedent `reports.ts:445-555` and `organizationDashboard.ts:161-163,202-203` | **M** | Existing implementation is already correct and already shipped (two independent working examples) | None — reuse the existing definition verbatim for consistency across surfaces |
-| 16 | Average appointment duration | `AVG(endTime - startTime)`, filtered by status/period | `startTime`, `endTime` | `Appointment.startTime`/`endTime` | `Appointment` | **M** | Planned duration, not actual (no check-in/checkout exists to measure actual duration) — must be labeled "scheduled duration" | Label explicitly as scheduled, not actual |
-| 17 | Schedule capacity utilization | Booked slot-minutes / total bookable slot-minutes, clinic-wide | Same numerator/denominator concept as #8, aggregated per clinic instead of per practitioner | `Appointment`, `ClinicWorkingHours` (`schema.prisma`, referenced by `dashboard.ts` imports), `DoctorAvailability`, `DoctorOffDay` | Same models as #8 | **P** | Same complexity caveat as #8 — no schema gap, only aggregation-design work | Same as #8 |
+| # | Metric | Business definition | Numerator/denominator | Required timestamps/statuses | Current source | Status | Mode / classification | Bias / ambiguity | Remediation |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | Appointment count by status | **"Current status of appointments whose current planned `startTime` falls within the selected range."** Explicitly **not**: status as-of the historical period; original-slot cohort outcome; immutable historical funnel evidence. | `COUNT(*) GROUP BY status` (current `status`, current `startTime` in range) | `Appointment.status`, `startTime` | `Appointment` table | **M** (for the Mode-A definition above only) | **A — `CURRENT_STATE_ONLY` + `MUTABLE_PERIOD_COHORT`** | Reflects *current* status of the *current* cohort only — a rescheduled-then-cancelled appointment shows as `cancelled` under its **new** slot's bucket, not the original one; an appointment rescheduled **out of** the selected range disappears from it entirely even if it was `confirmed` there at some point (survivorship + cohort mutation, §8.1/§8.5) | None needed for the Mode-A definition as stated; never relabel this as "historical status distribution" |
+| 2 | Completed/cancelled/no-show distribution | Same current-state, current-cohort definition as #1, filtered to `completed`/`cancelled`/`no_show`/other | Same as #1, filtered | Same as #1 | `Appointment` table; existing precedent in `reports.ts:445-555` (`/reports/no-show-analysis`) | **M** (Mode-A definition only) | **A — `CURRENT_STATE_ONLY` + `MUTABLE_PERIOD_COHORT`** | Same caveat as #1 | Same |
+| 3 | Busy hour by appointment start time | Count of appointments **currently** scheduled in each clinic-local hour-of-day, among appointments whose current `startTime` falls in range | `COUNT(*) GROUP BY hour(startTime, clinic tz)` | `startTime`, `Clinic.timezone` | `Appointment.startTime` + `Clinic.timezone` | **P** | **A — `MUTABLE_PERIOD_COHORT`**, plus a live timezone bug (next column) | Existing precedent (`reports.ts:528-541`, `no-show-analysis`'s `byHour`) uses raw SQL `EXTRACT(HOUR FROM "startTime")`, which extracts in the **database session's timezone (effectively UTC in this deployment)**, not clinic-local time — a real, present bug, not hypothetical. Independently of that bug, this is also a Mode-A metric: an appointment rescheduled from 9am to 2pm shows up in the 2pm bucket for **any** date range queried, including one covering the original 9am booking date if it still falls in range | New endpoint must compute the clinic-local hour using the app-layer `getZonedDateParts`/clinic-timezone pattern already used in `appointmentAvailabilityService.ts` (via `helpers.ts`), not raw SQL `EXTRACT`; `quality.reasonCodes` must always include `MUTABLE_PERIOD_COHORT` for this endpoint |
+| 4 | Busy hour by request/creation time | Count of `AppointmentRequest` (or `Appointment`) created per clinic-local hour | `COUNT(*) GROUP BY hour(createdAt, clinic tz)` | `createdAt`, `Clinic.timezone` | `AppointmentRequest.createdAt` / `Appointment.createdAt` | **M** | **A, but immutable-source** — `createdAt` never changes, so re-running this query next year for this year's data yields the same answer; the closest metric in this matrix to a true historical fact without any new event capture | `createdAt` is immutable and reliable; same timezone-bucketing requirement as #3 (must not reuse the UTC-`EXTRACT` pattern) | Reuse the clinic-local bucketing helper; no `MUTABLE_PERIOD_COHORT` code needed for this variant |
+| 5 | Weekday distribution | Count of appointments **currently** scheduled on each clinic-local weekday, among appointments whose current `startTime` falls in range | `COUNT(*) GROUP BY weekday(startTime, clinic tz)` | `startTime`, `Clinic.timezone` | `Appointment.startTime` | **P** | **A — `MUTABLE_PERIOD_COHORT`**, plus the same live timezone bug as #3 | Existing precedent (`reports.ts:512-525`, `byDayOfWeek`) uses `EXTRACT(DOW FROM "startTime")` — same UTC-vs-clinic-local bug as #3, plus the same reschedule-moves-the-cohort bias. Postgres `DOW` is `0=Sunday`, matching `DoctorAvailability.weekday` (`schema.prisma:192`) but must be documented per §11's locale-independence requirement | Same as #3; also must respect `firstDayOfWeek` clinic preference (`clinicOperatingPreferences.ts:35`) for **display** only, never for the underlying bucket key |
+| 6 | Monthly trend | Count of appointments **currently** scheduled in each clinic-local month, among appointments whose current `startTime` falls in range | `COUNT(*) GROUP BY month(startTime, clinic tz)` | `startTime`, `Clinic.timezone` | `Appointment.startTime`; existing precedent `reports.ts:464-478` (`monthlyTrend`, `DATE_TRUNC('month', "startTime")`) | **P** | **A — `MUTABLE_PERIOD_COHORT`**, plus the same live timezone bug as #3 | `DATE_TRUNC` also runs in DB-session timezone — same bias as #3/#5; independently, an appointment rescheduled across a month boundary silently moves between two months' trend figures with no trace left behind | Compute month boundary from clinic-local date parts, not raw `DATE_TRUNC` on the UTC instant; a re-run of last month's trend next quarter can legitimately differ from what was shown last month — this must not be treated as a bug |
+| 7 | Seasonal comparison | Same-period-prior-year comparison of any of the above | Two monthly/weekly series, offset by 12 months | Same as #6, run twice | Derivable once #6 is correctly clinic-local | **P** (inherits #6's bias until fixed) | **A — `MUTABLE_PERIOD_COHORT`** on both series | Requires enough historical data — `Appointment` rows are retained indefinitely (no cleanup job touches them, §4.3), so historical depth is **not** the limiting factor; correctness of the bucketing and the cohort-mutability caveat are. A same-period comparison run today vs. run again in six months can legitimately disagree for the **older** period too, since old appointments can still be rescheduled | Fix #6 first; no schema change needed; UI must not present this as immutable historical fact (§15) |
+| 8 | Practitioner utilization | Booked minutes / bookable minutes, per practitioner, for appointments whose current `startTime` falls in period | `SUM(endTime-startTime) FILTER (status not cancelled)` / (bookable minutes from `DoctorAvailability` − `DoctorOffDay`) | `startTime`, `endTime`, `status`, `DoctorAvailability`, `DoctorOffDay` | `Appointment` + `DoctorAvailability` (`schema.prisma:186-200`) + `DoctorOffDay` (`schema.prisma:202-215`) | **P** | **A — `CURRENT_STATE_ONLY` + `MUTABLE_PERIOD_COHORT`** | Numerator is exact for the current cohort; a historical-period utilization pull reflects **today's** schedule state for that period, not what was actually booked/occurring at the time. Denominator ("bookable minutes") also requires summing weekly recurring availability windows minus off-days minus clinic-wide `ClinicWorkingHours` intersection — non-trivial but fully derivable, no schema gap | Build as a dedicated aggregation query (§10), not a naive per-row scan; label as current-schedule utilization, not historical occupancy |
+| 9 | Room/chair utilization | Same as #8, per physical resource | — | Room/chair model | **Does not exist** (§4.7) | **N** | N/A | No source field at any level | Requires a new `Room`/`Chair` model and an `Appointment.roomId`/`chairId` FK — explicitly out of scope for this review; flagged as a product decision (§20) |
+| 10 | Appointment lead time | `startTime - createdAt`, per booked appointment, using **current** `startTime` | Distribution/average of the interval | `startTime`, `createdAt` | `Appointment` (both fields reliable, `schema.prisma:328,343`) | **M** (to current slot only) | **A — `MUTABLE_PERIOD_COHORT`** | If `startTime` is later rescheduled, the *lead time relative to the original slot* is lost — only lead time relative to the **current** `startTime` is computable, and §8.5 confirms no source retains the original value to recover it. Must be labeled "lead time to current scheduled time," not "original lead time" | Label explicitly; do not silently assume no reschedule occurred; `quality.reasonCodes` includes `MUTABLE_PERIOD_COHORT` and, once known-rescheduled appointments can be flagged (§9), `RESCHEDULE_HISTORY_UNAVAILABLE` for any appointment whose reschedule predates event capture |
+| 11 | Patient waiting-room time | `serviceStartAt - checkedInAt` | — | Check-in + service-start timestamps | **Does not exist** (§4.1, §4.2) | **N** | N/A (Mode B only, and not even partially captured) | No check-in concept anywhere in the schema | New fields/model required (§7 candidate C, §9); explicit product decision needed before building (§20) |
+| 12 | Appointment request response time | First staff action time − `AppointmentRequest.createdAt` | — | Request creation + first-response event timestamp | **Does not exist** as a dedicated field; only `updatedAt`, which fires on *any* edit, not specifically "first response" | **N** (exact) / **P** (rough proxy) | **B, partial** — not schedule-keyed (no `startTime` dependency), but still a lifecycle-timing question `updatedAt` cannot answer precisely | `updatedAt` conflates "first staff touch" with "any subsequent edit" — cannot distinguish a request touched once vs. edited five times before response | Requires `AppointmentLifecycleEvent`-style capture (`request_first_response`) at the moment `status` first leaves `pending` (§9) |
+| 13 | Request-to-booking conversion rate | `COUNT(status='converted') / COUNT(*)`, per period, per source | `AppointmentRequest.status`, `createdAt`, `source` | `AppointmentRequest.status='converted'`, `createdAt`, `source` — all exist (`schema.prisma:368-405`) | **M** | **A, but stable** — not schedule-keyed and `status` for a `converted` request is one-way (§4.2), so this cohort does not un-convert; the closest thing to a genuinely stable current-state metric in this matrix | Simple ratio, reliable; `source` already indexed (`@@index([source, status, createdAt])`, `schema.prisma:403`) | None — safe to ship in the current-data slice |
+| 14 | Cancellation lead time | Cancellation event time − `startTime` (how far in advance the cancellation happened relative to the slot), using **current** `startTime` | Time delta | Cancellation event time (§5), `startTime` | `AuditLog` (`metadata.newStatus='cancelled'`) as approximation; `startTime` reliable | **P** | **A/B mixed — `STATUS_HISTORY_PARTIAL`** | The cancellation-event time itself is a labeled approximation via `AuditLog` (§5); the `startTime` component is current-state, but a cancelled appointment is not normally rescheduled again afterward, so in practice current `startTime` usually equals the slot's time at cancellation — this is weaker than a proof and must stay labeled, not asserted | Document the `AuditLog`-sourced approximation explicitly via `STATUS_HISTORY_PARTIAL` in the API's `quality` object (§14) |
+| 15 | No-show rate | `COUNT(status='no_show') / COUNT(status != 'cancelled')`, per period, current cohort | `Appointment.status`, `startTime` | `Appointment.status`, `startTime` | `Appointment`; existing precedent `reports.ts:445-555` and `organizationDashboard.ts:161-163,202-203` | **M** (Mode-A definition) | **A — `CURRENT_STATE_ONLY` + `MUTABLE_PERIOD_COHORT`** | Existing implementation is already correct **for a current-state view** (two independent working examples) — the same cohort-mutability caveat as #1/#2 still applies to a historical pull | None — reuse the existing definition verbatim for consistency across surfaces; add the same reason codes as #1/#2 |
+| 16 | Average appointment duration | `AVG(endTime - startTime)`, filtered by status/period, current cohort | `startTime`, `endTime` | `Appointment.startTime`/`endTime` | `Appointment` | **M** (scheduled duration, current cohort) | **A — `MUTABLE_PERIOD_COHORT`** | Planned duration, not actual (no check-in/checkout exists to measure actual duration) — must be labeled "scheduled duration"; also subject to the same current-cohort caveat as #3/#5/#6, though duration itself changes less often than absolute time on a typical reschedule | Label explicitly as scheduled, not actual |
+| 17 | Schedule capacity utilization | Booked slot-minutes / total bookable slot-minutes, clinic-wide, current cohort | Same numerator/denominator concept as #8, aggregated per clinic instead of per practitioner | `Appointment`, `ClinicWorkingHours` (`schema.prisma`, referenced by `dashboard.ts` imports), `DoctorAvailability`, `DoctorOffDay` | Same models as #8 | **P** | **A — `CURRENT_STATE_ONLY` + `MUTABLE_PERIOD_COHORT`** | Same complexity caveat as #8 — no schema gap, only aggregation-design work; same current-cohort caveat for any historical-period query | Same as #8 |
+
+The full reason-code registry (`CURRENT_STATE_ONLY`, `MUTABLE_PERIOD_COHORT`, `RESCHEDULE_HISTORY_UNAVAILABLE`,
+`STATUS_HISTORY_PARTIAL`, `HISTORICAL_BACKFILL_INCOMPLETE`) is defined once, with full semantics, at the top
+of §14 and referenced by short name throughout this matrix rather than redefined per row.
 
 ---
 
@@ -336,7 +408,7 @@ Legend: **M** = measurable now (exact), **P** = partially measurable (approximat
 
 | Candidate | Definition | Required fields | Exist? | Verdict |
 |---|---|---|---|---|
-| **A. Booking lead time** | `appointment.startTime − appointment.createdAt` | `Appointment.startTime`, `Appointment.createdAt` | Both exist, both reliable (`schema.prisma:328,343`) | **Measurable now** — with the reschedule caveat from matrix row #10 |
+| **A. Booking lead time** | `appointment.startTime − appointment.createdAt` | `Appointment.startTime`, `Appointment.createdAt` | Both exist, both reliable (`schema.prisma:328,343`) | **Measurable now, Mode A (§5.1) only** — lead time to the **current** scheduled slot; if the appointment was rescheduled, the lead time to the *original* slot is permanently unrecoverable (§8.5), not merely "not yet captured" — see matrix row #10 |
 | **B. Request response time** | first staff response/conversion time − `appointmentRequest.createdAt` | `AppointmentRequest.createdAt` (exists) + a first-response event timestamp (does not exist as a dedicated field) | Partial | **Partially measurable** — only as a rough proxy via `updatedAt` at first status change away from `pending`, with the caveat that `updatedAt` cannot distinguish "first touch" from "Nth edit" (§5, §6 row 12). **Not safe to present as an exact number.** |
 | **C. Patient waiting-room time** | `serviceStartAt − checkedInAt` | Both fields | **Neither exists anywhere in the schema** | **Not measurable.** Per the task's explicit decision rule, this document does not claim it exists. No check-in concept, no service-start concept, in any model inspected (`Appointment`, `AppointmentRequest`, or any other model in `schema.prisma`). |
 | **D. Practitioner delay** | `actualStartAt − scheduled startTime` | `actualStartAt` | **Does not exist** | **Not measurable.** No field captures when a practitioner actually began seeing a patient, only the planned `startTime`. |
@@ -354,14 +426,23 @@ explicitly warns against.
 
 ## 8. Data-quality and historical-bias analysis
 
-### 8.1 Survivorship / historical-rewrite bias
+### 8.1 Survivorship / historical-rewrite bias (status **and** schedule)
 
-`Appointment.status` is a single mutable field with no append-only trail on the `Appointment` row itself
-(§4.1). A query like "how many appointments were `confirmed` on 2026-06-01" cannot be answered from
-`Appointment` directly — only "how many appointments **currently** show `startTime` in June and **some**
-status" can. If an appointment was `confirmed` in June and later `cancelled` in July, a June-dated
-"confirmed" count computed today will **not** include it, because its current status has moved on. This is
-the textbook survivorship bias the task brief asks to be named explicitly.
+Two independent fields on `Appointment` are mutated in place with no append-only trail on the row itself
+(§4.1): `status`, and the `startTime`/`endTime` pair. Each produces its own flavor of the same underlying
+problem — Mode A (current-schedule snapshot, §5.1) can only ever answer "what is true right now," never
+"what was true at time T" — but the two are not the same gap and must not be conflated:
+
+- **Status-rewrite bias:** a query like "how many appointments were `confirmed` on 2026-06-01" cannot be
+  answered from `Appointment` directly — only "how many appointments **currently** show `startTime` in June
+  and **some** status" can. If an appointment was `confirmed` in June and later `cancelled` in July, a
+  June-dated "confirmed" count computed today will **not** include it, because its current status has moved
+  on. This is the textbook survivorship bias the task brief asks to be named explicitly.
+- **Schedule-rewrite bias:** a query like "how many appointments were originally booked for June" is a
+  **different, currently unanswerable** question — not because of a status change, but because a reschedule
+  moves the appointment's `startTime`/`endTime` into a different bucket **with no trace of the original
+  values left anywhere** (§8.5). This is a strictly larger gap than the status one: status has a partial
+  mitigation (below); schedule time does not, today, have any mitigation at all.
 
 **Mitigation available today, with a caveat:** the `AuditLog` metadata trail (§4.3) *can* reconstruct "what
 was true at time T" by replaying `previousStatus`/`newStatus` transitions in `createdAt` order — but this
@@ -399,8 +480,46 @@ that only new capture can remove (rows 10, 12, 14). Per the task's instruction n
 table if existing audit/history models already provide reliable evidence: `AuditLog` **does** provide
 reliable evidence for status transitions specifically (row-level `previousStatus`/`newStatus` already
 captured, §4.3) — so §9 scopes the new model narrowly to what `AuditLog` does *not* provide (request-response
-timing, and, only pending a product decision, check-in/checkout timing) rather than duplicating what already
-works.
+timing, reschedule old/new times, and, only pending a product decision, check-in/checkout timing) rather than
+duplicating what already works.
+
+### 8.5 Audited finding: reschedule history is not captured anywhere today
+
+This section directly answers the follow-up task's explicit instruction to audit whether the repository
+writes old/new start/end values into `AuditLog` (or any other source) during a reschedule.
+
+`appointments.ts`'s single `PUT /api/appointments/:id` handler branches on whether `status` changed
+(`appointments.ts:589`):
+
+- **If `status` changed** (`appointments.ts:589-620`): writes an `AuditLog` row with
+  `metadata: { previousStatus: existing.status, newStatus: validation.data.status }` (`appointments.ts:604`).
+  No time fields are present in this metadata either, but the status-history use case doesn't need them.
+- **If `status` did not change — i.e. a pure reschedule, a notes edit, or any other non-status field change**
+  (`appointments.ts:620-636`, the `else` branch): writes a **different** `AuditLog` row —
+  `action: 'appointment_updated'`, `description: 'Appointment updated'` — with **no `metadata` field at all**
+  (`appointments.ts:625-635`, the `writeAuditLog` call has no `metadata:` key, unlike the status-change
+  branch three lines above it). The paired `logActivity` call in the same branch
+  (`appointments.ts:621-624`) is equally generic: `description: 'Randevu bilgileri güncellendi'`
+  ("Appointment info updated"), with no `metadataJson` populated either.
+
+**Conclusion, stated plainly per the task's decision rule:** the current repository does **not** write old or
+new `startTime`/`endTime` values into `AuditLog`, `ActivityLog`, or any other model on reschedule. There is
+no field, no log row, no derivable signal anywhere in the frozen baseline that proves what an appointment's
+`startTime`/`endTime` was before its most recent reschedule. This is not a completeness gap in an otherwise
+partial trail (as with status history, §8.1) — it is a **total absence of capture**. Consequently:
+
+- **No backfill migration can recover pre-existing reschedule history**, for any appointment rescheduled
+  before `AppointmentLifecycleEvent`'s `appointment_rescheduled` write path (§9) ships. Per §9.6's backfill
+  rule, this must be marked `RESCHEDULE_HISTORY_UNAVAILABLE`, not silently omitted or fabricated.
+- **Even reschedule *count*** (how many times an appointment was moved) is unrecoverable historically — only
+  forward-countable once event capture exists.
+- A **low-cost interim mitigation** worth flagging for product/engineering (not implemented by this
+  document): the existing `else`-branch `writeAuditLog` call already has direct access to `existing.startTime`/
+  `existing.endTime` (pre-update) and `validation.data.startTime`/`endTime` (post-update) in the same request
+  handler — populating its `metadata` field with those four values, even before the full
+  `AppointmentLifecycleEvent` model ships, would start closing this gap **going forward** at near-zero cost.
+  This document does not implement that change (out of scope — no route file may be modified here) but
+  records it as the cheapest available partial remediation for whoever picks up Slice B (§16).
 
 ---
 
@@ -425,12 +544,14 @@ model AppointmentLifecycleEvent {
   patientId             String?
   practitionerId        String?
   eventType             String    // see §9.3 — closed vocabulary enforced at the application layer
-  occurredAt            DateTime  // business event time (clinic-local semantics resolved at read time via Clinic.timezone)
+  occurredAt            DateTime  // business event time, captured once per logical mutation — see §9.5
   recordedAt            DateTime  @default(now()) // write-time, for detecting late-arriving/backfilled events
   actorUserId           String?   // null for system-originated events (e.g. an automated no-show sweep, if ever built)
   source                String    // "staff_ui" | "whatsapp" | "public_booking" | "system" | ...
-  metadataJson          Json?     // event-specific payload; never patient free-text beyond what's already in Appointment/AppointmentRequest
-  idempotencyKey        String    @unique // e.g. "<appointmentId>:<eventType>:<occurredAt-bucket>" — see §9.5
+  sourceMutationId      String    // stable per-logical-mutation identifier, generated once and reused across retries — see §9.5
+  correlationId         String?   // optional cross-system trace id (e.g. a webhook delivery id) — never used for idempotency itself
+  metadataJson          Json?     // event-specific payload; closed allowlist per eventType — see §9.3; never free-text patient content
+  idempotencyKey        String    @unique // "<sourceMutationId>:<eventType>" — see §9.5
 
   @@index([organizationId, clinicId, occurredAt])
   @@index([appointmentId, occurredAt])
@@ -457,14 +578,29 @@ a `zod` enum in the application layer, following the existing pattern at `schema
 `AppointmentRequest.status`):
 
 - `appointment_created`, `appointment_confirmed`, `appointment_completed`, `appointment_cancelled`,
-  `appointment_no_show`, `appointment_rescheduled` (captures **both** old and new `startTime`/`endTime` in
-  `metadataJson`, closing the reschedule-loses-original-lead-time gap noted in §6 row 10)
+  `appointment_no_show_marked`, `appointment_rescheduled`
 - `request_created`, `request_first_response` (staff first touched a `pending` request — closes §6 row 12 /
   §7 candidate B), `request_approved`, `request_rejected`, `request_converted`
 - Reserved, **not implemented** until a product decision (§20): `patient_checked_in`, `service_started`,
   `patient_checked_out` — these three event types close §7 candidates C/D/E, but per the task's explicit
   instruction, this document does not claim they are measurable until check-in/checkout UI and workflow are
   product-approved and built.
+
+**`appointment_rescheduled` metadata is a closed allowlist**, not a free-form payload — `metadataJson` for
+this event type may contain **only**:
+
+| Key | Type | Notes |
+|---|---|---|
+| `previousStartTime` | ISO 8601 string | `existing.startTime` before this mutation |
+| `previousEndTime` | ISO 8601 string | `existing.endTime` before this mutation |
+| `newStartTime` | ISO 8601 string | equals this event's `occurredAt`-adjacent new planned start, and equals the appointment's `startTime` immediately after the write |
+| `newEndTime` | ISO 8601 string | same relationship for the new planned end |
+| `reasonCode` | closed enum string | e.g. `patient_requested`, `practitioner_requested`, `clinic_requested`, `conflict_resolution` — never free text |
+| `source` | closed enum string | mirrors the event-level `source` column; kept here too since a reschedule can be staff-initiated while the *request* that triggered it came from a different channel |
+
+**No free-text patient names, notes, phone numbers, or clinical content may appear in `metadataJson` for any
+event type** — this is a hard rule, not a per-event-type judgment call, enforced the same way §9.6/§13.2
+already require for the model as a whole.
 
 ### 9.4 Indexes
 
@@ -474,13 +610,50 @@ detail-view use case); `[eventType, organizationId, occurredAt]` for cross-clini
 "all `request_first_response` events this quarter, org-wide"). This directly closes the composite-index gap
 identified in `AuditLog` (§4.3) rather than repeating it.
 
-### 9.5 Idempotency key
+### 9.5 Idempotency design
 
-Format: `"<sourceEntityId>:<eventType>:<occurredAt ISO-8601 to the second>"`, unique-constrained. This follows
-the existing `OperationalEvent.dedupeKey` precedent (`schema.prisma:1614-1618`, "Left null by every feature
-that doesn't need dedupe... a create is performed as an upsert on this unique key so duplicate-alert
-suppression is atomic") — the same upsert-on-conflict pattern prevents double-counting if a write path
-retries (e.g. a webhook redelivery for `request_created`).
+The original draft of this proposal keyed idempotency off `"<sourceEntityId>:<eventType>:<occurredAt to the
+second>"`. That design is **revised here** because a wall-clock-second-precision key has two failure modes:
+(a) two *legitimate*, distinct events of the same type on the same appointment within the same second would
+collide and the second one would be silently dropped by the upsert; (b) a retry that recomputes `occurredAt`
+via a fresh `now()` call would mint a **new** key on every retry, defeating the dedupe entirely — the opposite
+of what idempotency requires.
+
+**Revised design: idempotency is anchored on a stable `sourceMutationId`, not on a timestamp.**
+
+- **`sourceMutationId`** is generated **exactly once per logical mutation** — a single `crypto.randomUUID()`
+  (or equivalent) call at the top of the request handler (e.g. once per `PUT /api/appointments/:id`
+  invocation), captured into a local variable **before** entering any internal retry loop (such as a Prisma
+  transaction retry on a serialization failure). If that logical mutation is retried internally, the retry
+  **reuses the same captured `sourceMutationId`** — it is never regenerated mid-retry. If a *client* retries
+  the whole HTTP request after a network failure (a genuinely new logical mutation attempt from the caller's
+  perspective, indistinguishable server-side from an intentional second edit unless the client sends its own
+  idempotency header — no such header exists in this codebase today, confirmed by the targeted inspection of
+  `appointments.ts`), that retry legitimately gets a **new** `sourceMutationId` and is treated as a new event;
+  closing that specific gap would require introducing a client-supplied idempotency-key header, which is out
+  of scope for this additive proposal and is not required for slice B's initial goals (§16).
+- **`occurredAt`** is captured **once**, at the same point `sourceMutationId` is generated — a single
+  `Date`/transaction-`now()` read into a local variable before any retry — and that captured value is reused
+  verbatim for both the initial attempt and any internal retry of the same logical mutation. **A retry must
+  never call `now()` again.** This preserves `occurredAt` as a meaningful business-event timestamp for
+  ordering and analytics even though it is no longer part of the uniqueness key.
+- **`idempotencyKey`** is the stored, unique-constrained column, computed as `"<sourceMutationId>:<eventType>"`.
+  Because `sourceMutationId` is a fresh UUID per logical mutation rather than a wall-clock bucket:
+  - **Two legitimate reschedules of the same appointment within the same second do not collide** — each is
+    its own logical mutation with its own `sourceMutationId`, hence its own `idempotencyKey`, regardless of
+    how close together their `occurredAt` values land.
+  - **A retry of the same logical mutation collides on purpose** — same `sourceMutationId`, same `eventType`,
+    same `idempotencyKey`, so the write is a safe upsert-no-op on the second attempt, exactly the guarantee
+    idempotency is supposed to provide.
+  - **Reschedule events require distinct `sourceMutationId`s by construction** — each reschedule is its own
+    `PUT /api/appointments/:id` request, each minting its own UUID at handler entry; there is no shared-key
+    path between two different reschedules of the same appointment.
+- This still follows the spirit of the existing `OperationalEvent.dedupeKey` precedent
+  (`schema.prisma:1614-1618`, "a create is performed as an upsert on this unique key so duplicate-alert
+  suppression is atomic") — the same upsert-on-conflict pattern, just keyed on a mutation identity instead of
+  a timestamp bucket. `correlationId` (the optional field added in §9.1) is available for cross-system tracing
+  (e.g. linking an event back to a WhatsApp webhook delivery id) but is deliberately **not** used for
+  idempotency itself, keeping the two concerns (dedupe vs. traceability) independent.
 
 ### 9.6 Retention, privacy classification, deletion/anonymization
 
@@ -496,10 +669,19 @@ retries (e.g. a webhook redelivery for `request_created`).
   §3's retention grep), `AppointmentLifecycleEvent.patientId` should be nulled the same way
   `Appointment`/other FK-linked models are handled by that existing job — this document does not modify that
   job, only notes the dependency for the implementer of slice B (§16).
-- **Backfill limitations:** `occurredAt` for historical events **cannot** be backfilled with confidence beyond
-  what `AuditLog` already proves (§8.1) — any backfill migration must source `occurredAt` from the matching
-  `AuditLog.createdAt` row where one exists, and must leave events with no matching `AuditLog` row
-  unbackfilled rather than fabricated, per the task's decision rule against inventing historical timestamps.
+- **Backfill limitations:** `occurredAt` for historical **status-transition** events (`appointment_completed`,
+  `appointment_cancelled`, `appointment_no_show_marked`, `request_approved`/`rejected`/`converted`) **cannot**
+  be backfilled with confidence beyond what `AuditLog` already proves (§8.1) — any backfill migration must
+  source `occurredAt` from the matching `AuditLog.createdAt` row where one exists, and must leave events with
+  no matching `AuditLog` row unbackfilled rather than fabricated, per the task's decision rule against
+  inventing historical timestamps. **For `appointment_rescheduled` specifically, backfill is not merely
+  incomplete — it is impossible**: §8.5's direct audit of `appointments.ts`'s write path confirms **no**
+  source (`AuditLog`, `ActivityLog`, or any other model) ever recorded a pre-reschedule `startTime`/`endTime`
+  value, so there is nothing to backfill *from*. Every appointment rescheduled before this event type's write
+  path ships must be treated as **permanently** `RESCHEDULE_HISTORY_UNAVAILABLE` — not "pending backfill," a
+  state that implies future recovery is possible. Any endpoint or aggregate mixing pre-capture and
+  post-capture rows must surface `HISTORICAL_BACKFILL_INCOMPLETE` rather than silently averaging the two
+  populations together.
 
 ---
 
@@ -518,6 +700,14 @@ retries (e.g. a webhook redelivery for `request_created`).
 per-clinic short-TTL cache pattern already proven in `dashboard.ts`. Only introduce pre-aggregation once (a)
 `AppointmentLifecycleEvent` exists and (b) an org-wide multi-year query is actually requested and shown to be
 slow — not speculatively.
+
+**Pre-aggregation inherits Mode A's mutability — it does not escape it (§5.1).** A nightly rollup that sums
+"August's" appointments by grouping on current `startTime` is still a Mode-A query, frozen at the moment the
+rollup ran; if an August appointment is rescheduled the next day, the cached rollup and a fresh live query for
+"August" will now disagree, and **neither is wrong** — they are both honest Mode-A answers computed at
+different instants (§8.5). Any cached/pre-aggregated response must still carry `quality.calculatedAt` (already
+required, §10.6) **and** `MUTABLE_PERIOD_COHORT` where applicable, exactly as a live query would — caching
+must never be used to imply the number has become historically fixed.
 
 ### 10.2 Timezone
 
@@ -734,6 +924,25 @@ follows the existing `reports.ts`/`dashboard.ts` conventions: `authorize([...])`
 `validateAndGetClinicIdScope`/`validateAndGetScope` for tenant scope, mandatory `dateFrom`/`dateTo` validation,
 and a JSON error shape of `{ error: string }` on failure (matching every existing route inspected).
 
+### Quality reason-code registry
+
+Every response's `quality.reasonCodes` array draws from this closed vocabulary. Defined once here; §6's matrix
+and every endpoint below reference codes by name rather than redefining them.
+
+| Code | Meaning | Mode (§5.1) |
+|---|---|---|
+| `CURRENT_STATE_ONLY` | This response reflects `Appointment.status` (or `AppointmentRequest.status`) as it exists in the database **right now** — not a historical as-of-date reconstruction. | A |
+| `MUTABLE_PERIOD_COHORT` | This response's bucket/period membership is based on the record's **current** `startTime`/`endTime` — a rescheduled record appears under its new period, not its original one, and the same query can legitimately return a different answer for the same historical period if run again later. | A |
+| `RESCHEDULE_HISTORY_UNAVAILABLE` | No source (`AuditLog`, `ActivityLog`, or `AppointmentLifecycleEvent`) retains this record's prior `startTime`/`endTime` — original-slot or lead-time-to-original-slot cannot be computed for it, permanently (§8.5). | B |
+| `STATUS_HISTORY_PARTIAL` | The reported event time was reconstructed by reading `AuditLog`'s `previousStatus`/`newStatus` metadata — reliable for recent history but not guaranteed complete for older records (§8.1). | B |
+| `HISTORICAL_BACKFILL_INCOMPLETE` | This response mixes records with real captured lifecycle-event history and records that predate `AppointmentLifecycleEvent`'s rollout (or predate any interim mitigation, §8.5) and therefore have none — per-record backfill status is not distinguished in the aggregate shown. | B |
+
+`quality.status` remains a separate top-level field (`complete \| partial \| unavailable`, per the original
+§13 proposal) — `reasonCodes` explains *why* when `status` is not `complete`, and, per §6's matrix, **every**
+Mode-A endpoint response still carries `CURRENT_STATE_ONLY`/`MUTABLE_PERIOD_COHORT` even when `status:
+"complete"`, since "complete" means "the current-state query executed successfully and returned all matching
+rows," not "this is historically definitive."
+
 ### `GET /api/reports/operational/status-distribution`
 
 - **Query params:** `dateFrom` (required, ISO date), `dateTo` (required, ISO date, max 400-day span from
@@ -744,10 +953,14 @@ and a JSON error shape of `{ error: string }` on failure (matching every existin
   ```json
   {
     "dateFrom": "2026-01-01", "dateTo": "2026-06-30",
+    "definition": "Current status of appointments whose current planned startTime falls within the selected range.",
     "byStatus": [{ "status": "completed", "count": 412 }, { "status": "cancelled", "count": 38 }, ...],
-    "quality": { "status": "complete", "reasonCodes": [], "sourceVersion": "appointment-status-v1", "calculatedAt": "2026-08-02T10:00:00Z" }
+    "quality": { "status": "complete", "reasonCodes": ["CURRENT_STATE_ONLY", "MUTABLE_PERIOD_COHORT"], "sourceVersion": "appointment-status-v1", "calculatedAt": "2026-08-02T10:00:00Z" }
   }
   ```
+  The `definition` string is fixed, machine-stable text (not localized, not configurable) — its purpose is to
+  make the Mode-A scope explicit in the payload itself, not just in this document. It is **not**: status
+  as-of the historical period; original-slot cohort outcome; immutable historical funnel evidence (§6 row 1).
 - **Null vs. zero:** a status with zero occurrences in range is present in `byStatus` with `count: 0`, not
   omitted — so the client never has to guess "not returned" vs. "zero."
 - **Timezone metadata:** `dateFrom`/`dateTo` interpreted as clinic-local calendar dates (§11.3); response
@@ -764,9 +977,11 @@ and a JSON error shape of `{ error: string }` on failure (matching every existin
 - **Bucket granularity:** hour-of-day (`0-23`, clinic-local, §11.2) × weekday (`1-7`, ISO, §11.4).
 - **Response shape:** `{ dateFrom, dateTo, basis, timezone: "Europe/Istanbul", buckets: [{ hour, weekday, count }, ...], quality }`
   — `buckets` covers all 168 hour×weekday combinations present in the range, zero-filled.
-- **Data-quality metadata:** `quality.reasonCodes` includes `"utc_extract_not_used"` as a positive confirmation
-  flag (or, if a future implementation regresses to raw SQL `EXTRACT`, this is where that regression would be
-  caught by a contract test, §17).
+- **Data-quality metadata:** for `basis: "start_time"`, `quality.reasonCodes` always includes
+  `MUTABLE_PERIOD_COHORT` (§6 row 3 — a rescheduled appointment appears under its new hour/weekday, not the
+  one it originally held). For `basis: "created_at"`, `MUTABLE_PERIOD_COHORT` is **omitted** — `createdAt` is
+  immutable, so this variant is a stable current-and-historical fact (§6 row 4). A contract test (§17) must
+  assert this basis-dependent difference does not drift.
 
 ### `GET /api/reports/operational/trends`
 
@@ -775,7 +990,11 @@ and a JSON error shape of `{ error: string }` on failure (matching every existin
   optional — powers §6 row 7's seasonal comparison by running the same query twice server-side rather than
   making the client issue two requests).
 - **Bucket granularity:** per `granularity`, clinic-local (§11).
-- **Response shape:** `{ dateFrom, dateTo, granularity, series: [{ bucket: "2026-06", count }, ...], priorPeriodSeries: [...] | null, quality }`.
+- **Response shape:** `{ dateFrom, dateTo, granularity, series: [{ bucket: "2026-06", count }, ...], priorPeriodSeries: [...] | null, quality }`
+  — `quality.reasonCodes` always includes `MUTABLE_PERIOD_COHORT` (§6 rows 5/6/7), for both `series` and
+  `priorPeriodSeries` when present: a same-period-last-year comparison is still keyed on current `startTime`
+  for **both** periods, so the older period's figure is just as subject to revision by a since-happened
+  reschedule as the current one.
 - **Null vs. zero:** every bucket in range present with `count: 0` if empty; `priorPeriodSeries` is `null`
   (not an empty array) when `compareToPriorPeriod` was not requested, distinguishing "not asked for" from
   "asked for, all zero."
@@ -786,16 +1005,18 @@ and a JSON error shape of `{ error: string }` on failure (matching every existin
   sub-resources rather than one endpoint conflating them (per the task's instruction to avoid one unbounded
   "return everything" endpoint):
   - `GET /api/reports/operational/lead-time/booking` — distribution (min/p25/median/p75/max, in hours) of
-    `startTime − createdAt` for appointments booked in range, plus a labeled caveat field
-    `rescheduledExclusionNote` explaining §6 row 10's reschedule caveat.
+    `startTime − createdAt` for appointments booked in range, `quality.reasonCodes` always including
+    `MUTABLE_PERIOD_COHORT` (lead time to the **current** slot, §6 row 10) and, once appointments can be
+    flagged as known-rescheduled via `AppointmentLifecycleEvent` (§9), `RESCHEDULE_HISTORY_UNAVAILABLE` for
+    any one of them whose reschedule predates event capture.
   - `GET /api/reports/operational/lead-time/cancellation` — same distribution shape for cancellation lead
-    time, with `quality.status: "partial"` always set (since the underlying event time is `AuditLog`-sourced,
-    §6 row 14) and `quality.reasonCodes: ["cancellation_time_approximated_via_audit_log"]`.
+    time, with `quality.status: "partial"` always set and `quality.reasonCodes` always including
+    `STATUS_HISTORY_PARTIAL` (the underlying cancellation event time is `AuditLog`-sourced, §6 row 14).
 - **Response shape (booking sub-resource):**
   ```json
   { "dateFrom": "...", "dateTo": "...", "unit": "hours",
     "distribution": { "min": 0.5, "p25": 18, "median": 72, "p75": 168, "max": 2160, "count": 340 },
-    "quality": { "status": "complete", "reasonCodes": [], "sourceVersion": "lead-time-v1", "calculatedAt": "..." } }
+    "quality": { "status": "complete", "reasonCodes": ["MUTABLE_PERIOD_COHORT"], "sourceVersion": "lead-time-v1", "calculatedAt": "..." } }
   ```
 
 ### `GET /api/reports/operational/waiting-time`
@@ -803,16 +1024,19 @@ and a JSON error shape of `{ error: string }` on failure (matching every existin
 - **Explicitly disabled/`501`-shaped until §9's `patient_checked_in`/`service_started` events exist and a
   product decision approves them (§20).** The contract is defined now so the frontend (§15) can build the UI
   shell against a stable shape, but the endpoint itself should return `{ "quality": { "status":
-  "unavailable", "reasonCodes": ["checkin_timestamps_not_captured"] }, "distribution": null }` rather than
-  fabricating a number, per §7's verdict. Once check-in capture ships, response shape mirrors
-  `lead-time/booking` above with `unit: "minutes"`.
+  "unavailable", "reasonCodes": ["CHECKIN_TIMESTAMPS_NOT_CAPTURED"] }, "distribution": null }` rather than
+  fabricating a number, per §7's verdict. `CHECKIN_TIMESTAMPS_NOT_CAPTURED` is outside the five-code core
+  registry above (it names a Mode-B gap with no partial data at all, rather than a quality caveat on existing
+  data) but follows the same `UPPER_SNAKE_CASE` convention. Once check-in capture ships, response shape
+  mirrors `lead-time/booking` above with `unit: "minutes"`.
 
 ### `GET /api/reports/operational/utilization`
 
 - **Query params:** `dateFrom`, `dateTo`, `clinicId`, `groupBy` (`'practitioner' | 'clinic'`, required).
 - **Bucket granularity:** one row per practitioner or per clinic (not time-bucketed).
 - **Response shape:** `{ dateFrom, dateTo, groupBy, rows: [{ id, name, bookedMinutes, bookableMinutes, utilizationPct }, ...], quality }`
-  — `utilizationPct: null` (not `0`) for a practitioner/clinic with `bookableMinutes: 0` in range (e.g. no
+  — `quality.reasonCodes` always includes `CURRENT_STATE_ONLY` and `MUTABLE_PERIOD_COHORT` (§6 rows 8/17).
+  `utilizationPct: null` (not `0`) for a practitioner/clinic with `bookableMinutes: 0` in range (e.g. no
   `DoctorAvailability` configured), distinguishing "genuinely idle" from "no capacity data configured."
 - **Authorization:** a `DENTIST` caller receives only their own row (§12.1) regardless of `groupBy=practitioner`
   request scope — server-side filter, never client-trusted.
@@ -834,6 +1058,14 @@ simply bolted onto the existing `Reports.tsx` tab set without a clear "Operation
 break, since `Reports.tsx`'s existing four tabs (Revenue, Doctor Performance, Patient Sources, No-Show
 Analysis) are financial/mixed, and this task is explicitly operational-only (§2).
 
+**Every widget must be visibly labeled with its analytic mode (§5.1)** — a persistent, non-dismissible page
+subtitle or section header reading, verbatim or near-verbatim, "Current schedule snapshot — reflects today's
+data, not a historical record" for every Mode-A widget. This is a hard UI requirement, not a nice-to-have:
+per §17 test 11, an API consumer (including this dashboard's own frontend code) must never be able to confuse
+a current-snapshot figure for a historical one, and the cheapest, most reliable way to guarantee that for a
+*human* consumer is the same label on every screen, not just in API metadata a user never sees. Until Slice D
+ships, there is no Mode-B widget to label at all — the distinction becomes load-bearing the moment one exists.
+
 | Section | Data source (§14) | Ships with current data? |
 |---|---|---|
 | KPI summary (today's appointment count, this week's count, no-show rate, avg lead time) | `status-distribution` + `lead-time/booking`, small date ranges | **Yes** |
@@ -843,7 +1075,7 @@ Analysis) are financial/mixed, and this task is explicitly operational-only (§2
 | Lead-time distribution | `lead-time/booking`, `lead-time/cancellation` | **Yes**, with the reschedule/approximation caveats surfaced as inline UI notes, not hidden |
 | Waiting-time section | `waiting-time` | **No — must remain disabled/hidden (not merely grayed out with a fake number) until §9's check-in events exist and §20's product decision approves building them.** Per §7's verdict, showing anything here today would violate the task's explicit "do not claim patient waiting time exists" rule. |
 | Practitioner/clinic filters | shared across all sections | **Yes** — reuses the existing clinic-selector pattern already in `Dashboard.tsx`/`Reports.tsx` |
-| Data-quality warnings | `quality` object from every endpoint | **Yes** — a persistent, dismissible-per-session banner when any active widget's `quality.status !== 'complete'`, surfacing `reasonCodes` in plain language (e.g. "Cancellation timing is approximated from audit history and may be incomplete for older records") |
+| Data-quality warnings | `quality` object from every endpoint | **Yes** — a persistent, dismissible-per-session banner when any active widget's `quality.status !== 'complete'`, surfacing `reasonCodes` in plain language (e.g. `STATUS_HISTORY_PARTIAL` → "Cancellation timing is approximated from audit history and may be incomplete for older records"; `RESCHEDULE_HISTORY_UNAVAILABLE` → "Some appointments' original booking time can't be recovered because they were rescheduled before this history began tracking"). The `CURRENT_STATE_ONLY`/`MUTABLE_PERIOD_COHORT` codes are **not** routed through this dismissible banner — they are surfaced via the always-visible mode label above, since they apply to every Mode-A widget on every page load and dismissing them once should not hide them from the next visit |
 
 Widgets that must ship **disabled** (visible but explicitly "not yet available," never silently omitted, so
 users know the feature exists and why it isn't live): waiting-time section, room/chair utilization (§4.7, no
@@ -860,8 +1092,8 @@ independently mergeable and independently rollback-able.
 
 | Slice | Scope | Depends on | Schema impact | Migration | Backend | Frontend | Tests | Rollout | Rollback | Risk |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **A. Current-data operational metrics** | Ship `status-distribution`, `busy-hours` (fixed to clinic-local, §11), `trends`, `lead-time/booking`, `utilization` (practitioner + clinic) reading only existing `Appointment`/`DoctorAvailability`/`DoctorOffDay` fields | None | None | None | New route file(s) under `server/src/routes/`; new `AuditLog` composite index migration (§10.5) as a **separate**, purely additive migration PR, not bundled with route code | New dashboard page/section shell (§15), KPI/status/busy-hour/trend/lead-time widgets only | New `server/src/tests/reportsOperational*.test.ts` following the existing `reportsClinicScope.test.ts` style, plus a dedicated DST-boundary test (§17) | Behind no feature flag needed (additive, read-only) — direct release | Revert the route file / hide the frontend section; no data was ever written, so no data rollback needed | **Low** — read-only, no schema change beyond an additive index |
-| **B. Appointment lifecycle event capture** | Introduce `AppointmentLifecycleEvent` (§9); wire `appointment_*` event writes into the existing status-change code path in `appointments.ts` alongside (not replacing) the current `ActivityLog`/`AuditLog` writes | A (for the endpoints that will eventually read it) | New model, new migration | Additive migration (`CREATE TABLE`, no backfill in this slice — see §9.6 backfill limitation) | Write-path change in `appointments.ts`'s status-update handler (`appointments.ts:589-620` region) | None | New idempotency + immutability tests (§17) | Deploy write path first, dark (no reader yet), verify event volume looks sane for 1-2 weeks before any endpoint reads it | Stop writing (feature-flag the insert call); existing `ActivityLog`/`AuditLog` writes are untouched, so no functional regression from a rollback | **Medium** — touches a hot write path (`appointments.ts` status update), must not fail the parent transaction on event-write failure (mirror `operationalEventService.ts`'s "errors are swallowed" pattern, §3) |
+| **A. Current-schedule/current-state operational metrics** | Ship `status-distribution`, `busy-hours` (fixed to clinic-local, §11), `trends`, `lead-time/booking`, `utilization` (practitioner + clinic) reading only existing `Appointment`/`DoctorAvailability`/`DoctorOffDay` fields. **Scope is deliberately bounded to Mode A (§5.1) only** — every response carries `CURRENT_STATE_ONLY`/`MUTABLE_PERIOD_COHORT` (§14 registry) and the `definition` field (status-distribution); this slice makes **no** claim of immutable historical reconstruction anywhere, in the API contract, or in the frontend labels (§15) | None | None | None | New route file(s) under `server/src/routes/`; new `AuditLog` composite index migration (§10.5) as a **separate**, purely additive migration PR, not bundled with route code | New dashboard page/section shell (§15) with the mandatory current-schedule-snapshot label on every widget; KPI/status/busy-hour/trend/lead-time widgets only | New `server/src/tests/reportsOperational*.test.ts` following the existing `reportsClinicScope.test.ts` style, plus a dedicated DST-boundary test and the mutable-cohort tests (§17 items 1-4, 8) | Behind no feature flag needed (additive, read-only) — direct release | Revert the route file / hide the frontend section; no data was ever written, so no data rollback needed | **Low** — read-only, no schema change beyond an additive index |
+| **B. Appointment lifecycle event capture** | Introduce `AppointmentLifecycleEvent` (§9) with the `sourceMutationId`-anchored idempotency design (§9.5); wire event writes for **all three** of: (1) `appointment_created` at creation, (2) `appointment_rescheduled` (with the full `previousStartTime`/`previousEndTime`/`newStartTime`/`newEndTime`/`reasonCode`/`source` allowlist, §9.3) into the existing reschedule code path (`appointments.ts:620-636`, the branch §8.5 confirms currently writes no time metadata at all), and (3) the full status-lifecycle set (`appointment_confirmed`/`completed`/`cancelled`/`no_show_marked`) into the existing status-change code path (`appointments.ts:589-620`) — all alongside, not replacing, the current `ActivityLog`/`AuditLog` writes | A (for the endpoints that will eventually read it) | New model, new migration | Additive migration (`CREATE TABLE`, no backfill in this slice — §8.5/§9.6 confirm reschedule history has nothing to backfill *from*; status-history backfill from `AuditLog` is a separate, optional follow-up) | Write-path changes in **both** `appointments.ts` code branches identified in §8.5 — the status-change branch (`appointments.ts:589-620`) **and** the previously-uninstrumented reschedule branch (`appointments.ts:620-636`) | None | New idempotency (`sourceMutationId` reuse-on-retry, distinct-IDs-per-reschedule), reschedule-metadata-content, and immutability tests (§17 items 6, 7, 8) | Deploy write path first, dark (no reader yet), verify event volume looks sane for 1-2 weeks before any endpoint reads it | Stop writing (feature-flag the insert call); existing `ActivityLog`/`AuditLog` writes are untouched, so no functional regression from a rollback | **Medium** — touches two hot write-path branches (`appointments.ts` status update **and** reschedule), must not fail the parent transaction on event-write failure (mirror `operationalEventService.ts`'s "errors are swallowed" pattern, §3) |
 | **C. Request response/conversion metrics** | Wire `request_*` events into `appointmentRequests.ts`'s status/convert handlers; add `request-conversion` metric family reading real event data instead of the `updatedAt` proxy | B | None (reuses B's model) | None | Write-path change in `appointmentRequests.ts` (`:170-249` region) | Update `waiting-time`'s response-time sub-metric (still not the C/D/E patient-waiting-room metrics) from "partial/proxy" to "complete" once events exist | New tests mirroring B's pattern, scoped to `AppointmentRequest` | Same dark-write-first pattern as B | Same as B | **Low-Medium** — same write-path-failure caution as B, smaller blast radius (request volume is lower than appointment volume) |
 | **D. Check-in and actual service timing** | Only after §20's product decision: add check-in/checkout capture (new fields or new `patient_checked_in`/`service_started`/`patient_checked_out` event types, §9.3) | Product decision (§20); B | New optional fields or reuses B's event model | Additive | New route(s) for staff to mark check-in/checkout | New "waiting time" UI section (§15), now enabled | New tests for C/D/E waiting-time candidates (§7) | Feature-flagged per clinic (opt-in, since it's a new staff workflow, not just a read-only report) | Feature-flag off; no data loss (historical events remain, just unread) | **Medium-High** — new staff workflow adoption risk, not just a technical risk |
 | **E. Aggregation/indexing** | Introduce daily/weekly summary tables or scheduled rollups (§10.1) once slice A+B prove which queries are actually slow | A, B | New summary-table model(s) | Additive | New scheduled job (mirrors `server/src/jobs/` existing pattern, e.g. `dataRetentionCleanupJob.ts`'s cron-registration style) | None directly (backend-only perf work) | Job-correctness tests (rollup matches direct-query result for a sample period) | Deploy job dark, compare rollup output against live query for a burn-in period before any endpoint switches to reading the rollup | Switch reads back to direct query; drop summary table | **Low** — purely additive, reversible |
@@ -924,6 +1156,56 @@ individual `npm run test:<name>` entry aggregated into the top-level `test` scri
     vs. `/reports/revenue` parity implicit in `reports.ts`).
 18. **Frontend quality warnings** — a component test confirming the data-quality banner (§15) renders when
     `quality.status !== 'complete'` and is absent when `'complete'`.
+
+**Mode A/B correctness (added by this revision, §5.1/§8.5):**
+
+19. **Rescheduled appointment moves between current hour buckets** — an appointment moved from 9am to 2pm via
+    `PUT /api/appointments/:id` disappears from `busy-hours`' 9am bucket and appears in the 2pm bucket on the
+    very next query, for **any** date range that includes its (unchanged) `startTime` date — demonstrating
+    Mode A's "current state" behavior directly, not just asserting it in prose.
+20. **Current-schedule report reflects the new slot** — `status-distribution`/`trends` immediately reflect a
+    reschedule's new period bucket with no lag, no stale cache entry beyond the documented TTL (§10.6).
+21. **Historical original-slot report remains unavailable without event history** — before slice B ships (or
+    for an appointment rescheduled before slice B's write path went live), any attempt to ask "what was this
+    appointment's original slot" returns `RESCHEDULE_HISTORY_UNAVAILABLE`, never a fabricated or
+    best-guess value.
+22. **Status overwrite changes current-state distribution** — marking an appointment `completed` then
+    `cancelled` in succession changes `status-distribution`'s current counts each time; a companion assertion
+    confirms the **prior** `completed` count from before the second change is not recoverable from
+    `Appointment` alone (only from `AuditLog`, per §8.1).
+23. **Original cohort cannot be reconstructed from current row alone** — for a rescheduled-and-since-modified
+    appointment, a test asserts that no query against `Appointment` in isolation (without `AuditLog`/
+    `AppointmentLifecycleEvent`) can recover its original `startTime`, proving the gap is structural, not an
+    oversight in a particular query.
+24. **Reschedule event contains old/new times** — once slice B ships, a `PUT` that changes `startTime`/
+    `endTime` produces exactly one `AppointmentLifecycleEvent` row with `eventType: 'appointment_rescheduled'`
+    and a `metadataJson` containing `previousStartTime`, `previousEndTime`, `newStartTime`, `newEndTime`
+    matching the pre/post values exactly, and no other keys beyond the §9.3 allowlist.
+25. **Duplicate retry does not create two reschedule events** — simulating an internal transaction retry that
+    reuses the same captured `sourceMutationId`/`occurredAt` (§9.5) results in exactly one
+    `AppointmentLifecycleEvent` row after both attempts (upsert-on-conflict on `idempotencyKey`).
+26. **Two legitimate reschedules in the same second do not collide** — two separate `PUT` calls (distinct
+    `sourceMutationId`s) rescheduling the same appointment within the same wall-clock second both produce
+    their own `AppointmentLifecycleEvent` row; neither is dropped (§9.5's core justification for moving off a
+    timestamp-based key).
+27. **Backfill skips rows without proven old/new values** — a hypothetical status-history backfill migration
+    (§9.6) populates `occurredAt` only for appointments with a matching `AuditLog` row and leaves every other
+    appointment's status-transition history absent (not fabricated); a companion test confirms no backfill
+    path is even attempted for `appointment_rescheduled`, per §8.5's "nothing to backfill from" finding.
+28. **Quality reason codes are returned consistently** — every endpoint in §14 returns exactly the reason
+    codes documented for it (e.g. `busy-hours?basis=start_time` always includes `MUTABLE_PERIOD_COHORT`,
+    `basis=created_at` never does) — a table-driven test iterating the full registry (§14) against each
+    endpoint's documented expected set.
+29. **Current snapshot and historical mode cannot be confused by API consumers** — a contract test asserting
+    every Mode-A endpoint response includes `CURRENT_STATE_ONLY` and/or `MUTABLE_PERIOD_COHORT` in
+    `quality.reasonCodes`, and that no endpoint ever omits both while implicitly answering a Mode-B question
+    (i.e., a schema-level guardrail, not just a documentation convention) — paired with the frontend
+    component test (§15) confirming the mode label renders on every widget.
+30. **Deleted/cancelled/rescheduled records follow documented inclusion rules** — a single fixture appointment
+    that is rescheduled, then cancelled, then (if soft-delete is ever exercised) soft-deleted, is checked
+    against every endpoint's documented `deletedAt` policy (§8.2) at each stage, confirming inclusion/exclusion
+    is applied consistently rather than incidentally by whichever `WHERE` clause a given route happened to
+    write.
 
 ---
 
@@ -991,6 +1273,17 @@ proposed verification plan for whoever implements §16, not something executed h
   unbounded-retention table — the index must ship before any endpoint reads `AuditLog` at scale, not after.
 - Small-cohort re-identification (§13.1) is a real risk for any fine-grained breakdown; the suppression
   threshold is asserted as a recommendation (5), not a final legal-approved number.
+- **Reschedule history is unrecoverable for every appointment rescheduled before slice B ships** (§8.5) —
+  this is a one-way clock: the longer slice B is delayed, the larger the permanently-`RESCHEDULE_HISTORY_
+  UNAVAILABLE` population becomes. §8.5 flags a near-zero-cost interim mitigation (populate the existing
+  `else`-branch `AuditLog` write's `metadata` with old/new times) that could start closing this gap **before**
+  the full event model ships — worth prioritizing independently of slice B's full timeline.
+- **The `sourceMutationId` idempotency design (§9.5) only guarantees retry-safety for internal (server-side)
+  retries, not for a client that retries the whole HTTP request** — no client-supplied idempotency-key header
+  exists anywhere in this codebase today (confirmed by inspection of `appointments.ts`), so a genuine client
+  retry after a network failure is indistinguishable from a second, intentional edit and will legitimately
+  create a second event. This is a known, accepted gap for slice B's initial scope, not an oversight — closing
+  it would require introducing a new header contract, which is a larger, separate proposal.
 
 **Blockers (require a decision before the corresponding slice can start):**
 
@@ -1014,16 +1307,27 @@ proposed verification plan for whoever implements §16, not something executed h
 
 ## 21. Final recommendation
 
-Ship **slice A** (§16) now: it requires no schema change, reuses every existing tenant-scope and
-timezone-formatting primitive already proven correct elsewhere in the codebase (§11.1, §12.2), and closes a
-real, present bug (the UTC-vs-clinic-local hour/weekday/month bucketing in `reports.ts`'s existing
-`no-show-analysis` route, §6 rows 3/5/6) rather than merely avoiding a hypothetical one. Do **not** ship a
-"waiting time" widget of any kind until slice D's check-in/checkout capture exists and product has explicitly
-approved building that workflow (§20 blocker 1) — per the task's decision rules, an unmeasurable metric must
-never be presented as measurable, and no amount of UI polish substitutes for the missing timestamp. Build
-`AppointmentLifecycleEvent` (§9) as the single, deliberately-named-to-avoid-collision (§4.4) foundation for
-every metric this review marked **P** rather than **M**, reusing the `LabWorkOrderStatusHistory` precedent
-(§4.5) already proven in this codebase instead of inventing a new shape.
+Ship **slice A** (§16) now, but as **explicitly-labeled current-schedule-snapshot analytics (Mode A, §5.1)
+only** — never as an implicit or explicit claim of immutable historical reconstruction. It requires no schema
+change, reuses every existing tenant-scope and timezone-formatting primitive already proven correct elsewhere
+in the codebase (§11.1, §12.2), and closes a real, present bug (the UTC-vs-clinic-local hour/weekday/month
+bucketing in `reports.ts`'s existing `no-show-analysis` route, §6 rows 3/5/6) rather than merely avoiding a
+hypothetical one — but it does **not**, on its own, answer "what did the schedule look like historically,"
+and every response/widget must say so via `CURRENT_STATE_ONLY`/`MUTABLE_PERIOD_COHORT` (§14) and the mandatory
+frontend mode label (§15). Do **not** ship a "waiting time" widget of any kind until slice D's check-in/
+checkout capture exists and product has explicitly approved building that workflow (§20 blocker 1) — per the
+task's decision rules, an unmeasurable metric must never be presented as measurable, and no amount of UI
+polish substitutes for the missing timestamp.
+
+Build `AppointmentLifecycleEvent` (§9) — with the `sourceMutationId`-anchored idempotency design (§9.5) and
+the explicit `appointment_rescheduled` metadata allowlist (§9.3) — as the single,
+deliberately-named-to-avoid-collision (§4.4) foundation for every metric this review marked **P** rather than
+**M**, reusing the `LabWorkOrderStatusHistory` precedent (§4.5) already proven in this codebase instead of
+inventing a new shape. Prioritize wiring the reschedule branch (`appointments.ts:620-636`) alongside the
+already-instrumented status-change branch — §8.5's direct audit of the write path found the reschedule branch
+currently captures **zero** time metadata anywhere, a strictly worse gap than the partially-reconstructible
+status-history gap, and every day that instrumentation is delayed permanently enlarges the
+`RESCHEDULE_HISTORY_UNAVAILABLE` population with no way to backfill it later.
 
 ---
 
@@ -1043,11 +1347,16 @@ every metric this review marked **P** rather than **M**, reusing the `LabWorkOrd
 
 ### 8–11. Measurability summary
 
-- **Current measurable metrics (M):** appointment count by status; completed/cancelled/no-show distribution;
-  busy hour by creation time; request-to-booking conversion rate; no-show rate; average (scheduled)
-  appointment duration; booking lead time (§6 rows 1, 2, 4, 13, 15, 16, 10).
+- **Current measurable metrics (M), Mode A / current-schedule snapshot only (§5.1) — none of these are
+  historical reconstructions:** appointment count by status; completed/cancelled/no-show distribution; busy
+  hour by creation time; request-to-booking conversion rate; no-show rate; average (scheduled) appointment
+  duration; booking lead time (§6 rows 1, 2, 4, 13, 15, 16, 10). Every one of these except row 4 (busy hour
+  by creation time, immutable-source) and row 13 (conversion rate, one-way status) carries
+  `MUTABLE_PERIOD_COHORT` — a rescheduled appointment's period/hour/weekday bucket reflects its **current**
+  slot, not the slot it held at any point in the past (§8.5).
 - **Partially measurable metrics (P):** busy hour by start time and weekday/monthly trend (measurable in
-  principle, but the only existing implementation has a UTC-vs-clinic-local bug, §6 rows 3, 5, 6);
+  principle as Mode A, but the only existing implementation has a UTC-vs-clinic-local bug, §6 rows 3, 5, 6, on
+  top of the inherent `MUTABLE_PERIOD_COHORT` bias every Mode-A period-bucketed metric carries);
   practitioner and clinic schedule/utilization (exact numerator, complex-but-derivable denominator, §6 rows 8,
   17); cancellation lead time (depends on an `AuditLog`-approximated event time, §6 row 14); request response
   time (rough `updatedAt` proxy only, §6 row 12, §7 candidate B).
@@ -1062,10 +1371,14 @@ every metric this review marked **P** rather than **M**, reusing the `LabWorkOrd
 ### 12. New event model required?
 
 **Yes** — `AppointmentLifecycleEvent` (§9), scoped narrowly to what `AuditLog`/`ActivityLog` do not already
-provide (request-response timing now; check-in/checkout timing only pending a product decision, §20). It is
-deliberately not a reuse of the existing `OperationalEvent` model (name collision, wrong retention policy,
-wrong frontend surface, §4.4) and deliberately not a duplication of `AuditLog`'s already-reliable
-status-transition evidence (§8.4).
+provide: request-response timing, **reschedule old/new times (confirmed by direct audit, §8.5, to be captured
+nowhere in the current codebase — a strictly larger gap than the status-history gap, since status transitions
+at least have the partial `AuditLog` mitigation)**, and check-in/checkout timing only pending a product
+decision (§20). It is deliberately not a reuse of the existing `OperationalEvent` model (name collision,
+wrong retention policy, wrong frontend surface, §4.4) and deliberately not a duplication of `AuditLog`'s
+already-reliable status-transition evidence (§8.4). Idempotency is anchored on a `sourceMutationId` generated
+once per logical mutation, not on a timestamp bucket (§9.5) — the original timestamp-keyed design was revised
+in this update after the follow-up review identified its collision and retry-safety failure modes.
 
 ### 13. Proposed implementation slices
 
