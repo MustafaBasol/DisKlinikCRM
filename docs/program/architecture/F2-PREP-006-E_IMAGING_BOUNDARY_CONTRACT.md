@@ -24,7 +24,7 @@ gh pr view 288/289/290/291 --json mergeCommit,state -> all MERGED, merge commit 
 git worktree add <path> -b docs/f2-prep-006-e-imaging-boundary-consolidation origin/main
 ```
 
-**Exact baseline SHA: `46ba7b219002c8267bf127b39718efea091657b4`** (merge commit of PR #288, which happens to be `origin/main`'s current tip — the four PRs merged in the order A(#288)→B(#289)→C(#290)→D(#291), and `origin/main` had not advanced beyond D's merge at task start).
+**Exact baseline SHA: `46ba7b219002c8267bf127b39718efea091657b4`** — this is the merge commit of PR #288 (F2-PREP-006-A), and it is `origin/main`'s current tip used as the baseline for this task. PR #289 (F2-PREP-006-B)'s merge commit, PR #290 (F2-PREP-006-C)'s merge commit, and PR #291 (F2-PREP-006-D)'s merge commit are each an ancestor of this baseline (confirmed above by `git merge-base --is-ancestor`). The real merge order was **#289 → #290 → #291 → #288** — i.e. B, C, and D merged first, and A (#288) merged last, landing exactly on `origin/main`'s tip at task start. This is not alphabetical (A→B→C→D) letter order; it reflects only the actual chronological merge sequence of the four PRs.
 
 Aggregate main CI prerequisite, recorded exactly as supplied: run `30756005546`, head SHA `46ba7b219002c8267bf127b39718efea091657b4`, event `push`, workflow `ci-main-and-nightly`, result `success`, 9/9 jobs green. Not independently re-queried by this task (no new CI-relevant code exists to re-verify — all four inputs are already-merged, documentation-only PRs).
 
