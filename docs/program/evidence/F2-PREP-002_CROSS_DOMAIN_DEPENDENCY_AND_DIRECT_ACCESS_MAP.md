@@ -3,7 +3,7 @@
 **Phase:** F2 PREPARATION — Modular Monolith Boundary Definition
 **Type:** READ-ONLY DEPENDENCY DISCOVERY + NEW EVIDENCE FILES ONLY
 **Status:** AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW
-**Do not merge. Do not deploy. Do not modify application code. Do not fix violations in this task.**
+**Evidence-only discovery. No application correction, deployment, or production verification was performed by this task. Merge requires external review.**
 
 Machine-readable companion: [`F2-PREP-002_cross_domain_dependency_map.json`](F2-PREP-002_cross_domain_dependency_map.json) — every edge, direct-Prisma-access site, ownership-unknown item, contract candidate, transaction-boundary exception, and the top-20 remediation list referenced below carry stable IDs (`APT-*`, `PAT-*`, `MSG-*`, `BIL-*`, `IMG-*`, `INF-*`, `FE-*` for edges; `PZ-*` for direct Prisma access sites; `OU-*` for ownership-unknown; `F2-CC-*` for contract candidates; `TX-*` for transaction exceptions) so this narrative and the JSON stay cross-referenceable.
 
@@ -32,6 +32,27 @@ This task builds on, and is careful not to duplicate or contradict, three existi
 
 **This task is deliberately narrower and deeper than F0-004, not a re-derivation of it.** F0-004 answers "which domains touch which, and how many times." F2-PREP-002 answers, for a targeted subset of the highest-risk domains: which exact route/service/job calls which exact Prisma model, at which file:line, with what tenant-scope mechanism, inside or outside which transaction boundary, gated by which authorization middleware — and what the resulting risk and remediation priority is. Several findings below explicitly corroborate and extend F0-004 contract candidates (e.g. `F2-CC-01` extends `CC-01`/`CC-02`; `F2-CC-05` extends `CC-12`); none contradict them. **`MODULE_MAP.md` and `DEPENDENCY_MAP.md` themselves were not modified** — only read.
 
+### 2.1 Reconciliation with F2-PREP-001 (PR #276, merged to `main` as `0de9a04a8c7b4fefe5e7f525f9cab031b55fcb83`)
+
+This task (F2-PREP-002-R1, a continuation of the original F2-PREP-002 pass) reconciles this evidence against [`F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md`](F2-PREP-001_DOMAIN_OWNERSHIP_AND_BOUNDARY_INVENTORY.md) / `F2-PREP-001_domain_ownership_inventory.json`, which merged to `main` after this map's original pass. Full detail is in the JSON's `reconciliationWithF2Prep001` object; summary:
+
+- **Historical basis at task start: 37 domains** (F0-003/F0-004). **Current basis after the PR #276 merge: 38 domains** — F2-PREP-001 added **External Calendar Integration** as a new 38th domain.
+- **External Calendar Integration is already represented, not missing.** This map's `INF-01`..`INF-08` edges already itemize External Calendar's cross-domain reads/writes (into Appointment, Clinic, User, AppointmentType) — F2-PREP-001 §7 itself flags this domain's edge-coding as deferred to F2-PREP-002. No new edges were added; `domainSlices[INF].relatedF2Prep001Domains` in the JSON now explicitly cross-references `external-calendar-integration` and `core-storage-abstraction` (the backup subsystem, also new since F0-003) against the existing `INF-*` edges.
+- **Privacy / Platform Administration / Storage Abstraction ownership deltas** (F2-PREP-001 §8: +4 Prisma models and +10 services for Privacy's communication-consent subsystem; +1 model/+1 service for Platform Admin's audit ledger; +2 models/+2 services/+1 job for Storage's file-backup subsystem) were checked against this map's existing edges (`APT-16`, `PAT-09`, `PAT-13`, `MSG-17`, `INF-07`) and found **already represented** — no new edges required.
+- **`ContactRequest` ownership remains genuinely unresolved.** F2-PREP-001 classifies it `OWNERSHIP_AMBIGUOUS` with the same "Appointments (channel-agnostic intake)" candidate this map's `OU-04` already carries — independent corroboration, not a resolution. `MSG-10` stays `OWNERSHIP_UNKNOWN` pending an explicit domain-owner decision.
+- **F2-PREP-001's 4-bucket Prisma-model ownership classification** (`DOMAIN_OWNED`/`SHARED_KERNEL_CANDIDATE`/`PLATFORM_INFRASTRUCTURE`/`OWNERSHIP_AMBIGUOUS`) is consistent with, and does not contradict, this map's 6-category edge classification — the two measure different things (who owns the data vs. is this specific call site acceptable) and are complementary.
+- **Net effect: 0 edges added, 0 edges reclassified, 1 cross-reference correction** (`APT-05`'s note pointed to the wrong stable ID — see §2.2 below). Total edge count remains **124**. 8 of the 16 `ownershipUnknown` catalog items remain genuinely open after reconciliation.
+
+### 2.2 PR #279 review-thread corrections applied
+
+Three review comments were open on PR #279 prior to this reconciliation pass. All three are fixed in this commit; threads are resolved after the corresponding content is verified corrected (per this task's instruction):
+
+| Thread | File | Fix |
+|---|---|---|
+| `PRRT_kwDOScS24c6VvlbJ` | JSON, `APT-05` | Corrected the note's cross-reference from "see APT-19 OWNERSHIP_UNKNOWN" (APT-19 is actually `CROSS_DOMAIN_VIOLATION`) to "see APT-25 OWNERSHIP_UNKNOWN" (the correct DoctorAvailability/DoctorOffDay ownership-unknown entry). |
+| `PRRT_kwDOScS24c6VvlbU` | MD, header (§0) | Replaced "Do not merge. Do not deploy. Do not modify application code. Do not fix violations in this task." with "Evidence-only discovery. No application correction, deployment, or production verification was performed by this task. Merge requires external review." |
+| `PRRT_kwDOScS24c6Vvlbe` | MD, §3 Scope | Added the explicit path-convention note: `routes/*`, `services/*`, `jobs/*`, `middleware/*`, `utils/*` are relative to `server/src/` unless stated otherwise. |
+
 ## 3. Scope
 
 Per the task brief, inspection was limited to:
@@ -40,6 +61,8 @@ Per the task brief, inspection was limited to:
 - No dedicated `server/src/integrations` directory exists in this codebase. Provider adapters live under `server/src/services/{whatsapp,instagram,externalCalendar,imaging,labOrders}` plus standalone files (`evolutionApi.ts`, `metaTemplateService.ts`, `googleAiStudio.ts`) — these were treated as the "provider adapter" targets.
 - Frontend: `src/services/api.ts` (the single centralized API client), `src/hooks/`, and a spot-check across all 53 files in `src/pages/` for direct domain coupling.
 - 99 Prisma models were in scope for direct-access-site discovery.
+
+**Path convention:** unless otherwise stated, shorthand paths like `routes/*`, `services/*`, `jobs/*`, `middleware/*`, and `utils/*` throughout this document and the companion JSON are relative to `server/src/`. Frontend paths (`src/pages/*`, `src/services/*`, `src/hooks/*`) are relative to the repository root, as written. This note was added per PR #279 review thread `PRRT_kwDOScS24c6Vvlbe`.
 
 **CodeGraph** was not available as a tool in this environment. Equivalent coverage was obtained via **7 parallel read-only research passes** (one per domain cluster below), each of which read full source files — not just grep matches — and cross-referenced *outside* its own slice to find inbound edges from other domains. This is recorded here as a substitution for the requested CodeGraph tooling, not a silent scope reduction; see the JSON's `scope.codeGraphTool` field.
 
@@ -78,6 +101,10 @@ Full file lists per slice are in the JSON's `domainSlices` array.
 | Contract candidates proposed | 20 |
 | Transaction-boundary exceptions identified as legitimate and preserved | 10 |
 | Top remediation items ranked | 20 |
+| Top-20 items carrying a calibrated verification-status (ranks 1-16, Critical+High) | 16 |
+| — verificationStatus: CODE_PATH_CONFIRMED / TEST_REPRODUCED / PRODUCTION_VERIFIED / UNVERIFIED_INFERENCE | 15 / 0 / 0 / 1 |
+| Domain basis (historical at task start / current after PR #276 merge) | 37 / 38 |
+| Edges added or reclassified by the F2-PREP-001 reconciliation (§2.1) | 0 / 0 |
 
 All counts above were tallied programmatically from the JSON arrays (see `counts.methodologyNote` in the JSON for the exact derivation) so the two evidence files cannot drift out of sync with each other.
 
@@ -164,6 +191,33 @@ Ranked by risk, full detail with edge-ID cross-references and proposed contract 
 | 19 | Medium | `messages.ts` duplicates `treatmentCases.ts`'s remaining-balance calculation |
 | 20 | Medium | Inconsistent stock-deduction "undo" semantics between two delete paths |
 
+### 11.1 Verification-status calibration
+
+Every Critical and High item in the table above (ranks 1-16) now carries a `verificationStatus` field in the JSON, restricted to four values: `CODE_PATH_CONFIRMED`, `TEST_REPRODUCED`, `PRODUCTION_VERIFIED`, `UNVERIFIED_INFERENCE`. No finding was upgraded beyond what this task's evidence actually supports.
+
+| Status | Count | Meaning here |
+|---|---|---|
+| `CODE_PATH_CONFIRMED` | 15 | Source code was read directly at the cited file/line; no behavioral test or production log was reviewed. This is the default and correct status for a source-inspection-only audit. |
+| `TEST_REPRODUCED` | 0 | None — no finding in this audit was exercised against an existing or new automated test. |
+| `PRODUCTION_VERIFIED` | 0 | None — no production log, metric, or incident record was reviewed by this task. |
+| `UNVERIFIED_INFERENCE` | 1 | Rank 8 only (`backupService.ts` whole-database restore) — its calling HTTP route was never located within this task's scoped directories, so even its authorization boundary is inferred, not observed. This is deliberately the *weakest* claim in the top-8 Critical list, not an oversight. |
+
+For each of the 8 Critical findings (ranks 1-8), the JSON's `top20Remediation[].verification` object additionally records: exact file/function, current reachability evidence, authorization boundary, tenant scope, transaction/lock boundary, behavioral test status, production verification status, and a recommended focused validation task (cross-referenced to §11.2 below). None of the 8 Critical findings is described anywhere in either evidence file as a "confirmed" or "production" vulnerability — each is explicitly `CODE_PATH_CONFIRMED` or `UNVERIFIED_INFERENCE`, pending the validation sequence below.
+
+### 11.2 Security follow-up validation sequence (not implemented)
+
+Per the task's instruction, no remediation code was written. The following is a **recommended validation sequence** — tasks that confirm or refute a `CODE_PATH_CONFIRMED`/`UNVERIFIED_INFERENCE` finding with behavioral or production evidence, so a future task can make an informed fix decision. Full detail in the JSON's `securityFollowUpValidationSequence` object.
+
+| Priority | Title | Validates |
+|---|---|---|
+| `V1` | Legacy WhatsApp `getDefaultClinic` tenant-resolution validation | Whether a shared-secret holder can act against the wrong organization's clinic in practice; also covers the Evolution webhook's missing per-tenant HMAC (`MSG-09`). |
+| `V2` | WhatsApp/Instagram inbox appointment concurrency-path validation | Whether concurrent requests against the inbox "create appointment" endpoints actually double-book a slot, given the missing advisory lock. |
+| `V3` | Backup/restore RBAC and tenant-scope validation | Locate the calling route for `backupService.ts` and confirm its actual authorization gate — the one `UNVERIFIED_INFERENCE` item in the top-8. |
+| `V4` | Patient anonymization atomicity and failure-recovery validation | Whether a simulated mid-sequence failure in the 12+-step anonymization write (or the retention job's live-run sweep) produces the documented inconsistent state, and what recovery exists. |
+| `V5` | Financial transaction atomicity validation | Whether a simulated crash between the sequential installment-payoff or payout create/delete writes produces the documented orphaned/stuck/dangling states. |
+
+**These are validation tasks, not accepted implementation tasks.** F2-PREP-005 (§15) will decide, for each, whether it is an immediate pre-F2 blocker, an F2 pilot prerequisite, or normal remediation backlog — that triage call is explicitly out of scope for this task.
+
 ## 12. Validation
 
 ```
@@ -182,4 +236,12 @@ Results recorded in the final report delivered alongside this PR. No shared trac
 
 ## 14. Explicit non-scope
 
-Per the task brief, this evidence pass did **not**: fix any violation, implement any contract, move any file, change any Prisma schema/migration, change any test, change any CI/CD workflow, or modify any shared tracker/index/phase document. All 124 edges, 25 direct-access sites, 16 ownership questions, 20 contract candidates, and 20 remediation items above are findings for a future F2 execution phase to act on, not changes made in this task.
+Per the task brief, this evidence pass did **not**: fix any violation, implement any contract, move any file, change any Prisma schema/migration, change any test, change any CI/CD workflow, or modify any shared tracker/index/phase document. All 124 edges, 25 direct-access sites, 16 ownership questions, 20 contract candidates, and 20 remediation items above are findings for a future F2 execution phase to act on, not changes made in this task. This reconciliation pass (F2-PREP-002-R1) additionally did not start any code remediation from this evidence — see §15.
+
+## 15. Next task
+
+**Await:** `F2-PREP-003-R1`, `F2-PREP-004`, and `F1-003-B2` status.
+
+**Then execute: F2-PREP-005 — Consolidated Modularization Charter.**
+
+F2-PREP-005 must reconcile: the merged F2-PREP-001 ownership inventory, this F2-PREP-002 dependency/risk map, F2-PREP-003's feature intake map, F2-PREP-004's pilot sequencing, and the `V1`-`V5` high-risk validation tasks identified in §11.2. This evidence alone does not authorize starting code remediation — the validation sequence should run first, and F2-PREP-005 is the task that decides triage (immediate pre-F2 blocker / F2 pilot prerequisite / normal remediation backlog) for each finding.
