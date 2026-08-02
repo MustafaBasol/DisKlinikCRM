@@ -41,6 +41,14 @@
  * ever logged by this file — assertions on redacted/audited content compare
  * values in-memory and only report booleans/pass-fail, never the raw text.
  *
+ * Cleanup contract: the local-disk directory CreateImagingStudy writes to is
+ * removed by a real `finally` wrapped around the whole suite body — it does
+ * not depend on reaching the "Cleanup" section as the last test case. If an
+ * unexpected exception is thrown anywhere above that section (e.g. a route
+ * lookup failing before any individual `test()` call wraps it), the `finally`
+ * still runs and still deletes the directory; the "Cleanup" section afterward
+ * only reports/verifies that removal, it does not perform it.
+ *
  * Run with: npx tsx src/tests/imagingCharacterizationAuthShape.test.ts
  */
 
@@ -339,7 +347,32 @@ function normalizeForSnapshot(value: unknown): unknown {
   return value;
 }
 
+// Populated by invokeCreateStudy() (CT-16/CT-28 sections) as it actually writes real
+// files to local disk. Declared here, above the try/finally in main(), so the finally
+// block can always see whatever was created before either a normal completion or an
+// unexpected exception — cleanup must not depend on the variable being in scope only
+// inside the section that happens to run last.
+const createdUploadClinicDirs = new Set<string>();
+
+/** Deletes every synthetic clinic upload directory CreateImagingStudy actually wrote
+ * to during this run and returns what it found/removed, for the reporting step below.
+ * Called unconditionally from main()'s `finally` — this is the real cleanup mechanism;
+ * nothing about it depends on any particular test case executing or succeeding. */
+async function cleanupUploadDirs(): Promise<Array<{ dir: string; existedBeforeCleanup: boolean }>> {
+  const results: Array<{ dir: string; existedBeforeCleanup: boolean }> = [];
+  for (const clinicId of createdUploadClinicDirs) {
+    const dir = path.resolve(process.cwd(), 'uploads', clinicId);
+    const existedBeforeCleanup = fs.existsSync(dir);
+    await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+    results.push({ dir, existedBeforeCleanup });
+  }
+  return results;
+}
+
 async function main() {
+  let cleanupResults: Array<{ dir: string; existedBeforeCleanup: boolean }> = [];
+
+  try {
   // ══ CT-06 — bridge Bearer auth rejects a clinic-session JWT ═══════════════════════
   section('CT-06 — bridge Bearer authentication does not cross-accept a clinic-session JWT');
 
@@ -508,8 +541,6 @@ async function main() {
     return Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, 1)]);
   }
 
-  const createdUploadClinicDirs = new Set<string>();
-
   async function invokeCreateStudy(role: string) {
     createdStudyStore = null;
     const buffer = syntheticJpeg();
@@ -667,14 +698,23 @@ async function main() {
     assert.equal(normalized.source, 'manual_upload');
   });
 
-  // ── Cleanup: remove the tiny synthetic file(s) CreateImagingStudy actually wrote to
-  // local disk (fileStorage.ts default mode) under this run's synthetic clinic id ────
+  } finally {
+    // Real cleanup happens HERE, unconditionally — whether the try block above ran to
+    // completion or an unexpected exception escaped partway through (e.g. a route
+    // lookup failing before any test() call could wrap it). This does not depend on
+    // reaching the "Cleanup" reporting section below, which only runs on the
+    // non-throwing path and only verifies/reports what this finally already did.
+    cleanupResults = await cleanupUploadDirs();
+  }
+
+  // ── Cleanup (reporting only): confirm what the finally block above already removed.
+  // The tiny synthetic file(s) CreateImagingStudy actually wrote to local disk
+  // (fileStorage.ts default mode) under this run's synthetic clinic id are already
+  // gone by this point — this test asserts that fact, it does not perform the removal.
   section('Cleanup');
 
-  await test('synthetic upload directory removed, no residue left on disk', async () => {
-    for (const clinicId of createdUploadClinicDirs) {
-      const dir = path.resolve(process.cwd(), 'uploads', clinicId);
-      await fs.promises.rm(dir, { recursive: true, force: true });
+  await test('synthetic upload directory removed, no residue left on disk (verifying the unconditional finally-block cleanup above, not performing it)', () => {
+    for (const { dir } of cleanupResults) {
       assert.equal(fs.existsSync(dir), false);
     }
   });
