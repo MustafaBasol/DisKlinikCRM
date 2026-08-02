@@ -142,8 +142,9 @@ Revert the two new files (`server/src/tests/imagingCharacterizationIngestStorage
 - **Base:** `main` @ `5dc5ad67c7e9feee11f6fece9a7d65e03033d2fb`.
 - **Branch:** `test/f2-prep-007-c-imaging-ingest-storage`.
 - **Head SHA (original submission):** `36a13cd691353e250434d5c4f47f38090faffeb4`.
-- **Head SHA (after corrective round, §16):** `39171db` corrective commit, followed by this doc-only SHA-recording commit — see the final pushed commit on this branch for the exact PR head SHA.
-- **PR URL:** https://github.com/MustafaBasol/DisKlinikCRM/pull/295 (open, awaiting review — not merged).
+- **Corrective-round substantive commit (§16):** `39171db` (test-harness timeout fix + debug-directory cleanup).
+- **Corrective-round doc-only follow-up commit:** `31fd682` (records `39171db` back into this section).
+- **PR URL:** https://github.com/MustafaBasol/DisKlinikCRM/pull/295 (open, awaiting review — not merged). The PR's actual current head SHA is whichever of the above commits is most recently pushed to `test/f2-prep-007-c-imaging-ingest-storage` — see `git log` / the PR page for the authoritative value at any given moment.
 
 ## 15. Next action
 
