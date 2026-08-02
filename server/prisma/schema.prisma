@@ -59,6 +59,7 @@ model Clinic {
   practitionerPayouts           PractitionerPayout[]
   inventoryItems                InventoryItem[]
   inventoryTransactions         InventoryTransaction[]
+  inventoryUnits                InventoryUnit[]
   treatmentPlanProcedures       TreatmentPlanProcedure[]
   treatmentPackages             TreatmentPackage[]
   treatmentPackageItems         TreatmentPackageItem[]
@@ -1159,9 +1160,9 @@ model InventoryItem {
   name           String
   // implant | prosthetic | consumable | medication | equipment | other
   category       String       @default("consumable")
-  unit           String       @default("piece") // piece | box | ml | gram | vial | set
-  currentStock   Float        @default(0)
-  minimumStock   Float        @default(0) // triggers low-stock alert
+  unit           String       @default("piece") // piece | box | ml | gram | vial | set — legacy free-text display unit, superseded by purchaseUnit/consumptionUnit where set
+  currentStock   Float        @default(0) // always stored in consumptionUnit (base/consumption unit)
+  minimumStock   Float        @default(0) // triggers low-stock alert; same base unit as currentStock
   unitCost       Float?
   supplier       String?
   barcode        String?
@@ -1172,11 +1173,43 @@ model InventoryItem {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  // US-05.2: purchase-unit <-> consumption-unit conversion (koli <-> adet).
+  // Nullable/additive — existing items keep working via the legacy `unit` field
+  // until explicitly migrated to a clinic-scoped InventoryUnit pair.
+  purchaseUnitId    String?
+  purchaseUnit      InventoryUnit? @relation("InventoryItemPurchaseUnit", fields: [purchaseUnitId], references: [id])
+  consumptionUnitId String?
+  consumptionUnit   InventoryUnit? @relation("InventoryItemConsumptionUnit", fields: [consumptionUnitId], references: [id])
+  conversionFactor  Float? // 1 purchaseUnit = conversionFactor consumptionUnit; must be > 0
+
   transactions              InventoryTransaction[]
   appointmentTypeMaterials  AppointmentTypeMaterial[]
   treatmentPackageMaterials TreatmentPackageMaterial[]
 
   @@index([clinicId, category, isActive])
+  @@index([clinicId, purchaseUnitId])
+  @@index([clinicId, consumptionUnitId])
+}
+
+// US-05.2: clinic-scoped purchase/consumption unit reference data (e.g. Koli, Adet).
+// Referenced units are never hard-deleted, only deactivated (see InventoryUnit routes).
+model InventoryUnit {
+  id           String   @id @default(uuid())
+  clinicId     String
+  clinic       Clinic   @relation(fields: [clinicId], references: [id])
+  name         String
+  abbreviation String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  purchaseUnitItems    InventoryItem[]        @relation("InventoryItemPurchaseUnit")
+  consumptionUnitItems InventoryItem[]        @relation("InventoryItemConsumptionUnit")
+  transactions         InventoryTransaction[]
+
+  @@unique([clinicId, name])
+  @@unique([clinicId, abbreviation])
+  @@index([clinicId, isActive])
 }
 
 model InventoryTransaction {
@@ -1206,9 +1239,18 @@ model InventoryTransaction {
   notes                    String?
   createdAt                DateTime                     @default(now())
 
+  // US-05.2: the unit `quantity` was entered in, and its normalized base-unit
+  // (consumptionUnit) equivalent. Both nullable — legacy/pre-conversion rows
+  // (and every row ever written before this migration) leave both null and
+  // are NEVER recalculated; `quantity` alone remains their source of truth.
+  unitId             String?
+  unit               InventoryUnit? @relation(fields: [unitId], references: [id])
+  quantityInBaseUnit Float?
+
   @@index([clinicId, itemId, createdAt])
   @@index([clinicId, treatmentPlanProcedureId])
   @@index([clinicId, packageApplicationId])
+  @@index([clinicId, unitId])
 }
 
 // ── Tedavi Planı Görselleştirme ───────────────────────────────────────────────
