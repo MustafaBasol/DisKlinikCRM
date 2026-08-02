@@ -3,7 +3,21 @@
 **Phase:** F2 PREPARATION — Modular Monolith Boundary Definition
 **Type:** Backlog classification + new evidence files only (no application code, no tracker/index/phase file, no ClickUp mutation)
 **Status:** `AGENT_COMPLETED` / `PR_OPENED_AWAITING_REVIEW` (maximum status per task instruction — never claim more)
-**Authorized in parallel with:** F1-003-B2, PR #268 (`feature/f1-003-p3-layered-ci-workflows`, OPEN), and the other F2-PREP discovery tasks (F2-PREP-001 Domain Ownership Inventory, F2-PREP-002 Cross-Domain Dependency Map, F2-PREP-004 Modularization Sequence — all confirmed as fresh, zero-commit worktrees at `origin/main` tip at the time this task ran; none of their content was read into or copied by this document beyond that observation).
+**Authorized in parallel with:** F1-003-B2, PR #268 (`feature/f1-003-p3-layered-ci-workflows`, OPEN), and the other F2-PREP discovery tasks (F2-PREP-001 Domain Ownership Inventory, F2-PREP-002 Cross-Domain Dependency Map, F2-PREP-004 Modularization Sequence). At this task's start, `git worktree list` showed all three sibling worktrees sitting at `origin/main` tip with zero commits ahead of it — a **start-time observation only**, not a current program-status claim about those tasks; no sibling worktree content was read into or copied by this document at any point, then or now.
+
+> **R1 reconciliation note (this revision):** sanitizes author-machine filesystem paths from both evidence files; reconciles wording against externally supplied F2-PREP-001 delivery facts (now PR #276, `AGENT_COMPLETED`/`PR_OPENED_AWAITING_REVIEW`, not merged, proposing a candidate 38-domain inventory); corrects sibling-task wording to a start-time observation; corrects the status/next-task sections; and tightens the ClickUp scope-boundary language. No repository content was re-read for this revision beyond the externally supplied PR #276 metadata named in the R1 task instructions themselves — no F2-PREP-001 worktree or branch content was read or copied.
+
+### Status (R1)
+
+| Item | Status |
+|---|---|
+| Feature intake framework | completed |
+| Repository-derived backlog classification | completed |
+| ClickUp-derived backlog import | pending external import |
+| Taxonomy reconciliation | pending reviewed F2-PREP-001 result |
+| Merged | no |
+| Deployed | no |
+| Production verified | no |
 
 Machine-readable companion: [F2-PREP-003_feature_intake_domain_mapping.json](F2-PREP-003_feature_intake_domain_mapping.json).
 
@@ -15,11 +29,11 @@ Machine-readable companion: [F2-PREP-003_feature_intake_domain_mapping.json](F2-
 |---|---|
 | Baseline branch | `origin/main` |
 | Baseline SHA | `70b1690c1a656c95cead7b42812cc9ae6447bfb7` (exact tip of `origin/main` at task start — merge commit for PR #275, `feature/external-calendar-outbound-sync-phase2`) |
-| Worktree | `E:/Ek Gelir/Siteler/DisKlinikCRM-worktrees/f2-prep-003-feature-intake-domain-mapping` |
+| Worktree | fresh isolated worktree; local filesystem path intentionally omitted |
 | Branch | `docs/f2-prep-003-feature-intake-domain-mapping` |
 | Intervening commits between baseline and HEAD | 0 (fresh worktree cut directly from `origin/main`) |
 
-`git worktree list` at task start confirmed three sibling F2-PREP worktrees already exist (`f2-prep-001-domain-ownership-inventory`, `E:/Ek Gelir/Siteler/DisKlinikCRM-f2prep002` for F2-PREP-002, `f2-prep-004-modularization-sequence`), all sitting at `origin/main` HEAD `70b1690` with zero commits ahead of it — i.e. all three are not-yet-started siblings, not completed prior art. This task did not enter, read the working tree of, or depend on the content of any of those worktrees beyond this `git worktree list` observation.
+`git worktree list` at task start confirmed three sibling F2-PREP worktrees already existed as isolated worktrees (task IDs F2-PREP-001, F2-PREP-002, F2-PREP-004), all sitting at `origin/main` HEAD `70b1690` with zero commits ahead of it. **This was a start-time observation only, not a current program-status claim** — it describes the state at the moment this task began, not the state of those tasks now or at any later point. This task did not enter, read the working tree of, or depend on the content of any of those worktrees beyond this `git worktree list` observation, then or in this revision. See §4.1 below for the externally supplied, current F2-PREP-001 delivery status (PR #276).
 
 ---
 
@@ -51,13 +65,28 @@ Machine-readable companion: [F2-PREP-003_feature_intake_domain_mapping.json](F2-
 
 **Directly relevant repository finding:** GitHub Issue **#236 — "F0-ORCH-001 · Secure ClickUp → Claude Code → AI Review Orchestration Bootstrap"** (labels: `architecture`, `automation`, `security`) is **OPEN**, with no linked merged PR. This is the actual program task that would build the secure ClickUp integration this task was asked to use — its open status is independent, repository-native confirmation that the integration does not exist yet, consistent with (not merely coincident with) this session's own empty `ToolSearch` result. It is recorded as backlog item **F2P3-006** below, not silently dropped.
 
+**ClickUp claim boundary (explicit, per this revision's own instruction to state this clearly):**
+
+- No ClickUp task was read or modified by this task, in the original pass or in this revision.
+- The ClickUp-derived count in the JSON companion is exactly **0** (`clickup_derived_backlog: []`).
+- This framework (the intake checklist, stop conditions, readiness values, and JSON schema) is **ready to receive a ClickUp import** once F2P3-006 (or an equivalent authorization) lands — it defines the target shape, it does not perform the import.
+- The **17-item repository-derived backlog in §5 is not a substitute for the full ClickUp backlog.** It is a repository-evidence-only sample (GitHub issues + phase-document backlog categories + planned-domain epics + one legacy roadmap item).
+- **The 17 items must not be presented, cited, or reported anywhere as the full NoraMedi feature backlog total.** The true backlog total is unknown until a ClickUp import occurs; this document does not estimate it.
+
 ---
 
 ## 4. Classification framework
 
 ### 4.1 Domain taxonomy used
 
-This task reused the existing 37-domain, repository-evidence-verified taxonomy from `MODULE_MAP.md`/`DEPENDENCY_MAP.md` (F0-003/F0-004) rather than waiting on the parallel, not-yet-delivered F2-PREP-001 (Domain Ownership Inventory). Full list with codes is in the JSON companion's `domain_taxonomy_reference`. This is recorded explicitly as a **dependency this task took on an external-but-sibling task's eventual output** — if F2-PREP-001 revises the taxonomy, every `proposed_owning_domain` value below should be re-checked against it, not assumed still correct.
+**A. Historical task-start basis.** At the time this task originally ran, the parallel F2-PREP-001 (Domain Ownership Inventory) sibling task had not delivered any output (its worktree was observed at `origin/main` tip with zero commits — see §1). This task therefore used the existing 37-domain, repository-evidence-verified taxonomy from `MODULE_MAP.md`/`DEPENDENCY_MAP.md` (F0-003/F0-004) as its domain vocabulary. Full list with codes is in the JSON companion's `domain_taxonomy_reference`.
+
+**B. Current reconciliation note (this revision, R1).** F2-PREP-001 has since delivered: it is now **PR #276**, status `AGENT_COMPLETED` / `PR_OPENED_AWAITING_REVIEW`, **not merged**. Per the externally supplied delivery facts for this revision, PR #276 proposes a **38-domain inventory** — one candidate domain beyond the 37 used here, **External Calendar Integration** — plus deltas to the existing Privacy, Platform Administration, and Storage domain entries. This revision explicitly does **not** treat the 38-domain inventory as accepted or merged, and does **not** silently reassign any backlog item's `proposed_owning_domain` on that basis:
+
+- Every `proposed_owning_domain` value in §5 below **remains valid against the accepted 37-domain baseline** (F0-003/F0-004, still the only externally-accepted taxonomy as of this revision).
+- **External Calendar Integration is a candidate taxonomy delta, not yet authoritative** — no backlog item in §5 references it, since doing so would assume an outcome PR #276 has not yet been given.
+- Every `proposed_owning_domain` value **must be rechecked during F2-PREP-005** against the reviewed/merged F2-PREP-001 result (the 38-domain inventory, or whatever form it takes after review) — this is an open dependency, not a closed one.
+- No backlog item was silently reassigned in this revision without repository evidence; this revision changed wording and path sanitization only, not any `proposed_owning_domain`, `readiness`, `suggested_implementation_wave`, or `classification_confidence` field value in the JSON companion.
 
 ### 4.2 Readiness values (definitions)
 
@@ -119,7 +148,7 @@ No dates are assigned to any wave or item — none exist in repository evidence,
 
 ## 5. Backlog map
 
-**17 items total, all repository-derived, 0 ClickUp-derived.** Full detail (all ~20 fields per item) is in the JSON companion; this table is the compact index.
+**17 items total, all repository-derived, 0 ClickUp-derived.** Full detail (all ~20 fields per item) is in the JSON companion; this table is the compact index. **This is not the full NoraMedi feature backlog** — see the ClickUp claim boundary in §3.
 
 | ID | Title | Domain | Readiness | Wave | Confidence |
 |---|---|---|---|---|---|
@@ -167,7 +196,7 @@ No dates are assigned to any wave or item — none exist in repository evidence,
 
 ## 6. Missing decisions (explicitly not made by this task)
 
-- **Domain taxonomy authority**: F2-PREP-001 (Domain Ownership Inventory) has not delivered yet; this task's `proposed_owning_domain` values should be re-validated once it does.
+- **Domain taxonomy authority**: F2-PREP-001 (Domain Ownership Inventory) has now delivered as **PR #276** (`AGENT_COMPLETED`/`PR_OPENED_AWAITING_REVIEW`, not merged), proposing a candidate 38-domain inventory (adds External Calendar Integration; deltas to Privacy, Platform Administration, Storage). This task's `proposed_owning_domain` values remain valid against the accepted 37-domain baseline and must be rechecked during **F2-PREP-005** against the reviewed/merged F2-PREP-001 result — see §4.1.
 - **Contract syntax** (ADR-015 open question): TypeScript interface vs. interface + runtime validation — not decided; blocks F2P3-007/008/009/011/012.
 - **Queue/job platform** (ADR-006/007 `NEEDS_POC`): blocks F2P3-010.
 - **AI Gateway architecture** (ADR-009, F8) and **Official Integration Platform** (ADR-010, F9): both require external decisions outside this task's authority.
@@ -238,6 +267,22 @@ No other file in the working tree was created, modified, or deleted by this task
 
 ## 10. Exact next task
 
-Per this task's own dependency chain, the next task is **F2-PREP-001 — Domain Ownership Inventory** (or its equivalent), since this document's `proposed_owning_domain` assignments are explicitly provisional pending that task's output. A close second candidate is closing the GitHub-issue-hygiene gap found in §6 (issues #262/#263/#267 open despite merged/in-review implementation), which is a low-risk, high-clarity cleanup item outside this task's own write authorization.
+**Do not restart F2-PREP-001** — it has already delivered (PR #276, `AGENT_COMPLETED`/`PR_OPENED_AWAITING_REVIEW`).
 
-This task does not authorize the start of any Wave 1+ backlog item — it only classifies them.
+**Await completion/review of:**
+
+- F2-PREP-001-R1 on PR #276
+- F2-PREP-002
+- F2-PREP-004
+
+**Then execute F2-PREP-005 — Consolidated Modularization Charter**, which must:
+
+- reconcile the reviewed domain inventory (the 37- vs. 38-domain question, and any further deltas from F2-PREP-001-R1)
+- reconcile the cross-domain dependency map (F2-PREP-002's output)
+- import, or separately authorize, the real ClickUp backlog reconciliation (this document's framework is ready to receive it; it does not perform it)
+- resolve candidate domain ownership (including whether External Calendar Integration is accepted)
+- select the pilot module (this document's own evidence names CC-04/Appointment booking-cancellation as the strongest repository-evidenced candidate — F2-PREP-005 makes the final selection, not this task)
+- update the authoritative tracker/phase/index documents (explicitly out of this task's own write scope)
+- authorize the first modularization implementation task
+
+This task does not authorize the start of any Wave 1+ backlog item, F2-PREP-001 restart, or the F2-PREP-005 charter itself — it only classifies backlog and hands off the open dependencies above.

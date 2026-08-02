@@ -6,14 +6,22 @@
   "generated_from": {
     "baseline_branch": "origin/main",
     "baseline_sha": "70b1690c1a656c95cead7b42812cc9ae6447bfb7",
-    "worktree": "E:/Ek Gelir/Siteler/DisKlinikCRM-worktrees/f2-prep-003-feature-intake-domain-mapping",
+    "worktree": "fresh isolated worktree; local filesystem path intentionally omitted",
     "branch": "docs/f2-prep-003-feature-intake-domain-mapping"
   },
   "clickup_access": {
     "status": "UNAVAILABLE_IN_THIS_ENVIRONMENT",
     "checked_via": "ToolSearch query \"clickup\" against the session's deferred/MCP tool registry — zero matches",
     "consequence": "clickup_derived_backlog is an empty array (see below); no ClickUp task ID, title, or status was invented; treat as PENDING_EXTERNAL_IMPORT",
-    "related_repository_finding": "GitHub Issue #236 (F0-ORCH-001, OPEN) is itself the unfinished program task to bootstrap secure ClickUp -> Claude Code -> AI review orchestration — its OPEN status is direct repository evidence that the ClickUp integration this task was asked to use has not been built/authorized yet, independent of this session's own tool availability"
+    "related_repository_finding": "GitHub Issue #236 (F0-ORCH-001, OPEN) is itself the unfinished program task to bootstrap secure ClickUp -> Claude Code -> AI review orchestration — its OPEN status is direct repository evidence that the ClickUp integration this task was asked to use has not been built/authorized yet, independent of this session's own tool availability",
+    "claim_boundary": {
+      "clickup_task_read_or_modified": false,
+      "clickup_derived_count": 0,
+      "framework_ready_for_clickup_import": true,
+      "repository_derived_backlog_is_substitute_for_full_clickup_backlog": false,
+      "repository_derived_item_count_is_full_noramedi_backlog_total": false,
+      "note": "The 17-item repository_derived_backlog (plus phase/planned/legacy sub-arrays) is a repository-evidence-only sample. It must never be presented, cited, or reported as the full NoraMedi feature backlog total — that total is unknown until a ClickUp import occurs, which this document does not perform."
+    }
   },
   "repository_sources_used": [
     "docs/program/NORAMEDI_MASTER_TRACKER.md",
@@ -34,7 +42,14 @@
   ],
   "domain_taxonomy_reference": {
     "source": "docs/program/MODULE_MAP.md + docs/program/DEPENDENCY_MAP.md §10.1 (F0-003/F0-004, repository-evidence-verified as of 2026-07-18)",
-    "note": "F2-PREP-001 (Domain Ownership Inventory) is a parallel, not-yet-delivered sibling task (worktree exists at origin/main tip, zero commits at time of this task) that may refine this taxonomy. This task uses the existing F0-003/F0-004 taxonomy as the authoritative current baseline and flags reliance on it explicitly rather than waiting.",
+    "note": "Historical (task-start) basis: F2-PREP-001 (Domain Ownership Inventory) had not delivered any output at this task's original start (worktree observed at origin/main tip, zero commits) — a start-time observation only, not a later status claim. This task used the existing F0-003/F0-004 37-domain taxonomy as the authoritative baseline and flagged reliance on it explicitly rather than waiting.",
+    "reconciliation_r1": {
+      "f2_prep_001_status": "PR #276, AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW, not merged",
+      "proposed_inventory": "38 domains (candidate, not authoritative)",
+      "new_candidate_domain": "External Calendar Integration",
+      "other_proposed_deltas": ["Privacy", "Platform Administration", "Storage"],
+      "treatment": "The 38-domain inventory is NOT treated as accepted or merged. Every proposed_owning_domain value in this file remains valid against the accepted 37-domain baseline and must be rechecked during F2-PREP-005 against the reviewed/merged F2-PREP-001 result. No backlog item was reassigned in this revision without repository evidence."
+    },
     "domains": [
       {"code": "IDA", "name": "Identity and Access", "classification": "core platform", "criticality": "regulatory/tenant-critical"},
       {"code": "ORG", "name": "Organization / Clinic / User Membership", "classification": "core platform", "criticality": "regulatory/tenant-critical"},
@@ -593,6 +608,30 @@
     "distinguishes_inferred_classification": true,
     "distinguishes_unverified_ownership": true,
     "clickup_tasks_invented": 0,
-    "domain_taxonomy_source_is_external_task_not_yet_delivered": "F2-PREP-001 (Domain Ownership Inventory) — this task used F0-003/F0-004's existing repository-evidence-verified taxonomy instead of waiting"
+    "domain_taxonomy_source_at_task_start": "F2-PREP-001 (Domain Ownership Inventory) had not delivered at task start — this task used F0-003/F0-004's existing repository-evidence-verified 37-domain taxonomy instead of waiting",
+    "domain_taxonomy_source_current_r1": "F2-PREP-001 has since delivered as PR #276 (AGENT_COMPLETED / PR_OPENED_AWAITING_REVIEW, not merged), proposing a candidate 38-domain inventory — not treated as accepted; see domain_taxonomy_reference.reconciliation_r1"
+  },
+  "status_r1": {
+    "feature_intake_framework": "completed",
+    "repository_derived_backlog_classification": "completed",
+    "clickup_derived_backlog_import": "pending external import",
+    "taxonomy_reconciliation": "pending reviewed F2-PREP-001 result",
+    "merged": false,
+    "deployed": false,
+    "production_verified": false
+  },
+  "exact_next_task_r1": {
+    "do_not_restart": "F2-PREP-001 (already delivered as PR #276)",
+    "await": ["F2-PREP-001-R1 on PR #276", "F2-PREP-002", "F2-PREP-004"],
+    "then_execute": "F2-PREP-005 — Consolidated Modularization Charter",
+    "f2_prep_005_must": [
+      "reconcile the reviewed domain inventory",
+      "reconcile the cross-domain dependency map",
+      "import or separately authorize the real ClickUp backlog reconciliation",
+      "resolve candidate domain ownership",
+      "select the pilot module",
+      "update authoritative tracker/phase/index documents",
+      "authorize the first modularization implementation task"
+    ]
   }
 }
