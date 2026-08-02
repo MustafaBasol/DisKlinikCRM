@@ -49,7 +49,16 @@ router.post('/inventory-units', authorize(MANAGE_ROLES), async (req: AuthRequest
     return res.status(400).json({ error: 'name and abbreviation are required', code: 'INVENTORY_UNIT_FIELDS_REQUIRED' });
   }
 
-  const clinicId = await resolveEffectiveClinicId(req.user!, req.body.clinicId as string | undefined);
+  const bodyClinicId = req.body.clinicId != null ? String(req.body.clinicId) : undefined;
+  const queryClinicId = req.query.clinicId != null ? String(req.query.clinicId) : undefined;
+
+  if (bodyClinicId !== undefined && queryClinicId !== undefined && bodyClinicId !== queryClinicId) {
+    return res.status(400).json({ error: 'clinicId in body and query must match', code: 'INVENTORY_UNIT_CLINIC_MISMATCH' });
+  }
+
+  const selectedClinicId = bodyClinicId ?? queryClinicId;
+
+  const clinicId = await resolveEffectiveClinicId(req.user!, selectedClinicId);
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
 
   try {

@@ -46,6 +46,7 @@ const ERROR_CODE_KEYS: Record<string, string> = {
   INVENTORY_ADJUSTMENT_UNIT_UNSUPPORTED: 'inventory:errors.adjustmentUnitUnsupported',
   INVENTORY_UNIT_FIELDS_REQUIRED: 'inventory:errors.unitFieldsRequired',
   INVENTORY_UNIT_DUPLICATE: 'inventory:errors.unitDuplicate',
+  INVENTORY_UNIT_CLINIC_MISMATCH: 'inventory:errors.unitClinicMismatch',
   INVENTORY_INSUFFICIENT_STOCK: 'inventory:transaction.errors.insufficientStockGeneric',
   INVENTORY_TRANSACTION_UNIT_REQUIRED: 'inventory:errors.transactionUnitRequired',
   INVENTORY_CONSUMPTION_UNIT_LOCKED: 'inventory:errors.consumptionUnitLocked',

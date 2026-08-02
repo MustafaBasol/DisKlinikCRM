@@ -262,6 +262,154 @@ await test('the transactions route propagates InventoryUnitConversionError (cove
   assert.match(postTxBlock, /err instanceof InventoryUnitConversionError/);
 });
 
+// ─── PR #286 follow-up: POST /inventory-units query-vs-body clinic selection ─
+
+section('── POST /inventory-units clinic selection (query vs body) ────────────');
+
+// In-memory mirror of resolveEffectiveClinicId (clinicScope.ts): validates
+// the requested (or default) clinic belongs to the user's org and is
+// accessible to the user.
+type SimUser = { organizationId: string; clinicId: string; canAccessAllClinics: boolean; allowedClinicIds: string[] };
+
+const mockClinics = [
+  { id: 'clinic-A', organizationId: 'org-1' },
+  { id: 'clinic-B', organizationId: 'org-1' },
+  { id: 'clinic-other-org', organizationId: 'org-2' },
+];
+
+function simResolveEffectiveClinicId(user: SimUser, requestedClinicId: string | undefined): string | null {
+  const clinicId = requestedClinicId ?? user.clinicId;
+  const clinic = mockClinics.find((c) => c.id === clinicId && c.organizationId === user.organizationId);
+  if (!clinic) return null;
+  if (!user.canAccessAllClinics && !user.allowedClinicIds.includes(clinicId)) return null;
+  return clinicId;
+}
+
+// Mirrors the POST /inventory-units clinic-resolution block in
+// inventoryUnits.ts exactly (body/query merge + mismatch guard).
+function simResolvePostClinicSelection(
+  user: SimUser,
+  bodyClinicId: string | undefined,
+  queryClinicId: string | undefined,
+): { error: string } | { clinicId: string } {
+  if (bodyClinicId !== undefined && queryClinicId !== undefined && bodyClinicId !== queryClinicId) {
+    return { error: 'INVENTORY_UNIT_CLINIC_MISMATCH' };
+  }
+  const selectedClinicId = bodyClinicId ?? queryClinicId;
+  const clinicId = simResolveEffectiveClinicId(user, selectedClinicId);
+  if (!clinicId) return { error: 'ACCESS_DENIED' };
+  return { clinicId };
+}
+
+const orgAdmin: SimUser = { organizationId: 'org-1', clinicId: 'clinic-A', canAccessAllClinics: true, allowedClinicIds: [] };
+const clinicAOnlyUser: SimUser = { organizationId: 'org-1', clinicId: 'clinic-A', canAccessAllClinics: false, allowedClinicIds: ['clinic-A'] };
+
+await test('org admin creates a unit in a selected sibling clinic via query', () => {
+  const result = simResolvePostClinicSelection(orgAdmin, undefined, 'clinic-B');
+  assert.deepEqual(result, { clinicId: 'clinic-B' });
+});
+
+await test('the created unit appears in the sibling clinic\'s scoped list', () => {
+  resetFixtures();
+  const result = simResolvePostClinicSelection(orgAdmin, undefined, 'clinic-B') as { clinicId: string };
+  simCreateUnit(result.clinicId, 'Palet', 'PLT');
+  assert.equal(dbFindUnitsByClinic(['clinic-B'], false).length, 1);
+});
+
+await test('the created unit does not appear in the default clinic\'s list', () => {
+  resetFixtures();
+  const result = simResolvePostClinicSelection(orgAdmin, undefined, 'clinic-B') as { clinicId: string };
+  simCreateUnit(result.clinicId, 'Palet', 'PLT');
+  assert.equal(dbFindUnitsByClinic(['clinic-A'], false).length, 0);
+});
+
+await test('a query-only clinic the user cannot access is rejected', () => {
+  const result = simResolvePostClinicSelection(clinicAOnlyUser, undefined, 'clinic-B');
+  assert.deepEqual(result, { error: 'ACCESS_DENIED' });
+});
+
+await test('a query-only clinic from a different organization is rejected', () => {
+  const result = simResolvePostClinicSelection(orgAdmin, undefined, 'clinic-other-org');
+  assert.deepEqual(result, { error: 'ACCESS_DENIED' });
+});
+
+await test('conflicting body/query clinic IDs are rejected rather than silently choosing one', () => {
+  const result = simResolvePostClinicSelection(orgAdmin, 'clinic-A', 'clinic-B');
+  assert.deepEqual(result, { error: 'INVENTORY_UNIT_CLINIC_MISMATCH' });
+});
+
+await test('matching body/query clinic IDs are accepted (not treated as a mismatch)', () => {
+  const result = simResolvePostClinicSelection(orgAdmin, 'clinic-B', 'clinic-B');
+  assert.deepEqual(result, { clinicId: 'clinic-B' });
+});
+
+await test('body-only clinic selection remains supported', () => {
+  const result = simResolvePostClinicSelection(orgAdmin, 'clinic-B', undefined);
+  assert.deepEqual(result, { clinicId: 'clinic-B' });
+});
+
+await test('neither body nor query supplied falls back to the user\'s default clinic (single-clinic behavior)', () => {
+  const result = simResolvePostClinicSelection(clinicAOnlyUser, undefined, undefined);
+  assert.deepEqual(result, { clinicId: 'clinic-A' });
+});
+
+await test('inventoryUnits.ts POST route resolves bodyClinicId/queryClinicId before calling resolveEffectiveClinicId (source regression)', () => {
+  const block = inventoryUnitsSrc.slice(inventoryUnitsSrc.indexOf("router.post('/inventory-units'"));
+  assert.match(block, /req\.body\.clinicId/);
+  assert.match(block, /req\.query\.clinicId/);
+  assert.match(block, /code:\s*'INVENTORY_UNIT_CLINIC_MISMATCH'/);
+  assert.match(block, /resolveEffectiveClinicId\(req\.user!,\s*selectedClinicId\)/);
+});
+
+// ─── PR #286 follow-up: activity-log text reflects the entered unit ────────
+
+section('── Activity-log unit text reflects the entered unit ──────────────────');
+
+type SimTxRole = 'purchase' | 'consumption' | 'legacy';
+type SimTxItem = {
+  unit: string;
+  purchaseUnit?: { abbreviation: string } | null;
+  consumptionUnit?: { abbreviation: string } | null;
+};
+
+// Mirrors the enteredUnitLabel resolution inside the locked $transaction in
+// inventory.ts's POST /inventory/:id/transactions handler.
+function simResolveEnteredUnitLabel(role: SimTxRole, item: SimTxItem): string {
+  if (role === 'purchase') return item.purchaseUnit?.abbreviation ?? item.unit;
+  if (role === 'consumption') return item.consumptionUnit?.abbreviation ?? item.unit;
+  return item.unit;
+}
+
+await test('a purchase-unit transaction logs the purchase unit\'s abbreviation, not the legacy item.unit', () => {
+  const item: SimTxItem = { unit: 'piece', purchaseUnit: { abbreviation: 'Koli' }, consumptionUnit: { abbreviation: 'Adet' } };
+  assert.equal(simResolveEnteredUnitLabel('purchase', item), 'Koli');
+});
+
+await test('a consumption-unit transaction logs the consumption unit\'s abbreviation, not the legacy item.unit', () => {
+  const item: SimTxItem = { unit: 'piece', purchaseUnit: { abbreviation: 'Koli' }, consumptionUnit: { abbreviation: 'Adet' } };
+  assert.equal(simResolveEnteredUnitLabel('consumption', item), 'Adet');
+});
+
+await test('a legacy item with no unitId falls back to item.unit', () => {
+  const item: SimTxItem = { unit: 'piece', purchaseUnit: null, consumptionUnit: null };
+  assert.equal(simResolveEnteredUnitLabel('legacy', item), 'piece');
+});
+
+await test('the transactions route selects purchaseUnit/consumptionUnit on the same locked item read (no extra query outside the transaction)', () => {
+  const txStart = postTxBlock.indexOf('prisma.$transaction(async (tx)');
+  const findIdx = postTxBlock.indexOf('findUniqueOrThrow(', txStart);
+  const findCallEnd = postTxBlock.indexOf(');', findIdx);
+  const findCall = postTxBlock.slice(findIdx, findCallEnd);
+  assert.match(findCall, /purchaseUnit:\s*true/);
+  assert.match(findCall, /consumptionUnit:\s*true/);
+});
+
+await test('the logged itemUnit is resolved from role, not hardcoded to item.unit (closes the stale-unit activity-log bug)', () => {
+  assert.equal(/itemUnit:\s*item\.unit\b/.test(postTxBlock), false, 'itemUnit must not always be item.unit — it must reflect the entered purchase/consumption unit');
+  assert.match(postTxBlock, /role === 'purchase'/);
+  assert.match(postTxBlock, /role === 'consumption'/);
+});
+
 section('── Consumption/base-unit lock (source regression) ────────────────────');
 
 await test('PUT /inventory/:id row-locks the item with FOR UPDATE via Prisma.sql before reading stock/history counts', () => {

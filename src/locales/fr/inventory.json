@@ -140,6 +140,7 @@
     "adjustmentUnitUnsupported": "Les transactions d'ajustement doivent utiliser l'unité de consommation, pas l'unité d'achat.",
     "unitFieldsRequired": "Le nom et l'abréviation de l'unité sont obligatoires.",
     "unitDuplicate": "Une unité portant ce nom ou cette abréviation existe déjà.",
+    "unitClinicMismatch": "La sélection de clinique est incohérente. Veuillez actualiser la page et réessayer.",
     "transactionUnitRequired": "Une unité doit être sélectionnée pour le mouvement de stock de cet article.",
     "consumptionUnitLocked": "L'unité de consommation ne peut pas être modifiée ou supprimée tant qu'il existe un stock, un stock minimum ou un historique de mouvements pour cet article."
   }

@@ -140,6 +140,7 @@
     "adjustmentUnitUnsupported": "Korrekturbuchungen muessen die Verbrauchseinheit verwenden, nicht die Einkaufseinheit.",
     "unitFieldsRequired": "Einheitsname und Abkuerzung sind erforderlich.",
     "unitDuplicate": "Eine Einheit mit diesem Namen oder dieser Abkuerzung existiert bereits.",
+    "unitClinicMismatch": "Die Klinikauswahl ist inkonsistent. Bitte laden Sie die Seite neu und versuchen Sie es erneut.",
     "transactionUnitRequired": "Fuer die Bestandsbewegung dieses Artikels muss eine Einheit ausgewaehlt werden.",
     "consumptionUnitLocked": "Die Verbrauchseinheit kann nicht geaendert oder entfernt werden, solange fuer diesen Artikel Bestand, Mindestbestand oder ein Bewegungsverlauf vorhanden ist."
   }

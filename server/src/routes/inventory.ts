@@ -436,7 +436,10 @@ router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLI
       await tx.$queryRaw<{ id: string }[]>(
         Prisma.sql`SELECT id FROM "InventoryItem" WHERE id = ${id} AND "clinicId" = ${clinicId} FOR UPDATE`
       );
-      const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id } });
+      const item = await tx.inventoryItem.findUniqueOrThrow({
+        where: { id },
+        include: { purchaseUnit: true, consumptionUnit: true },
+      });
 
       const role = resolveUnitRole(item, requestedUnitId);
 
@@ -478,7 +481,16 @@ router.post('/inventory/:id/transactions', authorize(['OWNER', 'ORG_ADMIN', 'CLI
 
       const created = await tx.inventoryTransaction.create({ data: transactionData });
       const updatedItem = await tx.inventoryItem.findUniqueOrThrow({ where: { id }, select: { currentStock: true } });
-      return { created, newStock: updatedItem.currentStock, itemName: item.name, itemUnit: item.unit };
+
+      // Activity-log text should describe the unit actually entered for this
+      // transaction, not the item's legacy free-text unit — a purchase-unit
+      // entry (e.g. "3 Koli") must not be logged as "3 Adet".
+      const enteredUnitLabel =
+        role === 'purchase' ? (item.purchaseUnit?.abbreviation ?? item.unit)
+        : role === 'consumption' ? (item.consumptionUnit?.abbreviation ?? item.unit)
+        : item.unit;
+
+      return { created, newStock: updatedItem.currentStock, itemName: item.name, itemUnit: enteredUnitLabel };
     });
 
     const typeLabel = txType === 'in' ? 'Giriş' : txType === 'out' ? 'Çıkış' : 'Düzeltme';

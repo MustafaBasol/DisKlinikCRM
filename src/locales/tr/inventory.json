@@ -132,7 +132,7 @@
     "saveFailed": "Kayıt sırasında hata oluştu.",
     "unitInactive": "Bu birim pasif durumda ve yeni kayıtlarda kullanılamaz.",
     "unitNotAssigned": "Seçilen birim bu malzemenin alış veya sarf birimiyle eşleşmiyor.",
-    "unitCrossClinic": "Seçilen birim bu klinige ait değil.",
+    "unitCrossClinic": "Seçilen birim bu kliniğe ait değil.",
     "conversionFactorMissing": "Bu malzeme için geçerli bir dönüşüm katsayısı tanımlanmamış.",
     "conversionFactorInvalid": "Dönüşüm katsayısı 0'dan büyük bir sayı olmalıdır.",
     "conversionFactorLocked": "Bu malzeme için alış birimiyle işlem kaydedildikten sonra dönüşüm katsayısı değiştirilemez.",
@@ -140,6 +140,7 @@
     "adjustmentUnitUnsupported": "Düzeltme işlemleri alış birimiyle değil sarf birimiyle yapılmalıdır.",
     "unitFieldsRequired": "Birim adı ve kısaltması zorunludur.",
     "unitDuplicate": "Bu isimde veya kısaltmada bir birim zaten mevcut.",
+    "unitClinicMismatch": "Klinik seçimi tutarsız. Lütfen sayfayı yenileyip tekrar deneyin.",
     "transactionUnitRequired": "Bu malzeme için stok hareketinde bir birim seçilmelidir.",
     "consumptionUnitLocked": "Bu malzeme için stok, minimum stok veya işlem geçmişi mevcutken sarf birimi değiştirilemez veya kaldırılamaz."
   }
