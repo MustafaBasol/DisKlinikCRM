@@ -1,0 +1,224 @@
+{
+  "taskId": "F2-PREP-006-B",
+  "parent": "F2-PREP-006 — Imaging Pilot Boundary Contract Definition",
+  "frozenBaseline": "4cb334d213b4dbbac4193f1a8c1878deddb55714",
+  "branch": "docs/f2-prep-006-b-imaging-data-storage-kvkk",
+  "type": "READ-ONLY ASSESSMENT + NEW EVIDENCE FILES ONLY",
+  "inspectedPaths": [
+    "server/prisma/schema.prisma (lines 960-1029, 2520-2850, 3150-3245)",
+    "server/src/services/fileStorage.ts",
+    "server/src/services/imaging/imagingUploadValidation.ts",
+    "server/src/services/imaging/releaseMetadataValidation.ts",
+    "server/src/services/imaging/imagingRequestTransitions.ts",
+    "server/src/services/imaging/bridgePairing.ts",
+    "server/src/services/imaging/bridgeTokens.ts",
+    "server/src/services/imaging/bridgeOnboardingConfig.ts",
+    "server/src/services/imaging/bridgeUpdateConfig.ts",
+    "server/src/routes/attachments.ts",
+    "server/src/routes/imaging.ts",
+    "server/src/routes/imagingBridgePublic.ts",
+    "server/src/utils/clinicScope.ts",
+    "server/src/middleware/auth.ts",
+    "server/src/utils/auditLog.ts",
+    "server/src/utils/activity.ts",
+    "server/src/services/privacy/patientAnonymization.ts (lines 90-230)",
+    "server/src/services/privacy/deletionReviewInventory.ts (lines 1-70)",
+    "server/src/services/privacy/orphanFileInspection.ts",
+    "server/src/services/privacy/dataRetentionPolicy.ts (grep only, line 26 comment)",
+    "server/src/services/privacy/patientPrivacyExportPackage.ts (grep only)",
+    "server/src/services/backupService.ts (grep only, no RBAC keywords found)",
+    "server/src/services/fileBackupService.ts (lines 1-130, grep)",
+    "server/src/services/fileBackupDestination.ts (lines ~40-240, grep)",
+    "server/src/routes/platformAdmin.ts (lines 1-70, 1545-1660, grep)",
+    "server/src/middleware/platformAuth.ts",
+    "server/src/tests/imaging.test.ts (titles/structure only)",
+    "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts (titles/structure only)",
+    "server/src/tests/imagingBridgePairing.test.ts (filename/import graph only)",
+    "server/src/tests/imagingBridgeOnboarding.test.ts (filename/import graph only)",
+    "server/src/tests/imagingBridgeUpdate.test.ts (filename/import graph only)",
+    "server/src/tests/fileBackupService.test.ts (titles only)",
+    "server/src/tests/dbVerification/fileBackupDbIntegration.test.ts (titles only)",
+    "server/src/tests/platformBackup.test.ts (titles only)",
+    "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json (grep, prior evidence — read only)",
+    "docs/program/evidence/F2-PREP-002_cross_domain_dependency_map.json (grep, PZ-IMG-03 origin — read only)"
+  ],
+  "scopeExpansions": [
+    {
+      "id": "SE-1",
+      "path": ["server/src/routes/platformAdmin.ts", "server/src/middleware/platformAuth.ts"],
+      "followed": true,
+      "forcingReference": "server/src/routes/platformAdmin.ts dynamic import('../services/backupService.js') at lines 1555/1568/1579/1598 and import('../services/fileBackupService.js') at lines 1619/1630/1650, plus static import of authenticatePlatformAdmin from '../middleware/platformAuth.js' at line 5",
+      "reason": "Required to resolve the open PZ-IMG-03 question (F2-PREP-002): the route calling server/src/services/backupService.ts was previously located as 'not in scope / unverified'. This task's objective 5 requires direct evidence before any change to PZ-IMG-03 status, so the concrete import chain was followed to its authorization gate."
+    },
+    {
+      "id": "SE-2",
+      "path": ["server/src/services/fileBackupDestination.ts"],
+      "followed": true,
+      "forcingReference": "server/src/services/fileBackupService.ts:43-52 statically imports isFileBackupDestinationConfigured, buildBackupDestinationKey, writeToBackupDestination, etc. from './fileBackupDestination.js'",
+      "reason": "fileBackupService.ts is a direct storage dependency of ImagingImage (FileBackupEntry.sourceModel includes 'ImagingImage'); its destination-key construction had to be inspected to assess tenant-isolation of backup copies."
+    },
+    {
+      "id": "SE-3",
+      "path": ["server/src/services/security/securityDetectionRules.js"],
+      "followed": false,
+      "forcingReference": "server/src/utils/clinicScope.ts:13 imports evaluateCrossTenantDenialSignal from this module, called by recordCrossTenantDenialIfTargeted() on scope-denial",
+      "reason": "Identified as a concrete authorization-adjacent dependency of the tenant-scope helper used by every imaging/attachment route, but NOT read — outside this task's targeted scope and not required to answer any of the seven objectives. Flagged as a boundary note for the parent/consolidation task, not expanded."
+    }
+  ],
+  "relevantModels": [
+    "ImagingDevice", "ImagingRequest", "ImagingStudy", "ImagingImage",
+    "ImagingBridgeAgent", "ImagingBridgePairing", "ImagingBridgePairingDevice", "ImagingBridgeBinding",
+    "PatientAttachment", "LabOrderAttachment", "FileBackupEntry", "FileBackupRun"
+  ],
+  "ownershipClassification": [
+    { "model": "ImagingDevice", "classification": "IMG-owned", "rationale": "clinicId-scoped catalog of imaging devices; consumed only by Imaging — Server/Viewer routes (schema.prisma:2547-2567)." },
+    { "model": "ImagingRequest", "classification": "IMG-owned", "rationale": "clinicId-scoped clinical request; optional FKs to Patient/Appointment/TreatmentCase are references-by-identifier outward, not inbound ownership (schema.prisma:2571-2596)." },
+    { "model": "ImagingStudy", "classification": "IMG-owned", "rationale": "clinicId-scoped diagnostic study record; carries legalHold; owns ImagingImage[] (schema.prisma:2598-2645)." },
+    { "model": "ImagingImage", "classification": "IMG-owned", "rationale": "clinicId-scoped binary-reference row (filePath is a storage key, never a public URL); inherits legal-hold from parent study (schema.prisma:2751-2770)." },
+    { "model": "ImagingBridgeAgent", "classification": "BRG-owned", "rationale": "Device-bridge (Windows agent) principal; clinicId-scoped; distinct sub-domain per F2-PREP-001 'Imaging — Device Bridge / Windows Bridge' (schema.prisma:2652-2688)." },
+    { "model": "ImagingBridgePairing", "classification": "BRG-owned", "rationale": "One-time pairing-code flow for onboarding a bridge agent; clinicId-scoped (schema.prisma:2693-2716)." },
+    { "model": "ImagingBridgePairingDevice", "classification": "BRG-owned", "rationale": "Child of ImagingBridgePairing; no own clinicId field — tenant scope is inherited transitively via pairingId (schema.prisma:2718-2727)." },
+    { "model": "ImagingBridgeBinding", "classification": "BRG-owned", "rationale": "clinicId-scoped device-to-agent binding created at pairing redemption (schema.prisma:2731-2749)." },
+    { "model": "PatientAttachment", "classification": "shared infrastructure", "rationale": "Owned by the Patients domain (per F2-PREP-001 businessResponsibility note), not Imaging. Shares the same fileStorage.ts key scheme, backup ledger, anonymization pipeline, and orphan-inspection code as Imaging, but no Imaging route or service reads/writes PatientAttachment directly. Included here only because it shares storage/KVKK infrastructure with Imaging." },
+    { "model": "LabOrderAttachment", "classification": "shared infrastructure", "rationale": "Lab-domain owned; appears only as a FileBackupEntry.sourceModel sibling. Not read in depth — out of primary Imaging scope; listed for storage-pattern comparison only." },
+    { "model": "FileBackupEntry", "classification": "shared infrastructure", "rationale": "Platform-wide, cross-domain backup ledger; immutable append-only rows; ImagingImage is one of three sourceModel values (schema.prisma:3183-3209)." },
+    { "model": "FileBackupRun", "classification": "unresolved", "rationale": "Only seen as an FK target of FileBackupEntry.runId; full field list not extracted in this pass — evidence gap, see evidenceGaps." }
+  ],
+  "tenantEnforcement": {
+    "enforced": [
+      "server/src/routes/imaging.ts — every clinical route resolves clinicId exclusively through resolveEffectiveClinicId() or validateAndGetClinicIdScope() (server/src/utils/clinicScope.ts:147-167,179-222), which DB-verifies clinic.organizationId === user.organizationId and, absent canAccessAllClinics, that clinicId is in user.allowedClinicIds. No route was found reading clinicId from body/query for authorization without this re-validation.",
+      "server/src/routes/attachments.ts — same validateAndGetClinicIdScope() pattern on all 6 routes; clinicId used for storage/DB operations is patient.clinicId looked up inside the validated scope, not client-supplied directly (attachments.ts:120-126 comment).",
+      "server/src/routes/imagingBridgePublic.ts — every route derives clinicId exclusively from the authenticated bridge-agent DB row (agent.clinicId, imagingBridgePublic.ts:254), never from request body/query. No payload-controlled tenant-scope path was found.",
+      "server/src/services/fileStorage.ts buildStorageKey() — object storage keys are namespaced by clinicId as the first path segment (fileStorage.ts:71-74), giving storage-level isolation independent of the DB-level check.",
+      "server/src/services/fileBackupDestination.ts buildBackupDestinationKey() — backup destination keys are clinicId-scoped path segments (file-backups/{domain}/{clinicId}/{sourceRecordId}.bin), confirmed by dbVerification/fileBackupDbIntegration.test.ts:172 ('no cross-clinic path overlap')."
+    ],
+    "inherited": [
+      "ImagingBridgePairingDevice has no own clinicId field; tenant scope is inherited transitively through pairingId -> ImagingBridgePairing.clinicId (schema.prisma:2718-2727). Not independently verified at every read site in this pass.",
+      "ImagingImage.clinicId is a direct denormalized field, not a pure join — the invariant that it always equals its parent ImagingStudy.clinicId is an application-level assumption, not a DB constraint (no @@check or FK-derived constraint found)."
+    ],
+    "inferred": [
+      "GET /imaging/bridge-onboarding/config is intentionally NOT clinic-scoped (imaging.ts:1296 comment, global bridge-installer config) — this is a documented design choice, not a gap."
+    ],
+    "unverified": [
+      "server/src/services/fileBackupService.ts iterateSourceRows() (lines 102-116) iterates PatientAttachment/LabOrderAttachment/ImagingImage rows across ALL clinics with no clinicId filter at the source-scan layer — tenant isolation for this service exists only at the destination-key level, not the source-read level. Not independently confirmed whether this is an intentional platform-level design (single platform-admin operator) or an unreviewed gap."
+    ],
+    "potentiallyPayloadControlled": []
+  },
+  "authorizationFindings": [
+    "IMAGING_CLINICAL_ROLES = [OWNER, ORG_ADMIN, CLINIC_MANAGER, DENTIST, RECEPTIONIST]; IMAGING_MANAGE_ROLES = [OWNER, ORG_ADMIN, CLINIC_MANAGER] (imaging.ts:68-69). BILLING and ASSISTANT never appear in any imaging authorize() list — confirmed by source-scan-backed tests (imaging.test.ts:232-244).",
+    "Legal-hold mutation is restricted beyond the general clinical-role set on both attachment models: PATCH .../attachments/:id/legal-hold and PATCH /imaging/studies/:id/legal-hold both require OWNER or ORG_ADMIN only (attachments.ts:288, imaging.ts:927).",
+    "authenticate middleware (middleware/auth.ts:104-196) computes allowedClinicIds from UserClinic rows, rejects if no accessible clinic, cross-checks resolved clinic.organizationId === user.organizationId, and rejects on suspended/cancelled clinic status.",
+    "Backup/restore is authenticated (not role-differentiated authorized): every route under server/src/routes/platformAdmin.ts:152 (including the 7 backup/file-backup routes at lines 1553-1660) is gated only by authenticatePlatformAdmin, a single-tier check (server/src/middleware/platformAuth.ts, interface at lines 9-16 has only {id, email, sessionId} — no role/tier field exists on the platform-admin principal at all).",
+    "No step-up re-authentication (TOTP/password) is applied specifically to the backup/restore-triggering routes — verifyTotp is used only at platform-admin login/TOTP-setup/TOTP-verify endpoints (platformAdmin.ts:100,202,227), not in the backup section (1550-1660)."
+  ],
+  "auditFindings": [
+    "auditImaging() helper (imaging.ts:103-121, wraps writeAuditLog) covers device/request/study/bridge CRUD, view events (imaging_study_viewed on every preview/download), legal-hold changes, and bridge lifecycle events; metadata payloads are documented and test-verified to exclude filenames/patient identifiers/UIDs (imaging.test.ts:263-271).",
+    "attachments.ts writes AuditLog entries for legal-hold set/release and delete-blocked-by-hold, explicitly excluding the free-text legalHoldReason from audit metadata (attachments.ts:341-344 comment: 'no PII in audit log').",
+    "A SEPARATE table, ActivityLog (via utils/activity.ts logActivity()), DOES include original filenames in its description string for PatientAttachment upload (attachments.ts:161-170) and delete (attachments.ts:444-453) — this is a distinct code path from AuditLog and was not found to apply the same filename-redaction discipline.",
+    "writeAuditLog() (utils/auditLog.ts:37-58) is fire-and-forget and swallows all errors (console.error only) — an audit write failure does not fail the underlying request and is not otherwise surfaced. writeAuditLogInTx() (78-97) is transaction-scoped and non-swallowing but is used elsewhere (clinicBulkExportPackage.ts), not by imaging/attachment routes.",
+    "imagingBridgePublic.ts logs imaging_bridge_heartbeat_first_seen, imaging_bridge_study_ingested (metadata excludes filename/patient data), and imaging_bridge_pairing_redeemed."
+  ],
+  "storageFindings": [
+    "server/src/services/fileStorage.ts is the single storage abstraction for both PatientAttachment/LabOrderAttachment and ImagingImage bytes; local-disk (uploads/<clinicId>/...) by default, S3-compatible when S3_BUCKET is set (fileStorage.ts:1-22).",
+    "buildStorageKey(clinicId, originalName) (fileStorage.ts:71-74) bakes clinicId into the storage key as the first path segment — tenant isolation is structural, not just a query filter.",
+    "isSafeStorageKey() (fileStorage.ts:144-155) rejects absolute POSIX/Win32 paths, UNC prefixes, and '..'/'.' traversal segments; a prior host-OS-dependent bug (Windows-style absolute paths passing on Linux) is documented as fixed in a comment referencing PR #160.",
+    "No signed-URL generation exists anywhere in fileStorage.ts (confirmed by full-file read) — see signedUrlFindings.",
+    "No at-rest encryption logic exists in fileStorage.ts itself; S3 server-side encryption, if any, would be bucket-level infrastructure configuration, not application-enforced — not confirmed in this pass (evidence gap).",
+    "No checksum/integrity verification exists on the PRIMARY upload path (attachments.ts / imaging.ts manual-upload route) — checksums are computed only for bridge-upload dedup (server-recomputed sha256 against client-claimed ingestKey, imagingBridgePublic.ts:247-252) and for FileBackupEntry copies (sourceChecksumSha256/destinationChecksumSha256).",
+    "deleteFile() (fileStorage.ts:467-474) performs a hard physical delete (S3 DeleteObjectCommand or fs.unlink), idempotent on ENOENT. For PatientAttachment it is called only after a confirmed single-row Prisma delete (attachments.ts:439). For ImagingImage there is NO delete endpoint at all — deleteFile is invoked only as compensating cleanup when a DB transaction fails after a file was already saved (imaging.ts:683-684; imagingBridgePublic.ts ~385), never as a user-facing lifecycle operation.",
+    "Forward orphan detection exists (orphanFileInspection.ts: DB row present, physical file missing -> storageVerifiedMissingAt, informational only, never triggers deletion). Reverse orphan detection (physical file present, no DB row) is explicitly NOT implemented (orphanFileInspection.ts comment, lines 16-22).",
+    "server/src/services/fileBackupService.ts explicitly never mutates primary storage (header comment, lines 1-31): 'NEVER modifies, renames, or deletes anything in primary storage... NEVER changes a PatientAttachment/LabOrderAttachment/ImagingImage/ImagingStudy row.' Confirmed: deleting a source PatientAttachment row does NOT delete its FileBackupEntry or destination object (dbVerification/fileBackupDbIntegration.test.ts:331, described in-test as 'disclosed gap, confirmed live')."
+  ],
+  "signedUrlFindings": {
+    "currentState": "No signed-URL mechanism exists anywhere in the inspected scope. All Imaging and PatientAttachment binary access (preview/download) streams bytes through the authenticated Express process via openFileStream() -> res, gated by authenticate + authorize(roles) + validateAndGetClinicIdScope on every single request. imaging.ts explicitly documents this as an intentional design principle (Turkish comment, lines 8-19: images never get a public URL).",
+    "responseHardening": "streamStudyImage() sets Cache-Control: private, no-store and X-Content-Type-Options: nosniff on every image response (imaging.ts:782-783) and writes an imaging_study_viewed audit event on every access.",
+    "futureRequirement": "If Imaging is ever extracted to a separate deployable/service (out of scope for this task to authorize), the current per-request re-authentication model would need to be replaced or fronted by a short-lived signed-URL / token-exchange contract, since a separate service cannot reuse the monolith's in-process session/role checks directly. This is a contract requirement for a FUTURE state, not a current gap — current behavior is a deliberate, tested design choice."
+  },
+  "retentionFindings": [
+    "ImagingStudy.status supports 'archived' but the schema header comment (schema.prisma:2541-2545) states originals are immutable — no binary update/delete endpoint exists; archiving only changes ImagingStudy.status. Diagnostic imaging data is retained indefinitely by current design.",
+    "No TTL/scheduled-retention logic for ImagingImage/ImagingStudy binaries was found in fileStorage.ts or the imaging service directory.",
+    "server/src/services/privacy/dataRetentionPolicy.ts references PatientAttachment/ImagingStudy/ImagingImage in a scope-description comment (line 26) but was not read in full in this pass — the actual retention policy text/timers applicable to imaging are an evidence gap, not confirmed absent or present."
+  ],
+  "exportFindings": [
+    "server/src/services/privacy/patientPrivacyExportPackage.ts references PatientAttachment (line ~289/311) for the KVKK patient data export ZIP. No reference to ImagingImage or ImagingStudy was found in this file — imaging binaries/metadata do not currently appear to be included in the patient privacy export package. This is reported as a fact from a grep-level pass, not a full read; treat as a probable finding requiring confirmation, not a certainty."
+  ],
+  "anonymizationFindings": [
+    "redactPatientImagingImages(clinicId, patientId) (patientAnonymization.ts:103-131) performs METADATA-ONLY redaction: sets ImagingImage.originalName to '[ANONYMIZED]'. The underlying image bytes (DICOM/CBCT pixel data, JPEG/PNG content) are never touched, deleted, or scrubbed by this function.",
+    "The same function skips redaction entirely when the parent ImagingStudy has legalHold = true, incrementing counters.skippedLegalHold (lines 112-115).",
+    "redactPatientAttachments() applies the identical metadata-only pattern to PatientAttachment.originalName (lines 66-95).",
+    "Called from anonymizePatientData() on both the idempotent re-run path (lines 200-201) and the first-run path (lines 347-351)."
+  ],
+  "physicalDeletionFindings": [
+    "PatientAttachment: exactly one delete path exists in the codebase (attachments.ts DELETE route, verified by an explicit in-code comment stating no other route/service calls prisma.patientAttachment.delete() or deleteFile() on a PatientAttachment row). Deletion is a single atomic prisma.patientAttachment.deleteMany({ where: { id, patientId, ...scope, legalHold: false } }) closing a TOCTOU window against concurrent legal-hold placement; physical file removal happens only after a confirmed delete count of 1.",
+    "ImagingImage/ImagingStudy: no user-facing delete endpoint exists at all. Physical deleteFile() calls occur only as compensating cleanup on failed upload transactions. This matches the documented KVKK posture in deletionReviewInventory.ts that imaging/clinical data is 'conservative-retain by design... pending legal sign-off', and that a prior live-delete endpoint (POST /patients/:id/privacy/deletion-review/execute) was removed entirely rather than hardened."
+  ],
+  "backupFindings": [
+    "FileBackupEntry/FileBackupRun are ledger-only tables (schema.prisma:3179-3182: immutable once written, a durable per-run audit trail, not current state) — confirmed by fileBackupService.ts header comment.",
+    "fileBackupService.ts and fileBackupDestination.ts contain zero authorize/role/RBAC keyword matches (grep-confirmed) — no access-control logic exists inside the backup service itself; all authorization is external, applied at the calling route.",
+    "iterateSourceRows() (fileBackupService.ts:102-116) scans PatientAttachment/LabOrderAttachment/ImagingImage across ALL clinics with no clinicId filter; tenant isolation for backups is enforced only at the destination-key layer (buildBackupDestinationKey(domain, clinicId, sourceRecordId) -> file-backups/{domain}/{clinicId}/{sourceRecordId}.bin).",
+    "The calling route for backupService.ts (previously 'not located' per PZ-IMG-03 in F2-PREP-002) is now identified: server/src/routes/platformAdmin.ts, via dynamic import at lines 1555/1568/1579/1598 (backupService.js) and 1619/1630/1650 (fileBackupService.js).",
+    "All backup/file-backup routes (platformAdmin.ts:1553-1660) sit behind router.use(authenticatePlatformAdmin, csrfProtection('platform')) applied once at line 152. authenticatePlatformAdmin validates a JWT of type platform/platform_admin and sets req.platformAdmin = {id, email, sessionId} — no role or tier field exists on this principal.",
+    "No step-up authentication (TOTP/password re-verification) is applied to the backup/restore routes specifically; verifyTotp is used only at login/TOTP-setup/TOTP-verify endpoints.",
+    "platformBackup.test.ts asserts only binary auth ('missing token -> 401', 'valid platform token -> sets platformAdmin', 'clinic-type token rejected with 403') — no test asserts a specific platform-admin role/tier is required for backup or restore.",
+    "Confirmed via dbVerification/fileBackupDbIntegration.test.ts:331: deleting the source PatientAttachment row does NOT delete its FileBackupEntry row or destination object — described in-test as a disclosed, confirmed-live gap. This means backup copies of imaging-adjacent files can outlive an erasure/anonymization action on the source."
+  ],
+  "kvkkFindings": [
+    "Anonymization of imaging data is metadata-only (originalName field), not content-level — actual DICOM/CBCT/image bytes are never redacted or destroyed by the current anonymization pipeline. Whether this satisfies KVKK anonymization requirements for diagnostic imagery is a legal question this task does not and cannot resolve.",
+    "Backup copies do not inherit source-row deletion or anonymization — a confirmed, tested gap (see backupFindings). This is directly relevant to KVKK erasure/rectification propagation and must be characterized by legal/compliance before any closure claim.",
+    "Imaging binaries/metadata do not appear to be included in the KVKK patient data export package (exportFindings) — potentially relevant to a data-subject access request scope; requires legal confirmation of whether imaging is in-scope for that export.",
+    "Legal-hold is a first-class, audited safeguard (OWNER/ORG_ADMIN-only mutation, blocks both anonymization and deletion) on both PatientAttachment and ImagingStudy — a positive control already in place.",
+    "AuditLog metadata is deliberately PII-minimized for imaging events (IDs/modality/counters only, tested); ActivityLog is not held to the same discipline and carries original filenames for attachment operations — filenames are user-supplied and could incidentally contain patient-identifying strings; this has not been assessed and is recorded as a gap, not a violation.",
+    "This section defines required safeguards to preserve and gaps to close; it does not assert KVKK legal closure for Imaging, which remains outside this task's authority."
+  ],
+  "pzImg03Status": {
+    "priorStatus": "F2-PREP-002: UNVERIFIED_INFERENCE — 'the calling route was never located'; authorizationBoundary listed as UNVERIFIED.",
+    "currentStatus": "OPEN — location resolved, authentication confirmed, RBAC granularity unproven",
+    "detail": "Direct evidence now shows the backup/restore routes (server/src/routes/platformAdmin.ts:1553-1660) are gated by authenticatePlatformAdmin (single-tier session authentication) plus CSRF protection. This is authentication, not role-differentiated authorization: the platform-admin principal (middleware/platformAuth.ts:9-16) carries no role/tier field, so no evidence distinguishes a restricted-support role from a full-restore-capable role, and no step-up re-authentication gates these specific endpoints. Per task governance, PZ-IMG-03 is preserved as unresolved/OPEN because direct evidence of backup RBAC (role-differentiated authorization) was not found — only single-tier authentication was found.",
+    "doNotCloseWithoutFurtherEvidenceOf": [
+      "a platform-admin role/tier field or claim actually gating the 7 backup/file-backup routes differently by principal type",
+      "step-up re-authentication specifically applied to POST /backups/run, /backups/restore-test, /file-backups/run, or /file-backups/restore-rehearsal"
+    ]
+  },
+  "risks": [
+    { "id": "R1", "summary": "Backup copies of Imaging/attachment files are not deleted or redacted when the source row is deleted or anonymized (tested, confirmed).", "kvkkRelevant": true },
+    { "id": "R2", "summary": "Imaging anonymization is metadata-only; DICOM/CBCT pixel data and image bytes are never scrubbed.", "kvkkRelevant": true },
+    { "id": "R3", "summary": "fileBackupService source-row scan is not clinicId-filtered (cross-tenant read at scan time within a platform-level service); isolation relies solely on destination-key structure.", "kvkkRelevant": false },
+    { "id": "R4", "summary": "PZ-IMG-03: backup/restore routes have single-tier platform-admin authentication, no role-differentiated RBAC, no step-up auth on the restore-capable endpoints specifically.", "kvkkRelevant": true },
+    { "id": "R5", "summary": "writeAuditLog() is fire-and-forget and silently swallows failures — AuditLog completeness is not guaranteed for imaging/attachment events.", "kvkkRelevant": true },
+    { "id": "R6", "summary": "ImagingImage.clinicId consistency with its parent ImagingStudy.clinicId is an application-level assumption, not a DB-enforced constraint.", "kvkkRelevant": false },
+    { "id": "R7", "summary": "ActivityLog descriptions carry original (user-supplied) filenames for PatientAttachment operations, unlike the PII-minimized AuditLog — filename PII exposure has not been assessed.", "kvkkRelevant": true },
+    { "id": "R8", "summary": "At-rest encryption for primary imaging/attachment storage (S3 SSE or equivalent) was not confirmed as enabled/enforced in this pass.", "kvkkRelevant": true },
+    { "id": "R9", "summary": "Imaging data does not appear to be included in the KVKK patient privacy export package (grep-level finding, not fully confirmed).", "kvkkRelevant": true }
+  ],
+  "blockers": [
+    "None block this documentation-only assessment task itself.",
+    "For any future Imaging boundary-contract closure or module extraction (explicitly out of this task's authority): PZ-IMG-03 (R4) and the backup-erasure-propagation gap (R1) should be characterized by legal/compliance before a KVKK safeguard claim can be made complete."
+  ],
+  "evidenceGaps": [
+    "server/src/services/privacy/dataRetentionPolicy.ts not read in full — actual retention timers/policy applicable to Imaging unconfirmed.",
+    "server/src/services/privacy/patientPrivacyExportPackage.ts only grep-checked, not fully read — imaging-export-exclusion finding should be treated as probable, not certain.",
+    "server/src/services/fileBackupDestination.ts encryption logic (SSE / server-side encryption configuration) not fully read — at-rest encryption for backups unconfirmed.",
+    "S3/object-storage bucket-level configuration (region constraints, default encryption, versioning, lifecycle rules) is infrastructure configuration outside application code — not visible to a code-only assessment; would need infra evidence (e.g. an F0-006-topology-style artifact) to confirm.",
+    "FileBackupRun model fields were not extracted — only referenced as an FK target of FileBackupEntry.runId.",
+    "server/src/services/security/securityDetectionRules.js (cross-tenant denial signal logic used by clinicScope.ts) was identified but not read (see scopeExpansions SE-3).",
+    "LabOrderAttachment's own authorization/tenant-scoping route path was not verified in this pass (out of primary Imaging scope, included only as a backup-ledger sibling).",
+    "Whether any downstream consumer (analytics/reporting) reads Imaging models was not checked — only the 7 targeted scope categories were searched."
+  ],
+  "contractRequirements": [
+    "An explicit LegalHold contract spanning PatientAttachment.legalHold and ImagingStudy.legalHold (already flagged as a candidate in F2-PREP-001) rather than the current direct cross-table field access.",
+    "A backup-erasure-propagation contract: when a source row is deleted/anonymized, define whether and how FileBackupEntry-tracked backup copies must be redacted or purged, and by whom.",
+    "A backup RBAC contract: role-differentiated platform-admin permissions plus step-up authentication for restore-capable operations, required before PZ-IMG-03 can be considered for closure.",
+    "A signed-URL / access-token exchange contract for the future state where Imaging is served by a separate deployable, replacing today's in-process authenticate+authorize+scope check per request.",
+    "A query contract for Imaging's outward references to Patient/Appointment/TreatmentCase (currently direct FK reads), consistent with the general future-query-contract direction noted in F2-PREP-001/002.",
+    "A reverse-orphan-cleanup contract (physical file present, no DB row) — currently unimplemented by design (documented gap in orphanFileInspection.ts).",
+    "An export-completeness contract clarifying whether Imaging data must be included in the KVKK patient privacy export package.",
+    "A DB-level (or transactionally-enforced) invariant that ImagingImage.clinicId always equals its parent ImagingStudy.clinicId, replacing the current application-level assumption."
+  ],
+  "limitations": [
+    "This is a code-evidence assessment only. It does not constitute a legal KVKK compliance determination, does not authorize module extraction or caller migration, does not modify Prisma schema/migrations/tests/routes/services, and does not implement dependency-cruiser.",
+    "Findings are bounded by the task's targeted scope; CodeGraph/search was not run project-wide. Three scope expansions were required and are fully documented (scopeExpansions); one adjacent dependency was identified but deliberately not followed (SE-3).",
+    "Test-derived findings (item 9 in the underlying fact-extraction) were confirmed at the level of test titles/structure and source-scan assertions quoted in-test, not by executing the test suite.",
+    "PZ-IMG-03, R-070, R-046, R-071, and G1/G2 statuses are preserved as directed by task governance and are not altered by this task beyond the pzImg03Status refinement described above (location resolved; RBAC still unproven, so status remains OPEN, not CLOSED)."
+  ],
+  "nextConsolidationOwner": "F2-PREP-006-E"
+}
