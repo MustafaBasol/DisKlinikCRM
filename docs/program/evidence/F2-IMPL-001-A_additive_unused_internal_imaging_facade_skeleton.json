@@ -1,0 +1,137 @@
+{
+  "taskId": "F2-IMPL-001-A",
+  "taskName": "Additive Unused Internal Imaging Facade Skeleton",
+  "phase": "F2",
+  "parentAuthorization": {
+    "document": "docs/program/evidence/F2-PREP-008_STAGE1_IMAGING_FACADE_PREP_AND_AUTHORIZATION.md",
+    "decision": "AUTHORIZED_FOR_STAGE_1_IMPLEMENTATION",
+    "prNumber": 301,
+    "mergeCommit": "cf340cf019b9fb109e44e42ac42c07b389fe216b"
+  },
+  "baseline": {
+    "originMainSha": "cf340cf019b9fb109e44e42ac42c07b389fe216b",
+    "prNumber": 301,
+    "prHeadSha": "d181ec10b0677b3386a18e89d5ec47251980ab70",
+    "postMergeCiRun": {
+      "workflow": "ci-main-and-nightly",
+      "databaseId": 30803572776,
+      "event": "push",
+      "conclusion": "success",
+      "ciLayersJobsPassed": 9,
+      "ciLayersJobsTotal": 9
+    }
+  },
+  "worktree": {
+    "path": "E:/Ek Gelir/Siteler/DisKlinikCRM-worktrees/f2-impl-001-a-imaging-lifecycle-facade",
+    "branch": "feature/f2-impl-001-a-unused-imaging-lifecycle-facade",
+    "createdFrom": "origin/main",
+    "createdFromSha": "cf340cf019b9fb109e44e42ac42c07b389fe216b",
+    "primaryTreeTouched": false,
+    "primaryTreeBranch": "claude/treatment-proposal-pdf-p1-d4k0jl",
+    "primaryTreeDirty": true,
+    "siblingWorktreeReused": false
+  },
+  "acceptedContractSignatures": {
+    "markStorageMissing": "(imageId: string): Promise<void>",
+    "redactForAnonymization": "(imageId: string, reason: RedactionReason): Promise<void>",
+    "getImagesForLifecycleReview": "(clinicId: string, patientId: string): Promise<ImagingLifecycleImageDto[]>",
+    "checkImageStorageExists": "(imageId: string, fileExistsForTest?: (ref: string) => Promise<boolean>): Promise<boolean>",
+    "signaturesAlteredFromAccepted": false,
+    "checkImageStorageExistsNote": "Trailing optional test-only parameter, defaulted, never passed by production code; additive, not an alteration of the accepted 1-argument production call shape."
+  },
+  "excludedSurfaces": ["LinkImagingStudy", "UpdateImagingRequest", "CancelImagingRequest"],
+  "tenantEnforcement": {
+    "getImagesForLifecycleReview": "clinicId and patientId both applied in the Prisma where clause (flat column + relation)",
+    "imageIdOnlyMethods": {
+      "mechanism": "ownership re-derivation via ImagingImage -> ImagingStudy -> clinicId before every read/mutation; fail-closed indistinguishable ImagingNotFoundError on any mismatch or missing traversal; mutation where-clauses re-scoped by the derived clinicId; imageId provenance is only ever obtainable via the clinicId-scoped getImagesForLifecycleReview query",
+      "ambientTenantContextMechanismExists": false,
+      "blockedTenantContextContractInsufficientConsidered": true,
+      "blockedTenantContextContractInsufficientTriggered": false,
+      "regressionVsCurrentDirectCallers": "strictly stronger — current callers (markConfirmedMissing, redactPatientImagingImages) perform zero re-check at the point of mutation"
+    }
+  },
+  "dto": {
+    "name": "ImagingLifecycleImageDto",
+    "fields": ["id", "studyId", "clinicId", "patientId", "legalHold", "storageKey"],
+    "legalHoldReasonIncluded": false,
+    "legalHoldReasonExclusionReason": "legalHoldReason is role-gated (OWNER/ORG_ADMIN only) at the route layer via canSeeLegalHoldReason(req); the facade has no req/role context, so including it would either leak unconditionally or require inventing an unauthorized role check"
+  },
+  "typedErrors": [
+    { "class": "ImagingNotFoundError", "code": "IMAGING_NOT_FOUND" },
+    { "class": "ImagingLegalHoldViolationError", "code": "IMAGING_LEGAL_HOLD_VIOLATION" },
+    { "class": "ImagingStorageUnavailableError", "code": "IMAGING_STORAGE_UNAVAILABLE" },
+    { "class": "ImagingInvalidRedactionReasonError", "code": "IMAGING_INVALID_REDACTION_REASON" }
+  ],
+  "redactionReason": {
+    "values": ["anonymization", "deletion_review"],
+    "source": "reuses PatientPrivacyRequest.requestType's existing vocabulary (patientPrivacy.ts VALID_REQUEST_TYPES), not invented"
+  },
+  "transactionOwnership": {
+    "newTransactionsIntroduced": false,
+    "crossResourceAtomicityClaimed": false,
+    "blk01StorageDbCompensationGap": "unresolved, out of scope, unchanged"
+  },
+  "auditOwnership": {
+    "facadeWritesAuditLog": false,
+    "facadeWritesActivityLog": false,
+    "ownedBy": "calling service (matches current patientAnonymization.ts/orphanFileInspection.ts behavior)",
+    "rationale": "avoids duplicate audit entries once a future caller migration wires the facade in"
+  },
+  "filesChanged": [
+    "server/src/services/imaging/public.ts",
+    "server/src/tests/imagingLifecycleFacade.test.ts",
+    "server/package.json",
+    "docs/program/evidence/F2-IMPL-001-A_ADDITIVE_UNUSED_INTERNAL_IMAGING_FACADE_SKELETON.md",
+    "docs/program/evidence/F2-IMPL-001-A_additive_unused_internal_imaging_facade_skeleton.json",
+    "docs/program/NORAMEDI_MASTER_TRACKER.md",
+    "docs/program/CURRENT_PHASE.md",
+    "docs/program/phases/F2_MODULAR_BOUNDARIES.md",
+    "docs/program/evidence/README.md"
+  ],
+  "unusedFacadeProof": {
+    "sourceScanTestZeroMatches": true,
+    "independentGrepZeroMatches": true,
+    "searchedRoots": ["server/src/routes", "server/src/services", "server/src/middleware", "server/src/jobs"]
+  },
+  "validation": {
+    "gitDiffCheck": { "exitCode": 0 },
+    "jsonParseValidation": { "packageJson": "OK", "serverPackageJson": "OK", "ownCompanion": "OK" },
+    "prismaGenerate": { "exitCode": 0 },
+    "serverTypecheck": { "exitCode": 0 },
+    "facadeTests": { "command": "npm run test:imaging-lifecycle-facade", "passed": 25, "failed": 0, "skipped": 0 },
+    "imagingCharacterization": { "unchanged": true, "weakened": false },
+    "fullDisposableDbAggregate": {
+      "command": "npm run test:runtime:postgres -- --summary-file=postgres-run-summary.json",
+      "profile": "postgres",
+      "migrationCode": 0,
+      "testCode": 0,
+      "cleanupSuccess": true,
+      "exitCode": 0
+    },
+    "residualResourceCheck": {
+      "command": "npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01",
+      "candidates": 0,
+      "removed": 0,
+      "errors": 0
+    },
+    "existingImagingRegression": { "command": "npm run test:imaging", "passed": 103, "failed": 0 },
+    "existingPrivacyRegression": { "command": "npm run test:patient-privacy", "passed": 38, "failed": 0 }
+  },
+  "escalationRule": {
+    "fullBackendSuiteRun": false,
+    "justification": "no repository rule requires it; focused coverage is sufficient (one new script appended to one existing CI-owned aggregate, matching F2-PREP-007-E precedent); no broader regression risk exposed; PR CI (unmodified ci-layers.yml) exercises the full server:test:disposable-db aggregate this task's own local run already covered"
+  },
+  "migrationStatus": "none",
+  "backwardCompatibility": "total - zero existing caller/route/response/database/storage/configuration change",
+  "rollbackMethod": "git revert of the implementation commit(s), or delete public.ts + its test file and reverse the additive package-script/doc wiring",
+  "openDefectsUnchanged": ["CT-23", "CT-32", "CR-03", "BLK-02", "FP-06", "OVL-01", "BLK-01", "PZ-IMG-03", "R-070", "R-046", "R-071"],
+  "taskStatus": {
+    "agentCompleted": true,
+    "testsPassed": true,
+    "prOpened": true,
+    "merged": false,
+    "deployed": false,
+    "productionVerified": false
+  },
+  "nextTask": "Stage 2 (OVL-01 convergence + ImagingRequest PATCH/cancel concurrency hardening) - not started, not authorized by this task"
+}
