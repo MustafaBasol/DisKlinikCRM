@@ -133,6 +133,15 @@ export const patientPrivacyService = {
     api.get(`/patients/${patientId}/privacy/orphan-check`),
 };
 
+export const patientEmergencyContactService = {
+  getAll: (patientId: string) => api.get(`/patients/${patientId}/emergency-contacts`),
+  create: (patientId: string, data: any) => api.post(`/patients/${patientId}/emergency-contacts`, data),
+  update: (patientId: string, contactId: string, data: any) =>
+    api.put(`/patients/${patientId}/emergency-contacts/${contactId}`, data),
+  remove: (patientId: string, contactId: string) =>
+    api.delete(`/patients/${patientId}/emergency-contacts/${contactId}`),
+};
+
 // KVKK-HIGH-007: communication preference & consent management — technical
 // control only, not a legal determination (see docs/compliance/56-*.md).
 export const communicationPreferencesService = {

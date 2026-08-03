@@ -193,12 +193,17 @@ export async function anonymizePatientData(
       select: { id: true },
       orderBy: { createdAt: 'desc' },
     });
-    // Still run the attachment/imaging redaction pass — re-running must be a
-    // safe no-op (already-redacted rows are skipped, see redactPatientAttachments),
-    // but a first anonymization performed before this feature shipped may not
-    // have touched attachments/imaging yet.
+    // Still run the attachment/imaging/emergency-contact redaction passes —
+    // re-running must be a safe no-op (already-redacted rows are skipped, see
+    // redactPatientAttachments; the emergency-contact updateMany is
+    // idempotent by construction), but a first anonymization performed before
+    // these features shipped may not have touched them yet.
     const attachmentResults = await redactPatientAttachments(clinicId, patientId);
     const imagingResults = await redactPatientImagingImages(clinicId, patientId);
+    await prisma.patientEmergencyContact.updateMany({
+      where: { clinicId, patientId },
+      data: { fullName: ANON_TEXT, phone: null, phoneCountryCode: null, email: null, occupation: null },
+    });
     return {
       alreadyAnonymized: true,
       patientId,
@@ -322,7 +327,25 @@ export async function anonymizePatientData(
     WHERE "clinicId" = ${clinicId} AND "patientId" = ${patientId}
   `;
 
-  // ── 8. Redact ActivityLog descriptions for this patient ──────────────────────
+  // ── 8. PatientEmergencyContact (US-01.2): clear PII fields ────────────────
+  // fullName cannot be null (NOT NULL, and the create/update API requires a
+  // non-empty value) so it is redacted to the shared ANON_TEXT placeholder,
+  // matching the convention used for other NOT-NULL text fields above
+  // (AppointmentRequest.phone, WhatsAppConversationMessage.text). isPrimary/
+  // isLegalDecisionMaker flags and the row itself are preserved — only the
+  // identifying fields are cleared.
+  await prisma.patientEmergencyContact.updateMany({
+    where: { clinicId, patientId },
+    data: {
+      fullName: ANON_TEXT,
+      phone: null,
+      phoneCountryCode: null,
+      email: null,
+      occupation: null,
+    },
+  });
+
+  // ── 9. Redact ActivityLog descriptions for this patient ──────────────────────
   const activityRows = await prisma.activityLog.findMany({
     where: { clinicId, patientId, description: { not: null } },
     select: { id: true, description: true },
@@ -344,13 +367,13 @@ export async function anonymizePatientData(
       }),
   );
 
-  // ── 9. PatientAttachment metadata redaction (legal-hold skipped) ──────────
+  // ── 10. PatientAttachment metadata redaction (legal-hold skipped) ─────────
   const attachmentResults = await redactPatientAttachments(clinicId, patientId);
 
-  // ── 10. ImagingImage metadata redaction, via patient's ImagingStudy rows ──
+  // ── 11. ImagingImage metadata redaction, via patient's ImagingStudy rows ──
   const imagingResults = await redactPatientImagingImages(clinicId, patientId);
 
-  // ── 11. Create PatientPrivacyRequest record ───────────────────────────────
+  // ── 12. Create PatientPrivacyRequest record ───────────────────────────────
   const privacyRequest = await prisma.patientPrivacyRequest.create({
     data: {
       clinicId,
@@ -368,7 +391,7 @@ export async function anonymizePatientData(
 
   const partialFailure = attachmentResults.failed > 0 || imagingResults.failed > 0;
 
-  // ── 12. Write audit log (no full PII) ─────────────────────────────────────
+  // ── 13. Write audit log (no full PII) ─────────────────────────────────────
   await writeAuditLog({
     organizationId,
     clinicId,
@@ -387,7 +410,7 @@ export async function anonymizePatientData(
     },
   });
 
-  // ── 13. Write activity log ────────────────────────────────────────────────
+  // ── 14. Write activity log ────────────────────────────────────────────────
   await logActivity({
     clinicId,
     userId: actorUserId,

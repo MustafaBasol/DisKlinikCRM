@@ -8,6 +8,7 @@
 export const PATIENT_DETAIL_TAB_KEYS = [
   'overview', 'appointments', 'tasks', 'treatments', 'payments', 'insurance',
   'messages', 'files', 'imaging', 'dental', 'activity', 'privacy', 'communication',
+  'emergencyContacts',
 ] as const;
 export type PatientDetailTab = (typeof PATIENT_DETAIL_TAB_KEYS)[number];
 
@@ -49,4 +50,23 @@ export function resolvePatientDetailActiveTab(
  */
 export function requiresUrlNormalization(requestedTab: string | null, visibleTabKeys: readonly string[]): boolean {
   return Boolean(requestedTab) && !(visibleTabKeys as readonly string[]).includes(requestedTab as string);
+}
+
+/**
+ * US-01.2: true when the patient is under 18 as of `now`, given their date of
+ * birth (string/Date, or null/undefined when unknown — treated as "not a
+ * known minor" rather than guessing). Used only to drive the non-blocking
+ * "no legal decision-maker on record" warning on the Emergency Contacts tab —
+ * never for blocking patient creation or consent flows (out of scope here).
+ */
+export function isMinorPatient(dateOfBirth: string | Date | null | undefined, now: Date = new Date()): boolean {
+  if (!dateOfBirth) return false;
+  const dob = typeof dateOfBirth === 'string' ? new Date(dateOfBirth) : dateOfBirth;
+  if (Number.isNaN(dob.getTime())) return false;
+  let age = now.getFullYear() - dob.getFullYear();
+  const monthDiff = now.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age < 18;
 }
