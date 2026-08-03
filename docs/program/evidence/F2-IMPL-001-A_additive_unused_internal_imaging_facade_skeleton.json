@@ -337,6 +337,25 @@
     "mergeSafeReason": "awaiting program-owner review of this re-implementation against the accepted contract, per the task's own status-ceiling instruction",
     "deploymentSafe": true,
     "deploymentSafeReason": "zero production callers; merging changes no deployable runtime behavior",
-    "nextTask": "Program-owner review and acceptance of this R2 re-implementation. Stage 2 (OVL-01 convergence + ImagingRequest concurrency hardening) remains the next architecturally-sequenced item; Stage 3 caller migration remains gated behind Stage 2. Not started, not authorized by this task."
+    "nextTask": "Program-owner review and acceptance of this R2 re-implementation. Stage 2 (OVL-01 convergence + ImagingRequest concurrency hardening) remains the next architecturally-sequenced item; Stage 3 caller migration remains gated behind Stage 2. Not started, not authorized by this task.",
+    "finalPrPushAndCi": {
+      "pushedHead": "7bcd1c8658da95119ab725f454955d57f89f8e4f",
+      "prState": "OPEN",
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "BLOCKED",
+      "mergeStateStatusReason": "branch-protection/required-review gating, not conflicts or CI",
+      "reviewDecision": "",
+      "ciLayersRun": { "id": 30833104942, "conclusion": "success" },
+      "windowsBridgePrRun": {
+        "id": 30833102986,
+        "initialConclusion": "failure",
+        "initialFailingJob": "Windows Bridge .NET tests",
+        "initialFailingTest": "BridgeOrchestratorTests.Heartbeat_AfterPairing_TransitionsToOnlineAndOmitsNullCapabilities",
+        "rootCause": "unrelated CI flakiness — zero windows-bridge/ files changed between the pre-reconciliation PR head and origin/main; this task touched only server/src/services/imaging/** and docs/program/**",
+        "rerunConclusion": "success"
+      },
+      "finalChecksTotal": 14,
+      "finalChecksPassing": 14
+    }
   }
 }

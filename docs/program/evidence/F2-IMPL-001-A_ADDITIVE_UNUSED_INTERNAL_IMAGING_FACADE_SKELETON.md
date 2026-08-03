@@ -428,3 +428,13 @@ No backward compatibility obligation: PR #304 remains unmerged with zero product
 ### 27.15 Exact next task
 
 Program-owner review and acceptance of this R2 re-implementation. If accepted, Stage 2 (`OVL-01` convergence + `ImagingRequest` PATCH/cancel concurrency hardening) remains the next architecturally-sequenced item per F2-PREP-006-E; Stage 3 (Privacy/KVKK caller migration onto this facade) remains gated behind Stage 2 and is not authorized by this task. Not started, not authorized to start by this entry.
+
+### 27.16 PR #304 push and final CI (2026-08-03)
+
+Pushed to the existing branch: new head `7bcd1c8658da95119ab725f454955d57f89f8e4f`. `gh pr view 304` confirmed `state: OPEN`, `mergeable: MERGEABLE`, `mergeStateStatus: BLOCKED` (branch-protection/required-review gating, not conflicts or CI). PR body updated to record the full R1→F2-PREP-009→R2 lineage.
+
+**Both required CI workflows green on this exact head:**
+- `ci-layers` run [30833104942](https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/30833104942): `conclusion: success` — all layers pass (Layer 1 ×4, Layer 2, Layer 3, Layer 4, Layer 5 ×2).
+- `windows-bridge-pr` run [30833102986](https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/30833102986): initial attempt showed `Windows Bridge .NET tests` failing (`BridgeOrchestratorTests.Heartbeat_AfterPairing_TransitionsToOnlineAndOmitsNullCapabilities`, a timing-sensitive .NET assertion in `windows-bridge/tests/NoraMedi.Bridge.Core.Tests/Runtime/BridgeOrchestratorTests.cs`). **Root-caused as unrelated CI flakiness, not a regression from this task:** `git diff abac5e361abd0913dadbce1e124c2ca113600fb7 6f539b237019945443afe6156f9fc2a9fe32ffa4 --stat -- windows-bridge/` returns zero changed files — no windows-bridge code changed between the pre-reconciliation PR #304 head and the current `origin/main`, and this task touched only `server/src/services/imaging/**`/`docs/program/**`. `gh run rerun 30833102986 --failed` → re-run **passed** (`conclusion: success`), confirming a transient, non-deterministic failure unrelated to this PR's content.
+
+`gh pr checks 304` at task end: **14/14 checks `pass`**, zero failing. No review threads present (`reviewDecision: ""`).
