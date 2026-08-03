@@ -54,6 +54,7 @@ import {
   computeVisiblePatientDetailTabs,
   resolvePatientDetailActiveTab,
   requiresUrlNormalization,
+  splitPatientDetailTabsForNav,
   isMinorPatient,
   DEFAULT_PATIENT_DETAIL_TAB,
   type PatientDetailTab,
@@ -122,6 +123,10 @@ const PatientDetail: React.FC = () => {
     : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) });
 
   const tabItems: PatientDetailTabItem[] = visibleTabKeys.map((tab) => ({ key: tab, label: tabLabel(tab) }));
+  const { primary: primaryTabKeys, more: moreTabKeys } = splitPatientDetailTabsForNav(visibleTabKeys);
+  const tabItemByKey = new Map(tabItems.map((item) => [item.key, item]));
+  const primaryTabItems: PatientDetailTabItem[] = primaryTabKeys.map((key) => tabItemByKey.get(key)!);
+  const moreTabItems: PatientDetailTabItem[] = moreTabKeys.map((key) => tabItemByKey.get(key)!);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -418,7 +423,14 @@ const PatientDetail: React.FC = () => {
         </div>
       </div>
 
-      <PatientDetailTabs tabs={tabItems} activeTab={activeTab} onSelect={goToTab} />
+      <PatientDetailTabs
+        primaryTabs={primaryTabItems}
+        moreTabs={moreTabItems}
+        activeTab={activeTab}
+        onSelect={goToTab}
+        moreLabel={t('patients:detail.moreTab', { defaultValue: 'More' })}
+        moreMenuAriaLabel={t('patients:detail.moreTabMenuAriaLabel', { defaultValue: 'More patient detail tabs' })}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column - Profile Summary (desktop only) */}

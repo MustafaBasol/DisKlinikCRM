@@ -25,6 +25,36 @@ export function computeVisiblePatientDetailTabs(canSeeImaging: boolean): Patient
 }
 
 /**
+ * US-01.X: tabs kept in the always-visible primary row. Chosen as the
+ * day-to-day clinical/administrative workflow tabs (record overview,
+ * scheduling, treatment, billing, documents); everything else collapses into
+ * the "More" menu (see splitPatientDetailTabsForNav) so the primary row stays
+ * short and scannable as further patient modules are added, instead of
+ * growing into an ever-longer single row. Order matches
+ * PATIENT_DETAIL_TAB_KEYS — this is a grouping, not a reordering.
+ */
+export const PRIMARY_PATIENT_DETAIL_TAB_KEYS: readonly PatientDetailTab[] = [
+  'overview', 'appointments', 'treatments', 'payments', 'files',
+];
+
+/**
+ * Splits the caller's already-visible tab list into the primary row and the
+ * "More" menu group, preserving relative order within each group (no
+ * reordering — see PRIMARY_PATIENT_DETAIL_TAB_KEYS). A tab absent from
+ * `visibleTabKeys` (e.g. `imaging` for a non-clinical role) never appears in
+ * either group.
+ */
+export function splitPatientDetailTabsForNav(
+  visibleTabKeys: readonly PatientDetailTab[],
+): { primary: PatientDetailTab[]; more: PatientDetailTab[] } {
+  const primarySet = new Set<PatientDetailTab>(PRIMARY_PATIENT_DETAIL_TAB_KEYS);
+  return {
+    primary: visibleTabKeys.filter((tab) => primarySet.has(tab)),
+    more: visibleTabKeys.filter((tab) => !primarySet.has(tab)),
+  };
+}
+
+/**
  * Derives the active tab from a `?tab=` query value and the caller's visible
  * tab list. Missing (`null`) and invalid/unauthorized/feature-disabled values
  * both fall back to `overview` — the caller (PatientDetail.tsx) is
