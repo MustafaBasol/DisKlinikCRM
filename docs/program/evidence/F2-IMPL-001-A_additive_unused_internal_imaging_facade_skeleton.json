@@ -133,5 +133,15 @@
     "deployed": false,
     "productionVerified": false
   },
-  "nextTask": "Stage 2 (OVL-01 convergence + ImagingRequest PATCH/cancel concurrency hardening) - not started, not authorized by this task"
+  "nextTask": "Stage 2 (OVL-01 convergence + ImagingRequest PATCH/cancel concurrency hardening) - not started, not authorized by this task",
+  "preMergeReconciliation": {
+    "mainAdvancedTo": "37923ea814c14a38b158f9dc424e229458caa7ad",
+    "advancingPr": 302,
+    "mergeConflicts": 1,
+    "conflictedFile": "server/package.json",
+    "resolution": "manual, both branches' new script keys preserved",
+    "mergeCommit": "9904b04db698b656b72117630020a7819349bb17",
+    "postMergeValidationRerun": true,
+    "finalPrHeadSha": "9904b04db698b656b72117630020a7819349bb17"
+  }
 }

@@ -224,6 +224,25 @@ Yes, from a repository-integrity standpoint: additive-only, zero runtime callers
 
 Not applicable to this task specifically — merging this PR changes no deployable runtime behavior (zero callers), so there is nothing new to verify in production as a direct result of it. Production verification remains a separate, later gate tied to the eventual Stage 3 caller-migration task, not this one.
 
+## 25a. Pre-PR main reconciliation
+
+Before opening the PR, `origin/main` was fetched again and found to have advanced past this task's baseline: `37923ea814c14a38b158f9dc424e229458caa7ad` (PR #302, `feature/us-01-2-patient-emergency-contacts`, merged after this task's baseline). File-overlap check (`git diff --name-only cf340cf..origin/main`) found one shared file, `server/package.json` — both branches independently appended new `scripts` entries to `server:test:non-disposable`/`server:test:disposable-db`. No other overlap (PR #302 never touches `server/src/services/imaging/**`, `server/src/services/privacy/patientAnonymization.ts`'s content this task reads but does not modify, or any `docs/program/**` file this task edits).
+
+`git merge --no-ff origin/main` (merge commit `9904b04db698b656b72117630020a7819349bb17`) — **1 conflict**, `server/package.json`, resolved manually (no `--ours`/`--theirs`): both branches' new script keys preserved (`test:patient-emergency-contacts` in `server:test:non-disposable`; `test:patient-emergency-contacts-primary-concurrency` inserted into `server:test:disposable-db` from `origin/main`, `test:imaging-lifecycle-facade` appended to the same aggregate from this branch). `git merge-base --is-ancestor origin/main HEAD` → exit `0`.
+
+**All affected validation re-run after reconciliation, all clean:**
+
+| Command | Result |
+|---|---|
+| `git diff --check` | Clean |
+| `node -e "JSON.parse(...)"` on `server/package.json` | OK |
+| `npx prisma generate && tsc --noEmit` | `0` errors |
+| `npm run test:runtime:postgres -- --summary-file=postgres-run-summary-post-merge.json` (full `server:test:disposable-db`, now including PR #302's own `test:patient-emergency-contacts-primary-concurrency` alongside this task's `test:imaging-lifecycle-facade`) | exit `0`; new facade suite **25/25** re-confirmed |
+| `npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01` | zero residual resources |
+| `grep -rn "services/imaging/public" server/src/routes server/src/services server/src/middleware server/src/jobs` | zero matches, re-confirmed post-merge |
+
+Final PR head SHA: `9904b04db698b656b72117630020a7819349bb17`.
+
 ## 25. Exact next task
 
 Stage 2 (`OVL-01` convergence + `ImagingRequest` PATCH/cancel concurrency hardening, i.e. `CR-03`/`BLK-02`/`FP-06` resolution) per the accepted `F2-PREP-006-E` expand-migrate-contract sequence — a distinct, separately-gated future task, not started, not authorized to start by this task. Stage 3 (Privacy/KVKK caller migration onto this facade) remains blocked behind Stage 2 and is likewise not started or authorized here.
