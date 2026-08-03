@@ -105,6 +105,8 @@ model Clinic {
   legacyConsentCorrections      PatientLegacyConsentCorrection[]
   externalCalendarIntegration   ExternalCalendarIntegration?
   patientEmergencyContacts      PatientEmergencyContact[]
+  patientMedicalHistories       PatientMedicalHistory[]
+  patientConditions             PatientCondition[]
 
   @@unique([organizationId, slug])
 }
@@ -180,6 +182,7 @@ model User {
   imagingBridgeAgentsCreated   ImagingBridgeAgent[]           @relation("ImagingBridgeAgentCreator")
   imagingBridgePairingsCreated ImagingBridgePairing[]         @relation("ImagingBridgePairingCreator")
   legacyConsentCorrections     PatientLegacyConsentCorrection[]
+  medicalHistoryRecorded       PatientMedicalHistory[]        @relation("MedicalHistoryRecorder")
 
   // Global uniqueness on lower(email) is enforced by a raw DB index (migration 20260629120000).
 }
@@ -282,6 +285,8 @@ model Patient {
   communicationConsentEvents    PatientCommunicationConsentEvent[]
   legacyConsentCorrections      PatientLegacyConsentCorrection[]
   emergencyContacts             PatientEmergencyContact[]
+  medicalHistoryVersions        PatientMedicalHistory[]
+  medicalConditionLinks         PatientCondition[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
@@ -330,6 +335,148 @@ model PatientEmergencyContact {
   updatedAt            DateTime     @updatedAt
 
   @@index([patientId, isPrimary])
+  @@index([clinicId])
+  @@index([organizationId])
+}
+
+/// US-01.1-P1: versioned medical-history foundation. Medical history is
+/// sensitive health data (KVKK/GDPR "special category" equivalent) — see
+/// docs/compliance for the general anonymization/export conventions this
+/// model follows (server/src/services/privacy/patientAnonymization.ts,
+/// server/src/routes/patientPrivacy.ts). Additive, backward-compatible — no
+/// existing Patient row requires backfill (zero rows until the first version
+/// is recorded via POST /api/patients/:patientId/medical-history).
+///
+/// Design: EACH ROW IS ONE IMMUTABLE VERSION. Unlike
+/// PatientCommunicationPreference/-ConsentEvent, there is no separate
+/// mutable "current state" row — a version, once inserted, is never updated
+/// or deleted by application code (no PUT/PATCH/DELETE route exists for this
+/// resource in P1 — see server/src/routes/patientMedicalHistory.ts). Creating
+/// an update always INSERTs a new row with version = previous max(version)+1
+/// for that patientId; "latest version" is simply the row with the highest
+/// `version` for a given patientId. version allocation is concurrency-safe
+/// via a per-patient pg_advisory_xact_lock (see
+/// server/src/services/patientMedicalHistoryConcurrency.ts), the same
+/// pattern used for PatientEmergencyContact's single-primary invariant.
+/// @@unique([patientId, version]) is the database-level backstop that
+/// rejects any duplicate pair that slips past the lock — never rely on the
+/// lock alone (see that file's header for why an advisory lock, not just a
+/// unique index, is required to close the race deterministically).
+///
+/// noKnownConditions is an exclusive state: when true, this version must
+/// have zero linked PatientCondition rows — validated in
+/// server/src/services/medicalHistory.ts, never trusted from the client
+/// alone. clinicId mirrors Patient.clinicId (the patient's home clinic),
+/// consistent with the PatientEmergencyContact tri-scope convention above —
+/// not the clinic of whichever appointment prompted the recording.
+model PatientMedicalHistory {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  clinicId       String
+  clinic         Clinic       @relation(fields: [clinicId], references: [id])
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id])
+
+  /// Monotonic per-patient version counter starting at 1. Allocated under a
+  /// per-patient pg_advisory_xact_lock inside the create transaction — never
+  /// trust a client-supplied value.
+  version Int
+
+  recordedById String
+  recordedBy   User     @relation("MedicalHistoryRecorder", fields: [recordedById], references: [id])
+  /// Clinical event time — may be set by staff to reflect when the history
+  /// was actually taken, distinct from createdAt's fixed insert timestamp.
+  recordedAt   DateTime @default(now())
+
+  /// Exclusive state — see model doc comment above.
+  noKnownConditions Boolean @default(false)
+
+  /// Free-text allergy summary (e.g. "Penicillin - anaphylaxis"). Sensitive
+  /// free text — redacted (not the row) on patient anonymization, see
+  /// services/privacy/patientAnonymization.ts. Relational, coded allergy
+  /// entries also live in PatientCondition (category = allergy); this field
+  /// is the free-text clinical summary alongside those structured entries.
+  allergies String?
+  /// Free-text current-medications summary. Same anonymization treatment as allergies.
+  currentMedications String?
+
+  /// unknown | not_pregnant | pregnant | not_applicable
+  pregnancyStatus    String    @default("unknown")
+  pregnancyStartDate DateTime?
+
+  createdAt DateTime @default(now())
+
+  conditions PatientCondition[]
+
+  @@unique([patientId, version])
+  @@index([organizationId])
+  @@index([clinicId])
+  @@index([patientId, createdAt])
+}
+
+/// Global, tenant-independent ICD-10-compatible medical condition lookup
+/// catalog — reference data (like AppointmentType is clinic-scoped reference
+/// data), NOT patient data, so no organizationId/clinicId/patientId here.
+/// Seeded deterministically and idempotently by
+/// server/prisma/seedMedicalConditions.ts (upsert-by-code — safe to re-run,
+/// safe in production). Initial coverage is a SMALL, dental-clinic-relevant
+/// subset of standard ICD-10 codes — NOT the full global ICD-10 catalog (see
+/// that file's header comment for the documented initial list and its
+/// deliberately limited scope).
+model MedicalCondition {
+  id       String   @id @default(uuid())
+  /// Standard ICD-10 code, e.g. "E11.9", "Z88.0". Stable identifier — never
+  /// reused for a different clinical meaning; extend the catalog by adding
+  /// new rows, never by repurposing an existing code.
+  code     String   @unique
+  /// systemic | allergy | medication_risk | dental | obstetric | behavioral
+  category String
+  nameEn   String
+  nameTr   String
+  isActive Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  patientLinks PatientCondition[]
+
+  @@index([category])
+}
+
+/// One row per condition linked to one specific PatientMedicalHistory
+/// version. Written together with its parent version in the same
+/// transaction and never updated/deleted afterwards — the same immutability
+/// guarantee as its parent (a later change is recorded as a new
+/// PatientMedicalHistory version with its own fresh PatientCondition rows,
+/// never as an edit of a past version's rows). organizationId/clinicId are
+/// denormalized from the parent history row so scoped queries and the
+/// privacy export (patientPrivacy.ts) never need a join back through
+/// PatientMedicalHistory just to filter by tenant/clinic.
+model PatientCondition {
+  id          String                @id @default(uuid())
+  historyId   String
+  history     PatientMedicalHistory @relation(fields: [historyId], references: [id])
+  conditionId String
+  condition   MedicalCondition      @relation(fields: [conditionId], references: [id])
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  clinicId       String
+  clinic         Clinic       @relation(fields: [clinicId], references: [id])
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id])
+
+  /// active | resolved | historical
+  status String  @default("active")
+  /// Free-text clinical note about this specific condition instance (e.g.
+  /// severity, onset). Sensitive free text — redacted on anonymization, same
+  /// treatment as PatientMedicalHistory.allergies.
+  note   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([historyId])
+  @@index([conditionId])
+  @@index([patientId])
   @@index([clinicId])
   @@index([organizationId])
 }
@@ -1457,6 +1604,8 @@ model Organization {
   postTreatmentQueue            PostTreatmentMessageQueue[]
   legacyConsentCorrections      PatientLegacyConsentCorrection[]
   patientEmergencyContacts      PatientEmergencyContact[]
+  patientMedicalHistories       PatientMedicalHistory[]
+  patientConditions             PatientCondition[]
 }
 
 model UserClinic {
