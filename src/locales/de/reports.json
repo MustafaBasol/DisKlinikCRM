@@ -5,6 +5,26 @@
     "csv": "CSV herunterladen",
     "filePrefix": "umsatzbericht"
   },
+  "exportControls": {
+    "export": "Exportieren",
+    "exportExcel": "Nach Excel exportieren",
+    "exportPdf": "Als PDF exportieren",
+    "print": "Drucken",
+    "preparing": "Export wird vorbereitet…",
+    "generatedAt": "Erstellt am",
+    "appliedFilters": "Angewendete Filter",
+    "errors": {
+      "UNSUPPORTED_REPORT": "Nicht unterstützter Bericht",
+      "UNSUPPORTED_FORMAT": "Nicht unterstütztes Exportformat",
+      "INVALID_FILTERS": "Ungültige Filter",
+      "UNAUTHORIZED_ROLE": "Sie sind nicht berechtigt, diesen Bericht zu exportieren",
+      "INACCESSIBLE_CLINIC": "Zugriff auf die angeforderte Klinik verweigert",
+      "ROW_LIMIT_EXCEEDED": "Zu viele Zeilen für einen synchronen Export",
+      "NO_DATA": "Keine Daten zum Exportieren",
+      "GENERATION_FAILED": "Export fehlgeschlagen",
+      "generic": "Export fehlgeschlagen"
+    }
+  },
   "tabs": {
     "revenue": "Umsatzbericht",
     "doctors": "Arztleistung",
