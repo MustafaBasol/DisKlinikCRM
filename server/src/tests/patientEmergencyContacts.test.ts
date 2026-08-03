@@ -26,6 +26,9 @@
  *  6.  Contact cannot be updated/deleted under a different patientId
  *  7.  BILLING cannot list/create/update/delete emergency contacts
  *  8.  Setting a new primary flips the previous primary to false (transaction)
+ *  8b. isPrimaryContactConflict() correctly classifies P2002 vs. other errors
+ *      (real concurrent-write races against Postgres are covered separately
+ *      in dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts)
  *  9.  isLegalDecisionMaker can be true for multiple contacts (not deduped)
  *  10. Patient anonymization clears emergency-contact PII
  *  11. Patient privacy export includes emergency contacts
@@ -42,6 +45,8 @@ import {
   EMERGENCY_CONTACT_TYPES,
   validateEmergencyContact,
   mergeEmergencyContactPatch,
+  isPrimaryContactConflict,
+  PRIMARY_CONTACT_CONFLICT_CODE,
   type NormalizedEmergencyContact,
 } from '../services/patientEmergencyContacts.js';
 
@@ -316,6 +321,37 @@ await test('PUT that sets isPrimary=true on a non-primary contact demotes the cu
 
   const aAfter = mockContacts.find(c => c.id === a.contact!.id);
   assert.equal(aAfter?.isPrimary, false);
+});
+
+// ── 8b. P2002 -> 409 PRIMARY_CONTACT_CONFLICT translation (pure logic) ─────
+//
+// The single-primary invariant is now DATABASE-BACKED (a partial unique
+// index — see migration 20260803120000_add_patient_emergency_contacts).
+// This in-memory mock DB has no real Postgres constraint to race against
+// (JS execution is single-threaded, so two "concurrent" mock calls above
+// never actually interleave), so genuine concurrent-write races are covered
+// separately, against a REAL disposable Postgres instance, in
+// server/src/tests/dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts.
+// What IS unit-testable here without a DB is the pure error-classification
+// helper the route uses to turn a P2002 into a safe, stable response.
+
+section('8b. isPrimaryContactConflict() classifies P2002 -> stable 409 code (see dbVerification suite for the real-Postgres race)');
+
+await test('a Prisma P2002 error is classified as a primary-contact conflict', () => {
+  const p2002 = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+  assert.equal(isPrimaryContactConflict(p2002), true);
+});
+
+await test('an unrelated error (e.g. P2025 not-found, or a plain Error) is NOT classified as a primary-contact conflict', () => {
+  const p2025 = Object.assign(new Error('Record not found'), { code: 'P2025' });
+  assert.equal(isPrimaryContactConflict(p2025), false);
+  assert.equal(isPrimaryContactConflict(new Error('boom')), false);
+  assert.equal(isPrimaryContactConflict(null), false);
+  assert.equal(isPrimaryContactConflict(undefined), false);
+});
+
+await test('the stable API error code matches what the route responds with', () => {
+  assert.equal(PRIMARY_CONTACT_CONFLICT_CODE, 'PRIMARY_CONTACT_CONFLICT');
 });
 
 // ── 9. isLegalDecisionMaker is NOT deduplicated ─────────────────────────────

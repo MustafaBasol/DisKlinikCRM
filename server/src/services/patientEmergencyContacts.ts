@@ -6,6 +6,15 @@
  * format, contactType contract — can be unit tested without a database. The
  * route handler (server/src/routes/patientEmergencyContacts.ts) is
  * responsible for scope resolution and the single-primary transaction.
+ *
+ * The "at most one isPrimary=true row per patient" invariant is enforced by
+ * a database-level partial unique index (PatientEmergencyContact_
+ * one_primary_per_patient — see migration 20260803120000_add_patient_
+ * emergency_contacts), not by the application transaction alone. Concurrent
+ * requests that both try to become primary race on that index; the loser's
+ * Prisma call rejects with a P2002 unique-constraint error, which the route
+ * translates via isPrimaryContactConflict() below into a stable 409 response
+ * instead of an unhandled exception.
  */
 
 export const EMERGENCY_CONTACT_TYPES = ['SPOUSE', 'PARENT', 'GUARDIAN', 'CHILD', 'SIBLING', 'OTHER'] as const;
@@ -36,6 +45,21 @@ export type NormalizedEmergencyContact = {
 export type EmergencyContactValidationResult =
   | { ok: true; data: NormalizedEmergencyContact }
   | { ok: false; error: string };
+
+/** Stable API error code returned when the database-level single-primary
+ * partial unique index rejects a concurrent write (see the file header). */
+export const PRIMARY_CONTACT_CONFLICT_CODE = 'PRIMARY_CONTACT_CONFLICT';
+
+/**
+ * True when `err` is a Prisma unique-constraint violation (P2002). The only
+ * unique constraint on PatientEmergencyContact is the database-level partial
+ * index enforcing "at most one isPrimary=true row per patient", so any P2002
+ * raised while creating/updating a contact can only be that race — never an
+ * unrelated/ambiguous conflict.
+ */
+export function isPrimaryContactConflict(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && (err as { code?: unknown }).code === 'P2002');
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
