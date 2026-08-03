@@ -1,0 +1,334 @@
+{
+  "task": "F2-GUARDRAIL-PREP-010-C",
+  "phase": "F2 — Modular Monolith Guardrails",
+  "type": "evidence-only",
+  "status": "AGENT_COMPLETED / EVIDENCE_VALIDATED / PR_OPENED_AWAITING_PARALLEL_WAVE_CONSOLIDATION",
+  "parallelWave": ["F2-IMPL-001-A-R2", "PREP-010-A", "PREP-010-B"],
+  "sharedControlFilesTouched": false,
+  "baseline": {
+    "fetchedFrom": "origin/main",
+    "sha": "6f539b237019945443afe6156f9fc2a9fe32ffa4",
+    "description": "Merge commit for PR #312 (feature/us-01-1-p1-medical-history-foundation)",
+    "isolation": {
+      "worktreeCreatedFrom": "origin/main @ 6f539b237019945443afe6156f9fc2a9fe32ffa4",
+      "branch": "docs/f2-guardrail-prep-010-c-reference-contracts",
+      "workingTreeCleanAtCreation": true,
+      "primaryWorkingTreeTouched": false,
+      "taskIdPreUseCheck": {
+        "grepDocsForTaskId": "no matches before this task's own files created",
+        "remoteBranchExists": false
+      }
+    }
+  },
+  "preEditGateDocumentsRead": [
+    "AGENTS.md",
+    "docs/program/MODULE_MAP.md",
+    "docs/program/architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md",
+    "docs/program/architecture/F2-PREP-009_IMAGING_LIFECYCLE_PORT_TENANT_CONTEXT_CONTRACT_AMENDMENT.md",
+    "docs/architecture/adr-foundation-review.md",
+    "docs/program/ARCHITECTURE_DECISIONS.md",
+    "docs/program/NORAMEDI_MASTER_TRACKER.md"
+  ],
+  "f2Prep009Status": "PROPOSED_DOCUMENT_MERGED_CONTRACT_NOT_ACCEPTED",
+  "f2Prep009StatusNote": "The F2-PREP-009 .md/.json document pair is merged to main (via PR #307), but the contract amendment it proposes remains PROPOSED, not program-owner-accepted, per the document's own header and the tracker's latest entries. This task's briefing described F2-PREP-009 as 'merged'; the accurate statement is 'merged document, unaccepted contract'.",
+  "candidates": [
+    {
+      "id": "CAND-01",
+      "name": "Billing financial-select restricted selector",
+      "targetedCandidateCategory": "Billing financial-select/restricted selector",
+      "present": true,
+      "file": "server/src/routes/treatmentCases.ts",
+      "lines": "65-105",
+      "symbol": "inline handler for GET /api/treatment-cases/financial-select",
+      "ownerDomain": "Treatment Cases",
+      "consumerDomain": "Billing/Payments (src/services/api.ts:253 treatmentCaseService.getFinancialSelect, used by payment-creation form)",
+      "contractVisibility": "inline_route_handler",
+      "explicitTenantContext": true,
+      "tenantContextMechanism": "validateAndGetClinicIdScope(req.user!, selectedClinicId, res) — treatmentCases.ts:74",
+      "authorizationPlacement": "route_middleware",
+      "dbPredicateScope": "clinicId scope spread into sole where clause (line 78) with patientId/deletedAt",
+      "dtoDefinition": "none_named_inferred_select_projection",
+      "rawPrismaLeakage": false,
+      "typedSanitizedErrors": false,
+      "auditOwnership": "none (read-only)",
+      "transactionOwnership": "none",
+      "testOwnership": [
+        "server/src/tests/billingFinancialTreatmentCaseSelect.test.ts (simulated, not real route/DB)",
+        "server/src/tests/billingPatientAccess.test.ts (simulated)",
+        "server/src/tests/paymentsListFieldScope.test.ts (real DB + real route middleware chain, but covers GET /payments sibling select, not this endpoint)"
+      ],
+      "crossTenantTests": "present_in_simulated_test_only",
+      "backwardCompatibilityDocumented": false,
+      "rollbackDocumented": false,
+      "classification": "PARTIAL_PATTERN_NEEDS_HARDENING",
+      "selectedAsReference": true,
+      "referenceCategory": "restricted_read_selector"
+    },
+    {
+      "id": "CAND-02",
+      "name": "Treatment-case scoped relation-guard boundary (findTreatmentCaseInClinic)",
+      "targetedCandidateCategory": "treatment-case scoped service/route contracts",
+      "present": true,
+      "file": "server/src/utils/relationGuards.ts",
+      "lines": "26-36",
+      "symbol": "findTreatmentCaseInClinic(treatmentCaseId, clinicId, patientId?)",
+      "ownerDomain": "shared utils (misplaced — not owned by Treatment Case domain's own files, which export nothing but the router)",
+      "consumerDomain": "Payments (payments.ts:11,91,174), Appointments (appointments.ts:26,340,480,671), Imaging (imaging.ts:34,243), Lab Orders (labOrders.ts:12,128,171)",
+      "contractVisibility": "exported_module_function",
+      "explicitTenantContext": true,
+      "tenantContextMechanism": "clinicId required parameter at all 7 call sites; callers resolve it upstream via resolveEffectiveClinicId/getAccessibleClinicIds/validateAndGetClinicIdScope",
+      "authorizationPlacement": "caller_route_middleware",
+      "dbPredicateScope": "clinicId present in sole where clause (lines 27-32) with optional patientId narrowing",
+      "dtoDefinition": "none_named_ad_hoc_prisma_inferred",
+      "rawPrismaLeakage": false,
+      "typedSanitizedErrors": false,
+      "auditOwnership": "none at guard level; stays with each caller's own mutation",
+      "transactionOwnership": "none (never called inside $transaction at any of 7 call sites)",
+      "testOwnership": [
+        "no dedicated test file for relationGuards.ts",
+        "server/src/tests/treatmentCaseClinicScope.test.ts (hand-rolled mock reimplementation, not the real function)"
+      ],
+      "crossTenantTests": "present_in_mocked_reimplementation_only",
+      "backwardCompatibilityDocumented": false,
+      "rollbackDocumented": false,
+      "classification": "PARTIAL_PATTERN_NEEDS_HARDENING",
+      "selectedAsReference": true,
+      "referenceCategory": "scoped_mutation_service_boundary"
+    },
+    {
+      "id": "CAND-03",
+      "name": "Patient privacy scoped parent-resolution pattern (resolvePatient)",
+      "targetedCandidateCategory": "patient privacy scoped parent-resolution pattern",
+      "present": true,
+      "file": "server/src/routes/patientPrivacy.ts",
+      "lines": "64-81",
+      "symbol": "resolvePatient(patientId, user)",
+      "callSiteLines": [382, 450, 506, 586, 714, 749, 771, 806],
+      "ownerDomain": "Privacy / Consent / Retention / Data Subject Rights",
+      "consumerDomain": "none outside this file — module-private, not exported; downstream services (patientAnonymization.ts, orphanFileInspection.ts, deletionReviewInventory.ts) receive an already-resolved clinicId as a plain argument from the route, they do not call resolvePatient themselves",
+      "contractVisibility": "module_private_no_export",
+      "explicitTenantContext": true,
+      "tenantContextMechanism": "organizationId equality + deletedAt:null + conditional clinicId IN allowedClinicIds; endorsed as a legitimate record-derived tenant-context source in F2-PREP-009 §3/§8a",
+      "authorizationPlacement": "two_layer_route_middleware_role_plus_inline_tenant_check",
+      "dbPredicateScope": "id + organizationId + deletedAt:null always; clinicId IN allowedClinicIds unless canAccessAllClinics",
+      "dtoDefinition": "narrow_inline_select_with_explicit_return_type_not_named_shared_type",
+      "rawPrismaLeakage": false,
+      "typedSanitizedErrors": false,
+      "auditOwnership": "none inside resolvePatient; each caller writes its own audit entry after success",
+      "transactionOwnership": "none (single findFirst)",
+      "testOwnership": [
+        "server/src/tests/patientPrivacy.test.ts (characterization, reimplements logic locally, cannot import resolvePatient since it is not exported)",
+        "server/src/tests/kvkkAttachmentImagingLifecycle.test.ts (tests adjacent module, not this helper)"
+      ],
+      "crossTenantTests": "none_against_real_function_only_adjacent_module_tested",
+      "backwardCompatibilityDocumented": false,
+      "rollbackDocumented": false,
+      "classification": "INTERNAL_ONLY_NOT_A_CONTRACT",
+      "selectedAsReference": true,
+      "referenceCategory": "lifecycle_or_privacy_oriented_contract",
+      "note": "Selected despite INTERNAL_ONLY_NOT_A_CONTRACT classification because it is the cleanest, already-endorsed (F2-PREP-009 §3/§8a) tenant-context-resolution pattern in the repository; hardening requires exporting it and requiring downstream re-validation."
+    },
+    {
+      "id": "CAND-04",
+      "name": "Appointment statistics or summary services",
+      "targetedCandidateCategory": "appointment statistics or summary services",
+      "present": false,
+      "absentReason": "appointments.ts exports only the router; dashboard.ts and reports.ts each independently compute appointment counts entirely inline with zero shared exported function; no *appointment* service file contains statistics/summary exports (only availability/conflict-checking logic)",
+      "contrastExampleNotedForContextOnly": "server/src/services/labOrders/labOrderSummary.ts exports buildDashboardSummary — a real cross-file summary builder for a different domain, underscoring the gap in Appointments",
+      "classification": "INTERNAL_ONLY_NOT_A_CONTRACT",
+      "selectedAsReference": false
+    },
+    {
+      "id": "CAND-05",
+      "name": "Reporting DTO aggregation pattern",
+      "targetedCandidateCategory": "reporting DTO aggregation patterns",
+      "present": true,
+      "file": "server/src/routes/reports.ts, server/src/routes/dashboard.ts",
+      "symbol": "four inline route handlers + clinicScopeSql (module-private) in reports.ts; buildSafeStats (exported, null-safety normalizer only) + buildChartData (module-private) in dashboard.ts",
+      "ownerDomain": "none — shared/ambiguous per MODULE_MAP.md; owns zero Prisma models",
+      "consumerDomain": "n/a (Reporting is itself the cross-domain consumer of Payments, Appointments, Treatment Cases, Patients, Users)",
+      "contractVisibility": "inline_route_handler_mostly",
+      "explicitTenantContext": true,
+      "tenantContextMechanism": "validateAndGetClinicIdScope/validateAndGetScope consistently used; raw-SQL path uses parameterized clinicScopeSql() helper (reports.ts:16-24), array-aware, with a regression test locking a documented historical fix",
+      "authorizationPlacement": "route_middleware",
+      "dbPredicateScope": "sound for Prisma and raw SQL paths",
+      "dtoDefinition": "none_named_untyped_object_literal_responses",
+      "rawPrismaLeakage": true,
+      "rawPrismaLeakageDetail": "dashboard.ts agenda/doctorExtras.upcomingWeek/recentPatients/activities sections use include on Appointment/ActivityLog, passing through full model scalars",
+      "typedSanitizedErrors": false,
+      "auditOwnership": "none (read-only)",
+      "transactionOwnership": "none",
+      "testOwnership": [
+        "server/src/tests/reportsClinicScope.test.ts (mirrored logic + source-text regex assertions, not real route/DB)",
+        "server/src/tests/reportsRevenueByPeriod.test.ts (mirrored logic, no live DB per its own header)",
+        "server/src/tests/dashboard.test.ts (real unit test of buildSafeStats only; rest is mirrored reimplementation)"
+      ],
+      "crossTenantTests": "present_in_mirrored_logic_only",
+      "backwardCompatibilityDocumented": true,
+      "backwardCompatibilityNote": "reportsClinicScope.test.ts:22-23,206-211 documents an omitted clinicId selector resolves to the same accessible-clinic scope previously seen",
+      "rollbackDocumented": false,
+      "classification": "ANTI_PATTERN_DIRECT_ACCESS",
+      "selectedAsReference": false,
+      "note": "Retained as the negative reference point for what route-inlined-without-a-DTO-layer looks like; tenant-scoping mechanics specifically border PARTIAL_PATTERN_NEEDS_HARDENING."
+    },
+    {
+      "id": "CAND-06",
+      "name": "Existing domain public.ts / barrel conventions",
+      "targetedCandidateCategory": "existing domain public.ts/barrel conventions",
+      "present": false,
+      "absentReason": "no file named exactly public.ts exists anywhere under server/src at baseline 6f539b2; the only public.ts in this repository's git history is on PR #304's unmerged branch (see CAND-07), not on main",
+      "otherIndexFilesFoundNotQualifying": [
+        "server/src/index.ts (app bootstrap, not a domain barrel)",
+        "server/src/schemas/index.ts (flat cross-cutting Zod validation module, shared input-validation utility, explicitly excluded by task scope)"
+      ],
+      "authoritativeSourceForPlannedNotBuilt": [
+        "docs/program/MODULE_MAP.md:10",
+        "docs/program/evidence/F2-PREP-004_MODULARIZATION_SEQUENCE_AND_PILOT_SELECTION.md:256-261"
+      ],
+      "classification": "DOCUMENTED_NOT_IMPLEMENTED",
+      "selectedAsReference": false
+    },
+    {
+      "id": "CAND-07",
+      "name": "ImagingLifecyclePort — accepted/proposed contract documents vs. PR #304 implementation",
+      "targetedCandidateCategory": "accepted but not yet merged ImagingLifecyclePort implementation separately from its merged contract documents",
+      "present": true,
+      "contractDocuments": {
+        "f2Cc14AcceptedAndRevised": "F2-PREP-006-E §9 (merged)",
+        "tenantContextAmendmentProposed": "F2-PREP-009 (document merged; contract PROPOSED, not accepted)"
+      },
+      "implementation": {
+        "location": "PR #304, branch feature/f2-impl-001-a-unused-imaging-lifecycle-facade",
+        "mergedToMain": false,
+        "presentInThisTaskBaseline": false,
+        "liveReVerification": {
+          "checkedAt": "2026-08-03",
+          "baseRefName": "main",
+          "headRefOid": "abac5e361abd0913dadbce1e124c2ca113600fb7",
+          "mergeStateStatus": "DIRTY",
+          "mergeable": "CONFLICTING",
+          "state": "OPEN",
+          "note": "New observation this task is recording — a prior tracker entry recorded mergeable: MERGEABLE at the same head SHA; this task's own gh pr view re-check found CONFLICTING/DIRTY. Reconciliation is out of scope for this task."
+        },
+        "file": "server/src/services/imaging/public.ts",
+        "findings": [
+          {
+            "id": "Finding1_tenant_authorization_gap",
+            "status": "OPEN_UNCHANGED",
+            "location": "findOwnedImage(imageId) line 151; markStorageMissing line 177; redactForAnonymization line 196; checkImageStorageExists line 277",
+            "detail": "no clinicId/tenant parameter on any of the three imageId-only methods; ownership re-derivation is a data-integrity check (image.study.clinicId !== image.clinicId), not caller authorization"
+          },
+          {
+            "id": "test_seam_export",
+            "location": "__setImagingStorageExistenceCheckerForTest, line 264",
+            "detail": "production-reachable exported function whose only purpose is mutating module-private test state"
+          }
+        ],
+        "productionCallers": 0
+      },
+      "classification": {
+        "contractDocuments": "DOCUMENTED_NOT_IMPLEMENTED",
+        "implementation": "REJECTED_AS_REFERENCE"
+      },
+      "selectedAsReference": false,
+      "note": "F2-PREP-009's Option A design is cited as design input for the proposed template (§7) but the PR #304 source itself is explicitly not cited as a working reference, per direct-source-re-check requirement."
+    }
+  ],
+  "crossDomainAntiPatternInstances": [
+    {"file": "server/src/routes/dashboard.ts", "lines": [85, 91, 191], "detail": "prisma.treatmentCase.count/.aggregate/.groupBy, tenant-scoped but bypassing any Treatment-Case-owned function"},
+    {"file": "server/src/routes/reports.ts", "lines": [245, 271, 274], "detail": "prisma.treatmentCase.findMany/.count, same pattern"},
+    {"file": "server/src/routes/postTreatment.ts", "lines": [85, 139], "detail": "prisma.treatmentPackage.findFirst duplicated verbatim between POST and PUT handlers"},
+    {"file": "server/src/services/earningService.ts", "lines": [157], "detail": "prisma.treatmentCase.findFirst — bidirectional ad hoc coupling with Treatment Cases"},
+    {"file": "server/src/routes/dentalChart.ts", "lines": [33, 38], "detail": "prisma.toothRecord.findMany result serialized directly via res.json(records), zero DTO mapping"}
+  ],
+  "tenantContextFindingsSummary": "Every selected reference (CAND-01/02/03) and every anti-pattern instance applies an explicit non-optional clinicId predicate at the DB layer. No currently-merged production path passes a raw unvalidated req.user.clinicId/JWT-default into a security-critical where clause. The one confirmed unscoped-tenant-context signature is PR #304's unmerged implementation (CAND-07), not present on main.",
+  "dtoRawPrismaFindingsSummary": "No candidate examined defines a named, shared TypeScript DTO type on main. CAND-01/02/03 use narrow Prisma-inferred select projections (no leakage). CAND-05's dashboard.ts agenda/activities sections use include-based passthroughs of full Appointment/ActivityLog scalars (leakage). dentalChart.ts (§4/crossDomainAntiPatternInstances) returns a raw Prisma model with no select narrowing.",
+  "selectedReferences": [
+    {"candidateId": "CAND-01", "category": "restricted_read_selector", "classification": "PARTIAL_PATTERN_NEEDS_HARDENING"},
+    {"candidateId": "CAND-02", "category": "scoped_mutation_service_boundary", "classification": "PARTIAL_PATTERN_NEEDS_HARDENING"},
+    {"candidateId": "CAND-03", "category": "lifecycle_or_privacy_oriented_contract", "classification": "INTERNAL_ONLY_NOT_A_CONTRACT"}
+  ],
+  "rejectedPatterns": [
+    {"pattern": "direct_prisma_cross_domain_reads", "instances": ["dashboard.ts prisma.treatmentCase", "reports.ts prisma.treatmentCase", "postTreatment.ts prisma.treatmentPackage", "earningService.ts prisma.treatmentCase"]},
+    {"pattern": "raw_model_return", "instances": ["dentalChart.ts:38 res.json(records)", "dashboard.ts include-based Appointment/ActivityLog passthroughs"]},
+    {"pattern": "implicit_default_clinic_authorization", "instances": [], "note": "not found as a security-critical instance in currently-merged production code; documented and rejected in principle by F2-PREP-009 §3; two non-scoping locale/timezone req.user!.clinicId reads found and recorded as non-violations"},
+    {"pattern": "unscoped_id_only_mutation", "instances": ["PR #304 (unmerged) markStorageMissing(imageId)/redactForAnonymization(imageId,reason)/checkImageStorageExists(imageId)"]},
+    {"pattern": "public_export_of_test_seams", "instances": ["PR #304 (unmerged) __setImagingStorageExistenceCheckerForTest"]},
+    {"pattern": "service_wrappers_with_no_actual_boundary_enforcement", "instances": ["PR #304 (unmerged) services/imaging/public.ts as a whole"]}
+  ],
+  "proposedTemplate": {
+    "elements": [
+      "owner_domain_matching_module_map_ownership",
+      "exported_entry_path_inside_owning_domain_not_shared_utils_or_inline_handler",
+      "explicit_authorization_validated_context_leading_clinicId_param",
+      "input_dto_named_type",
+      "output_dto_named_type",
+      "no_raw_prisma_model_explicit_select_only",
+      "fail_closed_tenant_predicates_read_and_write_parity",
+      "sanitized_typed_errors_closed_set_of_error_classes",
+      "audit_ownership_explicitly_stated",
+      "transaction_ownership_explicitly_stated_even_if_none",
+      "version_backward_compatibility_explicit_statement",
+      "test_ownership_real_db_backed_not_mirrored",
+      "migration_impact_explicit_statement",
+      "rollback_delete_revert_when_additive_zero_caller",
+      "production_caller_inventory_enumerated_and_reverified_at_migration_time"
+    ],
+    "designInputSources": [
+      "CAND-01 (narrow select practice)",
+      "CAND-02 (explicit clinicId parameter practice)",
+      "CAND-03 / F2-PREP-009 §3,§8a (tenant-context source validation practice)",
+      "F2-PREP-009 §5 (fail-closed read/write predicate parity)",
+      "F2-PREP-009 §9,§10 (backward compatibility / rollback statement shape)",
+      "CAND-07 document only, not PR #304 source (named DTO practice, typed-error design)"
+    ],
+    "notImplementedByThisTask": true
+  },
+  "testRequirements": [
+    "Every future implementation of the proposed template must include a real DB-backed test invoking the actual exported function/route (per paymentsListFieldScope.test.ts's standard), not a mirrored/simulated reimplementation.",
+    "Cross-tenant rejection tests must exercise the real function with a genuine cross-clinic/cross-org fixture, asserting an undifferentiated not-found/denied result — no candidate examined in this inventory currently meets this bar against its own real code path."
+  ],
+  "unresolvedDecisions": [
+    "Whether findTreatmentCaseInClinic (CAND-02) should be relocated from utils/relationGuards.ts into a Treatment-Case-owned module, and whether its 7 call sites migrate in one pass or incrementally.",
+    "Whether resolvePatient (CAND-03) should be exported with a stable named type, and whether patientAnonymization.ts/orphanFileInspection.ts/deletionReviewInventory.ts should be required to re-call it instead of trusting a passed-in clinicId.",
+    "Whether the Billing financial-select selector (CAND-01) should be consolidated with the structurally identical narrow-selects in payments.ts/practitionerEarnings.ts into one shared, named, tested function.",
+    "Whether program ownership accepts F2-PREP-009's Option A design as the canonical tenant-context element for the proposed template, independent of PR #304's own resolution.",
+    "Whether a fourth 'barrel/facade convention' reference category should be added once any public.ts implementation actually merges to main (none exists today, CAND-06)."
+  ],
+  "dependencies": {
+    "pr304": {
+      "dependsOnThisTask": false,
+      "thisTaskDependsOnIt": false,
+      "note": "CAND-07's implementation classification (REJECTED_AS_REFERENCE) is contingent on PR #304's current state (OPEN, CONFLICTING, Finding 1 open). If a future task closes Finding 1 and reconciles the merge conflict, CAND-07's implementation classification requires re-evaluation — not decided by this document."
+    },
+    "laterTasks": {
+      "f2Prep009Acceptance": "F2-PREP-009's proposed contract remains PROPOSED pending program-owner acceptance, independent of this task.",
+      "parallelWaveTasks": ["F2-IMPL-001-A-R2", "PREP-010-A", "PREP-010-B"],
+      "parallelWaveNote": "No dependency between this task's two deliverables and the parallel-wave tasks' own outputs; this task creates only its own two uniquely-named files."
+    }
+  },
+  "validation": {
+    "gitDiffCheck": "clean",
+    "jsonParse": "clean",
+    "candidateIdUniqueness": "CAND-01..CAND-07, each appears exactly once",
+    "markdownJsonParity": "confirmed — every candidate/classification/reference/rejected-pattern/unresolved-decision entry present in both files",
+    "classificationCountParity": "7 candidates classified in both Markdown §3 and JSON candidates[]",
+    "directSourceRecheckForSelectedReferences": [
+      "CAND-01: treatmentCases.ts:65-105 re-verified via direct grep against baseline worktree",
+      "CAND-02: relationGuards.ts:26-36 + 7 call sites re-verified via direct grep against baseline worktree",
+      "CAND-03: patientPrivacy.ts:64-81 + 8 call sites re-verified via direct grep against baseline worktree"
+    ],
+    "noRuntimeSchemaMigrationWorkflowPackageSharedControlFileChanged": "confirmed — git status --porcelain=v1 in the isolated worktree shows only the two new evidence files"
+  },
+  "filesCreated": [
+    "docs/program/evidence/F2-GUARDRAIL-PREP-010-C_REFERENCE_PUBLIC_CONTRACT_PATTERN_INVENTORY.md",
+    "docs/program/evidence/F2-GUARDRAIL-PREP-010-C_reference_public_contract_pattern_inventory.json"
+  ],
+  "migrationRuntimeImpact": "none — evidence-only, no application/schema/migration/workflow/package file touched",
+  "tenantKvkkImpact": "none — read-only inventory of existing code; no data accessed beyond source-code inspection; no production system touched",
+  "mergeSafe": true,
+  "mergeSafeNote": "Safe to merge as documentation; contains no application code changes. Not auto-merged by this task per instruction.",
+  "deploymentSafe": true,
+  "deploymentSafeNote": "No deployable artifact changes; documentation only.",
+  "exactNextAction": "Program-owner review of the proposed reference template (§7) and the three selected-but-partial reference candidates, deciding whether to authorize a hardening task for CAND-01/02/03 before any is adopted as a canonical example for future cross-domain contract work. No implementation is authorized by this document."
+}
