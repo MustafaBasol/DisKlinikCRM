@@ -29,10 +29,15 @@ interface Props {
  * only ever calls `onSelect`; it never maintains its own notion of "which
  * tab is selected".
  *
- * When the active tab lives in `moreTabs`, the trigger displays that tab's
- * own label (instead of the generic "More" text) and is marked
- * `aria-selected` — the active tab is never buried inside an unlabeled
- * overflow control.
+ * ARIA model: the More trigger is a plain popup-menu button
+ * (`aria-haspopup="menu"`), never `role="tab"` — a button that opens a menu
+ * cannot simultaneously claim to be "one tab controlling one tabpanel", and
+ * it sits outside `role="tablist"` for the same reason. When the active tab
+ * lives in `moreTabs`, an additional real `role="tab"` element (styled like
+ * a primary tab, showing that tab's own label) is rendered inside the
+ * tablist so there is always exactly one element that is
+ * `role="tab"` + `aria-selected="true"` + `aria-controls` pointing at the
+ * active tabpanel — never the menu trigger itself.
  */
 const PatientDetailTabs: React.FC<Props> = ({
   primaryTabs,
@@ -44,6 +49,7 @@ const PatientDetailTabs: React.FC<Props> = ({
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const activeOverflowTabRef = useRef<HTMLButtonElement | null>(null);
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const menuItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -53,6 +59,17 @@ const PatientDetailTabs: React.FC<Props> = ({
 
   const activeMoreTab = moreTabs.find((tab) => tab.key === activeTab) ?? null;
   const isMoreActive = activeMoreTab !== null;
+  // Roving-tabindex slots: the primary tabs, plus — only while an overflow
+  // tab is active — the real `role="tab"` standing in for it. The More
+  // trigger is deliberately never one of these slots (requirement: it must
+  // not be mixed into the primary-tab roving-tabindex algorithm); it is
+  // reached only via normal browser Tab order.
+  const totalRovingSlots = primaryTabs.length + (isMoreActive ? 1 : 0);
+  const keyAtSlot = (index: number): string | undefined => {
+    if (index < primaryTabs.length) return primaryTabs[index]?.key;
+    if (isMoreActive && index === primaryTabs.length) return activeMoreTab!.key;
+    return undefined;
+  };
 
   const updateScrollState = useCallback(() => {
     const el = scrollRef.current;
@@ -126,25 +143,26 @@ const PatientDetailTabs: React.FC<Props> = ({
   const closeMore = () => setIsMoreOpen(false);
 
   /**
-   * Roving tabindex across the primary row PLUS the More trigger as its
-   * final stop. Landing on a primary tab activates it (matches prior
-   * behavior); landing on the More trigger only moves focus there — opening
-   * the menu is a separate, explicit action (Enter/Space/click), since the
-   * trigger does not represent a single tab to auto-select.
+   * Roving tabindex across the primary row plus — only while it exists — the
+   * real `role="tab"` standing in for the active overflow tab. Landing on
+   * any slot activates it (matches prior per-primary-tab behavior); the More
+   * trigger is never a slot here (see `totalRovingSlots` above), so it is
+   * simply skipped by arrow-key navigation.
    */
   const activateByIndex = (index: number) => {
-    const lastIndex = primaryTabs.length + (moreTabs.length > 0 ? 1 : 0) - 1;
+    const lastIndex = totalRovingSlots - 1;
     const clamped = Math.max(0, Math.min(lastIndex, index));
+    const key = keyAtSlot(clamped);
+    if (!key) return;
+    onSelect(key);
     if (clamped < primaryTabs.length) {
-      const target = primaryTabs[clamped];
-      if (!target) return;
-      onSelect(target.key);
-      tabRefs.current[target.key]?.focus();
+      tabRefs.current[key]?.focus();
     } else {
-      moreTriggerRef.current?.focus();
+      activeOverflowTabRef.current?.focus();
     }
   };
 
+  /** Shared by every primary-tab button AND the active-overflow-tab stand-in. */
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
     switch (event.key) {
       case 'ArrowRight':
@@ -161,28 +179,27 @@ const PatientDetailTabs: React.FC<Props> = ({
         break;
       case 'End':
         event.preventDefault();
-        activateByIndex(primaryTabs.length + (moreTabs.length > 0 ? 1 : 0) - 1);
+        activateByIndex(totalRovingSlots - 1);
         break;
       case 'Enter':
-      case ' ':
+      case ' ': {
         event.preventDefault();
-        onSelect(primaryTabs[index]!.key);
+        const key = keyAtSlot(index);
+        if (key) onSelect(key);
         break;
+      }
       default:
         break;
     }
   };
 
+  /**
+   * The More trigger is a plain menu button, not part of the roving-tabindex
+   * group above — it only ever opens/closes the popup menu, per the required
+   * ARIA model (a popup-menu button must never claim to be a tab).
+   */
   const handleMoreTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     switch (event.key) {
-      case 'ArrowLeft':
-        event.preventDefault();
-        activateByIndex(primaryTabs.length - 1);
-        break;
-      case 'Home':
-        event.preventDefault();
-        activateByIndex(0);
-        break;
       case 'ArrowDown':
       case 'Enter':
       case ' ':
@@ -233,51 +250,70 @@ const PatientDetailTabs: React.FC<Props> = ({
   };
 
   return (
-    <div role="tablist" aria-label="Hasta detay sekmeleri" className="relative flex items-stretch border-b border-gray-200 -mx-4 px-4 sm:mx-0 sm:px-0">
-      <div className="relative flex-1 min-w-0 flex items-center">
-        {canScrollLeft && (
-          <button
-            type="button"
-            aria-label="Önceki sekmeleri göster"
-            onClick={() => scrollByAmount(-160)}
-            className="absolute left-0 z-10 h-full w-8 flex items-center justify-center bg-gradient-to-r from-white via-white to-transparent"
-          >
-            <ChevronLeft size={16} className="text-gray-500" />
-          </button>
-        )}
-        <div
-          ref={scrollRef}
-          className="flex gap-1 sm:gap-4 overflow-x-auto scrollbar-hide scroll-smooth"
-        >
-          {primaryTabs.map((tab, index) => (
+    <div className="relative flex items-stretch border-b border-gray-200 -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div role="tablist" aria-label="Hasta detay sekmeleri" className="relative flex-1 min-w-0 flex items-stretch">
+        <div className="relative flex-1 min-w-0 flex items-center">
+          {canScrollLeft && (
             <button
-              key={tab.key}
-              ref={(el) => { tabRefs.current[tab.key] = el; }}
-              role="tab"
               type="button"
-              id={`patient-tab-${tab.key}`}
-              aria-selected={activeTab === tab.key}
-              aria-controls={`patient-tabpanel-${tab.key}`}
-              tabIndex={activeTab === tab.key ? 0 : -1}
-              data-tab={tab.key}
-              onClick={() => onSelect(tab.key)}
-              onKeyDown={(e) => handleKeyDown(e, index)}
-              className={`flex-shrink-0 px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 rounded-t ${
-                activeTab === tab.key ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
+              aria-label="Önceki sekmeleri göster"
+              onClick={() => scrollByAmount(-160)}
+              className="absolute left-0 z-10 h-full w-8 flex items-center justify-center bg-gradient-to-r from-white via-white to-transparent"
             >
-              {tab.label}
+              <ChevronLeft size={16} className="text-gray-500" />
             </button>
-          ))}
-        </div>
-        {canScrollRight && (
-          <button
-            type="button"
-            aria-label="Sonraki sekmeleri göster"
-            onClick={() => scrollByAmount(160)}
-            className="absolute right-0 z-10 h-full w-8 flex items-center justify-center bg-gradient-to-l from-white via-white to-transparent"
+          )}
+          <div
+            ref={scrollRef}
+            className="flex gap-1 sm:gap-4 overflow-x-auto scrollbar-hide scroll-smooth"
           >
-            <ChevronRight size={16} className="text-gray-500" />
+            {primaryTabs.map((tab, index) => (
+              <button
+                key={tab.key}
+                ref={(el) => { tabRefs.current[tab.key] = el; }}
+                role="tab"
+                type="button"
+                id={`patient-tab-${tab.key}`}
+                aria-selected={activeTab === tab.key}
+                aria-controls={`patient-tabpanel-${tab.key}`}
+                tabIndex={activeTab === tab.key ? 0 : -1}
+                data-tab={tab.key}
+                onClick={() => onSelect(tab.key)}
+                onKeyDown={(e) => handleKeyDown(e, index)}
+                className={`flex-shrink-0 px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 rounded-t ${
+                  activeTab === tab.key ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {canScrollRight && (
+            <button
+              type="button"
+              aria-label="Sonraki sekmeleri göster"
+              onClick={() => scrollByAmount(160)}
+              className="absolute right-0 z-10 h-full w-8 flex items-center justify-center bg-gradient-to-l from-white via-white to-transparent"
+            >
+              <ChevronRight size={16} className="text-gray-500" />
+            </button>
+          )}
+        </div>
+        {isMoreActive && (
+          <button
+            ref={activeOverflowTabRef}
+            role="tab"
+            type="button"
+            id={`patient-tab-${activeMoreTab!.key}`}
+            aria-selected="true"
+            aria-controls={`patient-tabpanel-${activeMoreTab!.key}`}
+            tabIndex={0}
+            data-tab={activeMoreTab!.key}
+            onClick={() => onSelect(activeMoreTab!.key)}
+            onKeyDown={(e) => handleKeyDown(e, primaryTabs.length)}
+            className="flex-shrink-0 px-2 sm:px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 border-primary-600 text-primary-600 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 rounded-t"
+          >
+            {activeMoreTab!.label}
           </button>
         )}
       </div>
@@ -285,14 +321,11 @@ const PatientDetailTabs: React.FC<Props> = ({
         <div className="relative flex-shrink-0 flex items-center">
           <button
             ref={moreTriggerRef}
-            role="tab"
             type="button"
-            id="patient-tab-more"
-            aria-selected={isMoreActive}
+            id="patient-tabs-more-trigger"
             aria-haspopup="menu"
             aria-expanded={isMoreOpen}
             aria-controls="patient-tabs-more-menu"
-            tabIndex={isMoreActive ? 0 : -1}
             data-tab="more"
             onClick={() => setIsMoreOpen((open) => !open)}
             onKeyDown={handleMoreTriggerKeyDown}
@@ -300,7 +333,7 @@ const PatientDetailTabs: React.FC<Props> = ({
               isMoreActive ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            {isMoreActive ? activeMoreTab!.label : moreLabel}
+            {moreLabel}
             <ChevronDown size={14} className={`transition-transform ${isMoreOpen ? 'rotate-180' : ''}`} />
           </button>
           {isMoreOpen && (

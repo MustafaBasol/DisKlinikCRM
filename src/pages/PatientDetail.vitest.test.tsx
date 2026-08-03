@@ -307,10 +307,11 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
     await waitForFullPageLoad();
 
     // canViewImaging is false by default here, so 13 of the 14 declared tab
-    // keys are visible: 5 in the primary row (+ the More trigger itself),
-    // and the remaining 8 collapsed into the More menu.
-    expect(screen.getAllByRole('tab')).toHaveLength(6);
-    await userEvent.click(screen.getByRole('tab', { name: /^More$/ }));
+    // keys are visible: 5 in the primary row, and the remaining 8 collapsed
+    // into the More menu (the More trigger itself is a plain button, not a
+    // tab, so it is not counted here).
+    expect(screen.getAllByRole('tab')).toHaveLength(5);
+    await userEvent.click(screen.getByRole('button', { name: /^More$/ }));
     expect(screen.getAllByRole('menuitemradio')).toHaveLength(8);
   });
 
@@ -319,7 +320,7 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
     await waitForFullPageLoad();
 
     expect(screen.queryByText('imaging:tab')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('tab', { name: /^More$/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^More$/ }));
     expect(screen.queryByText('imaging:tab')).not.toBeInTheDocument();
   });
 
@@ -328,7 +329,7 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
     renderPatientDetail();
     await waitForFullPageLoad();
 
-    await userEvent.click(screen.getByRole('tab', { name: /^More$/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^More$/ }));
     expect(screen.getByRole('menuitemradio', { name: 'imaging:tab' })).toBeInTheDocument();
   });
 
@@ -341,9 +342,11 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
       expect(emergencyContactSvc.getAll).toHaveBeenCalledWith('patient-1');
     });
     expect(screen.getByText('detail.emergencyContacts.empty')).toBeInTheDocument();
-    // The active tab (in the More group) is promoted onto the trigger itself
-    // instead of being hidden behind the generic "More" label.
+    // The active tab (in the More group) gets its own real role="tab"
+    // element showing its own label — never hidden behind the generic
+    // "More" trigger, which keeps showing the generic label unchanged.
     expect(screen.getByRole('tab', { name: 'patients:detail.emergencyContacts.title' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^More$/ })).toBeInTheDocument();
   });
 
   it('invalid ?tab= value falls back to rendering the Overview tab', async () => {
@@ -358,7 +361,7 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
     renderPatientDetail();
     await waitForFullPageLoad();
 
-    await userEvent.click(screen.getByRole('tab', { name: /^More$/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^More$/ }));
     await userEvent.click(screen.getByRole('menuitemradio', { name: 'patients:detail.emergencyContacts.title' }));
 
     expect(setSearchParamsMock).toHaveBeenCalled();
@@ -366,7 +369,7 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
     expect(forwardedParams.get('tab')).toBe('emergencyContacts');
   });
 
-  it('keyboard: ArrowRight from the last primary tab moves focus to the More trigger without navigating', async () => {
+  it('keyboard: ArrowRight from the last primary tab clamps in place — it never moves focus to the More trigger', async () => {
     renderPatientDetail();
     await waitForFullPageLoad();
 
@@ -374,7 +377,18 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
     lastPrimaryTab.focus();
     await userEvent.keyboard('{ArrowRight}');
 
-    expect(setSearchParamsMock).not.toHaveBeenCalled();
-    expect(screen.getByRole('tab', { name: /^More$/ })).toHaveFocus();
+    expect(lastPrimaryTab).toHaveFocus();
+    expect(screen.getByRole('button', { name: /^More$/ })).not.toHaveFocus();
+  });
+
+  it('keyboard: the More trigger is reachable via normal Tab order after the last primary tab', async () => {
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    const lastPrimaryTab = screen.getByRole('tab', { name: 'patients:detail.filesTab' });
+    lastPrimaryTab.focus();
+    await userEvent.tab();
+
+    expect(screen.getByRole('button', { name: /^More$/ })).toHaveFocus();
   });
 });

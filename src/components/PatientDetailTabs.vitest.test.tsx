@@ -76,11 +76,12 @@ describe('PatientDetailTabs', () => {
       }
     });
 
-    it('exposes the total tab count (primary + more) as role="tab" across the strip and the closed menu', () => {
+    it('exposes exactly the primary tabs as role="tab" when the active tab is primary — the More trigger is a button, not a tab', () => {
       renderTabs('overview');
-      // Primary tabs + the More trigger itself are role="tab"; menu items are
-      // role="menuitemradio" and not present until the menu opens.
-      expect(screen.getAllByRole('tab')).toHaveLength(PRIMARY.length + 1);
+      // Only the primary tabs are role="tab" here; the More trigger is a
+      // plain popup-menu button and menu items are role="menuitemradio" (not
+      // present until the menu opens).
+      expect(screen.getAllByRole('tab')).toHaveLength(PRIMARY.length);
     });
 
     it('marks the active primary tab with aria-selected and roving tabindex 0; others get -1', () => {
@@ -135,20 +136,38 @@ describe('PatientDetailTabs', () => {
       expect(onSelect).toHaveBeenCalledWith('overview');
     });
 
-    it('End moves focus to the More trigger (the final roving-tabindex stop) without selecting it', () => {
+    it('End moves to the last primary tab when no overflow tab is active — the More trigger is never part of this roving group', () => {
       const onSelect = vi.fn();
       renderTabs('overview', onSelect);
       fireEvent.keyDown(screen.getByRole('tab', { name: 'Genel Bakış' }), { key: 'End' });
-      expect(onSelect).not.toHaveBeenCalled();
-      expect(screen.getByRole('tab', { name: new RegExp(MORE_LABEL) })).toHaveFocus();
+      expect(onSelect).toHaveBeenCalledWith('files');
+      expect(screen.getByRole('tab', { name: 'Dosyalar' })).toHaveFocus();
+      expect(screen.getByRole('button', { name: new RegExp(MORE_LABEL) })).not.toHaveFocus();
     });
 
-    it('ArrowRight from the last primary tab moves focus to the More trigger without selecting it', () => {
+    it('ArrowRight from the last primary tab clamps in place — it never moves focus to the More trigger', () => {
       const onSelect = vi.fn();
       renderTabs('overview', onSelect);
       fireEvent.keyDown(screen.getByRole('tab', { name: 'Dosyalar' }), { key: 'ArrowRight' });
-      expect(onSelect).not.toHaveBeenCalled();
-      expect(screen.getByRole('tab', { name: new RegExp(MORE_LABEL) })).toHaveFocus();
+      expect(onSelect).toHaveBeenCalledWith('files');
+      expect(screen.getByRole('tab', { name: 'Dosyalar' })).toHaveFocus();
+      expect(screen.getByRole('button', { name: new RegExp(MORE_LABEL) })).not.toHaveFocus();
+    });
+
+    it('End moves to the active overflow tab (last roving slot) when a More-group tab is active', () => {
+      const onSelect = vi.fn();
+      renderTabs('emergencyContacts', onSelect);
+      fireEvent.keyDown(screen.getByRole('tab', { name: 'Genel Bakış' }), { key: 'End' });
+      expect(onSelect).toHaveBeenCalledWith('emergencyContacts');
+      expect(screen.getByRole('tab', { name: 'Acil Durum Kişileri' })).toHaveFocus();
+    });
+
+    it('ArrowLeft from the active overflow tab moves back to the last primary tab', () => {
+      const onSelect = vi.fn();
+      renderTabs('emergencyContacts', onSelect);
+      fireEvent.keyDown(screen.getByRole('tab', { name: 'Acil Durum Kişileri' }), { key: 'ArrowLeft' });
+      expect(onSelect).toHaveBeenCalledWith('files');
+      expect(screen.getByRole('tab', { name: 'Dosyalar' })).toHaveFocus();
     });
 
     it('ArrowLeft/ArrowRight at the primary-row boundary clamps instead of wrapping or throwing', () => {
@@ -176,9 +195,9 @@ describe('PatientDetailTabs', () => {
       expect(screen.queryByText(MORE_LABEL)).not.toBeInTheDocument();
     });
 
-    it('shows the generic More label when the active tab is a primary tab', () => {
+    it('always shows the generic More label — even when the active tab is a primary tab', () => {
       renderTabs('overview');
-      expect(screen.getByRole('tab', { name: new RegExp(`^${MORE_LABEL}`) })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: new RegExp(`^${MORE_LABEL}`) })).toBeInTheDocument();
     });
 
     it('is closed by default: menu items are not in the document until opened', () => {
@@ -188,7 +207,7 @@ describe('PatientDetailTabs', () => {
 
     it('clicking the More trigger opens the menu listing every overflow tab', async () => {
       renderTabs('overview');
-      await userEvent.click(screen.getByRole('tab', { name: new RegExp(MORE_LABEL) }));
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(MORE_LABEL) }));
       const menu = screen.getByRole('menu', { name: MORE_MENU_ARIA_LABEL });
       for (const tab of MORE) {
         expect(within(menu).getByRole('menuitemradio', { name: tab.label })).toBeInTheDocument();
@@ -197,7 +216,7 @@ describe('PatientDetailTabs', () => {
 
     it('the More trigger has proper aria-haspopup/aria-expanded/aria-controls wiring', async () => {
       renderTabs('overview');
-      const trigger = screen.getByRole('tab', { name: new RegExp(MORE_LABEL) });
+      const trigger = screen.getByRole('button', { name: new RegExp(MORE_LABEL) });
       expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
       expect(trigger).toHaveAttribute('aria-expanded', 'false');
       await userEvent.click(trigger);
@@ -205,10 +224,29 @@ describe('PatientDetailTabs', () => {
       expect(trigger).toHaveAttribute('aria-controls', screen.getByRole('menu').id);
     });
 
+    it('ArrowDown on the (focused) trigger opens the menu', () => {
+      renderTabs('overview');
+      const trigger = screen.getByRole('button', { name: new RegExp(MORE_LABEL) });
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+    });
+
+    it('Enter and Space on the (focused) trigger open the menu', () => {
+      renderTabs('overview');
+      const trigger = screen.getByRole('button', { name: new RegExp(MORE_LABEL) });
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      fireEvent.keyDown(document, { key: 'Escape' });
+      fireEvent.keyDown(trigger, { key: ' ' });
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+    });
+
     it('clicking a menu item calls onSelect with that tab\'s key and closes the menu', async () => {
       const onSelect = vi.fn();
       renderTabs('overview', onSelect);
-      await userEvent.click(screen.getByRole('tab', { name: new RegExp(MORE_LABEL) }));
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(MORE_LABEL) }));
       await userEvent.click(screen.getByRole('menuitemradio', { name: 'Gizlilik' }));
       expect(onSelect).toHaveBeenCalledWith('privacy');
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
@@ -217,7 +255,7 @@ describe('PatientDetailTabs', () => {
     it('clicking outside the open menu closes it without selecting a tab', async () => {
       const onSelect = vi.fn();
       renderTabs('overview', onSelect);
-      await userEvent.click(screen.getByRole('tab', { name: new RegExp(MORE_LABEL) }));
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(MORE_LABEL) }));
       expect(screen.getByRole('menu')).toBeInTheDocument();
       await userEvent.click(document.body);
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
@@ -226,7 +264,7 @@ describe('PatientDetailTabs', () => {
 
     it('Escape closes the menu and returns focus to the trigger', async () => {
       renderTabs('overview');
-      const trigger = screen.getByRole('tab', { name: new RegExp(MORE_LABEL) });
+      const trigger = screen.getByRole('button', { name: new RegExp(MORE_LABEL) });
       await userEvent.click(trigger);
       expect(screen.getByRole('menu')).toBeInTheDocument();
       fireEvent.keyDown(document, { key: 'Escape' });
@@ -236,7 +274,7 @@ describe('PatientDetailTabs', () => {
 
     it('ArrowDown/ArrowUp move focus between menu items', async () => {
       renderTabs('overview');
-      await userEvent.click(screen.getByRole('tab', { name: new RegExp(MORE_LABEL) }));
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(MORE_LABEL) }));
       const first = screen.getByRole('menuitemradio', { name: MORE[0]!.label });
       first.focus();
       fireEvent.keyDown(first, { key: 'ArrowDown' });
@@ -248,7 +286,7 @@ describe('PatientDetailTabs', () => {
     it('Enter on a menu item selects it, closes the menu, and returns focus to the trigger', () => {
       const onSelect = vi.fn();
       renderTabs('overview', onSelect);
-      const trigger = screen.getByRole('tab', { name: new RegExp(MORE_LABEL) });
+      const trigger = screen.getByRole('button', { name: new RegExp(MORE_LABEL) });
       fireEvent.click(trigger);
       const item = screen.getByRole('menuitemradio', { name: 'İletişim Tercihleri' });
       fireEvent.keyDown(item, { key: 'Enter' });
@@ -256,23 +294,35 @@ describe('PatientDetailTabs', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
       // onSelect is a mock here — the component does not own activeTab, so the
       // parent (PatientDetail.tsx) is responsible for the URL round-trip that
-      // would actually relabel the trigger; this only proves focus returns.
+      // would actually relabel the active-overflow-tab element; this only
+      // proves focus returns to the trigger.
       expect(trigger).toHaveFocus();
     });
   });
 
   describe('active tab never hidden inside the More overflow (requirement: no inaccessible overflow state)', () => {
-    it('when the active tab is in the More group, the trigger displays that tab\'s own label instead of the generic More text', () => {
+    it('when the active tab is in the More group, a real role="tab" element (not the trigger) displays that tab\'s own label', () => {
       renderTabs('emergencyContacts');
-      expect(screen.getByRole('tab', { name: 'Acil Durum Kişileri' })).toBeInTheDocument();
-      expect(screen.queryByText(MORE_LABEL)).not.toBeInTheDocument();
+      const activeOverflowTab = screen.getByRole('tab', { name: 'Acil Durum Kişileri' });
+      expect(activeOverflowTab).toBeInTheDocument();
+      // The trigger keeps showing the generic label — the active tab's own
+      // label lives on the separate role="tab" element, never on the trigger.
+      expect(screen.getByRole('button', { name: new RegExp(`^${MORE_LABEL}`) })).toBeInTheDocument();
     });
 
-    it('the More trigger is aria-selected and gets tabindex 0 when the active tab is in the More group', () => {
+    it('the active-overflow-tab element is aria-selected and gets tabindex 0; the More trigger has no aria-selected at all', () => {
       renderTabs('emergencyContacts');
-      const trigger = screen.getByRole('tab', { name: 'Acil Durum Kişileri' });
-      expect(trigger).toHaveAttribute('aria-selected', 'true');
-      expect(trigger).toHaveAttribute('tabindex', '0');
+      const activeOverflowTab = screen.getByRole('tab', { name: 'Acil Durum Kişileri' });
+      expect(activeOverflowTab).toHaveAttribute('aria-selected', 'true');
+      expect(activeOverflowTab).toHaveAttribute('tabindex', '0');
+      const trigger = screen.getByRole('button', { name: new RegExp(MORE_LABEL) });
+      expect(trigger).not.toHaveAttribute('aria-selected');
+    });
+
+    it('the active-overflow-tab element controls the real tabpanel for that key, never the More popup menu', () => {
+      renderTabs('emergencyContacts');
+      const activeOverflowTab = screen.getByRole('tab', { name: 'Acil Durum Kişileri' });
+      expect(activeOverflowTab).toHaveAttribute('aria-controls', 'patient-tabpanel-emergencyContacts');
     });
 
     it('no primary tab is aria-selected while the active tab lives in the More group', () => {
@@ -282,11 +332,77 @@ describe('PatientDetailTabs', () => {
       }
     });
 
+    it('no two elements claim aria-selected="true" at once, whichever group the active tab belongs to', () => {
+      const { rerender } = renderTabs('overview');
+      const selectedInPrimary = document.querySelectorAll('[aria-selected="true"]');
+      expect(selectedInPrimary).toHaveLength(1);
+      expect(selectedInPrimary[0]).toHaveAccessibleName('Genel Bakış');
+
+      rerender(
+        <PatientDetailTabs
+          primaryTabs={PRIMARY}
+          moreTabs={MORE}
+          activeTab="emergencyContacts"
+          onSelect={vi.fn()}
+          moreLabel={MORE_LABEL}
+          moreMenuAriaLabel={MORE_MENU_ARIA_LABEL}
+        />,
+      );
+      const selectedInOverflow = document.querySelectorAll('[aria-selected="true"]');
+      expect(selectedInOverflow).toHaveLength(1);
+      expect(selectedInOverflow[0]).toHaveAccessibleName('Acil Durum Kişileri');
+    });
+
     it('opening the menu while a More tab is active highlights it with aria-checked', async () => {
       renderTabs('emergencyContacts');
-      await userEvent.click(screen.getByRole('tab', { name: 'Acil Durum Kişileri' }));
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(MORE_LABEL) }));
       expect(screen.getByRole('menuitemradio', { name: 'Acil Durum Kişileri' })).toHaveAttribute('aria-checked', 'true');
       expect(screen.getByRole('menuitemradio', { name: 'Gizlilik' })).toHaveAttribute('aria-checked', 'false');
+    });
+  });
+
+  describe('ARIA model: More trigger vs. tabs (accessibility review requirements)', () => {
+    it('every role="tab" element has aria-controls pointing at a real patient tabpanel, never the More menu', () => {
+      renderTabs('emergencyContacts');
+      for (const tab of screen.getAllByRole('tab')) {
+        const controls = tab.getAttribute('aria-controls');
+        expect(controls).toMatch(/^patient-tabpanel-/);
+        expect(controls).not.toBe('patient-tabs-more-menu');
+      }
+    });
+
+    it('the More trigger is a button (not a tab) and has no role="tab" among its ancestors or attributes', () => {
+      renderTabs('overview');
+      const trigger = screen.getByRole('button', { name: new RegExp(MORE_LABEL) });
+      expect(trigger).not.toHaveAttribute('role', 'tab');
+      expect(screen.queryAllByRole('tab').includes(trigger)).toBe(false);
+    });
+
+    it('the More trigger sits outside role="tablist"', () => {
+      const { container } = renderTabs('overview');
+      const tablist = container.querySelector('[role="tablist"]');
+      const trigger = screen.getByRole('button', { name: new RegExp(MORE_LABEL) });
+      expect(tablist).not.toBeNull();
+      expect(tablist?.contains(trigger)).toBe(false);
+    });
+
+    it('the More trigger never carries aria-controls pointing at a tabpanel, active or not', () => {
+      const { rerender } = renderTabs('overview');
+      let trigger = screen.getByRole('button', { name: new RegExp(MORE_LABEL) });
+      expect(trigger.getAttribute('aria-controls')).not.toMatch(/^patient-tabpanel-/);
+
+      rerender(
+        <PatientDetailTabs
+          primaryTabs={PRIMARY}
+          moreTabs={MORE}
+          activeTab="emergencyContacts"
+          onSelect={vi.fn()}
+          moreLabel={MORE_LABEL}
+          moreMenuAriaLabel={MORE_MENU_ARIA_LABEL}
+        />,
+      );
+      trigger = screen.getByRole('button', { name: new RegExp(MORE_LABEL) });
+      expect(trigger.getAttribute('aria-controls')).not.toMatch(/^patient-tabpanel-/);
     });
   });
 
