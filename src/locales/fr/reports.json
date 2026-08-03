@@ -5,6 +5,26 @@
     "csv": "Télécharger le CSV",
     "filePrefix": "rapport-revenus"
   },
+  "exportControls": {
+    "export": "Exporter",
+    "exportExcel": "Exporter vers Excel",
+    "exportPdf": "Exporter en PDF",
+    "print": "Imprimer",
+    "preparing": "Préparation de l'export…",
+    "generatedAt": "Généré le",
+    "appliedFilters": "Filtres appliqués",
+    "errors": {
+      "UNSUPPORTED_REPORT": "Rapport non pris en charge",
+      "UNSUPPORTED_FORMAT": "Format d'export non pris en charge",
+      "INVALID_FILTERS": "Filtres invalides",
+      "UNAUTHORIZED_ROLE": "Vous n'êtes pas autorisé à exporter ce rapport",
+      "INACCESSIBLE_CLINIC": "Accès refusé à la clinique demandée",
+      "ROW_LIMIT_EXCEEDED": "Trop de lignes pour un export synchrone",
+      "NO_DATA": "Aucune donnée à exporter",
+      "GENERATION_FAILED": "Échec de l'export",
+      "generic": "Échec de l'export"
+    }
+  },
   "tabs": {
     "revenue": "Rapport de revenus",
     "doctors": "Performance des praticiens",

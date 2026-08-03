@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { reportService, userService } from '../services/api';
 import { useClinic } from '../context/ClinicContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
+import ReportExportControls from '../components/reports/ReportExportControls';
 
 const METHOD_KEYS = ['cash', 'card', 'bank_transfer', 'cheque', 'insurance', 'other'] as const;
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
@@ -53,7 +54,7 @@ function defaultDateRange() {
 const Reports: React.FC = () => {
   const { t } = useTranslation(['reports', 'common', 'payments']);
   const { selectedClinicId } = useClinic();
-  const { defaultCurrency, formatCurrency } = useClinicPreferences();
+  const { defaultCurrency, formatCurrency, formatDateTime } = useClinicPreferences();
   const [tab, setTab] = useState<'revenue' | 'doctors' | 'sources' | 'noshow'>('revenue');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -205,10 +206,26 @@ const Reports: React.FC = () => {
           <p className="text-gray-500 mt-1">{t('reports:subtitle')}</p>
         </div>
         {tab === 'revenue' && revenueData && (
-          <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-2 shrink-0">
-            <Download size={16} />
-            {t('reports:export.csv')}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-2 shrink-0 no-print">
+              <Download size={16} />
+              {t('reports:export.csv')}
+            </button>
+            <ReportExportControls
+              reportKey="revenue-by-period"
+              filters={{
+                dateFrom,
+                dateTo,
+                groupBy,
+                practitionerId: practitionerId || undefined,
+                paymentMethod: paymentMethod || undefined,
+                clinicId: selectedClinicId && selectedClinicId !== 'all' ? selectedClinicId : undefined,
+              }}
+              disabled={!revenueData || byPeriod.length === 0}
+              enablePdf
+              printTargetClassName="revenue-report-print-target"
+            />
+          </div>
         )}
       </div>
 
@@ -292,7 +309,26 @@ const Reports: React.FC = () => {
 
       {/* Revenue Tab */}
       {!loading && tab === 'revenue' && revenueData && (
-        <div className="space-y-6">
+        <div className="space-y-6 revenue-report-print-target">
+          {/* Print-only metadata: title, applied filters, generated-at — hidden on
+              screen (Tailwind's default `hidden print:block`), shown only inside
+              the print-target region (see ReportExportControls' print styles). */}
+          <div className="hidden print:block space-y-1">
+            <h2 className="text-xl font-bold text-gray-900">{t('reports:tabs.revenue')}</h2>
+            <p className="text-sm text-gray-600">
+              {t('exportControls.appliedFilters')}: {[
+                `${t('reports:filters.startDate')} ${dateFrom}`,
+                `${t('reports:filters.endDate')} ${dateTo}`,
+                `${t('reports:filters.grouping')}: ${t(`reports:filters.${groupBy}`)}`,
+                practitionerId
+                  ? `${t('reports:filters.doctor')}: ${doctors.find((d) => d.id === practitionerId)?.firstName ?? ''} ${doctors.find((d) => d.id === practitionerId)?.lastName ?? ''}`.trim()
+                  : null,
+                paymentMethod ? `${t('reports:filters.paymentMethod')}: ${methodLabel(paymentMethod)}` : null,
+              ].filter(Boolean).join(' · ')}
+            </p>
+            <p className="text-sm text-gray-600">{t('exportControls.generatedAt')}: {formatDateTime(new Date().toISOString())}</p>
+          </div>
+
           {/* Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="card p-5 bg-gradient-to-br from-green-500 to-green-600 text-white border-none">

@@ -5,6 +5,26 @@
     "csv": "CSV İndir",
     "filePrefix": "gelir-raporu"
   },
+  "exportControls": {
+    "export": "Dışa Aktar",
+    "exportExcel": "Excel'e Aktar",
+    "exportPdf": "PDF'e Aktar",
+    "print": "Yazdır",
+    "preparing": "Dışa aktarım hazırlanıyor…",
+    "generatedAt": "Oluşturulma Tarihi",
+    "appliedFilters": "Uygulanan Filtreler",
+    "errors": {
+      "UNSUPPORTED_REPORT": "Desteklenmeyen rapor",
+      "UNSUPPORTED_FORMAT": "Desteklenmeyen dışa aktarım biçimi",
+      "INVALID_FILTERS": "Geçersiz filtreler",
+      "UNAUTHORIZED_ROLE": "Bu raporu dışa aktarma yetkiniz yok",
+      "INACCESSIBLE_CLINIC": "İstenen klinige erişim reddedildi",
+      "ROW_LIMIT_EXCEEDED": "Eşzamanlı dışa aktarım için çok fazla satır var",
+      "NO_DATA": "Dışa aktarılacak veri yok",
+      "GENERATION_FAILED": "Dışa aktarım başarısız oldu",
+      "generic": "Dışa aktarım başarısız oldu"
+    }
+  },
   "tabs": {
     "revenue": "Gelir Raporu",
     "doctors": "Hekim Performansı",

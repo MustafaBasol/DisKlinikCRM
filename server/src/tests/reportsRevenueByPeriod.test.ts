@@ -26,9 +26,17 @@
  *      exercised against fixture Payment rows, to prove byPeriod totals
  *      stay consistent with the summary total under every filter/scope
  *      combination required by the audit.
- *   2. Source-shape assertions against the actual reports.ts text, to lock
+ *   2. Source-shape assertions against the actual query source text, to lock
  *      in the structural fix (single DATE_TRUNC interpolation, grouping by
  *      period_start, alias-aware clinic scope, filters wired into the CTE).
+ *
+ * US-07.3-P1 update: the byPeriod query (and its clinicScopeSql helper) was
+ * extracted out of reports.ts into services/reports/revenueByPeriodQuery.ts
+ * so the JSON report route and the new central report-export foundation
+ * (GET /api/reports/export/revenue-by-period) call the exact same function
+ * instead of maintaining two copies. Section 6's source-shape assertions now
+ * target that shared module; a new assertion confirms reports.ts calls it
+ * rather than re-implementing the query inline.
  *
  * Koşturma: cd server && npx tsx src/tests/reportsRevenueByPeriod.test.ts
  */
@@ -40,6 +48,10 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const reportsSrc = fs.readFileSync(path.join(__dirname, '..', 'routes', 'reports.ts'), 'utf8');
+const revenueByPeriodQuerySrc = fs.readFileSync(
+  path.join(__dirname, '..', 'services', 'reports', 'revenueByPeriodQuery.ts'),
+  'utf8',
+);
 
 // ─── Test harness ──────────────────────────────────────────────────────────
 
@@ -319,59 +331,60 @@ for (const { name, f } of SCENARIOS) {
   });
 }
 
-// ─── 6. Source verification — the actual SQL fix landed in reports.ts ──────
+// ─── 6. Source verification — the actual SQL fix, now in the shared loader ─
 
-section('6. Source verification — reports.ts byPeriodRaw query');
+section('6. Source verification — revenueByPeriodQuery.ts (shared loader)');
 
 const revenueRouteStart = reportsSrc.indexOf("router.get('/reports/revenue'");
 assert.ok(revenueRouteStart >= 0, 'revenue route must exist');
 const revenueRouteEnd = reportsSrc.indexOf("router.get('/reports/revenue/export.csv'");
 const revenueRouteSrc = reportsSrc.slice(revenueRouteStart, revenueRouteEnd > 0 ? revenueRouteEnd : undefined);
 
-await test('DATE_TRUNC(${groupByTrunc}, ...) is interpolated exactly once (was 3x pre-fix)', () => {
+await test('DATE_TRUNC(${groupBy}, ...) is interpolated exactly once (was 3x pre-fix)', () => {
   // Strip `//` line comments first — the fix's own explanatory comment quotes
   // the pre-fix pattern as illustrative text, which would otherwise inflate the count.
-  const codeOnly = revenueRouteSrc
+  const codeOnly = revenueByPeriodQuerySrc
     .replace(/\r\n/g, '\n')
     .split('\n')
     .map((line) => line.replace(/\/\/.*$/, ''))
     .join('\n');
-  const occurrences = (codeOnly.match(/DATE_TRUNC\(\$\{groupByTrunc\}/g) || []).length;
+  const occurrences = (codeOnly.match(/DATE_TRUNC\(\$\{groupBy\}/g) || []).length;
   assert.equal(occurrences, 1, 'DATE_TRUNC must be computed once in the CTE, not repeated across SELECT/GROUP BY/ORDER BY');
 });
 
 await test('GROUP BY and ORDER BY use the single computed period_start column', () => {
-  assert.match(revenueRouteSrc, /GROUP BY period_start/);
-  assert.match(revenueRouteSrc, /ORDER BY period_start/);
-  assert.equal(/GROUP BY DATE_TRUNC/.test(revenueRouteSrc), false, 'must not re-run DATE_TRUNC in GROUP BY');
-  assert.equal(/ORDER BY DATE_TRUNC/.test(revenueRouteSrc), false, 'must not re-run DATE_TRUNC in ORDER BY');
+  assert.match(revenueByPeriodQuerySrc, /GROUP BY period_start/);
+  assert.match(revenueByPeriodQuerySrc, /ORDER BY period_start/);
+  assert.equal(/GROUP BY DATE_TRUNC/.test(revenueByPeriodQuerySrc), false, 'must not re-run DATE_TRUNC in GROUP BY');
+  assert.equal(/ORDER BY DATE_TRUNC/.test(revenueByPeriodQuerySrc), false, 'must not re-run DATE_TRUNC in ORDER BY');
 });
 
 await test('TO_CHAR formatting happens only in the outer query, over period_start', () => {
-  const toCharMatches = revenueRouteSrc.match(/TO_CHAR\(([^)]*)\)/g) || [];
-  assert.equal(toCharMatches.length, 1, 'exactly one TO_CHAR call in the revenue route');
+  const toCharMatches = revenueByPeriodQuerySrc.match(/TO_CHAR\(([^)]*)\)/g) || [];
+  assert.equal(toCharMatches.length, 1, 'exactly one TO_CHAR call in the shared loader');
   assert.match(toCharMatches[0], /period_start/);
 });
 
-await test('byPeriodRaw uses a CTE (WITH ... AS) rather than a flat aggregate query', () => {
-  assert.match(revenueRouteSrc, /WITH scoped_payments AS/);
+await test('the shared loader uses a CTE (WITH ... AS) rather than a flat aggregate query', () => {
+  assert.match(revenueByPeriodQuerySrc, /WITH scoped_payments AS/);
 });
 
-await test('byPeriodRaw applies the same paymentMethod and practitionerId filters as baseWhere', () => {
-  assert.match(revenueRouteSrc, /paymentMethodFilterSql/);
-  assert.match(revenueRouteSrc, /practitionerFilterSql/);
-  assert.match(revenueRouteSrc, /tc\."practitionerId"/, 'practitioner filter must join TreatmentCase for practitionerId');
+await test('the shared loader applies the same paymentMethod and practitionerId filters as baseWhere', () => {
+  assert.match(revenueByPeriodQuerySrc, /paymentMethodFilterSql/);
+  assert.match(revenueByPeriodQuerySrc, /practitionerFilterSql/);
+  assert.match(revenueByPeriodQuerySrc, /tc\."practitionerId"/, 'practitioner filter must join TreatmentCase for practitionerId');
 });
 
-await test('clinic scope remains array-aware and is now alias-scoped to the Payment table', () => {
-  assert.match(revenueRouteSrc, /clinicScopeSql\(scope, 'p'\)/);
+await test('clinic scope remains array-aware and is alias-scoped to the Payment table', () => {
+  assert.match(revenueByPeriodQuerySrc, /clinicScopeSql\(scope, 'p'\)/);
   assert.equal(reportsSrc.includes('$queryRawUnsafe'), false, 'must not use $queryRawUnsafe anywhere in reports.ts');
+  assert.equal(revenueByPeriodQuerySrc.includes('$queryRawUnsafe'), false, 'must not use $queryRawUnsafe in the shared loader');
 });
 
 await test('clinicScopeSql helper supports an optional alias without changing its no-alias behavior', () => {
-  const helperStart = reportsSrc.indexOf('function clinicScopeSql');
+  const helperStart = revenueByPeriodQuerySrc.indexOf('function clinicScopeSql');
   assert.ok(helperStart >= 0);
-  const helperSrc = reportsSrc.slice(helperStart, helperStart + 700);
+  const helperSrc = revenueByPeriodQuerySrc.slice(helperStart, helperStart + 700);
   assert.match(helperSrc, /alias\?\s*:\s*string/, 'alias parameter must be optional — other callers pass no alias');
 });
 
@@ -382,11 +395,15 @@ await test('groupBy whitelist is unchanged (day/week/month only)', () => {
 await test('client-provided clinicId is never used outside validateAndGetClinicIdScope', () => {
   assert.equal(
     /selectedClinicId\s+as\s+string/.test(revenueRouteSrc) &&
-      /clinicScopeSql\(scope/.test(revenueRouteSrc) &&
       /validateAndGetClinicIdScope\(req\.user!, selectedClinicId/.test(revenueRouteSrc),
     true,
     'the raw query must derive its scope from the validated `scope`, not directly from the query param',
   );
+});
+
+await test('the JSON route (reports.ts) calls the shared loader instead of re-implementing the query', () => {
+  assert.match(revenueRouteSrc, /getRevenueByPeriodRows\(/, 'revenue route must call the shared loader');
+  assert.equal(/WITH scoped_payments AS/.test(revenueRouteSrc), false, 'the raw SQL must no longer live inline in reports.ts');
 });
 
 // ─── Sonuç ────────────────────────────────────────────────────────────────
