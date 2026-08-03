@@ -16,6 +16,7 @@
 
 import assert from 'node:assert/strict';
 import { normalizeRole } from '../utils/roles.js';
+import { MEDICAL_HISTORY_READ_ROLES, MEDICAL_HISTORY_WRITE_ROLES } from '../routes/patientMedicalHistory.js';
 
 // ─── authorize() ile aynı iki katmanlı kontrol (server/src/middleware/auth.ts:157) ──
 
@@ -122,6 +123,16 @@ test('BILLING ödeme formu için kısıtlı tedavi vakası seçicisine (financia
 
 test('BILLING hasta eklerini (attachments) silemez', () => {
   assert.equal(authorize(ATTACHMENTS_DELETE, billing), false);
+});
+
+test('BILLING tıbbi geçmiş (medical history) sürüm listesini/detayını göremez — US-01.1-P1', () => {
+  assert.equal(authorize(MEDICAL_HISTORY_READ_ROLES, billing), false);
+  assert.ok(!MEDICAL_HISTORY_READ_ROLES.includes('BILLING'), 'BILLING gerçek route rol listesinde olmamalı');
+});
+
+test('BILLING tıbbi geçmiş sürümü oluşturamaz — US-01.1-P1', () => {
+  assert.equal(authorize(MEDICAL_HISTORY_WRITE_ROLES, billing), false);
+  assert.ok(!MEDICAL_HISTORY_WRITE_ROLES.includes('BILLING'), 'BILLING gerçek route rol listesinde olmamalı');
 });
 
 test('BILLING hasta detayı yanıtında klinik alan bulunmaz, yalnızca kimlik+ödeme alanları döner', () => {
