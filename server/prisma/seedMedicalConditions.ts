@@ -21,11 +21,32 @@
  * code's standard definition. Extend this list additively in a later phase
  * (P2+) — never repurpose an existing `code` for a different meaning.
  *
+ * AUTHORITATIVE SOURCE (2026-08-03 audit): every `code`/`nameEn` pair below
+ * has been verified verbatim against the official CDC/NCHS ICD-10-CM
+ * Fiscal Year 2026 code set — "icd10cm-Code Descriptions-2026.zip"
+ * (icd10cm-order-2026.txt / icd10cm-codes-2026.txt, file-dated 2025-06-10),
+ * published by CDC/NCHS at:
+ *   https://ftp.cdc.gov/pub/health_statistics/nchs/publications/ICD10CM/2026/
+ * Every `nameEn` value is the exact FY2026 long descriptor for its code —
+ * no shortened/paraphrased UI labels are used, so there is no
+ * canonical-vs-product-label divergence to track. A reviewed canonical
+ * fixture asserting this (server/src/tests/fixtures/
+ * medicalConditionCatalogCanonical.ts) is checked by
+ * medicalConditionCatalogIntegrity.test.ts — see that file for the
+ * full per-code source citation and the record of two corrected
+ * clinical-coding errors found during the 2026-08-03 audit:
+ *   - Z91.010 is "Allergy to peanuts", NOT latex (latex is Z91.040).
+ *   - Z88.4 is "Allergy status to anesthetic agent", NOT "other
+ *     anti-infective agent" (that meaning is Z88.3).
+ *   Two non-billable FY2026 header codes were also found and replaced by
+ *   their correct billable leaf codes: J45.9 -> J45.909, G40.9 -> G40.909.
+ *
  * Run: npx tsx prisma/seedMedicalConditions.ts
  * Requires DATABASE_URL to point at the target database.
  */
 
 import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
@@ -33,9 +54,13 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg(process.env.DATABASE_URL!),
 });
 
-type SeedCondition = {
+export const SEED_CONDITION_CATEGORIES = ['systemic', 'allergy', 'medication_risk', 'dental', 'obstetric', 'behavioral'] as const;
+
+export type SeedConditionCategory = (typeof SEED_CONDITION_CATEGORIES)[number];
+
+export type SeedCondition = {
   code: string;
-  category: 'systemic' | 'allergy' | 'medication_risk' | 'dental' | 'obstetric' | 'behavioral';
+  category: SeedConditionCategory;
   nameEn: string;
   nameTr: string;
 };
@@ -51,18 +76,28 @@ export const CATALOG: SeedCondition[] = [
   // ── Systemic conditions relevant to dental treatment planning ──────────
   { code: 'E11.9', category: 'systemic', nameEn: 'Type 2 diabetes mellitus without complications', nameTr: 'Komplikasyonsuz Tip 2 diabetes mellitus' },
   { code: 'I10', category: 'systemic', nameEn: 'Essential (primary) hypertension', nameTr: 'Esansiyel (primer) hipertansiyon' },
-  { code: 'J45.9', category: 'systemic', nameEn: 'Asthma, unspecified', nameTr: 'Astım, tanımlanmamış' },
-  { code: 'G40.9', category: 'systemic', nameEn: 'Epilepsy, unspecified', nameTr: 'Epilepsi, tanımlanmamış' },
+  // J45.9 is a non-billable FY2026 header code (see order file, billable flag 0)
+  // — replaced by its billable leaf code J45.909, same clinical meaning.
+  { code: 'J45.909', category: 'systemic', nameEn: 'Unspecified asthma, uncomplicated', nameTr: 'Tanımlanmamış astım, komplikasyonsuz' },
+  // G40.9 is likewise a non-billable FY2026 header code — replaced by its
+  // billable leaf code G40.909, same clinical meaning.
+  { code: 'G40.909', category: 'systemic', nameEn: 'Epilepsy, unspecified, not intractable, without status epilepticus', nameTr: 'Epilepsi, tanımlanmamış, dirençli olmayan, status epileptikus olmaksızın' },
   { code: 'D68.9', category: 'systemic', nameEn: 'Coagulation defect, unspecified', nameTr: 'Tanımlanmamış pıhtılaşma bozukluğu' },
-  { code: 'M81.0', category: 'systemic', nameEn: 'Osteoporosis without current pathological fracture', nameTr: 'Patolojik kırık olmaksızın osteoporoz' },
-  { code: 'B18.1', category: 'systemic', nameEn: 'Chronic viral hepatitis B', nameTr: 'Kronik viral hepatit B' },
+  { code: 'M81.0', category: 'systemic', nameEn: 'Age-related osteoporosis without current pathological fracture', nameTr: 'Güncel patolojik kırık olmaksızın yaşa bağlı osteoporoz' },
+  { code: 'B18.1', category: 'systemic', nameEn: 'Chronic viral hepatitis B without delta-agent', nameTr: 'Delta ajanı olmaksızın kronik viral hepatit B' },
   { code: 'B18.2', category: 'systemic', nameEn: 'Chronic viral hepatitis C', nameTr: 'Kronik viral hepatit C' },
   { code: 'B20', category: 'systemic', nameEn: 'Human immunodeficiency virus [HIV] disease', nameTr: 'İnsan bağışıklık yetmezliği virüsü [HIV] hastalığı' },
 
   // ── Allergy status (documented drug/material allergy) ──────────────────
   { code: 'Z88.0', category: 'allergy', nameEn: 'Allergy status to penicillin', nameTr: 'Penisilin alerjisi öyküsü' },
-  { code: 'Z88.4', category: 'allergy', nameEn: 'Allergy status to other anti-infective agent', nameTr: 'Diğer enfeksiyon önleyici ajanlara alerji öyküsü' },
-  { code: 'Z91.010', category: 'allergy', nameEn: 'Allergy to latex', nameTr: 'Lateks alerjisi' },
+  // Corrected 2026-08-03: this row previously used the WRONG code Z88.4
+  // (which is actually "Allergy status to anesthetic agent") for this
+  // meaning. Z88.3 is the correct code for "other anti-infective agents".
+  { code: 'Z88.3', category: 'allergy', nameEn: 'Allergy status to other anti-infective agents', nameTr: 'Diğer enfeksiyon önleyici ajanlara alerji öyküsü' },
+  // Corrected 2026-08-03: this row previously used the WRONG code Z91.010
+  // (which is actually "Allergy to peanuts") for this meaning. Z91.040 is
+  // the correct code for latex allergy status.
+  { code: 'Z91.040', category: 'allergy', nameEn: 'Latex allergy status', nameTr: 'Lateks alerjisi durumu' },
 
   // ── Long-term medication use relevant to dental treatment risk ─────────
   { code: 'Z79.01', category: 'medication_risk', nameEn: 'Long term (current) use of anticoagulants', nameTr: 'Uzun süreli (mevcut) antikoagülan kullanımı' },
@@ -82,13 +117,22 @@ export const CATALOG: SeedCondition[] = [
   { code: 'Z87.891', category: 'behavioral', nameEn: 'Personal history of nicotine dependence', nameTr: 'Kişisel nikotin bağımlılığı öyküsü' },
 ];
 
-async function main() {
+/**
+ * Runs the idempotent upsert against the given Prisma client (defaults to
+ * this module's own client for CLI use). Exported — not just invoked as a
+ * side effect — so tests can exercise the REAL seed logic (including
+ * re-run idempotency) against a disposable Postgres instance without a
+ * second connection pool or duplicating the upsert logic.
+ */
+export async function runSeedMedicalConditions(
+  client: Pick<PrismaClient, 'medicalCondition'> = prisma,
+): Promise<{ created: number; updated: number; total: number }> {
   let created = 0;
   let updated = 0;
 
   for (const entry of CATALOG) {
-    const existing = await prisma.medicalCondition.findUnique({ where: { code: entry.code }, select: { id: true } });
-    await prisma.medicalCondition.upsert({
+    const existing = await client.medicalCondition.findUnique({ where: { code: entry.code }, select: { id: true } });
+    await client.medicalCondition.upsert({
       where: { code: entry.code },
       create: { code: entry.code, category: entry.category, nameEn: entry.nameEn, nameTr: entry.nameTr },
       update: { category: entry.category, nameEn: entry.nameEn, nameTr: entry.nameTr },
@@ -97,14 +141,22 @@ async function main() {
     else created++;
   }
 
-  console.log(`[seedMedicalConditions] done — ${created} created, ${updated} updated, ${CATALOG.length} total in catalog.`);
+  return { created, updated, total: CATALOG.length };
 }
 
-main()
-  .catch((err) => {
-    console.error('[seedMedicalConditions] failed:', err);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+// Only auto-run when executed directly (`npx tsx prisma/seedMedicalConditions.ts`),
+// never as a side effect of another module importing CATALOG/runSeedMedicalConditions
+// (e.g. the catalog-integrity/idempotency tests).
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
+  runSeedMedicalConditions()
+    .then(({ created, updated, total }) => {
+      console.log(`[seedMedicalConditions] done — ${created} created, ${updated} updated, ${total} total in catalog.`);
+    })
+    .catch((err) => {
+      console.error('[seedMedicalConditions] failed:', err);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
