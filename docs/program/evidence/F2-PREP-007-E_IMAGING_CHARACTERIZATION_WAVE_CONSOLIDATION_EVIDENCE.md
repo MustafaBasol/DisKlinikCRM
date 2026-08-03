@@ -256,7 +256,9 @@ No `full-suite`/`server:test:non-disposable` re-run was required beyond the targ
 ## 9. Migration, compatibility, rollback, and impact
 
 - **Migration status:** none. No Prisma schema or migration file is created, modified, or authorized by this task. `npx prisma generate` regenerated the client against the unmodified schema only.
-- **Backward-compatibility impact:** none. No application/runtime code path is touched. The only functional repository change is one additive `server/package.json` script member; no existing script's behavior changes.
+- **Runtime backward-compatibility impact:** none. No application/runtime code path is touched.
+- **Production behavior impact:** none. No production system, deployment, or runtime behavior is touched or authorized by this task.
+- **CI behavior impact:** the existing `server:test:disposable-db` aggregate now runs four additional characterization suites in Layer 3 (`disposable-postgres-tests`). This increases Layer 3's execution time by those four suites' own runtime (§8), but introduces no new CI job, orchestrator profile, workflow file, or duplicate execution across layers (§7.2).
 - **Rollback:** revert this consolidation/test-ownership PR. The change set is additive-only (one new evidence document, index/tracker/phase-document updates, and one `server/package.json` edit adding a script and extending one existing aggregate) — a single `git revert` fully restores the prior state with zero follow-up steps.
 - **Tenant impact:** none — no tenant-scoping code path touched; CT-02/CT-03/CT-05/CT-17/CT-26/CT-30's own characterization confirms current tenant-isolation behavior is correct where tested, unchanged by this task.
 - **KVKK impact:** none — CT-16/CT-19/CT-21/CT-28's own characterization confirms current legal-hold redaction and audit-PII-minimization behavior is correct where tested, unchanged by this task. `test:kvkk-lifecycle` regression-confirmed green (110/110).
@@ -286,13 +288,15 @@ No `F2-PREP-007-A/B/C/D_*` evidence file, no test file, no Prisma schema/migrati
 
 ## 12. Exact next task recommendation
 
-Per the accepted F2-PREP-006-E contract's 8-stage expand-migrate-contract sequence and this wave's own closure: **Stage 0 (characterization) is closed** (see §13). The next task in sequence, per repository evidence and the accepted roadmap order, is external program-owner review and approval of:
-1. This consolidation's Stage 0 closure, and
-2. The `CT-23` finding's blocker-decision disposition (§5.1/§10) — specifically whether it is formally added to the F2-PREP-006-E contract's `blockerDecisions` before Stage 1 begins.
+Per the accepted F2-PREP-006-E contract's 8-stage expand-migrate-contract sequence and this wave's own proposed closure: **all 10 Stage 0 technical acceptance conditions are demonstrated on this task's branch** (see §13), but closure is not yet authoritative — PR #298 is open, not merged. Three distinct next items, not to be conflated:
 
-Only after that review/approval is **Stage 1 (additive `ImagingLifecyclePort`/public-contract facade for the already-passing 18 mandatory-before-refactor tests)** authorized to start. This task does not begin Stage 1, does not implement any of the 11 non-blocking tests, and does not remediate `CT-23`, `CR-03`/`BLK-02`, the storage/DB compensation gap, or the manual/bridge ingest duplication.
+1. **Program-owner approval and PR #298 merge/main-CI closure** — program-owner review and approval of this Stage 0 closure proposal, followed by merging PR #298 and a passing post-merge main CI run on `main`. This is what makes Stage 0 closure authoritative (§13).
+2. **Stage 1 additive facade preparation** (`ImagingLifecyclePort`/public-contract facade for the already-passing 18 mandatory-before-refactor tests, additive and unused by any caller) — a distinct, separately-gated future task. Per the accepted classification, `CT-23` is **not** a Stage 0 blocker and does **not** itself block creation of an additive, unused internal facade; Stage 1 preparation is gated only on item 1 above (Stage 0 closure becoming authoritative), not on `CT-23`'s blocker-decision disposition. **Stage 1 execution is not authorized by this task or by this correction.**
+3. **`CT-23` remediation deadline** — `CT-23` must be resolved before Stage 3 caller migration or any external/public-contract exposure (not before Stage 1). Its blocker-decision disposition (§5.1/§10) — whether it is formally added to the F2-PREP-006-E contract's `blockerDecisions` — remains tracked as a precondition for that later gate, independent of Stage 1.
 
-## 13. Stage 0 closure acceptance — condition by condition
+This task does not begin Stage 1, does not implement any of the 11 non-blocking tests, and does not remediate `CT-23`, `CR-03`/`BLK-02`, the storage/DB compensation gap, or the manual/bridge ingest duplication.
+
+## 13. Stage 0 closure acceptance — condition by condition (technical conditions only; authoritative closure requires PR #298 merge — see below)
 
 1. A/B/C/D are merged. — **Yes** (§3).
 2. Their post-merge main CI results are recorded as passed. — **Yes**, run `30768167540`, 9/9 jobs `success`, head SHA exactly equal to `origin/main`'s tip (§3).
@@ -305,13 +309,16 @@ Only after that review/approval is **Stage 1 (additive `ImagingLifecyclePort`/pu
 9. Master tracker, current phase, and phase document agree. — **Yes**, all three updated identically by this task (§11; see each document's own new entry).
 10. No production behavior, schema, migration, or deployment change was introduced. — **Yes** (§9).
 
-**All ten conditions are met. Stage 0: `CLOSED`.**
+**All ten technical acceptance conditions are met on this task's branch. Stage 0: `CLOSURE_PROPOSED_AWAITING_MERGE_AND_MAIN_CI`.**
+
+The durable test-ownership change (the `server/package.json` wiring that gives the Stage 0 suites permanent CI ownership) exists only on branch `docs/f2-prep-007-e-imaging-characterization-consolidation` / PR [#298](https://github.com/MustafaBasol/DisKlinikCRM/pull/298) until that PR is merged. **Authoritative Stage 0 closure becomes effective only after PR #298 is merged to `main` and its post-merge main CI run passes.** Until then, this document's "Stage 0: CLOSED" claims in any other section, and in the program-control documents, mean "closure proposed and technically demonstrated on the PR branch," not "authoritative."
 
 ## 14. Status separation
 
 - **Agent completed:** yes.
 - **Tests passed:** yes — all commands in §8 executed for real, exact pass/fail counts recorded, zero residual Docker resources independently confirmed.
-- **PR opened:** recorded in the program-control documents only after the PR is actually opened (see `CURRENT_PHASE.md`/`NORAMEDI_MASTER_TRACKER.md` for the final PR URL/number once available).
+- **PR opened:** yes — [PR #298](https://github.com/MustafaBasol/DisKlinikCRM/pull/298), state `OPEN`, base `main`, head `docs/f2-prep-007-e-imaging-characterization-consolidation`.
 - **Merged:** no.
 - **Deployed:** no.
 - **Production verified:** no.
+- **Stage 0 closure:** technically demonstrated on the PR branch (§13); **not yet authoritative** — becomes effective only after PR #298 merges and its post-merge main CI passes.
