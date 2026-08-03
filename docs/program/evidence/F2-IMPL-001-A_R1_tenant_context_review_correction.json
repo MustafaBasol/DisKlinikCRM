@@ -1,0 +1,78 @@
+{
+  "taskId": "F2-IMPL-001-A-R1",
+  "taskName": "Tenant Context Review Correction",
+  "phase": "F2",
+  "reviews": {
+    "prNumber": 304,
+    "prBranch": "feature/f2-impl-001-a-unused-imaging-lifecycle-facade",
+    "prHeadSha": "f8a37b72c4cc1800126b67e451e35238080cfe17",
+    "prState": "OPEN",
+    "prMergeable": "MERGEABLE",
+    "mergedByThisTask": false,
+    "closedByThisTask": false,
+    "filesModifiedOnPr304ByThisTask": []
+  },
+  "priorSelfAssessment": {
+    "source": "docs/program/evidence/F2-IMPL-001-A_additive_unused_internal_imaging_facade_skeleton.json (PR #304 branch, unmodified)",
+    "signaturesAlteredFromAccepted": false,
+    "blockedTenantContextContractInsufficientConsidered": true,
+    "blockedTenantContextContractInsufficientTriggered": false
+  },
+  "correctedFindings": {
+    "signaturesAlteredFromAccepted": {
+      "value": true,
+      "method": "checkImageStorageExists",
+      "acceptedSignature": "(imageId: string): Promise<boolean>",
+      "implementedSignature": "(imageId: string, fileExistsForTest?: (ref: string) => Promise<boolean>): Promise<boolean>",
+      "citation": "server/src/services/imaging/public.ts, PR #304 head f8a37b72c4cc1800126b67e451e35238080cfe17"
+    },
+    "tenantAuthorizationEnforced": {
+      "value": false,
+      "affectedMethods": ["markStorageMissing", "redactForAnonymization", "checkImageStorageExists"],
+      "unaffectedMethod": "getImagesForLifecycleReview",
+      "reasoning": "findOwnedImage() queries by { id: imageId } only, then compares ImagingImage.clinicId to ImagingStudy.clinicId (two values both derived from the same row resolved by imageId). No caller-supplied clinicId/principal/context value is read, passed, or compared anywhere in the three imageId-only methods. This is a denormalization-consistency check, not a runtime authorization check against caller identity.",
+      "citation": "server/src/services/imaging/public.ts findOwnedImage(), PR #304 head"
+    },
+    "blockedTenantContextContractInsufficientTriggered": {
+      "value": true,
+      "reasoning": "The accepted imageId-only signatures provide no caller clinicId/principal/scoped-context parameter and no ambient/request-scoped tenant mechanism exists in this codebase (confirmed absent by the implementation's own search). The 'imageId provenance via getImagesForLifecycleReview' argument is a workflow convention (callers are expected to only pass IDs obtained the intended way), enforced by nothing at runtime, and therefore does not satisfy the escalation-avoidance bar the implementation's own evidence relied on."
+    },
+    "testsEstablishAuthorization": {
+      "value": false,
+      "reasoning": "imagingLifecycleFacade.test.ts asserts data-integrity behavior (clinicId-consistency mismatch -> not-found, idempotency, error-path coverage) but constructs no scenario with a distinct caller-tenant value separate from the target row's own stored clinicId fields, because the accepted signatures give the test no such input to assert against. A passing suite here is not evidence of caller tenant authorization."
+    }
+  },
+  "statusMatrix": {
+    "taskStatus": "BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT",
+    "mergeSafe": false,
+    "deploymentSafe": false,
+    "pr304Disposition": "LEFT_OPEN_UNMODIFIED_MARKED_BLOCKED_BY_THIS_DOCUMENT"
+  },
+  "reconciliationConvention": {
+    "description": "Original F2-IMPL-001-A evidence files (.md and .json) on the PR #304 branch are left unedited, consistent with this program's established practice (F2-PREP-006-E §2: contradictions across sibling evidence resolved in a new consolidation document, originals untouched).",
+    "originalFilesUnmodified": [
+      "docs/program/evidence/F2-IMPL-001-A_ADDITIVE_UNUSED_INTERNAL_IMAGING_FACADE_SKELETON.md",
+      "docs/program/evidence/F2-IMPL-001-A_additive_unused_internal_imaging_facade_skeleton.json"
+    ]
+  },
+  "nextTask": {
+    "id": "F2-PREP-009",
+    "name": "ImagingLifecyclePort Tenant Context Contract Amendment",
+    "document": "docs/program/architecture/F2-PREP-009_IMAGING_LIFECYCLE_PORT_TENANT_CONTEXT_CONTRACT_AMENDMENT.md",
+    "gatesReimplementationOf": "F2-IMPL-001-A"
+  },
+  "validation": {
+    "gitDiffCheck": "clean for reviewed facade/test files (pre-existing unrelated vendor/font trailing-whitespace only)",
+    "jsonParseValidated": [
+      "F2-IMPL-001-A_additive_unused_internal_imaging_facade_skeleton.json",
+      "F2-PREP-006-E_imaging_boundary_contract.json"
+    ],
+    "exactSignatureSearch": "git grep -n \"checkImageStorageExists\" and \"fileExistsForTest\" against PR #304 head",
+    "exactCallerSearch": "git grep -n \"services/imaging/public\" against PR #304 head, excluding /tests/ -> no production callers",
+    "ghPrView304": {
+      "state": "OPEN",
+      "mergeable": "MERGEABLE",
+      "headRefOid": "f8a37b72c4cc1800126b67e451e35238080cfe17"
+    }
+  }
+}
