@@ -32,7 +32,7 @@
   "contractRequirements": {
     "tenantContextSource": "MUST be an already authorization-validated clinic scope. A raw/unvalidated req.user.clinicId or JWT clinic-claim default is NOT by itself sufficient authorization - it is a UI/session default selection, not proof of current access. Must be resolved via resolveEffectiveClinicId(user, requestedClinicId?), validateAndGetClinicIdScope(user, selectedClinicId, res), getAccessibleClinicIds(user) (all server/src/utils/clinicScope.ts), or an equivalent record-derived validation whose own lookup where-clause was already scoped to organizationId + allowedClinicIds (e.g. patientPrivacy.ts's resolvePatient()). No caller may pass an arbitrary clinicId sourced directly from body/query/JWT-default without that validation step. The facade receives an already-authorized clinicId as an opaque trusted value and applies it in every DB predicate, but does not itself re-run authorization - it is a fail-closed data boundary, not the authorization boundary.",
     "principalSystemDistinction": "principal (interactive) callers must resolve clinicId via one of the validated mechanisms above - never the unvalidated req.user.clinicId/JWT claim taken as-is. system/lifecycle (batch job) callers obtain clinicId from a trusted, single-clinic DB iteration/request record, never a system wildcard/bypass value; no such caller exists in this codebase today (see callerClinicIdSourceVerification). Both categories require an explicit, single-clinic-scoped, already-validated clinicId per call; multi-clinic jobs call once per independently resolved clinic; no bypass/wildcard value exists for either category.",
-    "failClosedDbPredicates": "clinicId included as a top-level predicate in every read (findFirst where: {id, clinicId, study:{clinicId}}) and every write (updateMany where: {id, clinicId, study:{clinicId}}); zero-row result on mismatch, never a post-fetch-only comparison",
+    "failClosedDbPredicates": "clinicId included as a top-level predicate in every read (findFirst where: {id, clinicId, study:{clinicId}}) and every write (update/updateMany where: {id, clinicId, study:{clinicId}} - read and write predicates identical, never a reduced {id, clinicId}-only write predicate); zero-row result on mismatch, never a post-fetch-only comparison",
     "noCrossTenantExistenceLeakage": "ImagingNotFoundError remains the single undifferentiated error for not-found, denormalization-mismatch, and cross-tenant-mismatch cases; no distinguishable shape/timing/message across causes",
     "auditOwnership": "unchanged - remains with the calling service; port performs no audit/activity-log writes",
     "systemLifecycleCallerRules": "system/lifecycle callers scoped per-clinic per-call via their own existing iteration; no multi-clinic single call permitted",
@@ -88,6 +88,15 @@
     },
     "systemLifecycleCallerExistsToday": false,
     "stage3Precondition": "Verified for current call sites only, as of this correction (2026-08-03). Stage 3 migration is not asserted to be purely mechanical merely because this is true today - whoever migrates each caller must re-confirm resolvePatient() (or its future equivalent) still validates clinicId at that time, not rely on this document's snapshot."
+  },
+  "prismaCapabilityVerification": {
+    "performedBy": "F2-PREP-009 review-thread correction task",
+    "date": "2026-08-03",
+    "prismaVersionVerified": "7.8.0 (server/package.json, both prisma and @prisma/client)",
+    "sourceInspected": "server/node_modules/.prisma/client/index.d.ts (generated client, current repository state)",
+    "finding": "ImagingImageWhereUniqueInput = Prisma.AtLeast<{ id?, clinicId?, studyId?, ..., study?: XOR<ImagingStudyScalarRelationFilter, ImagingStudyWhereInput>, ... }, \"id\"> - this generated client supports Prisma's extended-whereUnique combination of the unique field (id) with additional non-unique filters, including the study:{clinicId} relation filter, on a single-record update/delete, not only on updateMany. updateMany's own ImagingImageWhereInput independently supports the identical relation filter with no uniqueness constraint at all.",
+    "conclusion": "the exact predicate {id: imageId, clinicId, study: {clinicId}} is directly usable, unmodified, on either a singular update/delete or an updateMany call against ImagingImage in this repository; no reduced/alternate write-side predicate is required - read and write predicates must be identical (see contractRequirements.failClosedDbPredicates)",
+    "notUnsupportedPrismaSyntaxPrescribed": true
   },
   "pr304Handling": {
     "closedOrMergedByThisTask": false,
