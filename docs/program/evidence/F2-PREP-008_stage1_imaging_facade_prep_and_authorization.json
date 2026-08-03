@@ -224,6 +224,7 @@
     "merged": false,
     "deployed": false,
     "productionVerified": false
+  }
   },
   "prStatus": {
     "number": 301,
