@@ -151,7 +151,13 @@
       "correspondsToAcceptedContractItem": "F2-CC-14 / ImagingLifecyclePort, ACCEPTED_AND_REVISED"
     },
     "dtoAndErrorContract": "Purpose-built DTOs only (e.g. ImagingLifecycleImageDto), never raw Prisma models; closed typed-error union (ImagingNotFoundError/ImagingLegalHoldViolationError/ImagingStorageUnavailableError), never a raw Prisma or storage-provider exception crossing the boundary.",
-    "tenantSecurityBoundary": "Every method requires an explicit clinicId parameter; no session/JWT verification performed by the facade itself (remains route-layer, unchanged); does not weaken or bypass authorize()/authenticateBridgeAgent().",
+    "tenantSecurityBoundary": "CORRECTED (was: 'every method requires an explicit clinicId parameter' - internally contradicted minimumOperationInventory itself, which shows 3 of 4 signatures without clinicId; removed). Signature constraint carried forward unchanged from the accepted F2-CC-14 contract (F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md Sec.9 / this JSON's f2cc14Decision.revisedScope): markStorageMissing/redactForAnonymization/checkImageStorageExists take imageId only, no clinicId parameter; only getImagesForLifecycleReview takes explicit clinicId+patientId. The 3 imageId-only methods are tenant-context-only operations: caller must already hold a tenant-scoped request context (resolveEffectiveClinicId-derived, matching every existing imaging.ts route); the facade internally re-derives the image's actual owning clinicId via the ImagingImage->ImagingStudy->clinicId traversal and throws ImagingNotFoundError (deliberately indistinguishable from a genuinely-missing row, to avoid a cross-tenant existence-leak side channel) if the derived clinicId does not match the caller's ambient tenant context. No unscoped prisma.imagingImage.findUnique/update by imageId alone is permitted anywhere in the facade implementation - every Prisma call must reach clinicId via a where clause, directly or through study.clinicId, regardless of whether clinicId is a formal parameter of that method. This is at least as strong as today: orphanFileInspection.ts markConfirmedMissing (SMB-01, lines 112-136) and patientAnonymization.ts redactPatientImagingImages (SMB-02, lines 103-131) both already call prisma.imagingImage.update({where:{id}}) imageId-only today with no re-check at the point of mutation, relying solely on a prior clinicId-scoped findMany earlier in the same call; the facade's re-derivation-and-throw check adds a second, independent verification gate that does not exist in today's code, so the resulting contract is strictly stronger, not merely equal. getImagesForLifecycleReview(clinicId, patientId) scopes every internal Prisma call directly by that clinicId, mirroring findStudyInScope's existing pattern. No session/JWT verification performed by the facade itself (remains route-layer, unchanged); does not weaken or bypass authorize()/authenticateBridgeAgent().",
+    "correctionApplied": {
+      "issue": "Blocking internal contradiction: minimumOperationInventory listed 3 of 4 methods as imageId-only, but tenantSecurityBoundary claimed 'every method requires an explicit clinicId parameter'.",
+      "resolutionPath": "PATH_B_PRESERVE_ACCEPTED_SIGNATURES",
+      "resolutionPathRationale": "The already-accepted F2-CC-14 contract (F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md Sec.9, 'Decision: ACCEPTED AND REVISED') explicitly and unambiguously specifies markStorageMissing(imageId)/redactForAnonymization(imageId)/checkImageStorageExists(imageId) as imageId-only; adding clinicId to those signatures would silently override an already-accepted architecture decision, which this task's own authority does not extend to (Sec.6 of the MD companion explicitly declines to edit the accepted boundary contract). minimumOperationInventory itself is therefore unchanged; only the false blanket tenantSecurityBoundary claim is corrected, replaced with the exact tenant-context enforcement mechanism.",
+      "signaturesUnchanged": true
+    },
     "transactionOwnership": "Facade owns $transaction only where a method's own semantics require atomicity across multiple writes (none of the 4 Stage-1 methods do). Storage+DB compensation gap represented honestly, not claimed as atomic.",
     "storageBoundary": "Depends on existing server/src/services/fileStorage.ts abstraction unchanged; no S3/local-specific branching added; legalHold/legalHoldReason handling unchanged.",
     "crossDomainContracts": "Facade IS the ImagingLifecyclePort Privacy's 3 existing direct-Prisma callers are accepted to migrate onto in a LATER stage; this task's design does not migrate them - zero existing files import the facade at its own future merge time.",
@@ -214,10 +220,22 @@
   "statusMatrix": {
     "agentCompleted": true,
     "testsPassed": "git diff --check clean, JSON parse validation clean; no application test suite run (not required, see validation.fullBackendTestSuiteRunJustification)",
-    "prOpened": null,
+    "prOpened": true,
     "merged": false,
     "deployed": false,
     "productionVerified": false
+  },
+  "prStatus": {
+    "number": 301,
+    "url": "https://github.com/MustafaBasol/DisKlinikCRM/pull/301",
+    "branch": "docs/f2-prep-008-imaging-facade-stage1-prep",
+    "baseBranch": "main",
+    "state": "OPEN",
+    "mergeable": "MERGEABLE",
+    "headRefOidBeforeThisCorrection": "7dc44f67b5cfa2fdad299d5ff55b5761e44d25d4",
+    "headRefOidAfterThisCorrection": "SELF_REFERENTIAL_NOT_EMBEDDABLE - a commit's own SHA is a hash over its own tree/content, so this file cannot embed the SHA of the very commit that includes this line without producing a stale/incorrect value at write time; the exact post-correction head SHA is recorded in the correction task's own final delivery report and is directly observable via `git rev-parse HEAD` / `gh pr view 301 --json headRefOid` on this branch.",
+    "verifiedVia": "gh pr view 301 --json state,mergeable,headRefOid,baseRefOid,url,number",
+    "verifiedAt": "2026-08-03"
   },
   "mergeSafe": true,
   "mergeSafeRationale": "Only docs/program/** files changed; no application/schema/workflow/package file touched; no runtime or CI risk.",

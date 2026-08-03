@@ -4,7 +4,7 @@
 **Parent contract:** [F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md](../architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md) (`expandMigrateContractStages[1]`, `blockerDecisions`, `f2cc14Decision`) and its companion `docs/program/architecture/evidence/F2-PREP-006-E_imaging_boundary_contract.json`.
 **Stage 0 lineage:** F2-PREP-007-A ([evidence](F2-PREP-007-A_IMAGING_CHARACTERIZATION_AUTH_SHAPE_EVIDENCE.md), PR #293), -B ([evidence](F2-PREP-007-B_IMAGING_CHARACTERIZATION_TENANT_LIFECYCLE_EVIDENCE.md), PR #294), -C ([evidence](F2-PREP-007-C_IMAGING_CHARACTERIZATION_INGEST_STORAGE_EVIDENCE.md), PR #295), -D ([evidence](F2-PREP-007-D_IMAGING_REQUEST_CONCURRENCY_EVIDENCE.md), PR #296), -E ([evidence](F2-PREP-007-E_IMAGING_CHARACTERIZATION_WAVE_CONSOLIDATION_EVIDENCE.md), PR #298).
 **Type:** DOCUMENTATION/EVIDENCE AND PROGRAM-CONTROL ONLY. No application code, Prisma schema/migration, package script, CI workflow, or test file is added, removed, or modified by this task. **No imaging facade implementation exists after this task.**
-**Status:** `AGENT_COMPLETED` / evidence and static validation only (see §12) / PR to be opened per this task's own instructions. Not merged, not deployed, not production-verified.
+**Status:** `AGENT_COMPLETED` / evidence and static validation only (see §12) / PR opened: [#301](https://github.com/MustafaBasol/DisKlinikCRM/pull/301), branch `docs/f2-prep-008-imaging-facade-stage1-prep` → `main`, state `OPEN` (re-verified by this document's own correction pass, §17). Not merged, not deployed, not production-verified.
 
 ---
 
@@ -165,7 +165,17 @@ Return types are new, purpose-built interfaces (e.g. `ImagingLifecycleImageDto {
 
 ### 9.4 Tenant/security boundary
 
-The facade **assumes an already-authenticated, already-tenant-resolved caller context** — it does not perform its own session/JWT verification (that remains route-layer, unchanged, per `authorize()`/`authenticateBridgeAgent()`). Every method requires an explicit `clinicId` parameter (never inferred, never defaulted) and every internal Prisma call the facade makes is scoped by that `clinicId`, mirroring `findStudyInScope`'s existing pattern. Cross-tenant access is explicitly prohibited by construction (no method accepts an ID without a co-located `clinicId`, matching every existing route in `imaging.ts`). The facade **does not weaken, replace, or bypass** any existing route-level `authorize()`/`authenticateBridgeAgent()` check — because it has zero callers at merge time (§9.9), it cannot yet be reached by any request path, authenticated or not.
+The facade **assumes an already-authenticated, already-tenant-resolved caller context** — it does not perform its own session/JWT verification (that remains route-layer, unchanged, per `authorize()`/`authenticateBridgeAgent()`).
+
+**Signature constraint carried forward, unchanged, from the accepted F2-CC-14 contract.** Per `F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md` §9 ("`ImagingLifecyclePort` now specifies both the original two command methods (`markStorageMissing(imageId)`, `redactForAnonymization(imageId)`, unchanged) **and** two new query methods added by this consolidation: `getImagesForLifecycleReview(clinicId, patientId)` ... and `checkImageStorageExists(imageId)`") and the companion JSON's `f2cc14Decision.revisedScope` field (identical wording), three of the four accepted methods — `markStorageMissing`, `redactForAnonymization`, `checkImageStorageExists` — take `imageId` only, with **no** `clinicId` parameter; only `getImagesForLifecycleReview` takes an explicit `clinicId` (plus `patientId`). This is the already-accepted shape and is **not** revised by this task. **Correction:** an earlier draft of this section incorrectly stated "every method requires an explicit `clinicId` parameter," which directly contradicted §9.2's own operation inventory (3 of 4 signatures shown there do not take `clinicId`) and has been removed as unacceptable ambiguity for a tenant/KVKK data-isolation boundary.
+
+**Tenant-context enforcement mechanism for the three `imageId`-only methods.** These are **tenant-context-only operations** — never callable in a system/cross-tenant context, never exposed to an unauthenticated or cross-tenant caller. The facade requires the caller to already hold a tenant-scoped request context (the same `resolveEffectiveClinicId(req.user!, ...)`-derived clinic identity every existing route in `imaging.ts` establishes before calling into any service function, §4.2). Internally, each of the three `imageId`-only methods **re-derives the image's actual owning `clinicId`** via the existing `ImagingImage → ImagingStudy → clinicId` relation — the same traversal `orphanFileInspection.ts`/`patientAnonymization.ts` already rely on today (e.g. `patientAnonymization.ts:105-106`, `prisma.imagingImage.findMany({ where: { clinicId, study: { patientId } } })`) — and **throws** (`ImagingNotFoundError`, deliberately indistinguishable from a genuinely-missing row, to avoid a cross-tenant existence-leak side channel) if the derived `clinicId` does not match the caller's ambient tenant context. **No unscoped `prisma.imagingImage.findUnique`/`update` by `imageId` alone is permitted anywhere in the facade implementation** — every Prisma call the facade makes against `ImagingImage` must include the ownership traversal (a `where` clause reaching `clinicId` either directly or through `study.clinicId`), whether or not `clinicId` is one of that method's own formal parameters.
+
+**Why this is at least as strong as current tenant isolation — no regression.** Today, `markConfirmedMissing` (`orphanFileInspection.ts:112-136`, `SMB-01`) and `redactPatientImagingImages` (`patientAnonymization.ts:103-131`, `SMB-02`) already call `prisma.imagingImage.update({ where: { id: image.id }, ... })` — `imageId`-only, exactly the accepted port's shape — and rely entirely on the `id` values having already been produced by a prior `clinicId`-scoped `findMany` earlier in the *same* function call, with no re-check at the point of mutation. The facade's re-derivation-and-throw check (previous paragraph) adds a **second, independent verification at the point of mutation that does not exist in today's code**, rather than removing the one that does — so the resulting contract is strictly stronger than, not merely equal to, today's route-level/service-level checks. `getImagesForLifecycleReview(clinicId, patientId)` is the only source of `imageId` values a caller obtains through the facade; no facade method accepts a bare, externally-supplied `imageId` with no upstream tenant provenance and no internal ownership re-check.
+
+**`getImagesForLifecycleReview(clinicId, patientId)`** is the one method that does take an explicit `clinicId`; every internal Prisma call it makes is scoped by that `clinicId` directly (mirroring `findStudyInScope`'s existing pattern, §4.2), consistent with its accepted signature.
+
+The facade **does not weaken, replace, or bypass** any existing route-level `authorize()`/`authenticateBridgeAgent()` check — because it has zero callers at merge time (§9.9), it cannot yet be reached by any request path, authenticated or not.
 
 ### 9.5 Transaction ownership and the compensation gap
 
@@ -246,7 +256,7 @@ Checklist (all required, per this task's own instructions):
 | No runtime behavior change | Yes (§10) |
 | No schema/storage migration | Yes (§13) |
 | No external/public exposure | Yes (§9.1/§9.9 — internal file, zero routes, zero callers) |
-| Tenant/authorization boundaries at least as strong as today | Yes (§9.4 — explicit `clinicId` on every method, no route-level check bypassed) |
+| Tenant/authorization boundaries at least as strong as today | Yes (§9.4 — accepted F2-CC-14 `imageId`-only signatures preserved unchanged; the three `imageId`-only methods add an internal image→study→clinicId re-derivation-and-throw check that is a second, independent gate not present today; `getImagesForLifecycleReview` takes explicit `clinicId`; no route-level check bypassed) |
 | No new forbidden cross-domain infrastructure access | Yes (§9.7 — zero new callers at merge time) |
 | Rollback is simple deletion/revert | Yes (§15) |
 | `CT-23` and `CT-32` remain explicitly unresolved and correctly gated | Yes (§6/§7 — both explicitly excluded from the Stage 1 operation inventory and retained as pre-exposure blockers) |
@@ -262,11 +272,11 @@ This authorization covers only the design in §9 (the `ImagingLifecyclePort`-sco
 
 ## 17. PR status
 
-To be opened per this task's own commit/PR rules, targeting `main`, branch `docs/f2-prep-008-imaging-facade-stage1-prep`. See the final report for the exact head SHA and URL once opened.
+**Open.** [PR #301](https://github.com/MustafaBasol/DisKlinikCRM/pull/301), branch `docs/f2-prep-008-imaging-facade-stage1-prep` → `main`, state `OPEN`, `mergeable: MERGEABLE` (`gh pr view 301 --json state,mergeable,headRefOid,baseRefOid,url,number`, re-verified live by this correction pass). Not merged, not deployed, not production-verified. This section itself was corrected in place (the blocking §9.2/§9.4 `clinicId` contradiction fix and this status update are part of the same commit that produced the exact head SHA recorded in the correction task's own final report — this document does not embed its own commit SHA, to avoid an unresolvable self-reference).
 
 ## 18. Status matrix
 
-Agent completed: yes. Tests passed: `git diff --check` clean, JSON parse validation clean (no application test suite run — none required, see §12). PR opened: yes (see §17 / final report for URL). Merged: no. Deployed: no. Production verified: no.
+Agent completed: yes. Tests passed / static validation: `git diff --check` clean, JSON parse validation clean (no application test suite run — none required, see §12). PR opened: yes — [#301](https://github.com/MustafaBasol/DisKlinikCRM/pull/301) (§17). Merged: no. Deployed: no. Production verified: no.
 
 ## 19. Accepted findings
 
