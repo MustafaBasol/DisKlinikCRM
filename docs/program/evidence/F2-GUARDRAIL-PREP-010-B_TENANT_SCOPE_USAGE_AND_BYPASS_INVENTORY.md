@@ -5,6 +5,7 @@
 **Baseline:** `origin/main` @ `6f539b237019945443afe6156f9fc2a9fe32ffa4`.
 **Isolation:** fresh worktree/branch `docs/f2-guardrail-prep-010-b-tenant-scope-inventory`, created from that exact SHA.
 **Parallel wave:** runs alongside F2-IMPL-001-A-R2, PREP-010-A, PREP-010-C. Does not edit `NORAMEDI_MASTER_TRACKER.md`, `CURRENT_PHASE.md`, `F2_MODULAR_BOUNDARIES.md`, or `evidence/README.md`.
+**R1 correction (this revision):** resolves PR #315 review threads on the stale `TSI-001…TSI-120` reference (now `TSI-001…TSI-127`) and the `server/src/jobs/*.ts` file count (12→13); adds an explicit count-reconciliation proof (§3), separates platform-global-maintenance jobs from tenant-scoping defects with precise subtypes (§5), adds exploit-precondition/response-shape precision to both verified defects with stable task IDs `F2-SEC-001`/`F2-SEC-002` (§4), and adds reproducible validation commands (§7). See the companion JSON's `countReconciliation`, `legacyExceptionAnalysis`, and `reviewThreadResolutions` keys for full detail.
 
 ---
 
@@ -99,6 +100,23 @@ delegation to `fileBackupService.ts` — were personally re-read from source
 respectively; they are counted in the table above under their resolved
 classification, not left open as `UNRESOLVED`.)
 
+**On the zero counts** — none of the three `0` rows above mean "not checked
+for":
+
+- `REQUEST_SUPPLIED_SCOPE_UNVERIFIED = 0`: no record has a user-supplied
+  `clinicId` reaching a query/mutation predicate without validation, that
+  isn't already captured at higher precedence below.
+- `UNSCOPED_RESOURCE_LOOKUP = 0`: the two entry points whose lookup is
+  effectively unscoped (§4) are recorded under the higher-precedence
+  `VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX` label instead of also
+  being counted here — a confirmed live defect is recorded once, under the
+  security-defect label, not double-counted under the pattern label
+  describing its mechanism.
+- `UNRESOLVED = 0`: all three initially-uncertain records (see above, plus
+  the legacy WhatsApp API's live-reachability question) were independently
+  re-verified by direct source re-read before this document was finalized —
+  see §7 item 1.
+
 Record count by transport: 109 route records across the 62 non-imaging route
 files reviewed in depth, plus 2 imaging light-touch route records
 (`imaging.ts`, `imagingBridgePublic.ts`) = 111 route-transport records; plus
@@ -107,6 +125,25 @@ files reviewed in depth, plus 2 imaging light-touch route records
 `inboundEventRetryJob.ts` — each split into a main-loop record and a separate
 crash-recovery-step record, see §5). 111 + 16 = **127 total**, matching the
 JSON `entryRecords` array's unique `recordId`s `TSI-001`…`TSI-127`.
+
+**Reconciliation proof (physical files vs. records):**
+
+- Physical route files: 64 (`server/src/routes/*.ts`, including `imaging.ts`
+  and `imagingBridgePublic.ts` as 2 of the 64 — they are **not** additional
+  files layered on top of the 64).
+- Physical job/worker files: 13 under `server/src/jobs/*.ts` + 1
+  `server/src/worker.ts` = **14** (corrects the prior `12`-file figure flagged
+  in PR #315 review; verified directly via `ls server/src/jobs/*.ts | wc -l` →
+  `13`).
+- `nonImagingRouteRecords (109) + imagingLightTouchRecords (2) + jobWorkerRecords (16) = 127 = totalRecords`. ✓
+- `nonImagingRouteRecords (109) + imagingLightTouchRecords (2) = 111 = routeTransportRecords`, spread across all 64 route files. ✓
+- Job/worker classification decomposition: `acceptedSystemPerClinicIteration (12) + legacyExceptions (4) + verifiedSecurityDefects (0) + otherJobClassifications (0) = 16 = jobWorkerRecords`. ✓
+- The 2 files that each produce 2 records (`externalCalendarOutboundSyncJob.ts`,
+  `inboundEventRetryJob.ts`) plus the other 12 job/worker files producing 1
+  record each account for all 14 physical files → 16 records (see §5).
+
+Full machine-checkable versions of every count above live in the companion
+JSON's `countReconciliation` key.
 
 ## 4. Verified security defects
 
@@ -162,6 +199,31 @@ cover this route).
 **Recommended fix (separate task):** add the same `getAllowedClinicIds(user)`
 + `allowedClinicIds.includes(entry.clinicId)` (or `canAccessAllClinics`) check
 used by every sibling handler in this file, before the `update` call.
+**Recommended task ID:** `F2-SEC-001` — *Enforce Clinic Membership on
+Instagram Inbox Status Mutation*.
+
+**Precision notes (R1 correction):**
+
+- **Scope, precisely:** same-organization, cross-**clinic** only. The
+  `organizationId` predicate is present and correct, so this is **not**
+  unrestricted or cross-organization access — it is scoped to a caller who is
+  a legitimate peer in the same organization but lacks membership in the
+  target entry's specific clinic.
+- **Exploit precondition, precisely:** the caller needs (a) one of the 5
+  allowed roles in the same organization, assigned to a *different* clinic
+  than the target entry, and (b) the target entry's UUID. Every listing route
+  in this same file (`GET /instagram/inbox/clinics`, the inbox list/unassigned
+  routes) is itself correctly clinic-scoped, so the id is **not** discoverable
+  through this codebase's own in-app browsing/search flow — some other
+  channel (a notification, a log line, a prior legitimate cross-clinic
+  interaction, or brute-forcing a 128-bit UUID) would be needed to obtain it
+  in practice. This does not make the defect safe; it narrows what "reachable"
+  means for this specific finding.
+- **What is disclosed, precisely:** the response is not status-only. `update()`
+  is called with no `select` clause, so the full row — `lastMessageText`,
+  `senderUsername`, `externalSenderId`, `patientId`, `messageCount`,
+  `rawPayload` — is returned alongside the mutated `status`. This is a
+  mutation **and** disclosure defect, not mutation-only.
 
 ### 4.2 TSI-108 — Legacy `/api/public/whatsapp/*` API has no tenant identification at all
 
@@ -224,6 +286,36 @@ model with the same per-connection resolution `/evolution-webhook` already
 uses (a caller-specific credential/connection row that resolves its own
 `clinicId`), before this API can be considered safe for any multi-clinic
 deployment.
+**Recommended task ID:** `F2-SEC-002` — *Remove Global Default-Clinic
+Resolution from Legacy WhatsApp Public API*. (Deliberately a separate ID from
+`F2-SEC-001` — different file, different root cause, different fix.)
+
+**Precision notes (R1 correction):**
+
+- **Production reachability, precisely:** all 6 routes are unconditional —
+  none are gated by `isLegacyFallbackEnabled()`. That flag guards two *other*
+  code paths in this same file (`whatsapp.ts:1092` and `:3760`); it does not
+  wrap any of the 6 handlers at lines 3832/3848/3864/3879/3913/3962. They are
+  reachable in every environment, including production, whenever
+  `WHATSAPP_WEBHOOK_SECRET` is configured — this is a live production surface,
+  not a dev-only or feature-flagged one.
+- **Scope, precisely — misdirection, not a "pick any tenant" bypass:** an
+  attacker cannot use this API to *choose* which clinic's data to read or
+  write. Every single call, from every caller holding the shared secret,
+  always resolves the same one clinic (`getDefaultClinic()`'s result — the
+  oldest `Clinic` row database-wide). In a deployment with more than one
+  clinic attempting to use this legacy contract, every clinic *other than the
+  oldest* would silently receive or mutate the oldest clinic's data instead of
+  its own. The risk is therefore a **tenant-resolution/misdirection defect**
+  as much as a disclosure one — distinct from a defect where a caller can
+  target an arbitrary tenant of their choosing.
+- **What is disclosed, precisely:** `GET /appointment-lookup` returns real
+  appointment scheduling data (date, time, service name, practitioner name,
+  status) for whatever phone number is queried, scoped only to the single
+  resolved clinic. `POST /appointment-requests`/`/cancel-request` create real
+  `AppointmentRequest` rows against that same clinic. No actual patient
+  name/phone/appointment record from any real database is reproduced in this
+  evidence document — only the query/response shape is documented.
 
 ## 5. System/job per-clinic iteration findings
 
@@ -235,39 +327,89 @@ predicate to every subsequent read/write inside that iteration, with bounded
 concurrency (`mapWithConcurrency`, `take: batchSize`) and a `withJobLock`
 mutual-exclusion lease.
 
-Four jobs deviate from the letter of the "always apply a per-tenant predicate"
-rule, all classified `LEGACY_EXCEPTION_REQUIRES_ALLOWLIST` (not verified
-defects — no attacker-influenced selector, no cross-tenant business-data
-exposure in three of the four, deterministic time-driven predicates only) but
-flagged because they perform a single cross-tenant `updateMany`/`deleteMany`
-with **no** clinic/organization predicate at all:
+Five records are classified `LEGACY_EXCEPTION_REQUIRES_ALLOWLIST` — four
+job/worker records and one route record. **This label covers two genuinely
+different situations, and R1 adds an explicit subtype to each record so they
+are not conflated:**
 
-- **`dataRetentionCleanupJob.ts`** — org-wide age-based delete/anonymize
-  across 8 categories including `WhatsAppConversationMessage`,
-  `ContactRequest`, `WhatsAppInboxEntry` (real PII fields: phone, name, note,
-  message text), with zero clinic/org predicate at any stage. The one job in
-  this set that touches substantive tenant PII without any tenant predicate —
-  strongest candidate for an explicit allowlist decision or redesign.
-- **`imagingBridgeOfflineJob.ts`** — single `updateMany({ status: 'online',
-  lastSeenAt: { lt: cutoff } } → 'offline')` across all clinics; low-sensitivity
-  operational presence metadata only.
-- **`externalCalendarOutboundSyncJob.ts`** (crash-recovery step only —
-  the job's main due-row loop is fully clinic-scoped) — one `updateMany`
-  flipping stuck `'syncing'` rows to `'failed_retryable'` with no clinic
-  predicate.
-- **`inboundEventRetryJob.ts`** (crash-recovery step only, same shape) — one
-  `updateMany` flipping stuck `'processing'` rows to `'failed'`.
+- **`PLATFORM_GLOBAL_MAINTENANCE_ACCEPTED`** — an internal cron job whose
+  cross-tenant `updateMany`/`deleteMany` is the deliberate, correct design
+  (platform-wide policy enforcement or bounded state-machine repair), not a
+  missed clinic filter. Four of the five records carry this subtype, and none
+  of them is a tenant-isolation defect.
+- **`DRIFT_REFACTOR_RECOMMENDED`** — a route whose local reimplementation of
+  the accepted scoping pattern is functionally correct today but should be
+  refactored to call the canonical `clinicScope.ts` helper directly, to close
+  a maintainability/drift risk (not an active bypass). One record carries this
+  subtype.
 
-Four more jobs (`clinicBulkExportCleanupJob.ts`, `clinicBulkExportWorker.ts`,
+None of the five contains an `isSystemAdmin`-style flag or a literal "skip all
+tenant filtering" bypass condition. Full field-by-field detail (job owner,
+runtime enable/disable gate, per-tenant policy dependency, eligibility
+predicate, batch bound, transaction behavior, legal-hold applicability,
+audit/metrics, cross-tenant leak potential) for every record below lives in
+the companion JSON's `legacyExceptionAnalysis` array.
+
+**`PLATFORM_GLOBAL_MAINTENANCE_ACCEPTED` (4 records):**
+
+- **`dataRetentionCleanupJob.ts` (TSI-114)** — org-wide, age-based
+  delete/anonymize across 8 categories (`WhatsAppConversationMessage`,
+  `ContactRequest`, `WhatsAppInboxEntry`, etc. — real PII fields: phone, name,
+  note, message text), by deliberate design: KVKK/GDPR retention is a
+  platform-wide legal policy, not a per-clinic one. Gated by a build-time
+  enable flag *and* a live runtime toggle re-checked every tick; every batch
+  is `findMany({take: batchSize})` → `{id:{in:...}}`-scoped, never an
+  open-ended mutation; each of the 8 categories fails independently without
+  blocking the others; a distributed job lock prevents concurrent runs. The
+  job's own header comment hard-excludes Patient/Appointment/Treatment/
+  Payment/Insurance/Attachment/AuditLog/ActivityLog rows and prefers
+  anonymization over deletion for PII. **Distinguishing disclosure risk from
+  legal/policy risk:** this job never reads-and-returns cross-tenant data to
+  any caller (no `crossTenantLeakPossible`) — its risk category is
+  `OPERATIONAL_BLAST_RADIUS` (a misconfigured global threshold could
+  over-delete platform-wide in one run) and **`POLICY_COUPLING`**: one global
+  retention schedule applies to every organization today, with no
+  per-organization override. Whether per-org retention overrides should be
+  supported is an open **product/legal decision**, not a tenant-isolation
+  defect — it is the one item in this set that still warrants a named
+  follow-up (see §9/enforcement candidates), but not as a security fix.
+- **`imagingBridgeOfflineJob.ts` (TSI-119)** — single `updateMany({status:
+  'online', lastSeenAt: {lt: cutoff}} → 'offline')` across all clinics: a
+  heartbeat/liveness flag flip only (one enum field), scoped by its own
+  status+timestamp predicate, job-locked against overlap. No row content is
+  read or returned to any caller.
+- **`externalCalendarOutboundSyncJob.ts` (TSI-117, crash-recovery step only —
+  the job's main due-row loop, TSI-116, is fully clinic-scoped)** — one
+  `updateMany` flipping rows stuck in `'syncing'` for 30+ minutes to
+  `'failed_retryable'`, so they re-enter the same per-row, clinic-scoped retry
+  path as TSI-116. A pure status-field flip on rows already in one specific
+  transient state; no business data mutated, no row content returned.
+- **`inboundEventRetryJob.ts` (TSI-121, crash-recovery step only, same shape
+  as above — the main retry loop, TSI-120, is fully clinic-scoped)** — one
+  `updateMany` flipping rows stuck in `'processing'` for 60+ minutes to
+  `'failed'`. Same self-healing, status-field-only pattern as TSI-117.
+
+**`DRIFT_REFACTOR_RECOMMENDED` (1 record):**
+
+- **`financeDashboard.ts` GET `/finance/dashboard` (TSI-022)** — not a job at
+  all; a route whose local `resolveClinicScope()` helper independently
+  computes `allowedIds` from org+role and validates any requested `clinicId`
+  query param against it before use — functionally equivalent to
+  `validateAndGetClinicIdScope`, just not calling it directly. Read-only, no
+  mutation predicate. The only risk is drift: a future edit to this local
+  copy could silently diverge from the canonical helper's semantics. This is
+  the same category of local-reimplementation risk noted for `resolveClinicScope`-
+  style helpers throughout §2/§6, surfaced here under its own record because
+  its independent implementation is more extensive than a one-line inline
+  check.
+
+Four other jobs (`clinicBulkExportCleanupJob.ts`, `clinicBulkExportWorker.ts`,
 `patientPrivacyExportCleanupJob.ts`, `publicBookingNoticeEvidenceCleanupJob.ts`)
 enumerate/mutate rows with no clinic predicate but are accepted as
 `ACCEPTED_SYSTEM_PER_CLINIC_ITERATION` because every mutated row is the job's
 own ephemeral, single-tenant export/evidence artifact addressed only by its
 own internal id — not shared tenant business data reachable by any other
 path.
-
-No job in this set contains an `isSystemAdmin`-style flag or a literal
-"skip all tenant filtering" bypass condition.
 
 ## 6. False positives explicitly distinguished (not defects)
 
@@ -305,40 +447,104 @@ No job in this set contains an `isSystemAdmin`-style flag or a literal
 ## 7. Verification performed
 
 1. **Direct source re-read for every risky/candidate classification**
-   (§4, and the two resolved `UNRESOLVED` items): `instagramInbox.ts:255-285,
-   769-794`; `server/src/middleware/planLimits.ts:69-104`;
-   `server/src/routes/whatsapp.ts:1060-1100, 3832-3844` plus
+   (§4, §5's `LEGACY_EXCEPTION_REQUIRES_ALLOWLIST` records, and the two
+   resolved `UNRESOLVED` items): `instagramInbox.ts:62-90, 255-285, 768-796`;
+   `server/src/middleware/planLimits.ts:69-104`;
+   `server/src/routes/whatsapp.ts:190-215, 1060-1103, 3830-3980` plus
    `server/src/index.ts:183` and `docs/21-whatsapp-n8n-clinic-integration.md`;
-   `server/src/services/fileBackupService.ts:96-350`.
+   `server/src/services/fileBackupService.ts:96-350`;
+   `server/src/jobs/dataRetentionCleanupJob.ts` (full file);
+   `server/src/jobs/externalCalendarOutboundSyncJob.ts:1-60`;
+   `server/src/jobs/inboundEventRetryJob.ts:1-55`;
+   `server/src/jobs/imagingBridgeOfflineJob.ts` (full file);
+   `server/src/routes/financeDashboard.ts:1-115`;
+   `server/prisma/schema.prisma:1938-1968` (InstagramInboxEntry model shape,
+   confirming the unselected `update()` return includes message content).
 2. **`git diff --check`** — clean (no whitespace errors) on this task's
    own new files.
-3. **JSON parse** — companion JSON validated with `JSON.parse` before commit.
-4. **Record-ID uniqueness** — all `recordId` values in the JSON
-   (`TSI-001`…`TSI-120`) are unique (script-checked).
-5. **Markdown/JSON parity** — classification totals in §3 match the JSON
-   `classificationTotals` object; the two verified defects in §4 match the
-   JSON `bypassCandidates` array entries `TSI-025`/`TSI-108`.
-6. **No runtime/schema/migration/workflow/package/shared-control files
+3. **Exact reproducible validation commands** (working directory: this
+   worktree's root; full copy-paste commands with expected output live in the
+   companion JSON's `validationCommands` key):
+   - JSON parse → `PARSE_OK`.
+   - Record-ID uniqueness → `count=127 unique=127 UNIQUE_OK`.
+   - Required-field validation on every `entryRecords` object →
+     `ALL_FIELDS_PRESENT`.
+   - Classification enum validation (all 9 mandated labels only) →
+     `ALL_CLASSIFICATIONS_VALID`.
+   - Classification-total parity (declared `classificationTotals` vs.
+     computed from `entryRecords`) → `sumComputed=127 declaredTotal=127
+     TOTALS_MATCH`.
+   - Markdown/JSON record-ID citation parity (every `TSI-###` cited by name
+     in this document exists in the JSON) → `mdCitedIds=7 [...]
+     ALL_MD_CITATIONS_EXIST_IN_JSON`.
+   - Route/imaging/job-worker decomposition parity → `109 + 2 + 16 = 127
+     DECOMPOSITION_OK`.
+   - Job-classification decomposition parity → `16 vs
+     jobWorkerRecordsTotal=16 JOB_DECOMPOSITION_OK`.
+   - Physical jobs-file count → `ls server/src/jobs/*.ts | wc -l` = `13`.
+   - Final TSI range → `first=TSI-001 last=TSI-127`.
+   - Changed-file scope → `git diff origin/main --name-only` lists exactly
+     the two evidence files in §9.
+   - Forbidden absolute local path check → no match (pass).
+   - Sensitive-data/secret-pattern sanity check → no match (pass); only the
+     env-var *name* `WHATSAPP_WEBHOOK_SECRET` appears, never a value.
+4. **No runtime/schema/migration/workflow/package/shared-control files
    changed** — this task's diff touches only the two new evidence files
-   listed in §9.
+   listed in §9 (confirmed via the changed-file-scope command above).
+5. **PR #315 review threads resolved** — the stale `TSI-001…TSI-120` range
+   (comment 3705959120) and the `server/src/jobs/*.ts` "12 files" count
+   (comment 3705959158) are both corrected in this revision; see the JSON's
+   `reviewThreadResolutions` key.
 
-## 8. Limitations
+## 8. Limitations and exact scope
 
-- This inventory covers HTTP route entry points, background jobs/workers, and
-  (light-touch, per the parallel-wave rule) the two imaging route files. It
-  does **not** independently audit all 128 files under `server/src/services/`
-  in isolation — service-layer logic was inventoried only as invoked from a
-  route (e.g. `relationGuards.ts` helpers, `resolvePatient()`-equivalent
-  functions). A small number of records note specific service functions
-  (e.g. `patientAnonymization.ts`, `recallCandidateService.ts`) that receive
-  an already-verified `clinicId`/id from their calling route but were not
+**In scope (read and classified):**
+
+- All 64 route files under `server/src/routes/*.ts`, including the 2 imaging
+  light-touch files (`imaging.ts`, `imagingBridgePublic.ts` — 2 of the 64,
+  not additional files).
+- All 14 job/worker physical files: 13 under `server/src/jobs/*.ts` +
+  `server/src/worker.ts`.
+- Webhook and public-integration routes specifically: `externalCalendarWebhook.ts`,
+  `instagramWebhook.ts`, `metaWhatsAppWebhook.ts`, `whatsapp.ts`'s
+  `/evolution-webhook` and its 6 legacy `/api/public/whatsapp/*` routes,
+  `imagingBridgePublic.ts`, `publicBooking.ts`, `publicClinicKvkk.ts` — these
+  are exactly the routes that produced TSI-108 and several of the
+  false-positive rules in §6.
+- Middleware/utility roots: `server/src/middleware/auth.ts`,
+  `server/src/middleware/platformAuth.ts`, `server/src/utils/clinicScope.ts`,
+  `server/src/utils/tenantGuard.ts`, `server/src/utils/relationGuards.ts`.
+
+**Explicitly out of scope (not read or inventoried):**
+
+- Frontend code (`client/*`) — excluded per the task's CodeGraph focused-roots
+  instruction.
+- Scripts/CLI tools and Prisma migrations/seed data — the roots list never
+  named these; they were not read.
+- Test files as entry points — consulted only to check existing cross-tenant
+  coverage for specific records (§ testGaps in the JSON), not classified as
+  entry points themselves.
+- All ~128 files under `server/src/services/` in isolation — service-layer
+  logic was inventoried only as invoked from a route/job (e.g.
+  `relationGuards.ts` helpers, `resolvePatient()`-equivalent functions). A
+  small number of records note specific service functions (e.g.
+  `patientAnonymization.ts`, `recallCandidateService.ts`) that receive an
+  already-verified `clinicId`/id from their calling route but were not
   independently re-read line-by-line; these are flagged in the JSON
-  `testGaps`/`limitations` arrays as follow-up candidates, not as defects.
+  `testGaps` array as follow-up candidates, not as defects.
 - `server/src/services/imaging/public.ts` does not exist on this baseline SHA
   (confirmed via `git ls-tree`) — it is PR #304, unmerged, with its own
   already-documented tenant-context gap tracked under F2-PREP-009 /
   F2-IMPL-001-A_R1. This task does not re-inventory it or count it toward the
   classification totals above.
+
+**Other limitations:**
+
+- **Dynamic registration:** this inventory is based on static reads of each
+  file's literal `router.get/post/patch/delete` calls at the pinned SHA. No
+  runtime/configuration-driven route registration was observed in the files
+  read, but a purely static pass cannot fully rule out an indirect
+  registration path outside those files.
 - Two minor consistency (non-security) observations were raised by the
   research passes but are not separately classified: `appointments.ts`
   `/available-slots` performs an unscoped initial `doctorId` lookup before an
@@ -347,6 +553,9 @@ No job in this set contains an `isSystemAdmin`-style flag or a literal
   Both are noted in the JSON `enforcementCandidates` array as low-priority
   cleanup, not bypass candidates.
 - No load/fuzz testing was performed; this is a static-source inventory.
+- **This inventory does not claim repository-wide completeness** — it claims
+  completeness only over the CodeGraph-scoped roots listed above and in the
+  JSON's `roots` array.
 
 ## 9. Files changed by this task
 

@@ -14,7 +14,7 @@
     "server/src/utils/tenantGuard.ts",
     "server/src/utils/relationGuards.ts",
     "server/src/routes/*.ts (64 files, one group at a time)",
-    "server/src/jobs/*.ts (12 files)",
+    "server/src/jobs/*.ts (13 files)",
     "server/src/worker.ts",
     "server/src/routes/imaging.ts (light touch)",
     "server/src/routes/imagingBridgePublic.ts (light touch)",
@@ -57,6 +57,42 @@
     "UNRESOLVED": 0,
     "VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX": 2,
     "total": 127
+  },
+  "countReconciliation": {
+    "purpose": "R1 correction: reconciles physical-file counts against evidence-record counts, addressing PR #315 review threads 3705959120 and 3705959158.",
+    "physicalRouteFiles": 64,
+    "physicalJobFiles": 13,
+    "physicalWorkerFiles": 1,
+    "physicalJobWorkerFilesTotal": 14,
+    "routeTransportRecords": 111,
+    "imagingLightTouchRecordsWithinRouteRecords": 2,
+    "nonImagingRouteRecords": 109,
+    "jobTransportRecords": 14,
+    "workerTransportRecords": 2,
+    "jobWorkerRecordsTotal": 16,
+    "totalRecords": 127,
+    "proof1_topLevelDecomposition": "nonImagingRouteRecords(109) + imagingLightTouchRecords(2) + jobWorkerRecords(16) = 127 = totalRecords",
+    "proof2_routeRecordsCheck": "nonImagingRouteRecords(109) + imagingLightTouchRecords(2) = 111 = routeTransportRecords, spread across all 64 distinct route files (imaging.ts and imagingBridgePublic.ts are 2 of the 64 route files, not additional files)",
+    "proof3_jobWorkerRecordsCheck": "jobTransportRecords(14) + workerTransportRecords(2) = 16 = jobWorkerRecordsTotal, produced by 14 physical files (13 in server/src/jobs/*.ts + server/src/worker.ts)",
+    "multiRecordFiles": {
+      "server/src/jobs/externalCalendarOutboundSyncJob.ts": "1 physical file -> 2 records: TSI-116 (main per-row retry loop, ACCEPTED_SYSTEM_PER_CLINIC_ITERATION) + TSI-117 (crash-recovery status-flip step, LEGACY_EXCEPTION_REQUIRES_ALLOWLIST/PLATFORM_GLOBAL_MAINTENANCE_ACCEPTED)",
+      "server/src/jobs/inboundEventRetryJob.ts": "1 physical file -> 2 records: TSI-120 (main per-row retry loop, ACCEPTED_SYSTEM_PER_CLINIC_ITERATION) + TSI-121 (crash-recovery status-flip step, LEGACY_EXCEPTION_REQUIRES_ALLOWLIST/PLATFORM_GLOBAL_MAINTENANCE_ACCEPTED)",
+      "note": "The other 12 physical job/worker files each produce exactly 1 record (12 files x 1 record + 2 files x 2 records = 16 records from 14 files)."
+    },
+    "jobWorkerClassificationDecomposition": {
+      "acceptedSystemPerClinicIteration": 12,
+      "legacyExceptions": 4,
+      "verifiedSecurityDefects": 0,
+      "otherJobClassifications": 0,
+      "proof": "12 + 4 + 0 + 0 = 16 = jobWorkerRecordsTotal"
+    },
+    "finalRecordIdRange": "TSI-001 .. TSI-127 (127 records; supersedes any prior reference to TSI-001...TSI-120)"
+  },
+  "zeroCountClarifications": {
+    "REQUEST_SUPPLIED_SCOPE_UNVERIFIED_is_0": "No record has a user-supplied clinicId reaching a query/mutation predicate without validation against allowedClinicIds/canAccessAllClinics by an accepted helper or an equivalent local reimplementation, that is not ALREADY captured at higher precedence under VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX.",
+    "UNSCOPED_RESOURCE_LOOKUP_is_0": "No record remains classified UNSCOPED_RESOURCE_LOOKUP because the two entry points whose lookup is effectively unscoped (instagramInbox.ts PATCH /:id/status; whatsapp.ts legacy public API's getDefaultClinic()) are classified under the higher-precedence VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX label instead, per this inventory's classification-precedence rule: a confirmed live defect is recorded once, under the security-defect label, not double-counted under the pattern label describing its mechanism.",
+    "UNRESOLVED_is_0": "The 3 records initially flagged by parallel research batches as needing further verification (patients.ts POST /patients; server/src/jobs/fileBackupJob.ts; whatsapp.ts legacy public API live-reachability) were each independently re-verified by direct source re-read (server/src/middleware/planLimits.ts:69-104; server/src/services/fileBackupService.ts:96-350; server/src/index.ts:183 plus docs/21-whatsapp-n8n-clinic-integration.md) before this inventory was finalized, and reclassified to ACCEPTED_SCOPE_HELPER, ACCEPTED_SYSTEM_PER_CLINIC_ITERATION, and VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX respectively.",
+    "RAW_DEFAULT_CLINIC_CONTEXT_ONLY_is_2_falsePositives": "Both records in this category are false positives, not defects: auth.ts's req.user.clinicId reference has no DB where-predicate at all (it is set at token-issuance time only); gdprExport.ts's route body is unimplemented (returns a not-yet-available response and performs no query)."
   },
   "entryRecords": [
     { "recordId": "TSI-001", "transport": "route", "file": "server/src/routes/appointmentRequests.ts", "methodOrSymbol": "GET/PUT/POST *", "domain": "appointment-requests", "roleGuard": "authorize([OWNER,ORG_ADMIN,CLINIC_MANAGER,RECEPTIONIST])", "scopeSource": "validateAndGetClinicIdScope on every handler", "helperUsed": "validateAndGetClinicIdScope", "userSuppliedClinicIdAccepted": "yes (query, on GETs) - validated", "accessibleClinicMembershipVerified": "yes", "parentRecordScope": "n/a", "mutationPredicateScope": "findFirst({...scope,id}) then update({where:{id}}); POST /convert reuses request.clinicId", "crossTenantTestCoverage": "unknown/not verified", "classification": "ACCEPTED_SCOPE_HELPER", "recommendedEnforcementRule": "none - reference pattern" },
@@ -187,32 +223,149 @@
     { "recordId": "TSI-126", "transport": "job", "file": "server/src/jobs/startBackgroundJobs.ts", "methodOrSymbol": "startBackgroundJobs() orchestrator", "domain": "cron job registration/bootstrap", "roleGuard": "n/a - no DB access in this file", "scopeSource": "n/a - calls each job's own start*() function once; withJobLock leases (inside each job) prevent double-scheduling if both API process and worker process call this", "helperUsed": "n/a", "userSuppliedClinicIdAccepted": "n/a", "accessibleClinicMembershipVerified": "n/a", "parentRecordScope": "n/a", "mutationPredicateScope": "n/a", "crossTenantTestCoverage": "unknown/not verified", "classification": "ACCEPTED_SYSTEM_PER_CLINIC_ITERATION", "recommendedEnforcementRule": "none - pure registration, no tenant-scoping question of its own" },
     { "recordId": "TSI-127", "transport": "worker", "file": "server/src/worker.ts", "methodOrSymbol": "process entrypoint -> startBackgroundJobs()", "domain": "background-job process bootstrap", "roleGuard": "n/a", "scopeSource": "n/a - no DB access beyond prisma.$disconnect() on shutdown", "helperUsed": "n/a", "userSuppliedClinicIdAccepted": "n/a", "accessibleClinicMembershipVerified": "n/a", "parentRecordScope": "n/a", "mutationPredicateScope": "n/a", "crossTenantTestCoverage": "unknown/not verified", "classification": "ACCEPTED_SYSTEM_PER_CLINIC_ITERATION", "recommendedEnforcementRule": "none - pure process-lifecycle wrapper" }
   ],
+  "legacyExceptionAnalysis": [
+    {
+      "recordId": "TSI-022",
+      "transport": "route",
+      "file": "server/src/routes/financeDashboard.ts",
+      "subtype": "DRIFT_REFACTOR_RECOMMENDED",
+      "note": "Not global-platform maintenance and not a system job. resolveClinicScope() is a LOCAL REIMPLEMENTATION that is functionally equivalent to the canonical clinicScope.ts helpers: it computes allowedIds from org+role (OWNER/ORG_ADMIN get all org clinics; BILLING/CLINIC_MANAGER get user.allowedClinicIds filtered to the org), then validates any requested clinicId query param against allowedIds before using it, returning 403 on mismatch. Read-only route; no mutation predicate at all.",
+      "jobOwnerOrDomain": "finance/billing dashboard",
+      "authorizationGate": "authorize(['OWNER','ORG_ADMIN','CLINIC_MANAGER','BILLING']) plus resolveClinicScope's own org+allowedClinicIds validation",
+      "crossTenantLeakPossible": "no - functionally correct scoping today",
+      "riskType": "POLICY_COUPLING / helper-drift risk only - a future edit to this local copy could silently diverge from clinicScope.ts's semantics; this is a maintainability recommendation, not an active TENANT_SCOPING_DEFECT"
+    },
+    {
+      "recordId": "TSI-114",
+      "transport": "job",
+      "file": "server/src/jobs/dataRetentionCleanupJob.ts",
+      "subtype": "PLATFORM_GLOBAL_MAINTENANCE_ACCEPTED",
+      "jobOwnerOrDomain": "privacy / KVKK-GDPR data retention",
+      "intendedScope": "whole platform (every organization/clinic) - a single global retention policy is the deliberate design; this is legal/compliance-driven, not a missed clinic filter",
+      "authorizationExecutionGate": "not user-invoked; internal cron. A manual-trigger route exists separately in platformAdmin.ts, gated by authenticatePlatformAdmin (platform-admin only) and sharing the same job lock",
+      "runtimeEnableDisableGate": "build-time config.enabled (DATA_RETENTION_CLEANUP_ENABLED) AND a live platform-setting runtime toggle (DATA_RETENTION_RUNTIME_SETTING_KEY) re-checked on every scheduled tick - either can disable the job without a redeploy",
+      "perTenantPolicyDependency": "none - one global schedule/threshold-per-category applies uniformly to every organization; no per-organization override exists today (this is the POLICY_COUPLING limitation, not a security defect)",
+      "eligibilityPredicate": "per-category age threshold only (createdAt/updatedAt older than N days per config); the file's own header comment enumerates hard exclusions: never deletes Patient/Appointment/Treatment/Payment/Insurance/Attachment rows, never deletes AuditLog/ActivityLog rows; prefers anonymizing PII fields over deleting rows for ContactRequest/inbox entries",
+      "batchBound": "findMany({take: config.batchSize}) to collect an exact id list, then deleteMany/updateMany scoped to {id:{in: that list}} - never an open-ended deleteMany/updateMany across a whole table",
+      "transactionBehavior": "each of the 8 categories runs and catches errors independently; one category's failure is logged and skipped, it does not roll back or block the others",
+      "legalHoldBehavior": "not applicable - this job never touches the entity types (Patient/Attachment/imaging rows) that carry a legal-hold flag elsewhere in this codebase; those are explicitly excluded by the job's own design",
+      "auditMetrics": "console.log run summary with per-category counts (no persistent AuditLog row is written for job runs); a distributed job lock (withJobLock, 2-hour TTL) prevents overlapping runs across replicas/workers or a concurrent manual platform-admin trigger",
+      "crossTenantLeakPossible": "no - the job only deletes/anonymizes rows in place; it never reads-and-returns cross-tenant data to any caller",
+      "riskType": "OPERATIONAL_BLAST_RADIUS (a misconfigured global age threshold could over-delete platform-wide in one run) and POLICY_COUPLING (no per-organization retention override) - explicitly NOT a TENANT_SCOPING_DEFECT; distinguished from cross-tenant disclosure risk because no data is ever returned to a caller"
+    },
+    {
+      "recordId": "TSI-117",
+      "transport": "job",
+      "file": "server/src/jobs/externalCalendarOutboundSyncJob.ts",
+      "symbol": "crash-recovery step (lines 41-53)",
+      "subtype": "PLATFORM_GLOBAL_MAINTENANCE_ACCEPTED",
+      "jobOwnerOrDomain": "external-calendar outbound sync (DigiDentiS integration)",
+      "intendedScope": "whole platform - a bounded crash-recovery status-flip, not a data operation",
+      "authorizationExecutionGate": "not user-invoked; internal cron, unconditionally scheduled",
+      "runtimeEnableDisableGate": "none beyond the process running; no separate feature flag",
+      "perTenantPolicyDependency": "none - the predicate is a pure stuck-state timer (status='syncing' AND updatedAt older than 30 minutes), identical for every tenant by design",
+      "eligibilityPredicate": "status='syncing' AND updatedAt < now-30min",
+      "batchBound": "no explicit take/limit on the updateMany call itself, but the predicate is self-limiting: only rows already stuck in one specific transient state for 30+ minutes qualify; recovered rows re-enter the SAME per-row, clinic-scoped retry path already classified ACCEPTED_SYSTEM_PER_CLINIC_ITERATION (TSI-116)",
+      "transactionBehavior": "single updateMany, not wrapped in a larger transaction",
+      "legalHoldBehavior": "not applicable - flips only a sync-status enum field; no patient/business data mutated or deleted",
+      "auditMetrics": "logger.warn with recovered-row count; guarded by withJobLock (10-minute lease) against concurrent runs across processes",
+      "crossTenantLeakPossible": "no - status-field flip only; does not read or return row content to any caller",
+      "riskType": "none identified beyond ordinary operational risk - a self-healing state-machine repair step, not a TENANT_SCOPING_DEFECT"
+    },
+    {
+      "recordId": "TSI-119",
+      "transport": "job",
+      "file": "server/src/jobs/imagingBridgeOfflineJob.ts",
+      "subtype": "PLATFORM_GLOBAL_MAINTENANCE_ACCEPTED",
+      "jobOwnerOrDomain": "imaging bridge agent connectivity/heartbeat",
+      "intendedScope": "whole platform - heartbeat/liveness flag maintenance across all bridge agents regardless of clinic",
+      "authorizationExecutionGate": "not user-invoked; internal cron, unconditionally scheduled",
+      "runtimeEnableDisableGate": "IMAGING_BRIDGE_OFFLINE_MINUTES env threshold only (defaults to 5 min, floor of 1 min); the job itself has no on/off flag",
+      "perTenantPolicyDependency": "none - a single staleness threshold applies to every clinic's bridge agents uniformly",
+      "eligibilityPredicate": "status='online' AND lastSeenAt older than the threshold; 'revoked' and 'pending' rows are never touched",
+      "batchBound": "single updateMany scoped by the status+lastSeenAt predicate - not an unbounded table scan of unrelated rows",
+      "transactionBehavior": "single updateMany",
+      "legalHoldBehavior": "not applicable - flips only a connectivity-status enum field",
+      "auditMetrics": "console.info with count of agents marked offline; withJobLock (2-minute lease) plus a process-local overlap flag prevent overlap",
+      "crossTenantLeakPossible": "no - status-field flip only; no row content read or returned to any caller",
+      "riskType": "none identified beyond ordinary operational risk - not a TENANT_SCOPING_DEFECT"
+    },
+    {
+      "recordId": "TSI-121",
+      "transport": "job",
+      "file": "server/src/jobs/inboundEventRetryJob.ts",
+      "symbol": "crash-recovery step (lines 38-45)",
+      "subtype": "PLATFORM_GLOBAL_MAINTENANCE_ACCEPTED",
+      "jobOwnerOrDomain": "messaging inbound webhook delivery (WhatsApp Meta Cloud API)",
+      "intendedScope": "whole platform - same bounded crash-recovery status-flip shape as TSI-117",
+      "authorizationExecutionGate": "not user-invoked; internal cron, unconditionally scheduled",
+      "runtimeEnableDisableGate": "none beyond the process running",
+      "perTenantPolicyDependency": "none - stuck-state timer identical for every tenant",
+      "eligibilityPredicate": "status='processing' AND updatedAt < now-60min",
+      "batchBound": "no explicit take on the updateMany, but self-limiting via the stuck-state timer predicate; recovered rows re-enter the per-row, clinic-scoped retry loop already classified ACCEPTED_SYSTEM_PER_CLINIC_ITERATION (TSI-120)",
+      "transactionBehavior": "single updateMany",
+      "legalHoldBehavior": "not applicable - status-field flip only",
+      "auditMetrics": "console.warn with recovered count; process-local overlap flag plus withJobLock guard concurrent runs",
+      "crossTenantLeakPossible": "no - status-field flip only",
+      "riskType": "none identified beyond ordinary operational risk - not a TENANT_SCOPING_DEFECT"
+    }
+  ],
   "bypassCandidates": [
     {
       "recordId": "TSI-025",
-      "title": "Cross-clinic status mutation/disclosure on Instagram inbox entries",
+      "title": "Cross-clinic status mutation and full-row disclosure on Instagram inbox entries",
       "file": "server/src/routes/instagramInbox.ts",
-      "lines": "769-794",
+      "lines": "768-796 (route registration comment at 768, handler body 769-794, router.patch call closes at 794)",
       "classification": "VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX",
-      "scope": "same-organization, cross-clinic (not cross-organization)",
-      "reproduction": "A user with role CLINIC_MANAGER or RECEPTIONIST, canAccessAllClinics:false, allowedClinicIds:['clinic-A'], sends PATCH /api/instagram/inbox/{entryId}/status with body {status:'ignored'} where entryId belongs to clinic-B in the same organization. Request succeeds; full entry row is echoed back.",
-      "rootCause": "findFirst({where:{id,organizationId}}) only - missing the allowedClinicIds.includes(entry.clinicId) check every sibling route in this file applies (confirmed present at lines 264-268 of the same file).",
-      "verifiedBy": "direct re-read of instagramInbox.ts:255-285 and :769-794 via Bash sed",
-      "recommendedFix": "add getAllowedClinicIds(user) + allowedClinicIds.includes(entry.clinicId) check before the update call, matching every sibling handler",
-      "patientDataExposed": "no patient data reproduced in this evidence document; only the code-path reasoning and field names are documented"
+      "scope": "same-organization, cross-clinic ONLY - not cross-organization and not unrestricted/global cross-tenant access",
+      "routeRegistration": "router.patch('/instagram/inbox/:id/status', authenticate, authorize(['OWNER','ORG_ADMIN','CLINIC_MANAGER','RECEPTIONIST','DOCTOR']), handler) - server/src/routes/instagramInbox.ts:769-794",
+      "productionReachability": "live - mounted via the standard authenticated Instagram-inbox router with no feature flag or environment gate; reachable in every deployment where the Instagram inbox module is active",
+      "authMiddleware": "authenticate (JWT) + authorize(['OWNER','ORG_ADMIN','CLINIC_MANAGER','RECEPTIONIST','DOCTOR']) - role check only, no in-handler clinic-capability check",
+      "organizationScope": "lookup predicate includes organizationId: req.user!.organizationId - correctly prevents cross-ORGANIZATION access",
+      "accessibleClinicScope": "NOT checked - the handler never computes/consults getAllowedClinicIds or allowedClinicIds.includes(entry.clinicId) for the target entry, unlike every sibling handler in the same file (confirmed present at lines 255-268 of this same file)",
+      "lookupPredicate": "prisma.instagramInboxEntry.findFirst({where:{id, organizationId: req.user!.organizationId}})",
+      "mutationPredicate": "prisma.instagramInboxEntry.update({where:{id}, data:{status}}) - id-only, no clinic re-check at mutation time either",
+      "siblingRoutePattern": "every other handler in instagramInbox.ts computes allowedClinicIds = getAllowedClinicIds(user) and returns 403 if !allowedClinicIds.includes(target.clinicId) before reading/mutating; this PATCH handler is the only one in the file missing that check",
+      "responseDataShape": "200 response body is {entry: updated} where updated is the FULL Prisma row with no select clause - includes lastMessageText, senderUsername, externalSenderId, patientId, messageCount, rawPayload, not just the mutated status field",
+      "exploitPrecondition": "caller must (a) be authenticated with one of the 5 allowed roles in the SAME organization as the target entry, assigned to a DIFFERENT clinic than the target entry's clinicId, and (b) know or guess the target entry's UUID. All in-app listing endpoints in this same file (e.g. GET /instagram/inbox/clinics and the inbox list routes) are themselves correctly clinic-scoped, so a caller cannot discover another clinic's entry IDs through this codebase's own listing/search flow - some other channel (a notification, a log, a prior legitimate cross-clinic interaction, or brute-forcing a 128-bit UUID) would be needed to obtain the id in practice.",
+      "crossOrgOrCrossClinic": "same-organization, cross-clinic ONLY. The organizationId predicate correctly blocks cross-organization access. This is not unrestricted cross-tenant access - it is scoped to peers within one organization who lack membership in the target entry's specific clinic.",
+      "idKnowledgeRequired": "yes - a valid entryId (UUID) belonging to a different clinic in the same organization is required, and is not obtainable via this codebase's own listing endpoints",
+      "patientOrMessageContentDisclosed": "both - a status mutation AND disclosure of the full inbox entry row (including last-message text and sender identifiers) occur in a single request; this is a mutation-plus-disclosure defect, not mutation-only",
+      "reproduction": "A user with role CLINIC_MANAGER or RECEPTIONIST, canAccessAllClinics:false, allowedClinicIds:['clinic-A'], sends PATCH /api/instagram/inbox/{entryId}/status with body {status:'ignored'} where entryId belongs to clinic-B in the same organization. The request succeeds (200) and the full entry row for clinic-B is echoed back in the response.",
+      "rootCause": "findFirst({where:{id,organizationId}}) only - missing the allowedClinicIds.includes(entry.clinicId) check every sibling route in this file applies",
+      "verifiedBy": "direct re-read of instagramInbox.ts:62-90 (clinic-scoped sibling pattern), :255-285 (allowedClinicIds check example), :768-796 (defective handler), and the InstagramInboxEntry Prisma model (prisma/schema.prisma:1938-1968) confirming the update() return shape",
+      "recommendedFix": "add getAllowedClinicIds(user) + allowedClinicIds.includes(entry.clinicId) check before the update call, matching every sibling handler in this file",
+      "recommendedTaskId": "F2-SEC-001",
+      "recommendedTaskTitle": "Enforce Clinic Membership on Instagram Inbox Status Mutation",
+      "patientDataExposed": "no patient data reproduced in this evidence document; only the code-path reasoning, field names, and schema shape are documented"
     },
     {
       "recordId": "TSI-108",
-      "title": "Legacy /api/public/whatsapp/* API has no tenant identification - always serves/mutates the single oldest clinic in the database",
+      "title": "Legacy /api/public/whatsapp/* API carries no tenant identification - always serves/mutates the single oldest clinic in the database",
       "file": "server/src/routes/whatsapp.ts",
-      "lines": "1089, 3832-3844 and 5 sibling routes",
+      "lines": "1089 (getDefaultClinic definition), 3832, 3848, 3864, 3879, 3913, 3962 (6 route registrations)",
       "classification": "VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX",
-      "scope": "cross-tenant (any organization holding the single global shared secret)",
-      "reproduction": "Any holder of the single global WHATSAPP_WEBHOOK_SECRET calls any of GET /services, /doctors, /availability, /appointment-lookup, POST /appointment-requests, /cancel-request under /api/public/whatsapp - every call resolves its target clinic via getDefaultClinic() (oldest Clinic row by createdAt), regardless of which clinic the caller's own integration is meant to serve.",
-      "rootCause": "getDefaultClinic() = prisma.clinic.findFirst({orderBy:{createdAt:'asc'}}) with no filter; authorizeWhatsappApi validates only a single global secret, carrying no clinic/org identity. Confirmed live-mounted at server/src/index.ts:183. Documented in docs/21-whatsapp-n8n-clinic-integration.md as a legacy, pre-multi-tenant-era integration contract that was never migrated when the platform became multi-tenant (contrast with the tenant-safe /evolution-webhook and metaWhatsAppWebhook.ts paths in the same codebase).",
-      "verifiedBy": "direct re-read of whatsapp.ts:1060-1100 and :3832-3844, server/src/index.ts:183, docs/21-whatsapp-n8n-clinic-integration.md",
-      "recommendedFix": "confirm this API is unused in current production integrations and remove it, or migrate it to the same per-connection tenant resolution the newer /evolution-webhook already uses",
-      "patientDataExposed": "no patient data reproduced in this evidence document; only the code-path reasoning is documented"
+      "scope": "tenant-resolution defect affecting every caller of this legacy API, not a caller-directed pick-any-tenant bypass (see crossOrgOrCrossClinic below)",
+      "routeRegistration": "6 registrations confirmed by direct grep of this baseline SHA: router.get('/services', authorizeWhatsappApi, ...) L3832; router.get('/doctors', ...) L3848; router.get('/availability', ...) L3864; router.get('/appointment-lookup', ...) L3879; router.post('/appointment-requests', ...) L3913; router.post('/cancel-request', ...) L3962. Mounted at app.use('/api/public/whatsapp', whatsappRoutes) - server/src/index.ts:183.",
+      "productionReachability": "live and unconditional - none of these 6 routes are gated by isLegacyFallbackEnabled() or any production/environment check. That gate (whatsapp.ts:1092 and :3760) guards two OTHER code paths in the same file and does NOT wrap these 6 handlers. They are reachable in every environment, including production, whenever WHATSAPP_WEBHOOK_SECRET is configured.",
+      "authMiddleware": "authorizeWhatsappApi only - validates a single global WHATSAPP_WEBHOOK_SECRET value against an Authorization or X-WhatsApp-Secret header; no user session, no clinic/org claim of any kind",
+      "secretSource": "process.env.WHATSAPP_WEBHOOK_SECRET - a single process-wide value, the SAME secret also used by the /evolution-webhook route in the same file (authorizeWhatsappWebhook uses the identical validateWhatsappApiSecret check)",
+      "secretGlobalOrTenantBound": "global - one secret for the entire deployment, not one per clinic/organization/connection",
+      "requestSuppliesTenantIdentity": "no - none of the 6 routes read a clinicId/tenant identifier from headers, query, or body to select the target clinic",
+      "storedConnectionMappingSuppliesTenantIdentity": "no - unlike /evolution-webhook (which resolves tenant via selectUniqueProviderConnection against a stored WhatsAppConnection row) and metaWhatsAppWebhook.ts, these 6 routes never consult any connection/mapping table at all",
+      "getDefaultClinicQuery": "const getDefaultClinic = async () => prisma.clinic.findFirst({ orderBy: { createdAt: 'asc' } }); - server/src/routes/whatsapp.ts:1089",
+      "choosesOldestClinicDbWide": "yes - unconditionally returns the single oldest Clinic row in the entire database, with no where-filter of any kind",
+      "exploitPreconditions": "caller must possess the single global WHATSAPP_WEBHOOK_SECRET value. By design this secret is intentionally shared with an external n8n workflow per docs/21-whatsapp-n8n-clinic-integration.md, so its exposure surface is inherently wider than a purely internal secret.",
+      "readEffects": "GET /services, /doctors, /availability, /appointment-lookup read appointment-type, doctor, availability-slot, and (by phone number) appointment data scoped only to getDefaultClinic()'s clinic. /appointment-lookup in particular returns a real patient's appointment date, time, service name, practitioner name, and status for the phone number queried.",
+      "writeEffects": "POST /appointment-requests and /cancel-request create real AppointmentRequest rows with clinicId hardcoded to getDefaultClinic()'s result",
+      "responseDataExposure": "appointment scheduling data (date/time/service/practitioner/status) for the queried phone number, always for whichever clinic happens to be the platform's oldest - never a caller-selected clinic",
+      "crossOrgOrCrossClinic": "tenant-resolution/misdirection defect, not a caller-directed 'choose any tenant' bypass - every caller, regardless of which clinic's integration they believe they configured, always reaches the SAME single oldest clinic. In any deployment with more than one clinic attempting to use this legacy contract, every clinic other than the oldest would silently receive/mutate the oldest clinic's data instead of its own.",
+      "patientDataExposed": "no patient data reproduced in this evidence document; only the code path, query shape, and field categories are documented - no actual patient name/phone/appointment record from any real database was copied here",
+      "rootCause": "getDefaultClinic() = prisma.clinic.findFirst({orderBy:{createdAt:'asc'}}) with no filter; authorizeWhatsappApi validates only a single global secret, carrying no clinic/org identity. Documented in docs/21-whatsapp-n8n-clinic-integration.md as a legacy, pre-multi-tenant-era integration contract that was never migrated when the platform became multi-tenant (contrast with the tenant-safe /evolution-webhook and metaWhatsAppWebhook.ts paths in the same codebase).",
+      "verifiedBy": "direct re-read of whatsapp.ts:190-215 (authorizeWhatsappApi/authorizeWhatsappWebhook share one secret check), :1089-1103 (getDefaultClinic + isLegacyFallbackEnabled gate scope), :3830-3980 (all 6 route bodies), server/src/index.ts:183, docs/21-whatsapp-n8n-clinic-integration.md:1-35",
+      "recommendedFix": "confirm this API is unused in current production integrations and remove it, or migrate it to the same per-connection tenant resolution the newer /evolution-webhook already uses (selectUniqueProviderConnection against a stored WhatsAppConnection row) before it can be considered safe for any multi-clinic deployment",
+      "recommendedTaskId": "F2-SEC-002",
+      "recommendedTaskTitle": "Remove Global Default-Clinic Resolution from Legacy WhatsApp Public API"
     }
   ],
   "falsePositiveRules": [
@@ -226,10 +379,11 @@
     "tests, fixtures, and migration scripts are out of scope for this inventory's route/job/worker focus and were not separately classified"
   ],
   "enforcementCandidates": [
-    { "priority": "high", "description": "Fix TSI-025: add allowedClinicIds membership check to PATCH /instagram/inbox/:id/status", "file": "server/src/routes/instagramInbox.ts" },
-    { "priority": "high", "description": "Resolve TSI-108: decide fate of the legacy /api/public/whatsapp/* API (remove if unused, or migrate to per-connection tenant resolution)", "file": "server/src/routes/whatsapp.ts" },
-    { "priority": "medium", "description": "Refactor local reimplementations of clinicScope.ts logic to call the canonical helpers directly, closing the drift risk that produced TSI-025", "files": ["server/src/routes/financeDashboard.ts", "server/src/routes/instagramInbox.ts", "server/src/routes/whatsappInbox.ts", "server/src/routes/operationalMonitoring.ts", "server/src/routes/organizationBranches.ts", "server/src/routes/organizationDashboard.ts", "server/src/routes/organizationInstagram.ts", "server/src/routes/organizationWhatsApp.ts", "server/src/routes/noShows.ts (dashboard route)", "server/src/routes/communicationPreferences.ts (aggregate routes)"] },
-    { "priority": "medium", "description": "Decide and explicitly allowlist (or redesign) the 4 jobs performing a cross-tenant updateMany/deleteMany with zero clinic predicate", "files": ["server/src/jobs/dataRetentionCleanupJob.ts", "server/src/jobs/imagingBridgeOfflineJob.ts", "server/src/jobs/externalCalendarOutboundSyncJob.ts (crash-recovery step)", "server/src/jobs/inboundEventRetryJob.ts (crash-recovery step)"] },
+    { "priority": "high", "taskId": "F2-SEC-001", "description": "Enforce Clinic Membership on Instagram Inbox Status Mutation - add allowedClinicIds membership check to PATCH /instagram/inbox/:id/status (TSI-025)", "file": "server/src/routes/instagramInbox.ts" },
+    { "priority": "high", "taskId": "F2-SEC-002", "description": "Remove Global Default-Clinic Resolution from Legacy WhatsApp Public API - decide fate of the legacy /api/public/whatsapp/* API (remove if unused, or migrate to per-connection tenant resolution) (TSI-108)", "file": "server/src/routes/whatsapp.ts" },
+    { "priority": "medium", "description": "Refactor local reimplementations of clinicScope.ts logic to call the canonical helpers directly, closing the drift risk noted for TSI-022 and structurally similar to the gap that produced TSI-025", "files": ["server/src/routes/financeDashboard.ts", "server/src/routes/instagramInbox.ts", "server/src/routes/whatsappInbox.ts", "server/src/routes/operationalMonitoring.ts", "server/src/routes/organizationBranches.ts", "server/src/routes/organizationDashboard.ts", "server/src/routes/organizationInstagram.ts", "server/src/routes/organizationWhatsApp.ts", "server/src/routes/noShows.ts (dashboard route)", "server/src/routes/communicationPreferences.ts (aggregate routes)"] },
+    { "priority": "low (product decision, not a security fix)", "description": "TSI-114 (dataRetentionCleanupJob.ts) is accepted as PLATFORM_GLOBAL_MAINTENANCE_ACCEPTED with one open POLICY_COUPLING question: should per-organization retention-period overrides be supported, or is one global KVKK/GDPR retention policy across all tenants the intended product design? This is a product/legal decision, not a tenant-isolation defect.", "file": "server/src/jobs/dataRetentionCleanupJob.ts" },
+    { "priority": "informational (no action required)", "description": "TSI-117, TSI-119, TSI-121 are bounded, status-field-only crash-recovery/heartbeat repairs (PLATFORM_GLOBAL_MAINTENANCE_ACCEPTED) - no cross-tenant leak, no unbounded mutation, no fix needed; retained here only so the classification rationale is discoverable alongside the other LEGACY_EXCEPTION_REQUIRES_ALLOWLIST records", "files": ["server/src/jobs/externalCalendarOutboundSyncJob.ts", "server/src/jobs/imagingBridgeOfflineJob.ts", "server/src/jobs/inboundEventRetryJob.ts"] },
     { "priority": "low", "description": "Scope the initial doctorId lookup directly in GET /appointments/available-slots for consistency (not currently exploitable)", "file": "server/src/routes/appointments.ts" },
     { "priority": "low", "description": "Add clinicId filter to the instagramConversationMessages query in GET /patients/:id for consistency with the adjacent whatsapp query (not currently exploitable)", "file": "server/src/routes/patients.ts" },
     { "priority": "low", "description": "Exclude cancelled/inactive clinics from the public booking clinic lookup, matching publicClinicKvkk.ts's stricter gate", "file": "server/src/routes/publicBooking.ts" }
@@ -243,10 +397,126 @@
     "128 files under server/src/services/ were not independently, exhaustively re-audited in this task - only invoked-from-route usage was inventoried (see limitations)"
   ],
   "limitations": [
-    "This inventory covers HTTP route entry points (64 files), background jobs/workers (14 files), and light-touch imaging routes (2 files). It does not independently, exhaustively audit all 128 files under server/src/services/ in isolation.",
+    "This inventory covers HTTP route entry points (all 64 files under server/src/routes/*.ts, including the 2 imaging light-touch files imaging.ts and imagingBridgePublic.ts, which are 2 of the 64, not additional files) and background jobs/workers (13 files under server/src/jobs/*.ts plus server/src/worker.ts = 14 physical files), producing 127 evidence records total (111 route-transport + 16 job/worker-transport). It does not independently, exhaustively audit all ~128 files under server/src/services/ in isolation - only service functions directly invoked from an inventoried route/job entry point were traced.",
+    "Webhook and public-integration routes ARE in scope and were inventoried (externalCalendarWebhook.ts, instagramWebhook.ts, metaWhatsAppWebhook.ts, whatsapp.ts's /evolution-webhook and its 6 legacy /api/public/whatsapp/* routes, imagingBridgePublic.ts, publicBooking.ts, publicClinicKvkk.ts) - these are exactly the routes that surfaced TSI-108 and informed several false-positive rules.",
+    "Scripts/CLI tools (server/scripts/*, if any), Prisma migrations, and seed data were explicitly out of scope and were not read or inventoried - this task's roots list only ever named route/job/worker/middleware/utility source files.",
+    "Test-only routes and test fixtures were out of scope for classification (see falsePositiveRules) - test files were only consulted to check for existing cross-tenant coverage of specific records (see testGaps), not inventoried as entry points themselves.",
+    "Frontend code (client/*) was explicitly out of scope per the task's CodeGraph focused-roots instruction and was not read.",
+    "Dynamic route registration: this inventory is based on static reads of each route file's literal router.get/post/patch/delete calls at this pinned SHA. It does not account for any hypothetical runtime route registration built from configuration or loops (none was observed in the files read, but a purely static pass cannot fully rule out an indirect registration path outside the read files).",
     "server/src/services/imaging/public.ts does not exist on this baseline SHA (confirmed via git ls-tree) - it is unmerged PR #304, with its own already-documented tenant-context gap tracked under F2-PREP-009/F2-IMPL-001-A_R1; not re-inventoried or counted in this task's totals.",
     "Cross-tenant test coverage fields marked 'unknown/not verified' reflect that no matching test file was found by filename/grep in the time available for this pass, not a confirmed absence of any test whatsoever - a follow-up could grep test bodies more exhaustively.",
     "No load/fuzz testing was performed; this is a static-source inventory based on direct file reads against the pinned worktree SHA.",
-    "Static analysis cannot prove a negative for every possible request shape; the two verified defects were confirmed by direct code reading and request-shape reasoning, not by executing a live exploit against a running instance."
+    "Static analysis cannot prove a negative for every possible request shape; the two verified defects were confirmed by direct code reading and request-shape reasoning, not by executing a live exploit against a running instance.",
+    "This inventory does not claim repository-wide completeness - it claims completeness only over the CodeGraph-scoped roots explicitly listed in the roots array above."
+  ],
+  "validationCommands": {
+    "workingDirectory": "the top-level directory of this task's git worktree (the checkout of branch docs/f2-guardrail-prep-010-b-tenant-scope-inventory)",
+    "commands": [
+      {
+        "id": 1,
+        "purpose": "JSON parse",
+        "command": "node -e \"JSON.parse(require('fs').readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json','utf8')); console.log('PARSE_OK')\"",
+        "expectedOutput": "PARSE_OK",
+        "nonZeroExitMeans": "malformed JSON - SyntaxError printed to stderr, exit 1"
+      },
+      {
+        "id": 2,
+        "purpose": "record-ID uniqueness",
+        "command": "node -e \"const d=require('./docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json');const ids=d.entryRecords.map(r=>r.recordId);const set=new Set(ids);console.log('count='+ids.length,'unique='+set.size,ids.length===set.size?'UNIQUE_OK':'DUPLICATE_FOUND')\"",
+        "expectedOutput": "count=127 unique=127 UNIQUE_OK",
+        "nonZeroExitMeans": "script itself only throws on missing file/parse error; a duplicate prints DUPLICATE_FOUND with matching exit 0 - inspect output text, not exit code, for this check"
+      },
+      {
+        "id": 3,
+        "purpose": "required-field validation",
+        "command": "node -e \"const d=require('./docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json');const req=['recordId','transport','file','methodOrSymbol','domain','roleGuard','scopeSource','helperUsed','userSuppliedClinicIdAccepted','accessibleClinicMembershipVerified','parentRecordScope','mutationPredicateScope','crossTenantTestCoverage','classification','recommendedEnforcementRule'];const missing=d.entryRecords.filter(r=>req.some(k=>!(k in r)));console.log(missing.length===0?'ALL_FIELDS_PRESENT':'MISSING_FIELDS:'+JSON.stringify(missing.map(m=>m.recordId)))\"",
+        "expectedOutput": "ALL_FIELDS_PRESENT",
+        "nonZeroExitMeans": "n/a - inspect printed text; script does not throw for missing fields, only for parse failure"
+      },
+      {
+        "id": 4,
+        "purpose": "classification enum validation",
+        "command": "node -e \"const d=require('./docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json');const allowed=new Set(['ACCEPTED_SCOPE_HELPER','ACCEPTED_SCOPED_PARENT_LOOKUP','ACCEPTED_SYSTEM_PER_CLINIC_ITERATION','RAW_DEFAULT_CLINIC_CONTEXT_ONLY','REQUEST_SUPPLIED_SCOPE_UNVERIFIED','UNSCOPED_RESOURCE_LOOKUP','LEGACY_EXCEPTION_REQUIRES_ALLOWLIST','UNRESOLVED','VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX']);const bad=d.entryRecords.filter(r=>!allowed.has(r.classification));console.log(bad.length===0?'ALL_CLASSIFICATIONS_VALID':'INVALID:'+JSON.stringify(bad.map(b=>[b.recordId,b.classification])))\"",
+        "expectedOutput": "ALL_CLASSIFICATIONS_VALID",
+        "nonZeroExitMeans": "n/a - inspect printed text"
+      },
+      {
+        "id": 5,
+        "purpose": "classification-total parity (declared vs. computed)",
+        "command": "node -e \"const d=require('./docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json');const computed={};d.entryRecords.forEach(r=>computed[r.classification]=(computed[r.classification]||0)+1);const declared=d.classificationTotals;let ok=true;Object.keys(declared).forEach(k=>{if(k==='total')return;const c=computed[k]||0;if(c!==declared[k]){ok=false;console.log('MISMATCH',k,'declared='+declared[k],'computed='+c)}});console.log('sumComputed='+Object.values(computed).reduce((a,b)=>a+b,0),'declaredTotal='+declared.total,ok?'TOTALS_MATCH':'TOTALS_MISMATCH')\"",
+        "expectedOutput": "sumComputed=127 declaredTotal=127 TOTALS_MATCH",
+        "nonZeroExitMeans": "n/a - inspect printed text for MISMATCH lines"
+      },
+      {
+        "id": 6,
+        "purpose": "Markdown/JSON record-ID parity (every TSI-id the MD narrative cites by name must exist in the JSON with a matching classification - the MD is a narrative summary, not an exhaustive per-record listing, so this is a subset/citation-accuracy check, not a requirement that all 127 ids appear in the MD)",
+        "command": "node -e \"const fs=require('fs');const d=require('./docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json');const md=fs.readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-B_TENANT_SCOPE_USAGE_AND_BYPASS_INVENTORY.md','utf8');const byId={};d.entryRecords.forEach(r=>byId[r.recordId]=r.classification);const mdIds=[...new Set((md.match(/TSI-\\\\d{3}/g)||[]))];const unknown=mdIds.filter(id=>!(id in byId));console.log('mdCitedIds='+mdIds.length,JSON.stringify(mdIds),unknown.length===0?'ALL_MD_CITATIONS_EXIST_IN_JSON':'UNKNOWN_IDS_CITED:'+JSON.stringify(unknown))\"",
+        "expectedOutput": "mdCitedIds=7 [\"TSI-025\",\"TSI-108\",\"TSI-022\",\"TSI-114\",\"TSI-117\",\"TSI-119\",\"TSI-121\"] ALL_MD_CITATIONS_EXIST_IN_JSON",
+        "nonZeroExitMeans": "n/a - inspect printed text for UNKNOWN_IDS_CITED"
+      },
+      {
+        "id": 7,
+        "purpose": "route/imaging/job-worker decomposition parity",
+        "command": "node -e \"const d=require('./docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json');const c=d.countReconciliation;const ok=(c.nonImagingRouteRecords+c.imagingLightTouchRecordsWithinRouteRecords+c.jobWorkerRecordsTotal)===c.totalRecords;console.log(c.nonImagingRouteRecords+' + '+c.imagingLightTouchRecordsWithinRouteRecords+' + '+c.jobWorkerRecordsTotal+' = '+(c.nonImagingRouteRecords+c.imagingLightTouchRecordsWithinRouteRecords+c.jobWorkerRecordsTotal),ok?'DECOMPOSITION_OK':'DECOMPOSITION_MISMATCH')\"",
+        "expectedOutput": "109 + 2 + 16 = 127 DECOMPOSITION_OK",
+        "nonZeroExitMeans": "n/a - inspect printed text"
+      },
+      {
+        "id": 8,
+        "purpose": "job-classification decomposition parity",
+        "command": "node -e \"const d=require('./docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json');const j=d.countReconciliation.jobWorkerClassificationDecomposition;const sum=j.acceptedSystemPerClinicIteration+j.legacyExceptions+j.verifiedSecurityDefects+j.otherJobClassifications;console.log(sum,'vs jobWorkerRecordsTotal='+d.countReconciliation.jobWorkerRecordsTotal,sum===d.countReconciliation.jobWorkerRecordsTotal?'JOB_DECOMPOSITION_OK':'JOB_DECOMPOSITION_MISMATCH')\"",
+        "expectedOutput": "16 vs jobWorkerRecordsTotal=16 JOB_DECOMPOSITION_OK",
+        "nonZeroExitMeans": "n/a - inspect printed text"
+      },
+      {
+        "id": 9,
+        "purpose": "physical jobs-file count",
+        "command": "ls server/src/jobs/*.ts | wc -l",
+        "expectedOutput": "13",
+        "nonZeroExitMeans": "non-zero only if server/src/jobs/ does not exist or glob matches nothing"
+      },
+      {
+        "id": 10,
+        "purpose": "final TSI range",
+        "command": "node -e \"const d=require('./docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json');const ids=d.entryRecords.map(r=>r.recordId).sort();console.log('first='+ids[0],'last='+ids[ids.length-1])\"",
+        "expectedOutput": "first=TSI-001 last=TSI-127",
+        "nonZeroExitMeans": "n/a - inspect printed text"
+      },
+      {
+        "id": 11,
+        "purpose": "changed-file scope (proves evidence-only, no runtime/schema/CI/package changes)",
+        "command": "git diff origin/main --name-only",
+        "expectedOutput": "exactly 2 lines: docs/program/evidence/F2-GUARDRAIL-PREP-010-B_TENANT_SCOPE_USAGE_AND_BYPASS_INVENTORY.md and docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json",
+        "nonZeroExitMeans": "non-zero only on a git/repository error; extra file names in output (not exit code) indicate scope creep"
+      },
+      {
+        "id": 12,
+        "purpose": "forbidden absolute local path check (no machine-specific paths leaked into evidence)",
+        "command": "grep -n \"E:/Ek Gelir\\|E:\\\\\\\\Ek Gelir\\|C:\\\\\\\\Users\\\\\\\\\" docs/program/evidence/F2-GUARDRAIL-PREP-010-B_TENANT_SCOPE_USAGE_AND_BYPASS_INVENTORY.md docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json",
+        "expectedOutput": "no output (grep exit 1 = no match = pass)",
+        "nonZeroExitMeans": "grep exit 1 means NO match found, which is the PASSING result for this check. CAVEAT: because this JSON file documents its own validation commands as literal text (this very command string), grepping the JSON will always self-match this command's own pattern text and the workingDirectory description's mention of the pattern - that self-match is expected and is NOT a real path leak. A real finding is a match in prose OUTSIDE the validationCommands block (e.g. in an entryRecord's file path, a reproduction step, or a note)."
+      },
+      {
+        "id": 13,
+        "purpose": "sensitive-data/secret-pattern sanity check (no real secrets, tokens, or patient PII copied into evidence)",
+        "command": "grep -niE \"WHATSAPP_WEBHOOK_SECRET *=|api[_-]?key *[:=] *['\\\"a-z0-9]{10,}|password *[:=]|-----BEGIN\" docs/program/evidence/F2-GUARDRAIL-PREP-010-B_TENANT_SCOPE_USAGE_AND_BYPASS_INVENTORY.md docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json",
+        "expectedOutput": "no output (grep exit 1 = no match = pass; references to the env-var NAME 'WHATSAPP_WEBHOOK_SECRET' without an assigned value are expected and fine)",
+        "nonZeroExitMeans": "grep exit 1 = pass. CAVEAT: this JSON documents its own command pattern as literal text, so a self-match against this command string's own bytes is expected and not a real leak. A real finding is a match of an actual secret VALUE (not just a pattern name or env-var name) elsewhere in either file."
+      }
+    ]
+  },
+  "reviewThreadResolutions": [
+    {
+      "threadCommentId": 3705959120,
+      "path": "docs/program/evidence/F2-GUARDRAIL-PREP-010-B_TENANT_SCOPE_USAGE_AND_BYPASS_INVENTORY.md",
+      "concern": "stale TSI-001...TSI-120 range in a verification bullet, inconsistent with the document's own TSI-127 total",
+      "resolution": "corrected the verification-methodology bullet to read TSI-001...TSI-127; countReconciliation.finalRecordIdRange added above as the single source of truth for the final range"
+    },
+    {
+      "threadCommentId": 3705959158,
+      "path": "docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json",
+      "concern": "roots array claimed 12 files under server/src/jobs/*.ts while the repository contains 13",
+      "resolution": "corrected roots[6] to 'server/src/jobs/*.ts (13 files)'; countReconciliation.physicalJobFiles=13 added as the single source of truth, reconciled against physicalWorkerFiles=1 and jobWorkerRecordsTotal=16"
+    }
   ]
 }
