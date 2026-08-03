@@ -35,9 +35,9 @@
     "markStorageMissing": "(imageId: string): Promise<void>",
     "redactForAnonymization": "(imageId: string, reason: RedactionReason): Promise<void>",
     "getImagesForLifecycleReview": "(clinicId: string, patientId: string): Promise<ImagingLifecycleImageDto[]>",
-    "checkImageStorageExists": "(imageId: string, fileExistsForTest?: (ref: string) => Promise<boolean>): Promise<boolean>",
+    "checkImageStorageExists": "(imageId: string): Promise<boolean>",
     "signaturesAlteredFromAccepted": false,
-    "checkImageStorageExistsNote": "Trailing optional test-only parameter, defaulted, never passed by production code; additive, not an alteration of the accepted 1-argument production call shape."
+    "checkImageStorageExistsNote": "CORRECTED 2026-08-03 (see statusCorrection below). As originally merged this method carried an additional optional trailing fileExistsForTest parameter, which was signature drift from the accepted 1-argument contract despite being optional/defaulted/test-only. Fixed by moving the test override to a module-private variable settable only via the separately-named, non-accepted-contract export __setImagingStorageExistenceCheckerForTest. The method now matches the accepted signature exactly."
   },
   "excludedSurfaces": ["LinkImagingStudy", "UpdateImagingRequest", "CancelImagingRequest"],
   "tenantEnforcement": {
@@ -47,7 +47,8 @@
       "ambientTenantContextMechanismExists": false,
       "blockedTenantContextContractInsufficientConsidered": true,
       "blockedTenantContextContractInsufficientTriggered": false,
-      "regressionVsCurrentDirectCallers": "strictly stronger — current callers (markConfirmedMissing, redactPatientImagingImages) perform zero re-check at the point of mutation"
+      "regressionVsCurrentDirectCallers": "strictly stronger — current callers (markConfirmedMissing, redactPatientImagingImages) perform zero re-check at the point of mutation",
+      "CORRECTED_2026_08_03": "This entire block describes a data-integrity consistency check (does ImagingImage.clinicId agree with its own ImagingStudy.clinicId), NOT caller tenant authorization. No field in this block is compared against any caller-supplied value — none of the three imageId-only methods' accepted signatures carry one. blockedTenantContextContractInsufficientTriggered is corrected to true as of this update. See statusCorrection.tenantAuthorizationGap below and the evidence doc's §26.1."
     }
   },
   "dto": {
@@ -131,9 +132,10 @@
     "prOpened": true,
     "merged": false,
     "deployed": false,
-    "productionVerified": false
+    "productionVerified": false,
+    "CORRECTED_2026_08_03_overallStatus": "BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT"
   },
-  "nextTask": "Stage 2 (OVL-01 convergence + ImagingRequest PATCH/cancel concurrency hardening) - not started, not authorized by this task",
+  "nextTask": "SUPERSEDED 2026-08-03 — see statusCorrection.nextTask. Original value (no longer current): Stage 2 (OVL-01 convergence + ImagingRequest PATCH/cancel concurrency hardening) - not started, not authorized by this task",
   "preMergeReconciliation": {
     "mainAdvancedTo": "37923ea814c14a38b158f9dc424e229458caa7ad",
     "advancingPr": 302,
@@ -142,6 +144,54 @@
     "resolution": "manual, both branches' new script keys preserved",
     "mergeCommit": "9904b04db698b656b72117630020a7819349bb17",
     "postMergeValidationRerun": true,
-    "finalPrHeadSha": "9904b04db698b656b72117630020a7819349bb17"
+    "finalPrHeadSha": "9904b04db698b656b72117630020a7819349bb17",
+    "note": "First of two reconciliations. See preMergeReconciliation2 below for the final PR head."
+  },
+  "preMergeReconciliation2": {
+    "mainAdvancedTo": "d3c2df6204e9f6849ebbc6f85251b372f92851fb",
+    "advancingPr": 303,
+    "mergeConflicts": 1,
+    "conflictedFile": "server/package.json",
+    "resolution": "manual, both branches' new script keys preserved (test:report-export-foundation added to server:test:non-disposable by PR #303)",
+    "mergeCommit": "f8a37b72c4cc1800126b67e451e35238080cfe17",
+    "postMergeValidationRerun": true,
+    "finalPrHeadSha": "f8a37b72c4cc1800126b67e451e35238080cfe17"
+  },
+  "statusCorrection": {
+    "date": "2026-08-03",
+    "correctedStatus": "BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT",
+    "priorReportedStatus": "AGENT_COMPLETED / TESTS_PASSED / PR_OPENED_AWAITING_REVIEW",
+    "findings": [
+      {
+        "id": "F2-IMPL-001-A-FINDING-1",
+        "severity": "blocking",
+        "title": "Tenant authorization is not enforced for the three imageId-only methods",
+        "summary": "findOwnedImage() checks ImagingImage.clinicId against its own ImagingStudy.clinicId — a data-integrity consistency check, not caller tenant authorization. No caller-supplied clinicId/principal/context exists anywhere in the accepted signatures of markStorageMissing, redactForAnonymization, or checkImageStorageExists to check the resolved clinicId against.",
+        "confirmedTriggerOfEscapeHatch": "BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT",
+        "codeChangeMade": false,
+        "reasonNoCodeChangeMade": "mandatory action explicitly forbids papering over this finding inside the current accepted contract; resolution requires a contract amendment (F2-PREP-009), not a facade-internal fix"
+      },
+      {
+        "id": "F2-IMPL-001-A-FINDING-2",
+        "severity": "blocking",
+        "title": "checkImageStorageExists shipped with signature drift from the accepted contract",
+        "summary": "Accepted signature is (imageId: string): Promise<boolean>. Implementation added an optional trailing fileExistsForTest parameter, which is a public contract change regardless of being optional/defaulted/test-only.",
+        "codeChangeMade": true,
+        "fix": "Removed the parameter. checkImageStorageExists is now exactly (imageId: string): Promise<boolean>. Test-only failure injection moved to a module-private variable settable only via the separate, non-accepted-contract export __setImagingStorageExistenceCheckerForTest(override)."
+      }
+    ],
+    "mandatoryActionsTaken": [
+      "Stopped implementation expansion (no tenant-context parameter added, no ambient-context mechanism invented, no caller wired to the facade)",
+      "Recorded BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT as the current status",
+      "Proposed F2-PREP-009 as a distinct docs/architecture-only follow-up task (see evidence doc §26.4)",
+      "Removed the fileExistsForTest optional parameter from the public checkImageStorageExists method",
+      "Left PR #304 open, unmerged, marked blocked rather than closing or merging it"
+    ],
+    "prHandling": {
+      "prNumber": 304,
+      "action": "left open, marked blocked",
+      "willNotMergeUntil": "F2-PREP-009 is authorized and this facade's three affected methods are brought into conformance with the amended contract"
+    },
+    "nextTask": "F2-PREP-009 — ImagingLifecyclePort Tenant Context Contract Amendment (docs/architecture-only, separate PR from #304). Not Stage 2."
   }
 }

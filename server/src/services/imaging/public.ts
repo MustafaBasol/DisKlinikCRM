@@ -18,22 +18,28 @@
  * `UpdateImagingRequest`/`CancelImagingRequest` (CT-32/CR-03 surface) — both
  * remain unresolved, pre-contract-exposure blockers.
  *
- * Tenant/KVKK note (imageId-only methods): the accepted F2-CC-14 signature
- * carries no clinicId parameter for markStorageMissing/redactForAnonymization/
- * checkImageStorageExists. Per the accepted design, the only in-contract way
- * a caller obtains an imageId is via getImagesForLifecycleReview(clinicId,
- * patientId), which is itself clinicId-scoped — tenant safety for the three
- * imageId-only methods is therefore provenance-based (by workflow), not a
- * runtime comparison against a caller-supplied tenant value (no such value
- * exists in the accepted signature). Every one of the three methods still
- * re-derives ownership through the ImagingImage -> ImagingStudy -> clinicId
- * relation before any read/mutation and fails closed (ImagingNotFoundError,
- * deliberately indistinguishable from a genuinely-missing row) if that
- * traversal does not resolve to a consistent clinicId — never a bare
- * `where: { id: imageId }` mutation. This is a strictly additional check:
- * today's equivalent direct-Prisma callers (orphanFileInspection.ts's
- * markConfirmedMissing, patientAnonymization.ts's redactPatientImagingImages)
- * perform no re-check at all at the point of mutation.
+ * ⚠ KNOWN GAP — TENANT AUTHORIZATION IS NOT ENFORCED (status corrected
+ * 2026-08-03; see docs/program/evidence/F2-IMPL-001-A_* and the proposed
+ * F2-PREP-009 contract amendment). The accepted F2-CC-14 signature carries
+ * no clinicId/principal/context parameter for markStorageMissing/
+ * redactForAnonymization/checkImageStorageExists. Every one of the three
+ * methods re-derives ImagingImage.clinicId against its own
+ * ImagingStudy.clinicId before any read/mutation and fails closed
+ * (ImagingNotFoundError, indistinguishable from a genuinely-missing row) if
+ * those two stored values disagree — but that is a DATA-INTEGRITY
+ * CONSISTENCY CHECK, not caller tenant authorization: there is no caller
+ * clinicId, principal, or scoped context anywhere in these three signatures
+ * to check the resolved clinicId against. A caller holding a valid imageId
+ * belonging to another tenant can read/mutate that image today as long as
+ * the image/study clinicIds are internally consistent (which they always
+ * are for every non-corrupted row). The claim that imageId values are only
+ * obtainable via the clinicId-scoped getImagesForLifecycleReview query is a
+ * workflow convention, not an enforced boundary — nothing in this module
+ * prevents a caller from invoking these three methods with an imageId it
+ * obtained any other way. This module is additive and has zero production
+ * callers (see unused-facade proof below); no caller may be wired to it
+ * until F2-PREP-009 defines and this file implements an enforceable tenant
+ * model.
  *
  * Audit ownership: this facade performs no audit/activity-log writes. Audit
  * ownership remains with the calling service, matching current behavior
@@ -237,28 +243,43 @@ export async function getImagesForLifecycleReview(
 }
 
 /**
+ * Module-private dependency factory for the storage-existence check.
+ * Defaults to the real fileStorage.ts implementation. Overridable ONLY via
+ * `__setImagingStorageExistenceCheckerForTest` below, which is a distinct,
+ * clearly-non-accepted-contract export — never a parameter on
+ * `checkImageStorageExists` itself. This keeps the accepted F2-CC-14
+ * signature (`checkImageStorageExists(imageId: string): Promise<boolean>`)
+ * exactly as accepted, with zero drift, even an additive/optional one.
+ */
+let storageExistenceChecker: (ref: string) => Promise<boolean> = fileExists;
+
+/**
+ * Test-only hook. NOT part of the accepted ImagingLifecyclePort four-method
+ * slice — never call this from production code. Exists solely so a unit
+ * test can deterministically force a storage-provider failure without a
+ * live S3-compatible endpoint, without altering `checkImageStorageExists`'s
+ * accepted single-parameter signature. Pass `null` to restore the real
+ * fileStorage.ts implementation.
+ */
+export function __setImagingStorageExistenceCheckerForTest(
+  override: ((ref: string) => Promise<boolean>) | null,
+): void {
+  storageExistenceChecker = override ?? fileExists;
+}
+
+/**
  * Verifies ownership before touching storage, then delegates entirely to the
  * existing fileStorage.ts abstraction (no S3/local branching here). A
  * provider failure (fileExists throwing on an unexpected, non-404-shaped
  * error) is converted to the facade's own sanitized error — never a raw
  * provider exception, never the storage key, crossing this boundary.
- *
- * `fileExistsForTest` is a test-only override for the storage-existence
- * check, never passed by any production call site (mirrors
- * fileStorage.ts's own `chmodForTest`/`findArchiveForTest` convention) — it
- * exists so a unit test can deterministically force a provider failure
- * without a live S3-compatible endpoint.
  */
-export async function checkImageStorageExists(
-  imageId: string,
-  fileExistsForTest?: (ref: string) => Promise<boolean>,
-): Promise<boolean> {
+export async function checkImageStorageExists(imageId: string): Promise<boolean> {
   const image = await findOwnedImage(imageId);
   if (!image) throw new ImagingNotFoundError();
 
-  const checkExists = fileExistsForTest ?? fileExists;
   try {
-    return await checkExists(image.filePath);
+    return await storageExistenceChecker(image.filePath);
   } catch {
     throw new ImagingStorageUnavailableError();
   }

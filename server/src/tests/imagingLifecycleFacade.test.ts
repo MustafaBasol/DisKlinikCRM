@@ -37,6 +37,7 @@ import {
   ImagingLegalHoldViolationError,
   ImagingStorageUnavailableError,
   ImagingInvalidRedactionReasonError,
+  __setImagingStorageExistenceCheckerForTest,
   type ImagingLifecycleImageDto,
   type RedactionReason,
 } from '../services/imaging/public.js';
@@ -118,15 +119,15 @@ async function main() {
       assert.equal(typeof checkImageStorageExists, 'function');
     });
 
-    await test('markStorageMissing/redactForAnonymization/checkImageStorageExists take exactly 1 required parameter (imageId), matching the accepted signature', () => {
-      // checkImageStorageExists has 1 additional test-only optional param
-      // (fileExistsForTest, never passed by production code) — .length only
-      // counts parameters before the first default/optional trailing one is
-      // irrelevant here since none have a default; all three commands/
-      // queries below declare exactly the accepted arity.
+    await test('the four accepted methods declare exactly the accepted arity, with zero signature drift', () => {
       assert.equal(markStorageMissing.length, 1);
       assert.equal(redactForAnonymization.length, 2);
       assert.equal(getImagesForLifecycleReview.length, 2);
+      assert.equal(
+        checkImageStorageExists.length,
+        1,
+        'checkImageStorageExists must remain exactly (imageId: string) — no optional trailing test parameter',
+      );
     });
 
     await test('exports a closed RedactionReason validator and the typed-error classes', () => {
@@ -379,13 +380,16 @@ async function main() {
         throw new Error('simulated provider outage with a raw internal detail that must never leak');
       };
 
+      __setImagingStorageExistenceCheckerForTest(failingFileExists);
       try {
-        await checkImageStorageExists(image.id, failingFileExists);
+        await checkImageStorageExists(image.id);
         assert.fail('expected ImagingStorageUnavailableError');
       } catch (err) {
         assert.ok(err instanceof ImagingStorageUnavailableError);
         assert.ok(!/simulated provider outage/.test((err as Error).message));
         assert.ok(!(err as Error).message.includes(image.filePath));
+      } finally {
+        __setImagingStorageExistenceCheckerForTest(null);
       }
     });
 
@@ -395,8 +399,13 @@ async function main() {
         storageCheckCalled = true;
         return true;
       };
-      await assert.rejects(() => checkImageStorageExists(randomUUID(), spyFileExists), ImagingNotFoundError);
-      assert.equal(storageCheckCalled, false, 'storage must never be touched before ownership is confirmed');
+      __setImagingStorageExistenceCheckerForTest(spyFileExists);
+      try {
+        await assert.rejects(() => checkImageStorageExists(randomUUID()), ImagingNotFoundError);
+        assert.equal(storageCheckCalled, false, 'storage must never be touched before ownership is confirmed');
+      } finally {
+        __setImagingStorageExistenceCheckerForTest(null);
+      }
     });
 
     // ── 12. No raw Prisma model exposure (source-scan) ────────────────────

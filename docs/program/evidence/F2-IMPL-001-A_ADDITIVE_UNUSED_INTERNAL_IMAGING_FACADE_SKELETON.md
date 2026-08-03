@@ -3,7 +3,9 @@
 **Phase:** F2 — Modular Monolith Guardrails / Imaging Early Implementation Gate.
 **Parent authorization:** [F2-PREP-008_STAGE1_IMAGING_FACADE_PREP_AND_AUTHORIZATION.md](F2-PREP-008_STAGE1_IMAGING_FACADE_PREP_AND_AUTHORIZATION.md) §9/§16 (`AUTHORIZED_FOR_STAGE_1_IMPLEMENTATION`), [F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md](../architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md) §9 (F2-CC-14 `ACCEPTED_AND_REVISED`).
 **Type:** Application code (one new file) + focused tests + additive `server/package.json` wiring + additive program-control documentation. No route/schema/migration/CI-workflow file touched.
-**Status:** `AGENT_COMPLETED` / `TESTS_PASSED` / `PR_OPENED_AWAITING_REVIEW`. Not merged, not deployed, not production-verified.
+**Status:** `BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT` (corrected 2026-08-03 — see §26). Not merged, not deployed, not production-verified. PR #304 remains open, marked blocked, not to be merged until F2-PREP-009 (§26.4) is authorized and this facade is brought into conformance with its amended contract.
+
+> **⚠ 2026-08-03 correction notice.** A subsequent architectural review identified two defects in the implementation originally recorded by §1–§25 below: (1) the tenant-safety mechanism described in §5/§6/§20 as "genuine ... enforcement" is in fact a data-integrity consistency check, not caller tenant authorization (§26.1), and (2) `checkImageStorageExists` shipped with an undisclosed-as-drift optional trailing parameter not present in the accepted signature (§26.2). §1–§25 are preserved unmodified below as the historical record of the original implementation and its (now-superseded) reasoning — do not treat their tenant-safety claims as current. §26 is the authoritative, current status.
 
 ---
 
@@ -246,3 +248,69 @@ Final PR head SHA: `9904b04db698b656b72117630020a7819349bb17`.
 ## 25. Exact next task
 
 Stage 2 (`OVL-01` convergence + `ImagingRequest` PATCH/cancel concurrency hardening, i.e. `CR-03`/`BLK-02`/`FP-06` resolution) per the accepted `F2-PREP-006-E` expand-migrate-contract sequence — a distinct, separately-gated future task, not started, not authorized to start by this task. Stage 3 (Privacy/KVKK caller migration onto this facade) remains blocked behind Stage 2 and is likewise not started or authorized here.
+
+**⚠ Superseded by §26 — the exact next task is now F2-PREP-009 (§26.4), not Stage 2.** §25 is preserved unmodified as the original record.
+
+---
+
+## 26. STATUS CORRECTION — 2026-08-03
+
+A subsequent architectural review of this PR (still at head `f8a37b72c4cc1800126b67e451e35238080cfe17` before this correction's own commit) identified two defects not caught by the original implementation or its own test suite. Both are recorded here in full; §1–§25 above are left unmodified as the historical record.
+
+### 26.1 Blocking finding 1 — tenant authorization is not enforced
+
+**Claim in §5/§6/§20 that this facade provides "genuine ... tenant enforcement" for the three `imageId`-only methods is incorrect. It provides a data-integrity consistency check, not caller tenant authorization.**
+
+`findOwnedImage()` re-derives `ImagingImage.clinicId` and compares it against its own `ImagingStudy.clinicId`, rejecting only when those two *stored* values disagree with each other. Neither value is ever compared against anything the *caller* supplied — because for `markStorageMissing(imageId)`, `redactForAnonymization(imageId, reason)`, and `checkImageStorageExists(imageId)`, the accepted F2-CC-14 signature carries no `clinicId`, principal, or scoped-context parameter, and no ambient tenant-context mechanism exists anywhere in this codebase (confirmed absent in the original §5 investigation, unchanged here). There is therefore nothing to authorize the caller's tenant *against* — only an internal check that the row itself is not corrupted.
+
+Concretely: a caller that supplies a valid `imageId` belonging to another clinic can read (`checkImageStorageExists`) or mutate (`markStorageMissing`, `redactForAnonymization`) that image today, as long as the image's own `clinicId` and its study's `clinicId` agree with each other — which they always do for every row created through normal application flow (both are set together at creation; the test suite's own "denormalized clinicId/study.clinicId mismatch" case in §6 of the test file requires manually corrupting a row via a direct `prisma.imagingImage.update` to trigger a rejection at all — no real cross-tenant caller scenario is exercised by any passing test).
+
+§5/§6's own defense of this — "the only in-contract way a caller obtains an `imageId` is via `getImagesForLifecycleReview(clinicId, patientId)`, which is itself clinicId-scoped" — is a **workflow convention**, not an **enforced boundary**. Nothing in `public.ts` prevents any caller, present or future, from invoking the three `imageId`-only methods with an `imageId` obtained any other way (a URL param, a stored reference, another table, operator error). A convention about how a well-behaved caller is *expected* to obtain the identifier is not a substitute for the callee checking the caller's authority.
+
+The original task's own instruction was explicit: *"If the accepted contract does not provide enough context to enforce tenant ownership safely for imageId-only signatures, stop and report: `BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT`. Do not weaken the design merely to make the method signatures compile."* §5 records that this condition was "seriously considered" and explicitly chose not to trigger it, reasoning that the F2-PREP-008 evidence document had already authorized this exact mechanism as sufficient. That reasoning is now determined to have been wrong: F2-PREP-008's "at least as strong as today" comparison is true only in the narrow sense that today's direct-Prisma callers also perform no caller-tenant check at their mutation point — but today's callers are reached only through routes that already apply their own request-scoped clinic authorization *before* calling into the service layer. This facade has no equivalent upstream gate (it has zero callers), and — critically — is being built specifically so that a *future* caller can be wired to it. Authorizing a mechanism by comparing it only to code paths that happen to have an external gate this facade doesn't have and won't inherit automatically was the error. **The condition described by the original task's escape hatch is now confirmed to apply.**
+
+This is a genuine defect, not a hypothetical: it means this facade, exactly as merged into PR #304 today, must not be wired to any caller until the accepted contract itself is amended to supply an enforceable authorization channel (§26.4).
+
+### 26.2 Blocking finding 2 — accepted signature was changed (corrected in this update)
+
+The accepted signature is `checkImageStorageExists(imageId: string): Promise<boolean>`. The implementation as originally merged into this branch exposed `checkImageStorageExists(imageId: string, fileExistsForTest?: (ref: string) => Promise<boolean>): Promise<boolean>`. Even though the second parameter was optional, defaulted, and never passed by any production call site, this is a change to the accepted method's public signature — the same trailing-optional-test-parameter pattern is idiomatic elsewhere in this repository (`fileStorage.ts`'s `chmodForTest`/`findArchiveForTest`, `clinicBulkExportPackage.ts`'s `uploadForTest`/`deleteForTest`), but none of those functions are bound to an externally accepted, frozen contract signature the way this one is. §3/§9's framing of this as "additive dependency injection in the established repository convention, not an alteration" is incorrect for this specific method.
+
+**Fix applied in this correction (commit following this document's own update):** `checkImageStorageExists` is now exactly one parameter, `(imageId: string): Promise<boolean>`, matching the accepted signature with zero drift. The storage-existence check is now injected via a module-private variable (`storageExistenceChecker`) settable only through a distinct, separately-named, explicitly-not-part-of-the-accepted-contract export, `__setImagingStorageExistenceCheckerForTest(override)`, called by the two tests that previously passed a function argument directly (`imagingLifecycleFacade.test.ts`, "sanitizes a storage-provider failure ..." and "verifies ownership before touching storage ..."), each wrapped in `try/finally` to restore the real implementation afterward. This fix is a compliance restoration to the accepted contract shape, not new scope — it does not touch finding 1.
+
+### 26.3 What was NOT done
+
+Per the mandatory action to not paper over finding 1: no `clinicId`/context parameter was added to any of the three affected methods, no ambient-context mechanism was invented, and no caller was wired to this facade. The facade's code otherwise remains exactly as originally implemented (§4–§14 unchanged) except for the finding-2 fix in §26.2. Implementation expansion is stopped pending F2-PREP-009.
+
+### 26.4 Proposed follow-up task — F2-PREP-009
+
+**F2-PREP-009 — ImagingLifecyclePort Tenant Context Contract Amendment.** A distinct, docs/architecture-only task (not implemented here) to amend the F2-CC-14 `ImagingLifecyclePort` contract so the three `imageId`-only methods have an enforceable authorization channel. The amendment must choose and justify exactly one of:
+
+- **(A) Explicit `clinicId`/context parameter on all `imageId` operations (preferred):** `markStorageMissing(clinicId, imageId)`, `redactForAnonymization(clinicId, imageId, reason)`, `checkImageStorageExists(clinicId, imageId)` — the caller-supplied `clinicId` is compared against the re-derived one, and only agreement between all three (caller-supplied, `ImagingImage.clinicId`, `ImagingStudy.clinicId`) permits the operation.
+- **(B) A context-bound port instance** created from an already-authorized tenant/principal context (e.g. `createImagingLifecyclePort(context)`), whose returned methods retain `imageId`-only signatures but are bound to a verified clinic scope at construction time, with that binding itself independently enforced (not merely trusted).
+
+The amendment document must define, at minimum: the tenant-context source and how it is established as authorized before reaching the port; the principal-vs-system-context distinction and exact rules for any genuinely privileged/system caller; the exact fail-closed DB predicates (building on, not discarding, this task's own `findOwnedImage` re-derivation); confirmation of no cross-tenant existence leakage; audit ownership; DTO/storage-key exposure rules; caller-migration implications for the existing three direct-Prisma callers; backward compatibility; rollback; and the required test set (including an actual cross-tenant-caller test, not only the data-corruption simulation this task's suite currently has).
+
+**Sequencing:** F2-PREP-009 should be opened as its own, separate, docs-only PR (not part of PR #304). PR #304 stays open, unmerged, explicitly marked blocked, and is not touched further until F2-PREP-009 is authorized — at which point #304 is reconciled with `main` and the facade's three affected methods are brought into conformance with the amended contract in a follow-up implementation task.
+
+### 26.5 Revised status matrix
+
+| Field | Value |
+|---|---|
+| Agent completed | true (original implementation + this correction) |
+| Tests passed | true (25/25 facade, 103/103 imaging regression, 38/38 privacy regression — all re-run after the §26.2 fix) |
+| Tenant authorization enforced (3 `imageId`-only methods) | **false — confirmed gap, §26.1** |
+| PR opened | true (#304, unmerged) |
+| Merged | false |
+| Deployed | false |
+| Production verified | false |
+| **Overall status** | **`BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT`** |
+
+### 26.6 Revised answers — merge safe? deployment safe?
+
+**Is merge safe?** No, as a matter of program-control status: this task is now `BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT`, and merging a facade with a confirmed, undocumented-until-now tenant-authorization gap — even one with zero current callers — records it as an accepted, unblocked design, which it is not. It should not be merged until F2-PREP-009 is authorized and this facade is brought into conformance (or the PR is explicitly re-labeled to make the gap and its zero-caller mitigation an accepted, reviewed trade-off, which is a program-owner decision, not an agent one).
+
+**Is deployment safe?** Not applicable — this PR still has zero production callers, so merging it (whenever that becomes appropriate) still changes no deployable runtime behavior. The concern is a design/authorization-boundary correctness issue for the module as written, not a runtime risk from merging as-is.
+
+### 26.7 Exact next task (supersedes §25)
+
+**F2-PREP-009 — ImagingLifecyclePort Tenant Context Contract Amendment** (§26.4), a separate docs/architecture-only task. Not Stage 2. Not started here, not authorized to start here.
