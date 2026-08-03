@@ -41,7 +41,8 @@
     "backwardCompatibility": "no production backward-compatibility obligation - F2-IMPL-001-A (PR #304) has zero callers and is unmerged; this is a pre-merge contract correction, not a breaking API change",
     "rollback": "documentation-only revert of this proposal (no app/schema/CI file touched); rollback of a future re-implementation remains single-file delete/revert per F2-IMPL-001-A's own established rollback plan",
     "requiredTests": [
-      "cross-tenant rejection for all 4 methods (Clinic A caller, Clinic B imageId) -> ImagingNotFoundError / empty result, no data leak, no distinguishable error shape",
+      "cross-tenant rejection, case A (markStorageMissing, redactForAnonymization, checkImageStorageExists): call with Clinic A's authorized clinicId + Clinic B's valid imageId -> ImagingNotFoundError, indistinguishable from genuinely-missing imageId",
+      "cross-tenant rejection, case B (getImagesForLifecycleReview): call with Clinic A's authorized clinicId + Clinic B's patientId -> empty result array, no Clinic B data",
       "same-clinic success unaffected - full existing assertion suite re-run with correct clinicId",
       "denormalization-mismatch-within-caller's-own-clinic still fails closed",
       "no existence side-channel across all not-found causes",
@@ -52,7 +53,9 @@
     "required": true,
     "amendedCheckImageStorageExistsMustBeExactly": "(clinicId: string, imageId: string): Promise<boolean>",
     "replacementTechniqueDecision": "deferred to re-implementation task - module-private helper / internal dependency factory / repository-native module-mock interception / real controlled-failure fixture, justified against existing test-suite conventions",
-    "statusOnCurrentPr304Head": "CORRECTED_ON_CURRENT_PR304_HEAD (abac5e361abd0913dadbce1e124c2ca113600fb7) - fileExistsForTest no longer exists as a parameter; see pr304HeadReconciliation. checkImageStorageExists is still missing the required clinicId parameter (Finding 1 / this amendment), independent of this fix."
+    "statusOnCurrentPr304Head": "CORRECTED_ON_CURRENT_PR304_HEAD (abac5e361abd0913dadbce1e124c2ca113600fb7) - fileExistsForTest no longer exists as a parameter; see pr304HeadReconciliation. checkImageStorageExists is still missing the required clinicId parameter (Finding 1 / this amendment), independent of this fix.",
+    "currentPr304TestSeamDescription": "A separately exported test-only setter controlling module-private state, __setImagingStorageExistenceCheckerForTest(override), not a parameter of checkImageStorageExists, not part of the accepted ImagingLifecyclePort interface, and not itself module-private (only the state it sets is). Existence of this setter does not reopen Finding 2 and is not classified as an accepted port method.",
+    "testSeamAcceptabilityDecision": "DEFERRED_TO_F2-IMPL-001-A_IMPLEMENTATION_REVIEW - whether an exported test-only setter mutating module-private state is an acceptable pattern for the re-implementation is an implementation-review concern, not a blocker to accepting this tenant-context contract, and not decided by this document"
   },
   "callerClinicIdSourceVerification": {
     "verifiedAgainst": "server/src/routes/patientPrivacy.ts (current main, 2026-08-03)",
