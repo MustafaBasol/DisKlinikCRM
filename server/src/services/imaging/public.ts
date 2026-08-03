@@ -1,5 +1,5 @@
 /**
- * public.ts — Imaging internal lifecycle facade (F2-IMPL-001-A-R2).
+ * public.ts — Imaging internal lifecycle facade (F2-IMPL-001-A-R2, R3).
  *
  * Additive, unused-at-merge-time facade implementing the F2-PREP-009-amended
  * `ImagingLifecyclePort` four-method slice (see
@@ -38,6 +38,23 @@
  * (markStorageMissing/redactForAnonymization) re-apply that exact same full
  * predicate on their own `updateMany` call — never a read-then-trust-the-
  * earlier-read pattern, never an unscoped `{ id: imageId }` write.
+ *
+ * LEGAL-HOLD ATOMICITY (F2-IMPL-001-A-R3, 2026-08-03): `redactForAnonymization`
+ * additionally requires `study.legalHold: false` inside its own mutation
+ * predicate — `{ id: imageId, clinicId, study: { clinicId, legalHold: false } }`
+ * — not only as an earlier in-memory check. This closes a TOCTOU window where
+ * legal hold could be acquired after the read but before the write, which
+ * previously still let the write through. A 0-row mutation result is
+ * classified using a second application of the ordinary tenant-scoped
+ * `findOwnedImage` lookup (never an unscoped-by-id lookup): not found under
+ * this tenant → `ImagingNotFoundError`; already redacted (a benign
+ * concurrent-writer race) → treated as a completed idempotent no-op; any
+ * other case → `ImagingLegalHoldViolationError`, since `study.legalHold` is
+ * the only predicate component capable of changing between the read and the
+ * write. A cross-tenant `imageId` is rejected before this logic is ever
+ * reached (the initial `findOwnedImage` call already returns `null`), so it
+ * can never surface `ImagingLegalHoldViolationError` — only
+ * `ImagingNotFoundError`, identical to every other not-found case.
  *
  * Audit ownership: this facade performs no audit/activity-log writes. Audit
  * ownership remains with the calling service, matching current behavior
@@ -191,12 +208,44 @@ export async function markStorageMissing(clinicId: string, imageId: string): Pro
 }
 
 /**
+ * Test-only synchronization seam (F2-IMPL-001-A-R3). NOT part of the
+ * accepted ImagingLifecyclePort four-method slice — never call this from
+ * production code. Lets a test deterministically pause
+ * `redactForAnonymization` at the exact point between its ownership/legal-
+ * hold read and its conditional mutation, closing a specific TOCTOU race
+ * window without a timing-based sleep. The barrier is a bare `() => Promise
+ * <void>` — it receives no arguments and returns no value, so it cannot
+ * observe or influence `clinicId`/`imageId`/the predicate being built; it can
+ * only delay when the already-in-flight call resumes. Pass `null` to restore
+ * the real no-op default. See Option B evidence on
+ * `__setImagingStorageExistenceCheckerForTest` below — the same reasoning
+ * applies here (process-local, sequential-only test suite, finally-restored,
+ * zero production importer, cannot alter tenant predicates).
+ */
+let preMutationBarrier: (() => Promise<void>) | null = null;
+
+export function __setRedactionPreMutationBarrierForTest(
+  barrier: (() => Promise<void>) | null,
+): void {
+  preMutationBarrier = barrier;
+}
+
+/**
  * Redacts originalName to the shared anonymization placeholder. Preserves
  * the ImagingImage/ImagingStudy structural records (never deletes a row).
  * Refuses (ImagingLegalHoldViolationError) if the owning study is under
- * legal hold — never a silent bypass. Idempotent: an already-redacted row
- * is a safe no-op, matching patientAnonymization.ts's own
- * redactPatientImagingImages behavior.
+ * legal hold — never a silent bypass, and never merely a point-in-time
+ * in-memory check: the `legalHold: false` condition is re-applied inside the
+ * mutation's own WHERE predicate (F2-IMPL-001-A-R3), so a hold acquired
+ * after the initial read but before the write still blocks the write
+ * atomically at the database level. Idempotent: an already-redacted row is a
+ * safe no-op, matching patientAnonymization.ts's own
+ * redactPatientImagingImages behavior — but legal hold takes precedence over
+ * that idempotent short-circuit whenever the row's CURRENT state (as read at
+ * the top of this call) shows it held, even if no further field change
+ * would otherwise be needed (F2-PREP-009 does not specify this ordering;
+ * this task fixes it explicitly — see F2-IMPL-001-A-R3 evidence §11 for the
+ * chosen-behavior rationale).
  *
  * `clinicId` must already be authorization-validated by the caller (F2-PREP-009
  * §3) — this facade applies it as a trusted predicate on both the read and
@@ -214,11 +263,35 @@ export async function redactForAnonymization(
   if (image.study.legalHold) throw new ImagingLegalHoldViolationError();
   if (image.originalName === REDACTED_PLACEHOLDER) return;
 
+  if (preMutationBarrier) await preMutationBarrier();
+
+  // The mutation predicate re-checks legalHold: false at write time — never
+  // relies solely on the read above. A concurrently-acquired hold between
+  // the read and this statement now causes a 0-row result here instead of a
+  // silently successful write.
   const result = await prisma.imagingImage.updateMany({
-    where: { id: imageId, clinicId, study: { clinicId } },
+    where: { id: imageId, clinicId, study: { clinicId, legalHold: false } },
     data: { originalName: REDACTED_PLACEHOLDER },
   });
-  if (result.count === 0) throw new ImagingNotFoundError();
+  if (result.count === 0) {
+    // Zero-row classification uses ONLY a tenant-scoped follow-up
+    // (findOwnedImage re-applies the exact same `{ id, clinicId,
+    // study: { clinicId } }` tenant predicate as every other lookup in this
+    // module) — never an unscoped-by-id lookup, which would create a
+    // cross-tenant existence oracle. A cross-tenant/missing/denormalized-
+    // mismatch imageId already returned null and threw ImagingNotFoundError
+    // above, before this point was ever reached, so this recheck only runs
+    // for an imageId already proven to belong to this clinicId.
+    const recheck = await findOwnedImage(clinicId, imageId);
+    if (!recheck) throw new ImagingNotFoundError();
+    if (recheck.originalName === REDACTED_PLACEHOLDER) return; // completed by a concurrent writer; same end-state
+    // Row exists, belongs to this tenant, and is not yet redacted — the
+    // only predicate field capable of independently flipping between our
+    // read and our write is study.legalHold (id/clinicId/study.clinicId are
+    // immutable for a row's lifetime), so a 0-row result here is uniquely
+    // explained by a legal hold that was in effect at mutation time.
+    throw new ImagingLegalHoldViolationError();
+  }
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────
@@ -283,6 +356,37 @@ let storageExistenceChecker: (ref: string) => Promise<boolean> = fileExists;
  * live S3-compatible endpoint, without altering `checkImageStorageExists`'s
  * accepted signature. Pass `null` to restore the real fileStorage.ts
  * implementation.
+ *
+ * TEST SEAM REVIEW (F2-IMPL-001-A-R3, 2026-08-03) — Option B retained
+ * (module-private variable + narrow test-only setter), not replaced with a
+ * repository-native mocking method, on this precise evidence (no stronger
+ * claim than what is verified):
+ *   - Sequential execution: this file (imagingLifecycleFacade.test.ts) is a
+ *     single straight-line `async function main()` — every `await test(...)`
+ *     call is awaited in source order before the next one starts, in one
+ *     Node process, over one shared `prisma` client. No `node:test`
+ *     `describe`/parallel runner, no worker threads, no concurrent
+ *     invocation of two tests that both touch this variable.
+ *   - Process-local state: `storageExistenceChecker` (and the sibling
+ *     `preMutationBarrier` above) are plain module-scope `let` bindings in
+ *     this process's module cache — never persisted, never shared across a
+ *     process boundary.
+ *   - Restoration: every call site sets the override inside a `try` and
+ *     restores it (`__setImagingStorageExistenceCheckerForTest(null)`) in a
+ *     `finally` block — verified by direct inspection of
+ *     imagingLifecycleFacade.test.ts §9-11.
+ *   - Zero production importers: proved by this suite's own §13
+ *     unused-facade-proof test, which scans routes/middleware/jobs/services
+ *     for any import of this module at all.
+ *   - Cannot alter tenant predicates: this seam only swaps which function
+ *     answers "does the file exist" — it has no parameter and no access to
+ *     `clinicId`/`imageId`/any Prisma `where` clause, so it structurally
+ *     cannot weaken tenant scoping.
+ *   - Scope of this claim: sequential-safety within THIS test file/process,
+ *     nothing broader. This is not a claim that the seam is safe under
+ *     concurrent/parallel test execution in general — if this suite is ever
+ *     run with a concurrent test runner, this seam would need to move to a
+ *     per-call parameter or async-local-storage-scoped mechanism instead.
  */
 export function __setImagingStorageExistenceCheckerForTest(
   override: ((ref: string) => Promise<boolean>) | null,

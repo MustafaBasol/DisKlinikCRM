@@ -39,6 +39,7 @@ import {
   ImagingStorageUnavailableError,
   ImagingInvalidRedactionReasonError,
   __setImagingStorageExistenceCheckerForTest,
+  __setRedactionPreMutationBarrierForTest,
   type ImagingLifecycleImageDto,
   type RedactionReason,
 } from '../services/imaging/public.js';
@@ -390,6 +391,106 @@ async function main() {
       await assert.rejects(() => redactForAnonymization(fixtures.defaultClinicId, imageB.id, validReason), ImagingNotFoundError);
       const after = await prisma.imagingImage.findUnique({ where: { id: imageB.id } });
       assert.deepEqual(after, before, 'Clinic B row must be unchanged after a rejected cross-tenant redaction attempt');
+    });
+
+    // ── 8b. Atomic legal-hold enforcement (F2-IMPL-001-A-R3) ──────────────
+    section('8b. Atomic legal-hold enforcement at mutation time (F2-IMPL-001-A-R3)');
+
+    await test('the redaction mutation predicate itself requires study.legalHold: false (not only an earlier in-memory check)', async () => {
+      const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id });
+      const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
+
+      const originalUpdateMany = prisma.imagingImage.updateMany.bind(prisma.imagingImage);
+      let capturedArgs: Parameters<typeof prisma.imagingImage.updateMany>[0] | null = null;
+      (prisma.imagingImage as unknown as { updateMany: typeof prisma.imagingImage.updateMany }).updateMany = (
+        args: Parameters<typeof prisma.imagingImage.updateMany>[0],
+      ) => {
+        capturedArgs = args;
+        return originalUpdateMany(args);
+      };
+      try {
+        await redactForAnonymization(fixtures.defaultClinicId, image.id, validReason);
+      } finally {
+        (prisma.imagingImage as unknown as { updateMany: typeof prisma.imagingImage.updateMany }).updateMany =
+          originalUpdateMany;
+      }
+
+      assert.ok(capturedArgs, 'updateMany must have been invoked');
+      const where = (capturedArgs as unknown as { where: Record<string, unknown> }).where;
+      assert.equal(where.id, image.id);
+      assert.equal(where.clinicId, fixtures.defaultClinicId);
+      const studyWhere = where.study as Record<string, unknown>;
+      assert.equal(studyWhere.clinicId, fixtures.defaultClinicId);
+      assert.equal(studyWhere.legalHold, false, 'the mutation WHERE clause must require study.legalHold === false');
+    });
+
+    await test('a cross-tenant image under legal hold still yields ImagingNotFoundError, never ImagingLegalHoldViolationError (no cross-tenant hold side-channel)', async () => {
+      const heldStudyB = await createStudy({ clinicId: fixtures.crossOrgClinicId, patientId: patientB.id, legalHold: true });
+      const heldImageB = await createImage({ clinicId: fixtures.crossOrgClinicId, studyId: heldStudyB.id });
+
+      await assert.rejects(
+        () => redactForAnonymization(fixtures.defaultClinicId, heldImageB.id, validReason),
+        ImagingNotFoundError,
+      );
+    });
+
+    await test('a denormalized clinicId/study.clinicId mismatch on redaction still fails closed as ImagingNotFoundError, even under legal hold', async () => {
+      const corruptStudy = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id, legalHold: true });
+      const corruptImage = await createImage({ clinicId: fixtures.defaultClinicId, studyId: corruptStudy.id });
+      await prisma.imagingImage.update({ where: { id: corruptImage.id }, data: { clinicId: fixtures.siblingClinicId } });
+
+      await assert.rejects(
+        () => redactForAnonymization(fixtures.defaultClinicId, corruptImage.id, validReason),
+        ImagingNotFoundError,
+      );
+      await assert.rejects(
+        () => redactForAnonymization(fixtures.siblingClinicId, corruptImage.id, validReason),
+        ImagingNotFoundError,
+      );
+    });
+
+    await test('deterministic concurrency regression: a legal hold acquired after the read but before the write still blocks redaction atomically (no TOCTOU, no sleep-based sync)', async () => {
+      const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id, legalHold: false });
+      const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
+
+      let signalBarrierReached: (() => void) | null = null;
+      const barrierReached = new Promise<void>((resolve) => {
+        signalBarrierReached = resolve;
+      });
+      let releaseBarrier: (() => void) | null = null;
+      const barrierGate = new Promise<void>((resolve) => {
+        releaseBarrier = resolve;
+      });
+
+      __setRedactionPreMutationBarrierForTest(async () => {
+        signalBarrierReached!();
+        await barrierGate;
+      });
+
+      try {
+        const redactionPromise = redactForAnonymization(fixtures.defaultClinicId, image.id, validReason);
+
+        // Deterministically wait until the in-flight call has passed its
+        // read + in-memory legal-hold check and is paused immediately
+        // before its conditional mutation — no fixed-duration sleep.
+        await barrierReached;
+
+        // Acquire legal hold concurrently, in the window the barrier holds
+        // the mutation open.
+        await prisma.imagingStudy.update({ where: { id: study.id }, data: { legalHold: true } });
+        releaseBarrier!();
+
+        await assert.rejects(() => redactionPromise, ImagingLegalHoldViolationError);
+
+        const row = await prisma.imagingImage.findUnique({ where: { id: image.id } });
+        assert.equal(row!.originalName, image.originalName, 'originalName must remain unchanged once the race is closed');
+
+        const crossRow = await prisma.imagingImage.findUnique({ where: { id: imageB.id } });
+        assert.ok(crossRow, 'an unrelated cross-tenant row must remain untouched by this same-tenant race scenario');
+      } finally {
+        __setRedactionPreMutationBarrierForTest(null);
+        await prisma.imagingStudy.update({ where: { id: study.id }, data: { legalHold: false } });
+      }
     });
 
     // ── 9-11. checkImageStorageExists ─────────────────────────────────────
