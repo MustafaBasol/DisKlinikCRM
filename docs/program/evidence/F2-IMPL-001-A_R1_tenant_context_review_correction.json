@@ -74,5 +74,33 @@
       "mergeable": "MERGEABLE",
       "headRefOid": "f8a37b72c4cc1800126b67e451e35238080cfe17"
     }
+  },
+  "headReconciliation": {
+    "performedBy": "F2-PREP-009 correction task",
+    "date": "2026-08-03",
+    "prNumber": 304,
+    "prHeadShaAtOriginalReview": "f8a37b72c4cc1800126b67e451e35238080cfe17",
+    "prHeadShaCurrentVerified": "abac5e361abd0913dadbce1e124c2ca113600fb7",
+    "prStateCurrentVerified": "OPEN",
+    "prMergeableCurrentVerified": "MERGEABLE",
+    "findingsReconciliation": {
+      "tenantAuthorizationEnforced": {
+        "classification": "VERIFIED_ON_PRIOR_HEAD / STILL_OPEN_ON_CURRENT_PR304_HEAD",
+        "value": false,
+        "note": "findOwnedImage(imageId) unchanged in substance on current head: where:{id:imageId} only, clinicId self-comparison only, no caller-supplied clinicId anywhere in the 3 imageId-only methods."
+      },
+      "signaturesAlteredFromAccepted": {
+        "classification": "VERIFIED_ON_PRIOR_HEAD / CORRECTED_ON_CURRENT_PR304_HEAD",
+        "originalValue": true,
+        "currentValue": false,
+        "note": "checkImageStorageExists is now exactly (imageId: string): Promise<boolean> on the current head; fileExistsForTest no longer exists as a parameter. Test-failure injection moved to a separate export, __setImagingStorageExistenceCheckerForTest, not a parameter of checkImageStorageExists."
+      }
+    },
+    "overallDispositionUnchanged": true,
+    "statusMatrix": {
+      "taskStatus": "BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT",
+      "mergeSafe": false,
+      "deploymentSafe": false
+    }
   }
 }

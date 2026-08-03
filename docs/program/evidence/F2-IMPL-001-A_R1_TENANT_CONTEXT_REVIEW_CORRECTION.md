@@ -103,3 +103,20 @@ Next step: [F2-PREP-009](../architecture/F2-PREP-009_IMAGING_LIFECYCLE_PORT_TENA
 - Exact import/caller search: `git grep -n "services/imaging/public"` against the PR #304 head, excluding `/tests/`, returns no matches — zero production callers confirmed.
 - `gh pr view 304 --json ...`: `state OPEN`, `mergeable MERGEABLE`, `headRefOid f8a37b72c4cc1800126b67e451e35238080cfe17`, CI roll-up as recorded in §7.
 - No implementation test was run or claimed as evidence of tenant authorization (§5).
+
+---
+
+## 9. Head reconciliation (2026-08-03, later same-day correction task)
+
+This section is added by the F2-PREP-009 correction task; §§1-8 above are left exactly as originally authored — this program's own established reconciliation convention (§0 above, F2-PREP-006-E §2) applies to this document's own relationship to a later correction just as it applies to PR #304's relationship to this document.
+
+At original review time, PR #304's head was `f8a37b72c4cc1800126b67e451e35238080cfe17` (§0 above). PR #304 has since advanced to head `abac5e361abd0913dadbce1e124c2ca113600fb7`, independently re-verified via `gh pr view 304` (`state: OPEN`, `mergeable: MERGEABLE`) at the time of this reconciliation. Re-inspecting `server/src/services/imaging/public.ts` at the new head:
+
+| Finding | Original (head `f8a37b72...`) | Current (head `abac5e3...`) | Classification |
+|---|---|---|---|
+| Finding 1 — tenant authorization not enforced for the three `imageId`-only methods | Confirmed | **Still confirmed, unchanged.** `findOwnedImage(imageId)` still queries by `{ id: imageId }` only and still compares `image.study.clinicId !== image.clinicId`, with no caller-supplied `clinicId` anywhere in the three `imageId`-only methods. | `VERIFIED_ON_PRIOR_HEAD` / **`STILL_OPEN_ON_CURRENT_PR304_HEAD`** |
+| Finding 2 — `checkImageStorageExists` accepted signature altered (optional `fileExistsForTest` parameter) | Confirmed | **No longer present.** The current head's `checkImageStorageExists(imageId: string): Promise<boolean>` takes exactly one parameter; storage-failure test injection is now provided via a separately-named, non-parameter export (`__setImagingStorageExistenceCheckerForTest`), never part of `checkImageStorageExists`'s own signature. | `VERIFIED_ON_PRIOR_HEAD` / **`CORRECTED_ON_CURRENT_PR304_HEAD`** |
+
+**Overall disposition unchanged:** `BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT` remains this document's status, because Finding 1 alone is sufficient to block, independent of Finding 2's resolution. PR #304 remains `OPEN`, unmerged, not modified by this reconciliation (or by the original review). Merge safe: no. Deployment safe: no.
+
+**Validation performed for this reconciliation:** `gh pr view 304 --json state,headRefOid,mergeable` (head `abac5e361abd0913dadbce1e124c2ca113600fb7`, `OPEN`, `MERGEABLE`); direct read of `server/src/services/imaging/public.ts` at that head (`findOwnedImage`, `markStorageMissing`, `redactForAnonymization`, `getImagesForLifecycleReview`, `checkImageStorageExists`, `__setImagingStorageExistenceCheckerForTest`); confirmed `fileExistsForTest` no longer appears as a parameter name anywhere in the current head's `public.ts`.
