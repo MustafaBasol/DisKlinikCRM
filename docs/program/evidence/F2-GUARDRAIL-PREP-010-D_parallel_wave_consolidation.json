@@ -1,0 +1,243 @@
+{
+  "task": "F2-GUARDRAIL-PREP-010-D",
+  "phase": "F2",
+  "type": "documentation_evidence_reconciliation_program_control_only",
+  "taskStatus": {
+    "agentCompleted": true,
+    "documentationValidationPassed": true,
+    "prOpened": true,
+    "merged": false,
+    "deployed": false,
+    "productionVerified": false
+  },
+  "baseline": {
+    "originMainSha": "c731e7af9a552dde2da45fee52fa318192da28f8",
+    "branch": "docs/f2-guardrail-prep-010-d-consolidation",
+    "worktree": "E:\\Ek Gelir\\Siteler\\DisKlinikCRM-worktrees\\f2-guardrail-prep-010-d-consolidation",
+    "primaryTreeUntouched": true,
+    "primaryTreeBranch": "claude/treatment-proposal-pdf-p1-d4k0jl",
+    "primaryTreeHead": "71ed59e9e85a37785e56257a3f3a947b436a3def"
+  },
+  "pr304Reconciliation": {
+    "prNumber": 304,
+    "head": "56be3e324f27f9f9ee125f6fbda1b2d386a2b554",
+    "mergeCommit": "c731e7af9a552dde2da45fee52fa318192da28f8",
+    "mergedAt": "2026-08-03T17:47:49Z",
+    "state": "MERGED",
+    "postMergeCi": {
+      "workflow": "ci-main-and-nightly",
+      "run": "30838364039",
+      "event": "push",
+      "conclusion": "success"
+    },
+    "acceptedSignatures": [
+      "markStorageMissing(clinicId, imageId)",
+      "redactForAnonymization(clinicId, imageId, reason)",
+      "checkImageStorageExists(clinicId, imageId)",
+      "getImagesForLifecycleReview(clinicId, patientId)"
+    ],
+    "atomicLegalHoldPredicate": "{ id: imageId, clinicId, study: { clinicId, legalHold: false } }",
+    "verifiedDirectlyInSource": true,
+    "sourceFile": "server/src/services/imaging/public.ts",
+    "status": "AGENT_COMPLETED / TESTS_PASSED / PR_CI_PASSED / MERGED / MAIN_CI_PASSED / NOT_DEPLOYED / NOT_PRODUCTION_VERIFIED"
+  },
+  "evidenceWave": [
+    {
+      "pr": 313,
+      "taskId": "F2-GUARDRAIL-PREP-010-A-R1",
+      "head": "2f38424a26c5f0bee7ca731352cfcbe5ef74c4a7",
+      "headVerified": true,
+      "state": "OPEN",
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "CLEAN",
+      "ciChecks": { "passed": 9, "total": 9, "run": "30834243419" },
+      "reviewThreads": { "resolved": 4, "total": 4 },
+      "filesAdded": [
+        "docs/program/evidence/F2-GUARDRAIL-PREP-010-A_CROSS_DOMAIN_ACCESS_INVENTORY.md",
+        "docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json"
+      ],
+      "touchesSharedDocs": false,
+      "totalEdges": 71,
+      "classificationCounts": {
+        "ACCEPTED_PUBLIC_CONTRACT": 12,
+        "ACCEPTED_RESTRICTED_CONTRACT": 7,
+        "UNRESOLVED_OWNERSHIP": 5,
+        "VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX": 1,
+        "PROHIBITED_NEW_PATTERN": 10,
+        "LEGACY_ALLOWLISTED_DIRECT_ACCESS": 36
+      },
+      "frozenEdgeTupleFields": ["callerPath", "callerSymbol", "ownerDomain", "targetModelOrSymbol", "accessKind"],
+      "nonIdentityMetadataFields": ["classification", "justificationEvidenceId", "expiryOrRemovalTask", "callerPathGlob"],
+      "noBroadeningRuleConfirmed": true,
+      "legacyAllowlistIsDescriptiveOnly": true,
+      "status": "VERIFIED_BRANCH_EVIDENCE / PR_CI_PASSED / AWAITING_CONSOLIDATION / NOT_MERGED"
+    },
+    {
+      "pr": 315,
+      "taskId": "F2-GUARDRAIL-PREP-010-B-R1",
+      "head": "d14a75fc9c491b310f7b946af4b309a78f3bd8b9",
+      "headVerified": true,
+      "state": "OPEN",
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "CLEAN",
+      "ciChecks": { "passed": 9, "total": 9, "run": "30835217833" },
+      "reviewThreads": { "resolved": 2, "total": 2 },
+      "filesAdded": [
+        "docs/program/evidence/F2-GUARDRAIL-PREP-010-B_TENANT_SCOPE_USAGE_AND_BYPASS_INVENTORY.md",
+        "docs/program/evidence/F2-GUARDRAIL-PREP-010-B_tenant_scope_usage_and_bypass_inventory.json"
+      ],
+      "touchesSharedDocs": false,
+      "totalRecords": 127,
+      "recordBreakdown": { "nonImagingRoute": 109, "imaging": 2, "jobWorker": 16 },
+      "securityBlockers": [
+        {
+          "id": "F2-SEC-001",
+          "title": "Enforce Clinic Membership on Instagram Inbox Status Mutation",
+          "file": "server/src/routes/instagramInbox.ts",
+          "route": "PATCH /instagram/inbox/:id/status",
+          "confirmedPresentOnMain": true
+        },
+        {
+          "id": "F2-SEC-002",
+          "title": "Remove Global Default-Clinic Resolution from Legacy WhatsApp Public API",
+          "file": "server/src/routes/whatsapp.ts",
+          "route": "/api/public/whatsapp/*",
+          "confirmedPresentOnMain": true
+        }
+      ],
+      "idNormalizationConflictsFound": 0,
+      "status": "VERIFIED_BRANCH_EVIDENCE / PR_CI_PASSED / AWAITING_CONSOLIDATION / NOT_MERGED"
+    },
+    {
+      "pr": 314,
+      "taskId": "F2-GUARDRAIL-PREP-010-C-R1",
+      "head": "f1408546040eaa5fa7ddd5833a28b097ea15e3a5",
+      "headVerified": true,
+      "state": "OPEN",
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "CLEAN",
+      "ciChecks": { "passed": 9, "total": 9, "run": "30834413566" },
+      "reviewThreads": { "resolved": 0, "total": 0 },
+      "filesAdded": [
+        "docs/program/evidence/F2-GUARDRAIL-PREP-010-C_REFERENCE_PUBLIC_CONTRACT_PATTERN_INVENTORY.md",
+        "docs/program/evidence/F2-GUARDRAIL-PREP-010-C_reference_public_contract_pattern_inventory.json"
+      ],
+      "touchesSharedDocs": false,
+      "candidatesInspected": 7,
+      "selectedReferenceBases": ["CAND-01", "CAND-02", "CAND-03"],
+      "candidates": [
+        { "id": "CAND-01", "name": "Billing financial-select restrictor", "status": "SELECTED_REFERENCE_BASE" },
+        { "id": "CAND-02", "name": "findTreatmentCaseInClinic scoped-ownership guard", "status": "SELECTED_REFERENCE_BASE" },
+        { "id": "CAND-03", "name": "resolvePatient parent-resolution", "status": "SELECTED_REFERENCE_BASE" },
+        { "id": "CAND-04", "name": "Appointment statistics/summary services", "status": "NOT_SELECTED_ABSENT" },
+        { "id": "CAND-05", "name": "Reporting DTO aggregation", "status": "ANTI_PATTERN_DIRECT_ACCESS" },
+        { "id": "CAND-06", "name": "Domain public.ts/barrel convention", "status": "DOCUMENTED_NOT_IMPLEMENTED" },
+        { "id": "CAND-07", "name": "ImagingLifecyclePort implementation (PR #304)", "status": "REJECTED_AS_REFERENCE_ON_BRANCH", "reclassifiedByThisTask": "STRENGTHENED_REFERENCE_BASE" }
+      ],
+      "canonicalContractExists": false,
+      "status": "VERIFIED_BRANCH_EVIDENCE / PR_CI_PASSED / AWAITING_CONSOLIDATION / NOT_MERGED"
+    }
+  ],
+  "exactEdgeTupleSemantics": {
+    "identityFields": ["callerPath", "callerSymbol", "ownerDomain", "targetModelOrSymbol", "accessKind"],
+    "source": "PR #313 (F2-GUARDRAIL-PREP-010-A-R1)",
+    "adoptedUnchanged": true,
+    "noFieldsInvented": true,
+    "antiBroadeningRuleConfirmed": true
+  },
+  "legacyAllowlistDecision": {
+    "descriptiveOnly": true,
+    "notTargetArchitecture": true,
+    "notPermanentPermissionModel": true,
+    "notAuthorizationForNewEdges": true,
+    "notPermissionToBroadenExistingEdge": true,
+    "subjectToExactEdgeFreezingAndIncrementalRetirement": true
+  },
+  "canonicalMutationContractGap": {
+    "canonicalContractExists": false,
+    "selectedCandidatesAreReferenceBasesOnly": true,
+    "hardeningRequiredBeforeCanonicalAdoptionBinding": true,
+    "noCandidateMayBeCopiedAsCanonical": true
+  },
+  "cand07Reevaluation": {
+    "identity": "server/src/services/imaging/public.ts (ImagingLifecyclePort facade, F2-IMPL-001-A / PR #304)",
+    "originalClassification": "REJECTED_AS_REFERENCE",
+    "originalRejectionBasis": "missing caller-supplied clinicId parameter (Finding 1)",
+    "findingStatus": "CLOSED_ON_MERGED_MAIN",
+    "outcome": "strengthened reference base",
+    "promotedToCanonical": false,
+    "remainingGaps": [
+      "facade is additive/unused, zero production callers, no real caller-integration evidence",
+      "retains public test-seam exports (__setImagingStorageExistenceCheckerForTest, __setRedactionPreMutationBarrierForTest)"
+    ]
+  },
+  "mergeOrderRecommendation": [
+    "F2-GUARDRAIL-PREP-010-D (this consolidation)",
+    "PR #315 (F2-GUARDRAIL-PREP-010-B-R1)",
+    "PR #313 (F2-GUARDRAIL-PREP-010-A-R1)",
+    "PR #314 (F2-GUARDRAIL-PREP-010-C-R1)"
+  ],
+  "mergeOrderRationale": "No shared program-control document is touched by #313/#315/#314; their new-file sets are mutually disjoint; no git conflict is expected in any order. This consolidation is recommended first so the security gate, legacy-allowlist caveats, canonical-gap statement, and CAND-07 finding land before any evidence PR's prose could be read in isolation as already-accepted architecture. No PR is recommended to supersede another.",
+  "guardrailAuthorizationDecision": {
+    "ciGuardrailImplementationAuthorized": false,
+    "reason": "F2-SEC-001 and F2-SEC-002 remain open, live, unpatched security defects on current main",
+    "narrowerSafeSubsetAuthorized": false,
+    "narrowerSafeSubsetConsidered": "new-cross-domain-edge-only, report-only (non-blocking) enforcement of the frozen 71-edge baseline, scoped strictly to architectural domain-boundary crossings, never tenant-scope correctness",
+    "whyNarrowerSubsetNotAuthorized": [
+      "relationship between PR #313's single VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX edge and F2-SEC-001/F2-SEC-002 not yet cross-referenced",
+      "CI-enforcement change is itself outside this task's own permitted scope",
+      "shipping any guardrail CI check while two confirmed tenant-isolation bypasses remain live risks a false sense of enforced boundary security"
+    ],
+    "noGrandfatheringOfInsecureTenantResolution": true
+  },
+  "stage2ImagingGate": {
+    "blocked": true,
+    "facadeCallerMigrationStarted": false,
+    "runtimeModularizationStarted": false,
+    "storageLifecycleExecutionWiringStarted": false,
+    "anonymizationCallerWiringStarted": false,
+    "deletionPhysicalStorageChangesStarted": false,
+    "newCrossDomainServiceAdoptionStarted": false
+  },
+  "programConstraintsPreserved": [
+    "modular_monolith",
+    "no_direct_cross_domain_access_without_accepted_public_contract",
+    "explicit_tenant_scope_mandatory",
+    "fail_closed_behavior",
+    "kvkk_physical_architecture_freeze_active",
+    "no_framework_rewrite",
+    "no_kafka",
+    "no_kubernetes",
+    "no_microservices",
+    "no_database_per_tenant",
+    "no_runtime_restructuring"
+  ],
+  "validation": {
+    "gitDiffCheck": "clean",
+    "securityIdGrepConsistent": true,
+    "stalePr304StatusGrepClean": true,
+    "accidentalAuthorizationLanguageGrepClean": true,
+    "dedicatedDocsValidationScriptExists": false,
+    "fallbackValidationUsed": ["git diff --check", "targeted grep passes"],
+    "fullBackendTestSuiteRun": false,
+    "fullBackendTestSuiteRunReason": "not required by repository policy for a documentation-only change"
+  },
+  "filesChanged": [
+    "docs/program/CURRENT_PHASE.md",
+    "docs/program/NORAMEDI_MASTER_TRACKER.md",
+    "docs/program/phases/F2_MODULAR_BOUNDARIES.md",
+    "docs/program/evidence/README.md",
+    "docs/program/evidence/F2-GUARDRAIL-PREP-010-D_PARALLEL_WAVE_CONSOLIDATION.md",
+    "docs/program/evidence/F2-GUARDRAIL-PREP-010-D_parallel_wave_consolidation.json"
+  ],
+  "otherBranchesFilesModified": false,
+  "rollback": {
+    "type": "documentation_only",
+    "method": "revert consolidation commit/PR",
+    "migrationRollback": false,
+    "runtimeRollback": false,
+    "dataRollback": false,
+    "deploymentRollback": false
+  },
+  "exactNextTask": "A dedicated security-fix task for F2-SEC-001 and F2-SEC-002 (clinic-membership enforcement on the Instagram inbox status-mutation route; removal of the WhatsApp legacy public API's global default-clinic resolution) — code-change task, not started, not authorized by this consolidation."
+}
