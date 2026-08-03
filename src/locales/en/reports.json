@@ -5,6 +5,26 @@
     "csv": "Download CSV",
     "filePrefix": "revenue-report"
   },
+  "exportControls": {
+    "export": "Export",
+    "exportExcel": "Export to Excel",
+    "exportPdf": "Export to PDF",
+    "print": "Print",
+    "preparing": "Preparing export…",
+    "generatedAt": "Generated at",
+    "appliedFilters": "Applied filters",
+    "errors": {
+      "UNSUPPORTED_REPORT": "Unsupported report",
+      "UNSUPPORTED_FORMAT": "Unsupported export format",
+      "INVALID_FILTERS": "Invalid filters",
+      "UNAUTHORIZED_ROLE": "You are not authorized to export this report",
+      "INACCESSIBLE_CLINIC": "Access denied to the requested clinic",
+      "ROW_LIMIT_EXCEEDED": "Too many rows for synchronous export",
+      "NO_DATA": "No data to export",
+      "GENERATION_FAILED": "Export failed",
+      "generic": "Export failed"
+    }
+  },
   "tabs": {
     "revenue": "Revenue Report",
     "doctors": "Doctor Performance",
