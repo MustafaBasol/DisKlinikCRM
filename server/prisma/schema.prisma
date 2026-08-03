@@ -104,6 +104,7 @@ model Clinic {
   communicationConsentEvents    PatientCommunicationConsentEvent[]
   legacyConsentCorrections      PatientLegacyConsentCorrection[]
   externalCalendarIntegration   ExternalCalendarIntegration?
+  patientEmergencyContacts      PatientEmergencyContact[]
 
   @@unique([organizationId, slug])
 }
@@ -280,9 +281,49 @@ model Patient {
   communicationPreferences      PatientCommunicationPreference[]
   communicationConsentEvents    PatientCommunicationConsentEvent[]
   legacyConsentCorrections      PatientLegacyConsentCorrection[]
+  emergencyContacts             PatientEmergencyContact[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
+}
+
+/// US-01.2: patient emergency contacts, relationship (contactType), and legal
+/// decision-maker flags (e.g. parent/guardian for a minor patient). Additive,
+/// backward-compatible — no existing Patient row requires backfill.
+///
+/// contactType is a stable backend string contract (not a Prisma enum, per
+/// the string-based status/type convention used elsewhere in this schema —
+/// see Patient.patientStatus, Appointment.status, etc.): SPOUSE | PARENT |
+/// GUARDIAN | CHILD | SIBLING | OTHER.
+///
+/// At most one row per patient may have isPrimary=true — enforced in the
+/// application layer via a transaction (server/src/routes/
+/// patientEmergencyContacts.ts), not a DB constraint, so it can accommodate
+/// the "no primary yet" state. isLegalDecisionMaker is intentionally NOT
+/// unique per patient — multiple legal guardians/decision-makers are a valid
+/// real-world case.
+model PatientEmergencyContact {
+  id                   String       @id @default(uuid())
+  patientId            String
+  patient              Patient      @relation(fields: [patientId], references: [id])
+  clinicId             String
+  clinic               Clinic       @relation(fields: [clinicId], references: [id])
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  contactType          String // SPOUSE | PARENT | GUARDIAN | CHILD | SIBLING | OTHER
+  fullName             String
+  phone                String?
+  phoneCountryCode     String?
+  email                String?
+  occupation           String?
+  isPrimary            Boolean      @default(false)
+  isLegalDecisionMaker Boolean      @default(false)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@index([patientId, isPrimary])
+  @@index([clinicId])
+  @@index([organizationId])
 }
 
 model AppointmentType {
@@ -1407,6 +1448,7 @@ model Organization {
   postTreatmentTemplates        PostTreatmentMessageTemplate[]
   postTreatmentQueue            PostTreatmentMessageQueue[]
   legacyConsentCorrections      PatientLegacyConsentCorrection[]
+  patientEmergencyContacts      PatientEmergencyContact[]
 }
 
 model UserClinic {

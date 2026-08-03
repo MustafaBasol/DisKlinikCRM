@@ -105,6 +105,41 @@
     "whatsappSessionTitle": "WhatsApp-Konversation",
     "whatsappSessionSummary": "WhatsApp: {{count}} Nachrichten ({{incoming}} eingehend • {{outgoing}} ausgehend)",
     "whatsappSessionCounts": "{{incoming}} eingehend • {{outgoing}} ausgehend ({{count}} Nachrichten)",
+    "emergencyContacts": {
+      "title": "Notfallkontakte",
+      "addNew": "Kontakt hinzufügen",
+      "addTitle": "Notfallkontakt hinzufügen",
+      "editTitle": "Notfallkontakt bearbeiten",
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "empty": "Es wurden noch keine Notfallkontakte hinzugefügt.",
+      "deleteConfirm": "Sind Sie sicher, dass Sie diesen Notfallkontakt löschen möchten?",
+      "deleteFailed": "Notfallkontakt konnte nicht gelöscht werden.",
+      "primary": "Primär",
+      "legalDecisionMaker": "Gesetzlicher Entscheidungsträger",
+      "minorWarning": "Dieser Patient ist minderjährig und es ist kein gesetzlicher Entscheidungsträger hinterlegt. Erwägen Sie, einen Elternteil oder Erziehungsberechtigten als gesetzlichen Entscheidungsträger hinzuzufügen.",
+      "types": {
+        "SPOUSE": "Ehepartner/in",
+        "PARENT": "Elternteil",
+        "GUARDIAN": "Erziehungsberechtigte/r",
+        "CHILD": "Kind",
+        "SIBLING": "Geschwister",
+        "OTHER": "Sonstiges"
+      },
+      "form": {
+        "contactType": "Beziehung",
+        "fullName": "Vollständiger Name",
+        "phone": "Telefonnummer",
+        "phoneCountryCode": "Ländervorwahl",
+        "email": "E-Mail-Adresse",
+        "occupation": "Beruf",
+        "isPrimary": "Als primären Kontakt festlegen",
+        "isLegalDecisionMaker": "Gesetzlicher Entscheidungsträger (Eltern/Erziehungsberechtigte)",
+        "fullNameRequired": "Vollständiger Name ist erforderlich",
+        "phoneRequired": "Telefonnummer ist erforderlich",
+        "saveFailed": "Notfallkontakt konnte nicht gespeichert werden."
+      }
+    },
     "overview": {
       "clinicalAlerts": "Klinische Hinweise",
       "clinicalAlertsSubtitle": "Wichtige Gesundheitsinformationen",

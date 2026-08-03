@@ -105,6 +105,41 @@
     "whatsappSessionTitle": "Conversation WhatsApp",
     "whatsappSessionSummary": "WhatsApp : {{count}} messages ({{incoming}} entrants • {{outgoing}} sortants)",
     "whatsappSessionCounts": "{{incoming}} entrants • {{outgoing}} sortants ({{count}} messages)",
+    "emergencyContacts": {
+      "title": "Contacts d'urgence",
+      "addNew": "Ajouter un contact",
+      "addTitle": "Ajouter un contact d'urgence",
+      "editTitle": "Modifier le contact d'urgence",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "empty": "Aucun contact d'urgence ajouté pour le moment.",
+      "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce contact d'urgence ?",
+      "deleteFailed": "Échec de la suppression du contact d'urgence.",
+      "primary": "Principal",
+      "legalDecisionMaker": "Décideur légal",
+      "minorWarning": "Ce patient est mineur et aucun décideur légal n'est enregistré. Envisagez d'ajouter un parent ou tuteur en tant que décideur légal.",
+      "types": {
+        "SPOUSE": "Conjoint(e)",
+        "PARENT": "Parent",
+        "GUARDIAN": "Tuteur/Tutrice",
+        "CHILD": "Enfant",
+        "SIBLING": "Frère/Sœur",
+        "OTHER": "Autre"
+      },
+      "form": {
+        "contactType": "Lien de parenté",
+        "fullName": "Nom complet",
+        "phone": "Numéro de téléphone",
+        "phoneCountryCode": "Indicatif pays",
+        "email": "Adresse e-mail",
+        "occupation": "Profession",
+        "isPrimary": "Définir comme contact principal",
+        "isLegalDecisionMaker": "Décideur légal (parent/tuteur)",
+        "fullNameRequired": "Le nom complet est requis",
+        "phoneRequired": "Le numéro de téléphone est requis",
+        "saveFailed": "Échec de l'enregistrement du contact d'urgence."
+      }
+    },
     "overview": {
       "clinicalAlerts": "Alertes cliniques",
       "clinicalAlertsSubtitle": "Informations de santé importantes",
