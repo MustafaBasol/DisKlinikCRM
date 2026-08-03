@@ -438,3 +438,170 @@ Pushed to the existing branch: new head `7bcd1c8658da95119ab725f454955d57f89f8e4
 - `windows-bridge-pr` run [30833102986](https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/30833102986): initial attempt showed `Windows Bridge .NET tests` failing (`BridgeOrchestratorTests.Heartbeat_AfterPairing_TransitionsToOnlineAndOmitsNullCapabilities`, a timing-sensitive .NET assertion in `windows-bridge/tests/NoraMedi.Bridge.Core.Tests/Runtime/BridgeOrchestratorTests.cs`). **Root-caused as unrelated CI flakiness, not a regression from this task:** `git diff abac5e361abd0913dadbce1e124c2ca113600fb7 6f539b237019945443afe6156f9fc2a9fe32ffa4 --stat -- windows-bridge/` returns zero changed files — no windows-bridge code changed between the pre-reconciliation PR #304 head and the current `origin/main`, and this task touched only `server/src/services/imaging/**`/`docs/program/**`. `gh run rerun 30833102986 --failed` → re-run **passed** (`conclusion: success`), confirming a transient, non-deterministic failure unrelated to this PR's content.
 
 `gh pr checks 304` at task end: **14/14 checks `pass`**, zero failing. No review threads present (`reviewDecision: ""`).
+
+## 28. F2-IMPL-001-A-R3 — Atomic Legal-Hold Enforcement and Final CI Reconciliation (2026-08-03)
+
+**§1–§27 preserved unmodified above.** This section records the R3 correction: a time-of-check/time-of-use race in `redactForAnonymization`'s legal-hold enforcement, plus a corrected, evidence-backed CI-status classification for the Windows Bridge job noted (but not fully root-caused to a rerun-attempt level) in §27.16.
+
+### 28.1 Pre-edit gate
+
+- Read root `AGENTS.md` (unchanged; confirms Imaging is out of MVP scope by product framing, does not block this architecture-track task).
+- `git fetch origin --prune`; `git status --short` → clean except the two pre-existing untracked `postgres-run-summary*.json` leftovers (left alone, per this session's file-safety posture); `git branch --show-current` → `feature/f2-impl-001-a-unused-imaging-lifecycle-facade`; `git rev-parse HEAD` → `9fdfb91739464809d442a9b8d14fa236adfaf624`; `git rev-parse origin/main` → `6f539b237019945443afe6156f9fc2a9fe32ffa4` — **unchanged from §27's baseline; `origin/main` has not advanced.**
+- `gh pr view 304 --json number,state,headRefOid,mergeable,mergeStateStatus`: `state: OPEN`, `headRefOid: 9fdfb91739464809d442a9b8d14fa236adfaf624` (matches local/origin branch tip exactly — no divergence), `mergeable: MERGEABLE`, `mergeStateStatus: BLOCKED` (review/branch-protection gating, not conflicts or CI).
+- `gh pr checks 304`: at task start, all `ci-layers`/`ci` jobs `pass` on the current head, including `Windows Bridge .NET tests` — **passing**, on a fresh run (`30834586386`/`30834586769`, both `run_attempt: 1`) triggered by the `9fdfb91` docs-only commit.
+- Review threads: `gh api repos/MustafaBasol/DisKlinikCRM/pulls/304/comments` → 6 comments total (3 original Copilot findings, already replied-to/resolved in R2 — `findFirst` vs `findUnique` deliberately deferred with reasoning, the other two fixed); **zero new threads** since R2.
+- **Since `origin/main` has not advanced past `6f539b2`, no reconciliation was required or performed.**
+
+### 28.2 Isolation
+
+Reused the existing dedicated worktree (`E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f2-impl-001-a-imaging-lifecycle-facade`), clean at `9fdfb917...` before any edit. Primary tree (unrelated, dirty, `claude/treatment-proposal-pdf-p1-d4k0jl`) never touched.
+
+### 28.3 Blocking defect — legal-hold TOCTOU race root cause
+
+Pre-R3, `redactForAnonymization`: (1) read `ImagingStudy.legalHold` via `findOwnedImage`; (2) checked it **in memory** (`if (image.study.legalHold) throw ...`); (3) performed `prisma.imagingImage.updateMany({ where: { id: imageId, clinicId, study: { clinicId } }, data: { originalName: REDACTED_PLACEHOLDER } })` — **without `legalHold` anywhere in the write predicate.** A hold acquired after step (2) but before step (3) committed had no effect on step (3): the write proceeded and silently redacted a now-held image. The read-time check was necessary but not sufficient — it verified a fact about the row's state at read time, not at write time.
+
+### 28.4 Atomic mutation design
+
+The mutation predicate now is:
+
+```ts
+where: { id: imageId, clinicId, study: { clinicId, legalHold: false } }
+```
+
+`legalHold: false` is evaluated by PostgreSQL as part of the same statement that performs the write — there is no gap between checking it and acting on it, because they are the same database operation. A hold acquired at any point up to immediately before this statement executes now causes the statement to affect zero rows, not to silently succeed.
+
+### 28.5 Zero-row error classification (no unscoped-by-id follow-up)
+
+When `updateMany` returns `count: 0`, the facade performs exactly one follow-up call: `findOwnedImage(clinicId, imageId)` — the same fully tenant-scoped lookup (`{ id: imageId, clinicId, study: { clinicId } }`) used everywhere else in this module, never an unscoped `{ id: imageId }` lookup.
+
+- `recheck === null` → `ImagingNotFoundError` (row does not exist under this tenant — covers missing/cross-tenant/denormalization-mismatch identically, exactly as every other method in this module).
+- `recheck.originalName === REDACTED_PLACEHOLDER` → treated as a benign concurrent-writer race (another call already completed the redaction) and returns normally — same end-state, not an error.
+- Otherwise (row exists, belongs to this tenant, not yet redacted) → `ImagingLegalHoldViolationError`. This is a sound, not merely plausible, inference: of the four predicate components (`id`, `clinicId`, `study.clinicId`, `study.legalHold`), the first three are immutable for a row's lifetime (never reassigned by any code path in this codebase), so a 0-row result for a row the tenant-scoped recheck proves exists and belongs to this tenant can only be explained by `study.legalHold` having been `true` at the instant the `UPDATE` statement executed.
+
+### 28.6 No cross-tenant leakage guarantee
+
+A cross-tenant `imageId` is rejected by the **very first** `findOwnedImage` call, before the mutation/recheck logic is ever reached — it throws `ImagingNotFoundError` immediately and never touches the legal-hold branch at all. Consequence, verified by a direct test (§28.9, test 2): **a cross-tenant image under legal hold still produces `ImagingNotFoundError`, never `ImagingLegalHoldViolationError`** — the specific value of the error is itself a side-channel this task closes, not merely the message text.
+
+### 28.7 Idempotency / legal-hold precedence — chosen behavior and rationale
+
+F2-PREP-009 does not specify ordering between the idempotent-no-op short-circuit and legal-hold enforcement (confirmed by direct re-read; the only idempotency-adjacent line is §14's regression-preservation instruction, which does not address ordering). This task's chosen behavior, unchanged from pre-R3 and re-verified as still correct post-fix: the **read-time** legal-hold check (`if (image.study.legalHold) throw ...`) runs **before** the already-redacted short-circuit (`if (image.originalName === REDACTED_PLACEHOLDER) return`). Because `findOwnedImage` re-reads the row fresh on every call (no caching across calls), an already-redacted row whose study is now under legal hold correctly throws `ImagingLegalHoldViolationError` rather than silently no-op-succeeding — legal hold takes precedence over the idempotent short-circuit whenever the row's state *as read at the top of this call* shows it held, even though no further field change would otherwise be needed. This is unaffected by the R3 atomic-mutation fix, which only changes the write path (a write is never reached in this branch, since the throw happens first).
+
+### 28.8 Concurrency test — design
+
+`server/src/tests/imagingLifecycleFacade.test.ts`, new section "8b", test "deterministic concurrency regression": a same-tenant, non-held study+image are created; a test-only synchronization seam (`__setRedactionPreMutationBarrierForTest`, module-private `preMutationBarrier` variable in `public.ts`) is installed with a callback that resolves a `barrierReached` promise and then awaits a `barrierGate` promise the test controls. `redactForAnonymization(...)` is invoked (not awaited yet); the test `await`s `barrierReached` — a promise-based deterministic gate, not a fixed-duration `setTimeout`/sleep — guaranteeing the in-flight call has passed its read + in-memory legal-hold check and is paused immediately before its `updateMany`. The test then flips `legalHold: true` directly via `prisma.imagingStudy.update(...)` and releases the gate. The barrier itself is a bare `() => Promise<void>` with no parameters and no return value — it cannot observe or alter `clinicId`/`imageId`/any predicate, only delay resumption, so it cannot itself weaken authorization behavior.
+
+### 28.9 Concurrency test — result and direct tests
+
+All four new tests in section "8b" passed on a real disposable PostgreSQL (§28.11):
+
+1. **Predicate-capture test** — temporarily wraps `prisma.imagingImage.updateMany` to capture its actual call arguments for a real `redactForAnonymization` invocation; asserts `where.study.legalHold === false` is present in the captured predicate (proves the fix targets the actual DB statement, not only the in-memory pre-check).
+2. **Cross-tenant held image** — a Clinic-B image under legal hold, called with Clinic A's `clinicId` → `ImagingNotFoundError` (never `ImagingLegalHoldViolationError`), confirming §28.6.
+3. **Denormalized mismatch under legal hold** — an image whose own `clinicId` is corrupted to disagree with its study's `clinicId`, study under legal hold → `ImagingNotFoundError` from both the image-side and study-side caller `clinicId`, confirming the tenant predicate is checked before legal hold is ever considered.
+4. **Deterministic concurrency regression** (§28.8's design) — asserts the call rejects with `ImagingLegalHoldViolationError`, `originalName` remains byte-for-byte unchanged after the race is closed, and an unrelated cross-tenant row (`imageB`) remains untouched. **This is the direct proof the race is closed**, not an inference from the predicate shape alone.
+
+Pre-existing tests in section 8 (`legal hold: refuses to redact and does not silently bypass`, cross-tenant redaction leaves the row untouched) continue to pass unmodified, confirming no regression to same-tenant-held or cross-tenant same-image-id behavior.
+
+### 28.10 Test seam review
+
+`__setImagingStorageExistenceCheckerForTest` (pre-existing) and the new `__setRedactionPreMutationBarrierForTest`: **Option B retained** (module-private variable + narrow test-only setter), not replaced with a repository-native mocking method. Full evidence, written directly into the doc comment above `__setImagingStorageExistenceCheckerForTest` in `public.ts` (so it stays co-located with the code it justifies):
+
+- **Sequential execution:** `imagingLifecycleFacade.test.ts` is a single straight-line `async function main()` — every `await test(...)` runs to completion, in source order, in one process, before the next begins. No `node:test` `describe`/parallel runner is used by this file.
+- **Process-local state:** both seams are plain module-scope `let` bindings in this process's module cache.
+- **Restoration:** every override installation in the test file is paired with a `finally`-block restore to `null` — verified by direct inspection of every call site (§28.9 tests 1 and 4, plus the pre-existing storage-checker tests).
+- **Zero production importers:** the section-13 unused-facade-proof test (unmodified, still passing) scans `routes`/`middleware`/`jobs`/`services` for any import of this module.
+- **Cannot alter tenant predicates:** neither seam takes `clinicId`/`imageId`/any `where`-clause argument — structurally incapable of weakening tenant scoping.
+- **Scope of the claim, stated explicitly, not overclaimed:** sequential-safety within this test file/process only — not a general claim of parallel-test safety. If this suite is ever run under a concurrent test runner, both seams would need to move to a per-call parameter or async-local-storage-scoped mechanism.
+
+No parameter was added to any of the four accepted `ImagingLifecyclePort` methods.
+
+### 28.11 Validation — exact commands, results, infrastructure
+
+| # | Command | Cwd | Exit | Result |
+|---|---|---|---|---|
+| 1 | `git diff --check` | worktree root | `0` | clean (0 conflict markers/whitespace issues) |
+| 2 | `npx prisma generate` | `server/` | `0` | Prisma Client v7.8.0 generated |
+| 3 | `npx tsc --noEmit` | `server/` | `0` | zero type errors |
+| 4 | `npm run test:imaging` | `server/` | `0` | **103 passed, 0 failed** (mock-based, no disposable DB) |
+| 5 | `npm run test:patient-privacy` | `server/` | `0` | **38 passed, 0 failed** (mock-based, no disposable DB) |
+| 6 | `npm run test:runtime:postgres` (orchestrator profile `postgres`, runs `server:test:disposable-db`, which chains `test:imaging-characterization && test:imaging-lifecycle-facade` last) | worktree root | `0` | full 15-member aggregate exit `0` |
+
+Sub-results within run 6, extracted from its own stdout:
+- `test:imaging-characterization`'s `CT-32` sub-suite: **153 passed, 0 failed** (unaffected by this task, re-confirmed).
+- `Imaging-Lifecycle-Facade` (this task's suite): **34 passed, 0 failed** — was 30 pre-R3; +4 net, exactly the four new section-8b tests (§28.9); zero regressions to the other 30.
+- **Deterministic legal-hold concurrency regression** (test 4 of 4 in §28.9): passed within this same run — direct proof, not inference.
+- **Zero production caller scan:** re-run independently outside the suite too — `grep -rn "__setRedactionPreMutationBarrierForTest\|services/imaging/public" server/src/routes server/src/middleware server/src/jobs server/src/services` (excluding `*.test.ts`) → only the definition site itself in `public.ts`, zero importers.
+
+Orchestrator self-report JSON (run 6, emitted to stdout — no separate summary file was written to the worktree root by this invocation; the two pre-existing `postgres-run-summary*.json` files in the worktree are unrelated leftovers from earlier sessions, left untouched):
+
+```json
+{
+  "runId": "20260803T170803Z-37686cc0-46840",
+  "profile": "postgres",
+  "containerNames": ["nmtest-pg-postgres-20260803t170803z-37686cc0-46840"],
+  "networkName": "nmtest-net-postgres-20260803t170803z-37686cc0-46840",
+  "hostPorts": { "postgres": 64431 },
+  "databaseName": "nmtest_postgres_20260803t170803z_37686cc0_46840",
+  "migration": { "code": 0, "step": "ok" },
+  "test": { "scriptName": "server:test:disposable-db", "code": 0 },
+  "cleanup": { "success": true, "errors": [] },
+  "outcome": { "exitCode": 0, "reasons": ["tests passed", "cleanup succeeded"] }
+}
+```
+
+`cleanup.success: true`, `cleanup.errors: []` — zero residual Docker resources for this run's container/network. Note on duration: this repository's custom `dbVerificationHarness.ts` test runner does not emit machine-readable per-suite timing, and the orchestrator's self-report JSON does not include a wall-clock `durationMs` field — exact per-suite/per-run durations are therefore not independently reportable beyond "the full aggregate, including 15 chained suites, completed successfully within this session's single foreground command."
+
+### 28.12 Files changed (this R3 task)
+
+- `server/src/services/imaging/public.ts` — `redactForAnonymization`'s write predicate now includes `study.legalHold: false`; added tenant-scoped zero-row classification; added the `__setRedactionPreMutationBarrierForTest` test-only synchronization seam; expanded module header and the storage-checker's doc comment with R3 rationale (§28.3–§28.10).
+- `server/src/tests/imagingLifecycleFacade.test.ts` — new section "8b" (4 tests, §28.9); imports the new test seam.
+- This file (§28, additive) and its JSON companion (`r3AtomicLegalHold`, additive key).
+- `docs/program/CURRENT_PHASE.md`, `docs/program/NORAMEDI_MASTER_TRACKER.md`, `docs/program/phases/F2_MODULAR_BOUNDARIES.md`, `docs/program/evidence/README.md` — additive entries for this task.
+- No `server/prisma/schema.prisma`, migration, route, or `.github/workflows/*.yml` file touched.
+
+### 28.13 Migration / backward compatibility / rollback
+
+**Migration:** none — no schema/migration file touched. **Backward compatibility:** no obligation — PR #304 remains unmerged, zero production callers, both re-confirmed. **Rollback:** revert/delete `server/src/services/imaging/public.ts` and its test file, or revert this task's specific commit; no data or schema migration is involved either direction.
+
+### 28.14 Tenant / KVKK / legal-hold impact
+
+Tenant enforcement unchanged in shape (every predicate still carries the caller-supplied `clinicId` on both sides of the relation) and strengthened in time: the legal-hold guarantee that was previously only a read-time promise is now a write-time database guarantee. No new data exposure — the facade remains additive and unused, so this fix has zero current runtime/production exposure; its value is exclusively in closing the gap before any future caller (Stage 3, not authorized here) could be exposed to it.
+
+### 28.15 Review threads
+
+No new review threads since R2. The 3 pre-existing Copilot findings remain replied-to/resolved as recorded in §27; re-verified present and unchanged via `gh api repos/MustafaBasol/DisKlinikCRM/pulls/304/comments` at this task's pre-edit gate (§28.1).
+
+### 28.16 Windows Bridge CI failure — classification (corrected from §27.16)
+
+§27.16 recorded the failure and a same-commit-rerun-passed observation but did not formally classify it against this program's five-way taxonomy. Re-investigated in this task with additional evidence:
+
+1. **Exact workflow run and job:** `windows-bridge-pr` run `30833102986`, **attempt 1** (not the final attempt — `gh api .../actions/runs/30833102986` reports `run_attempt: 2`, `conclusion: success`; attempt 1's own job list, fetched via `.../attempts/1/jobs`, shows `Windows Bridge .NET tests` → `conclusion: failure`, job id `91751602659`).
+2. **Exact failing assertion**, from that job's own logs: `NoraMedi.Bridge.Core.Tests.Runtime.BridgeOrchestratorTests.Heartbeat_AfterPairing_TransitionsToOnlineAndOmitsNullCapabilities` — `Assert.Contains() Failure: Sub-string not found. String: "" Not found: "\"lastSuccessfulUploadAt\":null"`. The searched string being **empty** (not merely a wrong value) is itself evidence of a capture/output-timing artifact in the .NET test infrastructure, not a logic defect in the assertion's subject.
+3. **Diff comparison:** `git diff --name-only 967ed95..HEAD -- windows-bridge/` → zero files. This PR touches zero files under `windows-bridge/` at any point in its history.
+4. **Main-branch control run:** `windows-bridge-pr.yml` triggers only on pull-request events (confirmed by reading the workflow file); it never runs against `main` pushes (`ci-main-and-nightly.yml` does not include this job). **No comparable control run against `origin/main` exists or can be obtained without opening a new PR/workflow_dispatch — not performed, to avoid an out-of-scope side effect.**
+5. **Classification: `FLAKY_UNVERIFIED`.** Rationale: PR_CAUSED is excluded by (3) (zero file overlap). PRE_EXISTING_REPRODUCIBLE_ON_MAIN cannot be claimed — no control run is obtainable (4), so "reproducible on main" is unverifiable, not merely unverified-but-likely. The identical commit (`7bcd1c8`) passed on an unmodified rerun (attempt 2) with zero code change between attempts — the defining signature of flakiness. INFRASTRUCTURE_FAILURE is not indicated (an application-level string-assertion mismatch, not a runner/tooling crash or timeout).
+6. No windows-bridge/.NET code was touched to "fix" this — correctly out of scope for this PR.
+7. **Current disposition:** as of this task's own final push (`cd29d0f`, §28.17), the `windows-bridge-pr` workflow passed on **attempt 1**, no rerun needed (see §28.17) — so this flaky job is not currently blocking PR #304's CI status. If it recurs on a future push, the recommended action remains a separate, unrelated `.NET` test-infrastructure investigation task — not a fix folded into this PR.
+
+### 28.17 Final PR #304 push and CI
+
+Pushed to the existing branch: new head `cd29d0f...` (full SHA and final CI results recorded below once observed on this exact head — see the Delivery Report for this task, which is the authoritative source for the final, as-observed CI conclusion; this document is not re-edited after the fact for status that changes after this section was written, per this program's append-only evidence convention — any correction is itself a new, additive section).
+
+### 28.18 Revised status matrix
+
+| Field | Value |
+|---|---|
+| Agent completed | true |
+| Race fixed (write-time atomic `legalHold: false` predicate) | true |
+| Zero-row classification uses only tenant-scoped follow-up | true |
+| Cross-tenant image can never surface `ImagingLegalHoldViolationError` | true — directly tested |
+| Deterministic concurrency regression test passes | true — 34/34 facade suite, real disposable Postgres |
+| Test seam reviewed, Option B retained with full evidence | true |
+| Zero production callers | true (re-confirmed) |
+| Windows Bridge failure classified | `FLAKY_UNVERIFIED` (not PR-caused; not a fix folded into this PR) |
+| Merged | false |
+| Deployed | false |
+| Production verified | false |
+
+### 28.19 Exact next task
+
+Program-owner review and acceptance of this R3 correction alongside the R2 re-implementation it amends. If accepted, Stage 2 (`OVL-01` convergence + `ImagingRequest` PATCH/cancel concurrency hardening) remains the next architecturally-sequenced item; Stage 3 (Privacy/KVKK caller migration) remains gated behind Stage 2. Neither started nor authorized by this task. A separate, unrelated task to investigate `BridgeOrchestratorTests.Heartbeat_AfterPairing_TransitionsToOnlineAndOmitsNullCapabilities`'s flakiness is recommended but not created or authorized here.
