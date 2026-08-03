@@ -39,7 +39,11 @@
     "signaturesAlteredFromAccepted": false,
     "checkImageStorageExistsNote": "CORRECTED 2026-08-03 (see statusCorrection below). As originally merged this method carried an additional optional trailing fileExistsForTest parameter, which was signature drift from the accepted 1-argument contract despite being optional/defaulted/test-only. Fixed by moving the test override to a module-private variable settable only via the separately-named, non-accepted-contract export __setImagingStorageExistenceCheckerForTest. The method now matches the accepted signature exactly."
   },
-  "excludedSurfaces": ["LinkImagingStudy", "UpdateImagingRequest", "CancelImagingRequest"],
+  "excludedSurfaces": [
+    "LinkImagingStudy",
+    "UpdateImagingRequest",
+    "CancelImagingRequest"
+  ],
   "tenantEnforcement": {
     "getImagesForLifecycleReview": "clinicId and patientId both applied in the Prisma where clause (flat column + relation)",
     "imageIdOnlyMethods": {
@@ -53,18 +57,40 @@
   },
   "dto": {
     "name": "ImagingLifecycleImageDto",
-    "fields": ["id", "studyId", "clinicId", "patientId", "legalHold", "storageKey"],
+    "fields": [
+      "id",
+      "studyId",
+      "clinicId",
+      "patientId",
+      "legalHold",
+      "storageKey"
+    ],
     "legalHoldReasonIncluded": false,
     "legalHoldReasonExclusionReason": "legalHoldReason is role-gated (OWNER/ORG_ADMIN only) at the route layer via canSeeLegalHoldReason(req); the facade has no req/role context, so including it would either leak unconditionally or require inventing an unauthorized role check"
   },
   "typedErrors": [
-    { "class": "ImagingNotFoundError", "code": "IMAGING_NOT_FOUND" },
-    { "class": "ImagingLegalHoldViolationError", "code": "IMAGING_LEGAL_HOLD_VIOLATION" },
-    { "class": "ImagingStorageUnavailableError", "code": "IMAGING_STORAGE_UNAVAILABLE" },
-    { "class": "ImagingInvalidRedactionReasonError", "code": "IMAGING_INVALID_REDACTION_REASON" }
+    {
+      "class": "ImagingNotFoundError",
+      "code": "IMAGING_NOT_FOUND"
+    },
+    {
+      "class": "ImagingLegalHoldViolationError",
+      "code": "IMAGING_LEGAL_HOLD_VIOLATION"
+    },
+    {
+      "class": "ImagingStorageUnavailableError",
+      "code": "IMAGING_STORAGE_UNAVAILABLE"
+    },
+    {
+      "class": "ImagingInvalidRedactionReasonError",
+      "code": "IMAGING_INVALID_REDACTION_REASON"
+    }
   ],
   "redactionReason": {
-    "values": ["anonymization", "deletion_review"],
+    "values": [
+      "anonymization",
+      "deletion_review"
+    ],
     "source": "reuses PatientPrivacyRequest.requestType's existing vocabulary (patientPrivacy.ts VALID_REQUEST_TYPES), not invented"
   },
   "transactionOwnership": {
@@ -92,15 +118,38 @@
   "unusedFacadeProof": {
     "sourceScanTestZeroMatches": true,
     "independentGrepZeroMatches": true,
-    "searchedRoots": ["server/src/routes", "server/src/services", "server/src/middleware", "server/src/jobs"]
+    "searchedRoots": [
+      "server/src/routes",
+      "server/src/services",
+      "server/src/middleware",
+      "server/src/jobs"
+    ]
   },
   "validation": {
-    "gitDiffCheck": { "exitCode": 0 },
-    "jsonParseValidation": { "packageJson": "OK", "serverPackageJson": "OK", "ownCompanion": "OK" },
-    "prismaGenerate": { "exitCode": 0 },
-    "serverTypecheck": { "exitCode": 0 },
-    "facadeTests": { "command": "npm run test:imaging-lifecycle-facade", "passed": 25, "failed": 0, "skipped": 0 },
-    "imagingCharacterization": { "unchanged": true, "weakened": false },
+    "gitDiffCheck": {
+      "exitCode": 0
+    },
+    "jsonParseValidation": {
+      "packageJson": "OK",
+      "serverPackageJson": "OK",
+      "ownCompanion": "OK"
+    },
+    "prismaGenerate": {
+      "exitCode": 0
+    },
+    "serverTypecheck": {
+      "exitCode": 0
+    },
+    "facadeTests": {
+      "command": "npm run test:imaging-lifecycle-facade",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    },
+    "imagingCharacterization": {
+      "unchanged": true,
+      "weakened": false
+    },
     "fullDisposableDbAggregate": {
       "command": "npm run test:runtime:postgres -- --summary-file=postgres-run-summary.json",
       "profile": "postgres",
@@ -115,8 +164,16 @@
       "removed": 0,
       "errors": 0
     },
-    "existingImagingRegression": { "command": "npm run test:imaging", "passed": 103, "failed": 0 },
-    "existingPrivacyRegression": { "command": "npm run test:patient-privacy", "passed": 38, "failed": 0 }
+    "existingImagingRegression": {
+      "command": "npm run test:imaging",
+      "passed": 103,
+      "failed": 0
+    },
+    "existingPrivacyRegression": {
+      "command": "npm run test:patient-privacy",
+      "passed": 38,
+      "failed": 0
+    }
   },
   "escalationRule": {
     "fullBackendSuiteRun": false,
@@ -125,7 +182,19 @@
   "migrationStatus": "none",
   "backwardCompatibility": "total - zero existing caller/route/response/database/storage/configuration change",
   "rollbackMethod": "git revert of the implementation commit(s), or delete public.ts + its test file and reverse the additive package-script/doc wiring",
-  "openDefectsUnchanged": ["CT-23", "CT-32", "CR-03", "BLK-02", "FP-06", "OVL-01", "BLK-01", "PZ-IMG-03", "R-070", "R-046", "R-071"],
+  "openDefectsUnchanged": [
+    "CT-23",
+    "CT-32",
+    "CR-03",
+    "BLK-02",
+    "FP-06",
+    "OVL-01",
+    "BLK-01",
+    "PZ-IMG-03",
+    "R-070",
+    "R-046",
+    "R-071"
+  ],
   "taskStatus": {
     "agentCompleted": true,
     "testsPassed": true,
@@ -250,7 +319,12 @@
       "redactForAnonymization": "(clinicId: string, imageId: string, reason: RedactionReason): Promise<void>",
       "checkImageStorageExists": "(clinicId: string, imageId: string): Promise<boolean>",
       "getImagesForLifecycleReview": "(clinicId: string, patientId: string): Promise<ImagingLifecycleImageDto[]>",
-      "runtimeArityVerified": { "markStorageMissing": 2, "redactForAnonymization": 3, "checkImageStorageExists": 2, "getImagesForLifecycleReview": 2 },
+      "runtimeArityVerified": {
+        "markStorageMissing": 2,
+        "redactForAnonymization": 3,
+        "checkImageStorageExists": 2,
+        "getImagesForLifecycleReview": 2
+      },
       "compatibilityWrapper": false,
       "optionalTenantArgument": false,
       "ambientOrGlobalTenantContext": false,
@@ -294,8 +368,16 @@
       "docs/program/evidence/F2-IMPL-001-A_additive_unused_internal_imaging_facade_skeleton.json"
     ],
     "tests": {
-      "imagingLifecycleFacade": { "passed": 30, "failed": 0, "priorCount": 25 },
-      "imagingCharacterizationCt32": { "passed": 153, "failed": 0, "unaffected": true },
+      "imagingLifecycleFacade": {
+        "passed": 30,
+        "failed": 0,
+        "priorCount": 25
+      },
+      "imagingCharacterizationCt32": {
+        "passed": 153,
+        "failed": 0,
+        "unaffected": true
+      },
       "fullDisposableDbAggregate": {
         "command": "npm run test:runtime:postgres",
         "runId": "20260803T162515Z-9e2ba333-44516",
@@ -305,15 +387,32 @@
         "cleanupSuccess": true,
         "exitCode": 0
       },
-      "existingImagingRegression": { "command": "npx tsx src/tests/imaging.test.ts", "passed": 103, "failed": 0, "requiresDisposableDb": false },
-      "existingPrivacyRegression": { "command": "npx tsx src/tests/patientPrivacy.test.ts", "passed": 38, "failed": 0, "requiresDisposableDb": false },
-      "serverTypecheck": { "command": "npx prisma generate && npx tsc --noEmit", "exitCode": 0 }
+      "existingImagingRegression": {
+        "command": "npx tsx src/tests/imaging.test.ts",
+        "passed": 103,
+        "failed": 0,
+        "requiresDisposableDb": false
+      },
+      "existingPrivacyRegression": {
+        "command": "npx tsx src/tests/patientPrivacy.test.ts",
+        "passed": 38,
+        "failed": 0,
+        "requiresDisposableDb": false
+      },
+      "serverTypecheck": {
+        "command": "npx prisma generate && npx tsc --noEmit",
+        "exitCode": 0
+      }
     },
     "characterizationResult": "unmodified, unweakened; CT-32 independently re-confirmed 153/153 as part of the same disposable-db aggregate run",
     "disposableDbEvidence": {
       "runId": "20260803T162515Z-9e2ba333-44516",
-      "containerNames": ["nmtest-pg-postgres-20260803t162515z-9e2ba333-44516"],
-      "hostPorts": { "postgres": 59217 },
+      "containerNames": [
+        "nmtest-pg-postgres-20260803t162515z-9e2ba333-44516"
+      ],
+      "hostPorts": {
+        "postgres": 59217
+      },
       "cleanupSuccess": true,
       "cleanupErrors": [],
       "residualLabeledDockerResourcesObserved": 0
@@ -322,7 +421,16 @@
     "backwardCompatibility": "total — zero production caller, zero route, zero deployable-behavior change",
     "rollback": "revert/delete server/src/services/imaging/public.ts and its test file; no data/schema migration involved",
     "tenantKvkkSecurityImpact": "closes the tenant-authorization gap for an as-yet-unused internal facade; zero production exposure change since there are zero callers",
-    "openImagingDefectsUnchanged": ["CT-23", "CT-32", "CR-03", "BLK-02", "FP-06", "OVL-01", "BLK-01", "PZ-IMG-03"],
+    "openImagingDefectsUnchanged": [
+      "CT-23",
+      "CT-32",
+      "CR-03",
+      "BLK-02",
+      "FP-06",
+      "OVL-01",
+      "BLK-01",
+      "PZ-IMG-03"
+    ],
     "taskStatus": {
       "agentCompleted": true,
       "testsPassed": true,
@@ -345,7 +453,10 @@
       "mergeStateStatus": "BLOCKED",
       "mergeStateStatusReason": "branch-protection/required-review gating, not conflicts or CI",
       "reviewDecision": "",
-      "ciLayersRun": { "id": 30833104942, "conclusion": "success" },
+      "ciLayersRun": {
+        "id": 30833104942,
+        "conclusion": "success"
+      },
       "windowsBridgePrRun": {
         "id": 30833102986,
         "initialConclusion": "failure",
@@ -356,6 +467,202 @@
       },
       "finalChecksTotal": 14,
       "finalChecksPassing": 14
+    }
+  },
+  "r3AtomicLegalHold": {
+    "date": "2026-08-03",
+    "taskId": "F2-IMPL-001-A-R3",
+    "supersedes": "amends redactForAnonymization as re-implemented in r2Reimplementation; does not alter any other method",
+    "preEditGate": {
+      "originMainAtGateTime": "6f539b237019945443afe6156f9fc2a9fe32ffa4",
+      "originMainAdvancedMidTask": true,
+      "originMainFinal": "26cf44fe127ca960e6854c62db323c9a63854335",
+      "pr304HeadAtGateTime": "9fdfb91739464809d442a9b8d14fa236adfaf624",
+      "pr304Mergeable": "MERGEABLE",
+      "reviewThreadsAtGateTime": 6,
+      "newReviewThreadsSinceR2": 0
+    },
+    "blockingDefect": {
+      "description": "redactForAnonymization checked ImagingStudy.legalHold only in memory at read time; the updateMany write predicate never included legalHold, so a hold acquired between the read and the write had no effect on the write",
+      "raceWindow": "between findOwnedImage's read and the subsequent updateMany call"
+    },
+    "atomicMutationDesign": {
+      "writePredicate": "{ id: imageId, clinicId, study: { clinicId, legalHold: false } }",
+      "guarantee": "legal hold is checked by the same database statement that performs the write, not a prior read"
+    },
+    "zeroRowClassification": {
+      "method": "a second, fully tenant-scoped findOwnedImage follow-up only — never an unscoped-by-id lookup",
+      "notFoundUnderTenant": "ImagingNotFoundError",
+      "alreadyRedactedByConcurrentWriter": "benign no-op, returns normally",
+      "otherwise": "ImagingLegalHoldViolationError",
+      "soundnessArgument": "of the four predicate fields (id, clinicId, study.clinicId, study.legalHold), only study.legalHold can independently change between the read and the write — the other three are immutable for a row's lifetime"
+    },
+    "noLeakageGuarantee": "a cross-tenant imageId is rejected by the initial findOwnedImage call before the legal-hold branch is ever reached, so it can never surface ImagingLegalHoldViolationError — directly tested",
+    "idempotencyLegalHoldPrecedence": {
+      "f2Prep009Specifies": false,
+      "chosenBehavior": "the read-time legal-hold check runs before the already-redacted short-circuit, so an already-redacted-but-now-held row still throws ImagingLegalHoldViolationError rather than silently no-op-succeeding",
+      "unaffectedByR3Fix": true
+    },
+    "concurrencyTest": {
+      "mechanism": "__setRedactionPreMutationBarrierForTest — a bare () => Promise<void> with no clinicId/imageId/predicate access",
+      "synchronization": "promise-based deterministic gate (await barrierReached), never a fixed-duration sleep",
+      "assertions": [
+        "rejects with ImagingLegalHoldViolationError",
+        "originalName remains byte-for-byte unchanged",
+        "an unrelated cross-tenant row remains untouched"
+      ],
+      "result": "passed"
+    },
+    "directTestsAdded": [
+      "mutation predicate capture proves study.legalHold: false is present in the actual updateMany where clause",
+      "cross-tenant image under legal hold yields ImagingNotFoundError, never ImagingLegalHoldViolationError",
+      "denormalized clinicId/study.clinicId mismatch under legal hold still fails closed as ImagingNotFoundError",
+      "deterministic concurrency regression (see concurrencyTest)"
+    ],
+    "testSeamReview": {
+      "decision": "Option B retained for both __setImagingStorageExistenceCheckerForTest and the new __setRedactionPreMutationBarrierForTest",
+      "evidence": [
+        "sequential execution: single straight-line async main(), one process, no node:test parallel runner",
+        "process-local state: plain module-scope let bindings",
+        "every override restored in a finally block",
+        "zero production importers (section-13 unused-facade-proof test)",
+        "cannot alter tenant predicates: neither seam takes clinicId/imageId/where-clause arguments",
+        "scope of claim explicitly limited to sequential execution within this test file/process, not general parallel-test safety"
+      ],
+      "noParameterAddedToAcceptedMethods": true
+    },
+    "filesChanged": [
+      "server/src/services/imaging/public.ts",
+      "server/src/tests/imagingLifecycleFacade.test.ts",
+      "docs/program/evidence/F2-IMPL-001-A_ADDITIVE_UNUSED_INTERNAL_IMAGING_FACADE_SKELETON.md (§28, additive)",
+      "docs/program/evidence/F2-IMPL-001-A_additive_unused_internal_imaging_facade_skeleton.json (this key, additive)",
+      "docs/program/CURRENT_PHASE.md",
+      "docs/program/NORAMEDI_MASTER_TRACKER.md",
+      "docs/program/phases/F2_MODULAR_BOUNDARIES.md",
+      "docs/program/evidence/README.md"
+    ],
+    "validation": {
+      "gitDiffCheck": {
+        "exitCode": 0
+      },
+      "prismaGenerate": {
+        "exitCode": 0
+      },
+      "serverTypecheck": {
+        "command": "npx tsc --noEmit",
+        "exitCode": 0
+      },
+      "facadeSuite": {
+        "command": "npx tsx src/tests/imagingLifecycleFacade.test.ts",
+        "passed": 34,
+        "failed": 0,
+        "wasBeforeThisTask": 30
+      },
+      "existingImagingRegression": {
+        "command": "npx tsx src/tests/imaging.test.ts",
+        "passed": 103,
+        "failed": 0,
+        "requiresDisposableDb": false
+      },
+      "existingPrivacyRegression": {
+        "command": "npx tsx src/tests/patientPrivacy.test.ts",
+        "passed": 38,
+        "failed": 0,
+        "requiresDisposableDb": false
+      },
+      "disposableDbAggregate": {
+        "command": "npm run test:runtime:postgres",
+        "runId": "20260803T170803Z-37686cc0-46840",
+        "profile": "postgres",
+        "migrationCode": 0,
+        "testCode": 0,
+        "cleanupSuccess": true,
+        "exitCode": 0
+      },
+      "characterizationCt32": {
+        "passed": 153,
+        "failed": 0
+      },
+      "zeroProductionCallerScan": {
+        "command": "grep -rn \"__setRedactionPreMutationBarrierForTest|services/imaging/public\" server/src/routes server/src/middleware server/src/jobs server/src/services",
+        "matchesOutsideDefinitionSite": 0
+      },
+      "durationNote": "the custom dbVerificationHarness.ts test runner and the orchestrator's self-report JSON do not emit machine-readable per-suite/run wall-clock duration fields; not independently reportable beyond successful completion within this session's single foreground command"
+    },
+    "disposableDbEvidence": {
+      "runId": "20260803T170803Z-37686cc0-46840",
+      "containerNames": [
+        "nmtest-pg-postgres-20260803t170803z-37686cc0-46840"
+      ],
+      "hostPorts": {
+        "postgres": 64431
+      },
+      "cleanupSuccess": true,
+      "cleanupErrors": [],
+      "residualLabeledDockerResourcesObserved": 0
+    },
+    "migration": "none",
+    "backwardCompatibility": "no obligation — zero production callers, PR unmerged",
+    "rollback": "revert/delete server/src/services/imaging/public.ts and its test file, or revert this task's specific commit; no data/schema migration involved either direction",
+    "tenantKvkkSecurityImpact": "strengthens the legal-hold guarantee from read-time to write-time-atomic; zero current production exposure since the facade remains unused",
+    "reviewThreads": {
+      "newSinceR2": 0,
+      "totalOnPr": 6,
+      "allRepliedOrResolved": true
+    },
+    "midTaskOriginMainReconciliation": {
+      "trigger": "PR #316 (REPO-HYGIENE-001-P6, an unrelated repository-hygiene documentation closeout) merged to origin/main mid-task",
+      "originMainBefore": "6f539b237019945443afe6156f9fc2a9fe32ffa4",
+      "originMainAfter": "26cf44fe127ca960e6854c62db323c9a63854335",
+      "method": "git merge --no-ff origin/main (no rebase, no force-push)",
+      "conflicts": [
+        "docs/program/CURRENT_PHASE.md — both branches independently prepended a new top log entry; resolved by keeping both entries, resequenced newest-first (this task's R3 entry newest, REPO-HYGIENE-001-P6 demoted to '(pre-R3)', the prior F2-PREP-009/PR#307 entry kept as 'Prior update (same day)', this task's own R2 entry demoted from '(pre-R3)' to plain 'Prior update')"
+      ],
+      "autoMergedCleanly": [
+        "docs/program/NORAMEDI_MASTER_TRACKER.md",
+        "docs/program/phases/F0_BASELINE_AND_VALIDATION.md"
+      ],
+      "codeFilesTouchedByEitherMerge": 0
+    },
+    "windowsBridgeCiClassification": {
+      "job": "Windows Bridge .NET tests",
+      "workflow": "windows-bridge-pr",
+      "failingTest": "NoraMedi.Bridge.Core.Tests.Runtime.BridgeOrchestratorTests.Heartbeat_AfterPairing_TransitionsToOnlineAndOmitsNullCapabilities",
+      "failingAssertion": "Assert.Contains() Failure: Sub-string not found. String: \"\" Not found: \"\\\"lastSuccessfulUploadAt\\\":null\"",
+      "observedOnCommits": [
+        "7bcd1c8658da95119ab725f454955d57f89f8e4f (R2 push, attempt 1)",
+        "cd29d0fdb1b28e8347a596e3d9ad218558be2463 (R3 push, attempt 1)"
+      ],
+      "bothPassedOnRerunAttempt2": true,
+      "diffOverlapWithWindowsBridge": 0,
+      "mainBranchControlRunAvailable": false,
+      "mainBranchControlRunReason": "windows-bridge-pr.yml triggers only on pull_request events; ci-main-and-nightly.yml does not include this job",
+      "classification": "FLAKY_UNVERIFIED",
+      "classificationRationale": "PR_CAUSED excluded by zero file overlap; PRE_EXISTING_REPRODUCIBLE_ON_MAIN unverifiable — no control run obtainable; identical commit fails then passes on rerun twice — the defining flaky signature; not an infrastructure-level failure (application-level string-assertion mismatch, not a runner crash/timeout)",
+      "codeChangeToFixIt": false
+    },
+    "taskStatus": {
+      "agentCompleted": true,
+      "raceFixed": true,
+      "zeroRowClassificationTenantScopedOnly": true,
+      "crossTenantCannotSurfaceLegalHoldError": true,
+      "concurrencyRegressionTestPasses": true,
+      "testSeamReviewed": true,
+      "zeroProductionCallers": true,
+      "windowsBridgeClassification": "FLAKY_UNVERIFIED",
+      "merged": false,
+      "deployed": false,
+      "productionVerified": false
+    },
+    "mergeSafe": false,
+    "mergeSafeReason": "awaiting program-owner review of this R3 correction alongside R2, per the task's own status-ceiling instruction",
+    "deploymentSafe": true,
+    "deploymentSafeReason": "zero production callers; merging changes no deployable runtime behavior",
+    "nextTask": "Program-owner review and acceptance of this R3 correction alongside R2. Stage 2 (OVL-01 convergence + ImagingRequest concurrency hardening) remains the next architecturally-sequenced item; Stage 3 caller migration remains gated behind Stage 2. A separate, unrelated .NET test-flakiness investigation task is recommended for the Windows Bridge job, not created or authorized here.",
+    "finalPrPushAndCi": {
+      "codeCommit": "cd29d0fdb1b28e8347a596e3d9ad218558be2463",
+      "reconciliationMergeCommit": "4d3b2a4",
+      "pushedHead": "will be filled after final push verification"
     }
   }
 }
