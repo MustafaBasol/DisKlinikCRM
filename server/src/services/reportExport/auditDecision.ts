@@ -10,12 +10,15 @@
  * AuditLog metadata NEVER contains patient names, phone numbers, emails,
  * row-level data, or raw export contents — only the report key, format,
  * a non-sensitive filter summary (date ranges / enum values / ids, never
- * free text), and the exported row count. `createdAt` (schema default)
- * supplies the timestamp; this module never invents its own.
+ * free text), the exported row count, and the resolved clinic-scope
+ * descriptor (see auditScope.ts — clinic ids only, never clinic names).
+ * `createdAt` (schema default) supplies the timestamp; this module never
+ * invents its own.
  */
 
 import { writeAuditLog } from '../../utils/auditLog.js';
 import type { ReportFilterSummary } from './types.js';
+import type { ReportExportAuditScope } from './auditScope.js';
 
 export function shouldAuditReportExport(definition: { pii: boolean }): boolean {
   return definition.pii === true;
@@ -24,7 +27,9 @@ export function shouldAuditReportExport(definition: { pii: boolean }): boolean {
 export interface ReportExportAuditParams {
   definition: { key: string; pii: boolean };
   organizationId: string;
-  clinicId?: string | null;
+  // The ALREADY-RESOLVED export scope (see auditScope.ts) — never the raw
+  // user.clinicId, which may differ from the clinic(s) actually exported.
+  auditScope: ReportExportAuditScope;
   actorUserId: string;
   actorRole: string;
   format: string;
@@ -40,7 +45,7 @@ export async function recordReportExportAudit(params: ReportExportAuditParams): 
 
   await writeAuditLog({
     organizationId: params.organizationId,
-    clinicId: params.clinicId ?? null,
+    clinicId: params.auditScope.clinicId,
     actorUserId: params.actorUserId,
     actorRole: params.actorRole,
     action: params.success ? 'report_export_succeeded' : 'report_export_failed',
@@ -53,6 +58,9 @@ export async function recordReportExportAudit(params: ReportExportAuditParams): 
       filters: params.filterSummary,
       rowCount: params.rowCount,
       success: params.success,
+      scopeType: params.auditScope.scopeType,
+      clinicCount: params.auditScope.clinicCount,
+      ...(params.auditScope.clinicIds ? { clinicIds: params.auditScope.clinicIds } : {}),
     },
     ipAddress: params.ipAddress ?? null,
     userAgent: params.userAgent ?? null,

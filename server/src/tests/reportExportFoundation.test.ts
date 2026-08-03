@@ -30,6 +30,7 @@ import { buildReportExportFilename } from '../services/reportExport/filenameSafe
 import { buildReportExportWorkbookBuffer } from '../services/reportExport/xlsxBuilder.js';
 import { buildReportExportPdfBuffer } from '../services/reportExport/pdfBuilder.js';
 import { shouldAuditReportExport } from '../services/reportExport/auditDecision.js';
+import { resolveReportExportAuditScope } from '../services/reportExport/auditScope.js';
 import { neutralizeFormulaInjection, isFormulaInjectionCandidate } from '../services/reportExport/formulaSafety.js';
 import { dateNumFmtFor, datetimeNumFmtFor } from '../services/reportExport/dateNumberFormat.js';
 import { EXPORT_METADATA_STRINGS } from '../services/reportExport/exportStrings.js';
@@ -39,6 +40,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const reportsSrc = fs.readFileSync(path.join(__dirname, '..', 'routes', 'reports.ts'), 'utf8');
 const reportExportRouteSrc = fs.readFileSync(path.join(__dirname, '..', 'routes', 'reportExport.ts'), 'utf8');
 const registrySrc = fs.readFileSync(path.join(__dirname, '..', 'services', 'reportExport', 'registry.ts'), 'utf8');
+const auditScopeSrc = fs.readFileSync(path.join(__dirname, '..', 'services', 'reportExport', 'auditScope.ts'), 'utf8');
+const auditDecisionSrc = fs.readFileSync(path.join(__dirname, '..', 'services', 'reportExport', 'auditDecision.ts'), 'utf8');
 
 // ─── Test harness (matches reportsRevenueByPeriod.test.ts / reportsClinicScope.test.ts) ─
 
@@ -248,6 +251,13 @@ await test('the export route never trusts req.user.clinicId as an authorization 
 
 await test('a denied clinic scope returns before any row loading or file generation happens', () => {
   assert.match(reportExportRouteSrc, /if \(scope === false\) return;/);
+});
+
+await test('a denied clinic scope returns before the audit scope is even resolved (no audit generation for a rejected request)', () => {
+  const scopeCheckIdx = reportExportRouteSrc.indexOf('if (scope === false) return;');
+  const auditScopeIdx = reportExportRouteSrc.indexOf('resolveReportExportAuditScope(');
+  assert.ok(scopeCheckIdx >= 0 && auditScopeIdx >= 0);
+  assert.ok(scopeCheckIdx < auditScopeIdx, 'the scope-denied early return must precede audit-scope resolution');
 });
 
 // ─── 5. Synchronous row limit — enforced without truncation ────────────────
@@ -565,24 +575,106 @@ await test('the synthetic PII test report key is never present in the production
 });
 
 await test('recordReportExportAudit only calls writeAuditLog AFTER the shouldAuditReportExport guard (source-shape)', () => {
-  const auditSrc = fs.readFileSync(path.join(__dirname, '..', 'services', 'reportExport', 'auditDecision.ts'), 'utf8');
-  const guardIdx = auditSrc.indexOf('if (!shouldAuditReportExport(params.definition)) return;');
-  const writeIdx = auditSrc.indexOf('await writeAuditLog(');
+  const guardIdx = auditDecisionSrc.indexOf('if (!shouldAuditReportExport(params.definition)) return;');
+  const writeIdx = auditDecisionSrc.indexOf('await writeAuditLog(');
   assert.ok(guardIdx >= 0 && writeIdx >= 0 && guardIdx < writeIdx, 'the classification guard must run before any AuditLog write');
 });
 
-await test('AuditLog metadata is limited to a safe allow-list (reportKey/format/filters/rowCount/success) — no row-level/patient fields, and description is always null', () => {
-  const auditSrc = fs.readFileSync(path.join(__dirname, '..', 'services', 'reportExport', 'auditDecision.ts'), 'utf8');
-  assert.match(auditSrc, /description: null,/);
-  const metadataStart = auditSrc.indexOf('metadata: {');
-  const metadataEnd = auditSrc.indexOf('}', metadataStart);
-  const metadataSrc = auditSrc.slice(metadataStart, metadataEnd);
-  for (const forbidden of ['firstName', 'lastName', 'phone', 'email', 'patient', 'fullName']) {
+await test('AuditLog metadata is limited to a safe allow-list (reportKey/format/filters/rowCount/success/scopeType/clinicCount[/clinicIds]) — no row-level/patient fields, and description is always null', () => {
+  assert.match(auditDecisionSrc, /description: null,/);
+  const metadataStart = auditDecisionSrc.indexOf('metadata: {');
+  const metadataEnd = auditDecisionSrc.indexOf('ipAddress:', metadataStart);
+  const metadataSrc = auditDecisionSrc.slice(metadataStart, metadataEnd);
+  for (const forbidden of ['firstName', 'lastName', 'phone', 'email', 'patient', 'fullName', 'clinicName', 'name:']) {
     assert.equal(metadataSrc.toLowerCase().includes(forbidden.toLowerCase()), false, `metadata must never reference ${forbidden}`);
   }
-  for (const required of ['reportKey', 'format', 'filters', 'rowCount', 'success']) {
+  for (const required of ['reportKey', 'format', 'filters', 'rowCount', 'success', 'scopeType', 'clinicCount']) {
     assert.match(metadataSrc, new RegExp(required));
   }
+});
+
+await test('AuditLog clinicId column is set from the resolved auditScope, never a raw params.clinicId/user.clinicId field', () => {
+  assert.match(auditDecisionSrc, /clinicId:\s*params\.auditScope\.clinicId,/);
+  assert.equal(/params\.clinicId/.test(auditDecisionSrc), false, 'auditDecision.ts must not reference a raw params.clinicId — only the resolved auditScope');
+});
+
+await test('ReportExportAuditParams carries a structured `auditScope`, not a bare clinicId field (source-shape proves the corrected contract)', () => {
+  const match = /export interface ReportExportAuditParams \{[\s\S]*?\n\}/.exec(auditDecisionSrc);
+  assert.ok(match, 'ReportExportAuditParams interface must be found');
+  const interfaceSrc = match![0];
+  assert.match(interfaceSrc, /auditScope:\s*ReportExportAuditScope/);
+  assert.equal(/\bclinicId\??:\s*string/.test(interfaceSrc), false, 'the params contract must not expose a raw clinicId field');
+});
+
+// ─── 12a. Audit clinic-scope resolution (resolveReportExportAuditScope) ────
+// Converts the ALREADY-RESOLVED ClinicIdScopeWhere into an audit-safe
+// descriptor. Its signature takes only `scope` — no `user` argument — which
+// structurally proves it can never fall back to user.clinicId.
+
+section('12a. resolveReportExportAuditScope — resolved scope drives the audit record, never user.clinicId');
+
+await test('the helper signature takes only the resolved scope — no user/default-clinic parameter exists to fall back to', () => {
+  assert.match(auditScopeSrc, /export function resolveReportExportAuditScope\(scope: ClinicIdScopeWhere\): ReportExportAuditScope/);
+});
+
+await test('an explicitly selected accessible clinic (different from any hypothetical user default clinic) resolves audit clinicId to that selected clinic', () => {
+  // Simulates the ClinicIdScopeWhere validateAndGetClinicIdScope would return
+  // for ?clinicId=clinic-B when the user's own default/JWT clinic is clinic-A
+  // — buildClinicIdScope returns { clinicId: selectedClinicId } regardless of
+  // the user's default clinic, so this shape alone is the proof.
+  const result = resolveReportExportAuditScope({ clinicId: 'clinic-B' });
+  assert.equal(result.clinicId, 'clinic-B');
+  assert.equal(result.scopeType, 'single_clinic');
+  assert.equal(result.clinicCount, 1);
+  assert.equal(result.clinicIds, undefined);
+});
+
+await test('a single-clinic default scope (no explicit selection) resolves to that same actual resolved clinic', () => {
+  const result = resolveReportExportAuditScope({ clinicId: 'clinic-A' });
+  assert.equal(result.clinicId, 'clinic-A');
+  assert.equal(result.scopeType, 'single_clinic');
+  assert.equal(result.clinicCount, 1);
+});
+
+await test('an "all clinics" / multi-clinic scope resolves AuditLog clinicId to null', () => {
+  const result = resolveReportExportAuditScope({ clinicId: { in: ['clinic-A', 'clinic-B', 'clinic-C'] } });
+  assert.equal(result.clinicId, null);
+});
+
+await test('multi-clinic scope metadata carries a safe scope type and the clinic count (and clinic ids — never names)', () => {
+  const result = resolveReportExportAuditScope({ clinicId: { in: ['clinic-A', 'clinic-B', 'clinic-C'] } });
+  assert.equal(result.scopeType, 'multi_clinic');
+  assert.equal(result.clinicCount, 3);
+  assert.deepEqual(result.clinicIds, ['clinic-A', 'clinic-B', 'clinic-C']);
+});
+
+await test('an empty resolved clinic set (edge case) is treated as multi_clinic with clinicCount 0, never thrown or defaulted to a clinic', () => {
+  const result = resolveReportExportAuditScope({ clinicId: { in: [] } });
+  assert.equal(result.clinicId, null);
+  assert.equal(result.scopeType, 'multi_clinic');
+  assert.equal(result.clinicCount, 0);
+});
+
+await test('the route computes auditScope from the resolved `scope` variable, not from `user.clinicId`', () => {
+  assert.match(reportExportRouteSrc, /resolveReportExportAuditScope\(scope\)/);
+});
+
+await test('the synthetic PII test definition\'s audit params would use the corrected auditScope contract (same shape as the real pilot)', () => {
+  const scope = resolveReportExportAuditScope({ clinicId: { in: ['clinic-A', 'clinic-B'] } });
+  const params = {
+    definition: SYNTHETIC_PII_TEST_DEFINITION,
+    organizationId: 'org-1',
+    auditScope: scope,
+    actorUserId: 'user-1',
+    actorRole: 'owner',
+    format: 'xlsx',
+    filterSummary: { dateFrom: '2026-06-01', dateTo: '2026-06-30' },
+    rowCount: 5,
+    success: true,
+  };
+  assert.equal(shouldAuditReportExport(params.definition), true);
+  assert.equal(params.auditScope.clinicId, null);
+  assert.equal(params.auditScope.scopeType, 'multi_clinic');
 });
 
 // ─── 13. Existing JSON report endpoint is unchanged ────────────────────────

@@ -27,6 +27,7 @@ import { getClinicOperatingPreferences } from '../services/clinicOperatingPrefer
 import { getReportDefinition } from '../services/reportExport/registry.js';
 import { isRoleAllowedForReport } from '../services/reportExport/roleCheck.js';
 import { recordReportExportAudit } from '../services/reportExport/auditDecision.js';
+import { resolveReportExportAuditScope } from '../services/reportExport/auditScope.js';
 import { buildReportExportWorkbookBuffer } from '../services/reportExport/xlsxBuilder.js';
 import { buildReportExportPdfBuffer } from '../services/reportExport/pdfBuilder.js';
 import { buildReportExportFilename } from '../services/reportExport/filenameSafety.js';
@@ -79,10 +80,14 @@ router.get('/reports/export/:reportKey', async (req: AuthRequest, res: Response)
   const locale = resolveExportLocale(req.query.locale);
   const generatedAt = new Date();
   const filterSummary = definition.filterSummary(filters);
+  // Built from the RESOLVED scope, never from user.clinicId, so the audit
+  // record reflects what was actually exported (an explicitly selected
+  // accessible clinic, or an org-wide/multi-clinic export) — see auditScope.ts.
+  const auditScope = resolveReportExportAuditScope(scope);
   const auditBase = {
     definition,
     organizationId: user.organizationId,
-    clinicId: user.clinicId,
+    auditScope,
     actorUserId: user.id,
     actorRole: user.role,
     format,
