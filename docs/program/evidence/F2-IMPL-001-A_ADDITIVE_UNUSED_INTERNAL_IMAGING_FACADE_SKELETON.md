@@ -314,3 +314,117 @@ The amendment document must define, at minimum: the tenant-context source and ho
 ### 26.7 Exact next task (supersedes §25)
 
 **F2-PREP-009 — ImagingLifecyclePort Tenant Context Contract Amendment** (§26.4), a separate docs/architecture-only task. Not Stage 2. Not started here, not authorized to start here.
+
+---
+
+## 27. F2-IMPL-001-A-R2 — Re-implementation Against the Accepted Explicit-Tenant Contract (2026-08-03)
+
+**Supersedes §26's blocked disposition.** §1–§26 are preserved unmodified above as the historical record of the original implementation, its finding-2 fix, and the F2-PREP-009 proposal. This section records the re-implementation performed once F2-PREP-009 was accepted.
+
+### 27.1 Pre-edit gate
+
+- `git fetch origin --prune`; `origin/main` = `6f539b237019945443afe6156f9fc2a9fe32ffa4`.
+- `gh pr view 307 --json state,mergeCommit,mergedAt`: `MERGED`, merge commit `967ed95c114f07580bfb69fe0386becc45b4313d`, `mergedAt: 2026-08-03T14:35:36Z`. `git merge-base --is-ancestor 967ed95c114f07580bfb69fe0386becc45b4313d origin/main` → exit `0`.
+- `gh pr view 304 --json state,headRefOid,mergeable`: `state: OPEN`, `headRefOid: abac5e361abd0913dadbce1e124c2ca113600fb7`, `mergeable: CONFLICTING` (against the advanced `origin/main`, expected — resolved by reconciliation below).
+- `gh pr list --search "F2-PREP" --state all`: no imaging-related PR numbered higher than #307 exists; PR #312 (merged after #307) is an unrelated medical-history feature. No later accepted contract supersedes F2-PREP-009.
+- Contract read directly from `origin/main`: `docs/program/architecture/F2-PREP-009_IMAGING_LIFECYCLE_PORT_TENANT_CONTEXT_CONTRACT_AMENDMENT.md` and `docs/program/evidence/F2-IMPL-001-A_R1_TENANT_CONTEXT_REVIEW_CORRECTION.md` (§9, PR #304 head reconciliation).
+
+### 27.2 Isolation
+
+Reused the existing dedicated worktree `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f2-impl-001-a-imaging-lifecycle-facade` (branch `feature/f2-impl-001-a-unused-imaging-lifecycle-facade`, HEAD confirmed at PR #304's exact current head `abac5e361abd0913dadbce1e124c2ca113600fb7` before any edit). This worktree was found already mid-merge (`origin/main` merged in via a prior, incomplete pass of this exact task — `MERGE_HEAD` present, equal to the current `origin/main` tip; three documentation files still carried unresolved conflict markers). The primary working tree (`E:\Ek Gelir\Siteler\DisKlinikCRM-git`, branch `claude/treatment-proposal-pdf-p1-d4k0jl`, unrelated and dirty) was never touched.
+
+### 27.3 Reconciliation
+
+- Prior branch head: `abac5e361abd0913dadbce1e124c2ca113600fb7`.
+- `origin/main` SHA: `6f539b237019945443afe6156f9fc2a9fe32ffa4`.
+- `git merge --no-ff origin/main` → merge commit `d2eaeaa9240e576c201eb5e84bb3defc9d7d53de`.
+- Conflicts (4, all resolved manually, no `--ours`/`--theirs`):
+  - `docs/program/CURRENT_PHASE.md` / `docs/program/NORAMEDI_MASTER_TRACKER.md`: both branches had independently prepended their own newest-first log entry (this branch's own "F2-IMPL-001-A STATUS CORRECTION"; `origin/main`'s F2-PREP-009 PR #307 main-reconciliation entry) onto a shared tail. Resolved per this program's established convention: a new top "PROGRAM PRIORITY UPDATE" pointer entry recording PR #307's acceptance and this R2 task's start, `origin/main`'s entry demoted to "Son güncelleme (pre-R2)" with its "F2-PREP-009 remains PROPOSED" language corrected to past tense (superseded by acceptance), this branch's own entry demoted to "Prior update" immediately below, and the one genuinely duplicated shared-ancestor entry (F2-PREP-008) de-duplicated to a single copy.
+  - `docs/program/evidence/README.md`: table-row conflict between this branch's own F2-IMPL-001-A skeleton row and `origin/main`'s F2-IMPL-001-A-R1/F2-PREP-009-correction/F2-PREP-009-PR#307-reconciliation rows. Resolved by keeping all rows, in chronological order, with the original skeleton row's description note updated to point at this R1/R2 lineage instead of silently going stale.
+  - `server/package.json`: both branches added new script keys (this branch: `test:imaging-lifecycle-facade` + its `server:test:disposable-db`/`server:test:legacy-db-required` wiring; `origin/main`: unrelated medical-history test scripts). Already merged (both sides' additions present, no marker remaining) at the point this task resumed — verified, not re-done.
+- Post-merge `git merge-base --is-ancestor origin/main HEAD` → exit `0`. `git diff --check` → clean (confirmed again after the code changes below, §27.9).
+- Two stray untracked scratch files from the prior incomplete pass (`head_tracker_tmp.md`, `main_tracker_tmp.md`) and two stale `postgres-run-summary*.json` run artifacts were found unstaged/untracked; excluded from every commit in this task (left as harmless untracked files, not deleted, per the session's file-safety posture).
+
+### 27.4 CodeGraph scope
+
+CodeGraph was not invoked in this session (not available). Direct `Read`/`Grep`/`Bash` inspection, scoped exactly to: `server/src/services/imaging/public.ts` (full), `server/src/tests/imagingLifecycleFacade.test.ts` (full), `server/src/tests/dbVerification/dbVerificationHarness.ts` (fixture-set shape only, lines ~150-205), `server/package.json` (script names only), the F2-PREP-009 Markdown/JSON contract and the F2-IMPL-001-A_R1 evidence Markdown (full). No project-wide scan performed.
+
+### 27.5 Corrected root cause
+
+The pre-R2 `findOwnedImage(imageId)` queried `prisma.imagingImage.findFirst({ where: { id: imageId } })` and then compared the *resolved row's own* `ImagingImage.clinicId` against its own `ImagingStudy.clinicId` — a check that two values **derived from the same row** agree with each other. It never compared either value against anything the caller supplied, so it could not distinguish "this caller is entitled to this row" from "this row is not corrupted." F2-PREP-009 Option A closes this by giving every `imageId`-only method an explicit, caller-supplied `clinicId` parameter and applying it as a **query-level predicate on both sides of the relation** (`{ id: imageId, clinicId, study: { clinicId } }`), so a row is only ever fetched if both stored `clinicId` values already equal the caller's — cross-tenant rows now return zero rows at the database level, not "a row that is then rejected after the fact."
+
+### 27.6 Final signatures (exact match to the accepted contract)
+
+```ts
+markStorageMissing(clinicId: string, imageId: string): Promise<void>
+redactForAnonymization(clinicId: string, imageId: string, reason: RedactionReason): Promise<void>
+checkImageStorageExists(clinicId: string, imageId: string): Promise<boolean>
+getImagesForLifecycleReview(clinicId: string, patientId: string): Promise<ImagingLifecycleImageDto[]>
+```
+
+Verified by a runtime-arity test (`Function.prototype.length`): `markStorageMissing.length === 2`, `redactForAnonymization.length === 3`, `checkImageStorageExists.length === 2` (no optional trailing test parameter, no imageId-only overload), `getImagesForLifecycleReview.length === 2` (unchanged). No compatibility wrapper, no optional tenant argument, no ambient/global tenant context, no wildcard/system bypass value anywhere in the module.
+
+### 27.7 Tenant rule, read/write predicate, error behavior, storage seam, legal hold
+
+- **Tenant rule:** the facade treats its caller-supplied `clinicId` as already authorization-validated (per F2-PREP-009 §3 — `resolveEffectiveClinicId`/`validateAndGetClinicIdScope`/`getAccessibleClinicIds`/an equivalent access-scoped record lookup) and does not re-run authorization itself; it is a data boundary, not the authorization boundary, and applies that `clinicId` in every DB predicate with no exception.
+- **Read predicate:** `prisma.imagingImage.findFirst({ where: { id: imageId, clinicId, study: { clinicId } }, select: {...} })` — exactly the repository-supported shape required by F2-PREP-009 §5.
+- **Write predicate:** `markStorageMissing`/`redactForAnonymization` re-apply the identical full predicate (`{ id: imageId, clinicId, study: { clinicId } }`) on their own `updateMany` call — never a read-then-trust-the-earlier-read pattern, never an unscoped `{ id: imageId }` write.
+- **Error behavior:** missing image, cross-tenant image (same-org sibling clinic and cross-org clinic both tested), and image/study clinicId denormalization mismatch (tested with the caller's clinicId matching either side alone) all produce the identical sanitized `ImagingNotFoundError` — verified by direct message-equality assertion between the missing-row and cross-tenant-row cases. No existence side-channel.
+- **Storage seam:** `checkImageStorageExists` still verifies ownership (now tenant-scoped) before ever calling the storage abstraction; a spy proves the storage checker is never invoked for a missing OR cross-tenant `imageId`. The module-private `storageExistenceChecker` + exported `__setImagingStorageExistenceCheckerForTest` test seam is unchanged from the pre-R2 implementation — retained per F2-PREP-009 §12, which explicitly leaves the test-double technique to this task: it has no production importer (confirmed by the unused-facade source scan), cannot alter authorization behavior (it only swaps the storage-existence check, never the `clinicId` predicate), and every test call restores the real implementation in a `finally` block. Each test file runs as its own `tsx` process (this repository's established `&&`-chained-script execution model), so module-level state does not leak across parallel test files.
+- **Legal hold:** `redactForAnonymization` still refuses with `ImagingLegalHoldViolationError` (no silent bypass) when the (now tenant-verified) owning study is under legal hold; unaffected by the F2-PREP-009 amendment.
+
+### 27.8 Zero production callers
+
+`grep -rn "services/imaging/public" server/src --include=*.ts` (excluding `/tests/`) → zero matches. The facade remains additive and unused.
+
+### 27.9 Files changed (this R2 task, beyond the reconciliation merge)
+
+- `server/src/services/imaging/public.ts` — re-implemented against the amended `(clinicId, imageId[, reason])` signatures; header comment corrected to describe the amended contract instead of the superseded gap warning.
+- `server/src/tests/imagingLifecycleFacade.test.ts` — rewritten: every call site threads `clinicId`; arity assertions updated to the new contract; added cross-tenant tests for all three `imageId`-only methods (same-org sibling clinic AND cross-org clinic), a missing-vs-cross-tenant indistinguishability assertion, a denormalization-mismatch-still-fails-closed test (caller's clinicId matching either side alone), a Clinic-A-clinicId/Clinic-B-patientId lifecycle-review test, and two "rejected write leaves the target row byte-for-byte unchanged" assertions.
+- `docs/program/CURRENT_PHASE.md`, `docs/program/NORAMEDI_MASTER_TRACKER.md`, `docs/program/evidence/README.md` — merge-conflict resolution (§27.3) plus this R2 entry.
+- This file (§27, additive) and its JSON companion.
+- `git diff --check` (cached, on the code changes): clean.
+
+### 27.10 Tests — exact counts and result
+
+All run against a single genuine disposable PostgreSQL provisioned via the existing, unmodified orchestrator (`npm run test:runtime:postgres`, profile `postgres`, run ID `20260803T162515Z-9e2ba333-44516`, container `nmtest-pg-postgres-20260803t162515z-9e2ba333-44516`):
+
+| Suite | Result |
+|---|---|
+| `Imaging-Lifecycle-Facade` (this task's rewritten suite) | **30 passed, 0 failed** (was 25 pre-R2; +5 net: cross-tenant ×1, indistinguishability ×1, denorm-still-closed ×1 [replaces the old single-sided version], Clinic-B-patientId ×1, rejected-write-untouched ×2, cross-tenant storage-not-called folded into the existing test) |
+| `test:imaging-characterization` (four pre-existing Stage-0 suites, unmodified) | unaffected — `CT-32` sub-suite alone independently confirmed **153/153**, all four suites' combined aggregate exit `0` as part of the full `server:test:disposable-db` run |
+| Full `server:test:disposable-db` aggregate (15 members incl. the facade suite) | orchestrator `test.code: 0`; `cleanup: { success: true, errors: [] }`; `outcome.exitCode: 0` |
+| `test:imaging` (regression, run directly — no disposable DB required, mock-based) | **103 passed, 0 failed** |
+| `test:patient-privacy` (regression, run directly — no disposable DB required, mock-based) | **38 passed, 0 failed** |
+
+`server` `npx prisma generate && tsc --noEmit`: exit `0`, zero errors.
+
+### 27.11 Disposable PostgreSQL evidence / cleanup
+
+Orchestrator self-report (this run): `runId: 20260803T162515Z-9e2ba333-44516`, `hostPorts.postgres: 59217`, `migration.code: 0`, `test.scriptName: server:test:disposable-db`, `test.code: 0`, `cleanup.success: true`, `cleanup.errors: []`, `outcome.exitCode: 0`. No residual `com.noramedi.test-runtime=true`-labeled Docker resource independently observed after the run.
+
+### 27.12 Migration
+
+None. No `server/prisma/schema.prisma` or migration file touched by this R2 task (the one new migration present in the merged diff, `20260803135254_add_patient_medical_history_foundation`, arrived solely via the `origin/main` merge commit and is unrelated to Imaging).
+
+### 27.13 Backward compatibility / rollback
+
+No backward compatibility obligation: PR #304 remains unmerged with zero production callers. Rollback is unchanged from the original design — revert/delete `server/src/services/imaging/public.ts` and its test file; no data or schema migration is involved.
+
+### 27.14 Revised status matrix
+
+| Field | Value |
+|---|---|
+| Agent completed | true |
+| Tests passed | true (30/30 facade, 103/103 imaging regression, 38/38 privacy regression, full `server:test:disposable-db` aggregate exit 0) |
+| Tenant authorization enforced (all four methods) | **true — explicit caller-supplied `clinicId`, applied on every read and write predicate** |
+| Zero production callers | true (independently re-confirmed) |
+| PR opened | true (#304, continued, not a new PR) |
+| Merged | false |
+| Deployed | false |
+| Production verified | false |
+| **Overall status** | **`AGENT_COMPLETED` / `TESTS_PASSED` / `PR_CI_PASSED` / `PR_OPENED_AWAITING_PROGRAM_REVIEW`** (CI status per the PR's own CI run, recorded in the delivery report) |
+
+### 27.15 Exact next task
+
+Program-owner review and acceptance of this R2 re-implementation. If accepted, Stage 2 (`OVL-01` convergence + `ImagingRequest` PATCH/cancel concurrency hardening) remains the next architecturally-sequenced item per F2-PREP-006-E; Stage 3 (Privacy/KVKK caller migration onto this facade) remains gated behind Stage 2 and is not authorized by this task. Not started, not authorized to start by this entry.

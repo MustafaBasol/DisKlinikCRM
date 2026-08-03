@@ -193,5 +193,150 @@
       "willNotMergeUntil": "F2-PREP-009 is authorized and this facade's three affected methods are brought into conformance with the amended contract"
     },
     "nextTask": "F2-PREP-009 — ImagingLifecyclePort Tenant Context Contract Amendment (docs/architecture-only, separate PR from #304). Not Stage 2."
+  },
+  "r2Reimplementation": {
+    "date": "2026-08-03",
+    "taskId": "F2-IMPL-001-A-R2",
+    "supersedes": "statusCorrection (BLOCKED_TENANT_CONTEXT_CONTRACT_INSUFFICIENT)",
+    "acceptedContract": {
+      "document": "docs/program/architecture/F2-PREP-009_IMAGING_LIFECYCLE_PORT_TENANT_CONTEXT_CONTRACT_AMENDMENT.md",
+      "prNumber": 307,
+      "mergeCommit": "967ed95c114f07580bfb69fe0386becc45b4313d",
+      "mergedAt": "2026-08-03T14:35:36Z",
+      "postMergeMainCiRun": 30823445835,
+      "postMergeMainCiConclusion": "success"
+    },
+    "preEditGate": {
+      "originMainSha": "6f539b237019945443afe6156f9fc2a9fe32ffa4",
+      "pr307State": "MERGED",
+      "pr307MergeCommitIsAncestorOfOriginMain": true,
+      "pr304State": "OPEN",
+      "pr304HeadShaBeforeReconciliation": "abac5e361abd0913dadbce1e124c2ca113600fb7",
+      "pr304MergeableBeforeReconciliation": "CONFLICTING",
+      "supersedingContractFound": false
+    },
+    "isolation": {
+      "worktreeReused": true,
+      "worktreePath": "E:/Ek Gelir/Siteler/DisKlinikCRM-worktrees/f2-impl-001-a-imaging-lifecycle-facade",
+      "worktreeFoundMidMergeFromPriorIncompleteRun": true,
+      "primaryTreeTouched": false
+    },
+    "reconciliation": {
+      "priorBranchHead": "abac5e361abd0913dadbce1e124c2ca113600fb7",
+      "originMainSha": "6f539b237019945443afe6156f9fc2a9fe32ffa4",
+      "mergeCommand": "git merge --no-ff origin/main",
+      "mergeCommit": "d2eaeaa9240e576c201eb5e84bb3defc9d7d53de",
+      "conflictCount": 4,
+      "conflictedFiles": [
+        "docs/program/CURRENT_PHASE.md",
+        "docs/program/NORAMEDI_MASTER_TRACKER.md",
+        "docs/program/evidence/README.md",
+        "server/package.json"
+      ],
+      "resolutionMethod": "manual, no --ours/--theirs; log-style docs resolved by promoting origin/main's newer entry with a new top pointer entry and demoting both prior entries per this program's established convention; evidence/README.md table rows kept from both sides in chronological order; server/package.json already merged (both sides' script additions present) at the point this task resumed",
+      "postMergeAncestryCheck": true,
+      "postMergeGitDiffCheckClean": true
+    },
+    "codeGraphScope": [
+      "server/src/services/imaging/public.ts",
+      "server/src/tests/imagingLifecycleFacade.test.ts",
+      "server/src/tests/dbVerification/dbVerificationHarness.ts (fixture-set shape only)",
+      "docs/program/architecture/F2-PREP-009_IMAGING_LIFECYCLE_PORT_TENANT_CONTEXT_CONTRACT_AMENDMENT.md",
+      "docs/program/evidence/F2-IMPL-001-A_R1_TENANT_CONTEXT_REVIEW_CORRECTION.md"
+    ],
+    "correctedRootCause": "findOwnedImage(imageId) compared two values both derived from the same resolved row (ImagingImage.clinicId vs its own ImagingStudy.clinicId) — a self-consistency check, never a caller-tenant check. Fixed by giving every imageId-only method an explicit clinicId parameter and applying it as a query-level predicate on both ImagingImage and ImagingStudy, so a cross-tenant row returns zero rows at the database level.",
+    "finalSignatures": {
+      "markStorageMissing": "(clinicId: string, imageId: string): Promise<void>",
+      "redactForAnonymization": "(clinicId: string, imageId: string, reason: RedactionReason): Promise<void>",
+      "checkImageStorageExists": "(clinicId: string, imageId: string): Promise<boolean>",
+      "getImagesForLifecycleReview": "(clinicId: string, patientId: string): Promise<ImagingLifecycleImageDto[]>",
+      "runtimeArityVerified": { "markStorageMissing": 2, "redactForAnonymization": 3, "checkImageStorageExists": 2, "getImagesForLifecycleReview": 2 },
+      "compatibilityWrapper": false,
+      "optionalTenantArgument": false,
+      "ambientOrGlobalTenantContext": false,
+      "wildcardOrSystemBypass": false
+    },
+    "readPredicate": "prisma.imagingImage.findFirst({ where: { id: imageId, clinicId, study: { clinicId } }, select: {...} })",
+    "writePredicate": "prisma.imagingImage.updateMany({ where: { id: imageId, clinicId, study: { clinicId } }, data: {...} }) — identical full predicate re-applied on every mutation, never an unscoped { id: imageId } write",
+    "errorBehavior": {
+      "missingImage": "ImagingNotFoundError",
+      "crossTenantImageSameOrgSiblingClinic": "ImagingNotFoundError (tested)",
+      "crossTenantImageCrossOrgClinic": "ImagingNotFoundError (tested)",
+      "denormalizationMismatchCallerMatchesImageSideOnly": "ImagingNotFoundError (tested)",
+      "denormalizationMismatchCallerMatchesStudySideOnly": "ImagingNotFoundError (tested)",
+      "missingVsCrossTenantIndistinguishable": true,
+      "existenceSideChannel": false
+    },
+    "storageSeam": {
+      "mechanism": "module-private storageExistenceChecker variable + exported __setImagingStorageExistenceCheckerForTest(override), never a parameter of checkImageStorageExists",
+      "productionImporters": 0,
+      "canAlterAuthorizationBehavior": false,
+      "testsRestoreStateInFinally": true,
+      "parallelContaminationRisk": "none — each test file runs as its own tsx process (established &&-chained execution model), no shared process/module registry across files",
+      "storageNotCalledForMissingOrCrossTenantImage": true
+    },
+    "legalHold": {
+      "unaffectedByAmendment": true,
+      "redactForAnonymizationRefusesUnderLegalHold": true,
+      "silentBypass": false
+    },
+    "zeroProductionCallers": {
+      "searchCommand": "grep -rn \"services/imaging/public\" server/src --include=*.ts (excluding /tests/)",
+      "matches": 0
+    },
+    "filesChanged": [
+      "server/src/services/imaging/public.ts",
+      "server/src/tests/imagingLifecycleFacade.test.ts",
+      "docs/program/CURRENT_PHASE.md",
+      "docs/program/NORAMEDI_MASTER_TRACKER.md",
+      "docs/program/evidence/README.md",
+      "docs/program/evidence/F2-IMPL-001-A_ADDITIVE_UNUSED_INTERNAL_IMAGING_FACADE_SKELETON.md",
+      "docs/program/evidence/F2-IMPL-001-A_additive_unused_internal_imaging_facade_skeleton.json"
+    ],
+    "tests": {
+      "imagingLifecycleFacade": { "passed": 30, "failed": 0, "priorCount": 25 },
+      "imagingCharacterizationCt32": { "passed": 153, "failed": 0, "unaffected": true },
+      "fullDisposableDbAggregate": {
+        "command": "npm run test:runtime:postgres",
+        "runId": "20260803T162515Z-9e2ba333-44516",
+        "profile": "postgres",
+        "migrationCode": 0,
+        "testCode": 0,
+        "cleanupSuccess": true,
+        "exitCode": 0
+      },
+      "existingImagingRegression": { "command": "npx tsx src/tests/imaging.test.ts", "passed": 103, "failed": 0, "requiresDisposableDb": false },
+      "existingPrivacyRegression": { "command": "npx tsx src/tests/patientPrivacy.test.ts", "passed": 38, "failed": 0, "requiresDisposableDb": false },
+      "serverTypecheck": { "command": "npx prisma generate && npx tsc --noEmit", "exitCode": 0 }
+    },
+    "characterizationResult": "unmodified, unweakened; CT-32 independently re-confirmed 153/153 as part of the same disposable-db aggregate run",
+    "disposableDbEvidence": {
+      "runId": "20260803T162515Z-9e2ba333-44516",
+      "containerNames": ["nmtest-pg-postgres-20260803t162515z-9e2ba333-44516"],
+      "hostPorts": { "postgres": 59217 },
+      "cleanupSuccess": true,
+      "cleanupErrors": [],
+      "residualLabeledDockerResourcesObserved": 0
+    },
+    "migration": "none",
+    "backwardCompatibility": "total — zero production caller, zero route, zero deployable-behavior change",
+    "rollback": "revert/delete server/src/services/imaging/public.ts and its test file; no data/schema migration involved",
+    "tenantKvkkSecurityImpact": "closes the tenant-authorization gap for an as-yet-unused internal facade; zero production exposure change since there are zero callers",
+    "openImagingDefectsUnchanged": ["CT-23", "CT-32", "CR-03", "BLK-02", "FP-06", "OVL-01", "BLK-01", "PZ-IMG-03"],
+    "taskStatus": {
+      "agentCompleted": true,
+      "testsPassed": true,
+      "prCiPassed": "recorded in the PR's own CI run at delivery-report time",
+      "prOpened": true,
+      "merged": false,
+      "deployed": false,
+      "productionVerified": false,
+      "overallStatus": "AGENT_COMPLETED / TESTS_PASSED / PR_CI_PASSED / PR_OPENED_AWAITING_PROGRAM_REVIEW"
+    },
+    "mergeSafe": false,
+    "mergeSafeReason": "awaiting program-owner review of this re-implementation against the accepted contract, per the task's own status-ceiling instruction",
+    "deploymentSafe": true,
+    "deploymentSafeReason": "zero production callers; merging changes no deployable runtime behavior",
+    "nextTask": "Program-owner review and acceptance of this R2 re-implementation. Stage 2 (OVL-01 convergence + ImagingRequest concurrency hardening) remains the next architecturally-sequenced item; Stage 3 caller migration remains gated behind Stage 2. Not started, not authorized by this task."
   }
 }

@@ -1,6 +1,7 @@
 /**
- * imagingLifecycleFacade.test.ts — F2-IMPL-001-A facade tests
- * (server/src/services/imaging/public.ts).
+ * imagingLifecycleFacade.test.ts — F2-IMPL-001-A-R2 facade tests
+ * (server/src/services/imaging/public.ts), against the F2-PREP-009-amended
+ * explicit-tenant `ImagingLifecyclePort` contract.
  *
  * This is a NEW, additive-facade test suite — distinct from and never
  * replacing/weakening test:imaging-characterization (F2-PREP-007-A..D),
@@ -119,14 +120,14 @@ async function main() {
       assert.equal(typeof checkImageStorageExists, 'function');
     });
 
-    await test('the four accepted methods declare exactly the accepted arity, with zero signature drift', () => {
-      assert.equal(markStorageMissing.length, 1);
-      assert.equal(redactForAnonymization.length, 2);
-      assert.equal(getImagesForLifecycleReview.length, 2);
+    await test('the four accepted methods declare exactly the F2-PREP-009-amended explicit-tenant arity, with zero signature drift', () => {
+      assert.equal(markStorageMissing.length, 2, 'markStorageMissing must be exactly (clinicId, imageId)');
+      assert.equal(redactForAnonymization.length, 3, 'redactForAnonymization must be exactly (clinicId, imageId, reason)');
+      assert.equal(getImagesForLifecycleReview.length, 2, 'getImagesForLifecycleReview must be exactly (clinicId, patientId)');
       assert.equal(
         checkImageStorageExists.length,
-        1,
-        'checkImageStorageExists must remain exactly (imageId: string) — no optional trailing test parameter',
+        2,
+        'checkImageStorageExists must be exactly (clinicId, imageId) — no optional trailing test parameter, no imageId-only overload',
       );
     });
 
@@ -159,6 +160,9 @@ async function main() {
     });
 
     // ── 2-3. Fixtures ────────────────────────────────────────────────────
+    // Two clinics, same org (default/sibling) plus one cross-org clinic —
+    // "Clinic A" below is fixtures.defaultClinicId, "Clinic B" is
+    // fixtures.crossOrgClinicId, per F2-PREP-009 §11's required test shape.
     const fixtures = await createClinicFixtureSet('imaging-lifecycle-facade');
     allFixtureClinicIds.push(fixtures.defaultClinicId, fixtures.siblingClinicId, fixtures.crossOrgClinicId);
     const patientA = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
@@ -217,52 +221,77 @@ async function main() {
       assert.equal(crossResults.length, 0);
     });
 
+    await test('Clinic A clinicId + Clinic B patientId returns an empty array (F2-PREP-009 §11.1.B)', async () => {
+      const crossResults = await getImagesForLifecycleReview(fixtures.defaultClinicId, patientB.id);
+      assert.deepEqual(crossResults, []);
+    });
+
     await test('unknown clinicId/patientId combination returns an empty array, never an error', async () => {
       const results = await getImagesForLifecycleReview(randomUUID(), randomUUID());
       assert.deepEqual(results, []);
     });
 
-    // ── 6. Image ownership re-derivation + not-found/mismatch (no leakage) ─
-    section('6. Ownership re-derivation, not-found/mismatch without leakage');
+    // ── 6. Ownership enforcement, not-found/cross-tenant/mismatch (no leakage) ─
+    section('6. Ownership enforcement, not-found/cross-tenant/mismatch without leakage');
 
     await test('markStorageMissing throws ImagingNotFoundError for a genuinely nonexistent imageId', async () => {
-      await assert.rejects(() => markStorageMissing(randomUUID()), ImagingNotFoundError);
+      await assert.rejects(() => markStorageMissing(fixtures.defaultClinicId, randomUUID()), ImagingNotFoundError);
     });
 
     await test('checkImageStorageExists throws ImagingNotFoundError for a genuinely nonexistent imageId', async () => {
-      await assert.rejects(() => checkImageStorageExists(randomUUID()), ImagingNotFoundError);
+      await assert.rejects(() => checkImageStorageExists(fixtures.defaultClinicId, randomUUID()), ImagingNotFoundError);
     });
 
-    await test('a denormalized clinicId/study.clinicId mismatch is treated as not-found (indistinguishable from a missing row)', async () => {
-      const corruptStudy = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id });
-      const corruptImage = await createImage({ clinicId: fixtures.defaultClinicId, studyId: corruptStudy.id });
-      // Simulate a cross-tenant/data-integrity corruption: the image's own
-      // clinicId no longer agrees with its study's clinicId. No production
-      // code path can produce this (both are set together at creation) —
-      // this proves the facade's re-derivation-and-throw defense-in-depth
-      // check actually fires rather than trusting the flat clinicId field.
-      await prisma.imagingImage.update({
-        where: { id: corruptImage.id },
-        data: { clinicId: fixtures.siblingClinicId },
-      });
+    await test('cross-tenant: Clinic A clinicId + Clinic B imageId is rejected for all three imageId-only methods (F2-PREP-009 §11.1.A)', async () => {
+      await assert.rejects(() => markStorageMissing(fixtures.defaultClinicId, imageB.id), ImagingNotFoundError);
+      await assert.rejects(() => redactForAnonymization(fixtures.defaultClinicId, imageB.id, 'anonymization'), ImagingNotFoundError);
+      await assert.rejects(() => checkImageStorageExists(fixtures.defaultClinicId, imageB.id), ImagingNotFoundError);
 
-      let notFoundMessage: string | undefined;
+      // Same-org sibling clinicId (authorized clinic, but not this image's
+      // owner) must be rejected identically — cross-tenant enforcement is
+      // per-clinic, not merely per-organization.
+      await assert.rejects(() => markStorageMissing(fixtures.siblingClinicId, imageA.id), ImagingNotFoundError);
+    });
+
+    await test('missing imageId and cross-tenant imageId are externally indistinguishable (identical error shape/message)', async () => {
       let missingMessage: string | undefined;
+      let crossTenantMessage: string | undefined;
       try {
-        await markStorageMissing(corruptImage.id);
-        assert.fail('expected ImagingNotFoundError');
-      } catch (err) {
-        assert.ok(err instanceof ImagingNotFoundError);
-        notFoundMessage = err.message;
-      }
-      try {
-        await markStorageMissing(randomUUID());
+        await markStorageMissing(fixtures.defaultClinicId, randomUUID());
         assert.fail('expected ImagingNotFoundError');
       } catch (err) {
         assert.ok(err instanceof ImagingNotFoundError);
         missingMessage = err.message;
       }
-      assert.equal(notFoundMessage, missingMessage, 'mismatch and genuinely-missing must be indistinguishable');
+      try {
+        await markStorageMissing(fixtures.defaultClinicId, imageB.id);
+        assert.fail('expected ImagingNotFoundError');
+      } catch (err) {
+        assert.ok(err instanceof ImagingNotFoundError);
+        crossTenantMessage = err.message;
+      }
+      assert.equal(missingMessage, crossTenantMessage, 'missing and cross-tenant must be indistinguishable');
+    });
+
+    await test('a denormalized clinicId/study.clinicId mismatch still fails closed even when the caller\'s clinicId matches one side (F2-PREP-009 §11.3)', async () => {
+      const corruptStudy = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id });
+      const corruptImage = await createImage({ clinicId: fixtures.defaultClinicId, studyId: corruptStudy.id });
+      // Simulate a cross-tenant/data-integrity corruption: the image's own
+      // clinicId no longer agrees with its study's clinicId. No production
+      // code path can produce this (both are set together at creation) —
+      // this proves the facade's predicate actually requires BOTH sides to
+      // equal the caller's clinicId, not either one alone.
+      await prisma.imagingImage.update({
+        where: { id: corruptImage.id },
+        data: { clinicId: fixtures.siblingClinicId },
+      });
+
+      // Caller's clinicId matches the STUDY side (defaultClinicId) but not
+      // the now-corrupted IMAGE side (siblingClinicId) — must still fail.
+      await assert.rejects(() => markStorageMissing(fixtures.defaultClinicId, corruptImage.id), ImagingNotFoundError);
+      // Caller's clinicId matches the IMAGE side (siblingClinicId) but not
+      // the STUDY side (defaultClinicId) — must also still fail.
+      await assert.rejects(() => markStorageMissing(fixtures.siblingClinicId, corruptImage.id), ImagingNotFoundError);
     });
 
     // ── 7. markStorageMissing behavior ────────────────────────────────────
@@ -272,7 +301,7 @@ async function main() {
       const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id, legalHold: true });
       const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
 
-      await markStorageMissing(image.id);
+      await markStorageMissing(fixtures.defaultClinicId, image.id);
 
       const row = await prisma.imagingImage.findUnique({ where: { id: image.id }, include: { study: true } });
       assert.ok(row, 'row must still exist');
@@ -285,15 +314,22 @@ async function main() {
       const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id });
       const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
 
-      await markStorageMissing(image.id);
+      await markStorageMissing(fixtures.defaultClinicId, image.id);
       const first = await prisma.imagingImage.findUnique({ where: { id: image.id }, select: { storageVerifiedMissingAt: true } });
       await new Promise((r) => setTimeout(r, 5));
-      await markStorageMissing(image.id);
+      await markStorageMissing(fixtures.defaultClinicId, image.id);
       const second = await prisma.imagingImage.findUnique({ where: { id: image.id }, select: { storageVerifiedMissingAt: true } });
 
       assert.ok(first?.storageVerifiedMissingAt);
       assert.ok(second?.storageVerifiedMissingAt);
       assert.ok(second!.storageVerifiedMissingAt!.getTime() >= first!.storageVerifiedMissingAt!.getTime());
+    });
+
+    await test('a rejected cross-tenant mutation attempt leaves the target Clinic B row completely untouched (full tenant scope re-applied on write)', async () => {
+      const before = await prisma.imagingImage.findUnique({ where: { id: imageB.id } });
+      await assert.rejects(() => markStorageMissing(fixtures.defaultClinicId, imageB.id), ImagingNotFoundError);
+      const after = await prisma.imagingImage.findUnique({ where: { id: imageB.id } });
+      assert.deepEqual(after, before, 'Clinic B row must be byte-for-byte unchanged after a rejected cross-tenant write attempt');
     });
 
     // ── 8. redactForAnonymization behavior ────────────────────────────────
@@ -306,7 +342,7 @@ async function main() {
       const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
 
       await assert.rejects(
-        () => redactForAnonymization(image.id, 'not_a_real_reason' as unknown as RedactionReason),
+        () => redactForAnonymization(fixtures.defaultClinicId, image.id, 'not_a_real_reason' as unknown as RedactionReason),
         ImagingInvalidRedactionReasonError,
       );
       const row = await prisma.imagingImage.findUnique({ where: { id: image.id } });
@@ -317,7 +353,7 @@ async function main() {
       const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id });
       const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
 
-      await redactForAnonymization(image.id, validReason);
+      await redactForAnonymization(fixtures.defaultClinicId, image.id, validReason);
 
       const row = await prisma.imagingImage.findUnique({ where: { id: image.id } });
       assert.ok(row, 'row must still exist');
@@ -328,8 +364,8 @@ async function main() {
       const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id });
       const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
 
-      await redactForAnonymization(image.id, validReason);
-      await redactForAnonymization(image.id, validReason); // must not throw
+      await redactForAnonymization(fixtures.defaultClinicId, image.id, validReason);
+      await redactForAnonymization(fixtures.defaultClinicId, image.id, validReason); // must not throw
 
       const row = await prisma.imagingImage.findUnique({ where: { id: image.id } });
       assert.equal(row!.originalName, '[ANONYMIZED]');
@@ -339,18 +375,25 @@ async function main() {
       const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id, legalHold: true });
       const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
 
-      await assert.rejects(() => redactForAnonymization(image.id, validReason), ImagingLegalHoldViolationError);
+      await assert.rejects(() => redactForAnonymization(fixtures.defaultClinicId, image.id, validReason), ImagingLegalHoldViolationError);
 
       const row = await prisma.imagingImage.findUnique({ where: { id: image.id } });
       assert.equal(row!.originalName, image.originalName, 'legal-hold row must remain untouched');
     });
 
     await test('throws ImagingNotFoundError for a nonexistent imageId, never a Prisma error', async () => {
-      await assert.rejects(() => redactForAnonymization(randomUUID(), validReason), ImagingNotFoundError);
+      await assert.rejects(() => redactForAnonymization(fixtures.defaultClinicId, randomUUID(), validReason), ImagingNotFoundError);
+    });
+
+    await test('cross-tenant redaction attempt (Clinic A clinicId + Clinic B imageId) is rejected and leaves the Clinic B row untouched', async () => {
+      const before = await prisma.imagingImage.findUnique({ where: { id: imageB.id } });
+      await assert.rejects(() => redactForAnonymization(fixtures.defaultClinicId, imageB.id, validReason), ImagingNotFoundError);
+      const after = await prisma.imagingImage.findUnique({ where: { id: imageB.id } });
+      assert.deepEqual(after, before, 'Clinic B row must be unchanged after a rejected cross-tenant redaction attempt');
     });
 
     // ── 9-11. checkImageStorageExists ─────────────────────────────────────
-    section('9-11. checkImageStorageExists (true / false / provider failure)');
+    section('9-11. checkImageStorageExists (true / false / provider failure / cross-tenant)');
 
     await test('returns true when the physical file exists (real local disk via fileStorage.ts)', async () => {
       const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id });
@@ -359,7 +402,7 @@ async function main() {
       createdStorageKeys.push(key);
       const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id, filePath: key });
 
-      const exists = await checkImageStorageExists(image.id);
+      const exists = await checkImageStorageExists(fixtures.defaultClinicId, image.id);
       assert.equal(exists, true);
     });
 
@@ -368,7 +411,7 @@ async function main() {
       const key = buildStorageKey(fixtures.defaultClinicId, 'missing.jpg');
       const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id, filePath: key });
 
-      const exists = await checkImageStorageExists(image.id);
+      const exists = await checkImageStorageExists(fixtures.defaultClinicId, image.id);
       assert.equal(exists, false);
     });
 
@@ -382,7 +425,7 @@ async function main() {
 
       __setImagingStorageExistenceCheckerForTest(failingFileExists);
       try {
-        await checkImageStorageExists(image.id);
+        await checkImageStorageExists(fixtures.defaultClinicId, image.id);
         assert.fail('expected ImagingStorageUnavailableError');
       } catch (err) {
         assert.ok(err instanceof ImagingStorageUnavailableError);
@@ -393,7 +436,7 @@ async function main() {
       }
     });
 
-    await test('verifies ownership before touching storage — throws not-found before ever calling the storage check', async () => {
+    await test('verifies ownership before touching storage — throws not-found before ever calling the storage check (missing AND cross-tenant)', async () => {
       let storageCheckCalled = false;
       const spyFileExists = async (_ref: string): Promise<boolean> => {
         storageCheckCalled = true;
@@ -401,8 +444,11 @@ async function main() {
       };
       __setImagingStorageExistenceCheckerForTest(spyFileExists);
       try {
-        await assert.rejects(() => checkImageStorageExists(randomUUID()), ImagingNotFoundError);
-        assert.equal(storageCheckCalled, false, 'storage must never be touched before ownership is confirmed');
+        await assert.rejects(() => checkImageStorageExists(fixtures.defaultClinicId, randomUUID()), ImagingNotFoundError);
+        assert.equal(storageCheckCalled, false, 'storage must never be touched for a missing imageId');
+
+        await assert.rejects(() => checkImageStorageExists(fixtures.defaultClinicId, imageB.id), ImagingNotFoundError);
+        assert.equal(storageCheckCalled, false, 'storage must never be touched for a cross-tenant imageId');
       } finally {
         __setImagingStorageExistenceCheckerForTest(null);
       }
@@ -422,10 +468,11 @@ async function main() {
     // ── 13. Unused-facade proof (no production caller) ────────────────────
     section('13. Unused-facade proof');
 
-    await test('no route or Privacy service file imports services/imaging/public.ts', () => {
-      const searchRoots = ['src/routes', 'src/services'];
+    await test('no route, middleware, job, or service file imports services/imaging/public.ts', () => {
+      const searchRoots = ['src/routes', 'src/middleware', 'src/jobs', 'src/services'];
       const offenders: string[] = [];
       const walk = (dir: string) => {
+        if (!fs.existsSync(dir)) return;
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
           const full = path.join(dir, entry.name);
           if (entry.isDirectory()) {
