@@ -1,4 +1,17 @@
 {
+  "superseded": {
+    "supersededBy": "PR #310 (hotfix/us-01-2-primary-update-race, closes issue #309)",
+    "supersedingCommit": "71989bad4e66a7d2dab938b2007d02f2433060d8",
+    "supersedingMergeCommit": "a59c4b7c8b9d09f2dc353fdf38a63705e0881c56",
+    "sameRootCauseDiagnosis": true,
+    "sameFixDesign": "per_patient_advisory_lock_plus_optimistic_snapshot_check",
+    "independentParallelSession": true,
+    "postMergeMainCiRunId": "30817449231",
+    "postMergeMainCiConclusion": "success",
+    "thisTaskOwnPrNumber": 311,
+    "thisTaskOwnPrMerged": false,
+    "thisTaskOwnPrClosedAsRedundant": true
+  },
   "taskId": "F1-004-P1",
   "title": "Patient Emergency Contact Concurrent Primary Update Determinism",
   "phase": "F1",

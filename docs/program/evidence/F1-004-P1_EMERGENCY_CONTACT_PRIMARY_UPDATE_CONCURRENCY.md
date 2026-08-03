@@ -1,5 +1,7 @@
 # F1-004-P1 — Patient Emergency Contact Concurrent Primary Update Determinism
 
+> **SUPERSEDED 2026-08-03.** While this task's fix was being validated, an independent parallel session merged **PR #310** (`hotfix/us-01-2-primary-update-race`, closing GitHub issue #309, merge commit `a59c4b7c8b9d09f2dc353fdf38a63705e0881c56`) to `main`, implementing the **same root-cause diagnosis and the same fix design** (per-patient `pg_advisory_xact_lock` + optimistic pre-transaction snapshot check, unique index kept as backstop) independently and first. Post-merge `main` CI (`ci-main-and-nightly`, run `30817449231`) is `success`. This document's own analysis, forced-interleaving reproduction, and fix are preserved verbatim below as an **independent corroboration** of PR #310's own diagnosis and design — not rewritten — but this task's own PR (**#311**) was closed unmerged as redundant/conflicting rather than landing a duplicate implementation. No further action on this task's own branch is required; see the PR's closing comment for the exact reconciliation record.
+
 | Field | Value |
 |---|---|
 | Task ID | F1-004-P1 |
