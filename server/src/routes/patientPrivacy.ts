@@ -104,6 +104,7 @@ async function collectStructuredExportData(
         instagramInboxEntries,
         activityLogs,
         privacyRequests,
+        emergencyContacts,
       ] = await Promise.all([
         prisma.patient.findFirst({
           where: { id: patientId, clinicId, organizationId },
@@ -296,6 +297,23 @@ async function collectStructuredExportData(
           },
           orderBy: { createdAt: 'desc' },
         }),
+        prisma.patientEmergencyContact.findMany({
+          where: { patientId, clinicId },
+          select: {
+            id: true,
+            contactType: true,
+            fullName: true,
+            phone: true,
+            phoneCountryCode: true,
+            email: true,
+            occupation: true,
+            isPrimary: true,
+            isLegalDecisionMaker: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        }),
       ]);
 
       return {
@@ -319,6 +337,7 @@ async function collectStructuredExportData(
         },
         activityHistory: activityLogs,
         privacyRequests,
+        emergencyContacts,
       };
 }
 

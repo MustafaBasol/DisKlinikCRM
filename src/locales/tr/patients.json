@@ -105,6 +105,41 @@
     "whatsappSessionTitle": "WhatsApp görüşmesi",
     "whatsappSessionSummary": "WhatsApp: {{count}} mesaj ({{incoming}} gelen • {{outgoing}} giden)",
     "whatsappSessionCounts": "{{incoming}} gelen • {{outgoing}} giden ({{count}} mesaj)",
+    "emergencyContacts": {
+      "title": "Acil Durum Kişileri",
+      "addNew": "Kişi Ekle",
+      "addTitle": "Acil Durum Kişisi Ekle",
+      "editTitle": "Acil Durum Kişisini Düzenle",
+      "edit": "Düzenle",
+      "delete": "Sil",
+      "empty": "Henüz acil durum kişisi eklenmedi.",
+      "deleteConfirm": "Bu acil durum kişisini silmek istediğinizden emin misiniz?",
+      "deleteFailed": "Acil durum kişisi silinemedi.",
+      "primary": "Birincil",
+      "legalDecisionMaker": "Yasal Karar Verici",
+      "minorWarning": "Bu hasta reşit değil ve kayıtlı bir yasal karar vericisi bulunmuyor. Ebeveyn veya vasiyi yasal karar verici olarak eklemeyi düşünün.",
+      "types": {
+        "SPOUSE": "Eş",
+        "PARENT": "Ebeveyn",
+        "GUARDIAN": "Vasi",
+        "CHILD": "Çocuk",
+        "SIBLING": "Kardeş",
+        "OTHER": "Diğer"
+      },
+      "form": {
+        "contactType": "Yakınlık Derecesi",
+        "fullName": "Ad Soyad",
+        "phone": "Telefon Numarası",
+        "phoneCountryCode": "Ülke Kodu",
+        "email": "E-posta Adresi",
+        "occupation": "Meslek",
+        "isPrimary": "Birincil kişi olarak ayarla",
+        "isLegalDecisionMaker": "Yasal karar verici (ebeveyn/vasi)",
+        "fullNameRequired": "Ad soyad zorunludur",
+        "phoneRequired": "Telefon numarası zorunludur",
+        "saveFailed": "Acil durum kişisi kaydedilemedi."
+      }
+    },
     "overview": {
       "clinicalAlerts": "Klinik Uyarılar",
       "clinicalAlertsSubtitle": "Önemli sağlık bilgileri",

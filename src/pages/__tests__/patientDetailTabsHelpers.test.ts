@@ -12,6 +12,7 @@ import {
   computeVisiblePatientDetailTabs,
   resolvePatientDetailActiveTab,
   requiresUrlNormalization,
+  isMinorPatient,
 } from '../patientDetailTabsHelpers';
 
 let passed = 0;
@@ -91,6 +92,37 @@ async function main() {
   await test('a feature-disabled tab param requires normalization until the feature becomes visible', () => {
     assert.equal(requiresUrlNormalization('imaging', computeVisiblePatientDetailTabs(false)), true);
     assert.equal(requiresUrlNormalization('imaging', computeVisiblePatientDetailTabs(true)), false);
+  });
+
+  section('isMinorPatient — US-01.2 minor-without-legal-decision-maker warning input');
+
+  await test('null/undefined dateOfBirth is never treated as a minor', () => {
+    assert.equal(isMinorPatient(null), false);
+    assert.equal(isMinorPatient(undefined), false);
+  });
+
+  await test('an invalid date string is never treated as a minor', () => {
+    assert.equal(isMinorPatient('not-a-date'), false);
+  });
+
+  await test('a patient turning 18 exactly today is NOT a minor', () => {
+    const now = new Date('2026-06-15T12:00:00Z');
+    assert.equal(isMinorPatient('2008-06-15', now), false);
+  });
+
+  await test('a patient turning 18 tomorrow is still a minor today', () => {
+    const now = new Date('2026-06-15T12:00:00Z');
+    assert.equal(isMinorPatient('2008-06-16', now), true);
+  });
+
+  await test('a clearly adult patient (35 years old) is not a minor', () => {
+    const now = new Date('2026-06-15T12:00:00Z');
+    assert.equal(isMinorPatient('1991-01-01', now), false);
+  });
+
+  await test('a newborn (Date object, not string) is a minor', () => {
+    const now = new Date('2026-06-15T12:00:00Z');
+    assert.equal(isMinorPatient(new Date('2026-01-01'), now), true);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);
