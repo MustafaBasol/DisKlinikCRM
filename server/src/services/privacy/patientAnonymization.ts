@@ -130,6 +130,37 @@ async function redactPatientImagingImages(clinicId: string, patientId: string): 
   return counters;
 }
 
+/**
+ * US-01.1-P1 (medical history): unlike attachments/imaging/emergency
+ * contacts, medical history rows are IMMUTABLE VERSIONS that must never be
+ * deleted or have their clinical/structural fields altered — deleting or
+ * rewriting a past version would falsify the clinical record the versioning
+ * system exists to protect. Anonymization here is narrower and specific:
+ * only the two FREE-TEXT fields that can carry incidental PII (a staff
+ * member writing a patient's name/phone into a free-text note, for example)
+ * are cleared to null, on every existing version — never a new version, and
+ * never the coded/structured fields (version number, recordedAt,
+ * recordedById, noKnownConditions, pregnancyStatus, pregnancyStartDate, or
+ * any PatientCondition.status/conditionId link). This preserves the
+ * clinical/audit shape of the history (how many versions existed, when,
+ * what conditions were coded) while removing the only fields capable of
+ * holding free-form identifying text. Idempotent by construction
+ * (updateMany onto already-null fields is a safe no-op) — no separate
+ * "already redacted" check is needed, unlike redactPatientAttachments/
+ * redactPatientImagingImages, which mutate a required (NOT NULL) column and
+ * so need a sentinel to detect a prior run.
+ */
+async function redactPatientMedicalHistory(clinicId: string, patientId: string): Promise<void> {
+  await prisma.patientMedicalHistory.updateMany({
+    where: { clinicId, patientId },
+    data: { allergies: null, currentMedications: null },
+  });
+  await prisma.patientCondition.updateMany({
+    where: { clinicId, patientId },
+    data: { note: null },
+  });
+}
+
 const ANON_FIRST = 'Anonim';
 const ANON_LAST  = 'Hasta';
 const ANON_TEXT  = '[ANONYMIZED]';
@@ -204,6 +235,7 @@ export async function anonymizePatientData(
       where: { clinicId, patientId },
       data: { fullName: ANON_TEXT, phone: null, phoneCountryCode: null, email: null, occupation: null },
     });
+    await redactPatientMedicalHistory(clinicId, patientId);
     return {
       alreadyAnonymized: true,
       patientId,
@@ -344,6 +376,9 @@ export async function anonymizePatientData(
       occupation: null,
     },
   });
+
+  // ── 8b. PatientMedicalHistory (US-01.1-P1): redact free text only ────────
+  await redactPatientMedicalHistory(clinicId, patientId);
 
   // ── 9. Redact ActivityLog descriptions for this patient ──────────────────────
   const activityRows = await prisma.activityLog.findMany({

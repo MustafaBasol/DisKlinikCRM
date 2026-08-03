@@ -168,6 +168,56 @@ async function scenarioConcurrentUpdatesDifferentContacts() {
   });
 }
 
+// ─── 2b. Stress: same UPDATE race, run repeatedly to demonstrate determinism ─
+
+async function scenarioConcurrentUpdatesStress() {
+  const ROUNDS = 25;
+  section(`2b. Stress: ${ROUNDS} independent rounds of the DIFFERENT-contacts UPDATE race, each on a fresh patient — must be deterministic every round`);
+  const fixtures = await createClinicFixtureSet('ec-concurrent-update-stress');
+  const user = await ownerUser(fixtures);
+
+  let onePassOneConflict = 0;
+  let exactlyOnePrimaryAfter = 0;
+
+  await test(`all ${ROUNDS} rounds produce exactly one 200 + one 409 PRIMARY_CONTACT_CONFLICT, and exactly one primary contact afterwards`, async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+
+      const createA = await callCreate(patient.id, user, contactBody({ isPrimary: false }));
+      const createB = await callCreate(patient.id, user, contactBody({ isPrimary: false }));
+      assert.equal(createA.statusCode, 201, `round ${round}: setup create A must succeed`);
+      assert.equal(createB.statusCode, 201, `round ${round}: setup create B must succeed`);
+
+      const [resA, resB] = await Promise.all([
+        callUpdate(patient.id, createA.body.id, user, { isPrimary: true }),
+        callUpdate(patient.id, createB.body.id, user, { isPrimary: true }),
+      ]);
+
+      const successCount = [resA, resB].filter(r => r.statusCode === 200).length;
+      const loser = resA.statusCode === 200 ? resB : resA;
+      const winner = resA.statusCode === 200 ? resA : resB;
+
+      assert.equal(
+        successCount,
+        1,
+        `round ${round}: exactly one concurrent update must succeed — got A=${resA.statusCode} B=${resB.statusCode} bodies=${JSON.stringify(resA.body)} / ${JSON.stringify(resB.body)}`,
+      );
+      assert.ok(
+        isConflict(loser),
+        `round ${round}: the loser must get the documented controlled 409 PRIMARY_CONTACT_CONFLICT, got ${loser.statusCode} ${JSON.stringify(loser.body)}`,
+      );
+      assert.equal(winner.statusCode, 200, `round ${round}: the winner must get 200`);
+      onePassOneConflict++;
+
+      const finalPrimaryCount = await primaryCount(patient.id);
+      assert.equal(finalPrimaryCount, 1, `round ${round}: exactly one primary contact must exist after the race, got ${finalPrimaryCount}`);
+      exactlyOnePrimaryAfter++;
+    }
+
+    console.log(`    [stress summary] rounds=${ROUNDS} one-200-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`);
+  });
+}
+
 // ─── 5. No unrelated patient or tenant contact is modified by the race ──────
 
 async function scenarioNoCrossPatientInterference() {
@@ -253,6 +303,7 @@ async function scenarioMultipleLegalDecisionMakersAllowed() {
 async function main() {
   await scenarioConcurrentCreatesSamePatient();
   await scenarioConcurrentUpdatesDifferentContacts();
+  await scenarioConcurrentUpdatesStress();
   await scenarioNoCrossPatientInterference();
   await scenarioMultipleNonPrimaryRowsAllowed();
   await scenarioMultipleLegalDecisionMakersAllowed();

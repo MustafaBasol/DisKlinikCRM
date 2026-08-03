@@ -9,9 +9,11 @@
 import assert from 'node:assert/strict';
 import {
   PATIENT_DETAIL_TAB_KEYS,
+  PRIMARY_PATIENT_DETAIL_TAB_KEYS,
   computeVisiblePatientDetailTabs,
   resolvePatientDetailActiveTab,
   requiresUrlNormalization,
+  splitPatientDetailTabsForNav,
   isMinorPatient,
 } from '../patientDetailTabsHelpers';
 
@@ -123,6 +125,51 @@ async function main() {
   await test('a newborn (Date object, not string) is a minor', () => {
     const now = new Date('2026-06-15T12:00:00Z');
     assert.equal(isMinorPatient(new Date('2026-01-01'), now), true);
+  });
+
+  section('splitPatientDetailTabsForNav — US-01.X primary row / More-menu grouping');
+
+  await test('every visible tab key is placed in exactly one of primary/more (none lost, none duplicated)', () => {
+    const visible = computeVisiblePatientDetailTabs(true);
+    const { primary, more } = splitPatientDetailTabsForNav(visible);
+    assert.deepEqual([...primary, ...more].sort(), [...visible].sort());
+    assert.equal(new Set([...primary, ...more]).size, visible.length);
+  });
+
+  await test('primary/more split preserves original relative order within each group (no reordering)', () => {
+    const visible = computeVisiblePatientDetailTabs(true);
+    const { primary, more } = splitPatientDetailTabsForNav(visible);
+    const visibleIndex = new Map(visible.map((tab, i) => [tab, i]));
+    for (let i = 1; i < primary.length; i++) {
+      assert.ok(visibleIndex.get(primary[i - 1]!)! < visibleIndex.get(primary[i]!)!, 'primary group out of order');
+    }
+    for (let i = 1; i < more.length; i++) {
+      assert.ok(visibleIndex.get(more[i - 1]!)! < visibleIndex.get(more[i]!)!, 'more group out of order');
+    }
+  });
+
+  await test('emergencyContacts is not a primary tab, so it collapses into the More group', () => {
+    const { primary, more } = splitPatientDetailTabsForNav(computeVisiblePatientDetailTabs(true));
+    assert.ok(!primary.includes('emergencyContacts'));
+    assert.ok(more.includes('emergencyContacts'));
+  });
+
+  await test('a role/feature-filtered tab (imaging, canSeeImaging=false) is absent from both primary and more', () => {
+    const { primary, more } = splitPatientDetailTabsForNav(computeVisiblePatientDetailTabs(false));
+    assert.ok(!primary.includes('imaging'));
+    assert.ok(!more.includes('imaging'));
+  });
+
+  await test('imaging (when visible) is grouped under More, not the primary row', () => {
+    const { primary, more } = splitPatientDetailTabsForNav(computeVisiblePatientDetailTabs(true));
+    assert.ok(!primary.includes('imaging'));
+    assert.ok(more.includes('imaging'));
+  });
+
+  await test('PRIMARY_PATIENT_DETAIL_TAB_KEYS only names tabs that actually exist in PATIENT_DETAIL_TAB_KEYS', () => {
+    for (const key of PRIMARY_PATIENT_DETAIL_TAB_KEYS) {
+      assert.ok((PATIENT_DETAIL_TAB_KEYS as readonly string[]).includes(key), `unknown primary tab key "${key}"`);
+    }
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

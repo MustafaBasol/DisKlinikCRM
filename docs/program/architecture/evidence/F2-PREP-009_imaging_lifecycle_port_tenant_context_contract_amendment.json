@@ -1,0 +1,124 @@
+{
+  "taskId": "F2-PREP-009",
+  "taskName": "ImagingLifecyclePort Tenant Context Contract Amendment",
+  "phase": "F2",
+  "status": "PROPOSED",
+  "amends": {
+    "document": "docs/program/architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md",
+    "section": "9 (F2-CC-14)",
+    "priorDecision": "ACCEPTED_AND_REVISED"
+  },
+  "triggeredBy": "docs/program/evidence/F2-IMPL-001-A_R1_TENANT_CONTEXT_REVIEW_CORRECTION.md",
+  "chosenModel": {
+    "option": "A",
+    "name": "Explicit clinicId/context on all imageId operations",
+    "amendedSignatures": {
+      "markStorageMissing": "(clinicId: string, imageId: string): Promise<void>",
+      "redactForAnonymization": "(clinicId: string, imageId: string, reason: RedactionReason): Promise<void>",
+      "checkImageStorageExists": "(clinicId: string, imageId: string): Promise<boolean>",
+      "getImagesForLifecycleReview": "(clinicId: string, patientId: string): Promise<ImagingLifecycleImageDto[]> (unchanged)"
+    },
+    "rejectedOption": {
+      "option": "B",
+      "name": "Context-bound port instance (createImagingLifecyclePort(context))",
+      "reasonsRejected": [
+        "no existing session/request-scoped factory-binding convention anywhere else in this codebase; every accepted contract uses explicit call-site parameters",
+        "hides the authorization boundary one indirection away from the call site, reducing reviewability of a missing/wrong scope",
+        "still requires solving the identical 'where does clinicId legitimately come from' question one layer up, at the factory call, not eliminating the work",
+        "materially larger and less mechanical caller-migration diff (must also decide construction lifetime/threading of the port instance)"
+      ]
+    }
+  },
+  "contractRequirements": {
+    "tenantContextSource": "MUST be an already authorization-validated clinic scope. A raw/unvalidated req.user.clinicId or JWT clinic-claim default is NOT by itself sufficient authorization - it is a UI/session default selection, not proof of current access. Must be resolved via resolveEffectiveClinicId(user, requestedClinicId?), validateAndGetClinicIdScope(user, selectedClinicId, res), getAccessibleClinicIds(user) (all server/src/utils/clinicScope.ts), or an equivalent record-derived validation whose own lookup where-clause was already scoped to organizationId + allowedClinicIds (e.g. patientPrivacy.ts's resolvePatient()). No caller may pass an arbitrary clinicId sourced directly from body/query/JWT-default without that validation step. The facade receives an already-authorized clinicId as an opaque trusted value and applies it in every DB predicate, but does not itself re-run authorization - it is a fail-closed data boundary, not the authorization boundary.",
+    "principalSystemDistinction": "principal (interactive) callers must resolve clinicId via one of the validated mechanisms above - never the unvalidated req.user.clinicId/JWT claim taken as-is. system/lifecycle (batch job) callers obtain clinicId from a trusted, single-clinic DB iteration/request record, never a system wildcard/bypass value; no such caller exists in this codebase today (see callerClinicIdSourceVerification). Both categories require an explicit, single-clinic-scoped, already-validated clinicId per call; multi-clinic jobs call once per independently resolved clinic; no bypass/wildcard value exists for either category.",
+    "failClosedDbPredicates": "clinicId included as a top-level predicate in every read (findFirst where: {id, clinicId, study:{clinicId}}) and every write (update/updateMany where: {id, clinicId, study:{clinicId}} - read and write predicates identical, never a reduced {id, clinicId}-only write predicate); zero-row result on mismatch, never a post-fetch-only comparison",
+    "noCrossTenantExistenceLeakage": "ImagingNotFoundError remains the single undifferentiated error for not-found, denormalization-mismatch, and cross-tenant-mismatch cases; no distinguishable shape/timing/message across causes",
+    "auditOwnership": "unchanged - remains with the calling service; port performs no audit/activity-log writes",
+    "systemLifecycleCallerRules": "system/lifecycle callers scoped per-clinic per-call via their own existing iteration; no multi-clinic single call permitted",
+    "dtoStorageKeyExposure": "unchanged from F2-IMPL-001-A's accepted ImagingLifecycleImageDto; no new field added or removed by this amendment",
+    "callerMigrationImplications": "mechanical: each of the 3 current direct-Prisma callers (patientAnonymization.ts, orphanFileInspection.ts, deletionReviewInventory.ts) already resolves clinicId earlier in its own call chain; migration threads that value as a new leading argument, replacing the direct Prisma call. Remains Stage 3 work, not performed by this amendment or by F2-IMPL-001-A's re-implementation.",
+    "backwardCompatibility": "no production backward-compatibility obligation - F2-IMPL-001-A (PR #304) has zero callers and is unmerged; this is a pre-merge contract correction, not a breaking API change",
+    "rollback": "documentation-only revert of this proposal (no app/schema/CI file touched); rollback of a future re-implementation remains single-file delete/revert per F2-IMPL-001-A's own established rollback plan",
+    "requiredTests": [
+      "cross-tenant rejection, case A (markStorageMissing, redactForAnonymization, checkImageStorageExists): call with Clinic A's authorized clinicId + Clinic B's valid imageId -> ImagingNotFoundError, indistinguishable from genuinely-missing imageId",
+      "cross-tenant rejection, case B (getImagesForLifecycleReview): call with Clinic A's authorized clinicId + Clinic B's patientId -> empty result array, no Clinic B data",
+      "same-clinic success unaffected - full existing assertion suite re-run with correct clinicId",
+      "denormalization-mismatch-within-caller's-own-clinic still fails closed",
+      "no existence side-channel across all not-found causes",
+      "corrected signature-arity assertions (markStorageMissing.length===2, redactForAnonymization.length===3, checkImageStorageExists.length===2 with no 3rd parameter present)"
+    ]
+  },
+  "removeFileExistsForTestParameter": {
+    "required": true,
+    "amendedCheckImageStorageExistsMustBeExactly": "(clinicId: string, imageId: string): Promise<boolean>",
+    "replacementTechniqueDecision": "deferred to re-implementation task - module-private helper / internal dependency factory / repository-native module-mock interception / real controlled-failure fixture, justified against existing test-suite conventions",
+    "statusOnCurrentPr304Head": "CORRECTED_ON_CURRENT_PR304_HEAD (abac5e361abd0913dadbce1e124c2ca113600fb7) - fileExistsForTest no longer exists as a parameter; see pr304HeadReconciliation. checkImageStorageExists is still missing the required clinicId parameter (Finding 1 / this amendment), independent of this fix.",
+    "currentPr304TestSeamDescription": "A separately exported test-only setter controlling module-private state, __setImagingStorageExistenceCheckerForTest(override), not a parameter of checkImageStorageExists, not part of the accepted ImagingLifecyclePort interface, and not itself module-private (only the state it sets is). Existence of this setter does not reopen Finding 2 and is not classified as an accepted port method.",
+    "testSeamAcceptabilityDecision": "DEFERRED_TO_F2-IMPL-001-A_IMPLEMENTATION_REVIEW - whether an exported test-only setter mutating module-private state is an acceptable pattern for the re-implementation is an implementation-review concern, not a blocker to accepting this tenant-context contract, and not decided by this document"
+  },
+  "callerClinicIdSourceVerification": {
+    "verifiedAgainst": "server/src/routes/patientPrivacy.ts (current main, 2026-08-03)",
+    "sharedMechanism": "resolvePatient(patientId, user) - Patient lookup where-scoped to organizationId: user.organizationId and, when !user.canAccessAllClinics, clinicId: { in: user.allowedClinicIds }; returns patient.clinicId",
+    "callers": {
+      "patientAnonymization.ts": {
+        "function": "anonymizePatientData",
+        "calledFrom": "POST /patients/:id/privacy/anonymize",
+        "clinicIdSource": "patient.clinicId from resolvePatient()",
+        "authorizationValidated": true,
+        "stage3AdditionalValidationRequired": false,
+        "note": "Verified by direct source read, not assumed. Record-derived-but-access-scoped, equivalent in effect to resolveEffectiveClinicId, not a raw req.user.clinicId passthrough."
+      },
+      "orphanFileInspection.ts": {
+        "function": "inspectOrphans",
+        "calledFrom": "GET /patients/:id/privacy/orphan-check",
+        "clinicIdSource": "patient.clinicId from resolvePatient()",
+        "authorizationValidated": true,
+        "stage3AdditionalValidationRequired": false,
+        "note": "Same resolvePatient() source and reasoning as patientAnonymization.ts."
+      },
+      "deletionReviewInventory.ts": {
+        "function": "buildDeletionReviewInventory",
+        "calledFrom": "GET /patients/:id/privacy/deletion-review",
+        "clinicIdSource": "patient.clinicId from resolvePatient()",
+        "authorizationValidated": true,
+        "stage3AdditionalValidationRequired": false,
+        "note": "Same resolvePatient() source and reasoning as patientAnonymization.ts."
+      }
+    },
+    "systemLifecycleCallerExistsToday": false,
+    "stage3Precondition": "Verified for current call sites only, as of this correction (2026-08-03). Stage 3 migration is not asserted to be purely mechanical merely because this is true today - whoever migrates each caller must re-confirm resolvePatient() (or its future equivalent) still validates clinicId at that time, not rely on this document's snapshot."
+  },
+  "prismaCapabilityVerification": {
+    "performedBy": "F2-PREP-009 review-thread correction task",
+    "date": "2026-08-03",
+    "prismaVersionVerified": "7.8.0 (server/package.json, both prisma and @prisma/client)",
+    "sourceInspected": "server/node_modules/.prisma/client/index.d.ts (generated client, current repository state)",
+    "finding": "ImagingImageWhereUniqueInput = Prisma.AtLeast<{ id?, clinicId?, studyId?, ..., study?: XOR<ImagingStudyScalarRelationFilter, ImagingStudyWhereInput>, ... }, \"id\"> - this generated client supports Prisma's extended-whereUnique combination of the unique field (id) with additional non-unique filters, including the study:{clinicId} relation filter, on a single-record update/delete, not only on updateMany. updateMany's own ImagingImageWhereInput independently supports the identical relation filter with no uniqueness constraint at all.",
+    "conclusion": "the exact predicate {id: imageId, clinicId, study: {clinicId}} is directly usable, unmodified, on either a singular update/delete or an updateMany call against ImagingImage in this repository; no reduced/alternate write-side predicate is required - read and write predicates must be identical (see contractRequirements.failClosedDbPredicates)",
+    "notUnsupportedPrismaSyntaxPrescribed": true
+  },
+  "pr304Handling": {
+    "closedOrMergedByThisTask": false,
+    "recommendation": "leave PR #304 open, marked blocked, per F2-IMPL-001-A_R1_TENANT_CONTEXT_REVIEW_CORRECTION.md; open this amendment as a separate docs-only PR; after this amendment merges, reconcile PR #304 with main and re-implement against the amended (clinicId, imageId) shape"
+  },
+  "pr304HeadReconciliation": {
+    "performedBy": "F2-PREP-009 correction task",
+    "date": "2026-08-03",
+    "prNumber": 304,
+    "prHeadShaAtOriginalReview": "f8a37b72c4cc1800126b67e451e35238080cfe17",
+    "prHeadShaCurrentVerified": "abac5e361abd0913dadbce1e124c2ca113600fb7",
+    "prStateCurrentVerified": "OPEN",
+    "prMergeableCurrentVerified": "MERGEABLE",
+    "finding1TenantAuthorizationGap": "STILL_OPEN_ON_CURRENT_HEAD - findOwnedImage(imageId) unchanged in substance; where:{id:imageId} only, clinicId self-comparison only, no caller-supplied clinicId anywhere in the 3 imageId-only methods",
+    "finding2SignatureDrift": "VERIFIED_ON_PRIOR_HEAD / CORRECTED_ON_CURRENT_PR304_HEAD - checkImageStorageExists is now exactly (imageId: string): Promise<boolean> on the current head; fileExistsForTest no longer exists as a parameter; test-failure injection moved to a separate export, __setImagingStorageExistenceCheckerForTest, not a parameter of checkImageStorageExists",
+    "overallDispositionUnchanged": true,
+    "note": "Finding 2's correction does not close Finding 1; F2-IMPL-001-A remains blocked on Finding 1 alone."
+  },
+  "validation": {
+    "gitDiffCheck": "clean for new files added by this task",
+    "jsonParseValidated": true,
+    "noApplicationSchemaMigrationWorkflowFileTouched": true,
+    "noCallerAdded": true
+  }
+}

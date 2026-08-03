@@ -105,6 +105,7 @@ async function collectStructuredExportData(
         activityLogs,
         privacyRequests,
         emergencyContacts,
+        medicalHistory,
       ] = await Promise.all([
         prisma.patient.findFirst({
           where: { id: patientId, clinicId, organizationId },
@@ -314,6 +315,33 @@ async function collectStructuredExportData(
           },
           orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
         }),
+        // US-01.1-P1: medical history is sensitive health data and a KVKK/GDPR
+        // access request must include it. Every version is exported (not just
+        // the latest) — the subject access right covers the full record held,
+        // and versions are immutable so none of this can go stale after export.
+        prisma.patientMedicalHistory.findMany({
+          where: { patientId, clinicId, organizationId },
+          select: {
+            id: true,
+            version: true,
+            recordedById: true,
+            recordedAt: true,
+            noKnownConditions: true,
+            allergies: true,
+            currentMedications: true,
+            pregnancyStatus: true,
+            pregnancyStartDate: true,
+            createdAt: true,
+            conditions: {
+              select: {
+                status: true,
+                note: true,
+                condition: { select: { code: true, category: true, nameEn: true, nameTr: true } },
+              },
+            },
+          },
+          orderBy: { version: 'desc' },
+        }),
       ]);
 
       return {
@@ -338,6 +366,7 @@ async function collectStructuredExportData(
         activityHistory: activityLogs,
         privacyRequests,
         emergencyContacts,
+        medicalHistory,
       };
 }
 

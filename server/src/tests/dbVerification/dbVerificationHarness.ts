@@ -288,6 +288,12 @@ export async function cleanupAllFixtures(): Promise<void> {
   await prisma.doctorOffDay.deleteMany({ where: { clinicId: { in: clinicIds } } });
   // PatientEmergencyContact.patientId FK is ON DELETE RESTRICT — must clear before Patient.
   await prisma.patientEmergencyContact.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  // PatientCondition.historyId/patientId FKs are ON DELETE RESTRICT — must clear
+  // before PatientMedicalHistory and before Patient. MedicalCondition itself is
+  // global, tenant-independent reference data (seeded, not fixture data) and is
+  // deliberately never deleted here.
+  await prisma.patientCondition.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  await prisma.patientMedicalHistory.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.patient.deleteMany({ where: { organizationId: { in: orgIds } } });
   await prisma.user.deleteMany({ where: { organizationId: { in: orgIds } } });
   await prisma.clinic.deleteMany({ where: { organizationId: { in: orgIds } } });
