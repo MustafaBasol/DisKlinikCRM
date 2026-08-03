@@ -1,0 +1,264 @@
+{
+  "taskId": "F2-PREP-008",
+  "title": "Stage 1 Imaging Internal Facade Preparation and Authorization",
+  "phase": "F2 - Modular Monolith Guardrails / Imaging Early Implementation Gate",
+  "parentContract": "docs/program/architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md",
+  "type": "DOCUMENTATION_EVIDENCE_AND_PROGRAM_CONTROL_ONLY",
+  "status": "AGENT_COMPLETED",
+  "implementationPerformed": false,
+  "baseline": {
+    "originMainSha": "1a97d542a6c16aa58f13774588b6b987b3fbf79b",
+    "note": "This SHA is PR #298's own merge commit (F2-PREP-007-E Stage 0 consolidation).",
+    "branch": "docs/f2-prep-008-imaging-facade-stage1-prep",
+    "createdFrom": "origin/main",
+    "worktreeIsolated": true,
+    "primaryWorkingTreeTouched": false
+  },
+  "mandatoryGateChecks": {
+    "f2Prep008AlreadyUsedInTracker": false,
+    "f2Impl001aAlreadyUsedInTracker": false,
+    "stage0AuthoritativelyClosedPerTracker": true,
+    "stage0ClosureCaveat": "Tracker's own F2-PREP-007-E entry was authored pre-merge and still literally reads 'PR opened yes (#298, OPEN); merged no'. This task independently re-verified via gh/git that PR #298 has since merged (mergedAt 2026-08-03T08:20:40Z) and its post-merge main CI run passed 9/9 ci-layers jobs on the exact baseline commit, satisfying the tracker's own stated closure criterion. F2-PREP-007-E's own entry was not edited.",
+    "f2Prep007PrsVerified": [
+      { "task": "F2-PREP-007-A", "pr": 293, "state": "MERGED", "mergedAt": "2026-08-02T21:04:25Z", "mergeCommit": "43b92dde43e4c0606a6333997a81de7ea3ed247c", "isAncestorOfOriginMain": true },
+      { "task": "F2-PREP-007-B", "pr": 294, "state": "MERGED", "mergedAt": "2026-08-02T20:21:37Z", "mergeCommit": "bfc1b7317e95881fa68306a0f190f3d0570596a3", "isAncestorOfOriginMain": true },
+      { "task": "F2-PREP-007-C", "pr": 295, "state": "MERGED", "mergedAt": "2026-08-02T21:33:44Z", "mergeCommit": "0d48d9fdea5d33f0a1acf88da9060702526c8bd1", "isAncestorOfOriginMain": true },
+      { "task": "F2-PREP-007-D", "pr": 296, "state": "MERGED", "mergedAt": "2026-08-02T20:37:23Z", "mergeCommit": "801ddbe4714b9aa92bafa4689be9c474eb2270db", "isAncestorOfOriginMain": true },
+      { "task": "F2-PREP-007-E", "pr": 298, "state": "MERGED", "mergedAt": "2026-08-03T08:20:40Z", "mergeCommit": "1a97d542a6c16aa58f13774588b6b987b3fbf79b", "isAncestorOfOriginMain": true, "note": "This merge commit IS the task baseline SHA." }
+    ],
+    "postMergeMainCi": {
+      "runId": 30797032835,
+      "commitSha": "1a97d542a6c16aa58f13774588b6b987b3fbf79b",
+      "workflow": "ci-main-and-nightly",
+      "event": "push",
+      "conclusion": "success",
+      "ciLayersJobs": [
+        { "name": "Layer 1: server typecheck", "conclusion": "success" },
+        { "name": "Layer 1: frontend typecheck + build", "conclusion": "success" },
+        { "name": "Layer 1: test-runtime tooling typecheck + unit tests", "conclusion": "success" },
+        { "name": "Layer 1: workflow YAML, shell, PowerShell, and JSON validation", "conclusion": "success" },
+        { "name": "Layer 2: non-disposable backend tests", "conclusion": "success" },
+        { "name": "Layer 3: disposable PostgreSQL tests", "conclusion": "success" },
+        { "name": "Layer 4: disposable PostgreSQL + MinIO storage integration tests", "conclusion": "success" },
+        { "name": "Layer 5: full-suite/compatibility fail-safe (frontend)", "conclusion": "success" },
+        { "name": "Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)", "conclusion": "success" }
+      ],
+      "jobsPassed": "9/9"
+    },
+    "differentNextTaskAssignedByTracker": false,
+    "gateResult": "PASS"
+  },
+  "repositoryEvidenceScope": {
+    "filesInspected": [
+      "server/src/routes/imaging.ts",
+      "server/src/routes/imagingBridgePublic.ts",
+      "server/src/services/imaging/bridgeOnboardingConfig.ts",
+      "server/src/services/imaging/bridgePairing.ts",
+      "server/src/services/imaging/bridgeTokens.ts",
+      "server/src/services/imaging/bridgeUpdateConfig.ts",
+      "server/src/services/imaging/imagingRequestTransitions.ts",
+      "server/src/services/imaging/imagingUploadValidation.ts",
+      "server/src/services/imaging/releaseMetadataValidation.ts",
+      "server/prisma/schema.prisma (ImagingRequest/ImagingStudy/ImagingDevice/ImagingImage/ImagingBridge* models only, lines 2547-2820 region)",
+      "server/package.json (scripts.test:imaging-characterization / server:test:disposable-db only)",
+      "docs/program/NORAMEDI_MASTER_TRACKER.md",
+      "docs/program/CURRENT_PHASE.md",
+      "docs/program/phases/F2_MODULAR_BOUNDARIES.md",
+      "docs/program/evidence/README.md",
+      "docs/program/architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md",
+      "docs/program/architecture/evidence/F2-PREP-006-E_imaging_boundary_contract.json",
+      "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md",
+      "docs/program/evidence/F2-PREP-007-A_IMAGING_CHARACTERIZATION_AUTH_SHAPE_EVIDENCE.md",
+      "docs/program/evidence/F2-PREP-007-B_IMAGING_CHARACTERIZATION_TENANT_LIFECYCLE_EVIDENCE.md",
+      "docs/program/evidence/F2-PREP-007-C_IMAGING_CHARACTERIZATION_INGEST_STORAGE_EVIDENCE.md",
+      "docs/program/evidence/F2-PREP-007-D_IMAGING_REQUEST_CONCURRENCY_EVIDENCE.md",
+      "docs/program/evidence/F2-PREP-007-E_IMAGING_CHARACTERIZATION_WAVE_CONSOLIDATION_EVIDENCE.md",
+      "AGENTS.md (repository root)"
+    ],
+    "outOfScopeButCitedForDependencyDirectionOnly": [
+      "server/src/services/privacy/deletionReviewInventory.ts (cited only, not fully inspected - dependency direction per accepted contract)",
+      "server/src/services/privacy/orphanFileInspection.ts (cited only)",
+      "server/src/services/privacy/patientAnonymization.ts (cited only)",
+      "server/src/services/fileBackupService.ts (cited only)",
+      "server/src/utils/clinicScope.ts (import target only, not fully inspected)",
+      "server/src/middleware/auth.ts (import target only, not fully inspected)",
+      "server/src/services/fileStorage.ts (import target only, not fully inspected)"
+    ],
+    "wholeRepoScanPerformed": false,
+    "modulesImagingDirectoryExists": false
+  },
+  "entryPoints": {
+    "imagingTsRouteCount": 27,
+    "imagingBridgePublicTsRouteCount": 5,
+    "totalRoutes": 32,
+    "ct23Route": { "method": "PATCH", "path": "/api/imaging/studies/:id/link", "handlerName": "LinkImagingStudy", "file": "server/src/routes/imaging.ts", "lines": "807-854" },
+    "ct32Routes": [
+      { "method": "PATCH", "path": "/api/imaging/requests/:id", "file": "server/src/routes/imaging.ts", "lines": "487-524" },
+      { "method": "PATCH", "path": "/api/imaging/requests/:id/cancel", "file": "server/src/routes/imaging.ts", "lines": "530-552" }
+    ],
+    "manualIngestTransaction": { "file": "server/src/routes/imaging.ts", "lines": "614-656" },
+    "bridgeIngestTransaction": { "file": "server/src/routes/imagingBridgePublic.ts", "lines": "301-341" }
+  },
+  "riskAndDefectDispositions": {
+    "CT-23": {
+      "source": "F2-PREP-007-B evidence + F2-PREP-006-D contract JSON characterizationTests[CT-23]",
+      "classification": "VERIFIED_DEFECT",
+      "resolvedByThisTask": false,
+      "affectsStage1Design": "Excluded from Stage 1 facade's minimum operation inventory entirely.",
+      "blockerDecisionFormallyAdded": false,
+      "note": "Disposition of whether CT-23 is formally added to F2-PREP-006-E_imaging_boundary_contract.json's blockerDecisions remains undecided; not resolved by this task."
+    },
+    "CT-32_CR-03_BLK-02_FP-06": {
+      "source": "F2-PREP-007-D evidence + F2-PREP-006-E contract JSON blockerDecisions.imagingRequestPatchConcurrency",
+      "classification": "VERIFIED_CONCURRENCY_GAP (silent last-write-wins clobber)",
+      "resolvedByThisTask": false,
+      "targetResolutionStage": "No later than Stage 2, before UpdateImagingRequest/CancelImagingRequest are exposed to any caller beyond imaging.ts",
+      "affectsStage1Design": "Excluded from Stage 1 facade's minimum operation inventory entirely."
+    },
+    "BLK-01_CR-01_CR-02": {
+      "source": "F2-PREP-006-E contract JSON blockerDecisions.storageDbCompensationGap",
+      "classification": "NOT_A_BLOCKER for modular-monolith-internal work; blocks only a future, unauthorized network-boundary extraction",
+      "resolvedByThisTask": false,
+      "affectsStage1Design": "Facade does not claim atomicity across storage+DB writes; represents the gap honestly, mirrors imaging.ts:679's existing best-effort compensation."
+    },
+    "OVL-01": {
+      "source": "F2-PREP-006-A/006-E/007-C evidence",
+      "classification": "CHARACTERIZED_DUPLICATION, no correctness defect, convergence decision = CONVERGE (deferred to Stage 2)",
+      "resolvedByThisTask": false,
+      "affectsStage1Design": "Facade does not touch, wrap, or merge either ingest handler."
+    },
+    "PZ-IMG-03": { "status": "OPEN", "changedByThisTask": false },
+    "R-070": { "status": "OPEN", "changedByThisTask": false },
+    "R-046": { "status": "OPEN", "changedByThisTask": false },
+    "R-071": { "status": "CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION", "changedByThisTask": false },
+    "G1_G2": { "status": "NOT_APPROVED", "changedByThisTask": false },
+    "kvkkPhysicalArchitectureFreeze": { "status": "ACTIVE", "changedByThisTask": false }
+  },
+  "proposedFacadeDesign": {
+    "fileLocation": "server/src/services/imaging/public.ts",
+    "locationJustification": "Already named by the accepted F2-PREP-006-E contract's own expandMigrateContractStages[1].filesAffected[0]; sits inside the existing IMG-owned services directory, not a new module.",
+    "moduleImagingDirectoryCreated": false,
+    "minimumOperationInventory": {
+      "commands": [
+        "markStorageMissing(imageId: string): Promise<void>",
+        "redactForAnonymization(imageId: string, reason: RedactionReason): Promise<void>"
+      ],
+      "queries": [
+        "getImagesForLifecycleReview(clinicId: string, patientId: string): Promise<ImagingLifecycleImageDto[]>",
+        "checkImageStorageExists(imageId: string): Promise<boolean>"
+      ],
+      "explicitlyExcluded": ["LinkImagingStudy (CT-23 surface)", "UpdateImagingRequest (CT-32 surface)", "CancelImagingRequest (CT-32 surface)"],
+      "correspondsToAcceptedContractItem": "F2-CC-14 / ImagingLifecyclePort, ACCEPTED_AND_REVISED"
+    },
+    "dtoAndErrorContract": "Purpose-built DTOs only (e.g. ImagingLifecycleImageDto), never raw Prisma models; closed typed-error union (ImagingNotFoundError/ImagingLegalHoldViolationError/ImagingStorageUnavailableError), never a raw Prisma or storage-provider exception crossing the boundary.",
+    "tenantSecurityBoundary": "CORRECTED (was: 'every method requires an explicit clinicId parameter' - internally contradicted minimumOperationInventory itself, which shows 3 of 4 signatures without clinicId; removed). Signature constraint carried forward unchanged from the accepted F2-CC-14 contract (F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md Sec.9 / this JSON's f2cc14Decision.revisedScope): markStorageMissing/redactForAnonymization/checkImageStorageExists take imageId only, no clinicId parameter; only getImagesForLifecycleReview takes explicit clinicId+patientId. The 3 imageId-only methods are tenant-context-only operations: caller must already hold a tenant-scoped request context (resolveEffectiveClinicId-derived, matching every existing imaging.ts route); the facade internally re-derives the image's actual owning clinicId via the ImagingImage->ImagingStudy->clinicId traversal and throws ImagingNotFoundError (deliberately indistinguishable from a genuinely-missing row, to avoid a cross-tenant existence-leak side channel) if the derived clinicId does not match the caller's ambient tenant context. No unscoped prisma.imagingImage.findUnique/update by imageId alone is permitted anywhere in the facade implementation - every Prisma call must reach clinicId via a where clause, directly or through study.clinicId, regardless of whether clinicId is a formal parameter of that method. This is at least as strong as today: orphanFileInspection.ts markConfirmedMissing (SMB-01, lines 112-136) and patientAnonymization.ts redactPatientImagingImages (SMB-02, lines 103-131) both already call prisma.imagingImage.update({where:{id}}) imageId-only today with no re-check at the point of mutation, relying solely on a prior clinicId-scoped findMany earlier in the same call; the facade's re-derivation-and-throw check adds a second, independent verification gate that does not exist in today's code, so the resulting contract is strictly stronger, not merely equal. getImagesForLifecycleReview(clinicId, patientId) scopes every internal Prisma call directly by that clinicId, mirroring findStudyInScope's existing pattern. No session/JWT verification performed by the facade itself (remains route-layer, unchanged); does not weaken or bypass authorize()/authenticateBridgeAgent().",
+    "correctionApplied": {
+      "issue": "Blocking internal contradiction: minimumOperationInventory listed 3 of 4 methods as imageId-only, but tenantSecurityBoundary claimed 'every method requires an explicit clinicId parameter'.",
+      "resolutionPath": "PATH_B_PRESERVE_ACCEPTED_SIGNATURES",
+      "resolutionPathRationale": "The already-accepted F2-CC-14 contract (F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md Sec.9, 'Decision: ACCEPTED AND REVISED') explicitly and unambiguously specifies markStorageMissing(imageId)/redactForAnonymization(imageId)/checkImageStorageExists(imageId) as imageId-only; adding clinicId to those signatures would silently override an already-accepted architecture decision, which this task's own authority does not extend to (Sec.6 of the MD companion explicitly declines to edit the accepted boundary contract). minimumOperationInventory itself is therefore unchanged; only the false blanket tenantSecurityBoundary claim is corrected, replaced with the exact tenant-context enforcement mechanism.",
+      "signaturesUnchanged": true
+    },
+    "transactionOwnership": "Facade owns $transaction only where a method's own semantics require atomicity across multiple writes (none of the 4 Stage-1 methods do). Storage+DB compensation gap represented honestly, not claimed as atomic.",
+    "storageBoundary": "Depends on existing server/src/services/fileStorage.ts abstraction unchanged; no S3/local-specific branching added; legalHold/legalHoldReason handling unchanged.",
+    "crossDomainContracts": "Facade IS the ImagingLifecyclePort Privacy's 3 existing direct-Prisma callers are accepted to migrate onto in a LATER stage; this task's design does not migrate them - zero existing files import the facade at its own future merge time.",
+    "observabilityAudit": "Mutating methods emit through the same shared audit/activity-log mechanism imaging.ts routes already use; no new PII/PHI in logs beyond current practice.",
+    "compatibilityRollback": "Zero existing callers touched; rollback = delete the new file(s) or git revert; no migration/flag/deploy-config needed.",
+    "futureTestOwnership": "Focused compile/type contract test + seam test (facade output == equivalent direct call, 1:1) + unused-ness check where practical. Does not duplicate test:imaging-characterization's 21 existing assertions; that suite remains Layer 3 (disposable-postgres-tests) CI-owned, unchanged. No new CI workflow/job proposed - no repository evidence found requiring one."
+  },
+  "authorizationDecision": {
+    "decision": "AUTHORIZED_FOR_STAGE_1_IMPLEMENTATION",
+    "scopeOfAuthorization": "Limited to the 4-method ImagingLifecyclePort slice in proposedFacadeDesign.minimumOperationInventory, zero callers wired at merge time. Does NOT authorize LinkImagingStudy, UpdateImagingRequest, CancelImagingRequest inclusion, or any caller migration.",
+    "checklist": {
+      "facadeAddableWithoutCallerMigration": true,
+      "noRuntimeBehaviorChange": true,
+      "noSchemaStorageMigration": true,
+      "noExternalPublicExposure": true,
+      "tenantAuthBoundariesAtLeastAsStrong": true,
+      "noNewForbiddenCrossDomainInfraAccess": true,
+      "rollbackIsSimpleDeletionRevert": true,
+      "ct23AndCt32RemainUnresolvedAndGated": true,
+      "ovl01RemainsDeferred": true,
+      "blk01RemainsOpen": true,
+      "noAcceptedAdrOrTrackerDecisionContradicted": true
+    },
+    "nextTask": {
+      "id": "F2-IMPL-001-A",
+      "title": "Additive Unused Internal Imaging Facade Skeleton",
+      "idPreviouslyUsedInTracker": false,
+      "verificationCommand": "grep -rn \"F2-IMPL-001-A\" docs/program/ (pre-edit) -> no matches",
+      "gatedOn": ["This authorization (F2-PREP-008)"],
+      "explicitlyNotGatedOn": ["CT-23 blocker-decision disposition", "CT-32/CR-03 remediation"]
+    }
+  },
+  "filesChangedByThisTask": [
+    "docs/program/evidence/F2-PREP-008_STAGE1_IMAGING_FACADE_PREP_AND_AUTHORIZATION.md",
+    "docs/program/evidence/F2-PREP-008_stage1_imaging_facade_prep_and_authorization.json",
+    "docs/program/NORAMEDI_MASTER_TRACKER.md",
+    "docs/program/CURRENT_PHASE.md",
+    "docs/program/phases/F2_MODULAR_BOUNDARIES.md",
+    "docs/program/evidence/README.md"
+  ],
+  "filesNotTouched": [
+    "server/prisma/schema.prisma",
+    "any server/src/**/*.ts application/route/service file",
+    "any .github/workflows/*.yml file",
+    "server/package.json",
+    "root package.json"
+  ],
+  "validation": {
+    "gitDiffCheck": "clean",
+    "jsonParseValidation": "this file parses via node -e JSON.parse, clean",
+    "ghPrViewChecks": "293/294/295/296/298 all confirmed MERGED with recorded mergeCommit/mergedAt",
+    "gitMergeBaseAncestryChecks": "43b92dd/bfc1b73/0d48d9f/801ddbe all confirmed ancestors of origin/main (exit 0)",
+    "ghRunViewPostMergeCi": "run 30797032835 on baseline SHA, 9/9 ci-layers jobs success",
+    "fullBackendTestSuiteRun": false,
+    "fullBackendTestSuiteRunJustification": "Documentation/evidence/program-control-only change; no repository rule found requiring the full suite for tracker/phase-doc/evidence changes; no prior F2-PREP-00X documentation-only task in tracker history ran it either."
+  },
+  "migrationStatus": "NONE",
+  "backwardCompatibility": "TOTAL - no runtime-reachable code path changed by this task.",
+  "rollbackMethod": "git revert of this task's commit(s), or deletion of the new files plus reversal of the additive doc edits.",
+  "statusMatrix": {
+    "agentCompleted": true,
+    "testsPassed": "git diff --check clean, JSON parse validation clean; no application test suite run (not required, see validation.fullBackendTestSuiteRunJustification)",
+    "prOpened": true,
+    "merged": false,
+    "deployed": false,
+    "productionVerified": false
+  }
+  },
+  "prStatus": {
+    "number": 301,
+    "url": "https://github.com/MustafaBasol/DisKlinikCRM/pull/301",
+    "branch": "docs/f2-prep-008-imaging-facade-stage1-prep",
+    "baseBranch": "main",
+    "state": "OPEN",
+    "mergeable": "MERGEABLE",
+    "headRefOidBeforeThisCorrection": "7dc44f67b5cfa2fdad299d5ff55b5761e44d25d4",
+    "headRefOidAfterThisCorrection": "SELF_REFERENTIAL_NOT_EMBEDDABLE - a commit's own SHA is a hash over its own tree/content, so this file cannot embed the SHA of the very commit that includes this line without producing a stale/incorrect value at write time; the exact post-correction head SHA is recorded in the correction task's own final delivery report and is directly observable via `git rev-parse HEAD` / `gh pr view 301 --json headRefOid` on this branch.",
+    "verifiedVia": "gh pr view 301 --json state,mergeable,headRefOid,baseRefOid,url,number",
+    "verifiedAt": "2026-08-03"
+  },
+  "mergeSafe": true,
+  "mergeSafeRationale": "Only docs/program/** files changed; no application/schema/workflow/package file touched; no runtime or CI risk.",
+  "deploymentSafe": "NOT_APPLICABLE - no deployable artifact changed.",
+  "exactNextTask": "F2-IMPL-001-A - Additive Unused Internal Imaging Facade Skeleton, per authorizationDecision.nextTask.",
+  "parallelWorkSafety": {
+    "otherActiveBranchesNoted": [
+      "fix/f1-003-b2-retention-run-lock-race",
+      "docs/f2-prep-005-consolidated-modularization-charter",
+      "docs/f2-prep-006-d-imaging-contract-test-design",
+      "docs/f2-prep-006-e-imaging-boundary-consolidation",
+      "test/f2-prep-007-a-imaging-auth-shape",
+      "docs/f2-prep-007-e-imaging-characterization-consolidation",
+      "test/f2-prep-007-b-imaging-tenant-lifecycle",
+      "docs/f2-prep-006-a-imaging-ownership-inventory",
+      "docs/f2-prep-006-b-imaging-data-storage-kvkk",
+      "docs/f2-prep-006-c-imaging-callers-transactions",
+      "test/f2-prep-007-c-imaging-ingest-storage",
+      "test/f2-prep-007-d-imaging-request-concurrency"
+    ],
+    "dirtyContentsInspected": false,
+    "serialMergeRequiredFlag": true,
+    "serialMergeRequiredReason": "Several of these branch names correspond to already-merged PRs (293-298) whose worktrees may still exist locally/remotely; NORAMEDI_MASTER_TRACKER.md/CURRENT_PHASE.md/F2_MODULAR_BOUNDARIES.md are the same shared, sequentially-edited authoritative documents every prior F2-PREP task also edited - this task's PR should be reconciled against the latest origin/main immediately before opening/merging, matching the established pattern in this tracker's own history (e.g. F1-003-P3-R2's multi-conflict reconciliation)."
+  }
+}
