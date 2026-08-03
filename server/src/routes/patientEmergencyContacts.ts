@@ -22,24 +22,37 @@
  *     guessing its ID under a different patient/clinic/organization.
  *
  * Single-primary-contact invariant (concurrency):
- *   - "At most one isPrimary=true contact per patient" is enforced by a
- *     database-level partial unique index (PatientEmergencyContact_
- *     one_primary_per_patient — see migration 20260803120000_add_patient_
- *     emergency_contacts), not just the reset-then-set sequence inside the
- *     $transaction() below. The transaction alone cannot stop two concurrent
- *     requests from each completing with a separate primary row; the DB
- *     index is what actually guarantees zero-or-one.
- *   - When two requests race to become primary for the same patient, the
- *     database allows exactly one write to succeed. The loser's Prisma call
- *     rejects with a P2002 unique-constraint error, which POST/PUT below
- *     catch via isPrimaryContactConflict() and turn into a controlled
- *     `409 { error, code: 'PRIMARY_CONTACT_CONFLICT' }` response — never an
- *     unhandled exception or a generic 500, and never internal DB details.
- *     No retry is attempted; the caller is expected to reload and retry.
- *   - The primary-reset queries inside the transaction are explicitly scoped
- *     to (patientId, clinicId, organizationId) — not patientId alone — so
- *     the tenant boundary stays explicit and defensible even though
- *     patientId is already globally unique.
+ *   - "At most one isPrimary=true contact per patient" has two layers:
+ *     1. A database-level partial unique index (PatientEmergencyContact_
+ *        one_primary_per_patient — see migration 20260803120000_add_patient_
+ *        emergency_contacts) guarantees the DB can never physically hold two
+ *        isPrimary=true rows for one patient. This is a backstop, not the
+ *        primary race guard (see below for why it alone is insufficient).
+ *     2. A per-patient PostgreSQL advisory transaction lock (claimPrimaryContactSlot,
+ *        server/src/services/patientEmergencyContactPrimaryLock.ts) combined
+ *        with an optimistic snapshot check of who is currently primary. This
+ *        is what actually delivers the documented HTTP contract: when two
+ *        requests race to become primary for the same patient, exactly one
+ *        gets 200/201 and the other gets a controlled
+ *        `409 { error, code: 'PRIMARY_CONTACT_CONFLICT' }` — never an
+ *        unhandled exception, a generic 500, internal DB details, or a
+ *        silent last-writer-wins 200/200 (F1-004-P1: the unique index alone
+ *        does not prevent this — a second transaction's reset-then-set can
+ *        legitimately clear the first transaction's already-committed
+ *        primary and set its own without ever touching the unique index,
+ *        producing two 200s. See the lock helper's file header for the full
+ *        analysis). No retry is attempted; the caller is expected to reload
+ *        and retry.
+ *   - claimPrimaryContactSlot() re-checks are explicitly scoped to
+ *     (patientId, clinicId, organizationId) — not patientId alone — so the
+ *     tenant boundary stays explicit and defensible even though patientId is
+ *     already globally unique (the advisory-lock key itself is patientId-only,
+ *     since Patient.id is a single global primary key — see the lock
+ *     helper's file header).
+ *   - The lock is only ever acquired when a write is actually transitioning
+ *     a row to isPrimary=true; non-primary creates/updates never contend on
+ *     it, and different patients use different lock keys, so unrelated
+ *     writes are never serialized against each other.
  */
 
 import express, { Response } from 'express';
@@ -53,6 +66,11 @@ import {
   isPrimaryContactConflict,
   type NormalizedEmergencyContact,
 } from '../services/patientEmergencyContacts.js';
+import {
+  claimPrimaryContactSlot,
+  readCurrentPrimaryContactId,
+  PrimaryContactRaceError,
+} from '../services/patientEmergencyContactPrimaryLock.js';
 
 const router = express.Router();
 
@@ -139,19 +157,14 @@ router.post(
       if (!validation.ok) return res.status(400).json({ error: validation.error });
       const data = validation.data;
 
+      const scope = { patientId: patient.id, clinicId: patient.clinicId, organizationId: patient.organizationId };
+      const expectedCurrentPrimaryId = data.isPrimary ? await readCurrentPrimaryContactId(prisma, scope) : null;
+
       let contact;
       try {
         contact = await prisma.$transaction(async (tx) => {
           if (data.isPrimary) {
-            await tx.patientEmergencyContact.updateMany({
-              where: {
-                patientId: patient.id,
-                clinicId: patient.clinicId,
-                organizationId: patient.organizationId,
-                isPrimary: true,
-              },
-              data: { isPrimary: false },
-            });
+            await claimPrimaryContactSlot(tx, scope, expectedCurrentPrimaryId);
           }
           return tx.patientEmergencyContact.create({
             data: {
@@ -163,7 +176,7 @@ router.post(
           });
         });
       } catch (txErr: any) {
-        if (isPrimaryContactConflict(txErr)) {
+        if (txErr instanceof PrimaryContactRaceError || isPrimaryContactConflict(txErr)) {
           return res.status(409).json({
             error: 'Another request just set a primary contact for this patient. Please retry.',
             code: 'PRIMARY_CONTACT_CONFLICT',
@@ -213,20 +226,15 @@ router.put(
       if (!validation.ok) return res.status(400).json({ error: validation.error });
       const data = validation.data;
 
+      const willPromoteToPrimary = data.isPrimary && !existing.isPrimary;
+      const scope = { patientId: patient.id, clinicId: patient.clinicId, organizationId: patient.organizationId };
+      const expectedCurrentPrimaryId = willPromoteToPrimary ? await readCurrentPrimaryContactId(prisma, scope) : null;
+
       let contact;
       try {
         contact = await prisma.$transaction(async (tx) => {
-          if (data.isPrimary && !existing.isPrimary) {
-            await tx.patientEmergencyContact.updateMany({
-              where: {
-                patientId: patient.id,
-                clinicId: patient.clinicId,
-                organizationId: patient.organizationId,
-                isPrimary: true,
-                id: { not: existing.id },
-              },
-              data: { isPrimary: false },
-            });
+          if (willPromoteToPrimary) {
+            await claimPrimaryContactSlot(tx, scope, expectedCurrentPrimaryId, existing.id);
           }
           return tx.patientEmergencyContact.update({
             where: { id: existing.id },
@@ -234,7 +242,7 @@ router.put(
           });
         });
       } catch (txErr: any) {
-        if (isPrimaryContactConflict(txErr)) {
+        if (txErr instanceof PrimaryContactRaceError || isPrimaryContactConflict(txErr)) {
           return res.status(409).json({
             error: 'Another request just set a primary contact for this patient. Please retry.',
             code: 'PRIMARY_CONTACT_CONFLICT',

@@ -1,0 +1,153 @@
+{
+  "taskId": "F1-004-P1",
+  "title": "Patient Emergency Contact Concurrent Primary Update Determinism",
+  "phase": "F1",
+  "type": "blocking_production_behavior_defect",
+  "discoveredBy": {
+    "task": "N/A (unrelated documentation PR)",
+    "pr": 307,
+    "prBranch": "docs/f2-prep-009-imaging-tenant-context-amendment",
+    "prHeadSha": "eb0865c4e174d0cf21a16b9c110888025ec8f2e1",
+    "githubRunId": "30813103465",
+    "attempt1JobId": "91684474347",
+    "attempt2JobId": "91687731309",
+    "jobName": "ci-layers / Layer 3: disposable PostgreSQL tests",
+    "bothAttemptsFailedIdentically": true,
+    "prContentUnrelatedToDefect": true
+  },
+  "baseline": {
+    "ref": "origin/main",
+    "sha": "28f6bc72f752dfc2a6f77125b796382e62b4c539",
+    "branch": "fix/f1-004-p1-emergency-contact-primary-update-concurrency",
+    "worktreeReused": false,
+    "primaryDirtyTreeTouched": false
+  },
+  "failingAssertion": {
+    "file": "server/src/tests/dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts",
+    "testName": "exactly one of two concurrent updates (different contacts, both -> isPrimary=true) wins; the other gets 409 PRIMARY_CONTACT_CONFLICT; at most one primary afterwards",
+    "assertionMessage": "exactly one concurrent update must succeed as primary",
+    "actual": [200, 200],
+    "expected": [200, 409],
+    "reproducedIdenticallyBothAttempts": true,
+    "otherScenariosInSameRunPassed": true
+  },
+  "introducingLineage": {
+    "modelRouteServiceMigration": { "commit": "b46534f", "pr": 301, "title": "feat(patient): add emergency contacts and legal decision makers" },
+    "partialUniqueIndexAndOriginalTest": { "commit": "f3baca2", "pr": 302, "title": "fix(patient): enforce single-primary emergency contact at the DB level" }
+  },
+  "localReproduction": {
+    "naturalTiming": { "standaloneRuns": 8, "failuresObserved": 0, "note": "genuinely timing-dependent, matches CI-flaky/local-clean asymmetry precedent from F1-003-B2" },
+    "forcedInterleaving": {
+      "method": "throwaway script replicating exact pre-fix route logic against real disposable Postgres, both snapshots read before either transaction opens, second transaction's start delayed until after first commits",
+      "result": { "resA": 200, "resB": 200, "finalPrimaryCount": 1, "finalPrimaryContact": "B" },
+      "deterministic": true,
+      "scriptDeletedBeforeCommit": true,
+      "scriptRemovalDeniedByPermissionSystem": true,
+      "scriptStagedOrCommitted": false
+    }
+  },
+  "rootCause": {
+    "category": "A_both_200_last_writer_wins_single_primary",
+    "summary": "The pre-fix PUT handler's reset-then-set sequence (clear whoever is currently primary, then set the target row) ran inside one transaction each, so at every instant the DB genuinely held at most one isPrimary=true row -- the partial unique index was never violated. When transaction B's own updateMany ran after transaction A had already committed, B legitimately (not illegitimately) saw A's new primary as 'the current primary' and cleared it before setting its own row. Both HTTP calls returned 200; A's response body's claim of success was silently falsified by B's later commit.",
+    "isUniqueIndexBroken": false,
+    "isOperationSequencingBypassingIndex": false,
+    "isTestSynchronizationInvalid": false,
+    "isGenuineApplicationContractViolation": true,
+    "whyCreatePathPassedButUpdatePathFailed": "PUT has one extra pre-transaction round trip (loading `existing`) absent from POST, making back-to-back (non-overlapping) transaction execution measurably more likely on GitHub Actions' runner timing -- exactly the ordering that triggers the domino instead of a genuine unique-index collision.",
+    "patientIdGloballyUnique": true,
+    "lockKeyScope": "patientId_only",
+    "advisoryLockUsed": true,
+    "lockMechanism": "pg_advisory_xact_lock_plus_optimistic_snapshot_check"
+  },
+  "fix": {
+    "approach": "per_patient_advisory_lock_plus_optimistic_snapshot_check_unique_index_kept_as_backstop",
+    "filesChanged": [
+      "server/src/services/patientEmergencyContactPrimaryLock.ts",
+      "server/src/routes/patientEmergencyContacts.ts",
+      "server/src/services/patientEmergencyContacts.ts",
+      "server/src/tests/dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts"
+    ],
+    "newLockHelper": "claimPrimaryContactSlot(tx, scope, expectedCurrentPrimaryId, keepContactId?) -- acquires pg_advisory_xact_lock(patientId hash), re-reads current primary post-lock, throws PrimaryContactRaceError on mismatch with the pre-transaction snapshot, else clears the previous primary and lets the caller proceed",
+    "lockKeyDerivation": "SHA-256('patient-emergency-contact-primary:{patientId}') split into two signed int32 values, same convention as appointmentRequestSafety.ts's existing advisory-lock helpers",
+    "migrationRequired": false,
+    "uniqueIndexModified": false,
+    "uniqueIndexDropped": false,
+    "newLockingSubsystemIntroduced": false,
+    "inMemoryMutexUsed": false,
+    "globalLockUsed": false,
+    "assertionWeakened": false,
+    "nonPrimaryWritesAcquireLock": false
+  },
+  "lockKeyCollisionAnalysis": {
+    "scope": "patientId_only_global_primary_key",
+    "clinicIdOrgIdInLockKey": false,
+    "clinicIdOrgIdInReCheckWhereClause": true,
+    "crossTenantCollisionPossible": false,
+    "crossPatientBlockingObserved": false,
+    "sameClinicDifferentPatientBlockingObserved": false,
+    "differentClinicOrgBlockingObserved": false
+  },
+  "httpSemantics": {
+    "loserStatus": 409,
+    "loserCode": "PRIMARY_CONTACT_CONFLICT",
+    "rawDbErrorLeaked": false,
+    "silentLastWriterWinObserved_postFix": false,
+    "loserTargetRowMutated": false
+  },
+  "testsAddedOrStrengthened": [
+    { "scenario": 8, "name": "same-clinic different-patient no cross-blocking", "new": true },
+    { "scenario": 9, "name": "sequential primary replacement backward compatible", "new": true },
+    { "scenario": 10, "name": "15-round repeated concurrent-update race loop, determinism", "new": true, "rounds": 15 }
+  ],
+  "preExistingScenariosPreserved": [1, 2, 5, 6, 7],
+  "originalFailingScenarioAssertionsWeakened": false,
+  "totalScenarios": { "before": 5, "after": 8 },
+  "validation": {
+    "gitDiffCheck": { "exitCode": 0, "clean": true },
+    "serverTypecheck": { "command": "npx tsc --noEmit", "cwd": "server/", "exitCode": 0 },
+    "focusedConcurrencyTest": {
+      "command": "npx tsx src/tests/dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts",
+      "cwd": "server/",
+      "runs": 11,
+      "allPassed": true,
+      "scenariosPerRun": 8,
+      "raceLoopRoundsPerRun": 15,
+      "raceLoopFailuresObserved": 0
+    },
+    "layerThreeExactCommand": {
+      "command": "npm run test:runtime:postgres -- --summary-file=postgres-run-summary.json",
+      "cwd": "worktree root",
+      "runs": 2,
+      "allExitCode0": true,
+      "aggregateSuiteTotal": 153,
+      "aggregateSuitePassed": 153,
+      "aggregateSuiteFailed": 0,
+      "cleanupSuccessBothRuns": true
+    },
+    "nonDbUnitSuite": {
+      "command": "npx tsx src/tests/patientEmergencyContacts.test.ts",
+      "cwd": "server/",
+      "exitCode": 0,
+      "passed": 22,
+      "failed": 0
+    },
+    "residualDockerResources": { "nmtestLabeledContainers": 0, "nmtestLabeledNetworks": 0, "manualReproContainerRemoved": true },
+    "migrationCreatedOrAuthorized": false
+  },
+  "backwardCompatibility": {
+    "apiShapeChanged": false,
+    "sequentialReassignmentStillWorks": true,
+    "provenNotAssumed": true
+  },
+  "rollback": {
+    "type": "code_only",
+    "dataRollbackRequired": false,
+    "migrationRollbackRequired": false,
+    "mechanism": "git revert of the fix commit(s)"
+  },
+  "pr307Relationship": {
+    "functionalRelationshipToF2Prep009Content": false,
+    "pr307ModifiedByThisTask": false,
+    "pr307BlockedOnlyByThisPreExistingDefect": true
+  }
+}

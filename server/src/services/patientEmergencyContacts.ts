@@ -7,14 +7,19 @@
  * route handler (server/src/routes/patientEmergencyContacts.ts) is
  * responsible for scope resolution and the single-primary transaction.
  *
- * The "at most one isPrimary=true row per patient" invariant is enforced by
- * a database-level partial unique index (PatientEmergencyContact_
- * one_primary_per_patient — see migration 20260803120000_add_patient_
- * emergency_contacts), not by the application transaction alone. Concurrent
- * requests that both try to become primary race on that index; the loser's
- * Prisma call rejects with a P2002 unique-constraint error, which the route
- * translates via isPrimaryContactConflict() below into a stable 409 response
- * instead of an unhandled exception.
+ * The "at most one isPrimary=true row per patient" invariant is primarily
+ * enforced by a per-patient PostgreSQL advisory transaction lock combined
+ * with an optimistic snapshot check (claimPrimaryContactSlot(), server/src/
+ * services/patientEmergencyContactPrimaryLock.ts) — see that file's header
+ * for why the transaction alone, and even the database-level partial unique
+ * index below, are not sufficient by themselves (F1-004-P1). The unique
+ * index (PatientEmergencyContact_one_primary_per_patient — migration
+ * 20260803120000_add_patient_emergency_contacts) remains as a physical
+ * backstop: it guarantees the DB can never hold two isPrimary=true rows for
+ * one patient even if application logic has a bug. If a P2002 from that
+ * index is ever raised (it should not be, given the lock), the route
+ * translates it via isPrimaryContactConflict() below into the same stable
+ * 409 response instead of an unhandled exception.
  */
 
 export const EMERGENCY_CONTACT_TYPES = ['SPOUSE', 'PARENT', 'GUARDIAN', 'CHILD', 'SIBLING', 'OTHER'] as const;
