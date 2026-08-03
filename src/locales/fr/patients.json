@@ -62,6 +62,8 @@
     "history": "Historique des rendez-vous",
     "activityTimeline": "Historique d'activité",
     "filesTab": "Fichiers",
+    "moreTab": "Plus",
+    "moreTabMenuAriaLabel": "Autres onglets du dossier patient",
     "treatmentProcedureLinkHint": "Cliquez pour les actes du plan de traitement -> détail du dossier",
     "createTreatmentCaseHint": "Créez un nouveau dossier avant d'ajouter un plan de traitement.",
     "addProcedureInstructionTitle": "Pour ajouter un acte au plan de traitement :",

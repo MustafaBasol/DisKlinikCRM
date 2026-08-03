@@ -51,14 +51,24 @@ export type EmergencyContactValidationResult =
 export const PRIMARY_CONTACT_CONFLICT_CODE = 'PRIMARY_CONTACT_CONFLICT';
 
 /**
- * True when `err` is a Prisma unique-constraint violation (P2002). The only
- * unique constraint on PatientEmergencyContact is the database-level partial
- * index enforcing "at most one isPrimary=true row per patient", so any P2002
- * raised while creating/updating a contact can only be that race — never an
- * unrelated/ambiguous conflict.
+ * True when `err` is either of the two sources of a single-primary-contact
+ * conflict:
+ *   - a Prisma unique-constraint violation (P2002) from the database-level
+ *     partial index (the last-resort backstop — see migration
+ *     20260803120000_add_patient_emergency_contacts); or
+ *   - a PrimaryContactConflictError (server/src/services/
+ *     patientEmergencyContactsConcurrency.ts) from the optimistic-concurrency
+ *     re-check performed under the per-patient advisory lock, which is what
+ *     actually catches the race in practice (see that file's header comment
+ *     for why the unique index alone is not sufficient).
+ * The only unique constraint on PatientEmergencyContact is the partial index
+ * above, so any P2002 raised while creating/updating a contact can only be
+ * that race — never an unrelated/ambiguous conflict.
  */
 export function isPrimaryContactConflict(err: unknown): boolean {
-  return Boolean(err && typeof err === 'object' && (err as { code?: unknown }).code === 'P2002');
+  if (!err || typeof err !== 'object') return false;
+  const code = (err as { code?: unknown }).code;
+  return code === 'P2002' || code === PRIMARY_CONTACT_CONFLICT_CODE;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

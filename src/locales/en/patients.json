@@ -62,6 +62,8 @@
     "history": "Appointment History",
     "activityTimeline": "Activity Timeline",
     "filesTab": "Files",
+    "moreTab": "More",
+    "moreTabMenuAriaLabel": "More patient detail tabs",
     "treatmentProcedureLinkHint": "Click for treatment plan procedures -> Case detail",
     "createTreatmentCaseHint": "Create a new case before adding a treatment plan.",
     "addProcedureInstructionTitle": "To add a treatment plan procedure:",

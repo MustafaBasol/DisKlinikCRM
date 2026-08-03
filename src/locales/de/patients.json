@@ -62,6 +62,8 @@
     "history": "Terminverlauf",
     "activityTimeline": "Aktivitätsverlauf",
     "filesTab": "Dateien",
+    "moreTab": "Mehr",
+    "moreTabMenuAriaLabel": "Weitere Patientendetail-Tabs",
     "treatmentProcedureLinkHint": "Für Behandlungsplan-Prozeduren klicken -> Aktendetail",
     "createTreatmentCaseHint": "Erstellen Sie zuerst eine neue Akte, bevor Sie einen Behandlungsplan hinzufügen.",
     "addProcedureInstructionTitle": "So fügen Sie eine Behandlungsplan-Prozedur hinzu:",
