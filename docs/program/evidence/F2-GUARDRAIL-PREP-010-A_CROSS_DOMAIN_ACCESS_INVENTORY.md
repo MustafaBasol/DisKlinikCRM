@@ -2,9 +2,11 @@
 
 **Phase:** F2 — Modular Monolith Guardrails
 **Type:** EVIDENCE-ONLY. No runtime, CI, package-script, schema, or migration change. No shared program-control file touched.
-**Status:** AGENT_COMPLETED / EVIDENCE_VALIDATED / PR_OPENED_AWAITING_PARALLEL_WAVE_CONSOLIDATION
+**Status:** AGENT_COMPLETED / EVIDENCE_VALIDATED / REVIEW_THREADS_RESOLVED / PR_CI_PASSED / PR_OPENED_AWAITING_PARALLEL_WAVE_CONSOLIDATION
 
 Machine-readable companion: [`F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json`](F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json) — every edge (`CDA-*`), security finding (`SEC-*`), and boundary-ownership disagreement (`BOD-*`) below carries a stable ID cross-referenceable between this narrative and the JSON.
+
+**Revision note (F2-GUARDRAIL-PREP-010-A-R1):** this revision corrects 4 PR #313 review findings against the original head (`27e7057315ed41d82b9e8506332dda3fb4b1f21a`): (1) removed a developer-local absolute Windows path from the JSON; (2) resolved an ownerDomain schema inconsistency (`"shared"`/`"n/a"` sentinels); (3) split a semicolon-separated `callerPathGlob` (`CDA-004`) into 6 exact edges (`CDA-067`..`CDA-072`), moving the total from 66 to 71 in-scope edges; (4) rewrote the proposed allowlist schema's enforcement semantics so a future CI implementation freezes each exact evidenced edge rather than authorizing open-ended growth of a caller-glob/owner/target pattern. Full detail: JSON `correctionHistory[]`. No classification, edge content, or finding other than the ones listed above changed in this revision.
 
 **Parallel-wave note:** this task runs alongside `F2-IMPL-001-A-R2`, `F2-GUARDRAIL-PREP-010-B`, and `F2-GUARDRAIL-PREP-010-C`. Per explicit instruction, this task does **not** edit `NORAMEDI_MASTER_TRACKER.md`, `CURRENT_PHASE.md`, `phases/F2_MODULAR_BOUNDARIES.md`, or `evidence/README.md` — a later consolidation task updates those. This task creates only the two uniquely named files listed above.
 
@@ -80,7 +82,16 @@ Recorded explicitly per instruction rather than resolved silently (full detail: 
 
 Per instruction, no defect below is fixed by this task.
 
-**`SEC-01` (`VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX`, edge `CDA-022`):** `server/src/routes/whatsapp.ts`'s `getDefaultClinic()` (line 1089, `prisma.clinic.findFirst({orderBy:{createdAt:'asc'}})`) resolves "the current clinic" for 6 legacy public endpoints (`POST /appointment-requests`, `POST /cancel-request`, `GET /services`, `/doctors`, `/availability`, `/appointment-lookup`) as the single first-ever-created clinic in the **entire** database, gated only by one static shared secret (`authorizeWhatsappApi`) valid for every organization. **Exploit precondition:** possession of the shared `WHATSAPP_WEBHOOK_SECRET` — no target-organization-specific knowledge is needed. **Impact:** cross-tenant creation/cancellation of appointment requests and reads of services/doctors/availability data against the wrong organization's clinic. Re-confirmed present against this task's own baseline (§6). **Recommendation:** a dedicated, separately-authorized remediation task (proposed `F2-SEC-001`) — not fixed here.
+**`SEC-01` (`VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX`, edge `CDA-022`):** `server/src/routes/whatsapp.ts`'s `getDefaultClinic()` (line 1089, `prisma.clinic.findFirst({orderBy:{createdAt:'asc'}})`) resolves "the current clinic" for 6 legacy public endpoints (`POST /appointment-requests`, `POST /cancel-request`, `GET /services`, `/doctors`, `/availability`, `/appointment-lookup`) as the single first-ever-created clinic in the **entire** database, gated only by one static shared secret (`authorizeWhatsappApi`) valid for every organization.
+
+R1 evidence precision (JSON `securityFindings[].SEC-01.verificationPrecision`) — this task distinguishes exactly what was and was not independently verified, so as not to overstate exploitability:
+- **Route registration:** VERIFIED — the 6 handlers are live, registered route handlers, not dead code.
+- **Authentication-helper behavior:** VERIFIED — `getDefaultClinic()` performs an unfiltered `findFirst` and is called from all 6 handlers at the cited line numbers.
+- **Tenant binding:** VERIFIED ABSENT — no request parameter, header, or resolved-secret identity selects the organization; one static secret gates all 6 handlers for every tenant.
+- **Production reachability:** **NOT independently verified in this pass** — this task did not check request logs, kill-switch/feature-flag state, network exposure, or whether `WHATSAPP_WEBHOOK_SECRET` is provisioned/in active use for any tenant today. The impact below is conditional on reachability, not a confirmation of active exploitation.
+- **Dead-code status:** VERIFIED NOT DEAD CODE — distinct from `CDA-019`/`evolutionApi.ts`, which this task separately confirmed has zero importers.
+
+**Exploit precondition:** possession of the shared `WHATSAPP_WEBHOOK_SECRET` — no target-organization-specific knowledge is needed. **Impact (conditional on production reachability):** cross-tenant creation/cancellation of appointment requests and reads of services/doctors/availability data against the wrong organization's clinic. Re-confirmed present in source against this task's own baseline (§6). **Recommendation:** a dedicated, separately-authorized remediation task (proposed `F2-SEC-001`) to (a) first confirm production reachability, then (b) replace `getDefaultClinic()` with real per-tenant resolution if reachable — not fixed here.
 
 **`SEC-02`** (same-domain, included for completeness per the stop condition, not counted in classification totals): the Evolution WhatsApp webhook's connection resolution has no per-tenant HMAC signature (unlike its Meta/Instagram siblings in the same file), carried forward from F2-PREP-002 without independent re-verification in this pass.
 
@@ -90,19 +101,21 @@ Per instruction, no defect below is fixed by this task.
 
 | Classification | Count |
 |---|---|
-| `ACCEPTED_PUBLIC_CONTRACT` | 7 |
+| `ACCEPTED_PUBLIC_CONTRACT` | 12 |
 | `ACCEPTED_RESTRICTED_CONTRACT` | 7 |
 | `UNRESOLVED_OWNERSHIP` | 5 |
 | `VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX` | 1 |
 | `PROHIBITED_NEW_PATTERN` | 10 |
 | `LEGACY_ALLOWLISTED_DIRECT_ACCESS` | 36 |
-| **Total in-scope cross-domain edges** | **66** |
+| **Total in-scope cross-domain edges** | **71** |
+
+R1 note: the total moved from 66 to 71 (and `ACCEPTED_PUBLIC_CONTRACT` from 7 to 12) because `CDA-004` — a single record conflating 3 caller files against 3 owner/target combinations behind a semicolon-separated `callerPathGlob` — was retired and replaced by 6 exact edges, `CDA-067`..`CDA-072`, one per (caller file, target) pair re-verified directly against source. No other edge changed. The ID range is intentionally non-contiguous (`CDA-001`..`CDA-066`, `CDA-067`..`CDA-072`) so every other edge's stable ID is preserved unchanged across this correction.
 
 Plus: 1 same-domain security finding noted for completeness (`SEC-02`, not counted above), 1 resolved-not-a-defect finding (`SEC-03-RESOLVED`), and 12 same-domain findings explicitly excluded from the cross-domain scope (`excludedSameDomainFindings[]`).
 
-### 9.1 Accepted contracts (14 total)
+### 9.1 Accepted contracts (19 total)
 
-`ACCEPTED_PUBLIC_CONTRACT` (broadly callable, real existing shared modules): `utils/auditLog.ts`, `services/security/securitySignalService.ts`, `utils/clinicScope.ts`→security telemetry, the channel-abstraction messaging services, the communication-consent gate, the AI-prompt redaction boundary (`services/privacy/redaction.ts`), and `utils/relationGuards.ts` (used identically by imaging/attachments/labOrders).
+`ACCEPTED_PUBLIC_CONTRACT` (broadly callable, real existing shared modules): `utils/auditLog.ts`, `services/security/securitySignalService.ts`, `utils/clinicScope.ts`→security telemetry, the consent-gate and AI-prompt redaction boundary (`services/privacy/redaction.ts`), `utils/relationGuards.ts` (used identically by imaging/attachments/labOrders, ownerDomain `core-platform-shared-utilities` — see §10), and the 6 exact channel-abstraction messaging imports `CDA-067`..`CDA-072` (post-treatment/appointment-confirmation/no-show-recovery WhatsApp and Instagram sends, and the no-show task-assignment notification), each now recorded as its own edge rather than one bundled record.
 
 `ACCEPTED_RESTRICTED_CONTRACT` (narrowly gated to one caller or transaction context): the imaging bridge's token-authenticated public API (ratified by F2-PREP-006-E), `services/fileStorage.ts` (implicit, unenforced tenant-prefix convention — flagged for future hardening), the appointment-completion→TreatmentCase transaction (`TX-02`), the appointment-request-conversion→Patient-creation transaction (`TX-01`), the External-Calendar outbound-sync seam (`INF-05`), the one-time clinic-registration genesis transaction, and the now-RBAC-confirmed backup/restore-test capability (`CDA-014`).
 
@@ -120,7 +133,11 @@ Critical/High-risk existing violations, tolerated today but explicitly not bless
 
 ## 10. Proposed allowlist schema
 
-Full schema: JSON `proposedAllowlistSchema`. Summary: a structural (never line-number-based) record of `{callerPathGlob, ownerDomain, targetModelOrSymbol, accessKind, justificationEvidenceId, expiryOrRemovalTask}`. Enforcement intent (not implemented by this task): allow existing entries and more-of-the-same-pattern call sites within an allowlisted `(caller, owner, target, accessKind)` tuple; fail the build on any new tuple not already present, regardless of classification; print a non-suppressible warning banner (not a silent pass) whenever a changed file touches a `PROHIBITED_NEW_PATTERN` or `VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX` entry, naming the linked remediation task.
+Full schema: JSON `proposedAllowlistSchema`. Summary: a structural (never line-number-based) record of `{callerPath, callerSymbol, ownerDomain, targetModelOrSymbol, accessKind, classification, justificationEvidenceId, expiryOrRemovalTask}`, plus an *optional* `callerPathGlob` retained only for relocation tolerance or controlled grouping over caller files that are each already individually evidenced — never as authority to match a file/symbol/target not itself backed by a distinct edge record.
+
+`ownerDomain` is a closed set: a real MODULE_MAP.md/F2-PREP-001 domain code, or exactly one of 3 documented sentinels — `UNRESOLVED` (only for `UNRESOLVED_OWNERSHIP` edges), `multiple (see accessedTarget)` (only when one edge genuinely fans out to several individually-owned targets in the same handler), and `core-platform-shared-utilities` (only for named, cross-cutting core-platform helpers with no single business-domain owner, e.g. `utils/relationGuards.ts`). No other free-text sentinel (bare `"shared"`, `"n/a"`, etc.) is permitted.
+
+**R1-corrected enforcement intent (frozen-edge semantics, not implemented by this task):** a future CI rule must compare the observed access against the *exact* evidenced `(callerPath, callerSymbol, ownerDomain, targetModelOrSymbol, accessKind)` tuple, not a broader glob/pattern match. Concretely: a new caller symbol, a new caller file, a new target model/symbol, or an access-kind escalation (e.g. read→write) is always a **new edge** requiring explicit review and an evidence update — never an automatic extension of an existing allowlist entry's authority, even when a `callerPathGlob` would otherwise match the file. `PROHIBITED_NEW_PATTERN` and `VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX` entries are tolerated only on their exact existing tuples (never as precedent for a similar-looking new access) and must trigger a non-suppressible warning banner naming the linked remediation task whenever a changed file touches them. Full 10-point semantics: JSON `proposedAllowlistSchema.frozenEdgeEnforcementSemantics[]`.
 
 ## 11. Limitations
 
@@ -142,15 +159,132 @@ Full schema: JSON `proposedAllowlistSchema`. Summary: a structural (never line-n
 
 ## 13. Validation
 
+All commands below are run from the worktree root (`docs/program/evidence/` paths are relative to it). `JSON_PATH` = `docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json`.
+
+**1. JSON parses cleanly**
 ```
-git diff --check                      # clean, no whitespace errors
-node -e "JSON.parse(...)"             # JSON parses cleanly
-duplicate edge-ID check                # 0 duplicates across 66 CDA-* ids
-every Markdown edge cross-referenced   # all classification-count rows trace to JSON edges[]
-every JSON edge represented in Markdown# summarized by classification in §9, full detail in JSON
-classification counts                  # computed directly from JSON edges[], match declared classificationCounts exactly (verified via node script)
-git status --short                     # only the 2 new evidence files created; no runtime/schema/workflow/package/shared-program-control file touched
+node -e "JSON.parse(require('fs').readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json','utf8')); console.log('OK')"
 ```
+Expected output: `OK`. Exit code 0. (A malformed file throws a `SyntaxError` and exits non-zero.)
+
+**2. Duplicate edge-ID detection**
+```
+node -e "
+const d = JSON.parse(require('fs').readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json','utf8'));
+const ids = d.edges.map(e => e.id);
+const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
+console.log('duplicates:', JSON.stringify(dupes));
+process.exit(dupes.length ? 1 : 0);
+"
+```
+Expected output: `duplicates: []`. Exit code 0.
+
+**3. Required-field validation (all 17 fields present per edge, plus 6 fields per proposedEnforcementKey)**
+```
+node -e "
+const d = JSON.parse(require('fs').readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json','utf8'));
+const required = ['id','sourceEdgeIds','callerDomain','ownerDomain','callerFile','callerSymbol','accessedTarget','operation','tenantScopeMechanism','authorizationMechanism','outputShape','auditOwnership','acceptedEvidence','testCoverage','classification','risk','proposedEnforcementKey'];
+const missing = [];
+for (const e of d.edges) for (const f of required) if (!(f in e)) missing.push(e.id + ':' + f);
+console.log('missing fields:', JSON.stringify(missing));
+process.exit(missing.length ? 1 : 0);
+"
+```
+Expected output: `missing fields: []`. Exit code 0.
+
+**4. Classification enum validation**
+```
+node -e "
+const d = JSON.parse(require('fs').readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json','utf8'));
+const allowed = new Set(['ACCEPTED_PUBLIC_CONTRACT','ACCEPTED_RESTRICTED_CONTRACT','LEGACY_ALLOWLISTED_DIRECT_ACCESS','PROHIBITED_NEW_PATTERN','UNRESOLVED_OWNERSHIP','VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX']);
+const bad = d.edges.filter(e => !allowed.has(e.classification)).map(e => e.id);
+console.log('invalid classifications:', JSON.stringify(bad));
+process.exit(bad.length ? 1 : 0);
+"
+```
+Expected output: `invalid classifications: []`. Exit code 0.
+
+**5. Computed-vs-declared count parity**
+```
+node -e "
+const d = JSON.parse(require('fs').readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json','utf8'));
+const computed = {};
+for (const e of d.edges) computed[e.classification] = (computed[e.classification]||0) + 1;
+computed.total = d.edges.length;
+const declared = d.classificationCounts;
+const keys = Object.keys(computed);
+const mismatches = keys.filter(k => computed[k] !== declared[k]);
+console.log('computed:', JSON.stringify(computed));
+console.log('declared:', JSON.stringify({ACCEPTED_PUBLIC_CONTRACT: declared.ACCEPTED_PUBLIC_CONTRACT, ACCEPTED_RESTRICTED_CONTRACT: declared.ACCEPTED_RESTRICTED_CONTRACT, UNRESOLVED_OWNERSHIP: declared.UNRESOLVED_OWNERSHIP, VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX: declared.VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX, PROHIBITED_NEW_PATTERN: declared.PROHIBITED_NEW_PATTERN, LEGACY_ALLOWLISTED_DIRECT_ACCESS: declared.LEGACY_ALLOWLISTED_DIRECT_ACCESS, total: declared.total}));
+console.log('mismatches:', JSON.stringify(mismatches));
+process.exit(mismatches.length ? 1 : 0);
+"
+```
+Expected output: `computed` and `declared` are identical objects (`ACCEPTED_PUBLIC_CONTRACT: 12, ACCEPTED_RESTRICTED_CONTRACT: 7, UNRESOLVED_OWNERSHIP: 5, VERIFIED_SECURITY_DEFECT_REQUIRES_SEPARATE_FIX: 1, PROHIBITED_NEW_PATTERN: 10, LEGACY_ALLOWLISTED_DIRECT_ACCESS: 36, total: 71`), `mismatches: []`. Exit code 0.
+
+**6. Markdown/JSON edge-ID parity (every JSON edge ID appears somewhere in the Markdown, and vice versa for IDs the Markdown cites explicitly)**
+```
+node -e "
+const fs = require('fs');
+const d = JSON.parse(fs.readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json','utf8'));
+const md = fs.readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-A_CROSS_DOMAIN_ACCESS_INVENTORY.md','utf8');
+const missingFromMd = d.edges.map(e=>e.id).filter(id => !md.includes(id));
+console.log('JSON ids missing a Markdown mention:', JSON.stringify(missingFromMd));
+"
+```
+Expected output: `JSON ids missing a Markdown mention: []` for the explicitly-cited IDs (`CDA-008`, `CDA-014`, `CDA-022`, `CDA-048`, `CDA-067`); the remaining edges are represented in the Markdown by classification-group summary (§9.1-9.4) rather than by individual ID, consistent with this document's own stated summarization design — not a parity failure.
+
+**7. Forbidden semicolon-multi-path detection (no semicolon-joined glob values remain)**
+```
+node -e "
+const d = JSON.parse(require('fs').readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json','utf8'));
+const bad = d.edges.filter(e => /;/.test(e.proposedEnforcementKey.callerPathGlob || '') || /;/.test(e.proposedEnforcementKey.callerPath || '')).map(e=>e.id);
+console.log('semicolon-packed path values:', JSON.stringify(bad));
+process.exit(bad.length ? 1 : 0);
+"
+```
+Expected output: `semicolon-packed path values: []`. Exit code 0.
+
+**8. Forbidden absolute local path detection**
+```
+node -e "
+const fs = require('fs');
+const files = ['docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json','docs/program/evidence/F2-GUARDRAIL-PREP-010-A_CROSS_DOMAIN_ACCESS_INVENTORY.md'];
+const pattern = /[A-Za-z]:[\\\\\/]|\/home\/[A-Za-z0-9_-]+|\/Users\/[A-Za-z0-9_-]+/;
+const hits = files.filter(f => pattern.test(fs.readFileSync(f,'utf8')));
+console.log('files with absolute local paths:', JSON.stringify(hits));
+process.exit(hits.length ? 1 : 0);
+"
+```
+Expected output: `files with absolute local paths: []`. Exit code 0.
+
+**9. ownerDomain value-domain validation (every proposedEnforcementKey.ownerDomain is a valid domain code or one of the 3 documented sentinels)**
+```
+node -e "
+const d = JSON.parse(require('fs').readFileSync('docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json','utf8'));
+const sentinels = new Set(['UNRESOLVED','multiple (see accessedTarget)','core-platform-shared-utilities']);
+const bad = d.edges.filter(e => {
+  const v = e.proposedEnforcementKey.ownerDomain;
+  return !sentinels.has(v) && !/^[a-z][a-z0-9-]*$/.test(v);
+}).map(e => [e.id, e.proposedEnforcementKey.ownerDomain]);
+console.log('invalid ownerDomain values:', JSON.stringify(bad));
+process.exit(bad.length ? 1 : 0);
+"
+```
+Expected output: `invalid ownerDomain values: []`. Exit code 0.
+
+**10. Changed-file scope validation (only the two evidence files changed; no runtime/schema/CI/package/shared-program-control file touched)**
+```
+git status --short
+git diff --name-only origin/main...HEAD
+```
+Expected output: both commands list exactly `docs/program/evidence/F2-GUARDRAIL-PREP-010-A_CROSS_DOMAIN_ACCESS_INVENTORY.md` and `docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json` (and nothing else). Exit code 0 for both.
+
+**11. Whitespace/diff hygiene**
+```
+git diff --check
+```
+Expected output: no output (clean). Exit code 0.
 
 ## 14. Output files
 
@@ -159,7 +293,7 @@ git status --short                     # only the 2 new evidence files created; 
 
 ## 15. Explicit non-scope
 
-This task did **not**: fix `SEC-01`/`SEC-02`, implement any contract, move any file, change any Prisma schema/migration, change any test, change any CI/CD workflow, or modify any shared tracker/index/phase document. All 66 cross-domain edges, 5 unresolved-ownership items, 1 verified security defect, and the proposed allowlist schema above are evidence and design for a future enforcement task, not changes made here.
+This task did **not**: fix `SEC-01`/`SEC-02`, implement any contract, move any file, change any Prisma schema/migration, change any test, change any CI/CD workflow, or modify any shared tracker/index/phase document. All 71 cross-domain edges, 5 unresolved-ownership items, 1 verified security defect, and the proposed allowlist schema above are evidence and design for a future enforcement task, not changes made here.
 
 ## 16. Next task
 
