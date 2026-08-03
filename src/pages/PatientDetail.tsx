@@ -39,6 +39,7 @@ import { patientService, taskService, treatmentCaseService, paymentService, paym
 import api from '../services/api';
 import DentalChart from '../components/DentalChart';
 import PatientPrivacyPanel from '../components/PatientPrivacyPanel';
+import PatientEmergencyContactsPanel from '../components/PatientEmergencyContactsPanel';
 import CommunicationPreferencesPanel from '../components/CommunicationPreferencesPanel';
 import PatientForm from '../components/PatientForm';
 import TaskForm from '../components/TaskForm';
@@ -53,6 +54,7 @@ import {
   computeVisiblePatientDetailTabs,
   resolvePatientDetailActiveTab,
   requiresUrlNormalization,
+  isMinorPatient,
   DEFAULT_PATIENT_DETAIL_TAB,
   type PatientDetailTab,
 } from './patientDetailTabsHelpers';
@@ -116,6 +118,7 @@ const PatientDetail: React.FC = () => {
     : tab === 'dental' ? t('patients:dentalChart.title')
     : tab === 'privacy' ? 'Gizlilik'
     : tab === 'communication' ? t('communicationConsent:tab')
+    : tab === 'emergencyContacts' ? t('patients:detail.emergencyContacts.title')
     : t(`common:${tab}`, { defaultValue: tab.charAt(0).toUpperCase() + tab.slice(1) });
 
   const tabItems: PatientDetailTabItem[] = visibleTabKeys.map((tab) => ({ key: tab, label: tabLabel(tab) }));
@@ -1398,6 +1401,13 @@ const PatientDetail: React.FC = () => {
               onAnonymized={() => fetchPatient()}
             />
           </div>
+        )}
+        {activeTab === 'emergencyContacts' && (
+          <PatientEmergencyContactsPanel
+            patientId={id!}
+            canManage={(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST'] as const).includes(userCanonicalRole as any)}
+            isMinor={isMinorPatient(patient.dateOfBirth)}
+          />
         )}
         {activeTab === 'communication' && (
           <div className="card p-6">

@@ -104,6 +104,7 @@ model Clinic {
   communicationConsentEvents    PatientCommunicationConsentEvent[]
   legacyConsentCorrections      PatientLegacyConsentCorrection[]
   externalCalendarIntegration   ExternalCalendarIntegration?
+  patientEmergencyContacts      PatientEmergencyContact[]
 
   @@unique([organizationId, slug])
 }
@@ -280,9 +281,57 @@ model Patient {
   communicationPreferences      PatientCommunicationPreference[]
   communicationConsentEvents    PatientCommunicationConsentEvent[]
   legacyConsentCorrections      PatientLegacyConsentCorrection[]
+  emergencyContacts             PatientEmergencyContact[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
+}
+
+/// US-01.2: patient emergency contacts, relationship (contactType), and legal
+/// decision-maker flags (e.g. parent/guardian for a minor patient). Additive,
+/// backward-compatible — no existing Patient row requires backfill.
+///
+/// contactType is a stable backend string contract (not a Prisma enum, per
+/// the string-based status/type convention used elsewhere in this schema —
+/// see Patient.patientStatus, Appointment.status, etc.): SPOUSE | PARENT |
+/// GUARDIAN | CHILD | SIBLING | OTHER.
+///
+/// At most one row per patient may have isPrimary=true — enforced by a
+/// DATABASE-BACKED partial unique index (PatientEmergencyContact_
+/// one_primary_per_patient, WHERE isPrimary = true — see migration
+/// 20260803120000_add_patient_emergency_contacts), not just the
+/// application-layer prisma.$transaction() reset-then-set sequence in
+/// server/src/routes/patientEmergencyContacts.ts. The index only ever
+/// indexes isPrimary=true rows, so it can still accommodate the "no primary
+/// yet" state (any number of isPrimary=false rows) while capping true rows
+/// at one. NOTE: this partial index cannot be expressed as `@@unique` here —
+/// Prisma's schema DSL has no filtered/partial unique index support, and a
+/// plain `@@unique([patientId, isPrimary])` would incorrectly also cap
+/// isPrimary=false rows at one per patient. isLegalDecisionMaker is
+/// intentionally NOT unique per patient — multiple legal guardians/
+/// decision-makers are a valid real-world case.
+model PatientEmergencyContact {
+  id                   String       @id @default(uuid())
+  patientId            String
+  patient              Patient      @relation(fields: [patientId], references: [id])
+  clinicId             String
+  clinic               Clinic       @relation(fields: [clinicId], references: [id])
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  contactType          String // SPOUSE | PARENT | GUARDIAN | CHILD | SIBLING | OTHER
+  fullName             String
+  phone                String?
+  phoneCountryCode     String?
+  email                String?
+  occupation           String?
+  isPrimary            Boolean      @default(false)
+  isLegalDecisionMaker Boolean      @default(false)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@index([patientId, isPrimary])
+  @@index([clinicId])
+  @@index([organizationId])
 }
 
 model AppointmentType {
@@ -1407,6 +1456,7 @@ model Organization {
   postTreatmentTemplates        PostTreatmentMessageTemplate[]
   postTreatmentQueue            PostTreatmentMessageQueue[]
   legacyConsentCorrections      PatientLegacyConsentCorrection[]
+  patientEmergencyContacts      PatientEmergencyContact[]
 }
 
 model UserClinic {

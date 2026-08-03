@@ -286,6 +286,8 @@ export async function cleanupAllFixtures(): Promise<void> {
   await prisma.patientClinic.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.doctorAvailability.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.doctorOffDay.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  // PatientEmergencyContact.patientId FK is ON DELETE RESTRICT — must clear before Patient.
+  await prisma.patientEmergencyContact.deleteMany({ where: { clinicId: { in: clinicIds } } });
   await prisma.patient.deleteMany({ where: { organizationId: { in: orgIds } } });
   await prisma.user.deleteMany({ where: { organizationId: { in: orgIds } } });
   await prisma.clinic.deleteMany({ where: { organizationId: { in: orgIds } } });
