@@ -6,8 +6,8 @@
 
 ## 1. Baseline
 
-- Primary working tree (`E:\Ek Gelir\Siteler\DisKlinikCRM-git`) was on an unrelated, heavily-staged branch (`claude/treatment-proposal-pdf-p1-d4k0jl`, HEAD `71ed59e9e85a37785e56257a3f3a947b436a3def`) with substantial in-progress uncommitted/staged work belonging to other tasks (treatment-proposal-pdf, inventory-unit-conversion, imaging-characterization). This tree was never modified, reset, stashed, cleaned, or read beyond `git status`/`git log`.
-- This task executed in a fresh, isolated worktree: `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f2-guardrail-prep-010-d-consolidation`, branch `docs/f2-guardrail-prep-010-d-consolidation`, created directly from freshly-fetched `origin/main` @ `c731e7af9a552dde2da45fee52fa318192da28f8` — confirmed via `git fetch origin --prune` + `git rev-parse origin/main` at task start, no drift.
+- Primary working tree (local path intentionally omitted as non-portable environment metadata) was on an unrelated, heavily-staged branch (`claude/treatment-proposal-pdf-p1-d4k0jl`, HEAD `71ed59e9e85a37785e56257a3f3a947b436a3def`) with substantial in-progress uncommitted/staged work belonging to other tasks (treatment-proposal-pdf, inventory-unit-conversion, imaging-characterization). This tree was never modified, reset, stashed, cleaned, or read beyond `git status`/`git log`.
+- This task executed in a fresh, task-local isolated worktree (local path intentionally omitted as non-portable environment metadata), branch `docs/f2-guardrail-prep-010-d-consolidation`, created directly from freshly-fetched `origin/main` @ `c731e7af9a552dde2da45fee52fa318192da28f8` — confirmed via `git fetch origin --prune` + `git rev-parse origin/main` at task start, no drift.
 - `c731e7af9a552dde2da45fee52fa318192da28f8` independently confirmed to be PR #304's own merge commit: `gh pr view 304` → `mergeCommit.oid == c731e7af9a552dde2da45fee52fa318192da28f8`, `mergedAt: 2026-08-03T17:47:49Z`, `state: MERGED`. `git merge-base --is-ancestor` confirms it is an ancestor of (in fact equal to the tip of) `origin/main`.
 - Post-merge main CI independently re-verified: `gh run view 30838364039` → `headSha` exact match, `workflowName: ci-main-and-nightly`, `event: push`, `status: completed`, `conclusion: success`.
 - No CodeGraph invocation was necessary or performed — this task is documentation reconciliation over already-known evidence-file paths and a small, targeted set of source files (`server/src/services/imaging/public.ts`, `server/src/routes/instagramInbox.ts`, `server/src/routes/whatsapp.ts`, `server/src/index.ts`), all located via `Grep`/`Read`, not a repository-wide scan.
@@ -21,10 +21,10 @@
 | #315 | `d14a75fc9c491b310f7b946af4b309a78f3bd8b9` | `d14a75fc9c491b310f7b946af4b309a78f3bd8b9` | exact | `OPEN` | `main` | `MERGEABLE` | `CLEAN` |
 | #314 | `f1408546040eaa5fa7ddd5833a28b097ea15e3a5` | `f1408546040eaa5fa7ddd5833a28b097ea15e3a5` | exact | `OPEN` | `main` | `MERGEABLE` | `CLEAN` |
 
-All three evidence-wave PRs already had a matching local worktree/branch pre-existing in this environment, checked out at their exact stated heads — read directly, never modified:
-- `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f2-guardrail-prep-010-a-cross-domain-inventory` (PR #313)
-- `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f2-guardrail-prep-010-b-tenant-scope-inventory` (PR #315)
-- `E:\Ek Gelir\Siteler\f2-guardrail-prep-010-c-wt` (PR #314)
+All three evidence-wave PRs already had a matching existing task-local evidence worktree pre-existing in this environment, checked out at their exact stated heads — read directly, never modified (local paths intentionally omitted as non-portable environment metadata):
+- existing task-local evidence worktree for PR #313
+- existing task-local evidence worktree for PR #315
+- existing task-local evidence worktree for PR #314
 
 CI and review-thread status independently pulled live (not read from any branch's own self-reported prose):
 

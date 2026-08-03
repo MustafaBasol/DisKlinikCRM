@@ -13,7 +13,7 @@
   "baseline": {
     "originMainSha": "c731e7af9a552dde2da45fee52fa318192da28f8",
     "branch": "docs/f2-guardrail-prep-010-d-consolidation",
-    "worktree": "E:\\Ek Gelir\\Siteler\\DisKlinikCRM-worktrees\\f2-guardrail-prep-010-d-consolidation",
+    "worktree": "task-local isolated worktree (local path omitted as non-portable environment metadata)",
     "primaryTreeUntouched": true,
     "primaryTreeBranch": "claude/treatment-proposal-pdf-p1-d4k0jl",
     "primaryTreeHead": "71ed59e9e85a37785e56257a3f3a947b436a3def"
