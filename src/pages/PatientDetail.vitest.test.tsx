@@ -26,6 +26,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import PatientDetail from './PatientDetail';
 import {
@@ -36,6 +37,7 @@ import {
   paymentPlanService,
   insuranceProvisionService,
   attachmentService,
+  patientEmergencyContactService,
 } from '../services/api';
 
 const { getMockTab, setMockTab } = vi.hoisted(() => {
@@ -48,6 +50,10 @@ const { getMockTab, setMockTab } = vi.hoisted(() => {
   };
 });
 
+const { setSearchParamsMock } = vi.hoisted(() => ({ setSearchParamsMock: vi.fn() }));
+
+let mockCanViewImaging = false;
+
 vi.mock('../services/api', () => ({
   patientService: { getById: vi.fn() },
   taskService: { getAll: vi.fn() },
@@ -56,6 +62,7 @@ vi.mock('../services/api', () => ({
   paymentPlanService: { getAll: vi.fn() },
   insuranceProvisionService: { getAll: vi.fn() },
   attachmentService: { getAll: vi.fn() },
+  patientEmergencyContactService: { getAll: vi.fn(), remove: vi.fn() },
   default: { get: vi.fn(() => Promise.reject(new Error('not mocked'))) },
 }));
 
@@ -67,7 +74,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: 'patient-1' }),
   useNavigate: () => vi.fn(),
-  useSearchParams: () => [new URLSearchParams(`?tab=${getMockTab()}`), vi.fn()],
+  useSearchParams: () => [new URLSearchParams(`?tab=${getMockTab()}`), setSearchParamsMock],
   Link: ({ children, ...props }: any) => <a {...props}>{children}</a>,
   Navigate: () => null,
 }));
@@ -92,7 +99,7 @@ vi.mock('../context/ClinicPreferencesContext', () => ({
 vi.mock('../utils/permissions', () => ({
   normalizeRole: () => 'DENTIST',
   canViewPatients: () => true,
-  canViewImaging: () => false,
+  canViewImaging: () => mockCanViewImaging,
   canManageLegalHold: () => false,
 }));
 
@@ -103,6 +110,7 @@ const paymentSvc = paymentService as unknown as Record<string, ReturnType<typeof
 const planSvc = paymentPlanService as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const insuranceSvc = insuranceProvisionService as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const attachmentSvc = attachmentService as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const emergencyContactSvc = patientEmergencyContactService as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 const BASE_PATIENT = {
   id: 'patient-1',
@@ -131,6 +139,7 @@ const PAYMENTS = [
 beforeEach(() => {
   vi.clearAllMocks();
   setMockTab('overview');
+  mockCanViewImaging = false;
   patientSvc.getById.mockResolvedValue({ data: BASE_PATIENT });
   taskSvc.getAll.mockResolvedValue({ data: [] });
   treatmentSvc.getAll.mockResolvedValue({ data: TREATMENT_CASES });
@@ -138,6 +147,7 @@ beforeEach(() => {
   planSvc.getAll.mockResolvedValue({ data: [] });
   insuranceSvc.getAll.mockResolvedValue({ data: [] });
   attachmentSvc.getAll.mockResolvedValue({ data: [] });
+  emergencyContactSvc.getAll.mockResolvedValue({ data: [] });
 });
 
 function renderPatientDetail() {
@@ -288,5 +298,97 @@ describe('PatientDetail — combined overview financial-summary guard', () => {
     // succeeded) and renders its data independently of treatmentCasesError.
     expect(screen.getAllByText('500').length).toBeGreaterThan(0);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
+  it('every visible tab key is reachable: primary row + More menu together account for all of them, none lost', async () => {
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    // canViewImaging is false by default here, so 13 of the 14 declared tab
+    // keys are visible: 5 in the primary row, and the remaining 8 collapsed
+    // into the More menu (the More trigger itself is a plain button, not a
+    // tab, so it is not counted here).
+    expect(screen.getAllByRole('tab')).toHaveLength(5);
+    await userEvent.click(screen.getByRole('button', { name: /^More$/ }));
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(8);
+  });
+
+  it('role-hidden tab: imaging never appears in the primary row or the More menu when canViewImaging is false', async () => {
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    expect(screen.queryByText('imaging:tab')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^More$/ }));
+    expect(screen.queryByText('imaging:tab')).not.toBeInTheDocument();
+  });
+
+  it('role visibility: imaging appears in the More menu once canViewImaging becomes true', async () => {
+    mockCanViewImaging = true;
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    await userEvent.click(screen.getByRole('button', { name: /^More$/ }));
+    expect(screen.getByRole('menuitemradio', { name: 'imaging:tab' })).toBeInTheDocument();
+  });
+
+  it('emergencyContacts deep link (?tab=emergencyContacts) renders the Emergency Contacts panel directly', async () => {
+    setMockTab('emergencyContacts');
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    await waitFor(() => {
+      expect(emergencyContactSvc.getAll).toHaveBeenCalledWith('patient-1');
+    });
+    expect(screen.getByText('detail.emergencyContacts.empty')).toBeInTheDocument();
+    // The active tab (in the More group) gets its own real role="tab"
+    // element showing its own label — never hidden behind the generic
+    // "More" trigger, which keeps showing the generic label unchanged.
+    expect(screen.getByRole('tab', { name: 'patients:detail.emergencyContacts.title' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^More$/ })).toBeInTheDocument();
+  });
+
+  it('invalid ?tab= value falls back to rendering the Overview tab', async () => {
+    setMockTab('not-a-real-tab');
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    expect(screen.getAllByText('patients:detail.overview.clinicalAlerts').length).toBeGreaterThan(0);
+  });
+
+  it('clicking an overflow tab in the More menu navigates via setSearchParams (single URL writer, deep-link/back-forward preserved)', async () => {
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    await userEvent.click(screen.getByRole('button', { name: /^More$/ }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'patients:detail.emergencyContacts.title' }));
+
+    expect(setSearchParamsMock).toHaveBeenCalled();
+    const forwardedParams = setSearchParamsMock.mock.calls[0]![0] as URLSearchParams;
+    expect(forwardedParams.get('tab')).toBe('emergencyContacts');
+  });
+
+  it('keyboard: ArrowRight from the last primary tab clamps in place — it never moves focus to the More trigger', async () => {
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    const lastPrimaryTab = screen.getByRole('tab', { name: 'patients:detail.filesTab' });
+    lastPrimaryTab.focus();
+    await userEvent.keyboard('{ArrowRight}');
+
+    expect(lastPrimaryTab).toHaveFocus();
+    expect(screen.getByRole('button', { name: /^More$/ })).not.toHaveFocus();
+  });
+
+  it('keyboard: the More trigger is reachable via normal Tab order after the last primary tab', async () => {
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    const lastPrimaryTab = screen.getByRole('tab', { name: 'patients:detail.filesTab' });
+    lastPrimaryTab.focus();
+    await userEvent.tab();
+
+    expect(screen.getByRole('button', { name: /^More$/ })).toHaveFocus();
   });
 });

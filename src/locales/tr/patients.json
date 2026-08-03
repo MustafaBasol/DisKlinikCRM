@@ -62,6 +62,8 @@
     "history": "Randevu Geçmişi",
     "activityTimeline": "İşlem Geçmişi",
     "filesTab": "Dosyalar",
+    "moreTab": "Diğer",
+    "moreTabMenuAriaLabel": "Diğer hasta detay sekmeleri",
     "treatmentProcedureLinkHint": "Tedavi planı prosedürleri için tıkla -> Vaka detayı",
     "createTreatmentCaseHint": "Tedavi planı eklemek için önce yeni vaka oluşturun.",
     "addProcedureInstructionTitle": "Tedavi planı prosedürü eklemek için:",
