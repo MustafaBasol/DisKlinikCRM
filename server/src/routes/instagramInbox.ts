@@ -771,6 +771,7 @@ router.patch(
   authenticate,
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DOCTOR']),
   async (req: AuthRequest, res) => {
+    const user = req.user!;
     const id = getParam(req, 'id');
     const { status } = req.body as { status?: string };
     const validStatuses = ['open', 'resolved', 'ignored', 'converted'];
@@ -779,13 +780,31 @@ router.patch(
     }
     try {
       const entry = await prisma.instagramInboxEntry.findFirst({
-        where: { id, organizationId: req.user!.organizationId },
+        where: { id, organizationId: user.organizationId },
+        select: { id: true, clinicId: true },
       });
       if (!entry) return res.status(404).json({ error: 'Entry not found' });
-      const updated = await prisma.instagramInboxEntry.update({
-        where: { id },
+
+      // Clinic-membership scope (same primitive as this file's other mutating
+      // handlers, e.g. /resolve, /assign-clinic): an org-level match alone is
+      // not sufficient once the entry is owned by a clinic. The membership
+      // check is embedded directly in the write predicate below (not applied
+      // as a separate app-level branch) so a same-org/wrong-clinic entry and a
+      // genuinely nonexistent one both surface as the identical 404 — no
+      // record-existence or clinic-ownership signal is leaked either way.
+      const allowedClinicIds = entry.clinicId ? await getAllowedClinicIds(user) : null;
+
+      const result = await prisma.instagramInboxEntry.updateMany({
+        where: {
+          id,
+          organizationId: user.organizationId,
+          ...(allowedClinicIds ? { clinicId: { in: allowedClinicIds } } : {}),
+        },
         data: { status },
       });
+      if (result.count === 0) return res.status(404).json({ error: 'Entry not found' });
+
+      const updated = await prisma.instagramInboxEntry.findUnique({ where: { id } });
       return res.json({ entry: updated });
     } catch {
       return res.status(500).json({ error: 'Failed to update status' });
