@@ -91,7 +91,7 @@ after the existing `getClinicForWhatsAppInstance()`:
 ```ts
 const getExplicitPublicApiClinic = async () => {
   const activeConnections = await prisma.whatsAppConnection.findMany({
-    where: { isActive: true },
+    where: { isActive: true, provider: 'evolution_api' },
     select: { id: true },
   });
   const uniqueConnection = selectUniqueProviderConnection(activeConnections);
@@ -122,6 +122,16 @@ All 6 route call sites changed from `const clinic = await getDefaultClinic();` t
 `const clinic = await getExplicitPublicApiClinic();`. `getDefaultClinic()` itself is untouched
 and remains in use only by the already-gated `getClinicForWhatsAppInstance()` legacy branch
 (§2) — it is no longer reachable from any ungated public entry point.
+
+The active-connection query is scoped to `provider: 'evolution_api'` — this whole file
+(`/evolution-webhook`, `getClinicForWhatsAppInstance`) is the Evolution API integration; Meta
+Cloud API has its own separate webhook route (`routes/metaWhatsAppWebhook.ts`, mounted at
+`/api/public`, not `/api/public/whatsapp`). Without this scope, a clinic with a valid, correctly
+-configured Evolution binding would spuriously fail closed the moment any organization anywhere
+also had an active Meta connection, since `WhatsAppConnection.isActive` has no provider
+discriminator on its own. This was flagged in automated PR review
+(`gh pr view 319` review comment, `discussion_r3710276954`) and fixed before merge — see §9's
+review-thread record.
 
 Every one of the 6 routes already had `if (!clinic) return res.status(404).json({ error:
 'Clinic not found' });` immediately after clinic resolution and before any read/write — this
@@ -191,7 +201,8 @@ convention as `appointmentRequestConversionAtomicity.test.ts`; no mocked Prisma,
 CI-owned `server:test:disposable-db` aggregate (one new member script appended to an existing
 aggregate — same precedent as F2-IMPL-001-A / F2-PREP-007-E).
 
-19 scenarios, all passing against the fixed code:
+20 scenarios, all passing against the fixed code (19 at initial PR open; scenario 11 below was
+added in response to automated review — see §9a):
 
 1. One valid explicit binding resolves the correct clinic — exercised independently for all 4
    GET routes (`/services`, `/doctors`, `/appointment-lookup`, `/availability` with a real
@@ -219,6 +230,9 @@ aggregate — same precedent as F2-IMPL-001-A / F2-PREP-007-E).
 10. Backward compatibility: `GET /services` and `POST /appointment-requests` remain consistent
     (same clinic, same response shape) for a single explicitly bound clinic — the one
     configuration shape this API was actually designed for.
+11. An active Meta Cloud API `WhatsAppConnection` elsewhere in the system does not make the
+    Evolution-only legacy API ambiguous — direct regression test for the provider-scoping fix
+    in §9a.
 
 **Test-integrity note:** every test that establishes a "single active connection" precondition
 tears its own fixtures down immediately after assertions (`isolatedTest`/`cleanupOrgs`), rather
@@ -233,11 +247,37 @@ removed, no other change), the same 19-scenario suite fails 6/19 — exactly the
 assert non-selection of a foreign/oldest clinic, ambiguity fail-closed, and cross-tenant/spoofed
 -clinicId prevention. Restored immediately after this check; not part of the shipped diff.
 
+### 9a. Automated PR review findings and fixes (before merge, before any thread was resolved)
+
+GitHub's `copilot-pull-request-reviewer` left 2 inline review comments on PR #319
+(`discussion_r3710276954`, `discussion_r3710276954+1`), both addressed with code/test changes,
+committed, and pushed before this evidence section was written:
+
+1. **Valid, real correctness bug** (`server/src/routes/whatsapp.ts`,
+   `getExplicitPublicApiClinic`): the active-connection query had no `provider` filter, so an
+   active `WhatsAppConnection` with `provider: 'meta_cloud_api'` anywhere in the system would
+   make the uniqueness check ambiguous and cause this Evolution-only legacy API to spuriously
+   fail closed even for an otherwise-correctly-configured Evolution deployment. Confirmed by
+   independently re-reading `server/src/routes/metaWhatsAppWebhook.ts` (a wholly separate route
+   file for Meta Cloud API, mounted at `/api/public`) and `server/src/routes/platformAdmin.ts`
+   (which already filters `prisma.whatsAppConnection.count({ where: { provider: 'evolution_api'
+   } })` for an analogous Evolution-only count). Fixed by adding `provider: 'evolution_api'` to
+   the `where` clause (§4). New regression test added (scenario 11, §9).
+2. **Valid test-strength nitpick** (`whatsappPublicApiExplicitClinicBinding.test.ts`, scenario
+   3's ambiguity test): `assert.notEqual(res.body.clinic?.id, clinicA.id)` would pass vacuously
+   even if `res.body.clinic` were `undefined` (the actual current shape), giving no real
+   protection against a future 404 payload that accidentally leaks a clinic id. Strengthened to
+   `assert.equal(res.body.clinic, undefined)` — an explicit non-enumeration check.
+
+Both fixes verified against a fresh disposable Postgres instance (20/20 passing, `git diff
+--check` clean, `npm run typecheck` clean) before being pushed as a second commit on this
+branch. See PR #319 review-thread status in the delivery report for reply/resolution record.
+
 ### Exact commands and results
 
 | # | Command | Result |
 |---|---|---|
-| 1 | `npx tsx src/tests/dbVerification/whatsappPublicApiExplicitClinicBinding.test.ts` (focused, standalone disposable Postgres) | 19 passed, 0 failed |
+| 1 | `npx tsx src/tests/dbVerification/whatsappPublicApiExplicitClinicBinding.test.ts` (focused, standalone disposable Postgres) | 20 passed, 0 failed (post-review-fix; 19 passed, 0 failed pre-review-fix) |
 | 2 | `npx tsx src/tests/whatsappProvider.test.ts` (`test:whatsapp`) | 143 passed, 0 failed |
 | 3 | `npx tsx src/tests/whatsappInbox.test.ts` (`test:inbox`) | 25 passed, 0 failed |
 | 4 | `test:meta-wa` (4 files: `metaWhatsAppWebhook`, `whatsappAwaitingServiceStep`, `whatsappStepAwareNlu`, `whatsappIdentityAndPostBooking`) | 17 + 9 + 12 + 62 = 100 passed, 0 failed |

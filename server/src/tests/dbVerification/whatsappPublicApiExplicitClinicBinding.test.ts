@@ -87,13 +87,13 @@ async function createClinic(organizationId: string, label: string) {
   });
 }
 
-async function createConnection(organizationId: string, opts: { isActive?: boolean } = {}) {
+async function createConnection(organizationId: string, opts: { isActive?: boolean; provider?: string } = {}) {
   const suffix = randomUUID().slice(0, 8);
   return prisma.whatsAppConnection.create({
     data: {
       organizationId,
       name: `Conn ${suffix}`,
-      provider: 'evolution_api',
+      provider: opts.provider ?? 'evolution_api',
       isActive: opts.isActive ?? true,
     },
   });
@@ -201,6 +201,20 @@ async function main() {
     assert.equal(res.body.clinic.id, clinic.id);
   });
 
+  await isolatedTest('an active Meta Cloud API connection elsewhere does not make the Evolution-only legacy API ambiguous', async () => {
+    // This legacy public API (and /evolution-webhook in the same file) is
+    // Evolution-only — Meta Cloud API has its own separate webhook route
+    // (routes/metaWhatsAppWebhook.ts). A clinic that also happens to run an
+    // active Meta connection must not turn this resolver's uniqueness check
+    // ambiguous; only evolution_api connections are relevant here.
+    const { clinic } = await createBoundClinic('s1-mixed-provider');
+    const metaOrg = await createOrg('s1-mixed-provider-meta');
+    await createConnection(metaOrg.id, { provider: 'meta_cloud_api' });
+    const res = await call(SERVICES_CHAIN, publicReq({}));
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.clinic.id, clinic.id);
+  });
+
   section('Scenario 2 — no matching binding fails closed');
   await isolatedTest('zero active WhatsApp connections: GET /services fails closed with generic 404', async () => {
     const res = await call(SERVICES_CHAIN, publicReq({}));
@@ -229,8 +243,13 @@ async function main() {
     const res = await call(SERVICES_CHAIN, publicReq({}));
     assert.equal(res.statusCode, 404);
     assert.equal(res.body.error, 'Clinic not found');
-    assert.notEqual(res.body.clinic?.id, clinicA.id);
-    assert.notEqual(res.body.clinic?.id, clinicB.id);
+    // Explicit non-enumeration check: the 404 payload must carry no clinic
+    // field at all, not merely one that happens to differ from A/B (a
+    // `notEqual` against `clinic?.id` would pass vacuously if `clinic` were
+    // ever added to the 404 body with an unrelated id).
+    assert.equal(res.body.clinic, undefined);
+    void clinicA;
+    void clinicB;
   });
 
   await isolatedTest('two orgs each with their own valid binding: POST /appointment-requests creates no tenant data in either clinic', async () => {

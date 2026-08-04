@@ -1116,10 +1116,16 @@ const getClinicForWhatsAppInstance = async (instanceName?: string | null) => {
  * requires exactly one active WhatsAppConnection, linked to exactly one
  * clinic via ClinicWhatsAppConnection. Zero or multiple matches fail closed
  * (returns null) — never a global/first-created/default clinic.
+ *
+ * Scoped to provider: 'evolution_api' — this whole file (including
+ * /evolution-webhook and getClinicForWhatsAppInstance above) is the Evolution
+ * API integration; Meta Cloud API has its own separate webhook route
+ * (routes/metaWhatsAppWebhook.ts). An active Meta connection must not make
+ * this Evolution-only legacy API spuriously ambiguous.
  */
 const getExplicitPublicApiClinic = async () => {
   const activeConnections = await prisma.whatsAppConnection.findMany({
-    where: { isActive: true },
+    where: { isActive: true, provider: 'evolution_api' },
     select: { id: true },
   });
   const uniqueConnection = selectUniqueProviderConnection(activeConnections);
