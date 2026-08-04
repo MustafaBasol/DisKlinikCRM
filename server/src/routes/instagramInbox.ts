@@ -794,7 +794,14 @@ router.patch(
       // record-existence or clinic-ownership signal is leaked either way.
       const allowedClinicIds = entry.clinicId ? await getAllowedClinicIds(user) : null;
 
-      const result = await prisma.instagramInboxEntry.updateMany({
+      // Atomic scoped write-and-return: `updateManyAndReturn` compiles to a
+      // single `UPDATE ... WHERE ... RETURNING *` statement, so the row(s)
+      // returned are exactly the row(s) that matched the tenant-scoped
+      // predicate at the moment of the write — there is no separate
+      // unscoped read afterwards that could observe a post-write clinic
+      // reassignment (TOCTOU). `id` is the table's primary key, so the
+      // predicate can only ever match zero or one row.
+      const updatedRows = await prisma.instagramInboxEntry.updateManyAndReturn({
         where: {
           id,
           organizationId: user.organizationId,
@@ -802,10 +809,13 @@ router.patch(
         },
         data: { status },
       });
-      if (result.count === 0) return res.status(404).json({ error: 'Entry not found' });
-
-      const updated = await prisma.instagramInboxEntry.findUnique({ where: { id } });
-      return res.json({ entry: updated });
+      if (updatedRows.length === 0) return res.status(404).json({ error: 'Entry not found' });
+      if (updatedRows.length > 1) {
+        // Impossible under the current schema (id is unique) — fail closed
+        // instead of silently returning an arbitrary row.
+        return res.status(500).json({ error: 'Failed to update status' });
+      }
+      return res.json({ entry: updatedRows[0] });
     } catch {
       return res.status(500).json({ error: 'Failed to update status' });
     }

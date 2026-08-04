@@ -2,7 +2,7 @@
 
 **Phase:** F2 — Modular Boundaries, Guardrails, Entitlements, and Feature Flags (tenant-safety hardening)
 **Type:** Narrowly scoped tenant-authorization security fix. No CI guardrail, no schema migration, no runtime module restructuring, no generalized authorization framework.
-**Task status:** `AGENT_COMPLETED` / `TESTS_PASSED` / `PR_OPENED` — `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`.
+**Task status:** `AGENT_COMPLETED` / `TARGETED_TESTS_PASSED` / `PR_OPENED` — `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`. Includes the F2-SEC-001-R1 follow-up (§12) pushed as a second commit to the same PR #318 / branch — no new branch/PR was created.
 **Parallel wave:** Runs in parallel with F2-SEC-002 (WhatsApp legacy public API default-clinic removal). F2-SEC-002 files were not read, opened, or modified by this task. Both tasks use separate task-local branches/worktrees.
 
 ## 1. Baseline
@@ -116,7 +116,7 @@ Run against a disposable PostgreSQL container provisioned by this repository's o
 - `npx tsc --noEmit` (backend TypeScript validation, from `server/`, after `npx prisma generate`) — clean, zero errors.
 - `git diff --check` — clean, no whitespace-conflict markers.
 
-**Pre-existing, unrelated failure (not caused by this change):** `test:clinic-bulk-export` reported `116 passed, 1 failed` — `✗ status DTO never serializes sensitive fields` (`expected the explicit status DTO block to be present`), a structural/source-text assertion inside the unrelated KVKK clinic-bulk-export subsystem (`server/src/routes/clinicBulkExport.ts` / its DTO). This task's diff touches exactly three files — `server/src/routes/instagramInbox.ts`, `server/package.json`, `server/src/tests/instagramInboxStatusClinicScope.test.ts` — none of which the clinic-bulk-export DTO test reads or exercises; it cannot be caused by this change. Not investigated further — out of this task's scope (no clinic-bulk-export file was opened or modified).
+**`LOCAL_WIN32_ONLY_NON_REPRODUCING_IN_AUTHORITATIVE_CI` / `PR_CAUSATION_NOT_EVIDENCED`:** `test:clinic-bulk-export` reported `116 passed, 1 failed` — `✗ status DTO never serializes sensitive fields`, inside the unrelated KVKK clinic-bulk-export subsystem. Corrected classification (see §12.6 for the full root-cause trace and re-confirmation under R1): this task's diff never touches `clinicBulkExport.ts` or its test, and the failing assertion (`server/src/tests/clinicBulkExport.test.ts`, "status DTO never serializes sensitive fields") does a literal-`\n` substring search (`source.indexOf('res.json({\n      jobId: row.id,')`) against the raw bytes of `server/src/routes/clinicBulkExport.ts` read straight off disk. That source file is checked out with CRLF line endings on this Windows machine (confirmed directly: 548 `\r\n`, 0 bare `\n`), so the LF-only search string never matches — a Windows-checkout line-ending artifact, not a code defect. This exact same run's PR CI (Layer 5 backend, Linux runner, LF checkout) passed this bucket 9/9 on head `190b0f9`. Not merely asserted as "pre-existing" — reproduced with an identified mechanism, on unmodified code, independent of this PR's content.
 
 **Full-suite escalation:** not triggered. No shared clinic/auth helper (`clinicScope.ts`, `roles.ts`, `middleware/auth.ts`) was modified; the focused test, the existing Instagram suite, and the multi-branch isolation suite all pass; no broader regression was exposed.
 
@@ -142,3 +142,100 @@ Revert this task's single commit/PR. No migration rollback, no data rollback, no
 - Guardrail CI implementation remains unauthorized and was not attempted.
 - Stage 2 Imaging remains blocked and was not touched.
 - Runtime modularization and G1/G2 remain unapproved and were not touched.
+
+## 12. F2-SEC-001-R1 — Eliminate Post-Mutation Unscoped Read and Close Response-Scope TOCTOU
+
+Follow-up finding on this same PR/branch (no new branch/PR/migration): the §4 implementation paired a tenant-scoped `updateMany` write with a **separate, unscoped** `findUnique({ where: { id } })` read to build the response body. The write predicate was tenant-scoped; the read was not. If clinic ownership changed after the write committed and before the read executed, the endpoint could return the full post-reassignment row — a tenant-data-disclosure window, independent of the §2 defect this PR originally closed.
+
+### 12.1 Mandatory analysis
+
+- **Prisma version:** `7.8.0` (`server/package.json`, both `prisma` and `@prisma/client`).
+- **Capability confirmed by direct inspection of the generated client** (`server/node_modules/.prisma/client/index.d.ts`): `InstagramInboxEntryDelegate` exposes `updateManyAndReturn<T extends InstagramInboxEntryUpdateManyAndReturnArgs>(...)`, generated for every model in this schema (no preview flag required — stable in this Prisma major). On PostgreSQL this compiles to a single `UPDATE ... WHERE ... RETURNING *` statement — one round trip, one atomic operation, no follow-up read.
+- Inspected only the paths the task scoped: `server/src/routes/instagramInbox.ts`, `server/src/tests/instagramInboxStatusClinicScope.test.ts`, `server/package.json`, `server/prisma/schema.prisma` (generator/provider block + the `InstagramInboxEntry` model), and the generated Prisma client's own `.d.ts` for the exact delegate signature. No CodeGraph, no repo-wide scan.
+
+### 12.2 Blocking root cause (confirmed, not assumed)
+
+```ts
+// pre-R1 (already tenant-scoped write, but...)
+const result = await prisma.instagramInboxEntry.updateMany({
+  where: { id, organizationId: user.organizationId, ...(allowedClinicIds ? { clinicId: { in: allowedClinicIds } } : {}) },
+  data: { status },
+});
+if (result.count === 0) return res.status(404).json({ error: 'Entry not found' });
+
+// ...the response was built from a SEPARATE, unscoped read:
+const updated = await prisma.instagramInboxEntry.findUnique({ where: { id } });
+return res.json({ entry: updated });
+```
+The `findUnique` carries no `organizationId`/`clinicId` predicate at all — it trusts that whatever the write just touched is still the row the caller is authorized to see, which is not guaranteed once the write and the read are two separate statements.
+
+### 12.3 Chosen atomic mutation-and-return mechanism
+
+`updateManyAndReturn`, with the identical tenant-scoped `where` the prior `updateMany` used:
+
+```ts
+const updatedRows = await prisma.instagramInboxEntry.updateManyAndReturn({
+  where: {
+    id,
+    organizationId: user.organizationId,
+    ...(allowedClinicIds ? { clinicId: { in: allowedClinicIds } } : {}),
+  },
+  data: { status },
+});
+if (updatedRows.length === 0) return res.status(404).json({ error: 'Entry not found' });
+if (updatedRows.length > 1) {
+  // Impossible under the current schema (id is the primary key) — fail
+  // closed instead of silently returning an arbitrary row.
+  return res.status(500).json({ error: 'Failed to update status' });
+}
+return res.json({ entry: updatedRows[0] });
+```
+`id` is `InstagramInboxEntry`'s `@id` column, so the predicate can only ever match 0 or 1 rows; the `>1` branch is an explicit, tested (not merely assumed) fail-closed guard rather than a silent `[0]` pick.
+
+**Response-scope guarantee:** the row returned to the caller is, by construction, the exact row the single atomic `UPDATE ... RETURNING` statement matched under the tenant-scoped `WHERE` at the moment of that statement — not a value observed by any later, separately-scoped query. There is no second Prisma call, and no `prisma.instagramInboxEntry.findUnique` call anywhere in this handler post-fix (proven by test, §12.5).
+
+**No `select`** was added — omitting `select` returns the same full-scalar-field shape `findUnique` used to return (no relations either way), so the response body shape is unchanged from pre-R1.
+
+### 12.4 Null-clinic (`clinicId == null`) semantics — unchanged, evidenced
+
+Inspected every sibling handler in this same file: `GET /instagram/inbox/:id/messages` and `POST /instagram/conversations/:id/reply` both use the identical pattern — `if (entry.clinicId) { /* apply allowedClinicIds check */ }` — meaning an entry with no clinic assigned yet is treated as **org-level and unrestricted** (any role permitted by that endpoint's own `authorize()` list may act on it, regardless of `allowedClinicIds`). The `PATCH /:id/status` handler already followed this exact convention pre-R1 (`entry.clinicId ? await getAllowedClinicIds(user) : null`) and R1 does not change it — no new policy was invented. A focused test (§12.5, section 12 of the test file) now documents this explicitly for this endpoint, where previously it was only implied by the conditional.
+
+### 12.5 Tests added (all under `server/src/tests/instagramInboxStatusClinicScope.test.ts`, sections 10-12; original 13 scenarios in sections 1-9 unchanged)
+
+1. **No post-mutation unscoped read** — a bound-original method spy on `prisma.instagramInboxEntry.findUnique` (try/finally-restored, matching the established spy pattern in `imagingLifecycleFacade.test.ts`) proves the handler invokes it **zero times** during a successful PATCH.
+2. **Response is the atomic write's own row** — a spy on `prisma.instagramInboxEntry.updateManyAndReturn` captures both the call's `where` (asserted tenant-scoped: `id`, `organizationId`, `clinicId: { in: [...] }`) and its return value, then asserts the HTTP response body's `entry` is `deepEqual` to `capturedResult[0]` — proving the response is sourced directly from the scoped write, not reconstructed from any other read.
+3. **Deterministic concurrency regression** — a bound-original spy on `prisma.instagramInboxEntry.findFirst` (the handler's only DB call before its atomic write) synchronously performs a real, committed clinic reassignment (`clinicA1` → `clinicA2`) inside the spy's own continuation, guaranteed by plain `await` sequencing (no sleep, no poll, no artificial gate) to land after the handler's initial lookup and before its `updateManyAndReturn` call evaluates its `WHERE`. Asserts: the A1-only caller receives `404 { error: 'Entry not found' }` (never a body containing any entry data), and the row's `status` remains unmodified (`'open'`) — the stale-scope write never applied, while a direct DB read confirms the reassignment itself did commit (`clinicId === clinicA2`). This is a stronger proof than a raw `Promise.all` race (used elsewhere in this repo, e.g. `imagingRequestConcurrencyCharacterization.test.ts`, for a gap that is *not* closed): it targets the exact application-level boundary the fix eliminates, deterministically, every run.
+4. **Null-clinic accepted behavior** — a clinic-restricted user (`allowedClinicIds=[A1]`, `canAccessAllClinics=false`) successfully mutates a freshly created `clinicId: null` entry in their own org; response `entry.clinicId` is `null`.
+5. **Original 13 non-enumeration/scope/role tests** — unchanged, all still passing (sections 1-9).
+
+### 12.6 Exact test commands and results (R1)
+
+- `npx tsc --noEmit` (from `server/`) — clean, exit 0.
+- `git diff --check` — clean, exit 0; diff still touches exactly the same two source files as §7 plus this evidence doc (`server/src/routes/instagramInbox.ts`, `server/src/tests/instagramInboxStatusClinicScope.test.ts`, `docs/program/evidence/F2-SEC-001_INSTAGRAM_INBOX_CLINIC_MEMBERSHIP.md`) — no `server/package.json` change was needed this round (no new npm script; the existing `test:instagram-inbox-status-clinic-scope` entry already runs this file).
+- `npx tsx src/tests/multiBranchAccess.test.ts` (`test:roles`, from `server/`) — **142/142 passed** (pure logic, no DB dependency).
+- `npx tsx scripts/test-runtime/orchestrator.ts postgres-compat` (disposable PostgreSQL; runs `server:test:legacy-db-required`):
+  - Disposable run ID: `20260804T072413Z-0e5916ba-40652`
+  - Container: `nmtest-pg-postgres-compat-20260804t072413z-0e5916ba-40652`
+  - Database: `nmtest_postgres_compat_20260804t072413z_0e5916ba_40652`
+  - Migration: `code: 0, step: "ok"`
+  - `test:auth` — 55/55 passed
+  - `test:instagram` (instagramProvider + instagramConversion + instagramAssistantParity) — 28/28 passed
+  - **`test:instagram-inbox-status-clinic-scope` (this task's focused test, now 17 scenarios: original 13 + 4 new) — 17/17 passed**
+  - Remaining `server:test:legacy-db-required` members ran to completion; the single failure is the CRLF-checkout artifact in §7 (`LOCAL_WIN32_ONLY_NON_REPRODUCING_IN_AUTHORITATIVE_CI`), not caused by this change.
+  - `cleanup`: `{"success": true, "errors": []}` — container + network fully torn down; **zero residual Docker resources**.
+  - Orchestrator's own process exit code was `1` **solely** because of that one unrelated CRLF-artifact test (`"test": {"code": 1}` in the orchestrator's JSON summary above), not because of any F2-SEC-001-R1 test.
+
+### 12.7 Migration / compatibility / rollback
+
+No schema change, no migration (unchanged from §8). Response body shape is unchanged (same scalar fields, no `select`/relations added or removed) — fully backward compatible. Rollback: revert the R1 commit on top of the already-open PR #318; no data/infra/migration rollback applies.
+
+### 12.8 Tenant isolation / security / KVKK / runtime impact
+
+- **Tenant isolation:** closes a second, narrower disclosure window (post-write TOCTOU) layered on top of the §10 tenant-isolation fix. No access is broadened for any role or clinic.
+- **Security:** the response is now provably sourced from the same atomic, tenant-scoped statement as the write — no interval in which a concurrent reassignment can be observed by this endpoint's response.
+- **KVKK:** no retention/deletion/consent-flow change; this is a query-atomicity correction only.
+- **Runtime/query impact:** **one fewer** round trip than the §4 implementation (`updateManyAndReturn` replaces `updateMany` + `findUnique` with a single statement) — a small, unambiguous improvement, not a regression.
+
+### 12.9 PR / review status (R1)
+
+Pushed as a second commit (`fix(instagram): return status mutation result within clinic scope`) to the existing PR #318 / branch `fix/f2-sec-001-instagram-inbox-clinic-membership` — no new branch, no new PR. New head SHA, CI result, and review-thread status are recorded in the delivery report accompanying this task; not merged, not deployed.
