@@ -771,6 +771,7 @@ router.patch(
   authenticate,
   authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST', 'DOCTOR']),
   async (req: AuthRequest, res) => {
+    const user = req.user!;
     const id = getParam(req, 'id');
     const { status } = req.body as { status?: string };
     const validStatuses = ['open', 'resolved', 'ignored', 'converted'];
@@ -778,15 +779,51 @@ router.patch(
       return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
     }
     try {
-      const entry = await prisma.instagramInboxEntry.findFirst({
-        where: { id, organizationId: req.user!.organizationId },
-      });
-      if (!entry) return res.status(404).json({ error: 'Entry not found' });
-      const updated = await prisma.instagramInboxEntry.update({
-        where: { id },
+      // Clinic-membership scope (same primitive as this file's other mutating
+      // handlers, e.g. /resolve, /assign-clinic) is computed independently of
+      // the target row — never from a pre-write read of its current
+      // `clinicId`. A stale `clinicId` read taken before the write can be
+      // invalidated by a concurrent reassignment landing between the read
+      // and the write; deciding scope from it would let a since-reassigned,
+      // now-inaccessible row slip through unscoped. `getAllowedClinicIds`
+      // returns `null` for an unrestricted caller (OWNER/ORG_ADMIN/
+      // `canAccessAllClinics`) and a `string[]` (possibly empty) of real
+      // `UserClinic` membership otherwise — see helper above.
+      const allowedClinicIds = await getAllowedClinicIds(user);
+
+      // Atomic scoped write-and-return: `updateManyAndReturn` compiles to a
+      // single `UPDATE ... WHERE ... RETURNING *` statement, evaluated by
+      // PostgreSQL at write time against the row's *current* state — so the
+      // row(s) returned are exactly the row(s) that matched the tenant-scoped
+      // predicate at that moment, with no separate pre- or post-write read
+      // that could observe (or authorize against) a stale value. `id` is the
+      // table's primary key, so the predicate can only ever match zero or one
+      // row. For a restricted caller, an unassigned entry (`clinicId IS
+      // NULL`) remains accessible (the accepted org-level policy — same as
+      // this file's `GET /:id/messages` and `POST /reply` handlers), and an
+      // entry currently assigned to any clinic the caller is not a member of
+      // is excluded, regardless of what its `clinicId` was at any earlier
+      // point in the request. `allowedClinicIds !== null` (not truthiness) is
+      // required here: an empty array is a real, restrictive scope — a
+      // restricted caller with zero clinic memberships must still match only
+      // `clinicId IS NULL`, not fall through to the unrestricted branch.
+      const updatedRows = await prisma.instagramInboxEntry.updateManyAndReturn({
+        where: {
+          id,
+          organizationId: user.organizationId,
+          ...(allowedClinicIds !== null
+            ? { OR: [{ clinicId: null }, { clinicId: { in: allowedClinicIds } }] }
+            : {}),
+        },
         data: { status },
       });
-      return res.json({ entry: updated });
+      if (updatedRows.length === 0) return res.status(404).json({ error: 'Entry not found' });
+      if (updatedRows.length > 1) {
+        // Impossible under the current schema (id is unique) — fail closed
+        // instead of silently returning an arbitrary row.
+        return res.status(500).json({ error: 'Failed to update status' });
+      }
+      return res.json({ entry: updatedRows[0] });
     } catch {
       return res.status(500).json({ error: 'Failed to update status' });
     }
