@@ -51,7 +51,7 @@ import { logActivity } from '../utils/activity.js';
 import { formatTurkishDateLong, normalizeDateFromTurkishInput, WHATSAPP_ASSISTANT_TIME_ZONE } from '../utils/whatsappDate.js';
 import { getZonedDateParts, minutesToTime, timeToMinutes, formatClinicDateTime, localDateTimeToClinicDate } from '../utils/helpers.js';
 import { isLegacyFallbackEnabled } from '../utils/legacyWhatsApp.js';
-import { selectUniqueProviderConnection } from '../utils/webhookRouting.js';
+import { selectUniqueProviderConnection, resolveSingleLinkedClinic } from '../utils/webhookRouting.js';
 import { sanitizeInboundMessageText } from '../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../utils/inboundRateLimiter.js';
 import { splitNameForPatient, titleCaseName } from '../utils/patientName.js';
@@ -1102,6 +1102,47 @@ const getClinicForWhatsAppInstance = async (instanceName?: string | null) => {
   if (mappedSetting?.clinic) return mappedSetting.clinic;
   if (configuredInstance && configuredInstance === normalizedInstance) return getDefaultClinic();
   return null;
+};
+
+/**
+ * Resolves the single clinic explicitly bound to WhatsApp for the legacy
+ * secret-gated public API (GET/POST /api/public/whatsapp/*). Unlike the
+ * Evolution webhook, these routes carry no per-request instance/connection
+ * identity — only the shared WHATSAPP_WEBHOOK_SECRET — so the only trustworthy
+ * tenant signal is the server's own WhatsApp connection configuration.
+ *
+ * Reuses the same explicit-binding primitives as the DB-based webhook
+ * resolution (selectUniqueProviderConnection, resolveSingleLinkedClinic):
+ * requires exactly one active WhatsAppConnection, linked to exactly one
+ * clinic via ClinicWhatsAppConnection. Zero or multiple matches fail closed
+ * (returns null) — never a global/first-created/default clinic.
+ */
+const getExplicitPublicApiClinic = async () => {
+  const activeConnections = await prisma.whatsAppConnection.findMany({
+    where: { isActive: true },
+    select: { id: true },
+  });
+  const uniqueConnection = selectUniqueProviderConnection(activeConnections);
+  if (!uniqueConnection) {
+    console.warn('[whatsapp-public-api] no unambiguous active WhatsApp connection', {
+      activeConnectionCount: activeConnections.length,
+    });
+    return null;
+  }
+
+  const clinicLinks = await prisma.clinicWhatsAppConnection.findMany({
+    where: { whatsappConnectionId: uniqueConnection.id },
+    select: { clinicId: true },
+  });
+  const clinicId = resolveSingleLinkedClinic(clinicLinks);
+  if (!clinicId) {
+    console.warn('[whatsapp-public-api] no unambiguous clinic binding for WhatsApp connection', {
+      linkedClinicCount: clinicLinks.length,
+    });
+    return null;
+  }
+
+  return prisma.clinic.findUnique({ where: { id: clinicId } });
 };
 
 const getAssistantServices = async (clinicId: string): Promise<AssistantService[]> => {
@@ -3831,7 +3872,7 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
 // GET /services
 router.get('/services', authorizeWhatsappApi, async (_req, res) => {
   try {
-    const clinic = await getDefaultClinic();
+    const clinic = await getExplicitPublicApiClinic();
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
     const services = await prisma.appointmentType.findMany({
       where: { clinicId: clinic.id, isActive: true, isService: true },
@@ -3847,7 +3888,7 @@ router.get('/services', authorizeWhatsappApi, async (_req, res) => {
 // GET /doctors
 router.get('/doctors', authorizeWhatsappApi, async (_req, res) => {
   try {
-    const clinic = await getDefaultClinic();
+    const clinic = await getExplicitPublicApiClinic();
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
     const doctors = await prisma.user.findMany({
       where: { clinicId: clinic.id, role: 'doctor', isActive: true },
@@ -3865,7 +3906,7 @@ router.get('/availability', authorizeWhatsappApi, async (req, res) => {
   const validation = whatsappAvailabilityQuerySchema.safeParse(req.query);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
   try {
-    const clinic = await getDefaultClinic();
+    const clinic = await getExplicitPublicApiClinic();
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
     const slots = await buildAvailableSlots(prisma, clinic.id, validation.data.appointmentTypeId, validation.data.date, validation.data.practitionerId);
     if (!slots) return res.status(404).json({ error: 'Service not found' });
@@ -3880,7 +3921,7 @@ router.get('/appointment-lookup', authorizeWhatsappApi, async (req, res) => {
   const validation = whatsappAppointmentLookupQuerySchema.safeParse(req.query);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
   try {
-    const clinic = await getDefaultClinic();
+    const clinic = await getExplicitPublicApiClinic();
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
     const patient = await findExistingPatientByPhone(clinic.id, validation.data.phone);
     if (!patient) {
@@ -3914,7 +3955,7 @@ router.post('/appointment-requests', authorizeWhatsappApi, async (req, res) => {
   const validation = whatsappAppointmentRequestSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
   try {
-    const clinic = await getDefaultClinic();
+    const clinic = await getExplicitPublicApiClinic();
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
     const phone = normalizePhone(validation.data.phone);
     const existingPatient = await findExistingPatientByPhone(clinic.id, phone);
@@ -3963,7 +4004,7 @@ router.post('/cancel-request', authorizeWhatsappApi, async (req, res) => {
   const validation = whatsappAppointmentRequestSchema.safeParse({ ...req.body, requestType: 'cancel' });
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
   try {
-    const clinic = await getDefaultClinic();
+    const clinic = await getExplicitPublicApiClinic();
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
     const cancelPhone = normalizePhone(validation.data.phone);
     const existingPatient = await findExistingPatientByPhone(clinic.id, cancelPhone);
