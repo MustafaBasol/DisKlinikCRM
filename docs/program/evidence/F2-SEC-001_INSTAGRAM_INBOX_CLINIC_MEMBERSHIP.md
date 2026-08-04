@@ -2,7 +2,7 @@
 
 **Phase:** F2 — Modular Boundaries, Guardrails, Entitlements, and Feature Flags (tenant-safety hardening)
 **Type:** Narrowly scoped tenant-authorization security fix. No CI guardrail, no schema migration, no runtime module restructuring, no generalized authorization framework.
-**Task status:** `AGENT_COMPLETED` / `TARGETED_TESTS_PASSED` / `PR_OPENED` — `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`. Includes the F2-SEC-001-R1 follow-up (§12) pushed as a second commit to the same PR #318 / branch — no new branch/PR was created.
+**Task status:** `AGENT_COMPLETED` / `TARGETED_TESTS_PASSED` / `PR_OPENED` — `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`. Includes the F2-SEC-001-R1 follow-up (§12) pushed as a second commit, and the F2-SEC-001-R2 follow-up (§13) pushed as a third commit, to the same PR #318 / branch — no new branch/PR was created.
 **Parallel wave:** Runs in parallel with F2-SEC-002 (WhatsApp legacy public API default-clinic removal). F2-SEC-002 files were not read, opened, or modified by this task. Both tasks use separate task-local branches/worktrees.
 
 ## 1. Baseline
@@ -239,3 +239,114 @@ No schema change, no migration (unchanged from §8). Response body shape is unch
 ### 12.9 PR / review status (R1)
 
 Pushed as a second commit (`fix(instagram): return status mutation result within clinic scope`) to the existing PR #318 / branch `fix/f2-sec-001-instagram-inbox-clinic-membership` — no new branch, no new PR. New head SHA, CI result, and review-thread status are recorded in the delivery report accompanying this task; not merged, not deployed.
+
+## 13. F2-SEC-001-R2 — Remove Stale Nullable-Clinic Authorization Decision and Close Null-to-Foreign Reassignment Race
+
+Second follow-up finding on this same PR/branch (reviewed head `98edb464676bb6168d5b6f8b12d7ec74bcea6c7d`; no new branch/PR/migration). R1 correctly replaced the scoped `updateMany` + unscoped `findUnique` with a single atomic `updateManyAndReturn`, closing the response-scope TOCTOU (§12). However, the *shape of the write predicate itself* was still chosen from a stale pre-write read:
+
+```ts
+const entry = await prisma.instagramInboxEntry.findFirst({
+  where: { id, organizationId: user.organizationId },
+  select: { id: true, clinicId: true },
+});
+const allowedClinicIds = entry.clinicId ? await getAllowedClinicIds(user) : null;
+```
+
+If `entry.clinicId` was `null` at the moment of that read, `allowedClinicIds` was forced to `null` — the handler's own "unrestricted" sentinel — regardless of the caller's actual `getAllowedClinicIds` scope, and the subsequent `updateManyAndReturn` carried no `clinicId` predicate at all.
+
+### 13.1 Mandatory analysis
+
+- **`getAllowedClinicIds(user)` semantics confirmed by re-reading `instagramInbox.ts:55–60`** (unchanged by R2): returns `null` for an unrestricted caller (`OWNER`, `ORG_ADMIN`, or `canAccessAllClinics`); returns `user.allowedClinicIds ?? []` — a real array, possibly **empty** — for a restricted caller. `null` and `[]` are semantically distinct: `null` = no clinic predicate needed (any clinic in the org); `[]` = a restricted caller with zero clinic memberships, who must still match only unassigned (`clinicId IS NULL`) rows, never fall through to unrestricted.
+- **Sibling null-clinic behavior re-confirmed** (`GET /instagram/inbox/:id/messages`, `POST /instagram/conversations/:id/reply`, both in this same file): both use `if (entry.clinicId) { ...apply allowedClinicIds check... }`, i.e. an unassigned entry is org-level/unrestricted-access. This accepted policy is unchanged by R2 — only *how* the policy is expressed in the write predicate changes (from an app-level pre-read branch to a database-evaluated `OR` clause).
+- **Prisma nullable-clinic `OR` predicate confirmed expressible without schema change**: `OR: [{ clinicId: null }, { clinicId: { in: allowedClinicIds } }]` — standard Prisma filter syntax against the existing nullable `clinicId` column; no new field, index, or migration required. Verified by the passing test suite (§13.5), including the exact captured `where.OR` shape (§13.5, test 2).
+- **Initial `findFirst` read confirmed unnecessary and removed**: `updateManyAndReturn` returning zero rows already uniformly represents "nonexistent id", "cross-organization id", and "same-org but authorization-predicate-excluded id" — the identical `404 { error: 'Entry not found' }` was already the response for all three pre-R2 (§7 non-enumeration test, unchanged). No request-body field depends on pre-read entry data. Removing the read also removes a full database round trip and eliminates any residual "read the foreign row's `clinicId` before deciding access" step.
+- Scope of files read/edited for this analysis: `server/src/routes/instagramInbox.ts`, `server/src/tests/instagramInboxStatusClinicScope.test.ts`, this evidence file, and the generated Prisma client types already inspected under R1 (§12.1) for `updateManyAndReturn`'s signature — no CodeGraph, no repository-wide scan.
+
+### 13.2 Blocking root cause (confirmed race)
+
+1. Restricted user U1 is authorized only for Clinic A1 (`allowedClinicIds=[A1]`).
+2. Target entry is initially unassigned: `clinicId = null`.
+3. The handler's `findFirst` reads `clinicId = null`.
+4. A concurrent writer reassigns the entry to inaccessible Clinic A2.
+5. Pre-R2: `allowedClinicIds` was computed as `null` (from the stale `clinicId = null` read) → the `updateManyAndReturn` predicate carried **no** clinic clause → it would match and mutate the now-A2-owned row, returning it to the A1-only caller.
+
+This is a distinct defect from the R1 TOCTOU (§12): R1 closed the gap between the *write* and a *separate response read*; R2 closes the gap between an *authorization-scope-deciding read* and the *write itself*.
+
+### 13.3 Row-independent authorization design (implemented)
+
+```ts
+const allowedClinicIds = await getAllowedClinicIds(user);
+
+const updatedRows = await prisma.instagramInboxEntry.updateManyAndReturn({
+  where: {
+    id,
+    organizationId: user.organizationId,
+    ...(allowedClinicIds !== null
+      ? { OR: [{ clinicId: null }, { clinicId: { in: allowedClinicIds } }] }
+      : {}),
+  },
+  data: { status },
+});
+if (updatedRows.length === 0) return res.status(404).json({ error: 'Entry not found' });
+if (updatedRows.length > 1) return res.status(500).json({ error: 'Failed to update status' });
+return res.json({ entry: updatedRows[0] });
+```
+
+- `allowedClinicIds` is computed from `req.user` alone — never from any read of the target row. There is no longer any pre-write database call in this handler at all (confirmed by test, §13.5).
+- **`allowedClinicIds !== null` (explicit identity check, not truthiness)** gates whether the `OR` clause is applied. This is required, not stylistic: `[]` is truthy in JavaScript, but semantically it is "restricted, zero memberships" — collapsing it into the unrestricted branch via `allowedClinicIds ? ... : {}` would silently convert a zero-membership restricted caller into an unrestricted one, granting access to every clinic in the organization. The explicit `!== null` check preserves the `null` (unrestricted) vs. `[]` (restricted, empty) distinction end-to-end into the write predicate.
+- For a restricted caller (`allowedClinicIds` is `null !== allowedClinicIds`, i.e. an array — empty or not), the predicate is `OR: [{ clinicId: null }, { clinicId: { in: allowedClinicIds } }]`: matches an unassigned row (accepted org-level policy, unchanged from R1/§12.4) or a row whose `clinicId` is currently in the caller's real membership list. Both branches are evaluated by PostgreSQL against the row's live state inside the single `UPDATE ... WHERE ... RETURNING` statement — there is no earlier snapshot of `clinicId` for a concurrent writer to invalidate.
+- For an unrestricted caller (`allowedClinicIds === null`), the predicate is exactly `{ id, organizationId }` — no clinic clause at all, matching the existing accepted OWNER/ORG_ADMIN/`canAccessAllClinics` behavior (organization scope mandatory, clinic restriction correctly omitted). Verified by test (§13.5, test 3): the captured `where` object's keys are exactly `['id', 'organizationId']`.
+- `id` remains `InstagramInboxEntry`'s `@id` column, so the `>1` branch remains an explicit, tested, structurally-unreachable fail-closed guard (unchanged from R1).
+
+### 13.4 Initial-read removal
+
+The pre-write `findFirst` was **removed entirely** (not retained). Justification: `updateManyAndReturn` returning zero rows already collapses "nonexistent id" / "cross-organization id" / "authorization-predicate-excluded id" into the identical `404`, so no case existed where the pre-read supplied information the write's own zero-rows outcome couldn't already represent; the only thing the pre-read *did* supply — `entry.clinicId`, used to decide whether to scope the write — was precisely the stale-decision defect this task closes. No `select`-based read of any target-row field survives anywhere in this handler.
+
+### 13.5 Tests added (all in `server/src/tests/instagramInboxStatusClinicScope.test.ts`; existing 17 sections 1–12 kept and still passing, sections 10 and 11 updated to match the new implementation, section 13 added)
+
+Because the R1-era race test (old §11) was mechanically anchored on intercepting `prisma.instagramInboxEntry.findFirst` — the exact call R2 removes — it could no longer inject its race once `findFirst` no longer exists in the handler; it is **updated, not deleted**, to inject the same "reassignment lands before the atomic write" race by intercepting `updateManyAndReturn` itself (synchronously performing the reassignment, `await`ed, before invoking the real call) — deterministic, no sleep, no polling, same scenario and same assertions as before.
+
+1. **§10 (updated):** handler now proven to call **neither** `findFirst` **nor** `findUnique` during a successful mutation — zero pre-write reads, zero post-write reads.
+2. **§10 (updated):** captured `updateManyAndReturn` `where.OR` for a restricted caller (`allowedClinicIds=[A1]`) asserted `deepEqual` to `[{ clinicId: null }, { clinicId: { in: [A1] } }]`.
+3. **§10 (new):** captured `updateManyAndReturn` `where` for an unrestricted caller (OWNER) asserted to have exactly the keys `['id', 'organizationId']` — no `OR`, no `clinicId`.
+4. **§11 (updated mechanism, same scenario):** entry legitimately in A1 at request start, reassigned to A2 immediately before the atomic write (spy on `updateManyAndReturn`) — A1-only caller gets `404`, row's `status` remains unmodified, reassignment confirmed to have actually committed.
+5. **§11 (new — the R2 blocking-finding scenario, required by this task):** entry initially **unassigned** (`clinicId = null`), reassigned to A2 immediately before the atomic write — A1-only caller (`allowedClinicIds=[A1]`) receives `404 { error: 'Entry not found' }`, `res.body?.entry` is `undefined` (no A2 data of any shape returned), the row's `status` remains `'open'` (caller's write did not apply), and a direct DB read confirms the reassignment to A2 did commit. Deterministic: the reassignment is `await`ed synchronously inside the `updateManyAndReturn` spy, guaranteed to commit before the real call's underlying SQL statement executes.
+6. **§9 (new):** ORG_ADMIN (unrestricted via `getAllowedClinicIds` returning `null`, independent of `canAccessAllClinics`) can mutate any clinic in its own org — unchanged by R2, added alongside the existing OWNER coverage.
+7. **§13 (new section — restricted user, `allowedClinicIds=[]`):**
+   - can still mutate an unassigned (`clinicId = null`) entry — same org-level policy as a non-empty restricted list;
+   - cannot mutate `entryA1` (an assigned-clinic entry);
+   - cannot mutate `entryA2` either;
+   - the captured write predicate's `where.OR` is explicitly `[{ clinicId: null }, { clinicId: { in: [] } }]` — proving the empty array is never dropped via a truthiness check (a `allowedClinicIds ? ... : {}` bug would have omitted the clause entirely and been caught by this assertion).
+
+All pre-existing sections 1–9, 12 are unchanged and still pass verbatim.
+
+### 13.6 Exact test commands and results (R2)
+
+- `npx tsc --noEmit` (from `server/`, after `npx prisma generate`) — clean, exit 0.
+- `git diff --check` — clean, exit 0 (only a benign CRLF-normalization notice on the test file, not a conflict marker).
+- `npx tsx src/tests/multiBranchAccess.test.ts` (`test:roles`, from `server/`) — **142/142 passed** (pure logic, no DB dependency).
+- `npx tsx scripts/test-runtime/orchestrator.ts postgres-compat` (disposable PostgreSQL; runs `server:test:legacy-db-required`), run from the worktree root:
+  - First attempt — disposable run ID `20260804T080341Z-f4657027-37268`: the aggregate script's `test:auth` step hit a pre-existing, unrelated, timing-sensitive flake (`platformAdmin.test.ts`, "PATCH and DELETE settings: concurrent enable/reset operations serialize into a coherent final state and audit chain" — real concurrent `$transaction` calls racing a Postgres advisory lock; no file this task touches). Because the aggregate script chains with `&&`, this aborted the bucket before `test:instagram-inbox-status-clinic-scope` ran. Cleanup still succeeded (`{"success": true, "errors": []}`); no residual Docker resources. This run supplied no signal on this task's own tests either way and is recorded here only for completeness.
+  - Second attempt — **disposable run ID `20260804T080514Z-63e4d8f3-39592`** (container `nmtest-pg-postgres-compat-20260804t080514z-63e4d8f3-39592`, database `nmtest_postgres_compat_20260804t080514z_63e4d8f3_39592`), migration `code: 0, step: "ok"`:
+    - `test:auth` — 55/55 passed (the prior flake did not reproduce).
+    - `test:instagram` (instagramProvider + instagramConversion + instagramAssistantParity) — 28/28 passed.
+    - **`test:instagram-inbox-status-clinic-scope` (this task's focused test, now 24 scenarios: original 13 + R1's 4 + R2's 7) — 24/24 passed.**
+    - Remaining `server:test:legacy-db-required` members ran to completion; the sole failure was `test:clinic-bulk-export` — `116 passed, 1 failed`, the identical `LOCAL_WIN32_ONLY_NON_REPRODUCING_IN_AUTHORITATIVE_CI` CRLF-checkout artifact already root-caused and documented in §7/§12.6 (`"status DTO never serializes sensitive fields"`, same test name, same mechanism — this task's diff does not touch `clinicBulkExport.ts` or its test).
+    - `cleanup`: `{"success": true, "errors": []}` — container + network fully torn down; **zero residual Docker resources** (confirmed independently via `docker ps -a --filter name=nmtest` and `docker network ls --filter name=nmtest`, both empty after teardown).
+    - Orchestrator process exit code was `1` **solely** because of the one unrelated CRLF-artifact test, not because of any F2-SEC-001-R2 test.
+- **Full-suite escalation:** not triggered. No shared clinic/auth helper (`clinicScope.ts`, `roles.ts`, `middleware/auth.ts`) was modified; the focused test (24/24), the existing Instagram suite (28/28), the auth suite (55/55), and the multi-branch isolation suite (142/142) all pass; no broader regression was exposed by this diff.
+
+### 13.7 Migration / compatibility / rollback
+
+No schema change, no migration (unchanged from §8). `InstagramInboxEntry.clinicId` remains the same nullable column; only the query predicate changed. Response body shape is unchanged (same scalar fields returned by `updateManyAndReturn`, no `select`/relations added or removed) — fully backward compatible with R1. Rollback: revert the R2 commit on top of the already-open PR #318; no data/infra/migration rollback applies.
+
+### 13.8 Tenant isolation / security / KVKK / runtime impact
+
+- **Tenant isolation:** closes the null-to-foreign-clinic reassignment race — the last remaining path by which a stale pre-write read could let an intra-organization, cross-clinic mutation slip through. Combined with §2 (original defect) and §12 (response-scope TOCTOU), all three identified authorization-timing gaps on this endpoint are now closed. No access is broadened for any role, and the accepted null-clinic (unassigned-entry) org-level policy is preserved exactly, including for the previously-untested `allowedClinicIds=[]` case.
+- **Security:** the write predicate is now provably independent of any value read from the target row at any point in the request — there is nothing left for a concurrent writer to invalidate between an authorization decision and the write it governs, because that decision no longer depends on the row at all.
+- **KVKK:** no retention/deletion/consent-flow change; this is a query-predicate correctness fix only, same category as R1.
+- **Runtime/query impact:** **one fewer** round trip than R1 (the pre-write `findFirst` is removed entirely; only the single atomic `updateManyAndReturn` statement remains) — an unambiguous improvement over both the pre-R1 and R1 implementations, not a regression.
+
+### 13.9 PR / review status (R2)
+
+Pushed as a third commit (`fix(instagram): scope nullable inbox mutation at write time`) to the existing PR #318 / branch `fix/f2-sec-001-instagram-inbox-clinic-membership` — no new branch, no new PR, no migration. New head SHA, CI result, and review-thread status are recorded in the delivery report accompanying this task; not merged, not deployed.

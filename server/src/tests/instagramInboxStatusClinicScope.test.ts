@@ -36,6 +36,24 @@
  * regression proving the reassignment-mid-flight case, and the accepted
  * null-clinic (org-level, unrestricted) policy.
  *
+ * F2-SEC-001-R2 follow-up: even after R1, the handler still chose *whether*
+ * to apply clinic scoping from a stale pre-write `findFirst` read of
+ * `entry.clinicId` — if that read observed `null`, clinic scoping was
+ * skipped entirely for the write that followed. A concurrent reassignment of
+ * the row from unassigned to an inaccessible clinic, landing after that read
+ * but before the atomic write, could still be mutated and returned. Fixed by
+ * computing `allowedClinicIds` independently of the target row (no read of
+ * it at all) and folding the null-clinic policy directly into the write
+ * predicate itself — `OR(clinicId IS NULL, clinicId IN allowed)` — evaluated
+ * by PostgreSQL against the row's current state at write time, so there is
+ * no stale read left to invalidate. Sections 10-13 below cover this
+ * follow-up: no pre-write `findFirst` (nor post-write `findUnique`) call at
+ * all, the exact `OR` predicate shape (including the unrestricted-caller
+ * case, which carries no clinic clause), a deterministic null-to-foreign-
+ * clinic race regression, and the `allowedClinicIds=[]` case (a real,
+ * restrictive scope — must not be treated as unrestricted, and must still
+ * permit only unassigned entries).
+ *
  * Run with: tsx src/tests/instagramInboxStatusClinicScope.test.ts
  * Requires DATABASE_URL to point at a disposable Postgres.
  */
@@ -329,6 +347,16 @@ async function main() {
     assert.equal(await statusOf(fx.entryA2Id), 'resolved');
   });
 
+  await test('ORG_ADMIN (unrestricted-within-org via getAllowedClinicIds returning null) can mutate any clinic in its own org, unchanged by R2', async () => {
+    const fx = await createFixture();
+    const res = await callPatchStatus(fx.entryA2Id, 'resolved', {
+      role: 'ORG_ADMIN', normalizedRole: 'ORG_ADMIN', organizationId: fx.orgAId, allowedClinicIds: [], canAccessAllClinics: false,
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body?.entry?.id, fx.entryA2Id);
+    assert.equal(await statusOf(fx.entryA2Id), 'resolved');
+  });
+
   await test('legacy raw role "doctor" (allowed by authorize()) can mutate its own clinic\'s entry', async () => {
     const fx = await createFixture();
     const res = await callPatchStatus(fx.entryA1Id, 'converted', {
@@ -347,12 +375,18 @@ async function main() {
     assert.equal(await statusOf(fx.entryA1Id), 'open');
   });
 
-  section('10. Response is returned directly from the atomic tenant-scoped mutation — no post-mutation unscoped read');
+  section('10. Response is returned directly from the atomic tenant-scoped mutation — no pre-write or post-write unscoped read');
 
-  await test('handler never calls instagramInboxEntry.findUnique (the pre-fix TOCTOU read path is gone)', async () => {
+  await test('handler never calls instagramInboxEntry.findFirst or .findUnique (R2: no stale pre-write read decides scope; the pre-R1 TOCTOU read path is also still gone)', async () => {
     const fx = await createFixture();
+    const originalFindFirst = prisma.instagramInboxEntry.findFirst.bind(prisma.instagramInboxEntry);
     const originalFindUnique = prisma.instagramInboxEntry.findUnique.bind(prisma.instagramInboxEntry);
+    let findFirstCalls = 0;
     let findUniqueCalls = 0;
+    (prisma.instagramInboxEntry as unknown as { findFirst: typeof prisma.instagramInboxEntry.findFirst }).findFirst = ((args: any) => {
+      findFirstCalls++;
+      return originalFindFirst(args);
+    }) as typeof prisma.instagramInboxEntry.findFirst;
     (prisma.instagramInboxEntry as unknown as { findUnique: typeof prisma.instagramInboxEntry.findUnique }).findUnique = ((args: any) => {
       findUniqueCalls++;
       return originalFindUnique(args);
@@ -363,13 +397,15 @@ async function main() {
         organizationId: fx.orgAId, allowedClinicIds: [fx.clinicA1Id], canAccessAllClinics: false,
       });
       assert.equal(res.statusCode, 200);
+      assert.equal(findFirstCalls, 0, 'PATCH /instagram/inbox/:id/status must not call findFirst — the authorization predicate must not depend on any pre-write read of the target row');
       assert.equal(findUniqueCalls, 0, 'PATCH /instagram/inbox/:id/status must not call findUnique — the response must come directly from the scoped write, not a later unscoped read');
     } finally {
+      (prisma.instagramInboxEntry as unknown as { findFirst: typeof prisma.instagramInboxEntry.findFirst }).findFirst = originalFindFirst;
       (prisma.instagramInboxEntry as unknown as { findUnique: typeof prisma.instagramInboxEntry.findUnique }).findUnique = originalFindUnique;
     }
   });
 
-  await test('the success response body is exactly the row returned by updateManyAndReturn under the tenant-scoped predicate', async () => {
+  await test('the success response body is exactly the row returned by updateManyAndReturn, and the write predicate carries organizationId plus the OR(clinicId IS NULL, clinicId IN allowed) clause', async () => {
     const fx = await createFixture();
     const originalUpdateManyAndReturn = prisma.instagramInboxEntry.updateManyAndReturn.bind(prisma.instagramInboxEntry);
     let capturedArgs: any = null;
@@ -388,7 +424,11 @@ async function main() {
       assert.ok(capturedArgs, 'updateManyAndReturn must have been invoked');
       assert.equal(capturedArgs.where.id, fx.entryA1Id);
       assert.equal(capturedArgs.where.organizationId, fx.orgAId);
-      assert.deepEqual(capturedArgs.where.clinicId, { in: [fx.clinicA1Id] }, 'the atomic write predicate itself must carry the tenant scope');
+      assert.deepEqual(
+        capturedArgs.where.OR,
+        [{ clinicId: null }, { clinicId: { in: [fx.clinicA1Id] } }],
+        'the atomic write predicate itself must carry the tenant scope as OR(clinicId IS NULL, clinicId IN allowed) — evaluated by PostgreSQL against the row\'s current state, not decided from any earlier read',
+      );
       assert.equal(res.statusCode, 200);
       assert.equal(Array.isArray(capturedResult) ? capturedResult.length : -1, 1);
       assert.deepEqual(res.body?.entry, capturedResult?.[0], 'response entry must be exactly the row returned by the atomic scoped write, not a separately-fetched row');
@@ -397,28 +437,51 @@ async function main() {
     }
   });
 
-  section("11. Concurrency — clinic reassignment landing between the initial lookup and the atomic write must never leak the reassigned clinic's data");
+  await test('for an unrestricted caller (OWNER), the write predicate carries no OR/clinicId clause at all — organization scope only', async () => {
+    const fx = await createFixture();
+    const originalUpdateManyAndReturn = prisma.instagramInboxEntry.updateManyAndReturn.bind(prisma.instagramInboxEntry);
+    let capturedArgs: any = null;
+    (prisma.instagramInboxEntry as unknown as { updateManyAndReturn: typeof prisma.instagramInboxEntry.updateManyAndReturn }).updateManyAndReturn = (async (args: any) => {
+      capturedArgs = args;
+      return originalUpdateManyAndReturn(args);
+    }) as typeof prisma.instagramInboxEntry.updateManyAndReturn;
+    try {
+      const res = await callPatchStatus(fx.entryA2Id, 'resolved', {
+        role: 'OWNER', normalizedRole: 'OWNER', organizationId: fx.orgAId, allowedClinicIds: [], canAccessAllClinics: true,
+      });
+      assert.equal(res.statusCode, 200);
+      assert.ok(capturedArgs, 'updateManyAndReturn must have been invoked');
+      assert.equal('OR' in capturedArgs.where, false, 'an unrestricted caller\'s write predicate must not carry a clinic-scoping OR clause');
+      assert.equal('clinicId' in capturedArgs.where, false, 'an unrestricted caller\'s write predicate must not carry a clinicId clause');
+      assert.deepEqual(Object.keys(capturedArgs.where).sort(), ['id', 'organizationId'], 'an unrestricted caller\'s write predicate must be exactly {id, organizationId}');
+    } finally {
+      (prisma.instagramInboxEntry as unknown as { updateManyAndReturn: typeof prisma.instagramInboxEntry.updateManyAndReturn }).updateManyAndReturn = originalUpdateManyAndReturn;
+    }
+  });
 
-  await test('entry legitimately in A1 when the request starts, reassigned to A2 before the atomic write executes: A1-only caller gets 404 (never the A2-owned row), and the stale-scope write does not apply', async () => {
+  section("11. Concurrency (R2) — clinic reassignment landing after authorization scope is computed but before the atomic write must never leak the reassigned clinic's data");
+
+  await test('entry legitimately in A1 when the request starts, reassigned to A2 immediately before the atomic write executes: A1-only caller gets 404 (never the A2-owned row), and the stale-scope write does not apply', async () => {
     const fx = await createFixture();
 
-    const originalFindFirst = prisma.instagramInboxEntry.findFirst.bind(prisma.instagramInboxEntry);
-    // Deterministically injects the "ownership changes after the handler's
-    // initial read but before its atomic write" race at the exact boundary
-    // it can occur at: the handler's only DB read before the atomic write is
-    // this findFirst lookup (used solely to learn whether the entry
-    // currently has a clinic at all). No sleeps, no polling, no artificial
-    // gate — the reassignment is sequenced synchronously inside the same
-    // await chain the handler itself drives, so it is guaranteed to have
-    // committed before the handler's subsequent updateManyAndReturn call
-    // evaluates its WHERE clause.
-    (prisma.instagramInboxEntry as unknown as { findFirst: typeof prisma.instagramInboxEntry.findFirst }).findFirst = (async (args: any) => {
-      const result = await originalFindFirst(args);
-      if (result && result.id === fx.entryA1Id) {
+    const originalUpdateManyAndReturn = prisma.instagramInboxEntry.updateManyAndReturn.bind(prisma.instagramInboxEntry);
+    // Deterministically injects the "ownership changes after authorization
+    // scope is computed but before the atomic write's WHERE is evaluated"
+    // race at the exact boundary it can occur at post-R2: the handler no
+    // longer performs any pre-write read of the target row at all (§10), so
+    // the reassignment is sequenced synchronously inside this spy on the
+    // handler's own updateManyAndReturn call — no sleeps, no polling, no
+    // artificial gate. Because the spy runs and `await`s the reassignment
+    // before invoking the original (real) updateManyAndReturn, the
+    // reassignment is guaranteed to have committed before the real
+    // `UPDATE ... WHERE ... RETURNING` statement executes and evaluates its
+    // predicate against the row's current state.
+    (prisma.instagramInboxEntry as unknown as { updateManyAndReturn: typeof prisma.instagramInboxEntry.updateManyAndReturn }).updateManyAndReturn = (async (args: any) => {
+      if (args?.where?.id === fx.entryA1Id) {
         await prisma.instagramInboxEntry.update({ where: { id: fx.entryA1Id }, data: { clinicId: fx.clinicA2Id } });
       }
-      return result;
-    }) as typeof prisma.instagramInboxEntry.findFirst;
+      return originalUpdateManyAndReturn(args);
+    }) as typeof prisma.instagramInboxEntry.updateManyAndReturn;
 
     try {
       const res = await callPatchStatus(fx.entryA1Id, 'resolved', {
@@ -429,12 +492,66 @@ async function main() {
       assert.equal(res.body?.error, 'Entry not found');
       assert.equal(res.body?.entry, undefined, 'no entry payload of any shape — the reassigned (A2) row must never appear in the response to the A1-only caller');
     } finally {
-      (prisma.instagramInboxEntry as unknown as { findFirst: typeof prisma.instagramInboxEntry.findFirst }).findFirst = originalFindFirst;
+      (prisma.instagramInboxEntry as unknown as { updateManyAndReturn: typeof prisma.instagramInboxEntry.updateManyAndReturn }).updateManyAndReturn = originalUpdateManyAndReturn;
     }
 
     const row = await prisma.instagramInboxEntry.findUniqueOrThrow({ where: { id: fx.entryA1Id } });
     assert.equal(row.clinicId, fx.clinicA2Id, 'the injected reassignment must actually have taken effect');
     assert.equal(row.status, 'open', 'the write must not have applied once the entry moved out of the caller\'s scope — no silent partial mutation');
+  });
+
+  await test('R2 blocking finding: entry initially UNASSIGNED (clinicId=null), reassigned to A2 immediately before the atomic write executes: A1-only caller gets 404 (never the A2-owned row), status is not modified, and no A2 row is returned', async () => {
+    const fx = await createFixture();
+    const unassigned = await prisma.instagramInboxEntry.create({
+      data: {
+        organizationId: fx.orgAId,
+        clinicId: null,
+        externalSenderId: `igsid-race-null-${randomUUID().slice(0, 8)}`,
+        senderUsername: 'race_null_sender',
+        status: 'open',
+      },
+    });
+
+    const originalUpdateManyAndReturn = prisma.instagramInboxEntry.updateManyAndReturn.bind(prisma.instagramInboxEntry);
+    // This is the exact race described in the R2 blocking finding: before
+    // this fix, the handler read `entry.clinicId` once (null at that
+    // instant) and used that stale read to decide whether to apply clinic
+    // scoping at all — a null read meant "skip clinic scoping entirely",
+    // even though PostgreSQL evaluates the write predicate against the row's
+    // *current* state, not the state at the time of that earlier read. If
+    // another writer reassigns the row from null to an inaccessible clinic
+    // (A2) after that stale read but before the write executes, the old
+    // implementation's unscoped write would still match and mutate the
+    // now-A2-owned row. Post-fix, authorization scope is computed without
+    // ever reading the target row's `clinicId`, so there is nothing for this
+    // reassignment to invalidate — the write predicate itself,
+    // `OR(clinicId IS NULL, clinicId IN allowed)`, is evaluated by
+    // PostgreSQL against the row's current (now A2) value and simply does
+    // not match. Deterministic: no sleep, no polling — the reassignment is
+    // `await`ed synchronously inside this spy, guaranteed to commit before
+    // the real updateManyAndReturn's underlying SQL statement runs.
+    (prisma.instagramInboxEntry as unknown as { updateManyAndReturn: typeof prisma.instagramInboxEntry.updateManyAndReturn }).updateManyAndReturn = (async (args: any) => {
+      if (args?.where?.id === unassigned.id) {
+        await prisma.instagramInboxEntry.update({ where: { id: unassigned.id }, data: { clinicId: fx.clinicA2Id } });
+      }
+      return originalUpdateManyAndReturn(args);
+    }) as typeof prisma.instagramInboxEntry.updateManyAndReturn;
+
+    try {
+      const res = await callPatchStatus(unassigned.id, 'resolved', {
+        role: 'CLINIC_MANAGER', normalizedRole: 'CLINIC_MANAGER',
+        organizationId: fx.orgAId, allowedClinicIds: [fx.clinicA1Id], canAccessAllClinics: false,
+      });
+      assert.equal(res.statusCode, 404);
+      assert.equal(res.body?.error, 'Entry not found');
+      assert.equal(res.body?.entry, undefined, 'no entry payload of any shape — the reassigned (A2) row must never appear in the response to the A1-only caller');
+    } finally {
+      (prisma.instagramInboxEntry as unknown as { updateManyAndReturn: typeof prisma.instagramInboxEntry.updateManyAndReturn }).updateManyAndReturn = originalUpdateManyAndReturn;
+    }
+
+    const row = await prisma.instagramInboxEntry.findUniqueOrThrow({ where: { id: unassigned.id } });
+    assert.equal(row.clinicId, fx.clinicA2Id, 'the injected null-to-A2 reassignment must actually have taken effect');
+    assert.equal(row.status, 'open', 'the write must not have applied once the entry moved to a clinic outside the caller\'s scope — the caller never modifies the status of the A2-owned row');
   });
 
   section('12. Null-clinic (unassigned) entries — accepted org-level behavior preserved (matches GET /messages and POST /reply in this same file)');
@@ -457,6 +574,74 @@ async function main() {
     assert.equal(res.statusCode, 200);
     assert.equal(res.body?.entry?.clinicId, null);
     assert.equal(await statusOf(unassigned.id), 'ignored');
+  });
+
+  section('13. Restricted user with allowedClinicIds=[] (zero clinic memberships) — the empty-array case must not be treated as unrestricted');
+
+  await test('allowedClinicIds=[] user can still mutate an unassigned (clinicId=null) entry — same org-level policy as a non-empty restricted list', async () => {
+    const fx = await createFixture();
+    const unassigned = await prisma.instagramInboxEntry.create({
+      data: {
+        organizationId: fx.orgAId,
+        clinicId: null,
+        externalSenderId: `igsid-empty-unassigned-${randomUUID().slice(0, 8)}`,
+        senderUsername: 'empty_unassigned_sender',
+        status: 'open',
+      },
+    });
+    const res = await callPatchStatus(unassigned.id, 'ignored', {
+      role: 'CLINIC_MANAGER', normalizedRole: 'CLINIC_MANAGER',
+      organizationId: fx.orgAId, allowedClinicIds: [], canAccessAllClinics: false,
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body?.entry?.clinicId, null);
+    assert.equal(await statusOf(unassigned.id), 'ignored');
+  });
+
+  await test('allowedClinicIds=[] user cannot mutate entryA1 (an assigned-clinic entry) — an empty allow-list must not fall through to unrestricted', async () => {
+    const fx = await createFixture();
+    const res = await callPatchStatus(fx.entryA1Id, 'resolved', {
+      role: 'CLINIC_MANAGER', normalizedRole: 'CLINIC_MANAGER',
+      organizationId: fx.orgAId, allowedClinicIds: [], canAccessAllClinics: false,
+    });
+    assert.equal(res.statusCode, 404);
+    assert.equal(res.body?.error, 'Entry not found');
+    assert.equal(await statusOf(fx.entryA1Id), 'open');
+  });
+
+  await test('allowedClinicIds=[] user cannot mutate entryA2 either', async () => {
+    const fx = await createFixture();
+    const res = await callPatchStatus(fx.entryA2Id, 'resolved', {
+      role: 'RECEPTIONIST', normalizedRole: 'RECEPTIONIST',
+      organizationId: fx.orgAId, allowedClinicIds: [], canAccessAllClinics: false,
+    });
+    assert.equal(res.statusCode, 404);
+    assert.equal(await statusOf(fx.entryA2Id), 'open');
+  });
+
+  await test('the write predicate for allowedClinicIds=[] is explicitly OR(clinicId IS NULL, clinicId IN []) — never omitted via truthiness', async () => {
+    const fx = await createFixture();
+    const originalUpdateManyAndReturn = prisma.instagramInboxEntry.updateManyAndReturn.bind(prisma.instagramInboxEntry);
+    let capturedArgs: any = null;
+    (prisma.instagramInboxEntry as unknown as { updateManyAndReturn: typeof prisma.instagramInboxEntry.updateManyAndReturn }).updateManyAndReturn = (async (args: any) => {
+      capturedArgs = args;
+      return originalUpdateManyAndReturn(args);
+    }) as typeof prisma.instagramInboxEntry.updateManyAndReturn;
+    try {
+      const res = await callPatchStatus(fx.entryA1Id, 'resolved', {
+        role: 'CLINIC_MANAGER', normalizedRole: 'CLINIC_MANAGER',
+        organizationId: fx.orgAId, allowedClinicIds: [], canAccessAllClinics: false,
+      });
+      assert.ok(capturedArgs, 'updateManyAndReturn must have been invoked even for an empty allow-list — the clinic predicate must never be skipped');
+      assert.deepEqual(
+        capturedArgs.where.OR,
+        [{ clinicId: null }, { clinicId: { in: [] } }],
+        'an empty allowedClinicIds must still produce an explicit OR(clinicId IS NULL, clinicId IN []) clause, not an omitted/falsy-skipped predicate',
+      );
+      assert.equal(res.statusCode, 404);
+    } finally {
+      (prisma.instagramInboxEntry as unknown as { updateManyAndReturn: typeof prisma.instagramInboxEntry.updateManyAndReturn }).updateManyAndReturn = originalUpdateManyAndReturn;
+    }
   });
 
   await cleanup();
