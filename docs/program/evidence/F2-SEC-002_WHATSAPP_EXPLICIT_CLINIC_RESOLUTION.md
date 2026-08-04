@@ -360,3 +360,347 @@ run.
   appended to the existing, already-CI-owned `server:test:disposable-db` aggregate — not a new
   CI mechanism).
 - Stage 2 Imaging remains blocked; this task did not touch imaging code or evidence.
+
+---
+
+## 14. R1 — Bind the request to one explicit connection credential + organization consistency
+
+Follow-up task on the same PR/branch (`fix/f2-sec-002-whatsapp-explicit-clinic-resolution`,
+PR #319), starting from the R0 head `e53116c393d02be900ce48e187e1d90c59a6d015` (the commit
+covered by §1-§13 above). Triggered by two blocking findings from re-review of that head.
+
+### 14.1 Blocking finding 1 — R0 was global uniqueness, not request binding
+
+R0's `getExplicitPublicApiClinic()` selected the clinic by requiring exactly one active Evolution
+`WhatsAppConnection` **globally** (`prisma.whatsAppConnection.findMany({ where: { isActive: true,
+provider: 'evolution_api' } })` with no `where` clause tying the query to anything in the
+request). The request carried a credential (`WHATSAPP_WEBHOOK_SECRET` via `authorizeWhatsappApi`)
+but that credential was never used to select *which* connection — it only gated whether the
+request was allowed to proceed at all. Consequences, exactly as flagged:
+
+- With two organizations each correctly configuring their own Evolution connection, the API
+  failed closed for **both** (`activeConnections.length === 2` → ambiguous → 404) — not a
+  tenant-safe outcome, just an availability failure with no path for either tenant to be served.
+- With only one organization configured, any caller holding the single global shared secret was
+  routed to that org's clinic — the secret carried no tenant identity, so "administrator secret"
+  and "Clinic B's own secret" were indistinguishable.
+- The R0 test named `Organization A request cannot fall through to Organization B when only B has
+  a binding` did not construct an Org-A-owned credential at all — it asserted that the *only*
+  configured org (labelled "B") received the write, which is precisely the behavior being
+  reviewed as unsafe, not evidence against it. Removed in R1 (§14.6).
+
+### 14.2 Blocking finding 2 — organization denormalization was never verified
+
+`WhatsAppConnection.organizationId`, `ClinicWhatsAppConnection.organizationId`, and
+`Clinic.organizationId` are three independently-writable columns (no compound DB constraint ties
+them together — confirmed by re-reading `server/prisma/schema.prisma:1662-1734`; `@@unique` on
+`ClinicWhatsAppConnection` is `[clinicId, whatsappConnectionId]` only, no organization
+cross-check). R0's resolver joined by `clinicId`/`whatsappConnectionId` alone and never compared
+these three `organizationId` values. A stale or corrupted cross-org link (e.g. a
+`ClinicWhatsAppConnection` row whose `organizationId` disagrees with either its `clinic` or its
+`whatsappConnection`) would have resolved and served silently.
+
+### 14.3 Root-cause inspection (targeted paths only, no full-repo scan)
+
+- `server/src/routes/whatsapp.ts` — `authorizeWhatsappApi` (global-secret-only gate, no
+  connection identity) and `getExplicitPublicApiClinic()` (global uniqueness, no org check); both
+  replaced (§14.4).
+- `server/src/services/whatsappPublicApi.ts` — `getProvidedWhatsappSecret()` (existing header
+  parser: `Authorization: Bearer <secret>` or `x-whatsapp-secret`, already used, reused verbatim,
+  not reimplemented) and `validateWhatsappApiSecret()` (still used, unchanged, only by
+  `authorizeWhatsappWebhook` for `/evolution-webhook`, which R1 does not touch — see §14.8).
+- `server/src/utils/encryption.ts` — `decryptSecretTagged()`: AES-256-GCM, `enc:v1:` version
+  prefix, legacy-plaintext-compatible (returns the value as-is if it has no `enc:v1:` prefix, so
+  a connection created before this task's fix or manually seeded with a plaintext secret still
+  works). Reused verbatim.
+- `server/src/utils/webhookRouting.ts` — `resolveSingleLinkedClinic()` reused verbatim (unchanged
+  from R0); `selectUniqueProviderConnection()` is no longer used by the R1 resolver (replaced by
+  an explicit secret-match filter that also needs `organizationId`/`webhookSecret` per row) but
+  remains unchanged and still used elsewhere in this same file (`/evolution-webhook`'s DB-based
+  instance resolution) and by `routes/metaWhatsAppWebhook.ts` — not touched.
+- `server/src/routes/metaWhatsAppWebhook.ts` — read only, as the existing precedent for
+  connection-owned `webhookSecret` usage (`decryptSecretTagged(connection.metaWebhookSecret) ||
+  decryptSecretTagged(connection.webhookSecret)`, `server/src/routes/metaWhatsAppWebhook.ts:231`).
+  Confirms `WhatsAppConnection.webhookSecret` is an established, already-shipped per-connection
+  credential field, not a new concept introduced by this task.
+- `server/prisma/schema.prisma:1662-1734` (`WhatsAppConnection`, `ClinicWhatsAppConnection`) —
+  read only. No column added, no constraint added.
+- `server/src/tests/dbVerification/whatsappPublicApiExplicitClinicBinding.test.ts` — the R0
+  focused suite; extended in place (§14.6), not replaced.
+
+**Answers to the mandatory root-cause questions:**
+
+1. Exact header credential accepted: `x-whatsapp-secret` or `Authorization: Bearer <secret>`
+   (`getProvidedWhatsappSecret`, unchanged).
+2. Existing per-connection credential fields on `WhatsAppConnection`: `webhookSecret` (generic,
+   provider-agnostic), `evolutionApiKeyEncrypted` (Evolution API's *outbound* API key — used by
+   this server to call Evolution, not a credential Evolution/a caller presents back to this
+   server — wrong direction for this use case, not used), `metaWebhookSecret` (Meta-specific,
+   not applicable to the Evolution-only legacy public API).
+3. Encryption format: `enc:v1:<iv(24 hex)><authTag(32 hex)><ciphertext(hex)>`, AES-256-GCM,
+   `decryptSecretTagged()` (legacy-plaintext-compatible, see §14.3).
+4. `WhatsAppConnection.webhookSecret` is tagged-encrypted-with-legacy-plaintext-fallback (schema
+   comment `server/prisma/schema.prisma:1697`: "Shared webhook secret for this connection —
+   encrypted at rest (enc:v1: prefix)"), and is **already used for connection-specific
+   verification elsewhere** — `metaWhatsAppWebhook.ts` (§14.3) uses it as an HMAC key for
+   `X-Hub-Signature-256`. R1 is the first place it is used for **direct** secret comparison
+   (Evolution's legacy public API presents the secret itself, not an HMAC signature), which is
+   the correct usage for this route shape and does not change how the column itself is written.
+5. `WHATSAPP_WEBHOOK_SECRET` is retained, but only as LEGACY_SINGLE_CONNECTION_COMPATIBILITY —
+   see §14.5.
+6. No-migration implementation: confirmed possible and implemented — `webhookSecret` already
+   exists on `WhatsAppConnection` (added before this task), already nullable (so existing
+   connections created without one keep working via LEGACY_SINGLE_CONNECTION_COMPATIBILITY, no
+   backfill required), already has an established decrypt helper and an established sibling usage
+   pattern (`metaWhatsAppWebhook.ts`). No schema change, no migration — see §14.9.
+
+### 14.4 Fix — connection-bound authorization + resolution (`server/src/routes/whatsapp.ts`)
+
+`authorizeWhatsappApi` (global-secret-only middleware) and `getExplicitPublicApiClinic()`
+(global-uniqueness-only resolver) are removed and replaced by three functions plus one middleware,
+implementing the exact AUTHORIZATION ORDER required (parse → verify against connection-specific
+config → resolve one connection → resolve one clinic link → validate org consistency → load
+clinic → only then let the route body run):
+
+- `timingSafeSecretEquals(provided, candidate)` — `Buffer.from(..., 'utf8')` + length check +
+  `crypto.timingSafeEqual`. Length is checked before calling `timingSafeEqual` (which throws on
+  mismatched buffer lengths); this is the same length-then-constant-time-compare shape already
+  used in `server/src/utils/totp.ts:97`, not a new pattern.
+- `tryDecryptConnectionSecret(value)` — wraps `decryptSecretTagged()` in a try/catch that returns
+  `null` on any decryption failure, so one corrupted/undecryptable row can never take down
+  resolution for the rest of the active connections, and no partial ciphertext or error detail is
+  ever logged.
+- `resolveWhatsappPublicApiConnection(providedSecret)` — queries `{ isActive: true, provider:
+  'evolution_api' }` (same scope as R0 — Meta connections still cannot participate, §14.3/§9
+  scenario "mixed provider", now also directly tested against a Meta connection sharing the exact
+  secret value, §14.6). Filters to connections whose decrypted `webhookSecret` constant-time-equals
+  the provided secret. Exactly one match → resolved (`source: 'connection_secret'`). Zero or more
+  than one match → falls through to (zero) the legacy path, or (more than one) fails closed
+  immediately — a secret shared by two connections is never "first-matched."
+- `resolveWhatsappPublicApiClinic(providedSecret)` — takes the resolved connection and adds the
+  organization-consistency invariant (§14.5's core: `connection.organizationId ===
+  clinicLink.organizationId === clinic.organizationId`), plus the existing R0
+  `resolveSingleLinkedClinic` uniqueness check and a `clinic` row-existence check.
+- `authorizeAndResolveWhatsappPublicApi` — the single middleware installed on all 6 routes,
+  replacing `authorizeWhatsappApi`. Parses the credential; 401 if absent (no DB read at all).
+  Otherwise runs full resolution; 404 on any failure (§14.7 explains why this collapsed from R0's
+  401-for-invalid-secret). On success, attaches the verified `Clinic` row to
+  `req.whatsappPublicApiClinic` and calls `next()`. Wrapped in try/catch → 500 on unexpected
+  errors (e.g. `ENCRYPTION_KEY` misconfigured), matching the existing route-level error-handling
+  convention in this file.
+- All 6 route bodies now read `(req as WhatsappPublicApiRequest).whatsappPublicApiClinic!` instead
+  of calling a resolver themselves — this is what guarantees "all six routes use the same
+  connection-bound resolver" structurally, not just by test coverage.
+
+### 14.5 LEGACY_SINGLE_CONNECTION_COMPATIBILITY (retained, explicitly classified)
+
+`WHATSAPP_WEBHOOK_SECRET` cannot identify a tenant (it is one global value), so it is never the
+normal multi-tenant resolution mechanism. It is accepted **only** when, in order:
+
+1. Connection-specific matching (§14.4) found **zero** candidates (a connection-specific secret,
+   if present, always wins — "prefer connection-specific first").
+2. `WHATSAPP_WEBHOOK_SECRET` is configured and the provided secret constant-time-equals it.
+3. Exactly **one** active Evolution `WhatsAppConnection` exists globally.
+
+If (3) fails (zero, or two-or-more, active connections) the legacy path itself fails closed —
+verified directly: `[whatsapp-public-api] legacy global secret rejected — not a single-connection
+topology` fires and the request 404s (test log, §14.10) even though the secret matched the exact
+correct global value. The moment a second connection exists anywhere in the system, this path
+stops matching anything; it never guesses which of the two connections the caller meant. This
+satisfies every one of the required conditions: exactly one active connection, exactly one clinic
+link (checked downstream in `resolveWhatsappPublicApiClinic`, same as R0), organization
+consistency (§14.6 cross-org tests exercise this against the legacy path too via the pre-existing
+R0 scenarios, all of which still use no-connection-secret fixtures and therefore always resolve
+through this exact path), the global secret matching, and zero/multiple-connection deployments
+failing closed. It is labelled `LEGACY_SINGLE_CONNECTION_COMPATIBILITY` in both the source
+(`resolveWhatsappPublicApiConnection`'s `source` field and its `console.warn`) and this evidence
+document, and is described here only as a compatibility shim for the genuine single-tenant
+deployment this API predates multi-tenancy for — never as the target architecture. The target
+architecture is connection-specific `webhookSecret` matching (§14.4), which every R1 test proves
+resolves independently of how many other active connections exist in the system (§14.6).
+
+### 14.6 Tests — `server/src/tests/dbVerification/whatsappPublicApiExplicitClinicBinding.test.ts`
+
+Extended in place (not replaced). Every R0 scenario is preserved with its original assertions,
+**except**:
+
+- The misleading test `Organization A request cannot fall through to Organization B when only B
+  has a binding` is **removed** — per TEST INTEGRITY, a request cannot be called "Organization
+  A's" without an A-owned credential, and that test had none; its premise (a single configured org
+  receiving the write) is not evidence of cross-tenant isolation. It is not "corrected" in place
+  because there is no way to correct it into a true A-vs-B isolation test without a
+  connection-specific credential — which is exactly what the new R1 section below provides,
+  properly, for both directions.
+- `a secret that is present but matches nothing ... : creates no appointment request` (formerly
+  "invalid secret ... 401") is updated from `401` to `404`. This is a deliberate, documented
+  status-code change, not an accidental weakening: NON-ENUMERATION requires that once a credential
+  is presented, "wrong secret" and "right secret but ambiguous/cross-org topology" be
+  indistinguishable from the outside — under R1 a 404 no longer means "this deployment has no
+  connections," it can also mean "your secret doesn't belong to any connection," so collapsing
+  both into the same generic 404 is what non-enumeration requires. The `missing secret header`
+  test is **unchanged** at `401`, because header-presence is checked before any database read and
+  therefore reveals nothing about connection/tenant state — this is the one distinction R1
+  preserves, and it is explicitly called out in the AUTHORIZATION ORDER code comment
+  (`server/src/routes/whatsapp.ts`, §14.4) as the reason it is not folded into the same 404.
+
+New section `R1 — connection-specific secret binds the request to exactly one connection-owned
+clinic` (12 new scenarios, all real-DB, no mocked secret comparison, no mocked Prisma):
+
+1. Two simultaneously active connections, each with its own connection-specific secret: all 4 GET
+   routes (`/services`, `/doctors`, `/appointment-lookup`, `/availability`) resolve strictly to
+   their own clinic for each secret; a cross-check (secret A + clinic B's `appointmentTypeId`)
+   returns 404, proving genuine binding rather than "some clinic happened to respond 200."
+2. The same topology for both POST routes (`/appointment-requests`, `/cancel-request`): secret A's
+   write and secret B's write are each counted (`countAppointmentRequests`) to prove secret A never
+   wrote to clinic B and vice versa — not merely that each individual call returned the expected
+   `clinicId` in its response. Also includes a spoofed `clinicId=B` in the body while authenticated
+   as A: still resolves/writes to A only, count on B unchanged (extends R0's spoofed-`clinicId`
+   coverage, §9, to the connection-specific path).
+   — Together, (1) and (2) touch all 6 routes with connection-specific credentials, which is the
+   direct evidence for "all six routes use the same connection-bound resolver" (§14.4).
+3. Unknown/garbage secret with connection-specific secrets already configured elsewhere: 404, row
+   count unchanged.
+4. The same `webhookSecret` value configured on two different active connections (a
+   misconfiguration, not an attack): ambiguous credential, fails closed, zero writes to either
+   clinic — proves "no first-match" for the connection-specific path, matching the R0 legacy-path
+   equivalent already covered.
+5. One connection (with its own secret) linked to two clinics: fails closed, same
+   `resolveSingleLinkedClinic` check as R0, now exercised via the connection-specific path too.
+6. Cross-org denormalization, variant 1: `ClinicWhatsAppConnection.organizationId` disagrees with
+   the connection's real `organizationId` (link falsely claims org B while both the connection and
+   the clinic it points at are genuinely org A's). Constructed by direct `prisma.clinicWhatsAppConnection.create`
+   (bypassing the test's own `linkClinicConnection` helper, which always writes a consistent
+   `organizationId`) — this is the only way to reach the corrupted-link state, since the app code
+   itself never writes an inconsistent link. Fails closed, zero writes, caught by the
+   connection-vs-link check.
+7. Cross-org denormalization, variant 2: the link's `organizationId` matches the connection
+   (passes check 6's check) but the `Clinic` row it points at genuinely belongs to a different
+   organization. Fails closed, zero writes, caught by the connection-vs-clinic check — proves both
+   halves of the `connection.organizationId === clinicLink.organizationId ===
+   clinic.organizationId` invariant are independently enforced, not just one of the two equalities.
+8. Missing clinic row: a `ClinicWhatsAppConnection` link pointing at a clinic that no longer
+   exists. **Not reachable through any normal application code path** — `Clinic` is the referenced
+   (parent) side of a real Postgres foreign key from `ClinicWhatsAppConnection.clinicId` with no
+   `onDelete` override (default `NO ACTION`/restrict), so the database itself refuses to delete a
+   `Clinic` row that is still linked. Reproduced only by temporarily running `ALTER TABLE "Clinic"
+   DISABLE TRIGGER ALL` (disabling the FK-enforcement trigger that lives on the parent table),
+   deleting the clinic row inside a `try`, then `ALTER TABLE "Clinic" ENABLE TRIGGER ALL` in a
+   `finally` (always re-enabled, even on assertion failure) — the same category of raw-SQL
+   table-level technique already used elsewhere in this suite family
+   (`server/src/tests/retentionManualRunAudit.test.ts`, `RENAME TABLE ... test_disabled`, for an
+   analogous "simulate a state the schema itself prevents" need). Confirms the resolver's own
+   defensive `if (!clinic) return null` (§14.4) is exercised, not merely present in source.
+9. Inactive connection: its **own** connection-specific secret never matches, even when provided
+   correctly — the `isActive: true` filter excludes it from the query entirely, so there is no
+   secret-comparison branch that could accidentally match an inactive row. Strengthens R0's
+   inactive-connection test (which only covered the legacy path).
+10. A Meta Cloud connection whose `webhookSecret` is set to the exact same value as a caller's
+    request: the `provider: 'evolution_api'` filter excludes it from the query before any secret
+    comparison happens, so it does not participate at all — strengthens R0's mixed-provider test
+    (which only proved a Meta connection doesn't cause spurious *ambiguity*; this proves it also
+    cannot itself be *matched*).
+
+**Regression-catching proof (R1, in addition to R0's own §9's proof):** with `server/src/routes/whatsapp.ts`
+reverted to the exact R0 head (`git show e53116c393d02be900ce48e187e1d90c59a6d015:server/src/routes/whatsapp.ts`,
+restored via a scratch-directory copy-swap, not a git operation on this branch) and the R1 test
+file left as-is, the same run reports **18 passed, 11 failed** — the 11 failures are exactly the
+12 new R1 scenarios' assertions minus one (the "unknown secret" test at old-401-vs-new-404 also
+fails, listed among the 11; scenarios 1 and 2 above are two `isolatedTest` calls each producing
+one failure, and every cross-org/missing-clinic/inactive-secret/meta-secret scenario fails with
+`401 !== 404` because the R0 code path never reaches connection-specific resolution at all — it
+either 401s on the global-secret mismatch or never distinguishes topology). Full failing-test list
+recorded in §14.10. `server/src/routes/whatsapp.ts` was restored to the R1 head immediately after
+this check (`cp` from a pre-saved scratch copy) and re-verified at 29/29 passing before any commit
+was made — the revert was never committed, staged, or pushed.
+
+### 14.7 Non-enumeration (updated)
+
+Once a credential is presented (any non-empty value), every one of the following returns the
+exact same `404 { error: 'Clinic not found' }`, with the response body never containing a
+`clinic` field of any kind: unknown secret, secret shared by multiple connections, zero/multiple
+clinic links, cross-org denormalization (either half of the invariant), missing clinic row,
+zero-or-multiple active connections under the legacy path. Only a **completely absent** credential
+short-circuits before any database read, at `401` — this is unchanged from R0 and is not a
+topology/secret-mismatch distinction (§14.6). Internal `console.warn` logs (§14.4) carry only
+counts (`activeConnectionCount`, `matchCount`, `linkedClinicCount`) or fixed diagnostic strings —
+never a connection id, clinic id, organization id, or secret value/fragment.
+
+### 14.8 Scope discipline (R1)
+
+- No Prisma schema change, no migration (`webhookSecret` already existed on `WhatsAppConnection`
+  before this task — confirmed in §14.3).
+- `authorizeWhatsappWebhook` (used only by `POST /evolution-webhook`) and
+  `resolveClinicForIncomingMessage`/`clinicResolver.ts` (used only by that same route) are
+  untouched — that route already performs its own DB-based, per-instance connection resolution
+  (Sprint 11) and was never part of either blocking finding, which are both scoped to the 6
+  secret-gated REST-style routes.
+- `server/src/services/whatsappPublicApi.ts` was **not** modified — `getProvidedWhatsappSecret`
+  and `validateWhatsappApiSecret` were both already exported; only the import list in
+  `whatsapp.ts` changed to also pull in the former.
+- F2-SEC-001, Meta webhook route logic (beyond reading its existing `webhookSecret` usage
+  pattern), appointment business logic, consent flows, AI flows, and shared program-control docs
+  were not touched.
+
+### 14.9 Migration / compatibility / rollback (R1)
+
+- **Migration:** none. `WhatsAppConnection.webhookSecret` already exists and is already nullable;
+  no backfill was needed or performed.
+- **Backward compatibility:** a deployment with exactly one active Evolution connection and no
+  connection-specific `webhookSecret` configured (i.e. every existing R0-shaped fixture and, by
+  extension, every genuinely single-tenant production deployment using only
+  `WHATSAPP_WEBHOOK_SECRET` today) continues to work identically via
+  LEGACY_SINGLE_CONNECTION_COMPATIBILITY (§14.5) — verified by every R0-era test in §9 still
+  passing unmodified except the one deliberate 401→404 status-code correction (§14.6). A
+  deployment with two or more active connections previously failed closed under R0 for a different
+  reason (unconditional global-uniqueness ambiguity) and continues to fail closed under R1 unless
+  each connection is given its own `webhookSecret` — this is the intended remediation path, not a
+  new regression: operators with more than one Evolution connection must set a per-connection
+  secret to regain multi-tenant service; the previous behavior (silently serving whichever single
+  connection existed) is what BLOCKING FINDING 1 identified as unsafe.
+- **Rollback:** revert this follow-up commit (returns `server/src/routes/whatsapp.ts` and the
+  focused test file to the R0 head `e53116c393d02be900ce48e187e1d90c59a6d015`). No migration
+  rollback (none applied), no data rollback, no infrastructure/queue/provider-configuration
+  rollback. Reverting reopens both R1 blocking findings; R0's own fix (removing the
+  global-default-clinic fallback) remains intact either way.
+
+### 14.10 Exact commands, counts, and run IDs (R1)
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `npx tsx src/tests/dbVerification/whatsappPublicApiExplicitClinicBinding.test.ts` (focused, standalone disposable Postgres) | **29 passed, 0 failed** (20 R0 scenarios, 1 status-code correction folded into an existing scenario, 12 new R1 scenarios — net +9 test cases vs. R0's 20) |
+| 2 | Regression proof: same command, `server/src/routes/whatsapp.ts` swapped to the exact R0 head, test file unchanged | **18 passed, 11 failed** — failing: the corrected invalid-secret test, both new all-six-routes connection-specific-binding tests, unknown-secret-with-connections-configured, duplicate-secret-ambiguity, connection-linked-to-two-clinics (secret variant), both cross-org denormalization variants, missing-clinic-row, inactive-connection-secret, Meta-connection-secret-exclusion. `server/src/routes/whatsapp.ts` restored to the R1 head immediately after; re-verified at 29/29 before proceeding. |
+| 3 | `npx tsx src/tests/whatsappProvider.test.ts` (`test:whatsapp`) | 143 passed, 0 failed (53 + 90, unchanged from R0) |
+| 4 | `npx tsx src/tests/whatsappInbox.test.ts` (`test:inbox`) | 25 passed, 0 failed (unchanged from R0) |
+| 5 | `npm run test:meta-wa` (4 files) | 17 + 9 + 12 + 62 = 100 passed, 0 failed (unchanged from R0) |
+| 6 | `npx tsx src/tests/organizationMessagingConnectionScope.test.ts` (`test:messaging-connection-scope`) | 33 passed, 0 failed (unchanged from R0; pre-existing unrelated `Failed to log activity` console noise from an unrelated fixture path, present in R0 too, does not affect the pass count) |
+| 7 | `npx tsx src/tests/multiBranchAccess.test.ts` (`test:roles`) | 142 passed, 0 failed (unchanged from R0) |
+| 8 | `npm run typecheck` (server) — `prisma generate` + `tsc --noEmit` | clean, zero errors |
+| 9 | `git diff --check` | clean |
+| 10 | `npm run test:runtime:postgres` (root orchestrator — official disposable-Postgres run, includes the R1-extended test as part of `server:test:disposable-db`) | see below |
+
+**Official disposable-Postgres orchestrator run (R1):**
+
+- Run ID: `20260804T083221Z-2032c986-16808`
+- Profile: `postgres`
+- Container: `nmtest-pg-postgres-20260804t083221z-2032c986-16808`
+- Network: `nmtest-net-postgres-20260804t083221z-2032c986-16808`
+- Database: `nmtest_postgres_20260804t083221z_2032c986_16808`
+- Migration: `{ "code": 0, "step": "ok" }`
+- Test (`server:test:disposable-db`, 15 member scripts, same aggregate membership as R0): `{
+  "code": 0 }` — every member script's own reported pass count is 0-failed, including
+  `whatsappPublicApiExplicitClinicBinding: 29 passed, 0 failed`.
+- Cleanup: `{ "success": true, "errors": [] }`
+- Outcome: `{ "exitCode": 0, "reasons": ["tests passed", "cleanup succeeded"] }`
+- Residual Docker resources after run: `docker ps -a --filter name=nmtest` and
+  `docker network ls --filter name=nmtest` both empty — zero residual containers/networks.
+
+Full-suite escalation criteria (shared tenant/auth primitives changed, shared WhatsApp processing
+changed broadly, focused tests exposed a regression, or CI policy requires it) were not met for
+the same reasons as R0 (§9): the change is scoped to one route file's public-API resolver plus its
+own focused test; `clinicResolver.ts`, `/evolution-webhook`, and Meta/Instagram code are untouched.
+Full `server:test` (77-member legacy aggregate) was not additionally run.
+
+### 14.11 R1 program-control status (unchanged)
+
+Same as §13 — F2-SEC-001, shared program-control files, CI guardrail authorization, and Stage 2
+Imaging were not touched by this follow-up task either.

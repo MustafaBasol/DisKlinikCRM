@@ -39,6 +39,7 @@ import {
 } from '../services/whatsappWebhookPayload.js';
 import {
   validateWhatsappApiSecret,
+  getProvidedWhatsappSecret,
   whatsappAppointmentLookupQuerySchema,
   whatsappAppointmentRequestSchema,
   whatsappAvailabilityQuerySchema,
@@ -52,6 +53,8 @@ import { formatTurkishDateLong, normalizeDateFromTurkishInput, WHATSAPP_ASSISTAN
 import { getZonedDateParts, minutesToTime, timeToMinutes, formatClinicDateTime, localDateTimeToClinicDate } from '../utils/helpers.js';
 import { isLegacyFallbackEnabled } from '../utils/legacyWhatsApp.js';
 import { selectUniqueProviderConnection, resolveSingleLinkedClinic } from '../utils/webhookRouting.js';
+import { decryptSecretTagged } from '../utils/encryption.js';
+import { timingSafeEqual } from 'crypto';
 import { sanitizeInboundMessageText } from '../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../utils/inboundRateLimiter.js';
 import { splitNameForPatient, titleCaseName } from '../utils/patientName.js';
@@ -190,20 +193,6 @@ const authorizeWhatsappWebhook: express.RequestHandler = (req, res, next) => {
   }
   if (validationResult === 'invalid') {
     return res.status(401).json({ error: 'Invalid WhatsApp webhook secret' });
-  }
-  next();
-};
-
-const authorizeWhatsappApi: express.RequestHandler = (req, res, next) => {
-  const validationResult = validateWhatsappApiSecret(process.env.WHATSAPP_WEBHOOK_SECRET, {
-    authorization: req.headers.authorization,
-    xWhatsappSecret: req.headers['x-whatsapp-secret'],
-  });
-  if (validationResult === 'not_configured') {
-    return res.status(503).json({ error: 'WhatsApp API secret is not configured' });
-  }
-  if (validationResult === 'invalid') {
-    return res.status(401).json({ error: 'Invalid WhatsApp API secret' });
   }
   next();
 };
@@ -1104,51 +1093,199 @@ const getClinicForWhatsAppInstance = async (instanceName?: string | null) => {
   return null;
 };
 
+// ---- Legacy public API: connection-bound authorization + clinic resolution (F2-SEC-002 R1) ----
+//
+// The legacy secret-gated public API (GET/POST /api/public/whatsapp/*) carries no
+// per-request clinic/org/instance identity of its own. R0 required exactly one
+// active Evolution WhatsAppConnection to exist *globally* — that is uniqueness,
+// not request binding: any caller holding the one shared secret was routed to
+// whichever single connection happened to be configured, and two legitimately
+// configured tenants made the whole API fail closed. R1 fixes this by requiring
+// the request's own secret to identify exactly one connection.
+//
+// AUTHORIZATION ORDER (do not reorder):
+//   1. Parse the credential from the request (Authorization: Bearer / x-whatsapp-secret).
+//   2. Verify it against each active Evolution connection's own `webhookSecret`
+//      (constant-time compare on the decrypted value) — this IS the tenant signal.
+//   3. Resolve to exactly one connection. A secret shared by zero, or by more than
+//      one, active connection never resolves (no first-match).
+//   4. Resolve exactly one ClinicWhatsAppConnection link for that connection.
+//   5. Verify organization consistency: connection.organizationId ===
+//      clinicLink.organizationId === clinic.organizationId. A stale/corrupted
+//      cross-org link fails closed even if steps 1-4 all succeeded.
+//   6. Load the clinic row itself (a link pointing at a since-deleted clinic fails closed).
+//   7. Only then may the route body perform any tenant read/write.
+//
+// LEGACY_SINGLE_CONNECTION_COMPATIBILITY: WHATSAPP_WEBHOOK_SECRET is a single
+// global value and cannot identify a tenant, so it is never treated as the normal
+// multi-tenant resolution mechanism. It is accepted ONLY when connection-specific
+// matching finds zero candidates AND exactly one active Evolution connection
+// exists globally AND that connection resolves to exactly one org-consistent
+// clinic link — i.e. the genuine single-tenant deployment this API predates
+// multi-tenancy for. The moment a second connection exists, this path stops
+// matching anything and the request must fail closed (never picks one of the two).
+//
+// Non-enumeration: once a credential is present, every resolution failure —
+// unknown secret, secret shared by multiple connections, missing/ambiguous
+// clinic link, org-consistency mismatch, missing clinic row — returns the exact
+// same generic 404 response. Only "no credential presented at all" is
+// distinguished (401), since that check runs before any database read and
+// reveals nothing about tenant/connection state.
+
+const timingSafeSecretEquals = (provided: string, candidate: string): boolean => {
+  const providedBuffer = Buffer.from(provided, 'utf8');
+  const candidateBuffer = Buffer.from(candidate, 'utf8');
+  if (providedBuffer.length !== candidateBuffer.length) return false;
+  return timingSafeEqual(providedBuffer, candidateBuffer);
+};
+
+const tryDecryptConnectionSecret = (value: string | null): string | null => {
+  if (!value) return null;
+  try {
+    return decryptSecretTagged(value);
+  } catch {
+    // Corrupted/undecryptable secret on one row must never take down resolution
+    // for the rest, and must never be logged (it may contain partial ciphertext).
+    return null;
+  }
+};
+
+type WhatsappPublicApiConnectionMatch = {
+  connectionId: string;
+  organizationId: string;
+  source: 'connection_secret' | 'LEGACY_SINGLE_CONNECTION_COMPATIBILITY';
+};
+
 /**
- * Resolves the single clinic explicitly bound to WhatsApp for the legacy
- * secret-gated public API (GET/POST /api/public/whatsapp/*). Unlike the
- * Evolution webhook, these routes carry no per-request instance/connection
- * identity — only the shared WHATSAPP_WEBHOOK_SECRET — so the only trustworthy
- * tenant signal is the server's own WhatsApp connection configuration.
- *
- * Reuses the same explicit-binding primitives as the DB-based webhook
- * resolution (selectUniqueProviderConnection, resolveSingleLinkedClinic):
- * requires exactly one active WhatsAppConnection, linked to exactly one
- * clinic via ClinicWhatsAppConnection. Zero or multiple matches fail closed
- * (returns null) — never a global/first-created/default clinic.
- *
- * Scoped to provider: 'evolution_api' — this whole file (including
- * /evolution-webhook and getClinicForWhatsAppInstance above) is the Evolution
- * API integration; Meta Cloud API has its own separate webhook route
- * (routes/metaWhatsAppWebhook.ts). An active Meta connection must not make
- * this Evolution-only legacy API spuriously ambiguous.
+ * Resolves the caller-presented secret to exactly one active Evolution
+ * WhatsAppConnection. Connection-specific `webhookSecret` is checked first
+ * (preferred, tenant-identifying); the global WHATSAPP_WEBHOOK_SECRET is only
+ * ever accepted as LEGACY_SINGLE_CONNECTION_COMPATIBILITY — see block comment above.
  */
-const getExplicitPublicApiClinic = async () => {
+const resolveWhatsappPublicApiConnection = async (
+  providedSecret: string,
+): Promise<WhatsappPublicApiConnectionMatch | null> => {
   const activeConnections = await prisma.whatsAppConnection.findMany({
     where: { isActive: true, provider: 'evolution_api' },
-    select: { id: true },
+    select: { id: true, organizationId: true, webhookSecret: true },
   });
-  const uniqueConnection = selectUniqueProviderConnection(activeConnections);
-  if (!uniqueConnection) {
-    console.warn('[whatsapp-public-api] no unambiguous active WhatsApp connection', {
+
+  const secretMatches = activeConnections.filter(connection => {
+    const decrypted = tryDecryptConnectionSecret(connection.webhookSecret);
+    return Boolean(decrypted) && timingSafeSecretEquals(providedSecret, decrypted!);
+  });
+
+  if (secretMatches.length === 1) {
+    const match = secretMatches[0];
+    return { connectionId: match.id, organizationId: match.organizationId, source: 'connection_secret' };
+  }
+
+  if (secretMatches.length > 1) {
+    console.warn('[whatsapp-public-api] secret matches multiple connections, fails closed', {
+      matchCount: secretMatches.length,
+    });
+    return null;
+  }
+
+  // Zero connection-specific matches — the only remaining possibility is the
+  // legacy global-secret compatibility path, and only under a strict
+  // single-connection topology.
+  const globalSecret = process.env.WHATSAPP_WEBHOOK_SECRET?.trim();
+  if (!globalSecret || !timingSafeSecretEquals(providedSecret, globalSecret)) {
+    console.warn('[whatsapp-public-api] no connection credential match', {
+      activeConnectionCount: activeConnections.length,
+    });
+    return null;
+  }
+  if (activeConnections.length !== 1) {
+    console.warn('[whatsapp-public-api] legacy global secret rejected — not a single-connection topology', {
       activeConnectionCount: activeConnections.length,
     });
     return null;
   }
 
+  const onlyConnection = activeConnections[0];
+  console.warn('[whatsapp-public-api] resolved via LEGACY_SINGLE_CONNECTION_COMPATIBILITY', {
+    activeConnectionCount: activeConnections.length,
+  });
+  return {
+    connectionId: onlyConnection.id,
+    organizationId: onlyConnection.organizationId,
+    source: 'LEGACY_SINGLE_CONNECTION_COMPATIBILITY',
+  };
+};
+
+/**
+ * Full R1 resolution: credential → connection → clinic link → organization
+ * consistency → clinic row. Returns null on any failure (see block comment above
+ * for the exact reject list) — callers must map null to a single generic failure
+ * response, never distinguishing the reason externally.
+ */
+const resolveWhatsappPublicApiClinic = async (providedSecret: string) => {
+  const connectionMatch = await resolveWhatsappPublicApiConnection(providedSecret);
+  if (!connectionMatch) return null;
+
   const clinicLinks = await prisma.clinicWhatsAppConnection.findMany({
-    where: { whatsappConnectionId: uniqueConnection.id },
-    select: { clinicId: true },
+    where: { whatsappConnectionId: connectionMatch.connectionId },
+    select: { clinicId: true, organizationId: true },
   });
   const clinicId = resolveSingleLinkedClinic(clinicLinks);
   if (!clinicId) {
-    console.warn('[whatsapp-public-api] no unambiguous clinic binding for WhatsApp connection', {
+    console.warn('[whatsapp-public-api] no unambiguous clinic binding for resolved connection', {
       linkedClinicCount: clinicLinks.length,
     });
     return null;
   }
 
-  return prisma.clinic.findUnique({ where: { id: clinicId } });
+  const link = clinicLinks[0]!;
+  if (link.organizationId !== connectionMatch.organizationId) {
+    console.warn('[whatsapp-public-api] cross-org denormalization: clinic link organization mismatch');
+    return null;
+  }
+
+  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId } });
+  if (!clinic) {
+    console.warn('[whatsapp-public-api] resolved clinic link points at a missing clinic row');
+    return null;
+  }
+  if (clinic.organizationId !== connectionMatch.organizationId) {
+    console.warn('[whatsapp-public-api] cross-org denormalization: clinic organization mismatch');
+    return null;
+  }
+
+  return clinic;
+};
+
+type WhatsappPublicApiClinic = NonNullable<Awaited<ReturnType<typeof resolveWhatsappPublicApiClinic>>>;
+type WhatsappPublicApiRequest = express.Request & { whatsappPublicApiClinic?: WhatsappPublicApiClinic };
+
+/**
+ * Combined authorization + resolution middleware for all 6 legacy public API
+ * routes. Parses the credential, resolves it through the full chain above, and
+ * attaches the verified clinic to the request — route handlers never resolve a
+ * clinic themselves, so all 6 routes share this exact same binding logic.
+ */
+const authorizeAndResolveWhatsappPublicApi: express.RequestHandler = async (req, res, next) => {
+  try {
+    const providedSecret = getProvidedWhatsappSecret({
+      authorization: req.headers.authorization,
+      xWhatsappSecret: req.headers['x-whatsapp-secret'],
+    });
+    if (!providedSecret) {
+      return res.status(401).json({ error: 'Invalid WhatsApp API secret' });
+    }
+
+    const clinic = await resolveWhatsappPublicApiClinic(providedSecret);
+    if (!clinic) {
+      return res.status(404).json({ error: 'Clinic not found' });
+    }
+
+    (req as WhatsappPublicApiRequest).whatsappPublicApiClinic = clinic;
+    next();
+  } catch (error) {
+    console.error('[whatsapp-public-api] connection resolution error', error);
+    res.status(500).json({ error: 'Failed to resolve WhatsApp connection' });
+  }
 };
 
 const getAssistantServices = async (clinicId: string): Promise<AssistantService[]> => {
@@ -3876,10 +4013,9 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
 });
 
 // GET /services
-router.get('/services', authorizeWhatsappApi, async (_req, res) => {
+router.get('/services', authorizeAndResolveWhatsappPublicApi, async (req, res) => {
   try {
-    const clinic = await getExplicitPublicApiClinic();
-    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+    const clinic = (req as WhatsappPublicApiRequest).whatsappPublicApiClinic!;
     const services = await prisma.appointmentType.findMany({
       where: { clinicId: clinic.id, isActive: true, isService: true },
       select: { id: true, name: true, durationMinutes: true, category: true, description: true },
@@ -3892,10 +4028,9 @@ router.get('/services', authorizeWhatsappApi, async (_req, res) => {
 });
 
 // GET /doctors
-router.get('/doctors', authorizeWhatsappApi, async (_req, res) => {
+router.get('/doctors', authorizeAndResolveWhatsappPublicApi, async (req, res) => {
   try {
-    const clinic = await getExplicitPublicApiClinic();
-    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+    const clinic = (req as WhatsappPublicApiRequest).whatsappPublicApiClinic!;
     const doctors = await prisma.user.findMany({
       where: { clinicId: clinic.id, role: 'doctor', isActive: true },
       select: { id: true, firstName: true, lastName: true },
@@ -3908,12 +4043,11 @@ router.get('/doctors', authorizeWhatsappApi, async (_req, res) => {
 });
 
 // GET /availability
-router.get('/availability', authorizeWhatsappApi, async (req, res) => {
+router.get('/availability', authorizeAndResolveWhatsappPublicApi, async (req, res) => {
   const validation = whatsappAvailabilityQuerySchema.safeParse(req.query);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
   try {
-    const clinic = await getExplicitPublicApiClinic();
-    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+    const clinic = (req as WhatsappPublicApiRequest).whatsappPublicApiClinic!;
     const slots = await buildAvailableSlots(prisma, clinic.id, validation.data.appointmentTypeId, validation.data.date, validation.data.practitionerId);
     if (!slots) return res.status(404).json({ error: 'Service not found' });
     res.json({ clinic: { id: clinic.id, name: clinic.name }, slots });
@@ -3923,12 +4057,11 @@ router.get('/availability', authorizeWhatsappApi, async (req, res) => {
 });
 
 // GET /appointment-lookup
-router.get('/appointment-lookup', authorizeWhatsappApi, async (req, res) => {
+router.get('/appointment-lookup', authorizeAndResolveWhatsappPublicApi, async (req, res) => {
   const validation = whatsappAppointmentLookupQuerySchema.safeParse(req.query);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
   try {
-    const clinic = await getExplicitPublicApiClinic();
-    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+    const clinic = (req as WhatsappPublicApiRequest).whatsappPublicApiClinic!;
     const patient = await findExistingPatientByPhone(clinic.id, validation.data.phone);
     if (!patient) {
       return res.json({ clinic: { id: clinic.id, name: clinic.name }, appointments: [] });
@@ -3957,12 +4090,11 @@ router.get('/appointment-lookup', authorizeWhatsappApi, async (req, res) => {
 });
 
 // POST /appointment-requests
-router.post('/appointment-requests', authorizeWhatsappApi, async (req, res) => {
+router.post('/appointment-requests', authorizeAndResolveWhatsappPublicApi, async (req, res) => {
   const validation = whatsappAppointmentRequestSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
   try {
-    const clinic = await getExplicitPublicApiClinic();
-    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+    const clinic = (req as WhatsappPublicApiRequest).whatsappPublicApiClinic!;
     const phone = normalizePhone(validation.data.phone);
     const existingPatient = await findExistingPatientByPhone(clinic.id, phone);
     if (validation.data.appointmentTypeId) {
@@ -4006,12 +4138,11 @@ router.post('/appointment-requests', authorizeWhatsappApi, async (req, res) => {
 });
 
 // POST /cancel-request
-router.post('/cancel-request', authorizeWhatsappApi, async (req, res) => {
+router.post('/cancel-request', authorizeAndResolveWhatsappPublicApi, async (req, res) => {
   const validation = whatsappAppointmentRequestSchema.safeParse({ ...req.body, requestType: 'cancel' });
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
   try {
-    const clinic = await getExplicitPublicApiClinic();
-    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+    const clinic = (req as WhatsappPublicApiRequest).whatsappPublicApiClinic!;
     const cancelPhone = normalizePhone(validation.data.phone);
     const existingPatient = await findExistingPatientByPhone(clinic.id, cancelPhone);
     const request = await prisma.appointmentRequest.create({

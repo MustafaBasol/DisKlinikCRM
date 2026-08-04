@@ -1,22 +1,26 @@
 /**
- * whatsappPublicApiExplicitClinicBinding.test.ts — F2-SEC-002
+ * whatsappPublicApiExplicitClinicBinding.test.ts — F2-SEC-002 (R0 + R1)
  *
- * Real disposable-PostgreSQL, real-route-handler verification that the
- * legacy secret-gated WhatsApp public API (GET/POST /api/public/whatsapp/*)
- * no longer resolves its clinic via a global/first-created default
- * (`prisma.clinic.findFirst({ orderBy: { createdAt: 'asc' } })`), and
- * instead requires an explicit, unambiguous clinic-owned WhatsApp
- * connection binding (WhatsAppConnection.isActive + ClinicWhatsAppConnection)
- * — see docs/program/evidence/F2-SEC-002_WHATSAPP_EXPLICIT_CLINIC_RESOLUTION.md.
+ * Real disposable-PostgreSQL, real-route-handler verification of the legacy
+ * secret-gated WhatsApp public API (GET/POST /api/public/whatsapp/*) clinic
+ * resolution — see docs/program/evidence/F2-SEC-002_WHATSAPP_EXPLICIT_CLINIC_RESOLUTION.md.
  *
- * These routes carry no per-request instance/connection/clinic identity of
- * their own (only the shared WHATSAPP_WEBHOOK_SECRET), so every scenario
- * below drives clinic resolution purely through server-side WhatsApp
- * connection configuration, exactly as the fixed route code does.
+ * R0 removed the global/first-created-clinic fallback but only required
+ * *uniqueness* of the active Evolution WhatsAppConnection — not that the
+ * request's own credential identify *which* connection. R1 (this file's
+ * primary addition) requires the caller-presented secret to resolve to
+ * exactly one connection via that connection's own `webhookSecret`, then
+ * verifies connection.organizationId === clinicLink.organizationId ===
+ * clinic.organizationId before any tenant read/write. The pre-existing
+ * global WHATSAPP_WEBHOOK_SECRET is retained ONLY as
+ * LEGACY_SINGLE_CONNECTION_COMPATIBILITY (exactly one active Evolution
+ * connection deployed, org-consistent) — never as the normal multi-tenant
+ * resolution mechanism.
  *
  * Uses the same real-DB / real-Express-handler convention as
  * appointmentRequestConversionAtomicity.test.ts (dbVerificationHarness.ts)
- * — no mocked Prisma, no in-memory simulation, no mocked clinic resolution.
+ * — no mocked Prisma, no in-memory simulation, no mocked clinic resolution,
+ * no mocked secret comparison.
  *
  * Run: npx tsx src/tests/dbVerification/whatsappPublicApiExplicitClinicBinding.test.ts
  * Requires DATABASE_URL to point at a disposable Postgres before import.
@@ -25,6 +29,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import whatsappRouter from '../../routes/whatsapp.js';
+import { encryptSecretTagged } from '../../utils/encryption.js';
 import {
   createSuite,
   getFullChain,
@@ -35,6 +40,8 @@ import {
 } from './dbVerificationHarness.js';
 
 const { section, test, summary } = createSuite('whatsappPublicApiExplicitClinicBinding');
+
+process.env.ENCRYPTION_KEY = 'c'.repeat(64);
 
 const TEST_SECRET = `test-whatsapp-secret-${randomUUID()}`;
 process.env.WHATSAPP_WEBHOOK_SECRET = TEST_SECRET;
@@ -49,7 +56,7 @@ const CANCEL_REQUEST_CHAIN = getFullChain(whatsappRouter as any, 'post', '/cance
 // ─── Request builder (unauthenticated public API — no AuthRequest.user) ────
 
 function publicReq(opts: {
-  secret?: string | null; // undefined = valid TEST_SECRET, null = no header at all
+  secret?: string | null; // undefined = valid TEST_SECRET (legacy global), null = no header at all
   query?: Record<string, unknown>;
   body?: Record<string, unknown>;
 }): any {
@@ -67,7 +74,8 @@ async function call(chain: any[], req: any): Promise<MockResponse> {
 // ─── Local fixture builders (full control over creation order / topology —
 // deliberately not reusing dbVerificationHarness's createClinicFixtureSet,
 // which batches all clinics in one Promise.all and cannot express the
-// "foreign clinic seeded before/after" ordering this defect requires) ────
+// "foreign clinic seeded before/after" / "corrupted cross-org link" ordering
+// this defect requires) ────
 
 const createdOrgIds: string[] = [];
 
@@ -87,7 +95,10 @@ async function createClinic(organizationId: string, label: string) {
   });
 }
 
-async function createConnection(organizationId: string, opts: { isActive?: boolean; provider?: string } = {}) {
+async function createConnection(
+  organizationId: string,
+  opts: { isActive?: boolean; provider?: string; webhookSecret?: string } = {},
+) {
   const suffix = randomUUID().slice(0, 8);
   return prisma.whatsAppConnection.create({
     data: {
@@ -95,6 +106,7 @@ async function createConnection(organizationId: string, opts: { isActive?: boole
       name: `Conn ${suffix}`,
       provider: opts.provider ?? 'evolution_api',
       isActive: opts.isActive ?? true,
+      webhookSecret: opts.webhookSecret ? encryptSecretTagged(opts.webhookSecret) : undefined,
     },
   });
 }
@@ -105,11 +117,18 @@ async function linkClinicConnection(organizationId: string, clinicId: string, wh
   });
 }
 
-/** One org + one clinic + one active connection + one clinic link — the "valid single binding" shape. */
-async function createBoundClinic(label: string) {
+/**
+ * One org + one clinic + one active connection + one clinic link — the
+ * "valid single binding" shape. Pass `webhookSecret` to give the connection
+ * its own R1 credential; omit it to exercise LEGACY_SINGLE_CONNECTION_COMPATIBILITY
+ * (the connection has no secret of its own, so only the global
+ * WHATSAPP_WEBHOOK_SECRET — under a strict single-connection topology — can
+ * resolve it).
+ */
+async function createBoundClinic(label: string, opts: { webhookSecret?: string } = {}) {
   const org = await createOrg(label);
   const clinic = await createClinic(org.id, label);
-  const connection = await createConnection(org.id);
+  const connection = await createConnection(org.id, { webhookSecret: opts.webhookSecret });
   await linkClinicConnection(org.id, clinic.id, connection.id);
   return { org, clinic, connection };
 }
@@ -126,14 +145,17 @@ async function countAppointmentRequests(clinicId: string) {
 }
 
 /**
- * Deletes exactly the given orgs' data, FK-safe order. The fix under test
- * resolves the bound clinic from a system-wide (not per-organization) query
- * — `WhatsAppConnection.isActive` across the whole table — precisely because
- * these routes carry no per-request org/clinic identity. That means any
- * WhatsApp connection left behind by an earlier test would silently turn a
- * later "exactly one binding" scenario into an "ambiguous" one. Every test
+ * Deletes exactly the given orgs' data, FK-safe order. Several scenarios
+ * below (legacy-path fixtures) resolve the bound clinic from a system-wide
+ * (not per-organization) query — `WhatsAppConnection.isActive` across the
+ * whole table — precisely because these routes carry no per-request
+ * org/clinic identity when relying on the legacy global secret. That means
+ * any WhatsApp connection left behind by an earlier test would silently turn
+ * a later "exactly one binding" scenario into an "ambiguous" one. Every test
  * below therefore tears its own fixtures down immediately (see
  * isolatedTest), rather than deferring to one cleanup pass at the end.
+ * Also handles the "missing clinic row" scenario, where the clinic row is
+ * already gone before this runs — every step here is a no-op-safe deleteMany.
  */
 async function cleanupOrgs(orgIds: string[]) {
   if (orgIds.length === 0) return;
@@ -164,7 +186,7 @@ async function isolatedTest(name: string, fn: () => void | Promise<void>) {
 // ─── Tests ───────────────────────────────────────────────────────────────
 
 async function main() {
-  section('Scenario 1 — one valid explicit binding resolves the correct clinic');
+  section('Scenario 1 — one valid explicit binding resolves the correct clinic (LEGACY_SINGLE_CONNECTION_COMPATIBILITY)');
   await isolatedTest('GET /services resolves the explicitly bound clinic and preserves successful behavior', async () => {
     const { clinic } = await createBoundClinic('s1-services');
     const res = await call(SERVICES_CHAIN, publicReq({}));
@@ -237,7 +259,13 @@ async function main() {
   });
 
   section('Scenario 3 — multiple matching bindings fail closed (never chooses the first)');
-  await isolatedTest('two orgs each with their own valid binding: GET /services is ambiguous, fails closed', async () => {
+  await isolatedTest('two orgs each with their own legacy-compatible binding: GET /services is ambiguous, fails closed', async () => {
+    // Neither connection carries its own webhookSecret, so both rely solely on
+    // the shared global secret — with two active connections, the
+    // LEGACY_SINGLE_CONNECTION_COMPATIBILITY topology check fails and the
+    // request can no longer resolve to either org. This is BLOCKING FINDING 1
+    // from the R1 review, reproduced directly: the public API fails closed
+    // rather than silently routing to whichever org happens to be selected.
     const { clinic: clinicA } = await createBoundClinic('s3-org-a');
     const { clinic: clinicB } = await createBoundClinic('s3-org-b');
     const res = await call(SERVICES_CHAIN, publicReq({}));
@@ -252,7 +280,7 @@ async function main() {
     void clinicB;
   });
 
-  await isolatedTest('two orgs each with their own valid binding: POST /appointment-requests creates no tenant data in either clinic', async () => {
+  await isolatedTest('two orgs each with their own legacy-compatible binding: POST /appointment-requests creates no tenant data in either clinic', async () => {
     const { clinic: clinicA } = await createBoundClinic('s3-write-a');
     const { clinic: clinicB } = await createBoundClinic('s3-write-b');
     const beforeA = await countAppointmentRequests(clinicA.id);
@@ -266,7 +294,7 @@ async function main() {
     assert.equal(await countAppointmentRequests(clinicB.id), beforeB);
   });
 
-  await isolatedTest('one connection linked to two clinics (shared line, no prior context): fails closed, not the first link', async () => {
+  await isolatedTest('one legacy-compatible connection linked to two clinics (shared line, no prior context): fails closed, not the first link', async () => {
     const org = await createOrg('s3-shared');
     const clinicX = await createClinic(org.id, 's3-shared-x');
     const clinicY = await createClinic(org.id, 's3-shared-y');
@@ -307,7 +335,7 @@ async function main() {
     assert.equal(res.body.error, 'Clinic not found');
   });
 
-  section('Scenario 6/7 — cross-tenant write prevention');
+  section('Scenario 6 — cross-tenant write prevention (single-tenant legacy-compatible topology)');
   await isolatedTest('Organization A request creates data under Clinic A only — never Organization B, never a foreign clinic', async () => {
     const { org: orgA, clinic: clinicA, connection } = await createBoundClinic('s6-org-a');
     const { clinic: foreignClinic } = await createUnboundClinic('s6-foreign');
@@ -319,21 +347,6 @@ async function main() {
     assert.equal(res.body.clinicId, clinicA.id);
     assert.equal(await countAppointmentRequests(foreignClinic.id), 0);
     assert.equal(connection.organizationId, orgA.id);
-  });
-
-  await isolatedTest('Organization A request cannot fall through to Organization B when only B has a binding', async () => {
-    const { org: orgB, clinic: clinicB } = await createBoundClinic('s7-org-b-only');
-    const res = await call(
-      APPOINTMENT_REQUESTS_CHAIN,
-      publicReq({ body: { patientName: 'Bob B', phone: '5554440000' } }),
-    );
-    // The only explicit binding present is B's — the request may only ever
-    // land on B (there is no "org A" identity in this legacy API at all),
-    // proving resolution never falls through to an unrelated/default clinic.
-    assert.equal(res.statusCode, 201);
-    assert.equal(res.body.clinicId, clinicB.id);
-    assert.equal(res.body.clinicId.length > 0, true);
-    void orgB;
   });
 
   section('Scenario 8 — spoofed client-supplied clinicId is ignored');
@@ -366,19 +379,8 @@ async function main() {
     assert.equal(await countAppointmentRequests(spoofedTargetClinic.id), 0);
   });
 
-  section('Scenario 9 — invalid/missing signature creates no tenant side effects');
-  await isolatedTest('invalid secret: creates no appointment request, preserves provider-compatible 401 acknowledgment', async () => {
-    const { clinic } = await createBoundClinic('s9-invalid-secret');
-    const before = await countAppointmentRequests(clinic.id);
-    const res = await call(
-      APPOINTMENT_REQUESTS_CHAIN,
-      publicReq({ secret: 'wrong-secret', body: { patientName: 'Eve', phone: '5557770000' } }),
-    );
-    assert.equal(res.statusCode, 401);
-    assert.equal(await countAppointmentRequests(clinic.id), before);
-  });
-
-  await isolatedTest('missing secret header: creates no appointment request', async () => {
+  section('Scenario 9 — invalid/missing credential creates no tenant side effects');
+  await isolatedTest('missing secret header: creates no appointment request, 401 (no DB read of any kind — pure request-shape check)', async () => {
     const { clinic } = await createBoundClinic('s9-missing-secret');
     const before = await countAppointmentRequests(clinic.id);
     const res = await call(
@@ -388,6 +390,23 @@ async function main() {
     assert.equal(res.statusCode, 401);
     assert.equal(await countAppointmentRequests(clinic.id), before);
   });
+
+  await isolatedTest(
+    'a secret that is present but matches nothing (not a connection secret, not the legacy global secret): creates no appointment request, generic 404 — ' +
+      'R1 non-enumeration: once a credential is presented, "wrong secret" and "right secret but ambiguous/cross-org topology" must be indistinguishable ' +
+      'from the outside (see NON-ENUMERATION requirement), so this is no longer 401 the way a purely-missing header is',
+    async () => {
+      const { clinic } = await createBoundClinic('s9-invalid-secret');
+      const before = await countAppointmentRequests(clinic.id);
+      const res = await call(
+        APPOINTMENT_REQUESTS_CHAIN,
+        publicReq({ secret: `wrong-secret-${randomUUID()}`, body: { patientName: 'Eve', phone: '5557770000' } }),
+      );
+      assert.equal(res.statusCode, 404);
+      assert.equal(res.body.error, 'Clinic not found');
+      assert.equal(await countAppointmentRequests(clinic.id), before);
+    },
+  );
 
   section('Scenario 10 — backward compatibility of the existing valid single-tenant path');
   await isolatedTest('GET /services and POST /appointment-requests remain consistent for the same explicitly bound clinic', async () => {
@@ -403,6 +422,271 @@ async function main() {
     assert.equal(createRes.statusCode, 201);
     assert.equal(createRes.body.clinicId, clinic.id);
   });
+
+  // ─── R1 — connection-specific credential binding (BLOCKING FINDING 1) ──
+  //
+  // Everything above this point is the R0 "uniqueness" model, preserved
+  // exactly (only the invalid-secret status code changed, per the
+  // non-enumeration note in Scenario 9). Everything below is new: it proves
+  // the caller's OWN secret — not merely "is there exactly one connection
+  // anywhere" — determines which clinic a request binds to. This is the
+  // corrected replacement for the R0 test "Organization A request cannot
+  // fall through to Organization B when only B has a binding", which the R1
+  // review correctly flagged as not actually testing an Org-A-owned
+  // credential at all (there was no Org A identity in that scenario — the
+  // request succeeded only because B was the *only* configured org, which is
+  // precisely BLOCKING FINDING 1). No test below calls a request
+  // "Organization A's" unless it carries and verifies an A-owned
+  // connection-specific secret.
+
+  section('R1 — connection-specific secret binds the request to exactly one connection-owned clinic');
+
+  await isolatedTest(
+    'two simultaneously active connections, each with its own secret: GET /services, /doctors, /appointment-lookup, /availability resolve strictly to their own connection-owned clinic',
+    async () => {
+      const secretA = `secret-a-${randomUUID()}`;
+      const secretB = `secret-b-${randomUUID()}`;
+      const { clinic: clinicA } = await createBoundClinic('r1-get-a', { webhookSecret: secretA });
+      const { clinic: clinicB } = await createBoundClinic('r1-get-b', { webhookSecret: secretB });
+      const appointmentTypeA = await prisma.appointmentType.create({
+        data: { clinicId: clinicA.id, name: 'Checkup A', durationMinutes: 30, isActive: true, isService: true },
+      });
+      const appointmentTypeB = await prisma.appointmentType.create({
+        data: { clinicId: clinicB.id, name: 'Checkup B', durationMinutes: 30, isActive: true, isService: true },
+      });
+
+      for (const [secret, clinic] of [
+        [secretA, clinicA],
+        [secretB, clinicB],
+      ] as const) {
+        const servicesRes = await call(SERVICES_CHAIN, publicReq({ secret }));
+        assert.equal(servicesRes.statusCode, 200);
+        assert.equal(servicesRes.body.clinic.id, clinic.id);
+
+        const doctorsRes = await call(DOCTORS_CHAIN, publicReq({ secret }));
+        assert.equal(doctorsRes.statusCode, 200);
+        assert.equal(doctorsRes.body.clinic.id, clinic.id);
+
+        const lookupRes = await call(APPOINTMENT_LOOKUP_CHAIN, publicReq({ secret, query: { phone: '5551230000' } }));
+        assert.equal(lookupRes.statusCode, 200);
+        assert.equal(lookupRes.body.clinic.id, clinic.id);
+      }
+
+      const availA = await call(
+        AVAILABILITY_CHAIN,
+        publicReq({ secret: secretA, query: { appointmentTypeId: appointmentTypeA.id, date: '2026-08-10' } }),
+      );
+      assert.equal(availA.statusCode, 200);
+      assert.equal(availA.body.clinic.id, clinicA.id);
+
+      const availB = await call(
+        AVAILABILITY_CHAIN,
+        publicReq({ secret: secretB, query: { appointmentTypeId: appointmentTypeB.id, date: '2026-08-10' } }),
+      );
+      assert.equal(availB.statusCode, 200);
+      assert.equal(availB.body.clinic.id, clinicB.id);
+
+      // Cross-check: secret A resolves clinic A, but clinic A has no service
+      // named appointmentTypeB — proves A's binding, not just "some 200".
+      const crossA = await call(
+        AVAILABILITY_CHAIN,
+        publicReq({ secret: secretA, query: { appointmentTypeId: appointmentTypeB.id, date: '2026-08-10' } }),
+      );
+      assert.equal(crossA.statusCode, 404);
+    },
+  );
+
+  await isolatedTest(
+    'two simultaneously active connections, each with its own secret: POST /appointment-requests and /cancel-request write strictly to their own clinic — secret A cannot write to Clinic B and vice versa; a spoofed clinicId cannot override the connection-specific binding',
+    async () => {
+      const secretA = `secret-a-${randomUUID()}`;
+      const secretB = `secret-b-${randomUUID()}`;
+      const { clinic: clinicA } = await createBoundClinic('r1-post-a', { webhookSecret: secretA });
+      const { clinic: clinicB } = await createBoundClinic('r1-post-b', { webhookSecret: secretB });
+
+      const reqA = await call(
+        APPOINTMENT_REQUESTS_CHAIN,
+        publicReq({ secret: secretA, body: { patientName: 'Alice A', phone: '5551110001' } }),
+      );
+      assert.equal(reqA.statusCode, 201);
+      assert.equal(reqA.body.clinicId, clinicA.id);
+
+      const cancelB = await call(
+        CANCEL_REQUEST_CHAIN,
+        publicReq({ secret: secretB, body: { patientName: 'Bob B', phone: '5551110002' } }),
+      );
+      assert.equal(cancelB.statusCode, 201);
+      assert.equal(cancelB.body.clinicId, clinicB.id);
+
+      // Secret A's write never landed on B, and secret B's write never landed on A.
+      assert.equal(await countAppointmentRequests(clinicA.id), 1);
+      assert.equal(await countAppointmentRequests(clinicB.id), 1);
+
+      // Secret A with a spoofed clinicId=B in the body still resolves/writes to A only.
+      const spoofed = await call(
+        APPOINTMENT_REQUESTS_CHAIN,
+        publicReq({ secret: secretA, body: { patientName: 'Spoofer', phone: '5551110003', clinicId: clinicB.id } }),
+      );
+      assert.equal(spoofed.statusCode, 201);
+      assert.equal(spoofed.body.clinicId, clinicA.id);
+      assert.equal(await countAppointmentRequests(clinicB.id), 1); // unchanged — still just cancelB's row
+    },
+  );
+
+  await isolatedTest(
+    'unknown secret with connection-specific secrets already configured: fails closed, no side effects',
+    async () => {
+      const secretA = `secret-a-${randomUUID()}`;
+      const { clinic: clinicA } = await createBoundClinic('r1-unknown-secret', { webhookSecret: secretA });
+      const before = await countAppointmentRequests(clinicA.id);
+      const res = await call(
+        APPOINTMENT_REQUESTS_CHAIN,
+        publicReq({ secret: `mallory-${randomUUID()}`, body: { patientName: 'Mallory', phone: '5551110004' } }),
+      );
+      assert.equal(res.statusCode, 404);
+      assert.equal(await countAppointmentRequests(clinicA.id), before);
+    },
+  );
+
+  await isolatedTest(
+    'the same webhookSecret configured on two different active connections (misconfiguration): ambiguous credential fails closed, no first-match, no write to either clinic',
+    async () => {
+      const sharedSecret = `secret-dup-${randomUUID()}`;
+      const { clinic: clinicA } = await createBoundClinic('r1-dup-secret-a', { webhookSecret: sharedSecret });
+      const { clinic: clinicB } = await createBoundClinic('r1-dup-secret-b', { webhookSecret: sharedSecret });
+
+      const beforeA = await countAppointmentRequests(clinicA.id);
+      const beforeB = await countAppointmentRequests(clinicB.id);
+      const res = await call(
+        APPOINTMENT_REQUESTS_CHAIN,
+        publicReq({ secret: sharedSecret, body: { patientName: 'Dup Secret', phone: '5551230033' } }),
+      );
+      assert.equal(res.statusCode, 404);
+      assert.equal(await countAppointmentRequests(clinicA.id), beforeA);
+      assert.equal(await countAppointmentRequests(clinicB.id), beforeB);
+    },
+  );
+
+  await isolatedTest(
+    'one connection (with its own secret) linked to two clinics: fails closed, not the first link',
+    async () => {
+      const secret = `secret-shared-${randomUUID()}`;
+      const org = await createOrg('r1-shared-secret');
+      const connection = await createConnection(org.id, { webhookSecret: secret });
+      const clinicX = await createClinic(org.id, 'r1-shared-secret-x');
+      const clinicY = await createClinic(org.id, 'r1-shared-secret-y');
+      await linkClinicConnection(org.id, clinicX.id, connection.id);
+      await linkClinicConnection(org.id, clinicY.id, connection.id);
+
+      const res = await call(SERVICES_CHAIN, publicReq({ secret }));
+      assert.equal(res.statusCode, 404);
+      assert.equal(res.body.clinic, undefined);
+    },
+  );
+
+  await isolatedTest(
+    'cross-org denormalization — ClinicWhatsAppConnection.organizationId does not match the connection\'s organization: fails closed, no write (BLOCKING FINDING 2)',
+    async () => {
+      const orgA = await createOrg('r1-xorg-link-a');
+      const orgB = await createOrg('r1-xorg-link-b');
+      const secret = `secret-xorg-link-${randomUUID()}`;
+      const connectionA = await createConnection(orgA.id, { webhookSecret: secret });
+      const clinicA = await createClinic(orgA.id, 'r1-xorg-link-clinic-a');
+      // Corrupted/stale link: organizationId falsely claims orgB even though
+      // both the connection and the clinic it points at are genuinely orgA's.
+      await prisma.clinicWhatsAppConnection.create({
+        data: { organizationId: orgB.id, clinicId: clinicA.id, whatsappConnectionId: connectionA.id, isDefault: true },
+      });
+
+      const before = await countAppointmentRequests(clinicA.id);
+      const res = await call(
+        APPOINTMENT_REQUESTS_CHAIN,
+        publicReq({ secret, body: { patientName: 'Xorg Link', phone: '5551230011' } }),
+      );
+      assert.equal(res.statusCode, 404);
+      assert.equal(res.body.error, 'Clinic not found');
+      assert.equal(await countAppointmentRequests(clinicA.id), before);
+    },
+  );
+
+  await isolatedTest(
+    'cross-org denormalization — the linked Clinic itself belongs to a different organization than the connection: fails closed, no write (BLOCKING FINDING 2)',
+    async () => {
+      const orgA = await createOrg('r1-xorg-clinic-a');
+      const orgB = await createOrg('r1-xorg-clinic-b');
+      const secret = `secret-xorg-clinic-${randomUUID()}`;
+      const connectionA = await createConnection(orgA.id, { webhookSecret: secret });
+      const clinicB = await createClinic(orgB.id, 'r1-xorg-clinic-clinic-b'); // genuinely belongs to org B
+      // Link's own organizationId matches the connection (passes the first
+      // consistency check) but points at a clinic that actually belongs to
+      // org B — this must be caught by the connection-vs-clinic check.
+      await prisma.clinicWhatsAppConnection.create({
+        data: { organizationId: orgA.id, clinicId: clinicB.id, whatsappConnectionId: connectionA.id, isDefault: true },
+      });
+
+      const before = await countAppointmentRequests(clinicB.id);
+      const res = await call(
+        APPOINTMENT_REQUESTS_CHAIN,
+        publicReq({ secret, body: { patientName: 'Xorg Clinic', phone: '5551230022' } }),
+      );
+      assert.equal(res.statusCode, 404);
+      assert.equal(res.body.error, 'Clinic not found');
+      assert.equal(await countAppointmentRequests(clinicB.id), before);
+    },
+  );
+
+  await isolatedTest(
+    'a resolved clinic link pointing at a deleted clinic row fails closed (missing clinic row) — simulated via a temporary FK trigger disable on Clinic, since real FK constraints make this unreachable through normal writes',
+    async () => {
+      const secret = `secret-missing-clinic-${randomUUID()}`;
+      const org = await createOrg('r1-missing-clinic');
+      const connection = await createConnection(org.id, { webhookSecret: secret });
+      const doomedClinic = await createClinic(org.id, 'r1-missing-clinic-doomed');
+      await linkClinicConnection(org.id, doomedClinic.id, connection.id);
+
+      await prisma.$executeRawUnsafe('ALTER TABLE "Clinic" DISABLE TRIGGER ALL');
+      try {
+        await prisma.clinic.delete({ where: { id: doomedClinic.id } });
+      } finally {
+        await prisma.$executeRawUnsafe('ALTER TABLE "Clinic" ENABLE TRIGGER ALL');
+      }
+
+      const res = await call(SERVICES_CHAIN, publicReq({ secret }));
+      assert.equal(res.statusCode, 404);
+      assert.equal(res.body.error, 'Clinic not found');
+      assert.equal(res.body.clinic, undefined);
+    },
+  );
+
+  await isolatedTest(
+    'inactive connection: its own connection-specific secret never matches, even though correctly provided',
+    async () => {
+      const secret = `secret-inactive-${randomUUID()}`;
+      const org = await createOrg('r1-inactive-secret');
+      const connection = await createConnection(org.id, { isActive: false, webhookSecret: secret });
+      const clinic = await createClinic(org.id, 'r1-inactive-secret-clinic');
+      await linkClinicConnection(org.id, clinic.id, connection.id);
+
+      const res = await call(SERVICES_CHAIN, publicReq({ secret }));
+      assert.equal(res.statusCode, 404);
+      assert.equal(res.body.clinic, undefined);
+    },
+  );
+
+  await isolatedTest(
+    'a Meta Cloud connection carrying the same secret value does not satisfy the Evolution-only resolver',
+    async () => {
+      const secret = `secret-meta-${randomUUID()}`;
+      const org = await createOrg('r1-meta-secret');
+      const clinic = await createClinic(org.id, 'r1-meta-secret-clinic');
+      const metaConnection = await createConnection(org.id, { provider: 'meta_cloud_api', webhookSecret: secret });
+      await linkClinicConnection(org.id, clinic.id, metaConnection.id);
+
+      const res = await call(SERVICES_CHAIN, publicReq({ secret }));
+      assert.equal(res.statusCode, 404);
+      assert.equal(res.body.clinic, undefined);
+    },
+  );
 
   await cleanupOrgs(createdOrgIds.splice(0));
   const ok = summary();
