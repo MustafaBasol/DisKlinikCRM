@@ -298,7 +298,7 @@ This supersedes this task's original observation (`headRefOid: abac5e36...`, `me
 
 ## 13. Validation performed
 
-All commands below were run from the isolated worktree's repository root: `E:\Ek Gelir\Siteler\f2-guardrail-prep-010-c-wt`. Each command's expected success output and non-zero-exit failure behavior is stated inline.
+All commands below were run from the task-local isolated worktree repository root. Each command's expected success output and non-zero-exit failure behavior is stated inline.
 
 1. **JSON parse.**
    ```
