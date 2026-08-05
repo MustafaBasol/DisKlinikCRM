@@ -21,6 +21,21 @@ export interface PatientEmergencyContact {
 interface Props {
   patientId: string;
   contact?: PatientEmergencyContact | null;
+  /**
+   * F1-004-P1-R2-R3: the id of the contact PatientEmergencyContactsPanel's
+   * last-loaded list shows as primary, or null if none. Sent back as
+   * `expectedCurrentPrimaryContactId` whenever this form submits with
+   * isPrimary=true, so the server can enforce it as a true
+   * optimistic-concurrency precondition (409 PRIMARY_CONTACT_CONFLICT on
+   * mismatch) instead of relying on a server-side timing comparison that
+   * cannot, by itself, distinguish a genuine concurrent double-submit from a
+   * deliberate later replacement — see server/src/services/
+   * patientEmergencyContactsConcurrency.ts's resolvePrimaryPromotion header
+   * comment for the full proof. Omitting this prop/field falls back to the
+   * older best-effort server-side check (not race-free); this form always
+   * supplies it.
+   */
+  observedCurrentPrimaryContactId?: string | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -30,7 +45,13 @@ interface Props {
  * "add contact" and "edit contact" flows (single component, per task scope)
  * from PatientEmergencyContactsPanel.
  */
-const PatientEmergencyContactForm: React.FC<Props> = ({ patientId, contact, onClose, onSuccess }) => {
+const PatientEmergencyContactForm: React.FC<Props> = ({
+  patientId,
+  contact,
+  observedCurrentPrimaryContactId = null,
+  onClose,
+  onSuccess,
+}) => {
   const { t } = useTranslation('patients');
   const isEdit = !!contact;
 
@@ -68,6 +89,9 @@ const PatientEmergencyContactForm: React.FC<Props> = ({ patientId, contact, onCl
       occupation: occupation.trim() || null,
       isPrimary,
       isLegalDecisionMaker,
+      // F1-004-P1-R2-R3: only meaningful (and only checked server-side) when
+      // isPrimary is true — see the observedCurrentPrimaryContactId prop doc.
+      ...(isPrimary ? { expectedCurrentPrimaryContactId: observedCurrentPrimaryContactId } : {}),
     };
 
     try {

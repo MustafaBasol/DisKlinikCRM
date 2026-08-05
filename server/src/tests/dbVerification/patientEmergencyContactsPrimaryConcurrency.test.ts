@@ -45,6 +45,86 @@ const { section, test, summary } = createSuite('patientEmergencyContactsPrimaryC
 const CREATE_CHAIN = getFullChain(patientEmergencyContactsRouter as any, 'post', '/patients/:patientId/emergency-contacts');
 const UPDATE_CHAIN = getFullChain(patientEmergencyContactsRouter as any, 'put', '/patients/:patientId/emergency-contacts/:contactId');
 
+// ─── Stress round configuration (Copilot review, PR #325) ──────────────────
+//
+// CI must always exercise the full committed defaults below. Neither
+// ci-layers.yml/ci-pr.yml nor server:test:disposable-db ever set
+// PATIENT_EMERGENCY_CONTACT_{CREATE,UPDATE}_RACE_ROUNDS, so every CI run
+// resolves to exactly 100 / 150 rounds regardless of this mechanism's
+// existence. The two env vars below exist ONLY so a developer can dial the
+// round count down (or up) for a local diagnostic run without editing this
+// file. An explicitly-provided override is strictly validated — never
+// silently coerced, clamped, or ignored on failure — so a typo or bad value
+// fails loudly (throws at import time, before any DB work) instead of
+// quietly changing what "the full stress suite" actually exercised.
+export const DEFAULT_CREATE_RACE_ROUNDS = 100;
+export const DEFAULT_UPDATE_RACE_ROUNDS = 150;
+
+const LOCAL_FAST_MODE_ENV_VAR = 'PATIENT_EMERGENCY_CONTACT_RACE_LOCAL_FAST_MODE';
+// A round count below this is too low to meaningfully "stress" anything —
+// only local-fast-mode (a separate, explicit opt-in) may go lower, and even
+// then never below 1.
+const MIN_ROUNDS_WITHOUT_FAST_MODE = 10;
+const MAX_ROUNDS = 100_000;
+
+/**
+ * Validates and resolves a single round-count override. Exported so the
+ * config-validation tests in section 0 below can exercise every rejection
+ * path directly, without ever mutating real process.env (which would risk
+ * affecting the rest of this file's own module-scope resolution below).
+ */
+export function parseRaceRoundOverride(
+  envVarName: string,
+  rawValue: string | undefined,
+  defaultValue: number,
+  fastModeEnabled: boolean,
+): number {
+  if (rawValue === undefined) return defaultValue;
+
+  const trimmed = rawValue.trim();
+  if (trimmed.length === 0) {
+    throw new Error(
+      `${envVarName} is set but empty — remove the variable to use the default (${defaultValue}), or provide a bounded positive integer.`,
+    );
+  }
+  if (!/^[0-9]+$/.test(trimmed)) {
+    throw new Error(
+      `${envVarName}="${rawValue}" is not a valid bounded positive integer (digits only — no sign, decimal point, or other characters).`,
+    );
+  }
+
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value)) {
+    throw new Error(`${envVarName}="${rawValue}" is not a safe integer.`);
+  }
+  if (value === 0) {
+    throw new Error(`${envVarName}="${rawValue}" must be a positive integer greater than zero (0 is not allowed).`);
+  }
+
+  const minAllowed = fastModeEnabled ? 1 : MIN_ROUNDS_WITHOUT_FAST_MODE;
+  if (value < minAllowed) {
+    throw new Error(
+      `${envVarName}="${rawValue}" is below the minimum of ${minAllowed} round(s). ` +
+        `Set ${LOCAL_FAST_MODE_ENV_VAR}=true to allow values as low as 1 for local diagnostic runs only.`,
+    );
+  }
+  if (value > MAX_ROUNDS) {
+    throw new Error(`${envVarName}="${rawValue}" exceeds the maximum of ${MAX_ROUNDS} rounds.`);
+  }
+
+  return value;
+}
+
+function resolveRaceRounds(envVarName: string, defaultValue: number): { rounds: number; source: 'default' | 'env-override' } {
+  const rawValue = process.env[envVarName];
+  const fastModeEnabled = process.env[LOCAL_FAST_MODE_ENV_VAR] === 'true';
+  const rounds = parseRaceRoundOverride(envVarName, rawValue, defaultValue, fastModeEnabled);
+  return { rounds, source: rawValue === undefined ? 'default' : 'env-override' };
+}
+
+const createRoundsConfig = resolveRaceRounds('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', DEFAULT_CREATE_RACE_ROUNDS);
+const updateRoundsConfig = resolveRaceRounds('PATIENT_EMERGENCY_CONTACT_UPDATE_RACE_ROUNDS', DEFAULT_UPDATE_RACE_ROUNDS);
+
 async function ownerUser(fixtures: ClinicFixtureSet, clinicId: string = fixtures.defaultClinicId) {
   const owner = await createStaffUser({
     organizationId: fixtures.orgId,
@@ -100,6 +180,81 @@ function isConflict(res: { statusCode: number; body: any }) {
   return res.statusCode === 409 && res.body?.code === 'PRIMARY_CONTACT_CONFLICT';
 }
 
+// ─── 0. Stress-round configuration is validated, never silently defaulted ──
+
+async function scenarioStressRoundConfiguration() {
+  section('0. Stress-round configuration: env overrides are validated (bounded positive integers), never silently defaulted');
+
+  await test('variables absent -> defaults 100 (create) / 150 (update)', () => {
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', undefined, DEFAULT_CREATE_RACE_ROUNDS, false), 100);
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_UPDATE_RACE_ROUNDS', undefined, DEFAULT_UPDATE_RACE_ROUNDS, false), 150);
+  });
+
+  await test('a valid integer override is accepted (and, only under local-fast-mode, may go as low as 1)', () => {
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '25', 100, false), 25);
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_UPDATE_RACE_ROUNDS', '40', 150, false), 40);
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '1', 100, true), 1);
+  });
+
+  await test('zero is rejected', () => {
+    assert.throws(
+      () => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '0', 100, false),
+      /must be a positive integer greater than zero/,
+    );
+  });
+
+  await test('a negative value is rejected', () => {
+    assert.throws(
+      () => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '-5', 100, false),
+      /not a valid bounded positive integer/,
+    );
+  });
+
+  await test('a decimal value is rejected', () => {
+    assert.throws(
+      () => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '12.5', 100, false),
+      /not a valid bounded positive integer/,
+    );
+  });
+
+  await test('a non-numeric / malformed value is rejected', () => {
+    assert.throws(() => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', 'abc', 100, false), /not a valid bounded positive integer/);
+    assert.throws(() => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', 'NaN', 100, false), /not a valid bounded positive integer/);
+    assert.throws(() => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '1e5', 100, false), /not a valid bounded positive integer/);
+    assert.throws(() => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '   ', 100, false), /is set but empty/);
+  });
+
+  await test('a below-minimum override is rejected without local-fast-mode, but accepted once local-fast-mode is explicitly enabled', () => {
+    assert.throws(
+      () => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '3', 100, false),
+      /below the minimum.*PATIENT_EMERGENCY_CONTACT_RACE_LOCAL_FAST_MODE/s,
+    );
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '3', 100, true), 3);
+  });
+
+  await test('an explicitly-invalid value is never silently coerced to the default', () => {
+    assert.throws(() => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', 'not-a-number', 100, false));
+  });
+
+  await test('the committed defaults are 100 (create) / 150 (update), and the default CI path (no overrides set) executes exactly those counts', () => {
+    assert.equal(DEFAULT_CREATE_RACE_ROUNDS, 100, 'the committed CREATE default must stay 100 rounds');
+    assert.equal(DEFAULT_UPDATE_RACE_ROUNDS, 150, 'the committed UPDATE default must stay 150 rounds');
+    if (process.env.PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS === undefined) {
+      assert.equal(createRoundsConfig.rounds, 100, 'without an override, this run must exercise exactly 100 CREATE rounds');
+      assert.equal(createRoundsConfig.source, 'default');
+    }
+    if (process.env.PATIENT_EMERGENCY_CONTACT_UPDATE_RACE_ROUNDS === undefined) {
+      assert.equal(updateRoundsConfig.rounds, 150, 'without an override, this run must exercise exactly 150 UPDATE rounds');
+      assert.equal(updateRoundsConfig.source, 'default');
+    }
+  });
+
+  console.log(
+    `    [stress config] CREATE_RACE_ROUNDS=${createRoundsConfig.rounds} (${createRoundsConfig.source}) ` +
+      `UPDATE_RACE_ROUNDS=${updateRoundsConfig.rounds} (${updateRoundsConfig.source})`,
+  );
+}
+
 // ─── 1. Two concurrent creates for the same patient, both isPrimary=true ────
 
 async function scenarioConcurrentCreatesSamePatient() {
@@ -129,6 +284,106 @@ async function scenarioConcurrentCreatesSamePatient() {
     // (and, since it failed, must not have persisted at all).
     const contacts = await allContacts(patient.id);
     assert.equal(contacts.length, 1, 'the losing create must not leave behind a non-primary orphan row either — the whole transaction rolled back');
+  });
+}
+
+// ─── 1b. Stress: same CREATE race, run repeatedly to demonstrate determinism ─
+
+async function scenarioConcurrentCreatesStress() {
+  const ROUNDS = createRoundsConfig.rounds;
+  section(
+    `1b. Stress: ${ROUNDS} independent rounds of the CREATE race, each on a fresh patient — must be deterministic every round ` +
+      `(${createRoundsConfig.source === 'default' ? 'committed default' : 'PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS override'})`,
+  );
+  const fixtures = await createClinicFixtureSet('ec-concurrent-create-stress');
+  const user = await ownerUser(fixtures);
+
+  let onePassOneConflict = 0;
+  let exactlyOnePrimaryAfter = 0;
+
+  await test(`all ${ROUNDS} rounds produce exactly one 201 + one 409 PRIMARY_CONTACT_CONFLICT, and exactly one primary contact afterwards`, async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+
+      const [resA, resB] = await Promise.all([
+        callCreate(patient.id, user, contactBody({ isPrimary: true })),
+        callCreate(patient.id, user, contactBody({ isPrimary: true })),
+      ]);
+
+      const successCount = [resA, resB].filter(r => r.statusCode === 201).length;
+      const loser = resA.statusCode === 201 ? resB : resA;
+
+      assert.equal(
+        successCount,
+        1,
+        `round ${round}: exactly one concurrent create must succeed — got A=${resA.statusCode} B=${resB.statusCode} bodies=${JSON.stringify(resA.body)} / ${JSON.stringify(resB.body)}`,
+      );
+      assert.ok(
+        isConflict(loser),
+        `round ${round}: the loser must get the documented controlled 409 PRIMARY_CONTACT_CONFLICT, got ${loser.statusCode} ${JSON.stringify(loser.body)}`,
+      );
+      onePassOneConflict++;
+
+      const finalPrimaryCount = await primaryCount(patient.id);
+      assert.equal(finalPrimaryCount, 1, `round ${round}: exactly one primary contact must exist after the race, got ${finalPrimaryCount}`);
+      exactlyOnePrimaryAfter++;
+    }
+
+    console.log(
+      `    [stress summary] rounds=${ROUNDS} source=${createRoundsConfig.source} one-201-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`,
+    );
+  });
+}
+
+// ─── 1c. Stress: token-protected CREATE race — F1-004-P1-R2-R3 ────────────
+//
+// Same shape as 1b, but both concurrent creates supply
+// expectedCurrentPrimaryContactId: null (both callers correctly believe, at
+// request-formation time, that the fresh patient has no primary yet). This
+// exercises the actual fix for the CI-observed A=201/B=201 failure (run
+// 31020654709 attempt 1) — see patientEmergencyContactsCreateRaceForcedInterleaving.test.ts
+// for the deterministic forced-interleaving proof that this mode is airtight
+// against the exact mechanism scenario 1b's legacy (no-token) path cannot
+// close. 500 rounds — this task's minimum required CREATE round count.
+
+async function scenarioConcurrentCreatesStressTokenProtected() {
+  const ROUNDS = 500;
+  section(`1c. Stress: ${ROUNDS} independent rounds of the TOKEN-PROTECTED CREATE race (expectedCurrentPrimaryContactId: null), each on a fresh patient — must be deterministic every round`);
+  const fixtures = await createClinicFixtureSet('ec-concurrent-create-stress-token');
+  const user = await ownerUser(fixtures);
+
+  let onePassOneConflict = 0;
+  let exactlyOnePrimaryAfter = 0;
+
+  await test(`all ${ROUNDS} token-protected rounds produce exactly one 201 + one 409 PRIMARY_CONTACT_CONFLICT, and exactly one primary contact afterwards`, async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+
+      const [resA, resB] = await Promise.all([
+        callCreate(patient.id, user, contactBody({ isPrimary: true, expectedCurrentPrimaryContactId: null })),
+        callCreate(patient.id, user, contactBody({ isPrimary: true, expectedCurrentPrimaryContactId: null })),
+      ]);
+
+      const successCount = [resA, resB].filter(r => r.statusCode === 201).length;
+      const loser = resA.statusCode === 201 ? resB : resA;
+
+      assert.equal(
+        successCount,
+        1,
+        `round ${round}: exactly one token-protected concurrent create must succeed — got A=${resA.statusCode} B=${resB.statusCode} bodies=${JSON.stringify(resA.body)} / ${JSON.stringify(resB.body)}`,
+      );
+      assert.ok(
+        isConflict(loser),
+        `round ${round}: the loser must get the documented controlled 409 PRIMARY_CONTACT_CONFLICT, got ${loser.statusCode} ${JSON.stringify(loser.body)}`,
+      );
+      onePassOneConflict++;
+
+      const finalPrimaryCount = await primaryCount(patient.id);
+      assert.equal(finalPrimaryCount, 1, `round ${round}: exactly one primary contact must exist after the race, got ${finalPrimaryCount}`);
+      exactlyOnePrimaryAfter++;
+    }
+
+    console.log(`    [stress summary] rounds=${ROUNDS} token-protected one-201-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`);
   });
 }
 
@@ -168,11 +423,37 @@ async function scenarioConcurrentUpdatesDifferentContacts() {
   });
 }
 
+// ─── 2c. Same contact, concurrent idempotent/no-op updates must never conflict ─
+
+async function scenarioSameContactConcurrentUpdate() {
+  section('2c. Concurrent updates of the SAME already-primary contact must never conflict with each other (idempotent — no promotion is happening)');
+  const fixtures = await createClinicFixtureSet('ec-same-contact-update');
+  const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+  const user = await ownerUser(fixtures);
+
+  const created = await callCreate(patient.id, user, contactBody({ isPrimary: true }));
+  assert.equal(created.statusCode, 201);
+  const contactId = created.body.id;
+
+  await test('5 concurrent isPrimary:true updates of the SAME already-primary contact all succeed with 200 — no PRIMARY_CONTACT_CONFLICT', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => callUpdate(patient.id, contactId, user, { isPrimary: true, fullName: `Same Contact ${i}` })),
+    );
+    for (const res of results) {
+      assert.equal(res.statusCode, 200, `idempotent same-contact update must never conflict, got ${res.statusCode} ${JSON.stringify(res.body)}`);
+    }
+    assert.equal(await primaryCount(patient.id), 1, 'still exactly one primary contact');
+  });
+}
+
 // ─── 2b. Stress: same UPDATE race, run repeatedly to demonstrate determinism ─
 
 async function scenarioConcurrentUpdatesStress() {
-  const ROUNDS = 25;
-  section(`2b. Stress: ${ROUNDS} independent rounds of the DIFFERENT-contacts UPDATE race, each on a fresh patient — must be deterministic every round`);
+  const ROUNDS = updateRoundsConfig.rounds;
+  section(
+    `2b. Stress: ${ROUNDS} independent rounds of the DIFFERENT-contacts UPDATE race, each on a fresh patient — must be deterministic every round ` +
+      `(${updateRoundsConfig.source === 'default' ? 'committed default' : 'PATIENT_EMERGENCY_CONTACT_UPDATE_RACE_ROUNDS override'})`,
+  );
   const fixtures = await createClinicFixtureSet('ec-concurrent-update-stress');
   const user = await ownerUser(fixtures);
 
@@ -214,7 +495,64 @@ async function scenarioConcurrentUpdatesStress() {
       exactlyOnePrimaryAfter++;
     }
 
-    console.log(`    [stress summary] rounds=${ROUNDS} one-200-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`);
+    console.log(
+      `    [stress summary] rounds=${ROUNDS} source=${updateRoundsConfig.source} one-200-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`,
+    );
+  });
+}
+
+// ─── 2d. Stress: token-protected UPDATE race — F1-004-P1-R2-R3 ────────────
+//
+// Same shape as 2b, but both concurrent promoting updates supply
+// expectedCurrentPrimaryContactId: null (both callers correctly believe
+// neither of the two freshly-created, non-primary contacts is primary yet).
+// 500 rounds — this task's minimum required UPDATE round count.
+
+async function scenarioConcurrentUpdatesStressTokenProtected() {
+  const ROUNDS = 500;
+  section(`2d. Stress: ${ROUNDS} independent rounds of the TOKEN-PROTECTED DIFFERENT-contacts UPDATE race (expectedCurrentPrimaryContactId: null), each on a fresh patient — must be deterministic every round`);
+  const fixtures = await createClinicFixtureSet('ec-concurrent-update-stress-token');
+  const user = await ownerUser(fixtures);
+
+  let onePassOneConflict = 0;
+  let exactlyOnePrimaryAfter = 0;
+
+  await test(`all ${ROUNDS} token-protected rounds produce exactly one 200 + one 409 PRIMARY_CONTACT_CONFLICT, and exactly one primary contact afterwards`, async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+
+      const createA = await callCreate(patient.id, user, contactBody({ isPrimary: false }));
+      const createB = await callCreate(patient.id, user, contactBody({ isPrimary: false }));
+      assert.equal(createA.statusCode, 201, `round ${round}: setup create A must succeed`);
+      assert.equal(createB.statusCode, 201, `round ${round}: setup create B must succeed`);
+
+      const [resA, resB] = await Promise.all([
+        callUpdate(patient.id, createA.body.id, user, { isPrimary: true, expectedCurrentPrimaryContactId: null }),
+        callUpdate(patient.id, createB.body.id, user, { isPrimary: true, expectedCurrentPrimaryContactId: null }),
+      ]);
+
+      const successCount = [resA, resB].filter(r => r.statusCode === 200).length;
+      const loser = resA.statusCode === 200 ? resB : resA;
+      const winner = resA.statusCode === 200 ? resA : resB;
+
+      assert.equal(
+        successCount,
+        1,
+        `round ${round}: exactly one token-protected concurrent update must succeed — got A=${resA.statusCode} B=${resB.statusCode} bodies=${JSON.stringify(resA.body)} / ${JSON.stringify(resB.body)}`,
+      );
+      assert.ok(
+        isConflict(loser),
+        `round ${round}: the loser must get the documented controlled 409 PRIMARY_CONTACT_CONFLICT, got ${loser.statusCode} ${JSON.stringify(loser.body)}`,
+      );
+      assert.equal(winner.statusCode, 200, `round ${round}: the winner must get 200`);
+      onePassOneConflict++;
+
+      const finalPrimaryCount = await primaryCount(patient.id);
+      assert.equal(finalPrimaryCount, 1, `round ${round}: exactly one primary contact must exist after the race, got ${finalPrimaryCount}`);
+      exactlyOnePrimaryAfter++;
+    }
+
+    console.log(`    [stress summary] rounds=${ROUNDS} token-protected one-200-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`);
   });
 }
 
@@ -301,9 +639,14 @@ async function scenarioMultipleLegalDecisionMakersAllowed() {
 // ─── Run ──────────────────────────────────────────────────────────────────
 
 async function main() {
+  await scenarioStressRoundConfiguration();
   await scenarioConcurrentCreatesSamePatient();
+  await scenarioConcurrentCreatesStress();
+  await scenarioConcurrentCreatesStressTokenProtected();
   await scenarioConcurrentUpdatesDifferentContacts();
+  await scenarioSameContactConcurrentUpdate();
   await scenarioConcurrentUpdatesStress();
+  await scenarioConcurrentUpdatesStressTokenProtected();
   await scenarioNoCrossPatientInterference();
   await scenarioMultipleNonPrimaryRowsAllowed();
   await scenarioMultipleLegalDecisionMakersAllowed();

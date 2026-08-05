@@ -21,24 +21,36 @@
  *     organizationId) before update/delete — a contact cannot be mutated by
  *     guessing its ID under a different patient/clinic/organization.
  *
- * Single-primary-contact invariant (concurrency):
+ * Single-primary-contact invariant (concurrency) — F1-004-P1-R2 / F1-004-P1-R2-R3:
  *   - "At most one isPrimary=true contact per patient" is enforced at two
  *     layers: (1) a per-patient PostgreSQL advisory transaction lock
  *     (acquireEmergencyContactPrimaryLock — server/src/services/
- *     patientEmergencyContactsConcurrency.ts) that serializes every
- *     primary-promotion attempt for that patient plus an
- *     optimistic-concurrency re-check performed under that lock, and (2) a
- *     database-level partial unique index (PatientEmergencyContact_
- *     one_primary_per_patient — see migration 20260803120000_add_patient_
- *     emergency_contacts) as a last-resort backstop. The advisory lock is
- *     what actually makes "exactly one promotion wins, the other gets a
- *     deterministic 409" true in practice — a partial unique index alone
- *     only rejects writes that physically overlap at the index-insert step,
- *     and two requests dispatched together do not have to overlap that
- *     precisely (see patientEmergencyContactsConcurrency.ts's header
- *     comment for the exact failure mode this closes).
+ *     patientEmergencyContactsConcurrency.ts) guarding an
+ *     optimistic-concurrency check performed under that lock
+ *     (resolvePrimaryPromotion, same file), and (2) a database-level partial
+ *     unique index (PatientEmergencyContact_one_primary_per_patient — see
+ *     migration 20260803120000_add_patient_emergency_contacts) as a
+ *     last-resort backstop.
+ *   - Both POST and PUT accept an OPTIONAL `expectedCurrentPrimaryContactId`
+ *     field (null, or an existing contact's id) whenever the request would
+ *     set isPrimary=true. When present, it is enforced as a TRUE
+ *     optimistic-concurrency precondition: the canonical current-primary
+ *     read taken under the lock must match it exactly, or the request gets
+ *     409 PRIMARY_CONTACT_CONFLICT before any demotion/insert. This is
+ *     airtight against connection-pool/event-loop scheduling, unlike any
+ *     purely server-side timing comparison — see resolvePrimaryPromotion's
+ *     header comment in patientEmergencyContactsConcurrency.ts for the full
+ *     proof (F1-004-P1-R2-R3, CI run 31020654709 attempt 1) that no
+ *     server-only signal can distinguish two requests that genuinely
+ *     overlapped at the HTTP layer from two that were genuinely sequential,
+ *     once the losing request's entire transaction happens to execute after
+ *     the winner's commit. When the field is OMITTED (an older client), the
+ *     route falls back to F1-004-P1-R2's best-effort "prior vs current"
+ *     server-side comparison — closes the gap PR #310 had, but is knowingly
+ *     NOT race-free against the F1-004-P1-R2-R3 mechanism; never claim
+ *     otherwise for that path.
  *   - When two requests race to become primary for the same patient, the
- *     loser either fails the optimistic-concurrency re-check
+ *     loser either fails the precondition/optimistic-concurrency check
  *     (PrimaryContactConflictError) or, in the rare case both reach the
  *     database index simultaneously, rejects with a P2002 unique-constraint
  *     error. POST/PUT below catch both via isPrimaryContactConflict() and
@@ -66,11 +78,12 @@ import {
   validateEmergencyContact,
   mergeEmergencyContactPatch,
   isPrimaryContactConflict,
+  parseExpectedPrimaryPrecondition,
   type NormalizedEmergencyContact,
 } from '../services/patientEmergencyContacts.js';
 import {
-  acquireEmergencyContactPrimaryLock,
-  PrimaryContactConflictError,
+  resolvePrimaryPromotion,
+  invokeEmergencyContactRaceHook,
 } from '../services/patientEmergencyContactsConcurrency.js';
 
 const router = express.Router();
@@ -158,52 +171,21 @@ router.post(
       if (!validation.ok) return res.status(400).json({ error: validation.error });
       const data = validation.data;
 
-      // Captured BEFORE the transaction so the in-lock re-check below can
-      // tell "nobody raced me since I looked" apart from "someone else just
-      // won" — see patientEmergencyContactsConcurrency.ts's header comment.
-      const priorPrimaryId = data.isPrimary
-        ? (
-            await prisma.patientEmergencyContact.findFirst({
-              where: {
-                patientId: patient.id,
-                clinicId: patient.clinicId,
-                organizationId: patient.organizationId,
-                isPrimary: true,
-              },
-              select: { id: true },
-            })
-          )?.id ?? null
-        : null;
+      const preconditionResult = parseExpectedPrimaryPrecondition(req.body ?? {});
+      if (!preconditionResult.ok) return res.status(400).json({ error: preconditionResult.error });
+      const precondition = preconditionResult.precondition;
 
       let contact;
       try {
         contact = await prisma.$transaction(async (tx) => {
           if (data.isPrimary) {
-            await acquireEmergencyContactPrimaryLock(tx, patient.id);
-
-            const currentPrimary = await tx.patientEmergencyContact.findFirst({
-              where: {
-                patientId: patient.id,
-                clinicId: patient.clinicId,
-                organizationId: patient.organizationId,
-                isPrimary: true,
-              },
-              select: { id: true },
+            await resolvePrimaryPromotion(tx, {
+              patientId: patient.id,
+              clinicId: patient.clinicId,
+              organizationId: patient.organizationId,
+              precondition,
+              op: 'create',
             });
-            if (currentPrimary && currentPrimary.id !== priorPrimaryId) {
-              throw new PrimaryContactConflictError();
-            }
-            if (currentPrimary) {
-              await tx.patientEmergencyContact.updateMany({
-                where: {
-                  patientId: patient.id,
-                  clinicId: patient.clinicId,
-                  organizationId: patient.organizationId,
-                  isPrimary: true,
-                },
-                data: { isPrimary: false },
-              });
-            }
           }
           return tx.patientEmergencyContact.create({
             data: {
@@ -222,6 +204,9 @@ router.post(
           });
         }
         throw txErr;
+      }
+      if (data.isPrimary) {
+        await invokeEmergencyContactRaceHook('afterCommit', { patientId: patient.id, op: 'create' });
       }
 
       await logActivity({
@@ -265,57 +250,28 @@ router.put(
       if (!validation.ok) return res.status(400).json({ error: validation.error });
       const data = validation.data;
 
-      // Only an actual promotion (not-yet-primary -> primary) needs the lock
-      // and the priorPrimaryId snapshot below — an idempotent update of an
-      // already-primary row, or a demotion, never contends for the
-      // single-primary invariant (see patientEmergencyContactsConcurrency.ts).
-      const promoting = data.isPrimary && !existing.isPrimary;
+      const preconditionResult = parseExpectedPrimaryPrecondition(req.body ?? {});
+      if (!preconditionResult.ok) return res.status(400).json({ error: preconditionResult.error });
+      const precondition = preconditionResult.precondition;
 
-      const priorPrimaryId = promoting
-        ? (
-            await prisma.patientEmergencyContact.findFirst({
-              where: {
-                patientId: patient.id,
-                clinicId: patient.clinicId,
-                organizationId: patient.organizationId,
-                isPrimary: true,
-              },
-              select: { id: true },
-            })
-          )?.id ?? null
-        : null;
+      // Only an actual promotion (not-yet-primary -> primary) needs the lock
+      // below — an idempotent update of an already-primary row, or a
+      // demotion, never contends for the single-primary invariant (see
+      // patientEmergencyContactsConcurrency.ts).
+      const promoting = data.isPrimary && !existing.isPrimary;
 
       let contact;
       try {
         contact = await prisma.$transaction(async (tx) => {
           if (promoting) {
-            await acquireEmergencyContactPrimaryLock(tx, patient.id);
-
-            const currentPrimary = await tx.patientEmergencyContact.findFirst({
-              where: {
-                patientId: patient.id,
-                clinicId: patient.clinicId,
-                organizationId: patient.organizationId,
-                isPrimary: true,
-                id: { not: existing.id },
-              },
-              select: { id: true },
+            await resolvePrimaryPromotion(tx, {
+              patientId: patient.id,
+              clinicId: patient.clinicId,
+              organizationId: patient.organizationId,
+              excludeContactId: existing.id,
+              precondition,
+              op: 'update',
             });
-            if (currentPrimary && currentPrimary.id !== priorPrimaryId) {
-              throw new PrimaryContactConflictError();
-            }
-            if (currentPrimary) {
-              await tx.patientEmergencyContact.updateMany({
-                where: {
-                  patientId: patient.id,
-                  clinicId: patient.clinicId,
-                  organizationId: patient.organizationId,
-                  isPrimary: true,
-                  id: { not: existing.id },
-                },
-                data: { isPrimary: false },
-              });
-            }
           }
           return tx.patientEmergencyContact.update({
             where: { id: existing.id },
@@ -330,6 +286,9 @@ router.put(
           });
         }
         throw txErr;
+      }
+      if (promoting) {
+        await invokeEmergencyContactRaceHook('afterCommit', { patientId: patient.id, op: 'update' });
       }
 
       await logActivity({

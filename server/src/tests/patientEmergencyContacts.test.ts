@@ -46,6 +46,7 @@ import {
   validateEmergencyContact,
   mergeEmergencyContactPatch,
   isPrimaryContactConflict,
+  parseExpectedPrimaryPrecondition,
   PRIMARY_CONTACT_CONFLICT_CODE,
   type NormalizedEmergencyContact,
 } from '../services/patientEmergencyContacts.js';
@@ -354,6 +355,35 @@ await test('the stable API error code matches what the route responds with', () 
   assert.equal(PRIMARY_CONTACT_CONFLICT_CODE, 'PRIMARY_CONTACT_CONFLICT');
 });
 
+await test('a PrimaryContactConflictError (optimistic-concurrency recheck under the advisory lock — F1-004-P1-R2) is classified as a primary-contact conflict', () => {
+  const conflictErr = Object.assign(new Error('Another request just set a primary contact for this patient.'), {
+    code: PRIMARY_CONTACT_CONFLICT_CODE,
+  });
+  assert.equal(isPrimaryContactConflict(conflictErr), true);
+});
+
+await test('a generic Prisma P2034 transaction-conflict error (deadlock/serialization failure) is NOT classified as a primary-contact conflict', () => {
+  // P2034 is Prisma's generic code for ANY deadlock/serialization failure —
+  // it does not by itself mean "another request just promoted a primary
+  // contact." Misclassifying it as PRIMARY_CONTACT_CONFLICT would hide an
+  // unrelated operational failure behind a business-conflict response (see
+  // this function's own doc comment in patientEmergencyContacts.ts). It
+  // must fall through to the route's existing generic 500 path instead.
+  const p2034 = Object.assign(new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction.'), {
+    code: 'P2034',
+  });
+  assert.equal(isPrimaryContactConflict(p2034), false);
+});
+
+await test('a generic/unrelated Prisma error is NOT classified as a primary-contact conflict, regardless of its code', () => {
+  const genericTimeout = Object.assign(new Error('Server has closed the connection.'), { code: 'P1017' });
+  const genericInternal = Object.assign(new Error('An operation failed because it depends on one or more records that were required but not found.'), {
+    code: 'P2025',
+  });
+  assert.equal(isPrimaryContactConflict(genericTimeout), false);
+  assert.equal(isPrimaryContactConflict(genericInternal), false);
+});
+
 // ── 9. isLegalDecisionMaker is NOT deduplicated ─────────────────────────────
 
 section('9. Legal decision-maker can be true for multiple contacts');
@@ -450,6 +480,54 @@ await test('patientListSelect (used for BILLING GET /api/patients/:id) does not 
 
 await test('all EMERGENCY_CONTACT_TYPES are the stable backend contract values', () => {
   assert.deepEqual([...EMERGENCY_CONTACT_TYPES], ['SPOUSE', 'PARENT', 'GUARDIAN', 'CHILD', 'SIBLING', 'OTHER']);
+});
+
+// ── 14. parseExpectedPrimaryPrecondition — F1-004-P1-R2-R3 ─────────────────
+//
+// Pure parsing/validation logic for the optimistic-concurrency precondition
+// that closes the CREATE primary-contact race a purely server-side "prior vs
+// current" comparison cannot (see patientEmergencyContactsConcurrency.ts's
+// resolvePrimaryPromotion header comment for the full proof). The actual
+// database-backed enforcement (mismatch -> 409) is covered against a real
+// Postgres in dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts.
+
+section('14. parseExpectedPrimaryPrecondition — precondition parsing (F1-004-P1-R2-R3)');
+
+await test('field omitted entirely -> { provided: false } (legacy compatibility mode)', () => {
+  const result = parseExpectedPrimaryPrecondition({});
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.ok && result.precondition, { provided: false });
+});
+
+await test('field explicitly null -> { provided: true, expectedCurrentPrimaryContactId: null } — NOT the same as omitted', () => {
+  const result = parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: null });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.ok && result.precondition, { provided: true, expectedCurrentPrimaryContactId: null });
+});
+
+await test('field set to a non-empty string -> provided with that exact (trimmed) id', () => {
+  const result = parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: '  contact-abc  ' });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.ok && result.precondition, { provided: true, expectedCurrentPrimaryContactId: 'contact-abc' });
+});
+
+await test('an empty string is rejected (400) — never silently treated as null or omitted', () => {
+  const result = parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: '' });
+  assert.equal(result.ok, false);
+});
+
+await test('a non-string, non-null value (number/boolean/object/array) is rejected (400)', () => {
+  assert.equal(parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: 42 }).ok, false);
+  assert.equal(parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: true }).ok, false);
+  assert.equal(parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: {} }).ok, false);
+  assert.equal(parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: [] }).ok, false);
+});
+
+await test('omitted vs explicit-null are never conflated across repeated calls (no shared/mutated state)', () => {
+  const omitted = parseExpectedPrimaryPrecondition({ isPrimary: true });
+  const explicitNull = parseExpectedPrimaryPrecondition({ isPrimary: true, expectedCurrentPrimaryContactId: null });
+  assert.equal(omitted.ok && omitted.precondition.provided, false);
+  assert.equal(explicitNull.ok && explicitNull.precondition.provided, true);
 });
 
 console.log(`\nSonuç: ${passed} geçti, ${failed} başarısız\n`);

@@ -51,19 +51,42 @@ export type EmergencyContactValidationResult =
 export const PRIMARY_CONTACT_CONFLICT_CODE = 'PRIMARY_CONTACT_CONFLICT';
 
 /**
- * True when `err` is either of the two sources of a single-primary-contact
- * conflict:
- *   - a Prisma unique-constraint violation (P2002) from the database-level
- *     partial index (the last-resort backstop — see migration
- *     20260803120000_add_patient_emergency_contacts); or
+ * True when `err` is one of the sources of a single-primary-contact
+ * conflict (F1-004-P1-R2):
  *   - a PrimaryContactConflictError (server/src/services/
  *     patientEmergencyContactsConcurrency.ts) from the optimistic-concurrency
  *     re-check performed under the per-patient advisory lock, which is what
  *     actually catches the race in practice (see that file's header comment
- *     for why the unique index alone is not sufficient).
+ *     for why the unique index alone is not sufficient, and why an earlier
+ *     version of this same check — PR #310 — still had a gap); or
+ *   - a Prisma unique-constraint violation (P2002) from the database-level
+ *     partial index (see migration 20260803120000_add_patient_emergency_
+ *     contacts), kept as a last-resort backstop.
  * The only unique constraint on PatientEmergencyContact is the partial index
  * above, so any P2002 raised while creating/updating a contact can only be
  * that race — never an unrelated/ambiguous conflict.
+ *
+ * Deliberately NOT included — Prisma P2034 (generic transaction-conflict:
+ * deadlock or serialization failure). An earlier version of this function
+ * mapped P2034 to PRIMARY_CONTACT_CONFLICT defensively, on the theory that
+ * it "shouldn't occur" under this design's READ COMMITTED isolation so it
+ * was safe to treat as this race if it ever did. That reasoning doesn't
+ * hold: P2034 is Prisma's generic code for ANY deadlock or serialization
+ * failure the database reports, not a signal specific to this primary-
+ * contact race — READ COMMITTED transactions can still deadlock for reasons
+ * having nothing to do with primary-contact promotion (e.g. lock-ordering
+ * with an unrelated concurrent write on the same patient row). Classifying
+ * every such failure as PRIMARY_CONTACT_CONFLICT would mislabel a genuine
+ * operational failure as a business conflict and hide it from the same
+ * operational visibility (500 + server-side log) every other unexpected
+ * transaction failure gets. A generic P2034 that reaches the route handler
+ * now falls through to the existing catch-all — logged and returned as a
+ * plain 500, exactly like any other unclassified transaction error — never
+ * exposing raw Prisma details to the client. Retrying it automatically was
+ * considered and rejected here: nothing in this file's error data
+ * distinguishes a spuriously-retryable deadlock from a real underlying
+ * problem, and no repository convention already justifies a bounded retry
+ * for this specific path.
  */
 export function isPrimaryContactConflict(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
@@ -114,6 +137,61 @@ export function validateEmergencyContact(input: EmergencyContactInput): Emergenc
       isLegalDecisionMaker: input.isLegalDecisionMaker === true,
     },
   };
+}
+
+/**
+ * A client-supplied optimistic-concurrency precondition for primary-contact
+ * promotion (F1-004-P1-R2-R3). Distinct from NormalizedEmergencyContact
+ * because it is a REQUEST-level precondition, not persisted contact data.
+ *
+ * Presence and value are deliberately tracked separately —
+ * `{ provided: false }` (the field was omitted entirely — legacy client,
+ * best-effort server-side comparison only, see patientEmergencyContactsConcurrency.ts)
+ * is NOT the same as `{ provided: true, expectedCurrentPrimaryContactId: null }`
+ * (the client explicitly asserts "I observed no current primary"). Collapsing
+ * "omitted" into "null" would silently downgrade every legacy request into a
+ * (false) explicit "no primary" assertion and reject legitimate sequential
+ * replacements against an established primary.
+ */
+export type ExpectedPrimaryPrecondition =
+  | { provided: false }
+  | { provided: true; expectedCurrentPrimaryContactId: string | null };
+
+export type ExpectedPrimaryPreconditionResult =
+  | { ok: true; precondition: ExpectedPrimaryPrecondition }
+  | { ok: false; error: string };
+
+/**
+ * Parses the optional `expectedCurrentPrimaryContactId` request field used by
+ * POST/PUT emergency-contacts to close the primary-promotion race that a
+ * purely server-side "prior vs current" comparison cannot: see
+ * patientEmergencyContactsConcurrency.ts's header comment for the full proof
+ * that no database-only signal can distinguish two requests that genuinely
+ * overlapped at the HTTP layer from two that were genuinely sequential, once
+ * the losing request's entire transaction happens to execute after the
+ * winner's commit. When the client provides this field, it captures the
+ * client's own observed state at request-formation time — information the
+ * server can never reconstruct from database state alone — and the route
+ * enforces it as a true optimistic-concurrency precondition instead of
+ * relying on timing.
+ *
+ * Accepts: field omitted entirely (`{ provided: false }`); `null` (client
+ * observed no current primary); or a non-empty string (client observed that
+ * exact contact as primary). Any other JSON type (number, boolean, object,
+ * empty string) is a validation error — never silently coerced.
+ */
+export function parseExpectedPrimaryPrecondition(body: Record<string, unknown>): ExpectedPrimaryPreconditionResult {
+  if (!Object.prototype.hasOwnProperty.call(body, 'expectedCurrentPrimaryContactId')) {
+    return { ok: true, precondition: { provided: false } };
+  }
+  const raw = body.expectedCurrentPrimaryContactId;
+  if (raw === null) {
+    return { ok: true, precondition: { provided: true, expectedCurrentPrimaryContactId: null } };
+  }
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    return { ok: true, precondition: { provided: true, expectedCurrentPrimaryContactId: raw.trim() } };
+  }
+  return { ok: false, error: 'expectedCurrentPrimaryContactId must be null or a non-empty string contact id' };
 }
 
 /**
