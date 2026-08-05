@@ -282,6 +282,21 @@
       "productionVerified": false,
       "note": "additive API-surface change — reported for review per this task's own instructions, not merged unilaterally"
     },
-    "exactNextTask": "Push to fix/f1-004-p1-r2-emergency-contact-update-race, watch CI to genuine terminal completion, report the final delivery summary. Program-owner/external review and merge decision for PR #325 (now carrying an additive API-surface change) is the actual next step — this task does not merge or deploy."
+    "exactNextTask": "Push to fix/f1-004-p1-r2-emergency-contact-update-race, watch CI to genuine terminal completion, report the final delivery summary. Program-owner/external review and merge decision for PR #325 (now carrying an additive API-surface change) is the actual next step — this task does not merge or deploy.",
+    "postPushCiEvidence": {
+      "commitPushed": "a39899aa35f5895e151d86fd62f9385fa0fadcf5",
+      "ciRunId": "31030601047",
+      "ciRunUrl": "https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/31030601047",
+      "firstAttempt": {
+        "conclusion": "failure",
+        "layer3DisposablePostgresJob": "success",
+        "unrelatedFailingJob": "ci-layers / Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)",
+        "unrelatedFailingTest": "server/src/tests/platformAdmin.test.ts — PATCH and DELETE settings: concurrent enable/reset operations serialize into a coherent final state and audit chain",
+        "fileTouchedByThisTask": false,
+        "lastUnrelatedCommitTouchingFile": "b860017"
+      },
+      "diagnosticRerun": { "command": "gh run rerun 31030601047 --failed", "codeOrTestChange": false, "conclusion": "success", "jobsSuccess": 10, "jobsTotal": 10 },
+      "prState": { "state": "OPEN", "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN", "headRefOid": "a39899aa35f5895e151d86fd62f9385fa0fadcf5", "unresolvedReviewThreads": 0 }
+    }
   }
 }

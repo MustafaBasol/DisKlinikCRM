@@ -360,6 +360,12 @@ All commands run from `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f1-004-p1-r2-em
 - "This fix eliminates the residual limitation for every API consumer" is **not** claimed — only for requests that supply the precondition; §23 states this plainly.
 - "A narrowed wall-clock heuristic would have been sufficient" is **not** accepted — §18 explains why it was rejected as a design choice, not merely as more work.
 
+## 26. Real GitHub Actions evidence on the R2-R3 head (post-push)
+
+Push to `fix/f1-004-p1-r2-emergency-contact-update-race` at commit `a39899aa35f5895e151d86fd62f9385fa0fadcf5` triggered `ci-layers` run [31030601047](https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/31030601047), watched to genuine terminal completion (`gh run watch --exit-status`, not assumed from a partial check). **First attempt: `ci-layers / Layer 3: disposable PostgreSQL tests` — the job this task's own new tests belong to — was `success`**; overall run conclusion was `failure` because a single, unrelated job, `ci-layers / Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)`, failed at `server/src/tests/platformAdmin.test.ts`'s `"PATCH and DELETE settings: concurrent enable/reset operations serialize into a coherent final state and audit chain"` assertion (`'false' !== null`). This file was not touched by this task or F1-004-P1-R2 — its last commit (`b860017`, `fix(privacy): add audited legacy consent setting reset`) is unrelated to emergency contacts. Following the identical diagnostic precedent already established in §15 (rerun the failed job only, no code/test change, report honestly), `gh run rerun 31030601047 --failed` was issued; **the rerun passed, and all 10/10 jobs are now `success`**, overall run conclusion `success`. Consistent with a transient, environment-scheduling-sensitive flake in an unrelated legacy concurrency test — not investigated further, as it is out of this task's scope and does not touch the emergency-contacts code path this task owns.
+
+PR #325 re-confirmed post-push: `state: OPEN`, `mergeable: MERGEABLE`, `mergeStateStatus: CLEAN`, `headRefOid: a39899aa35f5895e151d86fd62f9385fa0fadcf5`, 0 unresolved review threads (2 total, both already resolved from R2).
+
 ## Merge/deployment safety
 
 Do not merge. Do not deploy. PR #325 remains open per this task's own instructions, pending review of this design change (the precondition token is an additive API surface change, even though backward-compatible) and final CI confirmation on the pushed head.
