@@ -139,17 +139,40 @@
     "cleanlyAutoMergedFiles": ["docs/program/NORAMEDI_MASTER_TRACKER.md", "docs/program/evidence/README.md"],
     "runtimeOrSchemaChange": false,
     "ciWorkflowChange": false,
-    "note": "CI on the reconciled head is pending as of this entry — see PR #325 for the exact current head"
+    "reconciliationCommit": "fd1148f8341311baee3db1b2a7313522d7ad2404"
+  },
+  "firstRealCiObservationOfResidualLimitation": {
+    "ciRunId": "31020654709",
+    "ciRunUrl": "https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/31020654709",
+    "headSha": "fd1148f8341311baee3db1b2a7313522d7ad2404",
+    "firstAttempt": {
+      "conclusion": "failure",
+      "failingJob": "ci-layers / Layer 3: disposable PostgreSQL tests",
+      "failingAssertion": "patientEmergencyContactsPrimaryConcurrency — CREATE-race stress, round 0: exactly one concurrent create must succeed — got A=201 B=201",
+      "rootCauseTheory": "when no primary contact exists yet for a patient, both the prior-read and current-read return null for whichever request runs second; if that request's entire DB interaction is scheduled strictly after the first request's full commit, its own current-read (post-lock-acquire) sees the first request's newly-committed row, not the null its own prior-read captured moments earlier — BUT when neither read observed a primary at all (both null), priorPrimary.id === currentPrimary.id (both undefined/null), so no conflict is thrown and the second request silently takes over. This is the residual limitation already documented in rootCause and fixSelected.residualLimitation above, empirically observed in real CI for the first time.",
+      "reproducedLocally": false,
+      "localRunsAgainstThisCommit": 3,
+      "localRoundsWithoutFailure": 300
+    },
+    "diagnosticRerun": {
+      "command": "gh run rerun 31020654709 --failed",
+      "codeOrTestChange": false,
+      "conclusion": "success",
+      "failingJobOnRerun": "success"
+    },
+    "interpretation": "one failure, one passing rerun on the same code — consistent with a rare, non-deterministic manifestation of the already-documented residual limitation rather than a deterministic regression, but not formal proof of that over a genuine intermittent regression",
+    "actionTaken": "recorded transparently; no runtime or test code changed; no test expectation weakened",
+    "openQuestion": "whether this residual gap's real-world frequency is acceptable, whether the stress test should tolerate a bounded rare-failure rate, or whether a different mechanism is warranted — a program-owner decision, not resolved by this task"
   },
   "taskStatus": {
     "agentCompleted": true,
     "testsPassed": true,
     "remoteCiVerified": true,
-    "remoteCiVerifiedNote": "true for the pre-R2 head (a6d55efc5...) only — CI on the R2-plus-reconciled head is pending",
+    "remoteCiVerifiedNote": "true on the reconciled head fd1148f as of the diagnostic rerun of ci run 31020654709 — see firstRealCiObservationOfResidualLimitation for the first-attempt failure and rerun-pass detail",
     "prOpened": true,
     "merged": false,
     "deployed": false,
     "productionVerified": false
   },
-  "exactNextTask": "Wait for a fresh CI run on the reconciled head, then external review and merge decision for PR #325. No further F1-004 follow-up anticipated unless a future CI run reproduces a different concurrency gap in this same code path (would be a new, separately-numbered task)."
+  "exactNextTask": "Program-owner review of firstRealCiObservationOfResidualLimitation before any merge decision for PR #325 — this is new empirical evidence about the design's accepted residual limitation, not merely a review/merge formality. No further F1-004 follow-up anticipated beyond that unless a future CI run reproduces a different concurrency gap in this same code path (would be a new, separately-numbered task)."
 }
