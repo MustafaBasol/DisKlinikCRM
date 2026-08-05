@@ -82,7 +82,16 @@
       { "run": "3_retry", "command": "npm run test:runtime:postgres", "exitCode": 0, "cleanupSuccess": true, "residualNmtestContainers": 0 }
     ],
     "independentSuccessfulProcessLevelExecutions": 3,
-    "repetitionCountMeetsRequirement": true
+    "repetitionCountMeetsRequirement": true,
+    "realGithubActionsEvidence": {
+      "runId": "31012057012",
+      "runUrl": "https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/31012057012",
+      "headSha": "a6d55efc57811409355f83b8c17a811db805ae37",
+      "jobsTotal": 9,
+      "jobsSuccess": 9,
+      "layer3DisposablePostgresJob": "success",
+      "remoteCiVerified": true
+    }
   },
   "tenantScope": {
     "lockKeyedBy": "patientId (globally unique)",
@@ -109,6 +118,7 @@
   "taskStatus": {
     "agentCompleted": true,
     "testsPassed": true,
+    "remoteCiVerified": true,
     "prOpened": true,
     "merged": false,
     "deployed": false,

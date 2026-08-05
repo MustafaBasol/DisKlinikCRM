@@ -163,3 +163,7 @@ No purely server-side database mechanism (SERIALIZABLE, advisory locks, or the m
 ## Exact next task
 
 External review and merge decision for PR #325. Once merged, no further F1-004 follow-up is anticipated unless a future CI run reproduces a *different* concurrency gap in this same code path, in which case it should be opened as a new, separately-numbered task per this program's own convention (not silently folded into this one).
+
+## 13. Real GitHub Actions evidence (post-push, same task)
+
+PR #325's final head (`a6d55efc57811409355f83b8c17a811db805ae37`, after the documentation commit) triggered `ci-layers` run [31012057012](https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/31012057012), watched to genuine terminal completion via `gh run view --json status,conclusion,jobs` (not assumed from a partial check). **All 9 jobs `success`**, including `ci-layers / Layer 3: disposable PostgreSQL tests` — the exact job that failed in run 31002888303 — and `ci-layers / Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)`. `REMOTE_CI_VERIFIED` is genuinely established on the PR's own final head, independent of and in addition to the local 3-independent-run evidence in §8. **Task status upgraded: `AGENT_COMPLETED` / `TESTS_PASSED` / `REMOTE_CI_VERIFIED` / `PR_OPENED_AWAITING_REVIEW`.**
