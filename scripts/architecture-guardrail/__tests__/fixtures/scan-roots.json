@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": "test fixture",
+  "roots": ["server/src/routes", "server/src/services", "server/src/utils"],
+  "fileExtensions": [".ts"],
+  "excludePatterns": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"]
+}

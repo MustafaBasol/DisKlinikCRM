@@ -1,0 +1,52 @@
+{
+  "task": "TEST-FIXTURE-BASELINE",
+  "edges": [
+    {
+      "id": "FIX-001",
+      "classification": "ACCEPTED_PUBLIC_CONTRACT",
+      "risk": "Low",
+      "proposedEnforcementKey": {
+        "callerPath": "server/src/routes/orderRoute.ts",
+        "callerSymbol": "processPayment",
+        "ownerDomain": "domain-payments",
+        "targetModelOrSymbol": "services/paymentService.ts",
+        "accessKind": "import"
+      }
+    },
+    {
+      "id": "FIX-002",
+      "classification": "ACCEPTED_PUBLIC_CONTRACT",
+      "risk": "Low",
+      "proposedEnforcementKey": {
+        "callerPathGlob": "server/src/routes/**",
+        "callerSymbol": "n/a (glob entry)",
+        "ownerDomain": "domain-inventory",
+        "targetModelOrSymbol": "services/inventoryService.ts",
+        "accessKind": "import"
+      }
+    },
+    {
+      "id": "FIX-003",
+      "classification": "LEGACY_ALLOWLISTED_DIRECT_ACCESS",
+      "risk": "Low",
+      "proposedEnforcementKey": {
+        "callerPath": "server/src/routes/legacyRoute.ts",
+        "callerSymbol": "legacySymbol",
+        "ownerDomain": "domain-payments",
+        "targetModelOrSymbol": "services/paymentService.ts",
+        "accessKind": "import"
+      }
+    },
+    {
+      "id": "FIX-004",
+      "classification": "UNRESOLVED_OWNERSHIP",
+      "risk": "Low",
+      "proposedEnforcementKey": {
+        "callerPath": "server/src/routes/incomplete.ts",
+        "callerSymbol": "incompleteSymbol",
+        "targetModelOrSymbol": "services/incomplete.ts",
+        "accessKind": "import"
+      }
+    }
+  ]
+}

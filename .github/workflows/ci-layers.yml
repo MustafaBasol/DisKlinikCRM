@@ -12,6 +12,7 @@ name: ci-layers
 #   Layer 1 (static/type/syntax) -> frontend-typecheck-and-build,
 #                                   server-typecheck,
 #                                   tooling-typecheck-and-unit,
+#                                   architecture-guardrail-report-only,
 #                                   workflow-and-syntax-lint
 #   Layer 2 (non-disposable backend)      -> non-disposable-backend-tests
 #   Layer 3 (disposable PostgreSQL)       -> disposable-postgres-tests
@@ -40,6 +41,16 @@ name: ci-layers
 # F1-003-P2 disposable PostgreSQL/MinIO provisioning mechanism
 # (scripts/test-runtime/** is used exactly as merged, additively extended
 # only with the new profile described above).
+#
+# F2-GUARDRAIL-IMPL-001: adds architecture-guardrail-report-only, a new
+# standalone Layer 1 job for the exact-edge cross-domain-import guardrail
+# authorized (repository-only, report-only, non-blocking) by
+# docs/program/evidence/F2-SEC-003_SECURITY_GATE_RECONCILIATION.md section
+# 6. Deliberately not added to any other job's `needs:` list and nothing
+# needs it - see docs/program/evidence/F2-GUARDRAIL-IMPL-001_* for why a
+# guardrail-tool failure must never gate application tests. Architectural
+# findings always exit 0 (see scripts/architecture-guardrail/cli.ts); only a
+# genuine tool/configuration/execution failure turns this job red.
 
 on:
   workflow_call: {}
@@ -100,6 +111,50 @@ jobs:
         run: npm run typecheck:runtime
       - name: Docker-free orchestrator unit tests
         run: npm run test:runtime:unit
+
+  architecture-guardrail-report-only:
+    name: 'Layer 1: architecture guardrail (advisory, report-only)'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # F2-GUARDRAIL-IMPL-001 — repository-only, report-only, non-blocking
+    # exact-edge cross-domain import drift detector (scripts/architecture-
+    # guardrail/**). Deliberately NOT in any other job's `needs:` list and
+    # nothing needs this job - a guardrail-tool failure must never make
+    # application tests conditional on it (see this task's own evidence
+    # doc). Architectural findings never fail this job - only a genuine
+    # tool/configuration/execution failure does (see cli.ts's documented
+    # exit-code contract). No `continue-on-error` is used, so a real crash
+    # still turns this job red; findings alone never do.
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Typecheck scripts/architecture-guardrail
+        run: npm run typecheck:guardrail
+      - name: Guardrail focused unit tests
+        run: npm run guardrail:test
+      - name: Run guardrail scan (report-only - exit 0 regardless of finding count; non-zero only on a real tool/config failure)
+        run: npm run guardrail:scan -- --repo-sha=${{ github.sha }} --out=architecture-guardrail-report.json
+      - name: Validate report artifact is real JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('architecture-guardrail-report.json','utf8')); console.log('architecture-guardrail-report.json is valid JSON')"
+      - name: Scan report artifact for prohibited secret patterns
+        run: |
+          set -euo pipefail
+          if grep -EiI 'postgresql://|postgres://|AKIA[0-9A-Z]{16}|BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY|secretAccessKey|accessKeyId["'"'"']?\s*[:=]|password["'"'"']?\s*[:=]' architecture-guardrail-report.json; then
+            echo "Prohibited secret-like pattern found in artifact candidate - refusing to upload" >&2
+            exit 1
+          fi
+          echo "No prohibited secret patterns detected in architecture-guardrail-report.json"
+      - name: Upload architecture guardrail report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: architecture-guardrail-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: architecture-guardrail-report.json
+          retention-days: 30
 
   workflow-and-syntax-lint:
     name: 'Layer 1: workflow YAML, shell, PowerShell, and JSON validation'
