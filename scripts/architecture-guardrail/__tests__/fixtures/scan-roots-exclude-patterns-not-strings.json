@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": "test fixture: excludePatterns contains a non-string entry",
+  "roots": ["server/src/routes"],
+  "fileExtensions": [".ts"],
+  "excludePatterns": [1]
+}

@@ -44,12 +44,23 @@ export function loadScanRoots(filePath: string): ScanRootsConfig {
   if (!Array.isArray(data.fileExtensions) || data.fileExtensions.length === 0) {
     throw new ConfigError(`scan-roots config "${filePath}": "fileExtensions" must be a non-empty array`);
   }
+  if (!data.fileExtensions.every((e) => typeof e === 'string' && e.length > 0)) {
+    throw new ConfigError(`scan-roots config "${filePath}": every entry in "fileExtensions" must be a non-empty string`);
+  }
+  if (data.excludePatterns !== undefined) {
+    if (!Array.isArray(data.excludePatterns)) {
+      throw new ConfigError(`scan-roots config "${filePath}": "excludePatterns" must be an array`);
+    }
+    if (!data.excludePatterns.every((p) => typeof p === 'string' && p.length > 0)) {
+      throw new ConfigError(`scan-roots config "${filePath}": every entry in "excludePatterns" must be a non-empty string`);
+    }
+  }
   return {
     schemaVersion: String(data.schemaVersion ?? 'unknown'),
     provenance: String(data.provenance ?? ''),
     roots: data.roots,
     fileExtensions: data.fileExtensions,
-    excludePatterns: Array.isArray(data.excludePatterns) ? data.excludePatterns : [],
+    excludePatterns: data.excludePatterns ?? [],
   };
 }
 

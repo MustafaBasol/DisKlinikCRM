@@ -88,6 +88,54 @@ export function registerCliTests(h: Harness): void {
     h.assertEqual(options.baselinePath, null, '--no-baseline must disable baseline comparison');
   });
 
+  h.section('cli: --repo-root / default --baseline consistency (review finding 2)');
+
+  const DEFAULT_BASELINE_RELATIVE_PATH = 'docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json';
+  // Deliberately distinct from FIXTURE_REPO_ROOT: parseArgs never touches
+  // disk, so this need not exist — it only has to differ from the override
+  // below so a test can prove the override, not the original default, won.
+  const ALT_DEFAULT_ROOT = resolve(FIXTURE_REPO_ROOT, '..', 'alt-default-root-not-on-disk');
+
+  h.test('default invocation (no flags): baseline defaults under the default repo root', () => {
+    const options = parseArgs([], FIXTURE_REPO_ROOT);
+    h.assertEqual(
+      options.baselinePath,
+      resolve(FIXTURE_REPO_ROOT, DEFAULT_BASELINE_RELATIVE_PATH),
+      'default baseline must be rooted at the default repo root',
+    );
+  });
+
+  h.test('--repo-root=<fixture> only: default baseline follows the effective repo root, not the original default', () => {
+    const options = parseArgs([`--repo-root=${FIXTURE_REPO_ROOT}`], ALT_DEFAULT_ROOT);
+    h.assertEqual(options.repoRoot, resolve(FIXTURE_REPO_ROOT), 'repoRoot must be the overridden path');
+    h.assertEqual(
+      options.baselinePath,
+      resolve(FIXTURE_REPO_ROOT, DEFAULT_BASELINE_RELATIVE_PATH),
+      'default baseline must be re-derived from --repo-root, not left rooted at the original default repo root',
+    );
+  });
+
+  h.test('--repo-root=<fixture> plus explicit --baseline=<other>: explicit baseline wins', () => {
+    const explicitBaseline = resolve(FIXTURE_REPO_ROOT, 'custom-baseline.json');
+    const options = parseArgs([`--repo-root=${FIXTURE_REPO_ROOT}`, `--baseline=${explicitBaseline}`], ALT_DEFAULT_ROOT);
+    h.assertEqual(options.baselinePath, explicitBaseline, 'explicit --baseline must override the derived default');
+  });
+
+  h.test('reversed argument order (--baseline before --repo-root): explicit baseline still wins', () => {
+    const explicitBaseline = resolve(FIXTURE_REPO_ROOT, 'custom-baseline.json');
+    const options = parseArgs([`--baseline=${explicitBaseline}`, `--repo-root=${FIXTURE_REPO_ROOT}`], ALT_DEFAULT_ROOT);
+    h.assertEqual(
+      options.baselinePath,
+      explicitBaseline,
+      'argument order must not change the outcome: explicit override still wins',
+    );
+  });
+
+  h.test('--repo-root=<fixture> plus --no-baseline: explicit disable still wins regardless of order', () => {
+    const options = parseArgs([`--repo-root=${FIXTURE_REPO_ROOT}`, '--no-baseline'], ALT_DEFAULT_ROOT);
+    h.assertEqual(options.baselinePath, null, '--no-baseline must still disable the baseline even with --repo-root set');
+  });
+
   h.section('cli: real process invocation (spawned subprocess)');
 
   h.test('spawned cli.ts against the fixture repo exits 0 despite findings, and stdout is valid JSON', () => {

@@ -60,23 +60,29 @@ interface CliOptions {
   outPath: string | null;
 }
 
+const DEFAULT_BASELINE_RELATIVE_PATH = 'docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json';
+
 export function parseArgs(argv: string[], defaultRepoRoot: string): CliOptions {
   const options: CliOptions = {
     repoRoot: defaultRepoRoot,
     scanRootsPath: resolve(import.meta.dirname, 'config/scan-roots.json'),
     domainMapPath: resolve(import.meta.dirname, 'config/domain-map.json'),
-    baselinePath: resolve(
-      defaultRepoRoot,
-      'docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json',
-    ),
+    baselinePath: null,
     repoSha: null,
     deterministic: false,
     outPath: null,
   };
 
+  // Whether --baseline=... or --no-baseline was explicitly passed. Tracked
+  // separately from options.baselinePath (which --no-baseline sets to null)
+  // so the default baseline can still be derived from the *final* repoRoot
+  // below, regardless of --repo-root/--baseline argument order.
+  let baselineExplicit = false;
+
   for (const arg of argv) {
     if (arg === '--no-baseline') {
       options.baselinePath = null;
+      baselineExplicit = true;
     } else if (arg === '--deterministic') {
       options.deterministic = true;
     } else if (arg.startsWith('--repo-root=')) {
@@ -87,6 +93,7 @@ export function parseArgs(argv: string[], defaultRepoRoot: string): CliOptions {
       options.domainMapPath = resolve(arg.slice('--domain-map='.length));
     } else if (arg.startsWith('--baseline=')) {
       options.baselinePath = resolve(arg.slice('--baseline='.length));
+      baselineExplicit = true;
     } else if (arg.startsWith('--repo-sha=')) {
       options.repoSha = arg.slice('--repo-sha='.length);
     } else if (arg.startsWith('--out=')) {
@@ -94,6 +101,10 @@ export function parseArgs(argv: string[], defaultRepoRoot: string): CliOptions {
     } else {
       throw new ConfigError(`Unrecognized argument: "${arg}"`);
     }
+  }
+
+  if (!baselineExplicit) {
+    options.baselinePath = resolve(options.repoRoot, DEFAULT_BASELINE_RELATIVE_PATH);
   }
 
   return options;

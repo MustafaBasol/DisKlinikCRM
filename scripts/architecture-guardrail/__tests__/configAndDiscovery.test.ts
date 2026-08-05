@@ -8,6 +8,12 @@ import {
   FIXTURE_MALFORMED_JSON,
   FIXTURE_REPO_ROOT,
   FIXTURE_SCAN_ROOTS,
+  FIXTURE_SCAN_ROOTS_EXCLUDE_PATTERNS_EMPTY_STRING,
+  FIXTURE_SCAN_ROOTS_EXCLUDE_PATTERNS_NOT_ARRAY,
+  FIXTURE_SCAN_ROOTS_EXCLUDE_PATTERNS_NOT_STRINGS,
+  FIXTURE_SCAN_ROOTS_FILE_EXTENSIONS_EMPTY_STRING,
+  FIXTURE_SCAN_ROOTS_FILE_EXTENSIONS_MIXED,
+  FIXTURE_SCAN_ROOTS_FILE_EXTENSIONS_NOT_STRINGS,
   FIXTURE_SCAN_ROOTS_MISSING_PATH,
   FIXTURE_SCAN_ROOTS_MISSING_ROOTS,
 } from './fixturePaths.js';
@@ -41,6 +47,75 @@ export function registerConfigAndDiscoveryTests(h: Harness): void {
     const domainMap = loadDomainMap(FIXTURE_DOMAIN_MAP);
     h.assert(scanRoots.roots.length > 0, 'roots must be non-empty');
     h.assert(Object.keys(domainMap.files).length > 0, 'files must be non-empty');
+  });
+
+  h.section('configLoader: fileExtensions and excludePatterns shape validation (review finding 1)');
+
+  h.test('fileExtensions = [1] throws ConfigError, not a raw TypeError from endsWith', () => {
+    h.assertThrows(
+      () => loadScanRoots(FIXTURE_SCAN_ROOTS_FILE_EXTENSIONS_NOT_STRINGS),
+      'non-string fileExtensions entry must throw',
+    );
+    try {
+      loadScanRoots(FIXTURE_SCAN_ROOTS_FILE_EXTENSIONS_NOT_STRINGS);
+    } catch (err) {
+      h.assert(err instanceof ConfigError, 'must be a typed ConfigError, not a generic TypeError');
+    }
+  });
+
+  h.test('fileExtensions = [""] throws ConfigError', () => {
+    h.assertThrows(
+      () => loadScanRoots(FIXTURE_SCAN_ROOTS_FILE_EXTENSIONS_EMPTY_STRING),
+      'empty-string fileExtensions entry must throw',
+    );
+  });
+
+  h.test('fileExtensions = [".ts", 1] throws ConfigError', () => {
+    h.assertThrows(
+      () => loadScanRoots(FIXTURE_SCAN_ROOTS_FILE_EXTENSIONS_MIXED),
+      'a mix of valid and invalid fileExtensions entries must still throw',
+    );
+    try {
+      loadScanRoots(FIXTURE_SCAN_ROOTS_FILE_EXTENSIONS_MIXED);
+    } catch (err) {
+      h.assert(err instanceof ConfigError, 'must be a typed ConfigError, not a generic TypeError');
+    }
+  });
+
+  h.test('excludePatterns = "abc" (non-array) throws ConfigError', () => {
+    h.assertThrows(
+      () => loadScanRoots(FIXTURE_SCAN_ROOTS_EXCLUDE_PATTERNS_NOT_ARRAY),
+      'non-array excludePatterns must throw, not be silently coerced to []',
+    );
+    try {
+      loadScanRoots(FIXTURE_SCAN_ROOTS_EXCLUDE_PATTERNS_NOT_ARRAY);
+    } catch (err) {
+      h.assert(err instanceof ConfigError, 'must be a typed ConfigError');
+    }
+  });
+
+  h.test('excludePatterns = [1] throws ConfigError', () => {
+    h.assertThrows(
+      () => loadScanRoots(FIXTURE_SCAN_ROOTS_EXCLUDE_PATTERNS_NOT_STRINGS),
+      'non-string excludePatterns entry must throw',
+    );
+  });
+
+  h.test('excludePatterns = [""] throws ConfigError', () => {
+    h.assertThrows(
+      () => loadScanRoots(FIXTURE_SCAN_ROOTS_EXCLUDE_PATTERNS_EMPTY_STRING),
+      'empty-string excludePatterns entry must throw',
+    );
+  });
+
+  h.test('valid fileExtensions/excludePatterns string arrays continue to pass unchanged', () => {
+    const scanRoots = loadScanRoots(FIXTURE_SCAN_ROOTS);
+    h.assertDeepEqual(scanRoots.fileExtensions, ['.ts'], 'fileExtensions preserved for a valid config');
+    h.assertDeepEqual(
+      scanRoots.excludePatterns,
+      ['**/__tests__/**', '**/*.test.ts', '**/*.spec.ts'],
+      'excludePatterns preserved for a valid config',
+    );
   });
 
   h.section('sourceDiscovery: unreadable/missing configured path and empty result');

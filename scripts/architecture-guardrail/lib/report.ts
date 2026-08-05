@@ -23,6 +23,20 @@ import { redactSecrets } from './redact.js';
 
 export const SCHEMA_VERSION = '1.0.0';
 
+/**
+ * Locale-independent string comparator. String.prototype.localeCompare()
+ * uses ICU/locale-dependent collation, which is not guaranteed to produce
+ * the same ordering across environments (and can differ from host to host
+ * for non-ASCII characters) — this tool's "byte-identical" determinism
+ * guarantee requires a comparator whose result depends only on the
+ * strings' own UTF-16 code units.
+ */
+function compareCodeUnits(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 const TENANT_SCOPE_DISCLAIMER = [
   'Static findings from this guardrail are advisory signals only.',
   'Absence of findings is not proof of tenant isolation.',
@@ -32,12 +46,12 @@ const TENANT_SCOPE_DISCLAIMER = [
 
 function sortFindings(findings: Finding[]): Finding[] {
   return [...findings].sort((a, b) => {
-    if (a.callerPath !== b.callerPath) return a.callerPath.localeCompare(b.callerPath);
-    if (a.callerSymbol !== b.callerSymbol) return a.callerSymbol.localeCompare(b.callerSymbol);
+    if (a.callerPath !== b.callerPath) return compareCodeUnits(a.callerPath, b.callerPath);
+    if (a.callerSymbol !== b.callerSymbol) return compareCodeUnits(a.callerSymbol, b.callerSymbol);
     if (a.targetModelOrSymbol !== b.targetModelOrSymbol) {
-      return a.targetModelOrSymbol.localeCompare(b.targetModelOrSymbol);
+      return compareCodeUnits(a.targetModelOrSymbol, b.targetModelOrSymbol);
     }
-    return a.id.localeCompare(b.id);
+    return compareCodeUnits(a.id, b.id);
   });
 }
 
@@ -45,8 +59,8 @@ function sortByFilePathThenMessage<T extends { filePath: string | null; message:
   return [...items].sort((a, b) => {
     const aPath = a.filePath ?? '';
     const bPath = b.filePath ?? '';
-    if (aPath !== bPath) return aPath.localeCompare(bPath);
-    return a.message.localeCompare(b.message);
+    if (aPath !== bPath) return compareCodeUnits(aPath, bPath);
+    return compareCodeUnits(a.message, b.message);
   });
 }
 
@@ -97,8 +111,8 @@ export function buildReport(input: BuildReportInput): GuardrailReport {
     deterministic: input.generatedAt === null,
     repositorySha: input.repositorySha,
     scope: {
-      scanRoots: [...input.scanRoots].sort((a, b) => a.localeCompare(b)),
-      excludePatterns: [...input.excludePatterns].sort((a, b) => a.localeCompare(b)),
+      scanRoots: [...input.scanRoots].sort(compareCodeUnits),
+      excludePatterns: [...input.excludePatterns].sort(compareCodeUnits),
     },
     configurationVersion: '1.0.0',
     toolVersion: input.toolVersion,
