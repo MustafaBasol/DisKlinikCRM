@@ -298,5 +298,43 @@
       "diagnosticRerun": { "command": "gh run rerun 31030601047 --failed", "codeOrTestChange": false, "conclusion": "success", "jobsSuccess": 10, "jobsTotal": 10 },
       "prState": { "state": "OPEN", "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN", "headRefOid": "a39899aa35f5895e151d86fd62f9385fa0fadcf5", "unresolvedReviewThreads": 0 }
     }
+  },
+  "r4Reconciliation": {
+    "taskId": "F1-004-P1-R2-R4",
+    "type": "documentation_only_pr_metadata_and_program_status_reconciliation",
+    "note": "additive — does not rewrite r2r3Followup or earlier fields, per this file's own append-only convention",
+    "finalHeadSha": "2ebfc2c9eb086116c123939b82ae4df452b84a8f",
+    "finalHeadNote": "one documentation commit after r2r3Followup.postPushCiEvidence.commitPushed (a39899a) — docs(F1-004-P1-R2-R3): record post-push CI evidence and unrelated-flake diagnostic rerun",
+    "finalCi": {
+      "runId": "31031917887",
+      "runUrl": "https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/31031917887",
+      "conclusion": "success",
+      "jobsTotal": 10,
+      "jobsSuccess": 10,
+      "note": "clean on this head — the transient platformAdmin/legacy-suite flake recorded in r2r3Followup.postPushCiEvidence is historical context only and did not reproduce here"
+    },
+    "prState": { "state": "OPEN", "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN", "headRefOid": "2ebfc2c9eb086116c123939b82ae4df452b84a8f", "unresolvedReviewThreads": 0 },
+    "taskStatus": {
+      "agentCompleted": true,
+      "testsPassed": true,
+      "prOpened": true,
+      "prCiPassed": true,
+      "reviewThreadsResolved": true,
+      "merged": false,
+      "deployed": false,
+      "productionVerified": false
+    },
+    "scopeControl": {
+      "filesChanged": [
+        "PR #325 title/body",
+        "docs/program/CURRENT_PHASE.md",
+        "docs/program/NORAMEDI_MASTER_TRACKER.md",
+        "docs/program/phases/F1_CI_AND_TEST_ARCHITECTURE.md",
+        "docs/program/evidence/F1-004-P1-R2_EMERGENCY_CONTACT_UPDATE_RACE_ROOT_CAUSE_AND_FIX.md",
+        "docs/program/evidence/F1-004-P1-R2_emergency_contact_update_race_root_cause_and_fix.json"
+      ],
+      "runtimeOrFrontendOrTestOrSchemaOrMigrationOrWorkflowFileTouched": false
+    },
+    "exactNextTask": "External review and merge decision for PR #325; after merge and post-merge main CI, F1-004-P1-R2-PROD-001 — backend/frontend deployment and production verification of the token-protected emergency-contact primary promotion."
   }
 }
