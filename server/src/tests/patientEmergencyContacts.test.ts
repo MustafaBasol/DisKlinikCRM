@@ -354,6 +354,20 @@ await test('the stable API error code matches what the route responds with', () 
   assert.equal(PRIMARY_CONTACT_CONFLICT_CODE, 'PRIMARY_CONTACT_CONFLICT');
 });
 
+await test('a PrimaryContactConflictError (optimistic-concurrency recheck under the advisory lock — F1-004-P1-R2) is classified as a primary-contact conflict', () => {
+  const conflictErr = Object.assign(new Error('Another request just set a primary contact for this patient.'), {
+    code: PRIMARY_CONTACT_CONFLICT_CODE,
+  });
+  assert.equal(isPrimaryContactConflict(conflictErr), true);
+});
+
+await test('a Prisma P2034 transaction-conflict error (deadlock/serialization failure defensive mapping) is classified as a primary-contact conflict', () => {
+  const p2034 = Object.assign(new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction.'), {
+    code: 'P2034',
+  });
+  assert.equal(isPrimaryContactConflict(p2034), true);
+});
+
 // ── 9. isLegalDecisionMaker is NOT deduplicated ─────────────────────────────
 
 section('9. Legal decision-maker can be true for multiple contacts');

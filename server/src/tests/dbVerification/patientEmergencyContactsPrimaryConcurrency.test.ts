@@ -132,6 +132,49 @@ async function scenarioConcurrentCreatesSamePatient() {
   });
 }
 
+// ─── 1b. Stress: same CREATE race, run repeatedly to demonstrate determinism ─
+
+async function scenarioConcurrentCreatesStress() {
+  const ROUNDS = 100;
+  section(`1b. Stress: ${ROUNDS} independent rounds of the CREATE race, each on a fresh patient — must be deterministic every round`);
+  const fixtures = await createClinicFixtureSet('ec-concurrent-create-stress');
+  const user = await ownerUser(fixtures);
+
+  let onePassOneConflict = 0;
+  let exactlyOnePrimaryAfter = 0;
+
+  await test(`all ${ROUNDS} rounds produce exactly one 201 + one 409 PRIMARY_CONTACT_CONFLICT, and exactly one primary contact afterwards`, async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+
+      const [resA, resB] = await Promise.all([
+        callCreate(patient.id, user, contactBody({ isPrimary: true })),
+        callCreate(patient.id, user, contactBody({ isPrimary: true })),
+      ]);
+
+      const successCount = [resA, resB].filter(r => r.statusCode === 201).length;
+      const loser = resA.statusCode === 201 ? resB : resA;
+
+      assert.equal(
+        successCount,
+        1,
+        `round ${round}: exactly one concurrent create must succeed — got A=${resA.statusCode} B=${resB.statusCode} bodies=${JSON.stringify(resA.body)} / ${JSON.stringify(resB.body)}`,
+      );
+      assert.ok(
+        isConflict(loser),
+        `round ${round}: the loser must get the documented controlled 409 PRIMARY_CONTACT_CONFLICT, got ${loser.statusCode} ${JSON.stringify(loser.body)}`,
+      );
+      onePassOneConflict++;
+
+      const finalPrimaryCount = await primaryCount(patient.id);
+      assert.equal(finalPrimaryCount, 1, `round ${round}: exactly one primary contact must exist after the race, got ${finalPrimaryCount}`);
+      exactlyOnePrimaryAfter++;
+    }
+
+    console.log(`    [stress summary] rounds=${ROUNDS} one-201-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`);
+  });
+}
+
 // ─── 2. Two concurrent updates of different contacts, both isPrimary=true ───
 
 async function scenarioConcurrentUpdatesDifferentContacts() {
@@ -168,10 +211,33 @@ async function scenarioConcurrentUpdatesDifferentContacts() {
   });
 }
 
+// ─── 2c. Same contact, concurrent idempotent/no-op updates must never conflict ─
+
+async function scenarioSameContactConcurrentUpdate() {
+  section('2c. Concurrent updates of the SAME already-primary contact must never conflict with each other (idempotent — no promotion is happening)');
+  const fixtures = await createClinicFixtureSet('ec-same-contact-update');
+  const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+  const user = await ownerUser(fixtures);
+
+  const created = await callCreate(patient.id, user, contactBody({ isPrimary: true }));
+  assert.equal(created.statusCode, 201);
+  const contactId = created.body.id;
+
+  await test('5 concurrent isPrimary:true updates of the SAME already-primary contact all succeed with 200 — no PRIMARY_CONTACT_CONFLICT', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => callUpdate(patient.id, contactId, user, { isPrimary: true, fullName: `Same Contact ${i}` })),
+    );
+    for (const res of results) {
+      assert.equal(res.statusCode, 200, `idempotent same-contact update must never conflict, got ${res.statusCode} ${JSON.stringify(res.body)}`);
+    }
+    assert.equal(await primaryCount(patient.id), 1, 'still exactly one primary contact');
+  });
+}
+
 // ─── 2b. Stress: same UPDATE race, run repeatedly to demonstrate determinism ─
 
 async function scenarioConcurrentUpdatesStress() {
-  const ROUNDS = 25;
+  const ROUNDS = 150;
   section(`2b. Stress: ${ROUNDS} independent rounds of the DIFFERENT-contacts UPDATE race, each on a fresh patient — must be deterministic every round`);
   const fixtures = await createClinicFixtureSet('ec-concurrent-update-stress');
   const user = await ownerUser(fixtures);
@@ -302,7 +368,9 @@ async function scenarioMultipleLegalDecisionMakersAllowed() {
 
 async function main() {
   await scenarioConcurrentCreatesSamePatient();
+  await scenarioConcurrentCreatesStress();
   await scenarioConcurrentUpdatesDifferentContacts();
+  await scenarioSameContactConcurrentUpdate();
   await scenarioConcurrentUpdatesStress();
   await scenarioNoCrossPatientInterference();
   await scenarioMultipleNonPrimaryRowsAllowed();

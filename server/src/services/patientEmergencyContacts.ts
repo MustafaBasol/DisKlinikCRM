@@ -51,16 +51,21 @@ export type EmergencyContactValidationResult =
 export const PRIMARY_CONTACT_CONFLICT_CODE = 'PRIMARY_CONTACT_CONFLICT';
 
 /**
- * True when `err` is either of the two sources of a single-primary-contact
- * conflict:
- *   - a Prisma unique-constraint violation (P2002) from the database-level
- *     partial index (the last-resort backstop — see migration
- *     20260803120000_add_patient_emergency_contacts); or
+ * True when `err` is one of the sources of a single-primary-contact
+ * conflict (F1-004-P1-R2):
  *   - a PrimaryContactConflictError (server/src/services/
  *     patientEmergencyContactsConcurrency.ts) from the optimistic-concurrency
  *     re-check performed under the per-patient advisory lock, which is what
  *     actually catches the race in practice (see that file's header comment
- *     for why the unique index alone is not sufficient).
+ *     for why the unique index alone is not sufficient, and why an earlier
+ *     version of this same check — PR #310 — still had a gap); or
+ *   - a Prisma unique-constraint violation (P2002) from the database-level
+ *     partial index (see migration 20260803120000_add_patient_emergency_
+ *     contacts), kept as a last-resort backstop; or
+ *   - a Prisma transaction-conflict error (P2034 — deadlock or serialization
+ *     failure), which should not occur under this design's default READ
+ *     COMMITTED isolation but is mapped defensively rather than surfacing as
+ *     an unhandled 500 if it ever does.
  * The only unique constraint on PatientEmergencyContact is the partial index
  * above, so any P2002 raised while creating/updating a contact can only be
  * that race — never an unrelated/ambiguous conflict.
@@ -68,7 +73,7 @@ export const PRIMARY_CONTACT_CONFLICT_CODE = 'PRIMARY_CONTACT_CONFLICT';
 export function isPrimaryContactConflict(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const code = (err as { code?: unknown }).code;
-  return code === 'P2002' || code === PRIMARY_CONTACT_CONFLICT_CODE;
+  return code === 'P2002' || code === 'P2034' || code === PRIMARY_CONTACT_CONFLICT_CODE;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

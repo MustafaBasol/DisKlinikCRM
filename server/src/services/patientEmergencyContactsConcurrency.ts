@@ -1,9 +1,9 @@
 /**
- * patientEmergencyContactsConcurrency.ts — US-01.2-FU: closes the
- * emergency-contact primary-promotion race that the database-level partial
- * unique index (PatientEmergencyContact_one_primary_per_patient — see
- * migration 20260803120000_add_patient_emergency_contacts) does not fully
- * cover on its own.
+ * patientEmergencyContactsConcurrency.ts — US-01.2-FU / F1-004-P1-R2: closes
+ * the emergency-contact primary-promotion race that the database-level
+ * partial unique index (PatientEmergencyContact_one_primary_per_patient —
+ * see migration 20260803120000_add_patient_emergency_contacts) does not
+ * fully cover on its own.
  *
  * Why the unique index alone is not enough:
  *   The index only rejects a write when two transactions' primary-setting
@@ -23,21 +23,67 @@
  *   overwriting each other, even though only one caller's intent should have
  *   won and the other should have been told about the conflict.
  *
- * Fix:
- *   A transaction-scoped PostgreSQL advisory lock (pg_advisory_xact_lock —
- *   same primitive already used by
- *   server/src/services/appointmentRequestSafety.ts) keyed by patientId
- *   alone serializes every primary-promotion attempt for that patient. Each
- *   promotion then re-validates, INSIDE the lock, that the
- *   currently-primary contact (if any) still matches what THIS request
- *   observed before it started — an optimistic-concurrency check — and
- *   throws PrimaryContactConflictError instead of silently overwriting a
- *   promotion that raced ahead of it. Different patients (including
- *   different organizations/clinics) never contend: patientId is already
- *   globally unique in this schema (see the route file's own comment on the
- *   same point), and the lock is only ever acquired for isPrimary=true
- *   writes — concurrent isPrimary=false writes and unrelated field updates
- *   never touch this lock or the re-validation query.
+ * F1-004-P1-R2: an earlier fix (PR #310) closed the above by re-reading the
+ * current primary under a per-patient advisory lock and comparing it to a
+ * "prior primary" id captured via a SEPARATE, unlocked query issued before
+ * the transaction even opened. That query and the transaction's own
+ * connection checkout are two independent events competing for the same pg
+ * pool (server/src/db.ts, default max 10) — under real contention, the
+ * "prior" read for the losing request could itself be delayed until AFTER
+ * the winning request's entire transaction had already committed, at which
+ * point it silently absorbed the winner's committed row as its own "prior"
+ * belief and the in-lock recheck found no discrepancy. That gap reproduced
+ * the exact A=200/B=200 failure (main CI run 31002888303) despite the lock.
+ *
+ * Fix (R2):
+ *   The promoting transaction still reads the current primary, acquires the
+ *   per-patient advisory lock, and re-checks the current primary — but now
+ *   BOTH reads (the "prior" one before the lock and the "current" one after
+ *   it) run on the SAME prisma.$transaction (same pg connection) as each
+ *   other, instead of the "prior" read being a separate, unlocked query
+ *   issued before the transaction even opened. The only gap between the two
+ *   reads is the lock-wait itself — never a second, independently-poolable
+ *   database round trip that connection-pool scheduling could reorder
+ *   relative to a competing request's entire transaction. If the two reads
+ *   disagree (something else became/stopped being primary while this
+ *   request waited for the lock), PrimaryContactConflictError is thrown —
+ *   exactly PR #310's original algorithm, minus the one decoupled query
+ *   that broke it.
+ *
+ *   Alternative considered and rejected — SERIALIZABLE isolation: an
+ *   earlier version of this fix ran the whole transaction at
+ *   ISOLATION LEVEL SERIALIZABLE and dropped the manual prior/current
+ *   comparison entirely, relying on PostgreSQL's own predicate-lock
+ *   conflict detection (SQLSTATE 40001 / Prisma P2034) to abort one side of
+ *   any genuine conflict. Verified empirically (raw-SQL probe, no Prisma)
+ *   that this DOES correctly abort one transaction when two promotions
+ *   genuinely overlap in time. It was rejected because it also produced
+ *   FALSE-POSITIVE conflicts between completely unrelated patients: on a
+ *   small/sparse PatientEmergencyContact table (as in every fresh test
+ *   database, and plausibly in a lightly-loaded production table too),
+ *   PostgreSQL's query planner favors a sequential scan over the
+ *   patientId/clinicId/organizationId index for the "current primary" read,
+ *   and SERIALIZABLE's predicate locks are then taken at page/table
+ *   granularity rather than scoped to the matching rows — so two
+ *   concurrent promotions for two DIFFERENT patients could spuriously abort
+ *   each other. That is an unacceptable cross-tenant interference
+ *   regression (violates this task's own "different patients/clinics/
+ *   organizations must never block each other" requirement) for a class of
+ *   race (full DB-level non-overlap, see the evidence doc's root-cause
+ *   section for the exact boundary this does and does not close) that
+ *   SERIALIZABLE could not fully close anyway.
+ *
+ *   The per-patient advisory lock (pg_advisory_xact_lock — same primitive
+ *   already used by server/src/services/appointmentRequestSafety.ts and
+ *   patientMedicalHistoryConcurrency.ts) remains what actually serializes
+ *   promotion attempts for a given patient into "one at a time," so the
+ *   prior/current comparison only ever needs to reason about a single
+ *   competing transaction, not an unbounded pile-up. Different patients
+ *   (including different organizations/clinics) never contend: patientId is
+ *   already globally unique in this schema (see the route file's own
+ *   comment on the same point), and the lock is only ever acquired for
+ *   isPrimary=true writes — concurrent isPrimary=false writes and unrelated
+ *   field updates never touch it.
  */
 
 import { createHash } from 'node:crypto';
@@ -81,13 +127,18 @@ export function computeEmergencyContactPrimaryLockKey(patientId: string): [numbe
  * Acquires a PostgreSQL advisory transaction lock scoped to a single
  * patient's emergency-contact primary-promotion critical section.
  *
- * MUST be called as the FIRST operation inside the promoting
- * prisma.$transaction callback, before re-reading the current primary
- * contact and before the reset-then-set writes. pg_advisory_xact_lock
- * blocks until the lock is available and releases it automatically when
- * the surrounding transaction ends (commit or rollback) — never held
- * across a network call or unrelated work. Different patientId values
- * never block each other.
+ * MUST be called AFTER the promoting prisma.$transaction callback's "prior"
+ * read of the current primary contact, and BEFORE the "current" re-check
+ * read and the reset-then-set writes — all three (prior read, lock, current
+ * read) on the same `tx`. Calling this before the "prior" read would
+ * reintroduce a decoupled-query-shaped gap (see this file's header
+ * comment): the whole point of doing the "prior" read first is that it and
+ * the "current" read are separated by nothing except this lock's wait,
+ * never an independently-scheduled database round trip. pg_advisory_xact_lock
+ * blocks until the lock is available and releases it automatically when the
+ * surrounding transaction ends (commit or rollback) — never held across a
+ * network call or unrelated work. Different patientId values never block
+ * each other.
  */
 export async function acquireEmergencyContactPrimaryLock(
   tx: Prisma.TransactionClient,

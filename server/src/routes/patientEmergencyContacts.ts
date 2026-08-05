@@ -21,22 +21,30 @@
  *     organizationId) before update/delete — a contact cannot be mutated by
  *     guessing its ID under a different patient/clinic/organization.
  *
- * Single-primary-contact invariant (concurrency):
+ * Single-primary-contact invariant (concurrency) — F1-004-P1-R2:
  *   - "At most one isPrimary=true contact per patient" is enforced at two
  *     layers: (1) a per-patient PostgreSQL advisory transaction lock
  *     (acquireEmergencyContactPrimaryLock — server/src/services/
  *     patientEmergencyContactsConcurrency.ts) that serializes every
- *     primary-promotion attempt for that patient plus an
+ *     primary-promotion attempt for that patient, plus an
  *     optimistic-concurrency re-check performed under that lock, and (2) a
  *     database-level partial unique index (PatientEmergencyContact_
  *     one_primary_per_patient — see migration 20260803120000_add_patient_
- *     emergency_contacts) as a last-resort backstop. The advisory lock is
- *     what actually makes "exactly one promotion wins, the other gets a
- *     deterministic 409" true in practice — a partial unique index alone
- *     only rejects writes that physically overlap at the index-insert step,
- *     and two requests dispatched together do not have to overlap that
- *     precisely (see patientEmergencyContactsConcurrency.ts's header
- *     comment for the exact failure mode this closes).
+ *     emergency_contacts) as a last-resort backstop. Both the
+ *     optimistic-concurrency "prior" read and its "current" re-check now run
+ *     on the SAME prisma.$transaction (same connection) as each other and as
+ *     the lock acquisition between them — the only gap between the two
+ *     reads is the lock-wait itself, never a second, independently-poolable
+ *     database round trip. An earlier version of this same design (PR #310)
+ *     captured the "prior" read via a separate, unlocked query issued before
+ *     the transaction even opened; under real connection-pool contention
+ *     that query could itself be delayed until after a competing request's
+ *     entire transaction had already committed, silently absorbing the
+ *     competitor's result as "prior truth" and letting both requests return
+ *     200 (see patientEmergencyContactsConcurrency.ts's header comment for
+ *     the full mechanism, the exact CI failure this reproduced, and why
+ *     SERIALIZABLE isolation was considered and rejected in favor of this
+ *     design).
  *   - When two requests race to become primary for the same patient, the
  *     loser either fails the optimistic-concurrency re-check
  *     (PrimaryContactConflictError) or, in the rare case both reach the
@@ -158,12 +166,18 @@ router.post(
       if (!validation.ok) return res.status(400).json({ error: validation.error });
       const data = validation.data;
 
-      // Captured BEFORE the transaction so the in-lock re-check below can
-      // tell "nobody raced me since I looked" apart from "someone else just
-      // won" — see patientEmergencyContactsConcurrency.ts's header comment.
-      const priorPrimaryId = data.isPrimary
-        ? (
-            await prisma.patientEmergencyContact.findFirst({
+      let contact;
+      try {
+        contact = await prisma.$transaction(async (tx) => {
+          if (data.isPrimary) {
+            // MUST run before acquireEmergencyContactPrimaryLock — see
+            // patientEmergencyContactsConcurrency.ts's header comment. This
+            // "prior" read and the "current" re-check after the lock below
+            // now run on the SAME connection/transaction as each other
+            // (unlike the previous design's separate, unlocked pre-check
+            // query) — the only gap between them is one lock acquisition,
+            // not an independently-poolable query.
+            const priorPrimary = await tx.patientEmergencyContact.findFirst({
               where: {
                 patientId: patient.id,
                 clinicId: patient.clinicId,
@@ -171,14 +185,8 @@ router.post(
                 isPrimary: true,
               },
               select: { id: true },
-            })
-          )?.id ?? null
-        : null;
+            });
 
-      let contact;
-      try {
-        contact = await prisma.$transaction(async (tx) => {
-          if (data.isPrimary) {
             await acquireEmergencyContactPrimaryLock(tx, patient.id);
 
             const currentPrimary = await tx.patientEmergencyContact.findFirst({
@@ -190,7 +198,7 @@ router.post(
               },
               select: { id: true },
             });
-            if (currentPrimary && currentPrimary.id !== priorPrimaryId) {
+            if ((currentPrimary?.id ?? null) !== (priorPrimary?.id ?? null)) {
               throw new PrimaryContactConflictError();
             }
             if (currentPrimary) {
@@ -266,29 +274,33 @@ router.put(
       const data = validation.data;
 
       // Only an actual promotion (not-yet-primary -> primary) needs the lock
-      // and the priorPrimaryId snapshot below — an idempotent update of an
-      // already-primary row, or a demotion, never contends for the
-      // single-primary invariant (see patientEmergencyContactsConcurrency.ts).
+      // below — an idempotent update of an already-primary row, or a
+      // demotion, never contends for the single-primary invariant (see
+      // patientEmergencyContactsConcurrency.ts).
       const promoting = data.isPrimary && !existing.isPrimary;
-
-      const priorPrimaryId = promoting
-        ? (
-            await prisma.patientEmergencyContact.findFirst({
-              where: {
-                patientId: patient.id,
-                clinicId: patient.clinicId,
-                organizationId: patient.organizationId,
-                isPrimary: true,
-              },
-              select: { id: true },
-            })
-          )?.id ?? null
-        : null;
 
       let contact;
       try {
         contact = await prisma.$transaction(async (tx) => {
           if (promoting) {
+            // MUST run before acquireEmergencyContactPrimaryLock — see
+            // patientEmergencyContactsConcurrency.ts's header comment. This
+            // "prior" read and the "current" re-check after the lock below
+            // now run on the SAME connection/transaction as each other
+            // (unlike the previous design's separate, unlocked pre-check
+            // query) — the only gap between them is one lock acquisition,
+            // not an independently-poolable query.
+            const priorPrimary = await tx.patientEmergencyContact.findFirst({
+              where: {
+                patientId: patient.id,
+                clinicId: patient.clinicId,
+                organizationId: patient.organizationId,
+                isPrimary: true,
+                id: { not: existing.id },
+              },
+              select: { id: true },
+            });
+
             await acquireEmergencyContactPrimaryLock(tx, patient.id);
 
             const currentPrimary = await tx.patientEmergencyContact.findFirst({
@@ -301,7 +313,7 @@ router.put(
               },
               select: { id: true },
             });
-            if (currentPrimary && currentPrimary.id !== priorPrimaryId) {
+            if ((currentPrimary?.id ?? null) !== (priorPrimary?.id ?? null)) {
               throw new PrimaryContactConflictError();
             }
             if (currentPrimary) {
