@@ -88,7 +88,7 @@
 
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
-import { PRIMARY_CONTACT_CONFLICT_CODE } from './patientEmergencyContacts.js';
+import { PRIMARY_CONTACT_CONFLICT_CODE, type ExpectedPrimaryPrecondition } from './patientEmergencyContacts.js';
 
 /**
  * Thrown when a primary-promotion loses the optimistic-concurrency re-check
@@ -148,4 +148,158 @@ export async function acquireEmergencyContactPrimaryLock(
   // pg_advisory_xact_lock(int4,int4): explicit casts required — Prisma binds JS
   // numbers as int8 by default, but PostgreSQL has no (bigint,bigint) overload.
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${key1}::int4, ${key2}::int4)`;
+}
+
+/**
+ * TEST-ONLY deterministic synchronization hooks for the primary-promotion
+ * critical section (POST/PUT in server/src/routes/patientEmergencyContacts.ts).
+ * Every hook is a no-op (`activeHooks` is `null`) unless a test explicitly
+ * installs one via installEmergencyContactRaceTestHooks — normal request
+ * handling never sets this, so production behavior and the hot path's cost
+ * are unaffected beyond one `null` check per call site.
+ *
+ * These exist because a NATURAL Promise.all() race cannot be forced to hit a
+ * specific interleaving on demand: it reproduced on GitHub Actions CI (run
+ * 31020654709 attempt 1, round 0/100) but did not reproduce in 500 local
+ * rounds against a low-latency local disposable Postgres (see F1-004-P1-R2-R3
+ * evidence) — this codebase's own concurrency suites (this file, plus
+ * appointmentRequestSafety.ts / patientMedicalHistoryConcurrency.ts's
+ * disposable-DB tests) rely on real, un-mocked Promise.all() races precisely
+ * because JavaScript's single-threaded execution cannot fake a real database
+ * race — but proving or disproving a SPECIFIC hypothesized interleaving
+ * (e.g. "does request B's very first read, not just its lock wait, need to
+ * be delayed past request A's commit to reproduce the bug") requires forcing
+ * that exact schedule deterministically, every run, not hoping timing jitter
+ * lands on it.
+ *
+ * Every hook except afterCommit fires from INSIDE resolvePrimaryPromotion's
+ * transaction and receives that transaction's own client as `tx` — a test
+ * may use it to run read-only diagnostic queries on the exact same
+ * connection (e.g. `SELECT pg_backend_pid()`) without affecting the
+ * transaction's outcome. afterCommit fires from the route AFTER
+ * prisma.$transaction has already resolved, so no `tx` is available there.
+ */
+type HookCtxBase = { patientId: string; op: 'create' | 'update'; tx: Prisma.TransactionClient };
+
+export interface EmergencyContactRaceTestHooks {
+  beforePriorRead?: (ctx: HookCtxBase) => Promise<void> | void;
+  afterPriorRead?: (ctx: HookCtxBase & { priorPrimaryId: string | null }) => Promise<void> | void;
+  beforeLock?: (ctx: HookCtxBase) => Promise<void> | void;
+  afterLock?: (ctx: HookCtxBase) => Promise<void> | void;
+  beforeCurrentRead?: (ctx: HookCtxBase) => Promise<void> | void;
+  afterCurrentRead?: (ctx: HookCtxBase & { currentPrimaryId: string | null }) => Promise<void> | void;
+  beforeInsert?: (ctx: HookCtxBase) => Promise<void> | void;
+  afterCommit?: (ctx: { patientId: string; op: 'create' | 'update' }) => Promise<void> | void;
+}
+
+let activeHooks: EmergencyContactRaceTestHooks | null = null;
+
+/** TEST-ONLY. Never call outside a disposable-Postgres test process. */
+export function installEmergencyContactRaceTestHooks(hooks: EmergencyContactRaceTestHooks | null): void {
+  activeHooks = hooks;
+}
+
+export async function invokeEmergencyContactRaceHook<K extends keyof EmergencyContactRaceTestHooks>(
+  name: K,
+  ctx: Parameters<NonNullable<EmergencyContactRaceTestHooks[K]>>[0],
+): Promise<void> {
+  const hook = activeHooks?.[name];
+  if (hook) await hook(ctx as any);
+}
+
+/**
+ * F1-004-P1-R2-R3: resolves the primary-promotion critical section shared by
+ * POST (create-as-primary) and PUT (promote-to-primary) — acquires the
+ * per-patient advisory lock, determines the canonical current primary under
+ * that lock, and either throws PrimaryContactConflictError or demotes the
+ * previous primary (leaving the caller to perform its own create/update).
+ * Does NOT perform the create/update itself — the two callers differ there
+ * (create vs update, and update's WHERE additionally excludes the contact
+ * being promoted).
+ *
+ * Two mutually exclusive comparison modes, selected by `precondition`:
+ *
+ *  - precondition.provided === true (token-protected mode): the caller
+ *    supplied `expectedCurrentPrimaryContactId`, capturing what IT observed
+ *    as the current primary before forming this request. The canonical
+ *    current-primary read (taken under the lock, therefore always a fully
+ *    committed, unambiguous fact) is compared directly against that
+ *    client-supplied belief. This is true optimistic-concurrency control: it
+ *    is airtight regardless of how connection-pool or event-loop scheduling
+ *    happens to interleave this transaction relative to a competing one,
+ *    because it never depends on when THIS request's own reads execute
+ *    relative to a competitor's commit — only on whether reality (now, under
+ *    the lock) still matches what the client last saw.
+ *
+ *  - precondition.provided === false (legacy best-effort mode): no
+ *    precondition was supplied (an older/non-updated client). Falls back to
+ *    F1-004-P1-R2's design — a "prior" read taken before the lock is
+ *    compared against the "current" read taken after it, both on the same
+ *    transaction/connection so the only gap between them is the lock wait
+ *    itself. This closes the specific gap PR #310 had (the prior read being
+ *    a separate, independently-poolable query) but NOT the gap proven in
+ *    F1-004-P1-R2-R3 (CI run 31020654709 attempt 1): if this transaction's
+ *    own FIRST statement — the "prior" read — does not begin until AFTER a
+ *    competing transaction has already committed, both reads observe
+ *    identical, already-settled state and no conflict is detected, because
+ *    at that point the two transactions are — from PostgreSQL's own point of
+ *    view — genuinely, unambiguously sequential, not concurrent. No signal
+ *    visible only from inside this transaction (however early it runs, in
+ *    whatever order its statements are arranged) can distinguish that from a
+ *    deliberate, temporally-separated replacement; only information the
+ *    client captured at its own request-formation time — outside this
+ *    transaction, outside the database entirely — can. This mode is
+ *    therefore knowingly NOT race-free; it is retained only for backward
+ *    compatibility with clients that have not yet been updated to send the
+ *    precondition, and every caller of this function MUST NOT claim it
+ *    closes the race the way token-protected mode does.
+ */
+export async function resolvePrimaryPromotion(
+  tx: Prisma.TransactionClient,
+  params: {
+    patientId: string;
+    clinicId: string;
+    organizationId: string;
+    /** Excluded from every primary-lookup WHERE — set for UPDATE (the promoting row itself must never be compared against/demoted). Omit for CREATE (no existing row). */
+    excludeContactId?: string;
+    precondition: ExpectedPrimaryPrecondition;
+    op: 'create' | 'update';
+  },
+): Promise<void> {
+  const { patientId, clinicId, organizationId, excludeContactId, precondition, op } = params;
+  const primaryWhere = {
+    patientId,
+    clinicId,
+    organizationId,
+    isPrimary: true,
+    ...(excludeContactId ? { id: { not: excludeContactId } } : {}),
+  };
+
+  let priorPrimaryId: string | null = null;
+  if (!precondition.provided) {
+    // Legacy best-effort mode only — MUST run before the lock; see this
+    // function's header comment and acquireEmergencyContactPrimaryLock's.
+    await invokeEmergencyContactRaceHook('beforePriorRead', { patientId, op, tx });
+    const priorPrimary = await tx.patientEmergencyContact.findFirst({ where: primaryWhere, select: { id: true } });
+    await invokeEmergencyContactRaceHook('afterPriorRead', { patientId, op, tx, priorPrimaryId: priorPrimary?.id ?? null });
+    priorPrimaryId = priorPrimary?.id ?? null;
+  }
+
+  await invokeEmergencyContactRaceHook('beforeLock', { patientId, op, tx });
+  await acquireEmergencyContactPrimaryLock(tx, patientId);
+  await invokeEmergencyContactRaceHook('afterLock', { patientId, op, tx });
+
+  await invokeEmergencyContactRaceHook('beforeCurrentRead', { patientId, op, tx });
+  const currentPrimary = await tx.patientEmergencyContact.findFirst({ where: primaryWhere, select: { id: true } });
+  await invokeEmergencyContactRaceHook('afterCurrentRead', { patientId, op, tx, currentPrimaryId: currentPrimary?.id ?? null });
+
+  const expectedPrimaryId = precondition.provided ? precondition.expectedCurrentPrimaryContactId : priorPrimaryId;
+  if ((currentPrimary?.id ?? null) !== expectedPrimaryId) {
+    throw new PrimaryContactConflictError();
+  }
+
+  if (currentPrimary) {
+    await tx.patientEmergencyContact.updateMany({ where: primaryWhere, data: { isPrimary: false } });
+  }
+  await invokeEmergencyContactRaceHook('beforeInsert', { patientId, op, tx });
 }

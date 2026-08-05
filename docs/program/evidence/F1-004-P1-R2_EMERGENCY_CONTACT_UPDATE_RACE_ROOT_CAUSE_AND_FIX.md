@@ -198,3 +198,172 @@ This is precisely the theoretical **residual limitation already documented in §
 **Diagnostic action taken, per explicit direction, no code or test change:** the failed CI job was rerun once (`gh run rerun 31020654709 --failed`) to determine whether this was a one-off manifestation or a deterministic regression. **The rerun passed** — `ci-layers / Layer 3: disposable PostgreSQL tests` completed `success`, and the overall run conclusion is `success`. This is consistent with a rare, non-deterministic manifestation of the accepted residual limitation, not a deterministic logic regression — but a single rerun passing is not formal proof of the former over the latter; it is reported as exactly that: one failure, one rerun pass, both real, neither hidden.
 
 **This finding does not weaken, and this task did not weaken, the stress test's assertion** (`successCount === 1` for all 100/150 rounds) — doing so would require a program-owner decision about how to redefine "success" for a design that itself does not claim to eliminate this scheduling pattern, which is explicitly out of this reconciliation task's scope. **Recorded, not resolved:** whether this residual gap's real-world frequency is acceptable, whether the test should tolerate a bounded rare-failure rate, or whether a different mechanism (client-supplied concurrency token, previously rejected as an API-semantics change) is warranted, is an open question for a follow-up task or program-owner decision — not decided here.
+
+---
+
+# F1-004-P1-R2-R3 — Closing the CREATE-Race Residual Limitation: Deterministic Proof, Impossibility Analysis, and Precondition-Token Fix
+
+The open question at the end of §15 ("is this residual gap acceptable, or is a client-supplied concurrency token warranted") was escalated to the program owner and answered: **implement the precondition token.** This section records that follow-up task (F1-004-P1-R2-R3) in full — the deterministic proof that no further server-only design could close the gap, the exact fix implemented, and the complete test/verification evidence.
+
+| Field | Value |
+|---|---|
+| Task ID | F1-004-P1-R2-R3 |
+| Previous head SHA (task start) | `85f7c52c5a63ff40d21c8261dbebe685138cdfbf` (PR #325's head at task start, per §15) |
+| Baseline `origin/main` SHA (confirmed via `git fetch origin && git rev-parse origin/main`) | `32adf919cb331ae2ce4f681bd37e857ded8065ab` |
+| Failed CI evidence re-confirmed | Run [31020654709](https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/31020654709), **attempt 1** (the default `gh run view`/`gh api` attempt is attempt 2, which is `success` — attempt 1 must be fetched explicitly via `/attempts/1`). Job `ci-layers / Layer 3: disposable PostgreSQL tests` (id `92356454814`), `conclusion: failure`. Merge ref `fd1148f8341311baee3db1b2a7313522d7ad2404` against base `32adf919cb331ae2ce4f681bd37e857ded8065ab` — matches §14/§15 exactly. |
+| Exact failure log line | `AssertionError [ERR_ASSERTION]: round 0: exactly one concurrent create must succeed — got A=201 B=201 bodies={...isPrimary:true...id:42cab1ee...} / {...isPrimary:true...id:da37e5e8...}` — two distinct contact rows, both `isPrimary:true`, at `patientEmergencyContactsPrimaryConcurrency.test.ts:316`. |
+
+## 16. Root-cause questions, answered with code-path and DB evidence
+
+1. **Is the advisory lock acquired before or after any primary existence read?** After a "prior" read in legacy mode (unchanged from R2); in the new token-protected mode, there is no prior read at all — the lock is the first DB statement of the critical section.
+2. **Same transaction/connection for lock, current-primary read, demotion, insert?** Yes — confirmed by instrumenting every step with `SELECT pg_backend_pid()` inside `resolvePrimaryPromotion`'s `tx` (see the forced-interleaving test file's `record()` helper) — the same backend PID is observed for the lock, the current-primary read, and the insert within one request, always distinct from the competing request's PID.
+3. **Can either create path insert outside the locked transaction?** No — `tx.patientEmergencyContact.create()` is called from inside the same `prisma.$transaction()` callback as the lock/read/demote steps, unchanged from R2.
+4. **Can the handler return 201 before commit?** No — `prisma.$transaction(callback)` only resolves after Prisma issues `COMMIT` and it succeeds; the route's `res.status(201).json(contact)` runs strictly after that `await` resolves.
+5. **Is the partial unique index present, valid, non-deferrable, correctly scoped?** Confirmed by reading `migration.sql` directly: `CREATE UNIQUE INDEX "PatientEmergencyContact_one_primary_per_patient" ON "PatientEmergencyContact"("patientId") WHERE "isPrimary" = true;` — a bare `CREATE UNIQUE INDEX` (not `ALTER TABLE ... ADD CONSTRAINT`), so it is enforced immediately per-statement, never deferred; scoped by `patientId`, filtered to `isPrimary = true` rows only. No migration was needed or made — this index is untouched.
+6. **Can the code demote an existing row before inserting, letting both requests commit sequentially?** Yes — this is the exact mechanism (see §17). It is not a bug in the demote step itself; it is that the CHECK gating whether to demote is, in legacy mode, unable to tell "this is a legitimate later replacement" from "this is the other half of a race that got serialized by scheduling."
+7. **Does each request implement last-write-wins instead of loser-conflict?** Only when BOTH the "prior" and "current" reads of a legacy-mode request happen to execute after the competitor's full commit — proven in §17.
+8. **Is prior/current comparison meaningful when the initial prior state is null?** No — this is precisely the CREATE-specific gap R2's UPDATE-oriented design didn't anticipate: for UPDATE, `existing.id` anchors the comparison to a real row; for CREATE on a fresh patient, `null` is both the correct "nothing exists yet" state AND the state a fully-serialized-but-scheduled-concurrently request also observes.
+9. **Does the same-transaction snapshot under READ COMMITTED refresh after a lock wait?** Yes, confirmed empirically — a statement issued after a lock grant sees the latest committed state, exactly as READ COMMITTED semantics require. This is not the mechanism; the mechanism is that the *prior* read (in legacy mode) can itself be delayed until after that same committed state already exists.
+10. **Can Prisma pool/transaction behavior put lock and insert on different connections?** No — verified via the same PID instrumentation as Q2. `DB_POOL_MAX` defaults to 10 (`server/src/db.ts`), never the bottleneck for a 2-request race.
+11. **Did the failed test stop before checking final committed primary count?** No — `primaryCount()` runs after every round; §17's forced reproduction confirms the DB itself always ends at exactly 1 committed primary, even in the legacy-mode failure case. The bug is the HTTP contract (two 201s), never a DB-level double-primary.
+12. **Could two 201s be returned while one transaction later rolls back?** No — observed in every reproduction: both transactions commit successfully; the losing (legacy-mode) request's transaction legitimately demotes-then-inserts, a valid Postgres transaction from the database's own point of view.
+13. **Could the response be constructed before commit completion?** No — same as Q4.
+
+## 17. Deterministic forced-interleaving proof (not probabilistic)
+
+A natural `Promise.all()` race could not be forced to hit the exact CI-observed interleaving on demand: **500 independent local rounds against a low-latency, same-host disposable Postgres reproduced the bug zero times** — confirming §15's own observation that CI's runner-to-container network latency profile is what made the window reachable, and explaining "why previous local runs missed it."
+
+To prove the mechanism deterministically rather than relying on luck, this task added real, narrow, TEST-ONLY synchronization hooks directly to the production code path (`installEmergencyContactRaceTestHooks` / `invokeEmergencyContactRaceHook`, `server/src/services/patientEmergencyContactsConcurrency.ts`) — no-ops (`activeHooks === null`) unless a test explicitly installs them; normal request handling never sets them. These hooks fire at all 9 required synchronization points (request-before-lock, after-lock, after-current-read, before-insert — for both concurrent requests — plus commit completion), and expose the transaction client itself so a test can run `SELECT pg_backend_pid()` on the exact same connection for observability.
+
+Using these hooks (`patientEmergencyContactsCreateRaceForcedInterleaving.test.ts`), request B's critical section was forced to begin only after request A's entire transaction had committed — **every run, deterministically**, not hoping timing jitter lands on it:
+
+- **Legacy mode (no precondition), gated at `beforePriorRead`**: reproduces `A=201, B=201` **every time** (documented as a permanent characterization test — not a flake to chase, a proven mechanism).
+- **Token-protected mode, gated at `beforeLock`**: produces exactly one `201` + one `409` **every time** (20/20 rounds tested), even under this same maximally-adversarial forced full-serialization.
+
+This is the strongest available proof: the fix is not merely "less likely to fail" — it is verified correct under the exact worst-case schedule that broke the prior design, deterministically reproduced on demand.
+
+## 18. Why no further database-only design can close the legacy-mode gap (impossibility argument)
+
+Once a transaction holds the per-patient advisory lock, any row it reads as "the current primary" is, by construction, **fully committed** — Postgres has no notion of "this commit happened concurrently with some other request's HTTP arrival," only of transaction commit order. A request whose entire transaction (from its first statement) genuinely executes after a competitor's commit is, from PostgreSQL's own point of view, **indistinguishable** from a request that arrived minutes later with deliberate intent to replace the existing primary — because these two scenarios produce byte-for-byte identical database states and are visited by byte-for-byte identical queries.
+
+Options considered and ruled out before settling on a precondition token:
+
+- **Reordering the lock before the read, or dropping the pre-lock read entirely**: verified empirically (via the same forced-interleaving harness) that this does not help — the ambiguity simply moves one statement earlier; whatever is read first under the lock is still a fully-committed fact indistinguishable from legitimate replacement.
+- **`SELECT ... FOR UPDATE` on a per-patient sentinel row instead of an advisory lock**: structurally identical vulnerability — same "was this concurrent or sequential" ambiguity once the row lock is held.
+- **SERIALIZABLE isolation**: already rejected in §7 for causing false cross-tenant conflicts on a sparse table (page/table-granularity predicate locks); re-affirmed here as still inapplicable — it would not even solve the CREATE case, since a fully-serialized history (A commits, then B's transaction begins) is, by definition, not a conflict SSI detects.
+- **Wall-clock (`Date.now()`) comparison against the DB row's `createdAt`**: rejected as a *design choice*, not merely "harder" — it introduces app-server-vs-DB-server clock-skew dependence and an implicit magic-number tolerance, which is exactly the kind of un-provable heuristic this task's own instructions warn against ("do not add sleeps as correctness"). It narrows the window but does not close it airtight, and a narrowed-but-not-airtight fix would still fail the required 500/500 round guarantee under sufficiently adversarial timing.
+
+**Conclusion, consistent with this task's own escalation path**: closing the gap with mathematical certainty, for clients that have not observed the current state via some means outside the request's own database interaction, requires information the database cannot reconstruct on its own — the client's own observed belief at request-formation time. This was escalated per the task's stop conditions ("meeting the 201/409 contract requires a public API semantic change") rather than decided unilaterally; the program owner selected the precondition-token design below.
+
+## 19. Fix implemented: `expectedCurrentPrimaryContactId` optimistic-concurrency precondition
+
+**Selected design** (of the alternatives enumerated in the task brief: A–E): a variant of **Option A/C** — a client-observed precondition validated under the lock — implemented as follows.
+
+Both `POST` and `PUT` `/patients/:patientId/emergency-contacts[/:contactId]` now accept an **optional** `expectedCurrentPrimaryContactId` field, meaningful only when the request would set `isPrimary: true`:
+
+- **Omitted entirely** → `{ provided: false }` — legacy compatibility mode, unchanged R2 best-effort "prior vs current" comparison (still knowingly not race-free against this specific mechanism — §17's characterization test documents this permanently).
+- **Explicit `null`** → the client asserts "I observed no current primary."
+- **A non-empty string** → the client asserts that exact contact id is the current primary.
+
+Presence and value are parsed and tracked separately by a new pure function, `parseExpectedPrimaryPrecondition()` (`server/src/services/patientEmergencyContacts.ts`) — omitted and explicit-`null` are never conflated (unit-tested directly, §21).
+
+The critical section, refactored into one shared helper used by both `POST` and `PUT` — `resolvePrimaryPromotion()` (`server/src/services/patientEmergencyContactsConcurrency.ts`) — now branches on precondition presence:
+
+```
+if (precondition.provided) {
+  // Token-protected: no prior read at all. Acquire the lock, read the
+  // CANONICAL current primary, compare directly against the client's
+  // belief. Airtight — never depends on THIS request's own read timing
+  // relative to a competitor's commit.
+  await acquireEmergencyContactPrimaryLock(tx, patientId);
+  const currentPrimary = await tx.patientEmergencyContact.findFirst({ where: primaryWhere, select: { id: true } });
+  if ((currentPrimary?.id ?? null) !== precondition.expectedCurrentPrimaryContactId) {
+    throw new PrimaryContactConflictError();
+  }
+} else {
+  // Legacy best-effort (unchanged R2 design, same known limitation).
+  const priorPrimary = await tx.patientEmergencyContact.findFirst({ where: primaryWhere, select: { id: true } });
+  await acquireEmergencyContactPrimaryLock(tx, patientId);
+  const currentPrimary = await tx.patientEmergencyContact.findFirst({ where: primaryWhere, select: { id: true } });
+  if ((currentPrimary?.id ?? null) !== (priorPrimary?.id ?? null)) {
+    throw new PrimaryContactConflictError();
+  }
+}
+if (currentPrimary) { /* demote */ }
+```
+
+Why this is airtight: the comparison is against a belief the client formed **before** this request was even dispatched (typically from its last `GET`), not against a second read this same request takes — so no scheduling delay to *this* request's own statements can ever manufacture a false match. §17 proves this empirically under the worst-case forced schedule.
+
+**Frontend**: `PatientEmergencyContactsPanel.tsx` now passes `contacts.find(c => c.isPrimary)?.id ?? null` down to `PatientEmergencyContactForm.tsx` as `observedCurrentPrimaryContactId`; the form includes `expectedCurrentPrimaryContactId` in its payload whenever the `isPrimary` checkbox is checked (create or edit), including explicit `null` when no contact is currently observed as primary. NoraMedi's own frontend therefore always sends the field for every create/replace-primary operation — third-party/legacy API clients that do not send it fall back to (already-existing, already-CI-observed, honestly documented) legacy behavior, never a hard error.
+
+## 20. Alternatives explicitly rejected
+
+- **Remove CREATE's implicit auto-replace semantics** (always 409 if any primary exists, never silently demote-and-replace via CREATE) — airtight, but a materially bigger, more disruptive product behavior change (breaks the existing one-step "add a new primary contact" UX) than the additive, backward-compatible token. Not selected.
+- **Global or process-local lock** — explicitly forbidden by this task's own instructions; also does not solve the cross-replica case (`server/src/db.ts`'s pool is per-process) and was never seriously considered.
+- **Narrow SERIALIZABLE re-check only** — still rejected per §7/§18; the cross-tenant false-conflict mechanism does not depend on which part of the transaction runs at that isolation level.
+- **Wall-clock/timestamp heuristic** — rejected per §18, not merely deprioritized: it cannot meet the required 500/500 airtight guarantee and introduces an unprovable, cross-machine clock-skew assumption.
+- **Mapping generic P2034 to a business conflict** — not done; unchanged from R2 (§6/§15), remains a plain 500.
+
+## 21. Test evidence
+
+All commands run from `D:\Mustafa\Siteler\DisKlinikCRM-worktrees\f1-004-p1-r2-emergency-contact-update-race` unless noted.
+
+| # | Command | Result | Exit |
+|---|---|---|---|
+| 1 | `npx tsx src/tests/patientEmergencyContacts.test.ts` (server) | **31/31** passed (+6 new: `parseExpectedPrimaryPrecondition` — omitted vs explicit-null, valid id, empty-string rejection, wrong-type rejection, no cross-call state leakage) | 0 |
+| 2 | `npx tsx src/tests/dbVerification/patientEmergencyContactsCreateRaceForcedInterleaving.test.ts` (server, real disposable Postgres) | **7/7** passed — token-protected mode 20/20 forced rounds correct; legacy mode forced reproduction confirmed (characterization); 5 precondition-mismatch scenarios (null-vs-UUID, UUID-vs-different-UUID, stale frontend state, sequential replacement preserved, cross-tenant isolation) | 0 |
+| 3 | `npx tsx src/tests/dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts` (server, real disposable Postgres) | **19/19** passed — legacy CREATE stress 100/100, **token-protected CREATE stress 500/500** (new), legacy UPDATE stress 150/150, **token-protected UPDATE stress 500/500** (new), plus all pre-existing scenarios (idempotent same-contact update, cross-tenant isolation, non-primary/legal-decision-maker concurrency) | 0 |
+| 4 | `npx prisma generate && npx tsc --noEmit` (server) | Clean, no type errors | 0 |
+| 5 | `npx vitest run src/components/PatientEmergencyContactForm.vitest.test.tsx src/components/PatientEmergencyContactsPanel.vitest.test.tsx src/pages/PatientDetail.vitest.test.tsx` (root, frontend) | **40/40** passed (+4 new: token sent on create/edit promotion, `null` sent explicitly when no observed primary, omitted when not promoting, panel-to-form wiring) | 0 |
+| 6 | `npx tsc -b` (root, frontend typecheck) | Clean | 0 |
+| 7 | `npx tsx scripts/test-runtime/orchestrator.ts postgres` (root — full `server:test:disposable-db` chain, real Docker-provisioned disposable PostgreSQL, migration + all 17 chained scripts + teardown) — **independent run 1/5** | All scripts passed, including `patientEmergencyContactsPrimaryConcurrency: 19 passed, 0 failed` and `patientEmergencyContactsCreateRaceForcedInterleaving: 7 passed, 0 failed`; `cleanup.success: true`, zero residual `nmtest-*` Docker resources afterward | 0 |
+| 8 | Same as #7 — **independent run 2/5** | Identical results; `cleanup.success: true`, zero residual `nmtest-*` Docker resources | 0 |
+| 9 | Same as #7 — **independent run 3/5** | Identical results; `cleanup.success: true`, zero residual `nmtest-*` Docker resources | 0 |
+| 10 | Same as #7 — **independent run 4/5** | Identical results; `cleanup.success: true`, zero residual `nmtest-*` Docker resources | 0 |
+| 11 | Same as #7 — **independent run 5/5** | Identical results; `cleanup.success: true`, zero residual `nmtest-*` Docker resources | 0 |
+
+**All 5 independent process-level disposable-PostgreSQL executions completed successfully**, each provisioning and tearing down its own uniquely-named/-labeled Docker container and network. `docker ps -a --filter name=nmtest` and `docker network ls --filter name=nmtest` both returned empty after all 5 runs — zero residual resources.
+| 12 | `git diff --check` | No conflict markers, no trailing-whitespace errors (one line-ending-only touch to `vite.config.d.ts` from an incidental `tsc -b` run was reverted, not committed) | 0 |
+| 13 | `git diff --stat -- server/prisma/` | Empty — no migration or schema file touched | 0 |
+
+## 22. Migration status
+
+**No migration performed or required.** `server/prisma/schema.prisma` and `server/prisma/migrations/` are untouched by this task — confirmed via `git diff --stat -- server/prisma/` returning empty. The fix is entirely an application-layer precondition check plus one additive, optional request field; the existing partial unique index remains the unchanged last-resort backstop.
+
+## 23. API compatibility
+
+**Additive, backward-compatible.** `expectedCurrentPrimaryContactId` is optional on both `POST` and `PUT`. Requests that omit it behave exactly as before this task (R2's best-effort comparison, unchanged code path, unchanged known limitation). No existing field, status code, response shape, or error code changed. NoraMedi's own frontend was updated to always send it for primary-setting operations; any other API consumer continues to work unmodified, with the pre-existing (already-documented, already-observed) residual race for that consumer only.
+
+## 24. Tenant-scope and multi-replica safety
+
+- The advisory lock remains keyed by `patientId` alone; unrelated-patient/clinic/organization non-interference re-verified under token-protected mode (§21 #3, scenario 5; §21 #2, the cross-tenant precondition-mismatch scenario).
+- The token check reads the canonical current-primary state from the database itself (never from in-process memory), so it is correct regardless of which application-server replica handles either request — no replica-local state is introduced anywhere in this fix.
+- Reset/recheck queries remain scoped to `(patientId, clinicId, organizationId)`, unchanged.
+
+## 25. Rollback
+
+- **Revert runtime files**: `git revert` this task's commit(s) on `fix/f1-004-p1-r2-emergency-contact-update-race`, or reset to `85f7c52c5a63ff40d21c8261dbebe685138cdfbf` (the pre-R2-R3 head) — restores R2's exact prior design (same-transaction prior/current comparison only, no precondition token).
+- **Frontend rollback**: reverting `PatientEmergencyContactsPanel.tsx`/`PatientEmergencyContactForm.tsx` alone (without the backend revert) is safe — the backend already treats an omitted field as legacy mode, so an older frontend against the new backend continues to work exactly as it does today, with the same already-documented residual limitation.
+- **No migration to roll back** — none was performed.
+- **Old behavior after rollback**: R2's design is restored exactly — the CREATE-race residual gap documented in §15/§17 becomes reachable again for ALL clients (not just ones that never send the token), at the same low-but-nonzero, CI-observed rate.
+
+## Accepted findings (F1-004-P1-R2-R3)
+
+- The CI-observed CREATE-race failure (§15) was deterministically reproduced on demand via real, production-embedded test-only synchronization hooks — not left as an unverified theory.
+- No further purely-database-side design can close the legacy-mode gap with the required 500/500 airtight guarantee — proven by elimination across every alternative the task brief enumerated (§18/§20), not asserted without investigation.
+- The implemented `expectedCurrentPrimaryContactId` precondition is verified airtight under the exact worst-case forced schedule that broke every prior design (§17), across 500/500 token-protected CREATE rounds and 500/500 token-protected UPDATE rounds, over 5 independent disposable-Postgres process executions (§21/§22).
+- Legacy (no-token) behavior is unchanged and its known limitation is preserved honestly, not silently hidden — a dedicated, permanent characterization test asserts it still reproduces under forced interleaving.
+
+## Rejected or unverified claims
+
+- "The legacy fallback path is now race-free" is **not** claimed — it is explicitly and permanently documented as not race-free (§17, §19).
+- "This fix eliminates the residual limitation for every API consumer" is **not** claimed — only for requests that supply the precondition; §23 states this plainly.
+- "A narrowed wall-clock heuristic would have been sufficient" is **not** accepted — §18 explains why it was rejected as a design choice, not merely as more work.
+
+## Merge/deployment safety
+
+Do not merge. Do not deploy. PR #325 remains open per this task's own instructions, pending review of this design change (the precondition token is an additive API surface change, even though backward-compatible) and final CI confirmation on the pushed head.
+
+## Exact next action
+
+Push this task's commit(s) to `fix/f1-004-p1-r2-emergency-contact-update-race`, confirm PR #325 remains open/clean/mergeable with the updated diff, watch the resulting CI run to genuine terminal completion (not a partial check), and report the final delivery summary — merge and deploy remain explicitly out of scope for this task.

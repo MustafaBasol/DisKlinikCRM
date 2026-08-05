@@ -168,11 +168,120 @@
     "agentCompleted": true,
     "testsPassed": true,
     "remoteCiVerified": true,
-    "remoteCiVerifiedNote": "true on the reconciled head fd1148f as of the diagnostic rerun of ci run 31020654709 — see firstRealCiObservationOfResidualLimitation for the first-attempt failure and rerun-pass detail",
+    "remoteCiVerifiedNote": "true on the reconciled head fd1148f as of the diagnostic rerun of ci run 31020654709 — see firstRealCiObservationOfResidualLimitation for the first-attempt failure and rerun-pass detail. SUPERSEDED for the current head — see r2r3Followup.taskStatus below.",
     "prOpened": true,
     "merged": false,
     "deployed": false,
     "productionVerified": false
   },
-  "exactNextTask": "Program-owner review of firstRealCiObservationOfResidualLimitation before any merge decision for PR #325 — this is new empirical evidence about the design's accepted residual limitation, not merely a review/merge formality. No further F1-004 follow-up anticipated beyond that unless a future CI run reproduces a different concurrency gap in this same code path (would be a new, separately-numbered task)."
+  "exactNextTaskStale": "SUPERSEDED — see r2r3Followup.exactNextTask below. Kept unedited per this file's own convention (append, never rewrite in place): Program-owner review of firstRealCiObservationOfResidualLimitation before any merge decision for PR #325.",
+  "r2r3Followup": {
+    "taskId": "F1-004-P1-R2-R3",
+    "answersOpenQuestionFrom": "firstRealCiObservationOfResidualLimitation.openQuestion above — program owner selected: implement a client-supplied precondition token",
+    "previousHeadSha": "85f7c52c5a63ff40d21c8261dbebe685138cdfbf",
+    "baselineOriginMainSha": "32adf919cb331ae2ce4f681bd37e857ded8065ab",
+    "failedCiReconfirmed": {
+      "runId": "31020654709",
+      "attempt": 1,
+      "note": "gh api default/gh run view resolves to attempt 2 (success) — attempt 1 (failure) must be fetched explicitly via /attempts/1",
+      "jobId": "92356454814",
+      "jobName": "ci-layers / Layer 3: disposable PostgreSQL tests",
+      "conclusion": "failure",
+      "mergeRef": "fd1148f8341311baee3db1b2a7313522d7ad2404",
+      "baseRef": "32adf919cb331ae2ce4f681bd37e857ded8065ab"
+    },
+    "deterministicProof": {
+      "method": "real, production-embedded, no-op-unless-installed test synchronization hooks (installEmergencyContactRaceTestHooks / invokeEmergencyContactRaceHook, server/src/services/patientEmergencyContactsConcurrency.ts) forcing request B's entire promoting critical section to begin only after request A's transaction has fully committed",
+      "harnessFile": "server/src/tests/dbVerification/patientEmergencyContactsCreateRaceForcedInterleaving.test.ts (permanent, committed — not a scratch/temporary file, per this task's TEST REQUIREMENTS)",
+      "legacyModeForcedResult": { "gatedAt": "beforePriorRead", "resA": 201, "resB": 201, "finalPrimaryCount": 1, "reproducedEveryRun": true, "roundsRun": 5 },
+      "tokenModeForcedResult": { "gatedAt": "beforeLock", "correctEveryRun": true, "roundsRun": 20, "outcome": "exactly one 201 + one 409 in all 20/20 rounds" },
+      "unforcedLocalReproductionAttempts": 500,
+      "unforcedLocalReproductions": 0,
+      "interpretation": "confirms the CI-observed rate is a genuine network/scheduling artifact of the CI runner-to-container path, not a local-repro gap — matches why prior local runs (300 rounds across 3 independent disposable-DB runs, F1-004-P1-R2 §15) never caught it"
+    },
+    "impossibilityAnalysis": {
+      "claim": "no purely database-side design (using only signals visible from inside the promoting transaction) can distinguish a request whose entire transaction genuinely executes after a competitor's commit from a request that arrived later with deliberate intent — the two produce byte-for-byte identical database states",
+      "alternativesRuledOut": [
+        { "design": "reorder lock before read / drop pre-lock read", "verifiedVia": "same forced-interleaving harness", "result": "ambiguity moves one statement earlier, does not close" },
+        { "design": "SELECT ... FOR UPDATE sentinel row instead of advisory lock", "result": "structurally identical vulnerability" },
+        { "design": "SERIALIZABLE isolation", "result": "re-affirmed still inapplicable per F1-004-P1-R2's own cross-tenant false-positive finding; also would not catch a fully-serialized history by definition" },
+        { "design": "app-server wall-clock (Date.now()) vs DB row createdAt comparison", "result": "rejected as a design choice, not merely harder — introduces unprovable app-server-vs-DB-server clock-skew dependence and a magic-number tolerance; cannot meet the required airtight 500/500 guarantee" }
+      ],
+      "escalatedPerStopCondition": "meeting the 201/409 contract requires a public API semantic change",
+      "decidedBy": "program_owner_not_unilateral"
+    },
+    "fixSelected": {
+      "mechanism": "optional, backward-compatible expectedCurrentPrimaryContactId precondition field on POST and PUT, meaningful only when isPrimary:true",
+      "semantics": {
+        "omitted": "legacy compatibility mode — falls back to F1-004-P1-R2's best-effort prior/current comparison, unchanged, knowingly not race-free against this mechanism",
+        "explicitNull": "client asserts it observed no current primary",
+        "nonEmptyString": "client asserts that exact contact id is the current primary"
+      },
+      "presenceTrackedSeparatelyFromValue": true,
+      "sharedHelperFunction": "resolvePrimaryPromotion (server/src/services/patientEmergencyContactsConcurrency.ts) — used by both POST and PUT",
+      "airtightReason": "comparison is against a belief the client formed before this request was dispatched, never against a second read of this same request — no scheduling delay to this request's own statements can manufacture a false match",
+      "frontendChanges": [
+        "src/components/PatientEmergencyContactsPanel.tsx — passes contacts.find(c => c.isPrimary)?.id ?? null down as observedCurrentPrimaryContactId",
+        "src/components/PatientEmergencyContactForm.tsx — includes expectedCurrentPrimaryContactId in its payload whenever isPrimary is checked, on both create and edit"
+      ],
+      "migrationRequired": false,
+      "apiCompatibility": "additive, backward-compatible — no existing field/status/response shape/error code changed"
+    },
+    "alternativesRejected": [
+      { "design": "remove CREATE's implicit auto-replace semantics (always 409 if any primary exists)", "reason": "airtight but a materially bigger, more disruptive product/UX behavior change than the additive token" },
+      { "design": "global or process-local lock", "reason": "explicitly forbidden by this task's own instructions; does not solve the multi-replica case" },
+      { "design": "narrow SERIALIZABLE re-check only", "reason": "the cross-tenant false-conflict mechanism does not depend on which part of the transaction runs at that isolation level" },
+      { "design": "wall-clock/timestamp heuristic", "reason": "see impossibilityAnalysis — rejected as a design choice" },
+      { "design": "map generic P2034 to a business conflict", "reason": "not done — unchanged from R2, remains a plain 500" }
+    ],
+    "testEvidence": {
+      "focusedEmergencyContactUnitTests": { "command": "npx tsx src/tests/patientEmergencyContacts.test.ts", "passed": 31, "failed": 0, "exitCode": 0, "note": "supersedes the R2 25/25 figure above — net +6 new parseExpectedPrimaryPrecondition tests" },
+      "forcedInterleavingHarness": { "command": "npx tsx src/tests/dbVerification/patientEmergencyContactsCreateRaceForcedInterleaving.test.ts", "passed": 7, "failed": 0, "exitCode": 0 },
+      "focusedEmergencyContactConcurrencyTests": {
+        "command": "npx tsx src/tests/dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts",
+        "passed": 19, "failed": 0, "exitCode": 0,
+        "note": "supersedes the R2 17/17 figure above",
+        "legacyCreateRaceStressRounds": 100, "legacyCreateRaceResult": "100/100",
+        "tokenProtectedCreateRaceStressRounds": 500, "tokenProtectedCreateRaceResult": "500/500",
+        "legacyUpdateRaceStressRounds": 150, "legacyUpdateRaceResult": "150/150",
+        "tokenProtectedUpdateRaceStressRounds": 500, "tokenProtectedUpdateRaceResult": "500/500"
+      },
+      "serverTypecheck": { "command": "npx prisma generate && npx tsc --noEmit", "exitCode": 0, "errors": 0 },
+      "frontendTypecheck": { "command": "npx tsc -b", "exitCode": 0, "errors": 0 },
+      "frontendComponentTests": { "command": "npx vitest run src/components/PatientEmergencyContactForm.vitest.test.tsx src/components/PatientEmergencyContactsPanel.vitest.test.tsx src/pages/PatientDetail.vitest.test.tsx", "passed": 40, "failed": 0, "exitCode": 0, "note": "+4 new: token sent on create/edit promotion, explicit null when no observed primary, omitted when not promoting, panel-to-form wiring" },
+      "disposablePostgresProfileRuns": [
+        { "run": 1, "command": "npx tsx scripts/test-runtime/orchestrator.ts postgres", "exitCode": 0, "cleanupSuccess": true, "residualNmtestContainers": 0 },
+        { "run": 2, "command": "npx tsx scripts/test-runtime/orchestrator.ts postgres", "exitCode": 0, "cleanupSuccess": true, "residualNmtestContainers": 0 },
+        { "run": 3, "command": "npx tsx scripts/test-runtime/orchestrator.ts postgres", "exitCode": 0, "cleanupSuccess": true, "residualNmtestContainers": 0 },
+        { "run": 4, "command": "npx tsx scripts/test-runtime/orchestrator.ts postgres", "exitCode": 0, "cleanupSuccess": true, "residualNmtestContainers": 0 },
+        { "run": 5, "command": "npx tsx scripts/test-runtime/orchestrator.ts postgres", "exitCode": 0, "cleanupSuccess": true, "residualNmtestContainers": 0 }
+      ],
+      "independentSuccessfulProcessLevelExecutions": 5,
+      "residualDockerResourcesAfterAllRuns": { "nmtestContainers": 0, "nmtestNetworks": 0, "verifiedVia": "docker ps -a --filter name=nmtest / docker network ls --filter name=nmtest, both empty" },
+      "gitDiffCheck": { "conflictMarkers": 0, "trailingWhitespaceErrors": 0 },
+      "migrationSchemaDiff": { "command": "git diff --stat -- server/prisma/", "output": "empty", "migrationOrSchemaTouched": false }
+    },
+    "tenantScopeAndMultiReplicaSafety": {
+      "lockKeyedBy": "patientId, unchanged",
+      "tokenCheckReadsFrom": "database itself, never in-process/replica-local memory — correct regardless of which application-server replica handles either request",
+      "crossTenantNonInterferenceReVerified": true
+    },
+    "rollback": {
+      "runtimeFileRevert": "git revert this task's commit(s) on fix/f1-004-p1-r2-emergency-contact-update-race, or reset to 85f7c52c5a63ff40d21c8261dbebe685138cdfbf (pre-R2-R3 head) — restores R2's exact prior design",
+      "frontendOnlyRevertSafe": true,
+      "frontendOnlyRevertNote": "backend already treats an omitted field as legacy mode, so an older frontend against the new backend continues working exactly as today",
+      "migrationRollback": "not applicable — none performed",
+      "postRollbackBehavior": "R2's design restored exactly — the CREATE-race residual gap becomes reachable again for ALL clients, at the same CI-observed rate"
+    },
+    "taskStatus": {
+      "agentCompleted": true,
+      "testsPassed": true,
+      "prHeadUpdated": true,
+      "merged": false,
+      "deployed": false,
+      "productionVerified": false,
+      "note": "additive API-surface change — reported for review per this task's own instructions, not merged unilaterally"
+    },
+    "exactNextTask": "Push to fix/f1-004-p1-r2-emergency-contact-update-race, watch CI to genuine terminal completion, report the final delivery summary. Program-owner/external review and merge decision for PR #325 (now carrying an additive API-surface change) is the actual next step — this task does not merge or deploy."
+  }
 }

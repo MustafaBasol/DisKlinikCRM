@@ -172,6 +172,7 @@ const PatientEmergencyContactsPanel: React.FC<Props> = ({ patientId, canManage, 
         <PatientEmergencyContactForm
           patientId={patientId}
           contact={formState.mode === 'edit' ? formState.contact : null}
+          observedCurrentPrimaryContactId={contacts.find((c) => c.isPrimary)?.id ?? null}
           onClose={() => setFormState(null)}
           onSuccess={() => {
             setFormState(null);

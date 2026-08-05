@@ -46,6 +46,7 @@ import {
   validateEmergencyContact,
   mergeEmergencyContactPatch,
   isPrimaryContactConflict,
+  parseExpectedPrimaryPrecondition,
   PRIMARY_CONTACT_CONFLICT_CODE,
   type NormalizedEmergencyContact,
 } from '../services/patientEmergencyContacts.js';
@@ -479,6 +480,54 @@ await test('patientListSelect (used for BILLING GET /api/patients/:id) does not 
 
 await test('all EMERGENCY_CONTACT_TYPES are the stable backend contract values', () => {
   assert.deepEqual([...EMERGENCY_CONTACT_TYPES], ['SPOUSE', 'PARENT', 'GUARDIAN', 'CHILD', 'SIBLING', 'OTHER']);
+});
+
+// ── 14. parseExpectedPrimaryPrecondition — F1-004-P1-R2-R3 ─────────────────
+//
+// Pure parsing/validation logic for the optimistic-concurrency precondition
+// that closes the CREATE primary-contact race a purely server-side "prior vs
+// current" comparison cannot (see patientEmergencyContactsConcurrency.ts's
+// resolvePrimaryPromotion header comment for the full proof). The actual
+// database-backed enforcement (mismatch -> 409) is covered against a real
+// Postgres in dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts.
+
+section('14. parseExpectedPrimaryPrecondition — precondition parsing (F1-004-P1-R2-R3)');
+
+await test('field omitted entirely -> { provided: false } (legacy compatibility mode)', () => {
+  const result = parseExpectedPrimaryPrecondition({});
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.ok && result.precondition, { provided: false });
+});
+
+await test('field explicitly null -> { provided: true, expectedCurrentPrimaryContactId: null } — NOT the same as omitted', () => {
+  const result = parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: null });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.ok && result.precondition, { provided: true, expectedCurrentPrimaryContactId: null });
+});
+
+await test('field set to a non-empty string -> provided with that exact (trimmed) id', () => {
+  const result = parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: '  contact-abc  ' });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.ok && result.precondition, { provided: true, expectedCurrentPrimaryContactId: 'contact-abc' });
+});
+
+await test('an empty string is rejected (400) — never silently treated as null or omitted', () => {
+  const result = parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: '' });
+  assert.equal(result.ok, false);
+});
+
+await test('a non-string, non-null value (number/boolean/object/array) is rejected (400)', () => {
+  assert.equal(parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: 42 }).ok, false);
+  assert.equal(parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: true }).ok, false);
+  assert.equal(parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: {} }).ok, false);
+  assert.equal(parseExpectedPrimaryPrecondition({ expectedCurrentPrimaryContactId: [] }).ok, false);
+});
+
+await test('omitted vs explicit-null are never conflated across repeated calls (no shared/mutated state)', () => {
+  const omitted = parseExpectedPrimaryPrecondition({ isPrimary: true });
+  const explicitNull = parseExpectedPrimaryPrecondition({ isPrimary: true, expectedCurrentPrimaryContactId: null });
+  assert.equal(omitted.ok && omitted.precondition.provided, false);
+  assert.equal(explicitNull.ok && explicitNull.precondition.provided, true);
 });
 
 console.log(`\nSonuç: ${passed} geçti, ${failed} başarısız\n`);

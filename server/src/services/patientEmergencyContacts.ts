@@ -140,6 +140,61 @@ export function validateEmergencyContact(input: EmergencyContactInput): Emergenc
 }
 
 /**
+ * A client-supplied optimistic-concurrency precondition for primary-contact
+ * promotion (F1-004-P1-R2-R3). Distinct from NormalizedEmergencyContact
+ * because it is a REQUEST-level precondition, not persisted contact data.
+ *
+ * Presence and value are deliberately tracked separately —
+ * `{ provided: false }` (the field was omitted entirely — legacy client,
+ * best-effort server-side comparison only, see patientEmergencyContactsConcurrency.ts)
+ * is NOT the same as `{ provided: true, expectedCurrentPrimaryContactId: null }`
+ * (the client explicitly asserts "I observed no current primary"). Collapsing
+ * "omitted" into "null" would silently downgrade every legacy request into a
+ * (false) explicit "no primary" assertion and reject legitimate sequential
+ * replacements against an established primary.
+ */
+export type ExpectedPrimaryPrecondition =
+  | { provided: false }
+  | { provided: true; expectedCurrentPrimaryContactId: string | null };
+
+export type ExpectedPrimaryPreconditionResult =
+  | { ok: true; precondition: ExpectedPrimaryPrecondition }
+  | { ok: false; error: string };
+
+/**
+ * Parses the optional `expectedCurrentPrimaryContactId` request field used by
+ * POST/PUT emergency-contacts to close the primary-promotion race that a
+ * purely server-side "prior vs current" comparison cannot: see
+ * patientEmergencyContactsConcurrency.ts's header comment for the full proof
+ * that no database-only signal can distinguish two requests that genuinely
+ * overlapped at the HTTP layer from two that were genuinely sequential, once
+ * the losing request's entire transaction happens to execute after the
+ * winner's commit. When the client provides this field, it captures the
+ * client's own observed state at request-formation time — information the
+ * server can never reconstruct from database state alone — and the route
+ * enforces it as a true optimistic-concurrency precondition instead of
+ * relying on timing.
+ *
+ * Accepts: field omitted entirely (`{ provided: false }`); `null` (client
+ * observed no current primary); or a non-empty string (client observed that
+ * exact contact as primary). Any other JSON type (number, boolean, object,
+ * empty string) is a validation error — never silently coerced.
+ */
+export function parseExpectedPrimaryPrecondition(body: Record<string, unknown>): ExpectedPrimaryPreconditionResult {
+  if (!Object.prototype.hasOwnProperty.call(body, 'expectedCurrentPrimaryContactId')) {
+    return { ok: true, precondition: { provided: false } };
+  }
+  const raw = body.expectedCurrentPrimaryContactId;
+  if (raw === null) {
+    return { ok: true, precondition: { provided: true, expectedCurrentPrimaryContactId: null } };
+  }
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    return { ok: true, precondition: { provided: true, expectedCurrentPrimaryContactId: raw.trim() } };
+  }
+  return { ok: false, error: 'expectedCurrentPrimaryContactId must be null or a non-empty string contact id' };
+}
+
+/**
  * Merges a partial PUT body onto the existing row so the joint fullName/phone
  * invariant is re-checked against the RESULTING record, not just the patch —
  * e.g. a PUT that only sends `{ phone: "" }` on a contact with an existing

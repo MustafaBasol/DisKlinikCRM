@@ -139,4 +139,44 @@ describe('PatientEmergencyContactsPanel', () => {
 
     expect(svc.remove).not.toHaveBeenCalled();
   });
+
+  // ─── F1-004-P1-R2-R3: wires the observed current primary into the form ───
+
+  it('add flow: passes the currently-loaded primary contact id through to the form as observedCurrentPrimaryContactId', async () => {
+    svc.getAll.mockResolvedValue({ data: [contact({ id: 'primary-1', fullName: 'Ayşe Yılmaz', isPrimary: true })] });
+    svc.create.mockResolvedValue({ data: { id: 'new-1' } });
+
+    render(<PatientEmergencyContactsPanel patientId="patient-1" canManage={true} isMinor={false} />);
+    await screen.findByText('Ayşe Yılmaz');
+
+    fireEvent.click(screen.getByText('detail.emergencyContacts.addNew'));
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Yeni Kişi' } });
+    fireEvent.change(document.querySelector('input[type="tel"]') as HTMLInputElement, { target: { value: '05559998877' } });
+    fireEvent.click(screen.getAllByRole('checkbox')[0]); // isPrimary
+    fireEvent.click(screen.getByText('common:save'));
+
+    await waitFor(() => expect(svc.create).toHaveBeenCalledTimes(1));
+    expect(svc.create).toHaveBeenCalledWith(
+      'patient-1',
+      expect.objectContaining({ isPrimary: true, expectedCurrentPrimaryContactId: 'primary-1' }),
+    );
+  });
+
+  it('add flow: passes null through as observedCurrentPrimaryContactId when no loaded contact is primary', async () => {
+    svc.getAll.mockResolvedValue({ data: [contact({ id: 'non-primary-1', isPrimary: false })] });
+    svc.create.mockResolvedValue({ data: { id: 'new-1' } });
+
+    render(<PatientEmergencyContactsPanel patientId="patient-1" canManage={true} isMinor={false} />);
+    await screen.findByText('Ayşe Yılmaz');
+
+    fireEvent.click(screen.getByText('detail.emergencyContacts.addNew'));
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Yeni Kişi' } });
+    fireEvent.change(document.querySelector('input[type="tel"]') as HTMLInputElement, { target: { value: '05559998877' } });
+    fireEvent.click(screen.getAllByRole('checkbox')[0]); // isPrimary
+    fireEvent.click(screen.getByText('common:save'));
+
+    await waitFor(() => expect(svc.create).toHaveBeenCalledTimes(1));
+    const payload = svc.create.mock.calls[0][1];
+    expect(payload.expectedCurrentPrimaryContactId).toBeNull();
+  });
 });

@@ -335,6 +335,58 @@ async function scenarioConcurrentCreatesStress() {
   });
 }
 
+// ─── 1c. Stress: token-protected CREATE race — F1-004-P1-R2-R3 ────────────
+//
+// Same shape as 1b, but both concurrent creates supply
+// expectedCurrentPrimaryContactId: null (both callers correctly believe, at
+// request-formation time, that the fresh patient has no primary yet). This
+// exercises the actual fix for the CI-observed A=201/B=201 failure (run
+// 31020654709 attempt 1) — see patientEmergencyContactsCreateRaceForcedInterleaving.test.ts
+// for the deterministic forced-interleaving proof that this mode is airtight
+// against the exact mechanism scenario 1b's legacy (no-token) path cannot
+// close. 500 rounds — this task's minimum required CREATE round count.
+
+async function scenarioConcurrentCreatesStressTokenProtected() {
+  const ROUNDS = 500;
+  section(`1c. Stress: ${ROUNDS} independent rounds of the TOKEN-PROTECTED CREATE race (expectedCurrentPrimaryContactId: null), each on a fresh patient — must be deterministic every round`);
+  const fixtures = await createClinicFixtureSet('ec-concurrent-create-stress-token');
+  const user = await ownerUser(fixtures);
+
+  let onePassOneConflict = 0;
+  let exactlyOnePrimaryAfter = 0;
+
+  await test(`all ${ROUNDS} token-protected rounds produce exactly one 201 + one 409 PRIMARY_CONTACT_CONFLICT, and exactly one primary contact afterwards`, async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+
+      const [resA, resB] = await Promise.all([
+        callCreate(patient.id, user, contactBody({ isPrimary: true, expectedCurrentPrimaryContactId: null })),
+        callCreate(patient.id, user, contactBody({ isPrimary: true, expectedCurrentPrimaryContactId: null })),
+      ]);
+
+      const successCount = [resA, resB].filter(r => r.statusCode === 201).length;
+      const loser = resA.statusCode === 201 ? resB : resA;
+
+      assert.equal(
+        successCount,
+        1,
+        `round ${round}: exactly one token-protected concurrent create must succeed — got A=${resA.statusCode} B=${resB.statusCode} bodies=${JSON.stringify(resA.body)} / ${JSON.stringify(resB.body)}`,
+      );
+      assert.ok(
+        isConflict(loser),
+        `round ${round}: the loser must get the documented controlled 409 PRIMARY_CONTACT_CONFLICT, got ${loser.statusCode} ${JSON.stringify(loser.body)}`,
+      );
+      onePassOneConflict++;
+
+      const finalPrimaryCount = await primaryCount(patient.id);
+      assert.equal(finalPrimaryCount, 1, `round ${round}: exactly one primary contact must exist after the race, got ${finalPrimaryCount}`);
+      exactlyOnePrimaryAfter++;
+    }
+
+    console.log(`    [stress summary] rounds=${ROUNDS} token-protected one-201-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`);
+  });
+}
+
 // ─── 2. Two concurrent updates of different contacts, both isPrimary=true ───
 
 async function scenarioConcurrentUpdatesDifferentContacts() {
@@ -449,6 +501,61 @@ async function scenarioConcurrentUpdatesStress() {
   });
 }
 
+// ─── 2d. Stress: token-protected UPDATE race — F1-004-P1-R2-R3 ────────────
+//
+// Same shape as 2b, but both concurrent promoting updates supply
+// expectedCurrentPrimaryContactId: null (both callers correctly believe
+// neither of the two freshly-created, non-primary contacts is primary yet).
+// 500 rounds — this task's minimum required UPDATE round count.
+
+async function scenarioConcurrentUpdatesStressTokenProtected() {
+  const ROUNDS = 500;
+  section(`2d. Stress: ${ROUNDS} independent rounds of the TOKEN-PROTECTED DIFFERENT-contacts UPDATE race (expectedCurrentPrimaryContactId: null), each on a fresh patient — must be deterministic every round`);
+  const fixtures = await createClinicFixtureSet('ec-concurrent-update-stress-token');
+  const user = await ownerUser(fixtures);
+
+  let onePassOneConflict = 0;
+  let exactlyOnePrimaryAfter = 0;
+
+  await test(`all ${ROUNDS} token-protected rounds produce exactly one 200 + one 409 PRIMARY_CONTACT_CONFLICT, and exactly one primary contact afterwards`, async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+
+      const createA = await callCreate(patient.id, user, contactBody({ isPrimary: false }));
+      const createB = await callCreate(patient.id, user, contactBody({ isPrimary: false }));
+      assert.equal(createA.statusCode, 201, `round ${round}: setup create A must succeed`);
+      assert.equal(createB.statusCode, 201, `round ${round}: setup create B must succeed`);
+
+      const [resA, resB] = await Promise.all([
+        callUpdate(patient.id, createA.body.id, user, { isPrimary: true, expectedCurrentPrimaryContactId: null }),
+        callUpdate(patient.id, createB.body.id, user, { isPrimary: true, expectedCurrentPrimaryContactId: null }),
+      ]);
+
+      const successCount = [resA, resB].filter(r => r.statusCode === 200).length;
+      const loser = resA.statusCode === 200 ? resB : resA;
+      const winner = resA.statusCode === 200 ? resA : resB;
+
+      assert.equal(
+        successCount,
+        1,
+        `round ${round}: exactly one token-protected concurrent update must succeed — got A=${resA.statusCode} B=${resB.statusCode} bodies=${JSON.stringify(resA.body)} / ${JSON.stringify(resB.body)}`,
+      );
+      assert.ok(
+        isConflict(loser),
+        `round ${round}: the loser must get the documented controlled 409 PRIMARY_CONTACT_CONFLICT, got ${loser.statusCode} ${JSON.stringify(loser.body)}`,
+      );
+      assert.equal(winner.statusCode, 200, `round ${round}: the winner must get 200`);
+      onePassOneConflict++;
+
+      const finalPrimaryCount = await primaryCount(patient.id);
+      assert.equal(finalPrimaryCount, 1, `round ${round}: exactly one primary contact must exist after the race, got ${finalPrimaryCount}`);
+      exactlyOnePrimaryAfter++;
+    }
+
+    console.log(`    [stress summary] rounds=${ROUNDS} token-protected one-200-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`);
+  });
+}
+
 // ─── 5. No unrelated patient or tenant contact is modified by the race ──────
 
 async function scenarioNoCrossPatientInterference() {
@@ -535,9 +642,11 @@ async function main() {
   await scenarioStressRoundConfiguration();
   await scenarioConcurrentCreatesSamePatient();
   await scenarioConcurrentCreatesStress();
+  await scenarioConcurrentCreatesStressTokenProtected();
   await scenarioConcurrentUpdatesDifferentContacts();
   await scenarioSameContactConcurrentUpdate();
   await scenarioConcurrentUpdatesStress();
+  await scenarioConcurrentUpdatesStressTokenProtected();
   await scenarioNoCrossPatientInterference();
   await scenarioMultipleNonPrimaryRowsAllowed();
   await scenarioMultipleLegalDecisionMakersAllowed();
