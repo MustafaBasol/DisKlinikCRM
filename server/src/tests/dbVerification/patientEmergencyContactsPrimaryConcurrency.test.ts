@@ -45,6 +45,86 @@ const { section, test, summary } = createSuite('patientEmergencyContactsPrimaryC
 const CREATE_CHAIN = getFullChain(patientEmergencyContactsRouter as any, 'post', '/patients/:patientId/emergency-contacts');
 const UPDATE_CHAIN = getFullChain(patientEmergencyContactsRouter as any, 'put', '/patients/:patientId/emergency-contacts/:contactId');
 
+// ─── Stress round configuration (Copilot review, PR #325) ──────────────────
+//
+// CI must always exercise the full committed defaults below. Neither
+// ci-layers.yml/ci-pr.yml nor server:test:disposable-db ever set
+// PATIENT_EMERGENCY_CONTACT_{CREATE,UPDATE}_RACE_ROUNDS, so every CI run
+// resolves to exactly 100 / 150 rounds regardless of this mechanism's
+// existence. The two env vars below exist ONLY so a developer can dial the
+// round count down (or up) for a local diagnostic run without editing this
+// file. An explicitly-provided override is strictly validated — never
+// silently coerced, clamped, or ignored on failure — so a typo or bad value
+// fails loudly (throws at import time, before any DB work) instead of
+// quietly changing what "the full stress suite" actually exercised.
+export const DEFAULT_CREATE_RACE_ROUNDS = 100;
+export const DEFAULT_UPDATE_RACE_ROUNDS = 150;
+
+const LOCAL_FAST_MODE_ENV_VAR = 'PATIENT_EMERGENCY_CONTACT_RACE_LOCAL_FAST_MODE';
+// A round count below this is too low to meaningfully "stress" anything —
+// only local-fast-mode (a separate, explicit opt-in) may go lower, and even
+// then never below 1.
+const MIN_ROUNDS_WITHOUT_FAST_MODE = 10;
+const MAX_ROUNDS = 100_000;
+
+/**
+ * Validates and resolves a single round-count override. Exported so the
+ * config-validation tests in section 0 below can exercise every rejection
+ * path directly, without ever mutating real process.env (which would risk
+ * affecting the rest of this file's own module-scope resolution below).
+ */
+export function parseRaceRoundOverride(
+  envVarName: string,
+  rawValue: string | undefined,
+  defaultValue: number,
+  fastModeEnabled: boolean,
+): number {
+  if (rawValue === undefined) return defaultValue;
+
+  const trimmed = rawValue.trim();
+  if (trimmed.length === 0) {
+    throw new Error(
+      `${envVarName} is set but empty — remove the variable to use the default (${defaultValue}), or provide a bounded positive integer.`,
+    );
+  }
+  if (!/^[0-9]+$/.test(trimmed)) {
+    throw new Error(
+      `${envVarName}="${rawValue}" is not a valid bounded positive integer (digits only — no sign, decimal point, or other characters).`,
+    );
+  }
+
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value)) {
+    throw new Error(`${envVarName}="${rawValue}" is not a safe integer.`);
+  }
+  if (value === 0) {
+    throw new Error(`${envVarName}="${rawValue}" must be a positive integer greater than zero (0 is not allowed).`);
+  }
+
+  const minAllowed = fastModeEnabled ? 1 : MIN_ROUNDS_WITHOUT_FAST_MODE;
+  if (value < minAllowed) {
+    throw new Error(
+      `${envVarName}="${rawValue}" is below the minimum of ${minAllowed} round(s). ` +
+        `Set ${LOCAL_FAST_MODE_ENV_VAR}=true to allow values as low as 1 for local diagnostic runs only.`,
+    );
+  }
+  if (value > MAX_ROUNDS) {
+    throw new Error(`${envVarName}="${rawValue}" exceeds the maximum of ${MAX_ROUNDS} rounds.`);
+  }
+
+  return value;
+}
+
+function resolveRaceRounds(envVarName: string, defaultValue: number): { rounds: number; source: 'default' | 'env-override' } {
+  const rawValue = process.env[envVarName];
+  const fastModeEnabled = process.env[LOCAL_FAST_MODE_ENV_VAR] === 'true';
+  const rounds = parseRaceRoundOverride(envVarName, rawValue, defaultValue, fastModeEnabled);
+  return { rounds, source: rawValue === undefined ? 'default' : 'env-override' };
+}
+
+const createRoundsConfig = resolveRaceRounds('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', DEFAULT_CREATE_RACE_ROUNDS);
+const updateRoundsConfig = resolveRaceRounds('PATIENT_EMERGENCY_CONTACT_UPDATE_RACE_ROUNDS', DEFAULT_UPDATE_RACE_ROUNDS);
+
 async function ownerUser(fixtures: ClinicFixtureSet, clinicId: string = fixtures.defaultClinicId) {
   const owner = await createStaffUser({
     organizationId: fixtures.orgId,
@@ -100,6 +180,81 @@ function isConflict(res: { statusCode: number; body: any }) {
   return res.statusCode === 409 && res.body?.code === 'PRIMARY_CONTACT_CONFLICT';
 }
 
+// ─── 0. Stress-round configuration is validated, never silently defaulted ──
+
+async function scenarioStressRoundConfiguration() {
+  section('0. Stress-round configuration: env overrides are validated (bounded positive integers), never silently defaulted');
+
+  await test('variables absent -> defaults 100 (create) / 150 (update)', () => {
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', undefined, DEFAULT_CREATE_RACE_ROUNDS, false), 100);
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_UPDATE_RACE_ROUNDS', undefined, DEFAULT_UPDATE_RACE_ROUNDS, false), 150);
+  });
+
+  await test('a valid integer override is accepted (and, only under local-fast-mode, may go as low as 1)', () => {
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '25', 100, false), 25);
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_UPDATE_RACE_ROUNDS', '40', 150, false), 40);
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '1', 100, true), 1);
+  });
+
+  await test('zero is rejected', () => {
+    assert.throws(
+      () => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '0', 100, false),
+      /must be a positive integer greater than zero/,
+    );
+  });
+
+  await test('a negative value is rejected', () => {
+    assert.throws(
+      () => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '-5', 100, false),
+      /not a valid bounded positive integer/,
+    );
+  });
+
+  await test('a decimal value is rejected', () => {
+    assert.throws(
+      () => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '12.5', 100, false),
+      /not a valid bounded positive integer/,
+    );
+  });
+
+  await test('a non-numeric / malformed value is rejected', () => {
+    assert.throws(() => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', 'abc', 100, false), /not a valid bounded positive integer/);
+    assert.throws(() => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', 'NaN', 100, false), /not a valid bounded positive integer/);
+    assert.throws(() => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '1e5', 100, false), /not a valid bounded positive integer/);
+    assert.throws(() => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '   ', 100, false), /is set but empty/);
+  });
+
+  await test('a below-minimum override is rejected without local-fast-mode, but accepted once local-fast-mode is explicitly enabled', () => {
+    assert.throws(
+      () => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '3', 100, false),
+      /below the minimum.*PATIENT_EMERGENCY_CONTACT_RACE_LOCAL_FAST_MODE/s,
+    );
+    assert.equal(parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', '3', 100, true), 3);
+  });
+
+  await test('an explicitly-invalid value is never silently coerced to the default', () => {
+    assert.throws(() => parseRaceRoundOverride('PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS', 'not-a-number', 100, false));
+  });
+
+  await test('the committed defaults are 100 (create) / 150 (update), and the default CI path (no overrides set) executes exactly those counts', () => {
+    assert.equal(DEFAULT_CREATE_RACE_ROUNDS, 100, 'the committed CREATE default must stay 100 rounds');
+    assert.equal(DEFAULT_UPDATE_RACE_ROUNDS, 150, 'the committed UPDATE default must stay 150 rounds');
+    if (process.env.PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS === undefined) {
+      assert.equal(createRoundsConfig.rounds, 100, 'without an override, this run must exercise exactly 100 CREATE rounds');
+      assert.equal(createRoundsConfig.source, 'default');
+    }
+    if (process.env.PATIENT_EMERGENCY_CONTACT_UPDATE_RACE_ROUNDS === undefined) {
+      assert.equal(updateRoundsConfig.rounds, 150, 'without an override, this run must exercise exactly 150 UPDATE rounds');
+      assert.equal(updateRoundsConfig.source, 'default');
+    }
+  });
+
+  console.log(
+    `    [stress config] CREATE_RACE_ROUNDS=${createRoundsConfig.rounds} (${createRoundsConfig.source}) ` +
+      `UPDATE_RACE_ROUNDS=${updateRoundsConfig.rounds} (${updateRoundsConfig.source})`,
+  );
+}
+
 // ─── 1. Two concurrent creates for the same patient, both isPrimary=true ────
 
 async function scenarioConcurrentCreatesSamePatient() {
@@ -135,8 +290,11 @@ async function scenarioConcurrentCreatesSamePatient() {
 // ─── 1b. Stress: same CREATE race, run repeatedly to demonstrate determinism ─
 
 async function scenarioConcurrentCreatesStress() {
-  const ROUNDS = 100;
-  section(`1b. Stress: ${ROUNDS} independent rounds of the CREATE race, each on a fresh patient — must be deterministic every round`);
+  const ROUNDS = createRoundsConfig.rounds;
+  section(
+    `1b. Stress: ${ROUNDS} independent rounds of the CREATE race, each on a fresh patient — must be deterministic every round ` +
+      `(${createRoundsConfig.source === 'default' ? 'committed default' : 'PATIENT_EMERGENCY_CONTACT_CREATE_RACE_ROUNDS override'})`,
+  );
   const fixtures = await createClinicFixtureSet('ec-concurrent-create-stress');
   const user = await ownerUser(fixtures);
 
@@ -171,7 +329,9 @@ async function scenarioConcurrentCreatesStress() {
       exactlyOnePrimaryAfter++;
     }
 
-    console.log(`    [stress summary] rounds=${ROUNDS} one-201-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`);
+    console.log(
+      `    [stress summary] rounds=${ROUNDS} source=${createRoundsConfig.source} one-201-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`,
+    );
   });
 }
 
@@ -237,8 +397,11 @@ async function scenarioSameContactConcurrentUpdate() {
 // ─── 2b. Stress: same UPDATE race, run repeatedly to demonstrate determinism ─
 
 async function scenarioConcurrentUpdatesStress() {
-  const ROUNDS = 150;
-  section(`2b. Stress: ${ROUNDS} independent rounds of the DIFFERENT-contacts UPDATE race, each on a fresh patient — must be deterministic every round`);
+  const ROUNDS = updateRoundsConfig.rounds;
+  section(
+    `2b. Stress: ${ROUNDS} independent rounds of the DIFFERENT-contacts UPDATE race, each on a fresh patient — must be deterministic every round ` +
+      `(${updateRoundsConfig.source === 'default' ? 'committed default' : 'PATIENT_EMERGENCY_CONTACT_UPDATE_RACE_ROUNDS override'})`,
+  );
   const fixtures = await createClinicFixtureSet('ec-concurrent-update-stress');
   const user = await ownerUser(fixtures);
 
@@ -280,7 +443,9 @@ async function scenarioConcurrentUpdatesStress() {
       exactlyOnePrimaryAfter++;
     }
 
-    console.log(`    [stress summary] rounds=${ROUNDS} one-200-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`);
+    console.log(
+      `    [stress summary] rounds=${ROUNDS} source=${updateRoundsConfig.source} one-200-one-409=${onePassOneConflict}/${ROUNDS} exactly-one-primary=${exactlyOnePrimaryAfter}/${ROUNDS}`,
+    );
   });
 }
 
@@ -367,6 +532,7 @@ async function scenarioMultipleLegalDecisionMakersAllowed() {
 // ─── Run ──────────────────────────────────────────────────────────────────
 
 async function main() {
+  await scenarioStressRoundConfiguration();
   await scenarioConcurrentCreatesSamePatient();
   await scenarioConcurrentCreatesStress();
   await scenarioConcurrentUpdatesDifferentContacts();

@@ -361,11 +361,26 @@ await test('a PrimaryContactConflictError (optimistic-concurrency recheck under 
   assert.equal(isPrimaryContactConflict(conflictErr), true);
 });
 
-await test('a Prisma P2034 transaction-conflict error (deadlock/serialization failure defensive mapping) is classified as a primary-contact conflict', () => {
+await test('a generic Prisma P2034 transaction-conflict error (deadlock/serialization failure) is NOT classified as a primary-contact conflict', () => {
+  // P2034 is Prisma's generic code for ANY deadlock/serialization failure —
+  // it does not by itself mean "another request just promoted a primary
+  // contact." Misclassifying it as PRIMARY_CONTACT_CONFLICT would hide an
+  // unrelated operational failure behind a business-conflict response (see
+  // this function's own doc comment in patientEmergencyContacts.ts). It
+  // must fall through to the route's existing generic 500 path instead.
   const p2034 = Object.assign(new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction.'), {
     code: 'P2034',
   });
-  assert.equal(isPrimaryContactConflict(p2034), true);
+  assert.equal(isPrimaryContactConflict(p2034), false);
+});
+
+await test('a generic/unrelated Prisma error is NOT classified as a primary-contact conflict, regardless of its code', () => {
+  const genericTimeout = Object.assign(new Error('Server has closed the connection.'), { code: 'P1017' });
+  const genericInternal = Object.assign(new Error('An operation failed because it depends on one or more records that were required but not found.'), {
+    code: 'P2025',
+  });
+  assert.equal(isPrimaryContactConflict(genericTimeout), false);
+  assert.equal(isPrimaryContactConflict(genericInternal), false);
 });
 
 // ── 9. isLegalDecisionMaker is NOT deduplicated ─────────────────────────────

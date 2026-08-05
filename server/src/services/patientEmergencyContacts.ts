@@ -61,19 +61,37 @@ export const PRIMARY_CONTACT_CONFLICT_CODE = 'PRIMARY_CONTACT_CONFLICT';
  *     version of this same check — PR #310 — still had a gap); or
  *   - a Prisma unique-constraint violation (P2002) from the database-level
  *     partial index (see migration 20260803120000_add_patient_emergency_
- *     contacts), kept as a last-resort backstop; or
- *   - a Prisma transaction-conflict error (P2034 — deadlock or serialization
- *     failure), which should not occur under this design's default READ
- *     COMMITTED isolation but is mapped defensively rather than surfacing as
- *     an unhandled 500 if it ever does.
+ *     contacts), kept as a last-resort backstop.
  * The only unique constraint on PatientEmergencyContact is the partial index
  * above, so any P2002 raised while creating/updating a contact can only be
  * that race — never an unrelated/ambiguous conflict.
+ *
+ * Deliberately NOT included — Prisma P2034 (generic transaction-conflict:
+ * deadlock or serialization failure). An earlier version of this function
+ * mapped P2034 to PRIMARY_CONTACT_CONFLICT defensively, on the theory that
+ * it "shouldn't occur" under this design's READ COMMITTED isolation so it
+ * was safe to treat as this race if it ever did. That reasoning doesn't
+ * hold: P2034 is Prisma's generic code for ANY deadlock or serialization
+ * failure the database reports, not a signal specific to this primary-
+ * contact race — READ COMMITTED transactions can still deadlock for reasons
+ * having nothing to do with primary-contact promotion (e.g. lock-ordering
+ * with an unrelated concurrent write on the same patient row). Classifying
+ * every such failure as PRIMARY_CONTACT_CONFLICT would mislabel a genuine
+ * operational failure as a business conflict and hide it from the same
+ * operational visibility (500 + server-side log) every other unexpected
+ * transaction failure gets. A generic P2034 that reaches the route handler
+ * now falls through to the existing catch-all — logged and returned as a
+ * plain 500, exactly like any other unclassified transaction error — never
+ * exposing raw Prisma details to the client. Retrying it automatically was
+ * considered and rejected here: nothing in this file's error data
+ * distinguishes a spuriously-retryable deadlock from a real underlying
+ * problem, and no repository convention already justifies a bounded retry
+ * for this specific path.
  */
 export function isPrimaryContactConflict(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const code = (err as { code?: unknown }).code;
-  return code === 'P2002' || code === 'P2034' || code === PRIMARY_CONTACT_CONFLICT_CODE;
+  return code === 'P2002' || code === PRIMARY_CONTACT_CONFLICT_CODE;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
