@@ -1,0 +1,118 @@
+{
+  "taskId": "F1-004-P1-R2",
+  "phase": "F1 — Engineering Safety Net and Concurrency Verification",
+  "title": "Emergency-contact primary-update race — root-cause confirmation and fix",
+  "parentContext": {
+    "mainCiRunId": "31002888303",
+    "mainCiRunUrl": "https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/31002888303",
+    "baselineHeadSha": "9b10bc9fde0ceaeb58d90860a950143de7123910",
+    "baselineHeadIsPr323MergeCommit": true,
+    "priorFixCommit": "71989bad4e66a7d2dab938b2007d02f2433060d8",
+    "priorFixPr": 310,
+    "priorFixClosedIssue": 309,
+    "attempt1Job": { "jobId": "92295979999", "name": "ci-layers / Layer 3: disposable PostgreSQL tests", "conclusion": "failure" },
+    "attempt2Job": { "jobId": "92298209814", "name": "ci-layers / Layer 3: disposable PostgreSQL tests", "conclusion": "success" },
+    "priorF1004P1EvidenceFile": {
+      "path": "docs/program/evidence/F1-004-P1_EMERGENCY_CONTACT_PRIMARY_UPDATE_CONCURRENCY.md",
+      "everMergedToMain": false,
+      "note": "Only existed on unmerged/closed PR #311, which self-recorded supersession by PR #310."
+    }
+  },
+  "rootCause": {
+    "category": "F_combination_primarily_A",
+    "mechanism": "decoupled_unlocked_prior_primary_read_races_independently_of_its_own_transaction_connection_checkout",
+    "explanation": "PR #310's optimistic-concurrency 'prior primary' snapshot was read via a separate, unlocked prisma.patientEmergencyContact.findFirst() call issued before prisma.$transaction() opened. That query and the transaction's own connection checkout compete independently for the same pg pool (server/src/db.ts, default max 10). Under contention, the losing request's prior-read could be delayed until after the winning request's entire transaction had already committed, causing the in-lock recheck to find no discrepancy.",
+    "databaseInvariantEverViolated": false,
+    "applicationContractViolated": true,
+    "whyStressTestCouldPass": "The failure is scheduling-sensitive: it requires the exact window between the decoupled pre-check read and the transaction's own connection checkout to straddle the competing request's full commit. Repeated back-to-back rounds on an otherwise-idle process do not reliably reproduce that specific contention pattern.",
+    "deterministicRepro": {
+      "method": "AsyncLocalStorage-tagged monkey-patch gate on prisma.patientEmergencyContact.findFirst, scoped to the exact prior-primary query shape (isPrimary:true, no id filter, select {id:true}), forcing request B's read to wait for request A's full commit while both were dispatched via Promise.all",
+      "harnessFile": "server/src/tests/dbVerification/scratch_repro_toctou.ts (temporary, deleted before PR, never merged)",
+      "resultAgainstOldCode": { "resA": 200, "resB": 200, "finalPrimaryCount": 1, "reproducible": "deterministic_on_demand" },
+      "resultAgainstFixedCode": { "resA": 200, "resB": 409, "finalPrimaryCount": 1, "gateEverFired": false, "note": "decoupled query no longer exists in fixed code" }
+    }
+  },
+  "alternativeRejected": {
+    "design": "serializable_isolation_no_manual_comparison",
+    "verifiedCorrectFor": "genuine_transaction_overlap_via_postgres_ssi_sqlstate_40001",
+    "rejectedBecause": "false_positive_cross_tenant_conflicts_on_sparse_table_due_to_sequential_scan_predicate_locking",
+    "regressionScenario": "scenario 5 (two unrelated patients, different organizations) started returning 409 for patient Y's concurrent create",
+    "probeMethod": "raw pg client, no Prisma, no app code — three scenarios: true-overlap (correctly aborted, SQLSTATE 40001), full-sequential-B-after-A-commit (not caught by SERIALIZABLE, formally valid serial history), full-sequential-separate-connections (same result)"
+  },
+  "fixSelected": {
+    "mechanism": "same_transaction_prior_and_current_read_around_advisory_lock",
+    "isolationLevel": "default (READ COMMITTED) — not SERIALIZABLE",
+    "lockPrimitive": "pg_advisory_xact_lock, keyed by patientId, unchanged from PR #310",
+    "orderingRequirement": "prior read MUST precede acquireEmergencyContactPrimaryLock; both on the same tx",
+    "errorMapping": "isPrimaryContactConflict() now checks P2002 (unique-index backstop) OR PrimaryContactConflictError.code OR P2034 (defensive)",
+    "apiResponseUnchanged": true,
+    "migrationRequired": false,
+    "residualLimitation": "A request whose ENTIRE database interaction (including its own first statement) happens to be scheduled strictly after a competing request's full commit cannot be distinguished from a legitimately sequential operation by any purely server-side mechanism without a client-supplied concurrency token (would change API semantics) or a global lock (forbidden). Documented, not glossed over."
+  },
+  "filesChanged": [
+    "server/src/routes/patientEmergencyContacts.ts",
+    "server/src/services/patientEmergencyContacts.ts",
+    "server/src/services/patientEmergencyContactsConcurrency.ts",
+    "server/src/tests/dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts",
+    "server/src/tests/patientEmergencyContacts.test.ts"
+  ],
+  "productionCodeChanges": [
+    "server/src/routes/patientEmergencyContacts.ts",
+    "server/src/services/patientEmergencyContacts.ts",
+    "server/src/services/patientEmergencyContactsConcurrency.ts"
+  ],
+  "testOnlyChanges": [
+    "server/src/tests/dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts",
+    "server/src/tests/patientEmergencyContacts.test.ts"
+  ],
+  "testEvidence": {
+    "focusedEmergencyContactUnitTests": { "command": "npx tsx src/tests/patientEmergencyContacts.test.ts", "passed": 24, "failed": 0, "exitCode": 0 },
+    "focusedEmergencyContactConcurrencyTests": {
+      "command": "npx tsx src/tests/dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts",
+      "passed": 8, "failed": 0, "exitCode": 0,
+      "createRaceStressRounds": 100, "createRaceOnePassOneConflict": "100/100", "createRaceExactlyOnePrimary": "100/100",
+      "updateRaceStressRounds": 150, "updateRaceOnePassOneConflict": "150/150", "updateRaceExactlyOnePrimary": "150/150"
+    },
+    "serverTypecheck": { "command": "npx tsc --noEmit -p .", "exitCode": 0, "errors": 0 },
+    "testRuntimeUnit": { "command": "npm run test:runtime:unit", "passed": 74, "failed": 0, "exitCode": 0 },
+    "disposablePostgresProfileRuns": [
+      { "run": 1, "command": "npm run test:runtime:postgres", "exitCode": 0, "cleanupSuccess": true, "residualNmtestContainers": 0 },
+      { "run": 2, "command": "npm run test:runtime:postgres", "exitCode": 0, "cleanupSuccess": true, "residualNmtestContainers": 0 },
+      { "run": "3_first_attempt", "command": "npm run test:runtime:postgres", "exitCode": 3221226505, "cleanupSuccess": false, "failureCause": "environmental_docker_desktop_oom_not_code_defect", "note": "Docker Desktop's Go runtime: fatal error: out of memory allocating heap arena map" },
+      { "run": "3_retry", "command": "npm run test:runtime:postgres", "exitCode": 0, "cleanupSuccess": true, "residualNmtestContainers": 0 }
+    ],
+    "independentSuccessfulProcessLevelExecutions": 3,
+    "repetitionCountMeetsRequirement": true
+  },
+  "tenantScope": {
+    "lockKeyedBy": "patientId (globally unique)",
+    "resetQueriesScopedTo": ["patientId", "clinicId", "organizationId"],
+    "lockOnlyAcquiredFor": "isPrimary=true writes",
+    "crossPatientInterferenceRegressionFixed": true,
+    "authorizationCodeTouched": false
+  },
+  "migrationStatus": "none_required_no_migration_performed",
+  "rollback": {
+    "runtimeFileRevert": "git revert the single commit on fix/f1-004-p1-r2-emergency-contact-update-race, or reset to origin/main pre-fix tip 9b10bc9",
+    "testFileRevertRequired": "only if reverting production code",
+    "migrationRollback": "not applicable — none performed",
+    "postRollbackBehavior": "PR #310's exact prior design restored — the specific decoupled-query race becomes probabilistically (not deterministically) reproducible again under real scheduling/CI contention, at the same rate that produced the original CI failure"
+  },
+  "pr": {
+    "number": 325,
+    "url": "https://github.com/MustafaBasol/DisKlinikCRM/pull/325",
+    "headSha": "8a067f0241da3870d773c7e9aeefdde2c697383f",
+    "merged": false,
+    "deployed": false,
+    "productionVerified": false
+  },
+  "taskStatus": {
+    "agentCompleted": true,
+    "testsPassed": true,
+    "prOpened": true,
+    "merged": false,
+    "deployed": false,
+    "productionVerified": false
+  },
+  "exactNextTask": "External review and merge decision for PR #325. No further F1-004 follow-up anticipated unless a future CI run reproduces a different concurrency gap in this same code path (would be a new, separately-numbered task)."
+}
