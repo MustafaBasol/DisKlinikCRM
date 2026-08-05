@@ -1,0 +1,132 @@
+{
+  "task": "F2-GUARDRAIL-IMPL-001",
+  "title": "Exact-Edge and Tenant-Scope Guardrail Report-Only Baseline (Implementation)",
+  "phase": "F2 — Modular Monolith Guardrails, Entitlements and Feature Flags",
+  "type": "IMPLEMENTATION. Repository-only, report-only, non-blocking. No production/runtime behavior change.",
+  "status": "AGENT_COMPLETED / TESTS_PASSED / PR_OPENED (own PR, once opened) / NOT_MERGED / NOT_DEPLOYED / NOT_PRODUCTION_VERIFIED",
+  "baseline": {
+    "originMainSha": "da23f6fd4b86d4a37dc56f90859b0806f8ce60c6",
+    "pr321": { "state": "MERGED", "mergeCommit": "da23f6fd4b86d4a37dc56f90859b0806f8ce60c6", "mergedAt": "2026-08-05T10:09:53Z" },
+    "mainCiRun": { "id": "30996305595", "workflow": "ci-main-and-nightly", "conclusion": "success" },
+    "branch": "feature/f2-guardrail-impl-001-report-only-exact-edge"
+  },
+  "authorization": {
+    "source": "docs/program/evidence/F2-SEC-003_SECURITY_GATE_RECONCILIATION.md section 5.2 and section 6",
+    "repositoryOnlyImplementation": "AUTHORIZED",
+    "productionEnforcement": "NOT_AUTHORIZED",
+    "frozenTuple": ["callerPath", "callerSymbol", "ownerDomain", "targetModelOrSymbol", "accessKind"],
+    "prep011Discrepancy": "No docs/program/evidence/F2-GUARDRAIL-PREP-011* file exists on origin/main; F2-SEC-003 supersedes and does not reference one. Recorded as a factual correction; not a stop condition since F2-SEC-003 independently supplies full authorization."
+  },
+  "designSelected": {
+    "location": "scripts/architecture-guardrail/",
+    "tool": "TypeScript compiler API (existing devDependency, no new dependency added)",
+    "modules": [
+      "lib/types.ts", "lib/configLoader.ts", "lib/sourceDiscovery.ts", "lib/moduleResolution.ts",
+      "lib/edgeExtraction.ts", "lib/classification.ts", "lib/normalization.ts", "lib/globMatch.ts",
+      "lib/findingId.ts", "lib/baseline.ts", "lib/redact.ts", "lib/report.ts", "cli.ts"
+    ]
+  },
+  "alternativesRejected": [
+    "ESLint / eslint-boundaries (no existing ESLint devDependency; out of authorized scope)",
+    "New AST/dependency-graph npm package (TypeScript compiler API already sufficient)",
+    "Regex-only detection (rejected per task instruction; AST-based extraction used)",
+    "Committing a new self-referential baseline snapshot (deferred; F2-SEC-003 5.2 prerequisite not met)"
+  ],
+  "newDependency": null,
+  "guardrailScope": {
+    "scanRoots": ["server/src/routes", "server/src/services", "server/src/jobs", "server/src/middleware", "server/src/utils"],
+    "domainMapFileCount": 179,
+    "domainMapSource": "docs/program/evidence/F0-003_module_ownership_inventory.json",
+    "ambiguousFilesMappedToUnresolved": 4
+  },
+  "excludedScope": [
+    "CodeGraph (unavailable, honestly recorded)",
+    "Whole-repository scan",
+    "Frontend src/, bridge-agent/, windows-bridge/",
+    "Direct Prisma model access (accessKind always \"import\" in this version)",
+    "ESLint / root lint script",
+    "Tenant-scope enforcement"
+  ],
+  "detectionAlgorithm": "TypeScript syntactic parse (ts.createSourceFile, no type-checker/Program) of each discovered file; relative ImportDeclaration specifiers resolved to on-disk files; caller/target domain classified via the checked-in domain map; a finding emitted per imported binding when caller domain != target domain.",
+  "findingIdMethod": "SHA-256(callerPath + \" \" + callerSymbol + \" \" + ownerDomain + \" \" + targetModelOrSymbol + \" \" + accessKind), hex-truncated to 16 chars. No line number in the hash input.",
+  "baselineBehavior": {
+    "newBaselineArtifactCommitted": false,
+    "consumesExistingEvidence": "docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json (read-only, at scan time)",
+    "matchKey": ["ownerDomain", "targetModelOrSymbol", "accessKind", "callerPath (exact or glob)"],
+    "callerSymbolExcludedFromMatchKey": true,
+    "callerSymbolExclusionReason": "Most of the 71 frozen baseline entries store callerSymbol as descriptive prose, not an exact identifier; only CDA-067..CDA-072 (the R1-corrected entries) are exact.",
+    "resolvedComputedOnlyForExactCallerPathEntries": true
+  },
+  "exitCodeContract": {
+    "zero": "scan executed, regardless of finding count",
+    "nonZero": "malformed/unreadable scan-roots.json, domain-map.json, or baseline JSON; or a configured scan root missing/unreadable on disk",
+    "architecturalFindingsNeverCauseNonZero": true,
+    "testedAsPureFunctionAndRealSubprocess": true
+  },
+  "ciIntegration": {
+    "workflowFile": ".github/workflows/ci-layers.yml",
+    "newJob": "architecture-guardrail-report-only",
+    "layer": "Layer 1 (standalone, new job, not in any needs: list, nothing needs it)",
+    "continueOnErrorUsed": false,
+    "existingJobsModified": false,
+    "existingNeedsListsChanged": false,
+    "actionsShaPinned": true,
+    "actionlintClean": true
+  },
+  "securityAndTenantImpact": {
+    "productionRuntimeChanged": false,
+    "tenantFiltersChanged": false,
+    "secretsOrProdConfigRead": false,
+    "tenantScopeDisclaimerIncludedInEveryReport": true
+  },
+  "backwardCompatibility": "Purely additive: new directory, 3 new npm scripts, 1 new standalone CI job, 2 gitignore entries, 4 doc-status updates. No existing script/job/needs-list/path-filter changed or removed.",
+  "rollback": {
+    "repositoryOnly": true,
+    "migrationRollbackNeeded": false,
+    "runtimeRollbackNeeded": false,
+    "productionConfigRollbackNeeded": false,
+    "deploymentRollbackNeeded": false
+  },
+  "testResults": {
+    "guardrailUnitTests": { "passed": 56, "failed": 0, "exitCode": 0 },
+    "guardrailTypecheck": { "exitCode": 0 },
+    "realScopeScan": {
+      "filesDiscovered": 247,
+      "filesParsed": 247,
+      "filesSkipped": 0,
+      "totalFindings": 1031,
+      "newFindings": 1018,
+      "existingFindings": 13,
+      "errorCount": 0,
+      "warningCount": 0,
+      "exitCode": 0,
+      "repositorySha": "da23f6fd4b86d4a37dc56f90859b0806f8ce60c6"
+    },
+    "reportJsonValid": true,
+    "secretScanClean": true,
+    "deterministicAcrossTwoRuns": true,
+    "rootFrontendBuild": { "exitCode": 0 },
+    "serverTypecheck": { "exitCode": 0 },
+    "toolingTypecheckRuntime": { "exitCode": 0 },
+    "toolingUnitTestsRuntime": { "passed": 74, "failed": 0, "exitCode": 0 },
+    "actionlint": { "version": "1.7.12", "findings": 0 },
+    "packageJsonManifestsValid": true,
+    "shellPowershellValidation": "not re-run (no .sh/.ps1 file added by this task)",
+    "fullCiLayersOnOpenedPr": "not yet run as of this document (PR not yet opened at authoring time)"
+  },
+  "knownFalsePositiveRisk": "High and expected. 1018 NEW findings vs. the 71-edge curated baseline is attributed to the guardrail's exhaustive one-finding-per-imported-binding methodology vs. the baseline's curated/grouped sample. Exactly the gap F2-SEC-003 5.2 names as a prerequisite before any blocking use.",
+  "knownFalseNegativesLimitations": [
+    "No direct-Prisma-access (accessKind read/write) detection in this version",
+    "callerSymbol excluded from baseline match key",
+    "4 domain-ownership-ambiguous files mapped to UNRESOLVED rather than resolved",
+    "No CodeGraph tool used",
+    "Bare/package import specifiers never followed",
+    "Import targets outside server/src/ silently out of scope"
+  ],
+  "migrationStatus": "No Prisma migration created, needed, or touched. server/prisma/migrations and server/prisma/schema.prisma unchanged.",
+  "nextAuthorizationGate": [
+    "Program-owner false-positive-review pass over this task's report-only output",
+    "F2-SEC-001/F2-SEC-002 deployed and production-verified (independent of this task)",
+    "Only after both: a future task may define promotion criteria and propose (not enable) CI-blocking enforcement, and separately propose a committed self-referential baseline"
+  ]
+}

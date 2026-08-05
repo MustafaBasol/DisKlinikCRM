@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": "test fixture: one configured root does not exist on disk",
+  "roots": ["server/src/routes", "server/src/does-not-exist"],
+  "fileExtensions": [".ts"],
+  "excludePatterns": []
+}

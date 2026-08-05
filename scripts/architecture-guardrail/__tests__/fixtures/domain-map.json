@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": { "note": "test fixture, not derived from F0-003" },
+  "scanRootPrefixes": ["server/src/routes/", "server/src/services/", "server/src/utils/"],
+  "fileCount": 6,
+  "files": {
+    "server/src/routes/orderRoute.ts": "domain-orders",
+    "server/src/routes/brokenSyntax.ts": "domain-orders",
+    "server/src/services/paymentService.ts": "domain-payments",
+    "server/src/services/inventoryService.ts": "domain-inventory",
+    "server/src/services/sideEffectOnly.ts": "domain-inventory",
+    "server/src/utils/helper.ts": "domain-orders"
+  }
+}

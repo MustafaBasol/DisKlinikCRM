@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": "test fixture: missing roots array",
+  "fileExtensions": [".ts"],
+  "excludePatterns": []
+}

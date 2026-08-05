@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": {},
+  "scanRootPrefixes": [],
+  "fileCount": 0,
+  "files": ["this", "should", "be", "an", "object", "not", "an", "array"]
+}
