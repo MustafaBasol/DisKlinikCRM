@@ -1,0 +1,2390 @@
+{
+  "schemaVersion": "1.0.0",
+  "taskId": "F2-GUARDRAIL-VAL-001",
+  "sourceReport": "docs/program/evidence/tooling/F2-GUARDRAIL-VAL-001_raw_scan_report.json",
+  "sourceReportRepositorySha": "9b10bc9fde0ceaeb58d90860a950143de7123910",
+  "selectionMethod": "Deterministic, reproducible, rule-based stratified selection (no randomness, no timestamp). Re-running buildSample.js against the same raw report byte-for-byte reproduces an identical sample manifest.",
+  "requiredMinimumSampleSize": 120,
+  "actualSampleSize": 169,
+  "strataRules": [
+    "ALL_EXISTING_BASELINE_MATCHED: every one of the 13 EXISTING findings included",
+    "DECLARED_OWNERSHIP_COLLISION:<target>: up to 3 findings per each of the 4 F0-003-declared multi-domain files",
+    "HIGH_FREQUENCY_EDGE_FAMILY:<key>: first/middle/last member of each of the top 25 (ownerDomain,target,accessKind) families by finding count (76.3% of all findings)",
+    "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:<key>: first member of every family with <=3 findings where either side touches a high-risk or named-sector domain",
+    "CALLER_PATH_FAMILY_COVERAGE:<routes|services|jobs|middleware|utils>: topped up to >=8 samples per caller path family",
+    "OWNER_DOMAIN_COVERAGE:<domain>: at least 1 sample per distinct target-owning domain (incl. UNRESOLVED)",
+    "CALLER_DOMAIN_COVERAGE:<domain>: at least 1 sample per distinct caller-owning domain (incl. UNRESOLVED)",
+    "NAMED_SECTOR_COVERAGE:<domain>: topped up to >=4 samples per messaging/imaging/finance/inventory/reporting/privacy domain"
+  ],
+  "samples": [
+    {
+      "findingId": "00274ae1b873dcc6",
+      "callerPath": "server/src/routes/attachments.ts",
+      "callerSymbol": "deleteFile",
+      "ownerDomain": "core-storage-abstraction",
+      "callerDomain": "clinical-patients",
+      "targetModelOrSymbol": "services/fileStorage.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-storage-abstraction|services/fileStorage.ts|import"
+      ]
+    },
+    {
+      "findingId": "00275f8a9e874ac9",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "getTimePreference",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/whatsappInterpreter.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappInterpreter.ts|import"
+      ]
+    },
+    {
+      "findingId": "0042715ab7934a70",
+      "callerPath": "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+      "callerSymbol": "isCommunicationConsentEnforcementEnabled",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/communicationConsent/enforcementConfig.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:UNRESOLVED|services/communicationConsent/enforcementConfig.ts|import"
+      ]
+    },
+    {
+      "findingId": "005f45efe6a8b355",
+      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+      "callerSymbol": "minutesToTime",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|utils/helpers.ts|import"
+      ]
+    },
+    {
+      "findingId": "013ae4fba6db088d",
+      "callerPath": "server/src/routes/organizationInstagram.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|db.ts|import"
+      ]
+    },
+    {
+      "findingId": "01a1c6a189a7eee7",
+      "callerPath": "server/src/routes/dashboard.ts",
+      "callerSymbol": "authorize",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "reporting-analytics",
+      "targetModelOrSymbol": "middleware/auth.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-identity-access|middleware/auth.ts|import"
+      ]
+    },
+    {
+      "findingId": "0499ae459085f593",
+      "callerPath": "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts",
+      "callerSymbol": "decryptSecret",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "utils/encryption.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "DECLARED_OWNERSHIP_COLLISION:utils/encryption.ts",
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|utils/encryption.ts|import"
+      ]
+    },
+    {
+      "findingId": "0522671d88aa20ad",
+      "callerPath": "server/src/routes/appointments.ts",
+      "callerSymbol": "appointmentSchema",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|schemas/index.ts|import"
+      ]
+    },
+    {
+      "findingId": "0594294a0e8e1bd6",
+      "callerPath": "server/src/routes/messages.ts",
+      "callerSymbol": "sendClinicSms",
+      "ownerDomain": "messaging-sms",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "services/sms/smsService.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-sms|services/sms/smsService.ts|import"
+      ]
+    },
+    {
+      "findingId": "0683918de9b5c70b",
+      "callerPath": "server/src/routes/tasks.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "clinical-tasks-followup",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_DOMAIN_COVERAGE:clinical-tasks-followup"
+      ]
+    },
+    {
+      "findingId": "06f989e986077268",
+      "callerPath": "server/src/routes/organizationInstagram.ts",
+      "callerSymbol": "canViewInstagramStatus",
+      "ownerDomain": "core-permissions-roles",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "utils/roles.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-permissions-roles|utils/roles.ts|import"
+      ]
+    },
+    {
+      "findingId": "085664bc19cf4bfb",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "callerSymbol": "handleAwaitingTimeStep",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "services/whatsappBookingFlow.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappBookingFlow.ts|import"
+      ]
+    },
+    {
+      "findingId": "088412a53b31f56b",
+      "callerPath": "server/src/routes/noShows.ts",
+      "callerSymbol": "NO_SHOW_RECOVERY_MISSING_TEMPLATE_ERROR",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/whatsapp/whatsappOutboundMessaging.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-071",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "08862dea7023f253",
+      "callerPath": "server/src/routes/publicBooking.ts",
+      "callerSymbol": "DEFAULT_SLOT_DURATION_MINUTES",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "clinical-public-booking",
+      "targetModelOrSymbol": "services/whatsappAvailability.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappAvailability.ts|import"
+      ]
+    },
+    {
+      "findingId": "0892d35809797d15",
+      "callerPath": "server/src/routes/insuranceProvisions.ts",
+      "callerSymbol": "insuranceProvisionSchema",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "insurance",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_DOMAIN_COVERAGE:insurance"
+      ]
+    },
+    {
+      "findingId": "08ae3af731aec21b",
+      "callerPath": "server/src/routes/treatmentPackages.ts",
+      "callerSymbol": "resolveEffectiveClinicId",
+      "ownerDomain": "core-tenant-security",
+      "callerDomain": "clinical-treatment-cases",
+      "targetModelOrSymbol": "utils/clinicScope.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-tenant-security|utils/clinicScope.ts|import"
+      ]
+    },
+    {
+      "findingId": "0a46fe4db9c20fee",
+      "callerPath": "server/src/routes/imagingBridgePublic.ts",
+      "callerSymbol": "writeAuditLog",
+      "ownerDomain": "core-audit-activity",
+      "callerDomain": "imaging-device-bridge",
+      "targetModelOrSymbol": "utils/auditLog.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-audit-activity|utils/auditLog.ts|import"
+      ]
+    },
+    {
+      "findingId": "0c1716e169841207",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "callerSymbol": "resolveStepAwareWhatsAppIntent",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "services/whatsappStepAwareNlu.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappStepAwareNlu.ts|import"
+      ]
+    },
+    {
+      "findingId": "0c6d6ddf01be5f98",
+      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+      "callerSymbol": "checkInboundRateLimit",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "utils/inboundRateLimiter.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:UNRESOLVED|utils/inboundRateLimiter.ts|import"
+      ]
+    },
+    {
+      "findingId": "0d04094014636fc6",
+      "callerPath": "server/src/routes/appointments.ts",
+      "callerSymbol": "userPublicSelect",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "utils/prismaSelects.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|utils/prismaSelects.ts|import"
+      ]
+    },
+    {
+      "findingId": "0d21add559f208c5",
+      "callerPath": "server/src/routes/reports.ts",
+      "callerSymbol": "clinicScopeSql",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "reporting-analytics",
+      "targetModelOrSymbol": "services/reports/revenueByPeriodQuery.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:UNRESOLVED|services/reports/revenueByPeriodQuery.ts|import"
+      ]
+    },
+    {
+      "findingId": "0d84342ff09a4902",
+      "callerPath": "server/src/routes/instagramWebhook.ts",
+      "callerSymbol": "decryptSecretTagged",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "utils/encryption.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "DECLARED_OWNERSHIP_COLLISION:utils/encryption.ts"
+      ]
+    },
+    {
+      "findingId": "126223f11b1f91c1",
+      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+      "callerSymbol": "recordOperationalEvent",
+      "ownerDomain": "core-observability-ops-events",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/operationalEventService.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "OWNER_DOMAIN_COVERAGE:core-observability-ops-events"
+      ]
+    },
+    {
+      "findingId": "12cdcdf017964c65",
+      "callerPath": "server/src/routes/inventory.ts",
+      "callerSymbol": "InventoryUnitConversionError",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "inventory",
+      "targetModelOrSymbol": "services/inventoryUnitConversion.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|services/inventoryUnitConversion.ts|import"
+      ]
+    },
+    {
+      "findingId": "15455e789bab90ec",
+      "callerPath": "server/src/routes/payments.ts",
+      "callerSymbol": "findPatientInClinic",
+      "ownerDomain": "core-tenant-security",
+      "callerDomain": "clinical-basic-payments",
+      "targetModelOrSymbol": "utils/relationGuards.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-tenant-security|utils/relationGuards.ts|import"
+      ]
+    },
+    {
+      "findingId": "15efd7365fa48b9a",
+      "callerPath": "server/src/routes/imagingBridgePublic.ts",
+      "callerSymbol": "ImagingRequestStatus",
+      "ownerDomain": "imaging-server-viewer",
+      "callerDomain": "imaging-device-bridge",
+      "targetModelOrSymbol": "services/imaging/imagingRequestTransitions.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:imaging-server-viewer|services/imaging/imagingRequestTransitions.ts|import"
+      ]
+    },
+    {
+      "findingId": "16da4df8f63259c2",
+      "callerPath": "server/src/routes/messages.ts",
+      "callerSymbol": "getClinicOperatingPreferences",
+      "ownerDomain": "core-org-clinic-membership",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-org-clinic-membership|services/clinicOperatingPreferences.ts|import"
+      ]
+    },
+    {
+      "findingId": "16e423cbe2d86cf4",
+      "callerPath": "server/src/services/appointmentRequestNotification.ts",
+      "callerSymbol": "sendMessage",
+      "ownerDomain": "messaging-instagram",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/instagram/InstagramMessagingProvider.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-070",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "17f135aa729a86da",
+      "callerPath": "server/src/middleware/platformAuth.ts",
+      "callerSymbol": "PLATFORM_SESSION_COOKIE",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "utils/sessionCookies.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-identity-access|utils/sessionCookies.ts|import"
+      ]
+    },
+    {
+      "findingId": "1b2e78b0047b15e5",
+      "callerPath": "server/src/routes/treatmentPlanProcedures.ts",
+      "callerSymbol": "markProcedureStockDeductionFailed",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "clinical-dental-chart-procedures",
+      "targetModelOrSymbol": "services/treatmentStockDeduction.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "DECLARED_OWNERSHIP_COLLISION:services/treatmentStockDeduction.ts"
+      ]
+    },
+    {
+      "findingId": "1cd691a47c3b5834",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "NormalizedWhatsAppMessage",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/whatsappWebhookPayload.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappWebhookPayload.ts|import"
+      ]
+    },
+    {
+      "findingId": "1d05529998655f5c",
+      "callerPath": "server/src/services/imaging/bridgeUpdateConfig.ts",
+      "callerSymbol": "isAcceptableDownloadUrl",
+      "ownerDomain": "imaging-server-viewer",
+      "callerDomain": "imaging-device-bridge",
+      "targetModelOrSymbol": "services/imaging/releaseMetadataValidation.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:imaging-server-viewer|services/imaging/releaseMetadataValidation.ts|import"
+      ]
+    },
+    {
+      "findingId": "1ea9f2eedb30ab4c",
+      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+      "callerSymbol": "parseConsentReply",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/channelConsentGate.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-privacy-consent-retention-dsr|services/channelConsentGate.ts|import"
+      ]
+    },
+    {
+      "findingId": "1f4a81c4407da6bf",
+      "callerPath": "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts",
+      "callerSymbol": "decryptSecret",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "utils/encryption.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "DECLARED_OWNERSHIP_COLLISION:utils/encryption.ts"
+      ]
+    },
+    {
+      "findingId": "20d022fa51a61dc8",
+      "callerPath": "server/src/jobs/reminders.ts",
+      "callerSymbol": "getNotificationPreferences",
+      "ownerDomain": "core-notifications",
+      "callerDomain": "messaging-automation-recall-followup",
+      "targetModelOrSymbol": "services/notificationPreferences.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "OWNER_DOMAIN_COVERAGE:core-notifications"
+      ]
+    },
+    {
+      "findingId": "217ba8d2c394b254",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "assertSlotAvailable",
+      "ownerDomain": "clinical-appointments-availability",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/appointmentRequestSafety.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:clinical-appointments-availability|services/appointmentRequestSafety.ts|import"
+      ]
+    },
+    {
+      "findingId": "22c70cf28db7b503",
+      "callerPath": "server/src/routes/settings.ts",
+      "callerSymbol": "notificationPreferencesSchema",
+      "ownerDomain": "core-notifications",
+      "callerDomain": "core-config-secrets",
+      "targetModelOrSymbol": "services/notificationPreferences.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_DOMAIN_COVERAGE:core-config-secrets"
+      ]
+    },
+    {
+      "findingId": "25b25db6c0bddad6",
+      "callerPath": "server/src/services/appointmentRequestNotification.ts",
+      "callerSymbol": "InstagramConnectionRecord",
+      "ownerDomain": "messaging-instagram",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/instagram/InstagramMessagingProvider.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-070",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "293d8dc076cb899c",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "evaluateAuthLoginFailureSignal",
+      "ownerDomain": "core-security-incident-detection",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "services/security/securityDetectionRules.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-security-incident-detection|services/security/securityDetectionRules.ts|import"
+      ]
+    },
+    {
+      "findingId": "2a5953a5d3a7f94c",
+      "callerPath": "server/src/routes/patientMedicalHistory.ts",
+      "callerSymbol": "logActivity",
+      "ownerDomain": "core-audit-activity",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "utils/activity.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-audit-activity|utils/activity.ts|import"
+      ]
+    },
+    {
+      "findingId": "2b3e96e952d58cb8",
+      "callerPath": "server/src/routes/usersImport.ts",
+      "callerSymbol": "buildStaffOnboardingEmail",
+      "ownerDomain": "messaging-email",
+      "callerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "services/emailTemplates.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "OWNER_DOMAIN_COVERAGE:messaging-email"
+      ]
+    },
+    {
+      "findingId": "2b8ddb254423b642",
+      "callerPath": "server/src/routes/auth.ts",
+      "callerSymbol": "buildPasswordResetEmail",
+      "ownerDomain": "messaging-email",
+      "callerDomain": "core-identity-access",
+      "targetModelOrSymbol": "services/emailTemplates.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "NAMED_SECTOR_COVERAGE:messaging-email"
+      ]
+    },
+    {
+      "findingId": "2bd86abdb02e6195",
+      "callerPath": "server/src/routes/treatmentPlanProcedures.ts",
+      "callerSymbol": "markPackageExtraStockDeductionFailed",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "clinical-dental-chart-procedures",
+      "targetModelOrSymbol": "services/treatmentStockDeduction.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "DECLARED_OWNERSHIP_COLLISION:services/treatmentStockDeduction.ts"
+      ]
+    },
+    {
+      "findingId": "2cd7b1e279eb3d59",
+      "callerPath": "server/src/services/whatsappStepAwareNlu.ts",
+      "callerSymbol": "redactSensitiveText",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "messaging-ai-orchestration",
+      "targetModelOrSymbol": "services/privacy/redaction.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-privacy-consent-retention-dsr|services/privacy/redaction.ts|import"
+      ]
+    },
+    {
+      "findingId": "2d4ca1e83c656fdc",
+      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+      "callerSymbol": "splitNameForPatient",
+      "ownerDomain": "clinical-patients",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "utils/patientName.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:clinical-patients|utils/patientName.ts|import"
+      ]
+    },
+    {
+      "findingId": "2f61c08815bb0b44",
+      "callerPath": "server/src/routes/operationalMonitoring.ts",
+      "callerSymbol": "authorize",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "core-observability-ops-events",
+      "targetModelOrSymbol": "middleware/auth.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_DOMAIN_COVERAGE:core-observability-ops-events"
+      ]
+    },
+    {
+      "findingId": "331b9cc8c342fe62",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "callerSymbol": "sanitizeInboundMessageText",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "utils/messageSanitizer.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-whatsapp|utils/messageSanitizer.ts|import"
+      ]
+    },
+    {
+      "findingId": "3357d25dbf8d74e8",
+      "callerPath": "server/src/routes/platformExternalCalendar.ts",
+      "callerSymbol": "csrfProtection",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "middleware/csrf.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:core-identity-access|middleware/csrf.ts|import"
+      ]
+    },
+    {
+      "findingId": "35c3d506eec0ac11",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "upsertContactRequest",
+      "ownerDomain": "clinical-appointments-availability",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "routes/contactRequests.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:clinical-appointments-availability|routes/contactRequests.ts|import"
+      ]
+    },
+    {
+      "findingId": "36d667ca5acd45a5",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "runPlatformSmsProviderTest",
+      "ownerDomain": "messaging-sms",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "services/sms/platformSmsProviders.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-sms|services/sms/platformSmsProviders.ts|import"
+      ]
+    },
+    {
+      "findingId": "3811ce60ede17f89",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "AVAILABLE_SMS_PROVIDERS",
+      "ownerDomain": "messaging-sms",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "services/sms/smsProviders.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-sms|services/sms/smsProviders.ts|import"
+      ]
+    },
+    {
+      "findingId": "3859705d3c749ca6",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "createInboundEventOrDetectDuplicate",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/messagingInboundIdempotency.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-shared-events-queue-idempotency|services/messagingInboundIdempotency.ts|import"
+      ]
+    },
+    {
+      "findingId": "38a9d6df1d4b4818",
+      "callerPath": "server/src/jobs/startBackgroundJobs.ts",
+      "callerSymbol": "startClinicBulkExportWorker",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "jobs/clinicBulkExportWorker.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:core-privacy-consent-retention-dsr|jobs/clinicBulkExportWorker.ts|import"
+      ]
+    },
+    {
+      "findingId": "39dcef0843b5e946",
+      "callerPath": "server/src/routes/platformSecurityIncidents.ts",
+      "callerSymbol": "createRateLimiter",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-security-incident-detection",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_DOMAIN_COVERAGE:core-security-incident-detection"
+      ]
+    },
+    {
+      "findingId": "39ef7797c3c893ac",
+      "callerPath": "server/src/middleware/planLimits.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:middleware"
+      ]
+    },
+    {
+      "findingId": "3a1034a11352440f",
+      "callerPath": "server/src/routes/messages.ts",
+      "callerSymbol": "TemplateBindingStatus",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "services/whatsapp/templateBinding.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-whatsapp|services/whatsapp/templateBinding.ts|import"
+      ]
+    },
+    {
+      "findingId": "3aa63fd8c5066a11",
+      "callerPath": "server/src/jobs/startBackgroundJobs.ts",
+      "callerSymbol": "startImagingBridgeOfflineJob",
+      "ownerDomain": "imaging-device-bridge",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "jobs/imagingBridgeOfflineJob.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:imaging-device-bridge|jobs/imagingBridgeOfflineJob.ts|import"
+      ]
+    },
+    {
+      "findingId": "3e59d5429399f088",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "SMS_ROUTING_POLICIES",
+      "ownerDomain": "messaging-sms",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "services/sms/smsRoutingPolicy.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-sms|services/sms/smsRoutingPolicy.ts|import"
+      ]
+    },
+    {
+      "findingId": "432ef4d21f828de3",
+      "callerPath": "server/src/services/postTreatmentMessaging.ts",
+      "callerSymbol": "InstagramConnectionRecord",
+      "ownerDomain": "messaging-instagram",
+      "callerDomain": "messaging-automation-recall-followup",
+      "targetModelOrSymbol": "services/instagram/InstagramMessagingProvider.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-068",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "4348834e5787b9f7",
+      "callerPath": "server/src/utils/relationGuards.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-tenant-security",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:utils"
+      ]
+    },
+    {
+      "findingId": "440fb33dccedc6f2",
+      "callerPath": "server/src/jobs/inboundEventRetryJob.ts",
+      "callerSymbol": "MetaCloudWhatsAppProvider",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "services/whatsapp/MetaCloudWhatsAppProvider.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-whatsapp|services/whatsapp/MetaCloudWhatsAppProvider.ts|import"
+      ]
+    },
+    {
+      "findingId": "4548b7047c4abe30",
+      "callerPath": "server/src/jobs/inboundEventRetryJob.ts",
+      "callerSymbol": "deliverIncomingMetaMessage",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "services/whatsapp/metaInboundDelivery.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-whatsapp|services/whatsapp/metaInboundDelivery.ts|import"
+      ]
+    },
+    {
+      "findingId": "48a84f5b7c0eccaa",
+      "callerPath": "server/src/services/fileStorage.ts",
+      "callerSymbol": "safeErrorFields",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-storage-abstraction",
+      "targetModelOrSymbol": "utils/safeError.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_DOMAIN_COVERAGE:core-storage-abstraction"
+      ]
+    },
+    {
+      "findingId": "4aea93450720f0b0",
+      "callerPath": "server/src/utils/auditLog.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-audit-activity",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:utils"
+      ]
+    },
+    {
+      "findingId": "4b0ee19c4dbe25e9",
+      "callerPath": "server/src/routes/appointments.ts",
+      "callerSymbol": "triggerOnAppointmentCompleted",
+      "ownerDomain": "messaging-automation-recall-followup",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/postTreatmentMessaging.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-automation-recall-followup|services/postTreatmentMessaging.ts|import"
+      ]
+    },
+    {
+      "findingId": "4d75c4e32b5706d1",
+      "callerPath": "server/src/services/communicationConsent/legacyConsentCorrection.ts",
+      "callerSymbol": "getPlatformSetting",
+      "ownerDomain": "core-config-secrets",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "services/platformSettings.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "OWNER_DOMAIN_COVERAGE:core-config-secrets"
+      ]
+    },
+    {
+      "findingId": "4f2cd3796670f8fe",
+      "callerPath": "server/src/middleware/platformAuth.ts",
+      "callerSymbol": "getSecret",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "utils/secrets.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "DECLARED_OWNERSHIP_COLLISION:utils/secrets.ts"
+      ]
+    },
+    {
+      "findingId": "4fe87ede71474deb",
+      "callerPath": "server/src/utils/relationGuards.ts",
+      "callerSymbol": "CanonicalRole",
+      "ownerDomain": "core-permissions-roles",
+      "callerDomain": "core-tenant-security",
+      "targetModelOrSymbol": "utils/roles.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:utils"
+      ]
+    },
+    {
+      "findingId": "5022a7aa9a917dd3",
+      "callerPath": "server/src/utils/helpers.ts",
+      "callerSymbol": "AuthRequest",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "middleware/auth.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:utils"
+      ]
+    },
+    {
+      "findingId": "503e357a58ab6706",
+      "callerPath": "server/src/routes/treatmentPlanProcedures.ts",
+      "callerSymbol": "deductPackageExtraMaterialsIfReady",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "clinical-dental-chart-procedures",
+      "targetModelOrSymbol": "services/treatmentStockDeduction.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "DECLARED_OWNERSHIP_COLLISION:services/treatmentStockDeduction.ts"
+      ]
+    },
+    {
+      "findingId": "50c3a1bda2dcea5c",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "releaseJobLock",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "utils/jobLock.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-shared-events-queue-idempotency|utils/jobLock.ts|import"
+      ]
+    },
+    {
+      "findingId": "533adbcf68a1ff26",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "encryptSecretTagged",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "utils/encryption.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|utils/encryption.ts|import"
+      ]
+    },
+    {
+      "findingId": "54c8ecc975bf56e4",
+      "callerPath": "server/src/services/postTreatmentMessaging.ts",
+      "callerSymbol": "OUTBOUND_ERRORS",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "messaging-automation-recall-followup",
+      "targetModelOrSymbol": "services/whatsapp/whatsappOutboundMessaging.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-067",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "563d20ff455202eb",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "loadDataRetentionConfig",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "services/privacy/dataRetentionPolicy.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:core-privacy-consent-retention-dsr|services/privacy/dataRetentionPolicy.ts|import"
+      ]
+    },
+    {
+      "findingId": "5aa03367e5450a2c",
+      "callerPath": "server/src/routes/dashboard.ts",
+      "callerSymbol": "countUnresolvedNoShows",
+      "ownerDomain": "clinical-appointments-availability",
+      "callerDomain": "reporting-analytics",
+      "targetModelOrSymbol": "utils/noShowFollowUp.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:clinical-appointments-availability|utils/noShowFollowUp.ts|import"
+      ]
+    },
+    {
+      "findingId": "5d4ac99c3bbc949d",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "callerSymbol": "WhatsAppAgentDecision",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "services/whatsappAgentSchema.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappAgentSchema.ts|import"
+      ]
+    },
+    {
+      "findingId": "5e7224ad023c7dcc",
+      "callerPath": "server/src/routes/treatmentCases.ts",
+      "callerSymbol": "generateEarningFromTreatmentCase",
+      "ownerDomain": "finance-advanced-compensation",
+      "callerDomain": "clinical-treatment-cases",
+      "targetModelOrSymbol": "services/earningService.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-049",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED",
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:finance-advanced-compensation|services/earningService.ts|import"
+      ]
+    },
+    {
+      "findingId": "60a90e3fd8447ef6",
+      "callerPath": "server/src/routes/appointments.ts",
+      "callerSymbol": "patientContactSelect",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "utils/prismaSelects.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|utils/prismaSelects.ts|import"
+      ]
+    },
+    {
+      "findingId": "61b613c72b144876",
+      "callerPath": "server/src/routes/financeDashboard.ts",
+      "callerSymbol": "getDateRange",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "finance-advanced-compensation",
+      "targetModelOrSymbol": "routes/organizationDashboard.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "DECLARED_OWNERSHIP_COLLISION:routes/organizationDashboard.ts",
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:UNRESOLVED|routes/organizationDashboard.ts|import"
+      ]
+    },
+    {
+      "findingId": "6461c580ef7012fa",
+      "callerPath": "server/src/jobs/inboundEventRetryJob.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|db.ts|import"
+      ]
+    },
+    {
+      "findingId": "66bdaffb55371c59",
+      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+      "callerSymbol": "interpretTimeRequest",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/whatsappInterpreter.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappInterpreter.ts|import"
+      ]
+    },
+    {
+      "findingId": "66fab8d5643bd1dc",
+      "callerPath": "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+      "callerSymbol": "CommunicationPurpose",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/communicationConsent/taxonomy.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:UNRESOLVED|services/communicationConsent/taxonomy.ts|import"
+      ]
+    },
+    {
+      "findingId": "6769d31dd185b56b",
+      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+      "callerSymbol": "isDeterministicConfirmationReply",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/whatsappBookingFlow.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappBookingFlow.ts|import"
+      ]
+    },
+    {
+      "findingId": "681fd7490cb9f556",
+      "callerPath": "server/src/services/imaging/bridgePairing.ts",
+      "callerSymbol": "getSecret",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "imaging-device-bridge",
+      "targetModelOrSymbol": "utils/secrets.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "DECLARED_OWNERSHIP_COLLISION:utils/secrets.ts"
+      ]
+    },
+    {
+      "findingId": "685f644eb20f34ea",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "routeResolvedWhatsAppIntent",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/whatsappResolvedIntentRouter.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappResolvedIntentRouter.ts|import"
+      ]
+    },
+    {
+      "findingId": "69fa7fa7f8fae6ce",
+      "callerPath": "server/src/services/postTreatmentMessaging.ts",
+      "callerSymbol": "sendPostTreatmentWhatsApp",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "messaging-automation-recall-followup",
+      "targetModelOrSymbol": "services/whatsapp/whatsappOutboundMessaging.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-067",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "6a2b112599296e44",
+      "callerPath": "server/src/routes/imagingBridgePublic.ts",
+      "callerSymbol": "saveFile",
+      "ownerDomain": "core-storage-abstraction",
+      "callerDomain": "imaging-device-bridge",
+      "targetModelOrSymbol": "services/fileStorage.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-storage-abstraction|services/fileStorage.ts|import"
+      ]
+    },
+    {
+      "findingId": "6bbfe16d78886f6c",
+      "callerPath": "server/src/routes/inventory.ts",
+      "callerSymbol": "isConversionFactorChangeBlocked",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "inventory",
+      "targetModelOrSymbol": "services/inventoryUnitConversion.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|services/inventoryUnitConversion.ts|import"
+      ]
+    },
+    {
+      "findingId": "6e400b42e712c7ff",
+      "callerPath": "server/src/routes/payments.ts",
+      "callerSymbol": "generateEarningFromPayment",
+      "ownerDomain": "finance-advanced-compensation",
+      "callerDomain": "clinical-basic-payments",
+      "targetModelOrSymbol": "services/earningService.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-049",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "6e5d96c7ef0b4285",
+      "callerPath": "server/src/jobs/startBackgroundJobs.ts",
+      "callerSymbol": "startReminderJobs",
+      "ownerDomain": "messaging-automation-recall-followup",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "jobs/reminders.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-automation-recall-followup|jobs/reminders.ts|import"
+      ]
+    },
+    {
+      "findingId": "71488336e17f8f15",
+      "callerPath": "server/src/utils/passwordStepUp.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-identity-access",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:utils"
+      ]
+    },
+    {
+      "findingId": "723b20a44fd9c107",
+      "callerPath": "server/src/routes/imaging.ts",
+      "callerSymbol": "getBridgeOnboardingConfig",
+      "ownerDomain": "imaging-device-bridge",
+      "callerDomain": "imaging-server-viewer",
+      "targetModelOrSymbol": "services/imaging/bridgeOnboardingConfig.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:imaging-device-bridge|services/imaging/bridgeOnboardingConfig.ts|import"
+      ]
+    },
+    {
+      "findingId": "733dd3aa4f379cf7",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "getSmsEntitlement",
+      "ownerDomain": "messaging-sms",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "services/sms/smsEntitlement.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-sms|services/sms/smsEntitlement.ts|import"
+      ]
+    },
+    {
+      "findingId": "73e80257660a9f3e",
+      "callerPath": "server/src/routes/laboratories.ts",
+      "callerSymbol": "laboratorySchema",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "lab-prosthetics-tracking",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|schemas/index.ts|import"
+      ]
+    },
+    {
+      "findingId": "761aa351bf62cb5e",
+      "callerPath": "server/src/utils/clinicScope.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-tenant-security",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:utils"
+      ]
+    },
+    {
+      "findingId": "78f41ff5b196ab55",
+      "callerPath": "server/src/services/reports/revenueByPeriodQuery.ts",
+      "callerSymbol": "ClinicIdScopeWhere",
+      "ownerDomain": "core-tenant-security",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "utils/clinicScope.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-tenant-security|utils/clinicScope.ts|import"
+      ]
+    },
+    {
+      "findingId": "7a9de084127e1fd2",
+      "callerPath": "server/src/services/sms/smsCommunicationPurposeMap.ts",
+      "callerSymbol": "SmsPurpose",
+      "ownerDomain": "messaging-sms",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "services/sms/smsTemplating.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-sms|services/sms/smsTemplating.ts|import"
+      ]
+    },
+    {
+      "findingId": "7d74f820ee09cb8f",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "markInboundEventFailed",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/messagingInboundIdempotency.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-shared-events-queue-idempotency|services/messagingInboundIdempotency.ts|import"
+      ]
+    },
+    {
+      "findingId": "7df4aa74b1dca057",
+      "callerPath": "server/src/jobs/startBackgroundJobs.ts",
+      "callerSymbol": "startMetaTemplateSyncJob",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "jobs/metaTemplateSyncJob.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-whatsapp|jobs/metaTemplateSyncJob.ts|import"
+      ]
+    },
+    {
+      "findingId": "7fbf08c7cf1534d0",
+      "callerPath": "server/src/middleware/auth.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-identity-access",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:middleware"
+      ]
+    },
+    {
+      "findingId": "804f10c4868f799f",
+      "callerPath": "server/src/middleware/csrf.ts",
+      "callerSymbol": "PlatformAdminRequest",
+      "ownerDomain": "core-platform-administration",
+      "callerDomain": "core-identity-access",
+      "targetModelOrSymbol": "middleware/platformAuth.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:middleware"
+      ]
+    },
+    {
+      "findingId": "80b88bb1feab5700",
+      "callerPath": "server/src/routes/instagramInbox.ts",
+      "callerSymbol": "normalizeRole",
+      "ownerDomain": "core-permissions-roles",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "utils/roles.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-permissions-roles|utils/roles.ts|import"
+      ]
+    },
+    {
+      "findingId": "81125a18beca4b9f",
+      "callerPath": "server/src/services/treatmentStockDeduction.ts",
+      "callerSymbol": "checkAndNotifyLowStock",
+      "ownerDomain": "inventory",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "services/inventoryAlerts.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:inventory|services/inventoryAlerts.ts|import"
+      ]
+    },
+    {
+      "findingId": "823a75e04b83202e",
+      "callerPath": "server/src/services/whatsappBookingFlow.ts",
+      "callerSymbol": "redactPhone",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-ai-orchestration",
+      "targetModelOrSymbol": "utils/logRedaction.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:UNRESOLVED|utils/logRedaction.ts|import"
+      ]
+    },
+    {
+      "findingId": "85e118db762eb0f3",
+      "callerPath": "server/src/services/sms/smsService.ts",
+      "callerSymbol": "SMS_PURPOSE_TO_COMMUNICATION_PURPOSE",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-sms",
+      "targetModelOrSymbol": "services/sms/smsCommunicationPurposeMap.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:UNRESOLVED|services/sms/smsCommunicationPurposeMap.ts|import"
+      ]
+    },
+    {
+      "findingId": "86159a4df5b2093a",
+      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+      "callerSymbol": "isHumanHandoffPhrase",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/whatsapp/humanHandoffPhrases.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:UNRESOLVED|services/whatsapp/humanHandoffPhrases.ts|import"
+      ]
+    },
+    {
+      "findingId": "880f4b942772425f",
+      "callerPath": "server/src/routes/financeDashboard.ts",
+      "callerSymbol": "overdueInstallmentWhere",
+      "ownerDomain": "clinical-basic-payments",
+      "callerDomain": "finance-advanced-compensation",
+      "targetModelOrSymbol": "utils/overdueInstallments.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:clinical-basic-payments|utils/overdueInstallments.ts|import"
+      ]
+    },
+    {
+      "findingId": "889f9b44272b5cfb",
+      "callerPath": "server/src/middleware/clinicAccess.ts",
+      "callerSymbol": "evaluateCrossTenantDenialSignal",
+      "ownerDomain": "core-security-incident-detection",
+      "callerDomain": "core-tenant-security",
+      "targetModelOrSymbol": "services/security/securityDetectionRules.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-security-incident-detection|services/security/securityDetectionRules.ts|import"
+      ]
+    },
+    {
+      "findingId": "89499362b81beb17",
+      "callerPath": "server/src/routes/gdprExport.ts",
+      "callerSymbol": "writeAuditLog",
+      "ownerDomain": "core-audit-activity",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "targetModelOrSymbol": "utils/auditLog.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-audit-activity|utils/auditLog.ts|import"
+      ]
+    },
+    {
+      "findingId": "89c4225efdff9e1b",
+      "callerPath": "server/src/routes/metaWhatsAppWebhook.ts",
+      "callerSymbol": "requireWebhookSecretInProduction",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "utils/secrets.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "DECLARED_OWNERSHIP_COLLISION:utils/secrets.ts"
+      ]
+    },
+    {
+      "findingId": "8cf18f5e98a9d027",
+      "callerPath": "server/src/middleware/platformAuth.ts",
+      "callerSymbol": "isBearerFallbackEnabled",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "utils/authFallback.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:core-identity-access|utils/authFallback.ts|import"
+      ]
+    },
+    {
+      "findingId": "8d66874527ff6c51",
+      "callerPath": "server/src/routes/schedules.ts",
+      "callerSymbol": "timeToMinutes",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|utils/helpers.ts|import"
+      ]
+    },
+    {
+      "findingId": "8e07b45312d4f23a",
+      "callerPath": "server/src/services/privacy/patientAnonymization.ts",
+      "callerSymbol": "logActivity",
+      "ownerDomain": "core-audit-activity",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "targetModelOrSymbol": "utils/activity.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-audit-activity|utils/activity.ts|import"
+      ]
+    },
+    {
+      "findingId": "8e7d85b05216a45e",
+      "callerPath": "server/src/routes/whatsappInbox.ts",
+      "callerSymbol": "authenticate",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "middleware/auth.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-identity-access|middleware/auth.ts|import"
+      ]
+    },
+    {
+      "findingId": "9087ba6eb3377536",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "SlotConflictError",
+      "ownerDomain": "clinical-appointments-availability",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/appointmentRequestSafety.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:clinical-appointments-availability|services/appointmentRequestSafety.ts|import"
+      ]
+    },
+    {
+      "findingId": "915192db68d3ceed",
+      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+      "callerSymbol": "SavedAvailableSlot",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/whatsappAvailability.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappAvailability.ts|import"
+      ]
+    },
+    {
+      "findingId": "919ae5141bb0a203",
+      "callerPath": "server/src/services/postTreatmentMessaging.ts",
+      "callerSymbol": "sendMessage",
+      "ownerDomain": "messaging-instagram",
+      "callerDomain": "messaging-automation-recall-followup",
+      "targetModelOrSymbol": "services/instagram/InstagramMessagingProvider.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-068",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "92ca548e92afaf58",
+      "callerPath": "server/src/services/imaging/bridgeOnboardingConfig.ts",
+      "callerSymbol": "isValidSha256",
+      "ownerDomain": "imaging-server-viewer",
+      "callerDomain": "imaging-device-bridge",
+      "targetModelOrSymbol": "services/imaging/releaseMetadataValidation.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:imaging-server-viewer|services/imaging/releaseMetadataValidation.ts|import"
+      ]
+    },
+    {
+      "findingId": "92eac2ac76151762",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "callerSymbol": "loadConsentMetadata",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "services/channelConsentGate.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-privacy-consent-retention-dsr|services/channelConsentGate.ts|import"
+      ]
+    },
+    {
+      "findingId": "966b2820b86237e3",
+      "callerPath": "server/src/jobs/externalCalendarInboundRetryJob.ts",
+      "callerSymbol": "withJobLock",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "utils/jobLock.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-shared-events-queue-idempotency|utils/jobLock.ts|import"
+      ]
+    },
+    {
+      "findingId": "96e1b6b10c7ad40f",
+      "callerPath": "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+      "callerSymbol": "assertCommunicationPermission",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/communicationConsent/communicationConsentPolicy.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:UNRESOLVED|services/communicationConsent/communicationConsentPolicy.ts|import"
+      ]
+    },
+    {
+      "findingId": "9727b5068d0dbddd",
+      "callerPath": "server/src/utils/jobLock.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:utils"
+      ]
+    },
+    {
+      "findingId": "9b39f46066c411ac",
+      "callerPath": "server/src/services/whatsappAgentPrompt.ts",
+      "callerSymbol": "getAiCustomerNamePlaceholder",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "messaging-ai-orchestration",
+      "targetModelOrSymbol": "services/privacy/redaction.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-privacy-consent-retention-dsr|services/privacy/redaction.ts|import"
+      ]
+    },
+    {
+      "findingId": "a121a3af3a91a9d4",
+      "callerPath": "server/src/jobs/startBackgroundJobs.ts",
+      "callerSymbol": "startPublicBookingNoticeEvidenceCleanupJob",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "jobs/publicBookingNoticeEvidenceCleanupJob.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:core-privacy-consent-retention-dsr|jobs/publicBookingNoticeEvidenceCleanupJob.ts|import"
+      ]
+    },
+    {
+      "findingId": "a64f0bbf7b899223",
+      "callerPath": "server/src/routes/clinicRegistration.ts",
+      "callerSymbol": "buildEmailVerificationEmail",
+      "ownerDomain": "messaging-email",
+      "callerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "services/emailTemplates.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "NAMED_SECTOR_COVERAGE:messaging-email"
+      ]
+    },
+    {
+      "findingId": "aab15a85036fe6a5",
+      "callerPath": "server/src/middleware/platformAuth.ts",
+      "callerSymbol": "createSessionId",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "utils/sessionCookies.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-identity-access|utils/sessionCookies.ts|import"
+      ]
+    },
+    {
+      "findingId": "aafa52168b241a99",
+      "callerPath": "server/src/jobs/startBackgroundJobs.ts",
+      "callerSymbol": "startPatientPrivacyExportCleanupJob",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "jobs/patientPrivacyExportCleanupJob.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:core-privacy-consent-retention-dsr|jobs/patientPrivacyExportCleanupJob.ts|import"
+      ]
+    },
+    {
+      "findingId": "ab8102bef74d6bda",
+      "callerPath": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts",
+      "callerSymbol": "sendAppointmentRequestConfirmationNotification",
+      "ownerDomain": "clinical-appointments-availability",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "services/appointmentRequestNotification.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-058",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "ac8e9d7e49faa95b",
+      "callerPath": "server/src/routes/instagramWebhook.ts",
+      "callerSymbol": "verifyMetaWebhookChallenge",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "utils/webhookVerification.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-whatsapp|utils/webhookVerification.ts|import"
+      ]
+    },
+    {
+      "findingId": "ae77095ec0512bf6",
+      "callerPath": "server/src/jobs/reminders.ts",
+      "callerSymbol": "mapWithConcurrency",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "callerDomain": "messaging-automation-recall-followup",
+      "targetModelOrSymbol": "utils/concurrency.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:core-shared-events-queue-idempotency|utils/concurrency.ts|import"
+      ]
+    },
+    {
+      "findingId": "af063b022c785e59",
+      "callerPath": "server/src/routes/instagramInbox.ts",
+      "callerSymbol": "findUserAssignedToClinic",
+      "ownerDomain": "core-tenant-security",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "utils/relationGuards.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-tenant-security|utils/relationGuards.ts|import"
+      ]
+    },
+    {
+      "findingId": "b0046813281889f1",
+      "callerPath": "server/src/routes/reportExport.ts",
+      "callerSymbol": "getClinicOperatingPreferences",
+      "ownerDomain": "core-org-clinic-membership",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-org-clinic-membership|services/clinicOperatingPreferences.ts|import"
+      ]
+    },
+    {
+      "findingId": "b0aae0b35c6be331",
+      "callerPath": "server/src/utils/clinicScope.ts",
+      "callerSymbol": "AuthRequest",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "core-tenant-security",
+      "targetModelOrSymbol": "middleware/auth.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "CALLER_PATH_FAMILY_COVERAGE:utils"
+      ]
+    },
+    {
+      "findingId": "b6f80a8173cdb0fa",
+      "callerPath": "server/src/routes/users.ts",
+      "callerSymbol": "sendMail",
+      "ownerDomain": "messaging-email",
+      "callerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "services/emailService.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "NAMED_SECTOR_COVERAGE:messaging-email"
+      ]
+    },
+    {
+      "findingId": "b9b399cd246dc805",
+      "callerPath": "server/src/routes/noShows.ts",
+      "callerSymbol": "OUTBOUND_ERRORS",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/whatsapp/whatsappOutboundMessaging.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-071",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "c3c0ef0008b36f4e",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "verifyTotp",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "utils/totp.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:core-identity-access|utils/totp.ts|import"
+      ]
+    },
+    {
+      "findingId": "cbd6fbdcccf6a659",
+      "callerPath": "server/src/routes/messages.ts",
+      "callerSymbol": "WhatsAppConnectionRecord",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "services/whatsapp/WhatsAppProvider.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:messaging-whatsapp|services/whatsapp/WhatsAppProvider.ts|import"
+      ]
+    },
+    {
+      "findingId": "cd0da791604cc39e",
+      "callerPath": "server/src/routes/noShows.ts",
+      "callerSymbol": "sendNoShowRecoveryWhatsApp",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/whatsapp/whatsappOutboundMessaging.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-071",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "cf8810a960d8ab4e",
+      "callerPath": "server/src/routes/metaWhatsAppWebhook.ts",
+      "callerSymbol": "markInboundEventFailed",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/messagingInboundIdempotency.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-shared-events-queue-idempotency|services/messagingInboundIdempotency.ts|import"
+      ]
+    },
+    {
+      "findingId": "d2dbd44a56b46785",
+      "callerPath": "server/src/services/privacy/patientPrivacyExportPackage.ts",
+      "callerSymbol": "ATTACHMENT_MAX_FILE_SIZE_BYTES",
+      "ownerDomain": "clinical-patients",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "targetModelOrSymbol": "routes/attachments.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:clinical-patients|routes/attachments.ts|import"
+      ]
+    },
+    {
+      "findingId": "d7417c847e2423f2",
+      "callerPath": "server/src/services/sms/smsRoutingPolicy.ts",
+      "callerSymbol": "decryptJson",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "messaging-sms",
+      "targetModelOrSymbol": "utils/encryption.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|utils/encryption.ts|import"
+      ]
+    },
+    {
+      "findingId": "da13009cbb00bdad",
+      "callerPath": "server/src/services/appointmentRequestNotification.ts",
+      "callerSymbol": "sendAppointmentConfirmationWhatsApp",
+      "ownerDomain": "messaging-whatsapp",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/whatsapp/whatsappOutboundMessaging.ts",
+      "accessKind": "import",
+      "baselineStatus": "EXISTING",
+      "baselineEdgeId": "CDA-069",
+      "selectionReasons": [
+        "ALL_EXISTING_BASELINE_MATCHED"
+      ]
+    },
+    {
+      "findingId": "deadca9bd42731e9",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "isDeterministicConfirmationReply",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/whatsappBookingFlow.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappBookingFlow.ts|import"
+      ]
+    },
+    {
+      "findingId": "e18d70dbf28c0e1f",
+      "callerPath": "server/src/routes/dashboard.ts",
+      "callerSymbol": "overdueReceivablesAmount",
+      "ownerDomain": "clinical-basic-payments",
+      "callerDomain": "reporting-analytics",
+      "targetModelOrSymbol": "utils/overdueReceivables.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:clinical-basic-payments|utils/overdueReceivables.ts|import"
+      ]
+    },
+    {
+      "findingId": "e332eec30a133e9b",
+      "callerPath": "server/src/jobs/patientPrivacyExportCleanupJob.ts",
+      "callerSymbol": "withJobLock",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "targetModelOrSymbol": "utils/jobLock.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-shared-events-queue-idempotency|utils/jobLock.ts|import"
+      ]
+    },
+    {
+      "findingId": "e3780f470be62953",
+      "callerPath": "server/src/routes/auth.ts",
+      "callerSymbol": "evaluateAuthLoginFailureSignal",
+      "ownerDomain": "core-security-incident-detection",
+      "callerDomain": "core-identity-access",
+      "targetModelOrSymbol": "services/security/securityDetectionRules.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-security-incident-detection|services/security/securityDetectionRules.ts|import"
+      ]
+    },
+    {
+      "findingId": "e4fcb7d3e35d7d8a",
+      "callerPath": "server/src/routes/notifications.ts",
+      "callerSymbol": "PRE_RECEIPT_STATUSES",
+      "ownerDomain": "lab-prosthetics-tracking",
+      "callerDomain": "core-notifications",
+      "targetModelOrSymbol": "services/labOrders/labOrderStatusTransitions.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "OWNER_DOMAIN_COVERAGE:lab-prosthetics-tracking"
+      ]
+    },
+    {
+      "findingId": "ecb7412b2ae31879",
+      "callerPath": "server/src/routes/inventory.ts",
+      "callerSymbol": "resolveUnitRole",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "inventory",
+      "targetModelOrSymbol": "services/inventoryUnitConversion.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|services/inventoryUnitConversion.ts|import"
+      ]
+    },
+    {
+      "findingId": "ed196c8d9e6fccee",
+      "callerPath": "server/src/routes/patients.ts",
+      "callerSymbol": "userNameRoleSelect",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "clinical-patients",
+      "targetModelOrSymbol": "utils/prismaSelects.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|utils/prismaSelects.ts|import"
+      ]
+    },
+    {
+      "findingId": "ef7a1ae0f4902d34",
+      "callerPath": "server/src/services/imaging/bridgeOnboardingConfig.ts",
+      "callerSymbol": "isAcceptableDownloadUrl",
+      "ownerDomain": "imaging-server-viewer",
+      "callerDomain": "imaging-device-bridge",
+      "targetModelOrSymbol": "services/imaging/releaseMetadataValidation.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:imaging-server-viewer|services/imaging/releaseMetadataValidation.ts|import"
+      ]
+    },
+    {
+      "findingId": "effeedea5f44d98f",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "sanitizeAiMessageHistory",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/privacy/redaction.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-privacy-consent-retention-dsr|services/privacy/redaction.ts|import"
+      ]
+    },
+    {
+      "findingId": "f28b9cee99b2464d",
+      "callerPath": "server/src/routes/laboratories.ts",
+      "callerSymbol": "default",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "lab-prosthetics-tracking",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|db.ts|import"
+      ]
+    },
+    {
+      "findingId": "f385227c980629b5",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "clearAuthCookies",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "utils/sessionCookies.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-identity-access|utils/sessionCookies.ts|import"
+      ]
+    },
+    {
+      "findingId": "f4881da5ce8363cd",
+      "callerPath": "server/src/jobs/startBackgroundJobs.ts",
+      "callerSymbol": "startClinicBulkExportCleanupJob",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "jobs/clinicBulkExportCleanupJob.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:core-privacy-consent-retention-dsr|jobs/clinicBulkExportCleanupJob.ts|import"
+      ]
+    },
+    {
+      "findingId": "f5d60cf14a8c73d1",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "TimePreference",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/whatsappInterpreter.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappInterpreter.ts|import"
+      ]
+    },
+    {
+      "findingId": "f7ff8fc87715f5cb",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "callerSymbol": "checkChannelConsent",
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "services/channelConsentGate.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-privacy-consent-retention-dsr|services/channelConsentGate.ts|import"
+      ]
+    },
+    {
+      "findingId": "f98eedee689bb831",
+      "callerPath": "server/src/routes/imaging.ts",
+      "callerSymbol": "generateBridgeToken",
+      "ownerDomain": "imaging-device-bridge",
+      "callerDomain": "imaging-server-viewer",
+      "targetModelOrSymbol": "services/imaging/bridgeTokens.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "LOW_FREQUENCY_HIGH_RISK_EDGE_FAMILY:imaging-device-bridge|services/imaging/bridgeTokens.ts|import"
+      ]
+    },
+    {
+      "findingId": "fb81aaa36887b206",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "callerSymbol": "buildAvailableSlots",
+      "ownerDomain": "messaging-ai-orchestration",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "services/whatsappAvailability.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:messaging-ai-orchestration|services/whatsappAvailability.ts|import"
+      ]
+    },
+    {
+      "findingId": "fc7738a62094f98e",
+      "callerPath": "server/src/routes/noShows.ts",
+      "callerSymbol": "getClinicOperatingPreferences",
+      "ownerDomain": "core-org-clinic-membership",
+      "callerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-org-clinic-membership|services/clinicOperatingPreferences.ts|import"
+      ]
+    },
+    {
+      "findingId": "fcc905e69dbb81dd",
+      "callerPath": "server/src/routes/practitionerEarnings.ts",
+      "callerSymbol": "getAccessibleClinicIds",
+      "ownerDomain": "core-tenant-security",
+      "callerDomain": "finance-advanced-compensation",
+      "targetModelOrSymbol": "utils/clinicScope.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-tenant-security|utils/clinicScope.ts|import"
+      ]
+    },
+    {
+      "findingId": "fcee800bd984c7f5",
+      "callerPath": "server/src/routes/financeDashboard.ts",
+      "callerSymbol": "AuthRequest",
+      "ownerDomain": "core-identity-access",
+      "callerDomain": "finance-advanced-compensation",
+      "targetModelOrSymbol": "middleware/auth.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-identity-access|middleware/auth.ts|import"
+      ]
+    },
+    {
+      "findingId": "fd28b901fac9113d",
+      "callerPath": "server/src/routes/inventoryUnits.ts",
+      "callerSymbol": "logActivity",
+      "ownerDomain": "core-audit-activity",
+      "callerDomain": "UNRESOLVED",
+      "targetModelOrSymbol": "utils/activity.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-audit-activity|utils/activity.ts|import"
+      ]
+    },
+    {
+      "findingId": "fd5ce5b06a162362",
+      "callerPath": "server/src/routes/platformAdmin.ts",
+      "callerSymbol": "platformSmsProviderSchema",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-platform-administration",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|schemas/index.ts|import"
+      ]
+    },
+    {
+      "findingId": "fd688550a9be6b18",
+      "callerPath": "server/src/routes/payments.ts",
+      "callerSymbol": "writeAuditLog",
+      "ownerDomain": "core-audit-activity",
+      "callerDomain": "clinical-basic-payments",
+      "targetModelOrSymbol": "utils/auditLog.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-audit-activity|utils/auditLog.ts|import"
+      ]
+    },
+    {
+      "findingId": "fd99d07147b3de47",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "callerSymbol": "assertSlotAvailable",
+      "ownerDomain": "clinical-appointments-availability",
+      "callerDomain": "messaging-instagram",
+      "targetModelOrSymbol": "services/appointmentRequestSafety.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:clinical-appointments-availability|services/appointmentRequestSafety.ts|import"
+      ]
+    },
+    {
+      "findingId": "fdad3d1f3a3bbce4",
+      "callerPath": "server/src/routes/imagingBridgePublic.ts",
+      "callerSymbol": "deleteFile",
+      "ownerDomain": "core-storage-abstraction",
+      "callerDomain": "imaging-device-bridge",
+      "targetModelOrSymbol": "services/fileStorage.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-storage-abstraction|services/fileStorage.ts|import"
+      ]
+    },
+    {
+      "findingId": "feae736654993383",
+      "callerPath": "server/src/routes/whatsappInbox.ts",
+      "callerSymbol": "findUserAssignedToClinic",
+      "ownerDomain": "core-tenant-security",
+      "callerDomain": "messaging-whatsapp",
+      "targetModelOrSymbol": "utils/relationGuards.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-tenant-security|utils/relationGuards.ts|import"
+      ]
+    },
+    {
+      "findingId": "ff5968d715a25793",
+      "callerPath": "server/src/routes/auth.ts",
+      "callerSymbol": "canManageBranches",
+      "ownerDomain": "core-permissions-roles",
+      "callerDomain": "core-identity-access",
+      "targetModelOrSymbol": "utils/roles.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:core-permissions-roles|utils/roles.ts|import"
+      ]
+    },
+    {
+      "findingId": "ffbe825fe4e1932e",
+      "callerPath": "server/src/routes/users.ts",
+      "callerSymbol": "getParam",
+      "ownerDomain": "UNRESOLVED",
+      "callerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "baselineStatus": "NEW",
+      "baselineEdgeId": null,
+      "selectionReasons": [
+        "HIGH_FREQUENCY_EDGE_FAMILY:UNRESOLVED|utils/helpers.ts|import"
+      ]
+    }
+  ]
+}

@@ -111,18 +111,45 @@
     "number": 325,
     "url": "https://github.com/MustafaBasol/DisKlinikCRM/pull/325",
     "headSha": "8a067f0241da3870d773c7e9aeefdde2c697383f",
+    "headShaNote": "stale — see r2ReviewRemediation.commit and reconciliation for later commits; check PR #325 for the exact current head",
     "merged": false,
     "deployed": false,
     "productionVerified": false
+  },
+  "r2ReviewRemediation": {
+    "commit": "b01ea47124584f918351afd6feb02e6f46e4839a",
+    "resolvesReviewThreads": 2,
+    "changes": [
+      "isPrimaryContactConflict() no longer maps a generic Prisma P2034 (deadlock/serialization failure) to PRIMARY_CONTACT_CONFLICT — falls through to the existing generic 500 handling instead; PrimaryContactConflictError/P2002 unchanged (supersedes testEvidence.fixSelected.errorMapping's 'OR P2034 (defensive)' clause above, now stale)",
+      "added strictly-validated PATIENT_EMERGENCY_CONTACT_{CREATE,UPDATE}_RACE_ROUNDS local-diagnostic-only env overrides; CI never sets them, so CI always runs the committed 100/150 defaults"
+    ],
+    "correctedTestEvidence": {
+      "focusedEmergencyContactUnitTests": { "command": "npx tsx src/tests/patientEmergencyContacts.test.ts", "passed": 25, "failed": 0, "exitCode": 0, "note": "supersedes testEvidence.focusedEmergencyContactUnitTests.passed=24 above (net +1: -1 stale P2034-is-conflict test, +2 covering corrected non-classification)" },
+      "focusedEmergencyContactConcurrencyTests": { "command": "npx tsx src/tests/dbVerification/patientEmergencyContactsPrimaryConcurrency.test.ts", "passed": 17, "failed": 0, "exitCode": 0, "note": "supersedes testEvidence.focusedEmergencyContactConcurrencyTests.passed=8 above (original 8 concurrency/stress scenarios, unchanged, + 9 new stress-round-configuration-validation unit tests); createRaceStressRounds/updateRaceStressRounds unchanged at 100/150" },
+      "serverTypecheck": { "exitCode": 0, "errors": 0 },
+      "testRuntimeUnit": { "passed": 74, "failed": 0, "exitCode": 0 },
+      "disposablePostgresProfileRuns": "3 independent successful process-level runs against this exact post-R2 commit, exit 0 each, zero residual nmtest-* Docker resources each time"
+    }
+  },
+  "mainConflictReconciliation": {
+    "driftSourcePr": 324,
+    "driftSourceTaskId": "F2-GUARDRAIL-VAL-001",
+    "conflictingFiles": ["docs/program/CURRENT_PHASE.md"],
+    "resolution": "both this PR and PR #324 independently prepended a new top-of-file entry on the same baseline; this PR's entry placed above PR #324's, as the later reconciliation. PR #324's entry and all other newer main facts preserved unedited.",
+    "cleanlyAutoMergedFiles": ["docs/program/NORAMEDI_MASTER_TRACKER.md", "docs/program/evidence/README.md"],
+    "runtimeOrSchemaChange": false,
+    "ciWorkflowChange": false,
+    "note": "CI on the reconciled head is pending as of this entry — see PR #325 for the exact current head"
   },
   "taskStatus": {
     "agentCompleted": true,
     "testsPassed": true,
     "remoteCiVerified": true,
+    "remoteCiVerifiedNote": "true for the pre-R2 head (a6d55efc5...) only — CI on the R2-plus-reconciled head is pending",
     "prOpened": true,
     "merged": false,
     "deployed": false,
     "productionVerified": false
   },
-  "exactNextTask": "External review and merge decision for PR #325. No further F1-004 follow-up anticipated unless a future CI run reproduces a different concurrency gap in this same code path (would be a new, separately-numbered task)."
+  "exactNextTask": "Wait for a fresh CI run on the reconciled head, then external review and merge decision for PR #325. No further F1-004 follow-up anticipated unless a future CI run reproduces a different concurrency gap in this same code path (would be a new, separately-numbered task)."
 }
