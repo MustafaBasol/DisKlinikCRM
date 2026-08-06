@@ -20,6 +20,41 @@ export const minutesToTime = (minutes: number) => {
   return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 };
 
+// Relocated from routes/organizationDashboard.ts (F2-ADR-ORG-DASH-001) — a
+// generic date-range helper with no dashboard-specific logic, shared as-is
+// by financeDashboard.ts and organizationDashboard.ts.
+export function getDateRange(range: string, from?: string, to?: string): { from: Date; to: Date } {
+  const now = new Date();
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  switch (range) {
+    case 'today': {
+      const start = new Date(now); start.setHours(0, 0, 0, 0);
+      return { from: start, to: endOfToday };
+    }
+    case 'this_week': {
+      const start = new Date(now);
+      start.setDate(now.getDate() - now.getDay());
+      start.setHours(0, 0, 0, 0);
+      return { from: start, to: endOfToday };
+    }
+    case 'last_30_days': {
+      const start = new Date(now); start.setDate(now.getDate() - 29); start.setHours(0, 0, 0, 0);
+      return { from: start, to: endOfToday };
+    }
+    case 'custom': {
+      if (!from || !to) throw new Error('custom range requires from and to');
+      const toDate = new Date(to); toDate.setHours(23, 59, 59, 999);
+      return { from: new Date(from), to: toDate };
+    }
+    default: { // this_month
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: start, to: endOfToday };
+    }
+  }
+}
+
 export const getZonedDateParts = (date: Date, timeZone: string) => {
   const weekdayLabel = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(date);
   const timeParts = new Intl.DateTimeFormat('en-US', {
