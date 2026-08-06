@@ -36,16 +36,20 @@ const stillNew = stillPresentSameId.filter((x) => x.current.baselineStatus === '
 const nowExisting = stillPresentSameId.filter((x) => x.current.baselineStatus === 'EXISTING');
 console.log('Of same-ID findings: NEW =', stillNew.length, ' EXISTING =', nowExisting.length);
 
+// Baseline is constant for the whole run — precompute the
+// proposedEnforcementKey-bearing edges once rather than re-filtering the
+// full edge list on every analyze() call.
+const edgesWithKeys = baseline.edges.filter((e) => e.proposedEnforcementKey);
+
 // For each still-NEW finding, look at baseline.json edges directly to see WHY no match:
 // - is there ANY baseline entry with same ownerDomain+target+accessKind but different callerPath?
 // - is there a baseline entry with EXACT callerPath match but different ownerDomain/target/accessKind?
 // - or no related baseline entry at all?
 function analyze(finding) {
-  const edges = baseline.edges.filter((e) => e.proposedEnforcementKey);
-  const exactCallerPathMatch = edges.filter(
+  const exactCallerPathMatch = edgesWithKeys.filter(
     (e) => e.proposedEnforcementKey.callerPath === finding.callerPath,
   );
-  const sameOwnerTargetAccess = edges.filter(
+  const sameOwnerTargetAccess = edgesWithKeys.filter(
     (e) =>
       e.proposedEnforcementKey.ownerDomain === finding.ownerDomain &&
       e.proposedEnforcementKey.targetModelOrSymbol === finding.targetModelOrSymbol &&

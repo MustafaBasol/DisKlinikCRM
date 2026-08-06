@@ -1,4 +1,12 @@
 {
+  "proof": {
+    "explicitFindingsCount": 88,
+    "sweptInSiblingsCount": 90,
+    "totalFlippedCount": 178,
+    "unattributedFlipsCount": 0,
+    "organizationDashboardInvolvedCount": 0,
+    "attributionSourcesAgree": true
+  },
   "totalFlipped": 178,
   "explicitlyVerified": 88,
   "sweptInCount": 90,
