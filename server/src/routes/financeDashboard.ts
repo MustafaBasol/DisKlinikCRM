@@ -18,7 +18,7 @@ import prisma from '../db.js';
 import { authorize } from '../middleware/auth.js';
 import type { AuthRequest } from '../middleware/auth.js';
 import { normalizeRole } from '../utils/roles.js';
-import { getDateRange } from './organizationDashboard.js';
+import { getDateRange } from '../utils/helpers.js';
 import { overdueInstallmentWhere } from '../utils/overdueInstallments.js';
 import { overdueReceivablesAmount } from '../utils/overdueReceivables.js';
 

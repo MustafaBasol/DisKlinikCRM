@@ -3,7 +3,7 @@
  *
  * Tests cover:
  *  - canViewFinanceDashboard role-based access
- *  - getDateRange utility (shared with organizationDashboard)
+ *  - getDateRange utility (shared platform helper, utils/helpers.ts; also used by organizationDashboard)
  *  - resolveClinicScope logic (mocked inline)
  *  - Summary metric structure correctness
  *  - Empty data returns zeros safely
@@ -39,7 +39,7 @@ function section(title: string) {
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { canViewFinanceDashboard } from '../utils/roles.js';
-import { getDateRange } from '../routes/organizationDashboard.js';
+import { getDateRange } from '../utils/helpers.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 

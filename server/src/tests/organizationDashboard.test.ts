@@ -13,7 +13,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { getDateRange } from '../routes/organizationDashboard.js';
+import { getDateRange } from '../utils/helpers.js';
 import { canAccessOrganizationDashboard } from '../utils/roles.js';
 
 // ── Test yardımcısı ──────────────────────────────────────────────────────────
