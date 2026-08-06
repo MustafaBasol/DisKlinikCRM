@@ -12,7 +12,7 @@ ADR: [`docs/architecture/f2/ADR-F2-ORG-DASH-OWNERSHIP.md`](../../architecture/f2
 | `git fetch origin --prune` | run at task start; fetched `99436e5..46acae8  main` |
 | `git rev-parse origin/main` | `46acae8415020cb0bd340fbc854c4187c43e3662` |
 | `git status --short` (this worktree, before any edit) | clean (empty) |
-| Worktree | `E:\Ek Gelir\Siteler\DisKlinikCRM-git\.claude\worktrees\agent-af5c5bafdd95dc5f1` (agent-isolated worktree, pre-created by the harness) |
+| Worktree | task-local worktree (agent-isolated worktree, pre-created by the harness) |
 | Branch | `docs/f2-adr-org-dashboard-002-ownership`, created via `git checkout -b … origin/main`; HEAD confirmed `46acae8…` before any file was written |
 | PR #329 | `gh pr view 329` → `state: MERGED`, `mergedAt: 2026-08-06T10:32:43Z`, `mergeCommit.oid: 99436e5ba0823fcc82d86eb9b731dc5dffd04ccb` |
 | PR #328 | `gh pr view 328` → `state: MERGED`, `mergedAt: 2026-08-06T11:37:39Z`, `mergeCommit.oid: 46acae8415020cb0bd340fbc854c4187c43e3662` |
@@ -32,7 +32,7 @@ ADR: [`docs/architecture/f2/ADR-F2-ORG-DASH-OWNERSHIP.md`](../../architecture/f2
 
 ## 2. Tooling note — CodeGraph
 
-A `.codegraph/` index exists, but the MCP `codegraph_explore` tool resolved to the **primary** worktree's index (`E:\Ek Gelir\Siteler\DisKlinikCRM-git`, HEAD `255392c`), not this agent worktree, and the tool emitted an explicit warning to that effect. Its output was demonstrably stale: it still showed `getDateRange` defined inside `organizationDashboard.ts:31`, i.e. the pre-PR-#328 state.
+A `.codegraph/` index exists, but the MCP `codegraph_explore` tool resolved to the **primary worktree's** index (HEAD `255392c`), not this task-local worktree, and the tool emitted an explicit warning to that effect. Its output was demonstrably stale: it still showed `getDateRange` defined inside `organizationDashboard.ts:31`, i.e. the pre-PR-#328 state.
 
 **Consequence for this evidence:** CodeGraph output is used **only** for corroborating the shape of the caller graph (it independently surfaced `routes/auth.ts` as a second caller of `canAccessOrganizationDashboard`, and `src/App.tsx` as the sole caller of `src/pages/OrganizationDashboard.tsx`). Every ownership-relevant fact below comes from direct source reads at HEAD `46acae8`, and every such fact was re-verified by grep/read against this worktree. No stale CodeGraph claim is carried into any conclusion. Per the brief's scope constraint, only `organizationDashboard.ts` and its direct dependency graph were queried; no whole-repository exploration or re-indexing was performed.
 
