@@ -55,7 +55,7 @@ Human-operator evidence is treated as valid production evidence once clearly att
   - **explicit `null`** — the client observed no current primary contact.
   - **a contact ID** — the client observed that exact contact as the current primary.
 - Conflict contract: both `POST` and `PUT` catch a primary-contact conflict via `isPrimaryContactConflict(txErr)` and respond `res.status(409).json({ ..., code: 'PRIMARY_CONTACT_CONFLICT' })` — confirmed at two call sites in the route file (create path and update path), each returning HTTP `409` with `code: 'PRIMARY_CONTACT_CONFLICT'` verbatim.
-- This contract matches the human-operator production evidence in §8–§9 below exactly: the operator's Tab B requests receiving HTTP `409` with `code: PRIMARY_CONTACT_CONFLICT` is the same conflict path this task independently confirmed in the merged source.
+- This contract matches the human-operator production evidence in §10–§11 below exactly: the operator's Tab B requests receiving HTTP `409` with `code: PRIMARY_CONTACT_CONFLICT` is the same conflict path this task independently confirmed in the merged source.
 
 ## 5. Deployment evidence
 
@@ -76,7 +76,7 @@ Human-operator evidence is treated as valid production evidence once clearly att
 **Human operator verified** (count) and **agent verified** (no new migration introduced by this closeout):
 
 - Production reported 72 migrations found, 0 pending, at deployment time.
-- No schema action was performed during the human operator's browser verification (§8–§9) — that verification exercised only the existing, already-deployed `POST`/`PUT` emergency-contact endpoints.
+- No schema action was performed during the human operator's browser verification (§10–§11) — that verification exercised only the existing, already-deployed `POST`/`PUT` emergency-contact endpoints.
 - This closeout task introduces no new migration. `git status`/`git diff --stat` for this task's branch touch only documentation files (see §20).
 
 ## 7. Exact automated validation results
