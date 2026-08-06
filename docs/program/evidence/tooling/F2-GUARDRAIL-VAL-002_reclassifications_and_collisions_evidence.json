@@ -1,0 +1,107 @@
+[
+  {
+    "file": "server/src/services/imaging/releaseMetadataValidation.ts",
+    "priorClassification": "imaging-server-viewer",
+    "newClassification": "imaging-device-bridge",
+    "sourceEvidence": "Both real callers (bridgeOnboardingConfig.ts, bridgeUpdateConfig.ts) are imaging-device-bridge files; the prior imaging-server-viewer label was a path-prefix guess (co-located under services/imaging/), not caller evidence. Matches VAL-001 top-10 noisy family #2 and F2-PREP-006-A/E BRG ownership.",
+    "callers": [
+      "server/src/services/imaging/bridgeOnboardingConfig.ts [imaging-device-bridge]",
+      "server/src/services/imaging/bridgeUpdateConfig.ts [imaging-device-bridge]"
+    ],
+    "tenantSecurityImpact": "None — no tenant/security-sensitive data path involved; corrects a same-domain edge previously mislabeled cross-domain (BRG calling its own BRG helper).",
+    "reasonNotHidingViolation": "Removes a false cross-domain finding; does not touch or hide the separate, still-open F2-PREP-006-A BRG-in-imaging.ts physical co-location finding (unrelated, tracked separately).",
+    "group": "reclassification"
+  },
+  {
+    "file": "server/src/utils/messageSanitizer.ts",
+    "priorClassification": "messaging-whatsapp",
+    "newClassification": "messaging-shared-channel-infrastructure",
+    "sourceEvidence": "File header: \"Shared inbound message text sanitization utilities... Used by all AI-connected inbound channels (Evolution WhatsApp, Meta WhatsApp, Instagram DM)\". Real callers span messaging-whatsapp (2) and messaging-instagram (1) — genuinely channel-neutral, not whatsapp-owned.",
+    "callers": [
+      "server/src/routes/whatsapp.ts [messaging-whatsapp]",
+      "server/src/services/instagram/instagramAiConversationProcessor.ts [messaging-instagram]",
+      "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts [messaging-whatsapp]"
+    ],
+    "tenantSecurityImpact": "None — pure text sanitization, no PII/tenant data model access.",
+    "reasonNotHidingViolation": "Correctly surfaces the Instagram->this-file edge as a legitimate expected shared-infra edge (category C) instead of hiding it under an inaccurate whatsapp-only label; does not suppress any finding.",
+    "group": "reclassification"
+  },
+  {
+    "file": "server/src/utils/webhookVerification.ts",
+    "priorClassification": "messaging-whatsapp",
+    "newClassification": "messaging-shared-channel-infrastructure",
+    "sourceEvidence": "Content is a generic Meta webhook challenge/token verification protocol (mode/token/challenge), not WhatsApp-specific. Real callers: instagramWebhook.ts (messaging-instagram) and metaWhatsAppWebhook.ts (messaging-whatsapp).",
+    "callers": [
+      "server/src/routes/instagramWebhook.ts [messaging-instagram]",
+      "server/src/routes/metaWhatsAppWebhook.ts [messaging-whatsapp]"
+    ],
+    "tenantSecurityImpact": "Webhook signature/token verification is security-relevant; reclassifying does not change the verification logic itself, only its domain label.",
+    "reasonNotHidingViolation": "Both real cross-domain edges remain visible and correctly labeled as expected shared-infra edges; nothing suppressed.",
+    "group": "reclassification"
+  },
+  {
+    "file": "server/src/utils/patientName.ts",
+    "priorClassification": "clinical-patients",
+    "newClassification": "messaging-whatsapp",
+    "sourceEvidence": "Content is pure string/name formatting (Turkish name normalization) with zero Prisma/patient-model access. Both real callers (routes/whatsapp.ts, metaWhatsAppAiProcessor.ts) are messaging-whatsapp. The prior clinical-patients label was a filename guess, not supported by content or callers.",
+    "callers": [
+      "server/src/routes/whatsapp.ts [messaging-whatsapp]",
+      "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts [messaging-whatsapp]"
+    ],
+    "tenantSecurityImpact": "None — no patient data model touched by this file.",
+    "reasonNotHidingViolation": "Removes a false \"whatsapp reaches into clinical-patients\" finding that never reflected a real cross-domain data access; no clinical-patients violation existed or is hidden by this change.",
+    "group": "reclassification"
+  },
+  {
+    "file": "server/src/services/whatsappAvailability.ts",
+    "priorClassification": "messaging-ai-orchestration",
+    "newClassification": "clinical-appointments-availability",
+    "sourceEvidence": "File performs real availability/slot-duration/overlap computation and directly imports checkAppointmentOverlap/checkAppointmentRequestConflict from services/appointments/appointmentAvailabilityService.ts (clinical-appointments-availability). Real callers span clinical-public-booking, messaging-whatsapp, messaging-instagram, and messaging-ai-orchestration — its own content is squarely appointments-availability domain logic, not messaging logic.",
+    "callers": [
+      "server/src/routes/publicBooking.ts [clinical-public-booking]",
+      "server/src/routes/whatsapp.ts [messaging-whatsapp]",
+      "server/src/services/instagram/instagramAiConversationProcessor.ts [messaging-instagram]",
+      "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts [messaging-whatsapp]",
+      "server/src/services/whatsappBookingFlow.ts [messaging-ai-orchestration]"
+    ],
+    "tenantSecurityImpact": "None — scheduling/slot data only, no tenant-isolation logic changed.",
+    "reasonNotHidingViolation": "Makes the genuine cross-domain edges (messaging/booking consuming appointments-availability computations) correctly visible as expected platform edges (category C), rather than mislabeled under a narrower messaging domain that hid the real dependency direction.",
+    "group": "reclassification"
+  },
+  {
+    "file": "server/src/utils/encryption.ts",
+    "priorClassification": "UNRESOLVED (declared collision: core-config-secrets vs core-privacy-consent-retention-dsr)",
+    "newClassification": "core-platform-crypto (new domain)",
+    "sourceEvidence": "F0-003 explicitly documents this file as a \"true platform primitive, correctly placed\" (F0-003_MODULE_OWNERSHIP_EVIDENCE.md:202). F2-GUARDRAIL-VAL-001 independently classified all 10 sampled findings targeting it as category C (EXPECTED_PLATFORM_SHARED_EDGE), reused identically by WhatsApp, Instagram, SMS, and platform-admin callers. Recommendation to use a dedicated platform/shared domain (e.g. core-platform-crypto) is VAL-001 section 9, finding #1.",
+    "callers": [
+      "many domains (WhatsApp, Instagram, SMS, platform-admin per VAL-001 sample) — not re-enumerated exhaustively by this task, relying on VAL-001s already-verified 10-sample cross-check"
+    ],
+    "tenantSecurityImpact": "HIGH — this file implements encryption primitives. Resolving its UNRESOLVED status to a real domain does not change any cryptographic code; it only allows the guardrail to stop conflating this platform primitive with genuine ownership disputes.",
+    "reasonNotHidingViolation": "Does not hide any violation — the underlying crypto code is unchanged; this only fixes the domain LABEL so future scans classify its (legitimate, expected) shared usage correctly instead of bucketing it under the same UNRESOLVED sentinel as genuine unknowns.",
+    "group": "collision-resolution"
+  },
+  {
+    "file": "server/src/utils/secrets.ts",
+    "priorClassification": "UNRESOLVED (declared collision: core-config-secrets vs core-privacy-consent-retention-dsr)",
+    "newClassification": "core-platform-crypto (new domain)",
+    "sourceEvidence": "Identical situation to utils/encryption.ts per VAL-001 section 9 finding #2 — same F0-003 \"true platform primitive\" classification, same generic env-secret-accessor content, cross-domain reuse confirmed by VAL-001s sample (platform-admin, imaging-bridge, WhatsApp-webhook callers).",
+    "callers": [
+      "platform-admin, imaging-bridge, WhatsApp-webhook callers per VAL-001 sample"
+    ],
+    "tenantSecurityImpact": "HIGH — secret-accessor primitive; label-only change, no behavior change.",
+    "reasonNotHidingViolation": "Same reasoning as encryption.ts: label-only fix, underlying code and access pattern unchanged.",
+    "group": "collision-resolution"
+  },
+  {
+    "file": "server/src/services/treatmentStockDeduction.ts",
+    "priorClassification": "UNRESOLVED (declared collision: clinical-dental-chart-procedures vs inventory)",
+    "newClassification": "clinical-dental-chart-procedures",
+    "sourceEvidence": "F0-003 explicitly documents this file as physically located under clinical-dental-chart-procedures own service list (F0-003_module_ownership_inventory.json:409,720), while separately noting it writes InventoryTransaction (an Inventory-owned model) directly — a known, already-tracked \"transitional... candidate for an Inventory stock-adjustment command\" per VAL-001 section 9 finding #3. The dual listing reflected \"who writes here\" vs \"who owns this file\", not genuine file-ownership uncertainty.",
+    "callers": [
+      "not independently re-enumerated by this task; relies on F0-003s settled physical-location determination and VAL-001s 3-sample re-confirmation (category D, dual-domain content)"
+    ],
+    "tenantSecurityImpact": "MEDIUM — this file performs a real cross-domain write into InventoryTransaction. This reconciliation resolves only the false \"ownership is unknown\" framing; it explicitly does NOT close the underlying cross-domain write, which remains open, already-tracked technical debt (F0-003s \"Inventory stock-adjustment command\" candidate, unaffected by this task).",
+    "reasonNotHidingViolation": "Explicitly does not hide the real cross-domain write — that edge (services/inventoryAlerts.ts / InventoryTransaction access) remains a genuine finding after this change (see the \"truly added\" edge list for clinical-dental-chart-procedures -> inventory edges), unchanged.",
+    "group": "collision-resolution"
+  }
+]

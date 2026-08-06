@@ -1,0 +1,191 @@
+[
+  {
+    "domain": "core-shared-platform-infrastructure",
+    "domainStatus": "NEW domain",
+    "files": [
+      "server/src/db.ts",
+      "server/src/schemas/index.ts",
+      "server/src/utils/helpers.ts",
+      "server/src/utils/prismaSelects.ts",
+      "server/src/utils/safeError.ts",
+      "server/src/utils/logRedaction.ts",
+      "server/src/utils/redis.ts",
+      "server/src/utils/counterStore.ts"
+    ],
+    "evidence": "Each file read directly. db.ts is the single shared PrismaClient instance (30 distinct caller domains observed). schemas/index.ts is the shared zod validation barrel (14 distinct caller domains). utils/helpers.ts is explicitly commented \"Generic Helpers\" (23 distinct caller domains). utils/prismaSelects.ts holds reusable Prisma `select` shapes (8 domains). utils/safeError.ts header: \"structured, non-leaking error fields for log lines... Routes/services that touch storage or exports must log via this helper\" (4 domains). utils/logRedaction.ts header: \"Shared helpers for keeping PII out of operational logs\" (channel-neutral by design, 1 current caller). utils/redis.ts header: \"Opsiyonel paylasimli Redis istemcisi\" (shared Redis client). utils/counterStore.ts header: \"Rate limit sayaclari icin paylasimli store soyutlamasi\" (shared store abstraction used by both helpers.ts and inboundRateLimiter.ts).",
+    "tenantSecurity": "db.ts/prismaSelects.ts touch the shared Prisma client broadly; no query/access logic changed, only the domain LABEL. safeError.ts/logRedaction.ts exist specifically to prevent PII/path leakage in logs -- correctly classifying them does not change their redaction behavior.",
+    "notHiding": "These files were previously silently excluded from ~every finding where BOTH caller and target were UNRESOLVED (targetDomain === callerDomain === UNRESOLVED is treated as same-domain by the scanner and skipped). Correctly classifying them SURFACES previously-invisible genuine cross-domain edges (see \"truly added\" edge list, 42 new core-shared-platform-infrastructure edges) rather than suppressing anything."
+  },
+  {
+    "domain": "messaging-shared-channel-infrastructure",
+    "domainStatus": "NEW domain",
+    "files": [
+      "server/src/utils/inboundRateLimiter.ts"
+    ],
+    "evidence": "Header: \"Rate limiter for inbound AI message processing. Keyed by: channel + connectionId + sender\". Real callers span messaging-whatsapp (routes/whatsapp.ts, metaWhatsAppAiProcessor.ts) and messaging-instagram (instagramAiConversationProcessor.ts) -- genuinely channel-parameterized, not whatsapp-owned. Builds on utils/counterStore.ts (core-shared-platform-infrastructure).",
+    "tenantSecurity": "Rate-limiting logic unaffected; label-only change.",
+    "notHiding": "The Instagram->this-file edge is now correctly visible as an expected shared-infra edge; nothing suppressed."
+  },
+  {
+    "domain": "external-calendar-integration",
+    "domainStatus": "EXISTING accepted domain (id \"external-calendar-integration\", code EXC) -- NOT invented by this task",
+    "files": [
+      "server/src/jobs/externalCalendarInboundRetryJob.ts",
+      "server/src/jobs/externalCalendarOutboundSyncJob.ts",
+      "server/src/routes/externalCalendarWebhook.ts",
+      "server/src/routes/platformExternalCalendar.ts",
+      "server/src/routes/externalCalendarOutboundSyncStatus.ts",
+      "server/src/services/externalCalendar/ExternalCalendarProvider.ts",
+      "server/src/services/externalCalendar/externalCalendarConnectionService.ts",
+      "server/src/services/externalCalendar/externalCalendarErrors.ts",
+      "server/src/services/externalCalendar/externalCalendarIdempotency.ts",
+      "server/src/services/externalCalendar/externalCalendarMappingService.ts",
+      "server/src/services/externalCalendar/externalCalendarOrchestration.ts",
+      "server/src/services/externalCalendar/externalCalendarOutboundSync.ts",
+      "server/src/services/externalCalendar/externalCalendarProviderFactory.ts",
+      "server/src/services/externalCalendar/externalCalendarWebhookProcessor.ts",
+      "server/src/services/externalCalendar/digidentis/DigiDentisApiClient.ts",
+      "server/src/services/externalCalendar/digidentis/DigiDentisProvider.ts",
+      "server/src/services/externalCalendar/digidentis/DigiDentisSigning.ts",
+      "server/src/services/externalCalendar/digidentis/digidentisConfig.ts"
+    ],
+    "evidence": "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json domain id \"external-calendar-integration\" (code EXC), part of the accepted 38-domain reconciliation in F2-PREP-005_CONSOLIDATED_MODULARIZATION_CHARTER.md (\"Domain inventory reconciled: 38 domains... External Calendar Integration [EXC], added by F2-PREP-001\"). Its own routes[]/services[]/scheduledJobs[] arrays list every one of these 18 files verbatim (routes[] explicitly notes the exact-filename correspondence for externalCalendarOutboundSyncStatus.ts). Independently re-confirmed by this tasks own reverse-dependency scan: this module is almost entirely self-contained (only 1 real external caller, routes/appointmentRequests.ts [clinical-appointments-availability], into externalCalendarOutboundSync.ts -- which is itself already an accepted baseline edge, CDA-031).",
+    "tenantSecurity": "F2-PREP-001 records this domain securitySensitivity=HIGH (OAuth2 client secret + webhook HMAC) and tenantIsolationSensitivity=HIGH. No code changed; classifying these files only lets the guardrail recognize their already-accepted CDA-031 baseline edge (confirmed: this domain-map fix alone moved that edge from NEW to EXISTING in the after-scan, see section 7 of the evidence doc).",
+    "notHiding": "Does not suppress anything -- F2-PREP-001 already documents this domains real cross-domain FK reads (ExternalCalendarAppointmentLink.appointmentId -> Appointment, ExternalCalendarMapping.localId -> User/AppointmentType) as open, uncontracted technical debt; those remain fully visible as findings after this change (see \"truly added\" edges, 8 new clinical-appointments-availability-domain edges from this correction)."
+  },
+  {
+    "domain": "core-privacy-consent-retention-dsr",
+    "domainStatus": "EXISTING domain (already present in domain-map.json before this task)",
+    "files": [
+      "server/src/routes/communicationPreferences.ts",
+      "server/src/services/communicationConsent/communicationConsentAdmin.ts",
+      "server/src/services/communicationConsent/communicationConsentAuditLogging.ts",
+      "server/src/services/communicationConsent/communicationConsentAuditReport.ts",
+      "server/src/services/communicationConsent/communicationConsentConflictTracker.ts",
+      "server/src/services/communicationConsent/communicationConsentPolicy.ts",
+      "server/src/services/communicationConsent/consentEvidenceSanitizer.ts",
+      "server/src/services/communicationConsent/enforcementConfig.ts",
+      "server/src/services/communicationConsent/legacyConsentCorrection.ts",
+      "server/src/services/communicationConsent/legacyReconciliationResolver.ts",
+      "server/src/services/communicationConsent/taxonomy.ts",
+      "server/src/services/privacy/dataRetentionManualRunAudit.ts"
+    ],
+    "evidence": "docs/program/evidence/F2-PREP-001_domain_ownership_inventory.json domain \"core-privacy-consent-retention-dsr\" (code PRV) services[]/routes[] arrays list every one of these 12 files verbatim (this is the KVKK-HIGH-007/008 communicationConsent lineage F2-PREP-001 explicitly folded in after F0-003 had excluded it as an uncommitted working-tree directory). Supersedes F2-GUARDRAIL-VAL-001s own tentative recommendation of a brand-new \"communication-consent\" domain -- F2-PREP-001 (more current, already-accepted evidence) shows it is not a new domain, it already belongs to the existing core-privacy-consent-retention-dsr domain.",
+    "tenantSecurity": "HIGH per F2-PREP-001 (regulatory/tenant-critical). No code changed; classifying these files lets several real same-domain edges (e.g. dataRetentionManualRunAudit.ts -> dataRetentionPolicy.ts) resolve correctly instead of appearing as false UNRESOLVED cross-domain findings.",
+    "notHiding": "All real cross-domain edges from this cluster into other domains remain visible; only the previously-mislabeled false same-domain findings are removed (see \"truly removed\", core-privacy-consent-retention-dsr: 1 edge, verified individually in section 8)."
+  },
+  {
+    "domain": "core-storage-abstraction",
+    "domainStatus": "EXISTING domain",
+    "files": [
+      "server/src/jobs/fileBackupJob.ts",
+      "server/src/services/fileBackupDestination.ts",
+      "server/src/services/fileBackupService.ts"
+    ],
+    "evidence": "F2-PREP-001 domain \"core-storage-abstraction\" (code STG) scheduledJobs[]/services[] arrays list all 3 files verbatim.",
+    "tenantSecurity": "Backup/restore is a sensitive operational surface (see docs/program/NORAMEDI_MASTER_TRACKER.md PZ-IMG-03 note on backupService.ts, a related but different file); no code changed by this task.",
+    "notHiding": "Label-only change; any real cross-domain access from these files into other domains remains fully visible."
+  },
+  {
+    "domain": "core-platform-administration",
+    "domainStatus": "EXISTING domain",
+    "files": [
+      "server/src/services/platformAdminAudit.ts"
+    ],
+    "evidence": "F2-PREP-001 domain \"core-platform-administration\" (code PAD) services[] array lists this file verbatim.",
+    "tenantSecurity": "Platform-admin audit trail; no code changed.",
+    "notHiding": "Label-only change."
+  },
+  {
+    "domain": "clinical-patients",
+    "domainStatus": "EXISTING domain -- own investigation (F2-PREP-001 predates these files)",
+    "files": [
+      "server/src/routes/patientEmergencyContacts.ts",
+      "server/src/services/patientEmergencyContacts.ts",
+      "server/src/services/patientEmergencyContactsConcurrency.ts",
+      "server/src/routes/patientMedicalHistory.ts",
+      "server/src/services/medicalHistory.ts",
+      "server/src/services/patientMedicalHistoryConcurrency.ts"
+    ],
+    "evidence": "Direct source read. patientEmergencyContacts.ts header: \"US-01.2: patient emergency contacts... Endpoints: GET/POST/PUT/DELETE /api/patients/:patientId/emergency-contacts... Security: Role matrix mirrors PUT /api/patients/:id (server/src/routes/patients.ts)\". patientMedicalHistory.ts header: \"US-01.1-P1: versioned medical-history backend foundation... GET/POST /api/patients/:patientId/medical-history\". Both are direct patient sub-resource CRUD, co-located and explicitly cross-referenced against the existing clinical-patients route (patients.ts).",
+    "tenantSecurity": "Patient PII (emergency contacts, medical history) -- HIGH sensitivity. No code changed; only the domain label, which now correctly reflects these as clinical-patients sub-resources rather than UNRESOLVED.",
+    "notHiding": "No violation hidden -- these files had zero domain-map entry before (fully UNRESOLVED on both caller and target sides), which is a data-completeness gap, not a resolved dispute; classifying them surfaces their real cross-domain calls (if any) correctly for the first time."
+  },
+  {
+    "domain": "inventory",
+    "domainStatus": "EXISTING domain -- own investigation",
+    "files": [
+      "server/src/routes/inventoryUnits.ts",
+      "server/src/services/inventoryUnitConversion.ts"
+    ],
+    "evidence": "inventoryUnits.ts: direct source read, /api/inventory-units CRUD route, co-located with and structurally identical to the existing inventory-domain routes/inventory.ts. inventoryUnitConversion.ts: sole real caller is routes/inventory.ts [inventory] (VAL-001 top-10 noisy family #1, independently re-confirmed by this tasks reverse-dependency scan).",
+    "tenantSecurity": "None beyond existing inventory domain sensitivity; no code changed.",
+    "notHiding": "Removes a same-domain false positive (inventoryUnitConversion.ts) and correctly classifies a previously-unmapped same-domain route (inventoryUnits.ts); no cross-domain finding suppressed."
+  },
+  {
+    "domain": "reporting-analytics",
+    "domainStatus": "EXISTING domain -- own investigation",
+    "files": [
+      "server/src/routes/reportExport.ts",
+      "server/src/services/reportExport/auditDecision.ts",
+      "server/src/services/reportExport/auditScope.ts",
+      "server/src/services/reportExport/dateNumberFormat.ts",
+      "server/src/services/reportExport/exportStrings.ts",
+      "server/src/services/reportExport/filenameSafety.ts",
+      "server/src/services/reportExport/formulaSafety.ts",
+      "server/src/services/reportExport/pdfBuilder.ts",
+      "server/src/services/reportExport/registry.ts",
+      "server/src/services/reportExport/roleCheck.ts",
+      "server/src/services/reportExport/rowLimit.ts",
+      "server/src/services/reportExport/types.ts",
+      "server/src/services/reportExport/xlsxBuilder.ts",
+      "server/src/services/reports/revenueByPeriodQuery.ts"
+    ],
+    "evidence": "routes/reportExport.ts header: \"US-07.3-P1 central synchronous report-export route... for the pilot report delegates to services/reports/revenueByPeriodQuery.ts\" -- explicitly ties itself to the existing reporting-analytics route (reports.ts). Reverse-dependency scan confirms the entire reportExport/* module is self-contained (only caller of every file in the group is routes/reportExport.ts itself or another reportExport/* file, plus index.ts bootstrap). revenueByPeriodQuery.ts real caller is routes/reports.ts [reporting-analytics] (VAL-001 top-10 noisy family #4, independently re-confirmed).",
+    "tenantSecurity": "Report export touches clinic-scoped financial/clinical aggregate data; routes/reportExport.ts header explicitly documents its own authorization/tenant-isolation reuse of validateAndGetClinicIdScope. No code changed by this task.",
+    "notHiding": "Self-contained module with no external callers besides index.ts bootstrap wiring; nothing was previously hidden that this reclassification could suppress."
+  },
+  {
+    "domain": "messaging-sms",
+    "domainStatus": "EXISTING domain -- own investigation",
+    "files": [
+      "server/src/services/sms/smsCommunicationPurposeMap.ts"
+    ],
+    "evidence": "Sole real caller: services/sms/smsService.ts [messaging-sms] (VAL-001 top-10 noisy family #5, independently re-confirmed).",
+    "tenantSecurity": "None; no code changed.",
+    "notHiding": "Removes a same-domain false positive only."
+  },
+  {
+    "domain": "messaging-whatsapp",
+    "domainStatus": "EXISTING domain -- own investigation",
+    "files": [
+      "server/src/services/whatsapp/humanHandoffPhrases.ts",
+      "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts",
+      "server/src/routes/messages.ts"
+    ],
+    "evidence": "humanHandoffPhrases.ts (VAL-001 top-10 noisy family #6): real callers are metaWhatsAppAiProcessor.ts [messaging-whatsapp] and whatsappStepAwareNlu.ts [messaging-ai-orchestration] -- classified to the majority/content-driven domain (WhatsApp-specific handoff phrasing), with the ai-orchestration caller treated as an expected same-feature-family edge, not a violation. whatsappCommunicationPurposeMap.ts: sole real caller is routes/messages.ts, co-located under services/whatsapp/. routes/messages.ts: 787-line message-template + WhatsApp-Business (Meta) template submit/sync/status route; majority of its endpoints (3 of 11: meta/submit, meta/sync, meta/status) and majority of its service imports (whatsappService, metaTemplateService, templateBinding, WhatsAppProvider) are WhatsApp-specific; SMS send is a secondary dispatch path. This is a judgment call, explicitly flagged lower-confidence in this evidence document -- the files own genuine multi-channel dispatch (to messaging-sms, core-privacy-consent-retention-dsr, etc.) remains fully visible as legitimate cross-domain findings regardless of this label.",
+    "tenantSecurity": "messages.ts sends patient-facing communications; no code changed by this task, only the domain label of the calling route.",
+    "notHiding": "The routes real dispatch into messaging-sms and core-privacy-consent-retention-dsr (communicationConsentPolicy.ts) remains visible as genuine, correctly-labeled cross-domain findings after this change -- this reclassification does not and cannot suppress those, since messaging-whatsapp differs from both target domains."
+  },
+  {
+    "domain": "clinical-treatment-cases",
+    "domainStatus": "EXISTING domain -- own investigation",
+    "files": [
+      "server/src/services/treatmentProposalPdf.ts",
+      "server/src/utils/money.ts"
+    ],
+    "evidence": "treatmentProposalPdf.ts header: \"US-02.2 Phase 1: deterministic A4 treatment proposal PDF... authorization/tenant lookup lives in the route handler (server/src/routes/treatmentCases.ts)\". Sole real caller confirmed: routes/treatmentCases.ts [clinical-treatment-cases]. money.ts header: \"bounded, deterministic money summation for Float-backed schema fields... TreatmentPlanProcedure.estimatedCost\". Sole real caller: treatmentProposalPdf.ts (itself just classified clinical-treatment-cases) -- narrow, single-purpose, not shared infra despite superficially resembling the other generic utils/ files.",
+    "tenantSecurity": "Treatment financial data (estimatedCost); no code changed.",
+    "notHiding": "Narrow single-caller files given a same-domain label based on actual (not aspirational) usage; nothing suppressed."
+  },
+  {
+    "domain": "imaging-server-viewer",
+    "domainStatus": "EXISTING domain -- accepted public-contract facade",
+    "files": [
+      "server/src/services/imaging/public.ts"
+    ],
+    "evidence": "File header: \"public.ts — Imaging internal lifecycle facade (F2-IMPL-001-A-R2, R3)... Additive, unused-at-merge-time facade implementing the F2-PREP-009-amended ImagingLifecyclePort four-method slice\". This is the exact facade referenced in docs/program/NORAMEDI_MASTER_TRACKER.md as \"F2-IMPL-001-A [PR #304] additive unused ImagingLifecyclePort facade MERGED/MAIN_CI_PASSED\" -- an already-accepted public contract, not a new judgment call. Zero real callers within server/src at this commit (matches the files own \"Zero callers at merge time\" claim, independently re-verified by this tasks reverse-dependency scan).",
+    "tenantSecurity": "Imaging domain, HIGH sensitivity per program docs; this file performs no runtime logic change -- purely a domain-map label addition for an already-accepted, currently-uncalled facade.",
+    "notHiding": "Zero callers means this addition cannot suppress any existing finding; it exists purely so a future caller-migration task (Stage 3, not authorized by this task) will be classified correctly from day one."
+  }
+]
