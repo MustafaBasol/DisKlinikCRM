@@ -292,7 +292,23 @@ Every item below is proved by the fact that **no application source file is modi
 
 ## 14. PR
 
-See the master tracker entry for the PR number, URL, head SHA, mergeability, and CI state as recorded at delivery time. This task does **not** merge and does **not** deploy.
+| Field | Value |
+|---|---|
+| PR | **#331** — https://github.com/MustafaBasol/DisKlinikCRM/pull/331 |
+| Title | `docs+config(F2-ADR-ORG-DASH-002): resolve organizationDashboard ownership to core-org-clinic-membership` |
+| Base | `main` @ `46acae8415020cb0bd340fbc854c4187c43e3662` |
+| Head branch | `docs/f2-adr-org-dashboard-002-ownership` |
+| Commits | 2 (the implementation commit, plus a PR-number reconciliation commit — the docs were authored before the number was known and provisionally said `#330`; corrected to `#331` rather than left wrong) |
+| Merged | **NO** — this task does not merge |
+| Deployed | **NO** — this task does not deploy |
+
+Exact merge command, **for later human use — not executed by this task**:
+
+```
+gh pr merge 331 --squash --match-head-commit <HEAD_SHA>
+```
+
+`--match-head-commit` must be given the PR's head SHA as verified immediately before merging, so the merge aborts if anything was pushed in between.
 
 ## 15. Rollback
 
