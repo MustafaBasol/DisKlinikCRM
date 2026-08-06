@@ -2,6 +2,12 @@
 // builds a reverse-dependency map (target file -> caller files + their
 // domain-map status) across ALL server/src/**/*.ts (not just the 5 scan
 // roots), to give evidence for domain-map completeness corrections.
+//
+// Usage (run via the repo's tsx devDependency, no extra install needed):
+//   npx tsx scripts/architecture-guardrail-validation/buildReverseDeps.ts
+//     -> reports every target file's callers
+//   npx tsx scripts/architecture-guardrail-validation/buildReverseDeps.ts server/src/services/fileStorage.ts,server/src/db.ts
+//     -> reports only the given comma-separated target subset
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import * as ts from 'typescript';
