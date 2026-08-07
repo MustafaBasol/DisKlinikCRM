@@ -1,0 +1,1064 @@
+[
+  {
+    "edgeKey": "server/src/jobs/metaTemplateSyncJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/jobs/metaTemplateSyncJob.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "6c3a319e76b68846"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "jobs -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/appointments.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/appointments.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-appointments-availability",
+    "callerDomainVaries": false,
+    "clusterSize": 6,
+    "findingIds": [
+      "4e1db7a119e105e9",
+      "6251ac43373629ff",
+      "99e0bba677f28e97",
+      "a54f164eb7451cf3",
+      "a8b4a91f9ad20bc6",
+      "d2ebf98dc9f410e7"
+    ],
+    "callerSymbols": [
+      "checkPractitionerAvailability",
+      "getParam",
+      "getZonedDateParts",
+      "localDateTimeToClinicDate",
+      "minutesToTime",
+      "timeToMinutes"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "5+",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/auth.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/auth.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "core-identity-access",
+    "callerDomainVaries": false,
+    "clusterSize": 9,
+    "findingIds": [
+      "16946e2a0b702452",
+      "2a0793bab8626c07",
+      "3405044e3c4fc891",
+      "3b25234712dea819",
+      "6d6213b39811e829",
+      "85f351709051ec6b",
+      "8be24b1edaa406bc",
+      "f24d92758dbb595b",
+      "fc3ec637df9ccc3a"
+    ],
+    "callerSymbols": [
+      "checkForgotPasswordAttempt",
+      "checkLoginAttempt",
+      "checkResendVerificationAttempt",
+      "createRateLimiter",
+      "recordForgotPasswordAttempt",
+      "recordLoginAttempt",
+      "recordResendVerificationAttempt",
+      "resetLoginAttempts",
+      "validatePassword"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/routes/imaging.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-server-viewer",
+    "callerDomainVaries": false,
+    "clusterSize": 8,
+    "findingIds": [
+      "83b8cfa31d33528f",
+      "95dbce2ed1f836e0",
+      "ae96f2d4ce90ef12",
+      "b34267fcff0659d2",
+      "d43abd027c048732",
+      "dbbb03362da8add2",
+      "dd215ef465fe8b0d",
+      "e178fa12609c3c94"
+    ],
+    "callerSymbols": [
+      "imagingBridgePairingCreateSchema",
+      "imagingBridgeSchema",
+      "imagingDeviceSchema",
+      "imagingDeviceUpdateSchema",
+      "imagingRequestSchema",
+      "imagingRequestUpdateSchema",
+      "imagingStudyLinkSchema",
+      "imagingStudyUploadSchema"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "callerPath": "server/src/routes/imaging.ts",
+    "ownerDomain": "core-storage-abstraction",
+    "targetModelOrSymbol": "services/fileStorage.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-server-viewer",
+    "callerDomainVaries": false,
+    "clusterSize": 5,
+    "findingIds": [
+      "01a8ff14b95eb91b",
+      "12da4e29924927af",
+      "1ca8bda8226d4d5f",
+      "3a6f7946d41dd86b",
+      "9537d3b9df6e5819"
+    ],
+    "callerSymbols": [
+      "buildStorageKey",
+      "deleteFile",
+      "fileNameFromKey",
+      "openFileStream",
+      "saveFile"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging",
+      "storage"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/routes/imagingBridgePublic.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-device-bridge",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "216f6a63fd18d577",
+      "7be38210b5d3b7f5",
+      "99684e1a06f29814"
+    ],
+    "callerSymbols": [
+      "imagingBridgeHeartbeatSchema",
+      "imagingBridgePublicPairSchema",
+      "imagingBridgeStudyUploadSchema"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/inventoryUnits.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/inventoryUnits.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "inventory",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "56b1e57cb06b1e8c"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/labOrders.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "lab-prosthetics-tracking",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "9920516155463c54"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "callerPath": "server/src/routes/labOrders.ts",
+    "ownerDomain": "core-storage-abstraction",
+    "targetModelOrSymbol": "services/fileStorage.ts",
+    "accessKind": "import",
+    "callerDomain": "lab-prosthetics-tracking",
+    "callerDomainVaries": false,
+    "clusterSize": 5,
+    "findingIds": [
+      "095cd220041a8156",
+      "1b73b823cdc923c2",
+      "6fb30853b9f94759",
+      "b7936712f115c81d",
+      "f4ecc1f58e7511aa"
+    ],
+    "callerSymbols": [
+      "buildStorageKey",
+      "deleteFile",
+      "fileNameFromKey",
+      "openFileStream",
+      "saveFile"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "storage"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/noShows.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/noShows.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-appointments-availability",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "292780c8667157b1"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/operationalMonitoring.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/operationalMonitoring.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "core-observability-ops-events",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "5824558a8973db3b"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/organizationInstagram.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/organizationInstagram.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "3334e5eb8e28ba66"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/postTreatment.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/postTreatment.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "47ce8c9f6de2c849"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/postTreatment.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/postTreatment.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "d47120cf231094da"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/practitionerPayouts.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "f18ba8e20aa3a22d"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/publicBooking.ts␟core-privacy-consent-retention-dsr␟services/publicBookingNoticeEvidence.ts␟import",
+    "callerPath": "server/src/routes/publicBooking.ts",
+    "ownerDomain": "core-privacy-consent-retention-dsr",
+    "targetModelOrSymbol": "services/publicBookingNoticeEvidence.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-public-booking",
+    "callerDomainVaries": false,
+    "clusterSize": 5,
+    "findingIds": [
+      "404ddf370395687c",
+      "57236fb6521ee65e",
+      "5726cc9580b55163",
+      "74342a2fb8d0cb56",
+      "f72a9edc68cc63a3"
+    ],
+    "callerSymbols": [
+      "issueOrReuseNoticeEvidence",
+      "linkNoticeEvidenceToRequest",
+      "normalizeNoticeLanguage",
+      "resolvePublishedLegalProfile",
+      "validateNoticeEvidenceToken"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/schedules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/schedules.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-appointments-availability",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "3666ec6da8c25167"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "callerPath": "server/src/routes/treatmentCases.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/safeError.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-treatment-cases",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "7e718358bfabbb97"
+    ],
+    "callerSymbols": [
+      "safeErrorFields"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPackages.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/treatmentPackages.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-treatment-cases",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "09d9cb49fe62ff6e"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/users.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 6,
+    "findingIds": [
+      "03414346ce94f41e",
+      "421f778a8b129bd2",
+      "527f0df5255433da",
+      "65f6d1292aed1e92",
+      "8517161d5e5bc3cc",
+      "dfe61094f9176c96"
+    ],
+    "callerSymbols": [
+      "formatClinicDateTime",
+      "getParam",
+      "getZonedDateParts",
+      "localDateTimeToClinicDate",
+      "timeToMinutes",
+      "validatePassword"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "5+",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/usersImport.ts␟clinical-patients␟utils/excelImport.ts␟import",
+    "callerPath": "server/src/routes/usersImport.ts",
+    "ownerDomain": "clinical-patients",
+    "targetModelOrSymbol": "utils/excelImport.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 5,
+    "findingIds": [
+      "767323ffa353886c",
+      "8f7b1768b624ffa1",
+      "94b269785ae04e7e",
+      "c0261e4acba9e94c",
+      "f83e1898e822dff8"
+    ],
+    "callerSymbols": [
+      "ImportRowResult",
+      "MAX_FILE_SIZE_BYTES",
+      "MAX_IMPORT_ROWS",
+      "buildUserTemplate",
+      "parseExcelFile"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "5+",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-privacy-consent-retention-dsr␟services/channelConsentGate.ts␟import",
+    "callerPath": "server/src/routes/whatsapp.ts",
+    "ownerDomain": "core-privacy-consent-retention-dsr",
+    "targetModelOrSymbol": "services/channelConsentGate.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 8,
+    "findingIds": [
+      "2fe604f45c24f79f",
+      "3c6ab8f839e78e9f",
+      "5e74d8c7a0dc5ed1",
+      "61ac537f6b4f0271",
+      "b3cd71a8dcafb5a9",
+      "d41a53a262e7b6b0",
+      "dab6dccb7a6a646e",
+      "e76c0dc7f5398f93"
+    ],
+    "callerSymbols": [
+      "CONSENT_ACCEPTED_TEXT",
+      "CONSENT_DECLINED_TEXT",
+      "CONSENT_REPROMPT_TEXT",
+      "MISSING_LEGAL_PROFILE_BLOCK_TEXT",
+      "checkChannelConsent",
+      "loadConsentMetadata",
+      "logChannelConsent",
+      "parseConsentReply"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging",
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/whatsapp.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 5,
+    "findingIds": [
+      "01ba99abf69618b3",
+      "4ee3e4b112b4cad6",
+      "6733939aaf045616",
+      "699dba6e4d45c84f",
+      "e4118903ce3bfc82"
+    ],
+    "callerSymbols": [
+      "formatClinicDateTime",
+      "getZonedDateParts",
+      "localDateTimeToClinicDate",
+      "minutesToTime",
+      "timeToMinutes"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/whatsappPublicApi.ts␟import",
+    "callerPath": "server/src/routes/whatsapp.ts",
+    "ownerDomain": "messaging-ai-orchestration",
+    "targetModelOrSymbol": "services/whatsappPublicApi.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 5,
+    "findingIds": [
+      "1cbb963d093780e5",
+      "22477aa9b83a7df5",
+      "9466e2ef53dbb461",
+      "9ac82934aeec5996",
+      "fb8fa9a76ae27419"
+    ],
+    "callerSymbols": [
+      "getProvidedWhatsappSecret",
+      "validateWhatsappApiSecret",
+      "whatsappAppointmentLookupQuerySchema",
+      "whatsappAppointmentRequestSchema",
+      "whatsappAvailabilityQuerySchema"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "ai",
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/clinicOperatingPreferences.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/clinicOperatingPreferences.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a918ee7e47a3711e"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappBookingFlow.ts␟import",
+    "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+    "ownerDomain": "messaging-ai-orchestration",
+    "targetModelOrSymbol": "services/whatsappBookingFlow.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 6,
+    "findingIds": [
+      "085664bc19cf4bfb",
+      "0c6fe7386ac32046",
+      "233afeb45983d5f9",
+      "273d93a737c5c0aa",
+      "413057c6eecad20b",
+      "6b3ec342402f8eab"
+    ],
+    "callerSymbols": [
+      "BookingStateJson",
+      "handleAwaitingConfirmationStep",
+      "handleAwaitingDateStep",
+      "handleAwaitingServiceStep",
+      "handleAwaitingTimeStep",
+      "isDeterministicConfirmationReply"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "ai",
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/inventoryAlerts.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/inventoryAlerts.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "inventory",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "c067800de4f66a4f"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/services/messagingInboundIdempotency.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/messagingInboundIdempotency.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-shared-events-queue-idempotency",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "0b428f464fa60e64"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/services/privacy/clinicBulkExportPackage.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "callerPath": "server/src/services/privacy/clinicBulkExportPackage.ts",
+    "ownerDomain": "core-storage-abstraction",
+    "targetModelOrSymbol": "services/fileStorage.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 8,
+    "findingIds": [
+      "1e4840df480698a1",
+      "74c811308434db71",
+      "759dec0499d4f5f7",
+      "8bbba08ba6811718",
+      "90e6f6697d46fc50",
+      "9de89e04546ea64a",
+      "e2af672a702f24ca",
+      "f44b1293ef23f254"
+    ],
+    "callerSymbols": [
+      "buildExportStorageKey",
+      "buildExportTempFilePath",
+      "deleteFile",
+      "ensureExportTempDir",
+      "fileExists",
+      "getExportTempDir",
+      "parseExportTempFileName",
+      "saveFileFromPath"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk",
+      "storage"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "callerPath": "server/src/services/privacy/patientPrivacyExportPackage.ts",
+    "ownerDomain": "core-storage-abstraction",
+    "targetModelOrSymbol": "services/fileStorage.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 5,
+    "findingIds": [
+      "0b4c7cea725d92c6",
+      "0df537c791c2bc82",
+      "40fb537d8c632590",
+      "62b41522705d490a",
+      "fa5161f9221d0cf2"
+    ],
+    "callerSymbols": [
+      "buildExportStorageKey",
+      "deleteFile",
+      "openFileStream",
+      "saveFileFromPath",
+      "statFile"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk",
+      "storage"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/security/securityIncidentService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/security/securityIncidentService.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-security-incident-detection",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "7fe679bd87366d79"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "security-incident (extension)"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/sms/smsService.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-sms",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "b113eaebb48134df"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "52867afcc2699a02"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+    "inclusionProbability": 0.09047619047619047
+  },
+  {
+    "edgeKey": "server/src/services/whatsappBookingFlow.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+    "callerPath": "server/src/services/whatsappBookingFlow.ts",
+    "ownerDomain": "clinical-appointments-availability",
+    "targetModelOrSymbol": "services/whatsappAvailability.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-ai-orchestration",
+    "callerDomainVaries": false,
+    "clusterSize": 8,
+    "findingIds": [
+      "092062a6b337d13b",
+      "35d9529b4659c013",
+      "59fd5376f9dd969c",
+      "7d7e6e580908e82f",
+      "92c6199fab300095",
+      "b1a7eae2fe63a261",
+      "ddd13da6f83634b5",
+      "f23fd764989be064"
+    ],
+    "callerSymbols": [
+      "SavedAvailableSlot",
+      "createAvailabilitySnapshot",
+      "filterSlotsByTimePreference",
+      "filterSlotsByTimeThreshold",
+      "findNearbySlotsForTime",
+      "formatSlotListMessage",
+      "loadAvailabilityForDate",
+      "slotIdentity"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "ai",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/whatsappBookingFlow.ts␟messaging-whatsapp␟utils/whatsappDate.ts␟import",
+    "callerPath": "server/src/services/whatsappBookingFlow.ts",
+    "ownerDomain": "messaging-whatsapp",
+    "targetModelOrSymbol": "utils/whatsappDate.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-ai-orchestration",
+    "callerDomainVaries": false,
+    "clusterSize": 5,
+    "findingIds": [
+      "4d61682f8a581bd1",
+      "60a3326737e182eb",
+      "b51486e3020c9e83",
+      "b5f3bcc8e84e1900",
+      "c73eae6616f27395"
+    ],
+    "callerSymbols": [
+      "WHATSAPP_ASSISTANT_TIME_ZONE",
+      "formatTurkishDateLong",
+      "formatTurkishDateWithWeekday",
+      "getPastMonthDayCorrectedDate",
+      "normalizeDateFromTurkishInput"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "5+",
+    "highRisk": true,
+    "highRiskCategories": [
+      "ai",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_CLUSTER_5PLUS",
+    "samplingStratum": "cluster5PlusCensus",
+    "inclusionProbability": 1
+  }
+]

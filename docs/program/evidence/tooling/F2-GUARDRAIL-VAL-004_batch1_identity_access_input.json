@@ -1,0 +1,866 @@
+[
+  {
+    "edgeKey": "server/src/middleware/auth.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "callerPath": "server/src/middleware/auth.ts",
+    "ownerDomain": "core-permissions-roles",
+    "targetModelOrSymbol": "utils/roles.ts",
+    "accessKind": "import",
+    "callerDomain": "core-identity-access",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "d98b01a3e3381da5"
+    ],
+    "callerSymbols": [
+      "normalizeRole"
+    ],
+    "edgeShape": "middleware -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+    "callerPath": "server/src/routes/clinicBulkExport.ts",
+    "ownerDomain": "core-security-incident-detection",
+    "targetModelOrSymbol": "services/security/securityDetectionRules.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "2d489aa2a94485ea",
+      "818e10e5595e86cd",
+      "b1d3bc463867cd6a"
+    ],
+    "callerSymbols": [
+      "evaluateExportRequestBurstSignal",
+      "evaluateExportStepUpLockoutSignal",
+      "evaluateExportTokenReplaySignal"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk",
+      "security-incident (extension)"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/communicationPreferences.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/communicationPreferences.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "11f17b53dea98aa3",
+      "d54bbc86bf6ebc53"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth",
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/dentalChart.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/dentalChart.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-dental-chart-procedures",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "bbba232c693eb8b6",
+      "faeefc14141fdf80"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/financeDashboard.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "callerPath": "server/src/routes/financeDashboard.ts",
+    "ownerDomain": "core-permissions-roles",
+    "targetModelOrSymbol": "utils/roles.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "f4147a7d491ed542"
+    ],
+    "callerSymbols": [
+      "normalizeRole"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth",
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/instagramInbox.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/instagramInbox.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "24652d44f1971f8a",
+      "454cfab791cdb000",
+      "765ce8a80c01e779"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authenticate",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth",
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/inventory.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/inventory.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "inventory",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "3e5a4e32dca04311",
+      "edb5119ae6b62ebc"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/labOrders.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "lab-prosthetics-tracking",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "a4fcac1a9338d2c3",
+      "ef8b16cb529889b8"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/laboratories.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/laboratories.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "lab-prosthetics-tracking",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "bf7e071506234532",
+      "e776585f2c59a06d"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/notifications.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/notifications.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "core-notifications",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "403809e1b201d78f",
+      "c7dfe0288c9bcf73"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/operationalMonitoring.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "callerPath": "server/src/routes/operationalMonitoring.ts",
+    "ownerDomain": "core-permissions-roles",
+    "targetModelOrSymbol": "utils/roles.ts",
+    "accessKind": "import",
+    "callerDomain": "core-observability-ops-events",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "37d065c71e1bad04",
+      "76ed4cc20371264e",
+      "7ed40724e64be5ff"
+    ],
+    "callerSymbols": [
+      "canResolveOperationalEvents",
+      "canViewOperations",
+      "normalizeRole"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/organizationBranches.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "callerPath": "server/src/routes/organizationBranches.ts",
+    "ownerDomain": "core-permissions-roles",
+    "targetModelOrSymbol": "utils/roles.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "90c4253c104cfca3",
+      "efb20119f7fc32bc",
+      "f5cb397dd562f7c9"
+    ],
+    "callerSymbols": [
+      "canAssignUserClinics",
+      "canManageBranches",
+      "normalizeRole"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/organizationDashboard.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "4285663cbc690e31",
+      "78acdc8c7ff088da"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_ORG_DASH_CALLER",
+    "samplingStratum": "orgDashCallerCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "callerPath": "server/src/routes/organizationDashboard.ts",
+    "ownerDomain": "core-permissions-roles",
+    "targetModelOrSymbol": "utils/roles.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "719208fa9920d414"
+    ],
+    "callerSymbols": [
+      "canAccessOrganizationDashboard"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_ORG_DASH_CALLER",
+    "samplingStratum": "orgDashCallerCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/organizationDashboard.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "acc8cc0a4f0697d3"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_ORG_DASH_CALLER",
+    "samplingStratum": "orgDashCallerCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/organizationDashboard.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "0729e383fef7532f"
+    ],
+    "callerSymbols": [
+      "getDateRange"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_ORG_DASH_CALLER",
+    "samplingStratum": "orgDashCallerCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "callerPath": "server/src/routes/organizationWhatsApp.ts",
+    "ownerDomain": "core-permissions-roles",
+    "targetModelOrSymbol": "utils/roles.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "1c9c4c11a2c8d24a",
+      "5433653c7e8a56e0",
+      "65f93ed14f4be8fa"
+    ],
+    "callerSymbols": [
+      "canAssignWhatsAppToClinic",
+      "canManageWhatsAppConnections",
+      "canViewWhatsAppStatus"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/patientEmergencyContacts.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/patientEmergencyContacts.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-patients",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "25d15cf464b8ec67",
+      "fb0260cfef198277"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/patients.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/patients.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-patients",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "0974b95090355ec2",
+      "a38624a3b08b9cd7"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/postTreatment.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/postTreatment.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "615a371650cbac3a",
+      "c7d669960315d9dc"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/practitionerEarnings.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "78a96a42cf851734",
+      "ce056edb0942327b"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth",
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/schedules.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "callerPath": "server/src/routes/schedules.ts",
+    "ownerDomain": "core-permissions-roles",
+    "targetModelOrSymbol": "utils/roles.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-appointments-availability",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "363ba243cef06107"
+    ],
+    "callerSymbols": [
+      "normalizeRole"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/tasks.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-tasks-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "1084b946feb9539f",
+      "83c54d7c8f8f38fa"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/treatmentCases.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-treatment-cases",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "6ee3915c3d5e2b6e",
+      "75024bb98c85b42a"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "callerPath": "server/src/routes/treatmentPlanProcedures.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "middleware/auth.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-dental-chart-procedures",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "0886f77869fa941a",
+      "853dd8d0056d56f1"
+    ],
+    "callerSymbols": [
+      "AuthRequest",
+      "authorize"
+    ],
+    "edgeShape": "routes -> middleware",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟core-identity-access␟utils/passwordResetToken.ts␟import",
+    "callerPath": "server/src/routes/users.ts",
+    "ownerDomain": "core-identity-access",
+    "targetModelOrSymbol": "utils/passwordResetToken.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "27e76d551a147901",
+      "bdec0086f047207a"
+    ],
+    "callerSymbols": [
+      "RESET_TOKEN_EXPIRY_MINUTES",
+      "createPasswordResetToken"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2727272727272727
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟clinical-appointments-availability␟routes/contactRequests.ts␟import",
+    "callerPath": "server/src/routes/whatsapp.ts",
+    "ownerDomain": "clinical-appointments-availability",
+    "targetModelOrSymbol": "routes/contactRequests.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "35c3d506eec0ac11"
+    ],
+    "callerSymbols": [
+      "upsertContactRequest"
+    ],
+    "edgeShape": "routes -> routes",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_ROUTE_TO_ROUTE",
+    "samplingStratum": "routeToRouteCensus",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/whatsappInbox.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "callerPath": "server/src/routes/whatsappInbox.ts",
+    "ownerDomain": "core-permissions-roles",
+    "targetModelOrSymbol": "utils/roles.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "229e54f0d8b31292"
+    ],
+    "callerSymbols": [
+      "normalizeRole"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth",
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/privacy/clinicBulkExportPackage.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+    "callerPath": "server/src/services/privacy/clinicBulkExportPackage.ts",
+    "ownerDomain": "core-security-incident-detection",
+    "targetModelOrSymbol": "services/security/securityDetectionRules.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "3a44138a35149dc2",
+      "a03458cb340d89b1"
+    ],
+    "callerSymbols": [
+      "evaluateExportCleanupFailureSignal",
+      "evaluateExportGenerationIntegritySignal"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk",
+      "security-incident (extension)"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/reportExport/roleCheck.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "callerPath": "server/src/services/reportExport/roleCheck.ts",
+    "ownerDomain": "core-permissions-roles",
+    "targetModelOrSymbol": "utils/roles.ts",
+    "accessKind": "import",
+    "callerDomain": "reporting-analytics",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "d3e03fc15e20b77b"
+    ],
+    "callerSymbols": [
+      "normalizeRole"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/utils/clinicScope.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+    "callerPath": "server/src/utils/clinicScope.ts",
+    "ownerDomain": "core-security-incident-detection",
+    "targetModelOrSymbol": "services/security/securityDetectionRules.ts",
+    "accessKind": "import",
+    "callerDomain": "core-tenant-security",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "bd4919a03c62dbd6"
+    ],
+    "callerSymbols": [
+      "evaluateCrossTenantDenialSignal"
+    ],
+    "edgeShape": "utils -> services",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "security-incident (extension)",
+      "tenancy"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+    "inclusionProbability": 1
+  }
+]

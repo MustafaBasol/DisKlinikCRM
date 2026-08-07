@@ -1,0 +1,710 @@
+[
+  {
+    "edgeKey": "server/src/routes/appointmentRequests.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+    "callerPath": "server/src/routes/appointmentRequests.ts",
+    "ownerDomain": "core-observability-ops-events",
+    "targetModelOrSymbol": "utils/logger.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-appointments-availability",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "e38618d8eabec7c5"
+    ],
+    "callerSymbols": [
+      "logger"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_SMALL_CELL",
+    "samplingStratum": "smallCellCensus:core-observability-ops-events",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/paymentPlans.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/paymentPlans.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-basic-payments",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "e8fbf85e101ab408"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/paymentPlans.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/paymentPlans.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-basic-payments",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "97217bf4233cdcb0"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "callerPath": "server/src/routes/payments.ts",
+    "ownerDomain": "core-org-clinic-membership",
+    "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-basic-payments",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "491a51ec2f3710dd"
+    ],
+    "callerSymbols": [
+      "getClinicOperatingPreferences"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/payments.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-basic-payments",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "651f58d26d31e975"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/routes/payments.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-basic-payments",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a2c88df39d3dd8af"
+    ],
+    "callerSymbols": [
+      "paymentSchema"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/payments.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-basic-payments",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "bfe55e46851f785c"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+    "callerPath": "server/src/routes/payments.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/prismaSelects.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-basic-payments",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "71b599b4c601b957"
+    ],
+    "callerSymbols": [
+      "patientContactSelect"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/publicBooking.ts␟clinical-appointments-availability␟services/appointments/appointmentAvailabilityService.ts␟import",
+    "callerPath": "server/src/routes/publicBooking.ts",
+    "ownerDomain": "clinical-appointments-availability",
+    "targetModelOrSymbol": "services/appointments/appointmentAvailabilityService.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-public-booking",
+    "callerDomainVaries": false,
+    "clusterSize": 4,
+    "findingIds": [
+      "06645ff4d5b4b81a",
+      "1bfdbde223c47cdf",
+      "a4005ec73a8ac85e",
+      "b8181cc24bd56795"
+    ],
+    "callerSymbols": [
+      "SlotConflictError",
+      "acquireAppointmentSlotLock",
+      "assertSlotAvailable",
+      "checkPractitionerAvailabilityForSlot"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_SMALL_CELL",
+    "samplingStratum": "smallCellCensus:clinical-appointments-availability",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/utils/auditLog.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/utils/auditLog.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-audit-activity",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "4f4fa053fade54e5"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "utils -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.23809523809523808
+  },
+  {
+    "edgeKey": "server/src/routes/settings.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "callerPath": "server/src/routes/settings.ts",
+    "ownerDomain": "core-org-clinic-membership",
+    "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+    "accessKind": "import",
+    "callerDomain": "core-config-secrets",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "80cf490c53421f49",
+      "953120a612966f61",
+      "ea5df128fc47b6a8"
+    ],
+    "callerSymbols": [
+      "clinicOperatingPreferencesSchema",
+      "getClinicOperatingPreferences",
+      "upsertClinicOperatingPreferences"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-config-secrets",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/platformSettings.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/platformSettings.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-config-secrets",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "6db1026e64b5b2de"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-config-secrets",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/utils/passwordStepUp.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/utils/passwordStepUp.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-identity-access",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "72a423adbcc120d4"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "utils -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "auth"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-identity-access",
+    "inclusionProbability": 0.2542372881355932
+  },
+  {
+    "edgeKey": "server/src/jobs/clinicBulkExportCleanupJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "callerPath": "server/src/jobs/clinicBulkExportCleanupJob.ts",
+    "ownerDomain": "core-shared-events-queue-idempotency",
+    "targetModelOrSymbol": "utils/jobLock.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a50095b7bb61b348"
+    ],
+    "callerSymbols": [
+      "withJobLock"
+    ],
+    "edgeShape": "jobs -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "callerPath": "server/src/jobs/dataRetentionCleanupJob.ts",
+    "ownerDomain": "core-shared-events-queue-idempotency",
+    "targetModelOrSymbol": "utils/jobLock.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "58c3abd24ccdedff"
+    ],
+    "callerSymbols": [
+      "withJobLock"
+    ],
+    "edgeShape": "jobs -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/jobs/dataRetentionCleanupJob.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "1cfb834a0bcfd887"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "jobs -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "callerPath": "server/src/routes/clinicBulkExport.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/safeError.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "d6f674ba2b8595c2"
+    ],
+    "callerSymbols": [
+      "safeErrorFields"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/clinicLegalProfile.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/clinicLegalProfile.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "c7d590107ed9fc73"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/communicationPreferences.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/communicationPreferences.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "2196ed059b29cf68"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/communicationPreferences.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/routes/communicationPreferences.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "0038b2479ce75c9c"
+    ],
+    "callerSymbols": [
+      "legacySmsOptOutCorrectionSchema"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/publicClinicKvkk.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/publicClinicKvkk.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "68a8f8408e7ae6d1"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/services/channelConsentGate.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/channelConsentGate.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a3423b7241ff0b53"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/services/communicationConsent/communicationConsentAdmin.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/communicationConsent/communicationConsentAdmin.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "726b52d738d7297f"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/privacy/patientPrivacyExportPackage.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "ff5443b9a98b0aab"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/services/publicBookingNoticeEvidence.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/publicBookingNoticeEvidence.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "6cf55deb6b3e60b1"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/platformSecurityIncidents.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/platformSecurityIncidents.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "core-security-incident-detection",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "0d951ab9a410c5b0"
+    ],
+    "callerSymbols": [
+      "createRateLimiter"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "security-incident (extension)"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/security/securityDetectionRules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/security/securityDetectionRules.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-security-incident-detection",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "21938db97b78422a"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "security-incident (extension)"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+    "inclusionProbability": 1
+  }
+]

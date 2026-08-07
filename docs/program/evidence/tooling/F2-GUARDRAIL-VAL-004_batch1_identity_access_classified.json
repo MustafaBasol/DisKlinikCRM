@@ -1,0 +1,250 @@
+[
+  {
+    "edgeKey": "server/src/middleware/auth.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "middleware/auth.ts is itself the platform's authentication/authorization middleware; it imports normalizeRole to compute req.user.normalizedRole (auth.ts:185) and to canonicalize roles inside authorize() (auth.ts:223). This is the canonical, intended consumer of utils/roles.ts, not a boundary crossing between unrelated business domains — auth middleware and the role-normalization helper are two halves of the same platform RBAC mechanism.",
+    "callerEvidence": "server/src/middleware/auth.ts:4 `import { normalizeRole } from '../utils/roles.js';`; used at :185 `normalizedRole: normalizeRole(dbUser.role, canAccessAllClinics)` and :223 `const canonicalRole = normalizeRole(req.user.role, req.user.canAccessAllClinics).toLowerCase();`",
+    "targetEvidence": "server/src/utils/roles.ts:45 `export function normalizeRole(userRole: string, canAccessAllClinics: boolean = false): CanonicalRole { ... }` — documented (roles.ts:1-25) as the central role-normalization helper intended for use by authorize() and any consumer needing canonical roles.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+    "classification": "B",
+    "reasoning": "securityDetectionRules.ts explicitly documents itself as 'route/service-facing wrappers' meant to be called from routes across the codebase for KVKK-CRIT-003 mandatory detection. clinicBulkExport.ts calls all three imported signal functions exactly at the documented trigger points: lockout on step-up failure, request-burst on job creation, and token-replay on expired/already-downloaded token reuse.",
+    "callerEvidence": "server/src/routes/clinicBulkExport.ts:44-48 imports the three signal fns; called at :181 `evaluateExportStepUpLockoutSignal({...})` after a lockout, :216 `evaluateExportRequestBurstSignal({...})` after job creation, and :422/:480 `evaluateExportTokenReplaySignal({...reason...})` on replay/expired token attempts.",
+    "targetEvidence": "server/src/services/security/securityDetectionRules.ts:1-23 header doc: 'Thin, route/service-facing wrappers around securitySignalService.ts ... Rule 3: clinic export anomaly → evaluateExportStepUpLockoutSignal, evaluateExportTokenReplaySignal, ... evaluateExportRequestBurstSignal' — an explicitly documented external-facing entry point for non-security-domain callers.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/communicationPreferences.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard: imports authorize/AuthRequest and applies authorize([...]) as Express middleware on its endpoints, identical to virtually every other route file in the codebase. This is the expected, universal way any domain's routes authenticate/authorize requests.",
+    "callerEvidence": "server/src/routes/communicationPreferences.ts:24 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => { ... }` — the platform's single shared RBAC middleware factory; server/src/middleware/auth.ts:90 `export interface AuthRequest extends Request { user?: {...} }` — the shared typed request augmentation every route uses.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/dentalChart.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage: `authorize([...])` applied as middleware on each endpoint (e.g. dentalChart.ts:21), `AuthRequest` used as the handler's request type. Identical universal pattern to all other routes.",
+    "callerEvidence": "server/src/routes/dentalChart.ts:2 `import { authorize, AuthRequest } from '../middleware/auth.js';`; used e.g. :21 `authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST'])`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` and :90 `export interface AuthRequest extends Request {...}` — shared platform auth primitives.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/financeDashboard.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "normalizeRole is used purely for permission-tier computation inside finance route handlers (e.g. financeDashboard.ts:37, :59 to compute `role` for further gating), the same generic RBAC pattern used across the whole codebase, not a reach into finance-specific internals of the permissions domain.",
+    "callerEvidence": "server/src/routes/financeDashboard.ts:20 `import { normalizeRole } from '../utils/roles.js';`; used at :37 `const role = normalizeRole(user.role, user.canAccessAllClinics);`",
+    "targetEvidence": "server/src/utils/roles.ts:45 `export function normalizeRole(...)` — generic canonical-role helper with no finance-specific logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramInbox.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard use of authenticate/authorize/AuthRequest as route-level auth middleware/types (instagramInbox.ts:21-22, applied at :64-65 as router middleware), same universal pattern as all other route files.",
+    "callerEvidence": "server/src/routes/instagramInbox.ts:21 `import { authenticate, authorize } from '../middleware/auth.js';` and :22 `import type { AuthRequest } from '../middleware/auth.js';`; used at :64-65 `authenticate, authorize(['OWNER','ORG_ADMIN','CLINIC_MANAGER','RECEPTIONIST'])`.",
+    "targetEvidence": "server/src/middleware/auth.ts:104 `export const authenticate = async (...)` and :216 `export const authorize = (roles: string[]) => {...}` — shared platform middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/inventory.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files: authorize/AuthRequest imported and applied to gate endpoints.",
+    "callerEvidence": "server/src/routes/inventory.ts:4 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/labOrders.ts:7 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/laboratories.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/laboratories.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/notifications.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/notifications.ts:2 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/operationalMonitoring.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "canResolveOperationalEvents, canViewOperations, and normalizeRole are used purely as permission-gate checks inside operational monitoring route handlers, the standard cross-cutting RBAC pattern (verified import at operationalMonitoring.ts:19), not a reach into permissions-domain internals.",
+    "callerEvidence": "server/src/routes/operationalMonitoring.ts:18-19 `import { authorize, AuthRequest } from '../middleware/auth.js'; import { normalizeRole, canViewOperations, canResolveOperationalEvents } from '../utils/roles.js';`",
+    "targetEvidence": "server/src/utils/roles.ts:371 `export function canViewOperations(...)` and :382 `export function canResolveOperationalEvents(...)` — generic exported permission predicates, documented (roles.ts:363-386) as the Sprint 13 operational-monitoring permission helpers meant for exactly this kind of external route consumption.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationBranches.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "canAssignUserClinics, canManageBranches, normalizeRole imported and used as standard permission gates (organizationBranches.ts:27-28), matching the documented purpose of these exported roles.ts predicates.",
+    "callerEvidence": "server/src/routes/organizationBranches.ts:27-28 `import { authorize, AuthRequest } from '../middleware/auth.js'; import { normalizeRole, canManageBranches, canAssignUserClinics } from '../utils/roles.js';`",
+    "targetEvidence": "server/src/utils/roles.ts:215 `export function canManageBranches(...)` and :225 `export function canAssignUserClinics(...)` — documented (roles.ts:210-228) generic branch/assignment permission predicates.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "authorize(['OWNER','ORG_ADMIN']) is applied as route middleware (organizationDashboard.ts:51) and AuthRequest types the handler — the standard universal auth pattern.",
+    "callerEvidence": "server/src/routes/organizationDashboard.ts:25 `import { authorize, AuthRequest } from '../middleware/auth.js';`; used at :51 `authorize(['OWNER', 'ORG_ADMIN'])`.",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "canAccessOrganizationDashboard performs a second, defense-in-depth permission check after the authorize() middleware (organizationDashboard.ts:53), exactly matching its documented purpose in roles.ts as the org-dashboard access predicate. Generic cross-cutting RBAC use.",
+    "callerEvidence": "server/src/routes/organizationDashboard.ts:26 `import { canAccessOrganizationDashboard } from '../utils/roles.js';`; used at :53 `if (!canAccessOrganizationDashboard(req.user!)) { return res.status(403)... }`",
+    "targetEvidence": "server/src/utils/roles.ts:131 `export function canAccessOrganizationDashboard(user: UserForRole): boolean { return isOrganizationAdmin(user); }` — documented (roles.ts:123-130) as exactly this dashboard's access predicate.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "db.ts exports the single shared Prisma client instance used by literally every route/service in the codebase; importing `prisma` as the default export is the only sanctioned way to talk to the database anywhere in server/src.",
+    "callerEvidence": "server/src/routes/organizationDashboard.ts:24 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:14-23 `const prisma = new PrismaClient({...}); export default prisma;` — the platform's single shared DB client.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "getDateRange is explicitly documented in helpers.ts as a generic, dashboard-agnostic date-range utility relocated out of organizationDashboard.ts itself under ADR F2-ADR-ORG-DASH-001 specifically so it could be shared cleanly with financeDashboard.ts — this is the direct intended post-refactor consumption pattern, not a violation.",
+    "callerEvidence": "server/src/routes/organizationDashboard.ts:27 `import { getDateRange } from '../utils/helpers.js';`; used at :62 `dateRange = getDateRange(String(range), ...)`",
+    "targetEvidence": "server/src/utils/helpers.ts:23-25 `// Relocated from routes/organizationDashboard.ts (F2-ADR-ORG-DASH-001) — a generic date-range helper with no dashboard-specific logic, shared as-is by financeDashboard.ts and organizationDashboard.ts.`",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "canAssignWhatsAppToClinic, canManageWhatsAppConnections, canViewWhatsAppStatus are used repeatedly (organizationWhatsApp.ts, ~15 call sites e.g. :121, :195, :1192) as standard in-handler permission gates, matching their documented purpose in roles.ts as the WhatsApp-connection permission predicates.",
+    "callerEvidence": "server/src/routes/organizationWhatsApp.ts:29-32 imports `canManageWhatsAppConnections, canAssignWhatsAppToClinic, canViewWhatsAppStatus`; used e.g. :121 `if (!canViewWhatsAppStatus(req.user!)) {...}`, :1192 `if (!canAssignWhatsAppToClinic(req.user!)) {...}`",
+    "targetEvidence": "server/src/utils/roles.ts:265-286 `export function canManageWhatsAppConnections(...)`, `canAssignWhatsAppToClinic(...)`, `canViewWhatsAppStatus(...)` — documented (roles.ts:259-286) as the dedicated WhatsApp-connection permission helpers.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/patientEmergencyContacts.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files (authorize applied at patientEmergencyContacts.ts:137, :162).",
+    "callerEvidence": "server/src/routes/patientEmergencyContacts.ts:74 `import { authorize, AuthRequest } from '../middleware/auth.js';`; used at :137 `authorize(EMERGENCY_CONTACT_ROLES)`.",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/patients.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/patients.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/postTreatment.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/postTreatment.ts:16 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage: authorize([...]) applied inline on every handler (practitionerEarnings.ts:21,60,108,133,164), AuthRequest as handler type — universal pattern.",
+    "callerEvidence": "server/src/routes/practitionerEarnings.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`; used at :21 `authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST'])`.",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/schedules.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "normalizeRole used purely for permission-tier computation in schedules route handlers, generic cross-cutting RBAC pattern.",
+    "callerEvidence": "server/src/routes/schedules.ts:17 `import { normalizeRole } from '../utils/roles.js';`",
+    "targetEvidence": "server/src/utils/roles.ts:45 `export function normalizeRole(...)` — generic canonical-role helper.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/tasks.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage: authorize([...]) applied inline on each handler (treatmentCases.ts:37,69,108,144,220), AuthRequest as handler type.",
+    "callerEvidence": "server/src/routes/treatmentCases.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`; used at :37 `authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST'])`.",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/treatmentPlanProcedures.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟core-identity-access␟utils/passwordResetToken.ts␟import",
+    "classification": "C",
+    "reasoning": "users.ts calls createPasswordResetToken during staff-onboarding user creation to email a reset link, and RESET_TOKEN_EXPIRY_MINUTES to render the expiry in that email. This is the module's clean public API (a self-contained crypto/token helper analogous to a shared secrets utility) consumed exactly as intended — user creation legitimately needs to hand a new user a password-reset path, which is inherently an identity/auth concern any user-provisioning flow must invoke.",
+    "callerEvidence": "server/src/routes/users.ts:8 `import { createPasswordResetToken, RESET_TOKEN_EXPIRY_MINUTES } from '../utils/passwordResetToken.js';`; used at :204 `const { rawToken } = await createPasswordResetToken(user.id);` and :211 `expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES`.",
+    "targetEvidence": "server/src/utils/passwordResetToken.ts:12 `export async function createPasswordResetToken(userId: string): Promise<{ rawToken: string; expiresAt: Date }> {...}` and :4 `export const RESET_TOKEN_EXPIRY_MINUTES = 60;` — a small, self-contained public helper with no private internals exposed.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟clinical-appointments-availability␟routes/contactRequests.ts␟import",
+    "classification": "H",
+    "reasoning": "routes/whatsapp.ts (messaging-whatsapp) imports and calls upsertContactRequest, a Prisma-backed create/dedup business function, directly from another route file (routes/contactRequests.ts) rather than from a service layer — a route-to-route dependency that bypasses normal domain layering (routes are meant to be leaf consumers of services/utils, not exporters other routes import from). This mirrors the exact anti-pattern the codebase already remediated for getDateRange under F2-ADR-ORG-DASH-001 (see recent commit f762d6d), which relocated a route-file-exported helper into utils/ specifically to close this kind of route-to-route edge; this occurrence has not yet received the same treatment, so it reads as pre-existing/legacy debt of the same known category rather than new coupling. Separately, contactRequests.ts's domain-map assignment to 'clinical-appointments-availability' is itself questionable — its content (contactRequests.ts:20-74, GET/PATCH handlers) is lead/contact-inquiry tracking (channel, externalSenderId, patient linking), not appointment scheduling/availability — worth a domain-map correction independent of the routing fix.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:64 `import { upsertContactRequest } from './contactRequests.js';`; called at :1866 and :1914 `const contactRequest = await upsertContactRequest({ clinicId, channel: 'whatsapp', ... });`",
+    "targetEvidence": "server/src/routes/contactRequests.ts:20 `export async function upsertContactRequest(args: {...}) {...}` — a Prisma-backed dedup/create function defined and exported directly from a route file alongside its own Express router, not extracted to a service module.",
+    "followUpRequired": "Two separate items for an architect: (1) consider extracting upsertContactRequest out of routes/contactRequests.ts into a service module, matching the getDateRange precedent set by F2-ADR-ORG-DASH-001, to close the route-to-route edge; (2) reconsider contactRequests.ts's domain-map ownership — content suggests a lead/CRM-intake domain rather than 'clinical-appointments-availability'."
+  },
+  {
+    "edgeKey": "server/src/routes/whatsappInbox.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "normalizeRole imported and used purely for permission-tier computation inside WhatsApp inbox route handlers (whatsappInbox.ts:37,59,324,419), generic cross-cutting RBAC pattern.",
+    "callerEvidence": "server/src/routes/whatsappInbox.ts:25 `import { normalizeRole } from '../utils/roles.js';`; used at :37 `const role = normalizeRole(user.role, user.canAccessAllClinics);`",
+    "targetEvidence": "server/src/utils/roles.ts:45 `export function normalizeRole(...)` — generic canonical-role helper.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/clinicBulkExportPackage.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+    "classification": "B",
+    "reasoning": "securityDetectionRules.ts explicitly documents itself as route/service-facing wrappers meant for exactly this kind of cross-domain invocation. clinicBulkExportPackage.ts calls evaluateExportCleanupFailureSignal at the documented trigger (persistent storage-cleanup failure, package.ts:434) and evaluateExportGenerationIntegritySignal for generation-integrity failures, matching Rule 3's documented signal list.",
+    "callerEvidence": "server/src/services/privacy/clinicBulkExportPackage.ts:52-55 `import { evaluateExportGenerationIntegritySignal, evaluateExportCleanupFailureSignal } from '../security/securityDetectionRules.js';`; called at :434 `evaluateExportCleanupFailureSignal({ organizationId: row.organizationId, clinicId: row.clinicId, jobId });` inside finalizeArtifactDeletionOutcome's failure branch (comment at :426-429 explicitly ties this to KVKK-CRIT-003 Rule 3).",
+    "targetEvidence": "server/src/services/security/securityDetectionRules.ts:1-22 documents both evaluateExportGenerationIntegritySignal and evaluateExportCleanupFailureSignal as Rule 3 (clinic export anomaly) entry points; :369 `export function evaluateExportCleanupFailureSignal(...)`; :324 `export function evaluateExportGenerationIntegritySignal(...)`.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/reportExport/roleCheck.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "roleCheck.ts is explicitly documented as intentionally mirroring middleware/auth.ts's authorize() role-check logic for a data-driven role set that can't be statically wired as router middleware — it deliberately reuses normalizeRole to guarantee identical semantics to the standard authorize() path. Textbook shared-RBAC-helper reuse, not a boundary violation.",
+    "callerEvidence": "server/src/services/reportExport/roleCheck.ts:13 `import { normalizeRole } from '../../utils/roles.js';`; used at :20 `const canonicalRole = normalizeRole(user.role, user.canAccessAllClinics).toLowerCase();`",
+    "targetEvidence": "server/src/services/reportExport/roleCheck.ts:1-11 header doc: 'mirrors middleware/auth.ts's authorize() role-check logic exactly, for use OUTSIDE the static Express middleware factory pattern ... so the export path never grants access authorize() would have denied for the same report (and vice versa).'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/utils/clinicScope.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+    "classification": "B",
+    "reasoning": "securityDetectionRules.ts's own doc comment for evaluateCrossTenantDenialSignal names clinicScope.ts as one of the two intended call sites ('the single shared clinic/organization scope-rejection helper'). clinicScope.ts calls it from recordCrossTenantDenialIfTargeted, invoked by both validateAndGetScope and validateAndGetClinicIdScope on access denial — exactly the documented integration point.",
+    "callerEvidence": "server/src/utils/clinicScope.ts:13 `import { evaluateCrossTenantDenialSignal } from '../services/security/securityDetectionRules.js';`; called at :30 inside `recordCrossTenantDenialIfTargeted(...)`, itself invoked from :94 and :217 on access-denied paths.",
+    "targetEvidence": "server/src/services/security/securityDetectionRules.ts:146-153 doc comment: 'Rule 2 — instruments the single shared clinic/organization scope-rejection helper (validateAndGetClinicIdScope / buildClinicScopeWhere), not individual routes.' — clinicScope.ts is the explicitly documented caller.",
+    "followUpRequired": "none"
+  }
+]

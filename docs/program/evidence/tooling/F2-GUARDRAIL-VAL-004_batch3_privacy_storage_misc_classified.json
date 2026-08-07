@@ -1,0 +1,314 @@
+[
+  {
+    "edgeKey": "server/src/jobs/clinicBulkExportCleanupJob.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "cleanupStaleLocalExportPartialFiles is a generic storage-abstraction sweep function in fileStorage.ts, the codebase's single S3/local storage abstraction layer. Any job that produces on-disk export artifacts is expected to reuse this rather than reimplement filesystem cleanup, matching the rubric's 'storage abstraction' example verbatim.",
+    "callerEvidence": "jobs/clinicBulkExportCleanupJob.ts:23 `import { cleanupStaleLocalExportPartialFiles } from '../services/fileStorage.js';` and :50 `const deletedPartials = await cleanupStaleLocalExportPartialFiles(STALE_PARTIAL_FILE_MAX_AGE_MS);`",
+    "targetEvidence": "services/fileStorage.ts:529 `export async function cleanupStaleLocalExportPartialFiles(...)` — doc comment explicitly frames it as a general local-mode partial-artifact sweep, not privacy-domain-specific logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/jobs/externalCalendarOutboundSyncJob.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+    "classification": "C",
+    "reasoning": "logger is the shared pino structured logger every module in the codebase is expected to import for observability; this is the textbook 'observability/logging' shared-platform pattern from the rubric, with no domain-specific coupling at all.",
+    "callerEvidence": "jobs/externalCalendarOutboundSyncJob.ts:26 `import { logger } from '../utils/logger.js';` and multiple `logger.warn/info/error(...)` calls (e.g. line 85, 101).",
+    "targetEvidence": "utils/logger.ts:24 `export const logger = pino({...})` — a single shared, privacy-hardened structured logger instance with no owning-domain logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/jobs/imagingBridgeOfflineJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "classification": "C",
+    "reasoning": "withJobLock is the shared cross-replica cron lease-lock utility explicitly designed (per its own doc comment) to be used by any scheduled job in the codebase to prevent double-execution; it carries no imaging-specific or domain-specific logic.",
+    "callerEvidence": "jobs/imagingBridgeOfflineJob.ts:16 `import { withJobLock } from '../utils/jobLock.js';` and :46 `withJobLock('imaging-bridge-offline', 2 * 60 * 1000, runImagingBridgeOfflineJob)`.",
+    "targetEvidence": "utils/jobLock.ts:87 `export async function withJobLock(name, ttlMs, fn)` — doc comment: 'Cron job'lar için paylaşımlı lease kilidi', a generic named-lock primitive for any job.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟core-privacy-consent-retention-dsr␟jobs/dataRetentionCleanupJob.ts␟import",
+    "classification": "B",
+    "reasoning": "startDataRetentionCleanupJob is the job's own documented external entry point ('Run with: startDataRetentionCleanupJob()' in the file's header doc comment), and startBackgroundJobs.ts is the single central bootstrapper whose entire purpose is to call every job's designated start function at process boot regardless of owning domain.",
+    "callerEvidence": "jobs/startBackgroundJobs.ts:13 `import { startDataRetentionCleanupJob } from './dataRetentionCleanupJob.js';` and :27 `startDataRetentionCleanupJob();`",
+    "targetEvidence": "jobs/dataRetentionCleanupJob.ts:16 doc comment `Run with: startDataRetentionCleanupJob()` and :445 `export function startDataRetentionCleanupJob(...)` — the documented, intended external entry point.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟core-storage-abstraction␟jobs/fileBackupJob.ts␟import",
+    "classification": "B",
+    "reasoning": "startFileBackupJob is fileBackupJob.ts's sole exported symbol, designed as the module's external entry point, called from the same central job-bootstrapper pattern as every other scheduled job in this codebase (see the sibling dataRetentionCleanupJob edge above).",
+    "callerEvidence": "jobs/startBackgroundJobs.ts:20 `import { startFileBackupJob } from './fileBackupJob.js';` and :34 `startFileBackupJob();`",
+    "targetEvidence": "jobs/fileBackupJob.ts:34 `export function startFileBackupJob(): void { ... cron.schedule(...) }` — the only exported symbol, clearly the module's designed entry point.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/attachments.ts␟core-storage-abstraction␟utils/filePreview.ts␟import",
+    "classification": "C",
+    "reasoning": "isInlinePreviewable is a tiny shared mime-type-whitelist helper explicitly documented as generic ('shared whitelist for inline attachment preview'), used identically by every route that serves uploaded files. This is a textbook shared-utility edge, not a reach into private attachment-domain logic.",
+    "callerEvidence": "routes/attachments.ts:6 `import { isInlinePreviewable } from '../utils/filePreview.js';` and :259 `if (!isInlinePreviewable(attachment.mimeType)) {`",
+    "targetEvidence": "utils/filePreview.ts:1 doc comment 'shared whitelist for inline (in-browser) attachment preview' and :15 `export function isInlinePreviewable(mimeType: string): boolean`.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/attachments.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+    "classification": "C",
+    "reasoning": "isAllowedFileSignature is the shared magic-byte upload validator whose own doc comment says it was extracted from duplicated logic in attachments.ts and labOrders.ts specifically to be a shared cross-route utility.",
+    "callerEvidence": "routes/attachments.ts:5 `import { isAllowedFileSignature } from '../utils/fileSignature.js';` and :137 `if (!isAllowedFileSignature(req.file.buffer, req.file.mimetype, req.file.originalname, ALLOWED_EXTENSIONS_BY_MIME)) {`",
+    "targetEvidence": "utils/fileSignature.ts:4 doc comment 'attachments.ts ve labOrders.ts'teki kopya yardımcıların ortaklaştırılmış hali' (shared/consolidated helper from these exact two callers).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "openFileStream is fileStorage.ts's public streaming-read API, generically documented to work for any caller regardless of domain, local or S3 mode. clinicBulkExport.ts uses it exactly as intended: to stream a file back to the client.",
+    "callerEvidence": "routes/clinicBulkExport.ts:43 `import { openFileStream } from '../services/fileStorage.js';` and :436 `const stream = await openFileStream(validation.archive.storageKey);`",
+    "targetEvidence": "services/fileStorage.ts:105 `export async function openFileStream(ref: string): Promise<Readable | null>` — doc comment: 'Dosyayı okunabilir stream olarak açar' (generic, storage-mode-agnostic).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟utils/filePreview.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared inline-preview whitelist as the attachments.ts edge above, reused verbatim by the imaging route for the same purpose (deciding Content-Disposition).",
+    "callerEvidence": "routes/imaging.ts:28 `import { isInlinePreviewable } from '../utils/filePreview.js';` and :766 `if (mode === 'preview' && !isInlinePreviewable(image.mimeType) && !isDicom) {`",
+    "targetEvidence": "utils/filePreview.ts:15 `export function isInlinePreviewable(mimeType: string): boolean` — generic mime whitelist, no imaging-specific logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared magic-byte signature validator as the attachments.ts edge above; imaging.ts uses it to validate uploaded image/DICOM bytes against the declared mime type before storing.",
+    "callerEvidence": "routes/imaging.ts:27 `import { isAllowedFileSignature } from '../utils/fileSignature.js';` and :604 `if (!isAllowedFileSignature(req.file.buffer, effectiveMime, req.file.originalname, IMAGING_EXTENSIONS_BY_MIME)) {`",
+    "targetEvidence": "utils/fileSignature.ts:38 `export function isAllowedFileSignature(...)` — generic signature/extension/mime consistency check, DICOM support included generically.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared upload-signature validator reused a third time, here by the device-bridge's public ingestion endpoint, exactly the kind of any-domain-may-use shared utility the rubric describes.",
+    "callerEvidence": "routes/imagingBridgePublic.ts:33 `import { isAllowedFileSignature } from '../utils/fileSignature.js';` and :291 `if (!isAllowedFileSignature(req.file.buffer, effectiveMime, req.file.originalname, IMAGING_EXTENSIONS_BY_MIME)) {`",
+    "targetEvidence": "utils/fileSignature.ts:38 `export function isAllowedFileSignature(...)` — same generic helper as above.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟utils/filePreview.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared inline-preview whitelist used identically by the lab-orders attachment-preview route.",
+    "callerEvidence": "routes/labOrders.ts:5 `import { isInlinePreviewable } from '../utils/filePreview.js';` and :452 `if (!isInlinePreviewable(attachment.mimeType)) {`",
+    "targetEvidence": "utils/filePreview.ts:15 `export function isInlinePreviewable(mimeType: string): boolean`.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+    "classification": "C",
+    "reasoning": "labOrders.ts is literally one of the two files named in fileSignature.ts's own doc comment as the source this shared helper was extracted from — about as clear a shared-utility edge as exists in this codebase.",
+    "callerEvidence": "routes/labOrders.ts:4 `import { isAllowedFileSignature } from '../utils/fileSignature.js';` and :348 `if (!isAllowedFileSignature(req.file.buffer, req.file.mimetype, req.file.originalname, ALLOWED_EXTENSIONS_BY_MIME)) {`",
+    "targetEvidence": "utils/fileSignature.ts:4 'attachments.ts ve labOrders.ts'teki kopya yardımcıların ortaklaştırılmış hali'.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/messages.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/communicationConsentPolicy.ts␟import",
+    "classification": "B",
+    "reasoning": "assertCommunicationPermission is explicitly documented as 'the flag-aware wrapper every outbound sender should call' before dispatching a patient-facing message — this is the KVKK-HIGH-007 consent domain's designed, published entry point for exactly this kind of cross-domain caller.",
+    "callerEvidence": "routes/messages.ts:23 `import { assertCommunicationPermission } from '../services/communicationConsent/communicationConsentPolicy.js';` and :534 `const permission = await assertCommunicationPermission({...})`.",
+    "targetEvidence": "services/communicationConsent/communicationConsentPolicy.ts:214 doc comment 'Flag-aware wrapper every outbound sender should call before dispatching a patient-facing message.'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/noShows.ts␟core-notifications␟services/taskAssignmentNotifier.ts␟import",
+    "classification": "C",
+    "reasoning": "sendTaskAssignmentNotification is a self-contained notification-dispatch function (rubric explicitly lists 'notification dispatch' as a shared/platform pattern) with its own internal try/catch so a notification failure never breaks the caller's route logic.",
+    "callerEvidence": "routes/noShows.ts:24 `import { sendTaskAssignmentNotification } from '../services/taskAssignmentNotifier.js';` and :613 `await sendTaskAssignmentNotification(appointment.clinicId, task);`",
+    "targetEvidence": "services/taskAssignmentNotifier.ts:5 `export async function sendTaskAssignmentNotification(clinicId, task)` — generic single-purpose WhatsApp task-assignment notifier, not no-show-specific logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/patientPrivacy.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic openFileStream storage-abstraction read API as the clinicBulkExport.ts edge above, used here to stream a KVKK export archive back to the requesting admin.",
+    "callerEvidence": "routes/patientPrivacy.ts:34 `import { openFileStream } from '../services/fileStorage.js';` and :609 `const stream = await openFileStream(validation.archive.storageKey);`",
+    "targetEvidence": "services/fileStorage.ts:105 `export async function openFileStream(ref: string): Promise<Readable | null>`.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/paymentPlans.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "classification": "C",
+    "reasoning": "getClinicOperatingPreferences is a generic clinic-scoped settings getter (currency/timezone/locale/date format) — a cross-cutting, tenant-scope-config-resolution style utility any domain formatting money/dates for a clinic is expected to call, matching the rubric's 'tenant-scope resolution' / shared-config example.",
+    "callerEvidence": "routes/paymentPlans.ts:7 `import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';` and :145 `const operatingPreferences = await getClinicOperatingPreferences(clinicId);`",
+    "targetEvidence": "services/clinicOperatingPreferences.ts:162 `export async function getClinicOperatingPreferences(clinicId: string): Promise<ClinicOperatingPreferences>` — generic region/currency/timezone/date-format resolver with no payment-specific logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟jobs/dataRetentionCleanupJob.ts␟import",
+    "classification": "B",
+    "reasoning": "dataRetentionCleanupJob.ts's own doc comment names routes/platformAdmin.ts by file path as the intended second caller of this exact lock name/TTL/summary type, so the manual admin-triggered run and the scheduled cron never race — this is an explicit, documented cross-domain contract, not an incidental reach-in.",
+    "callerEvidence": "routes/platformAdmin.ts:12-13 `import type { DataRetentionSummary } from '../jobs/dataRetentionCleanupJob.js'; import { DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS } from '../jobs/dataRetentionCleanupJob.js';` and :1383 `holdingLock = await acquireJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS);`",
+    "targetEvidence": "jobs/dataRetentionCleanupJob.ts:435-443 'used by BOTH the scheduled cron below and the platform-admin manual run route (routes/platformAdmin.ts), so a manual live run and a scheduled tick ... can never execute their delete/anonymize batches ... at the same time.'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyConsentCorrection.ts␟import",
+    "classification": "B",
+    "reasoning": "legacyConsentCorrection.ts's doc comment explicitly names 'the PATCH settings route in platformAdmin.ts' as the intended caller for the transaction-scoped runtime-toggle read, and platformAdmin.ts implements exactly that PATCH/DELETE settings pair as the platform-admin kill-switch UI backend for this privacy feature.",
+    "callerEvidence": "routes/platformAdmin.ts:23-24 `import { LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, isLegacyConsentCorrectionRuntimeEnabled } from ...` and :1100-1143 the PATCH `/privacy/legacy-consent-correction/settings` handler.",
+    "targetEvidence": "services/communicationConsent/legacyConsentCorrection.ts:56-61 'Pass a Prisma.TransactionClient to read the value from inside a caller's transaction — see the PATCH settings route in platformAdmin.ts'.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟services/privacy/dataRetentionManualRunAudit.ts␟import",
+    "classification": "B",
+    "reasoning": "dataRetentionManualRunAudit.ts's module doc comment literally names 'POST /api/platform/privacy/data-retention/run (routes/platformAdmin.ts)' as the caller this entire audit module exists to serve — the clearest possible documented public-contract edge in this batch.",
+    "callerEvidence": "routes/platformAdmin.ts:16-19 `import { recordManualRunStarted, recordManualRunTerminal, recordManualRunTerminalOnly, type DataRetentionManualRunTerminalOutcome } from ...` and calls at :1281, :1299, :1428, :1476.",
+    "targetEvidence": "services/privacy/dataRetentionManualRunAudit.ts:2-9 'dataRetentionManualRunAudit.ts — RETENTION-MANUAL-RUN-AUDIT-001 ... Durable, two-phase audit trail for POST /api/platform/privacy/data-retention/run (routes/platformAdmin.ts).'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/platformExternalCalendar.ts␟core-platform-administration␟middleware/platformAuth.ts␟import",
+    "classification": "C",
+    "reasoning": "authenticatePlatformAdmin/PlatformAdminRequest is the shared platform-admin authentication middleware every platform-scoped route in the codebase must mount; this is the textbook 'auth/authorization middleware' example from the rubric.",
+    "callerEvidence": "routes/platformExternalCalendar.ts:21 `import { authenticatePlatformAdmin, PlatformAdminRequest } from '../middleware/platformAuth.js';` and :48 `router.use(authenticatePlatformAdmin as express.RequestHandler, csrfProtection('platform'));`",
+    "targetEvidence": "middleware/platformAuth.ts:18 `export const authenticatePlatformAdmin = (req, res, next) => {...}` — generic JWT-based platform-admin session verifier, no calendar-integration-specific logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/platformSecurityIncidents.ts␟core-platform-administration␟middleware/platformAuth.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared platform-admin auth middleware as the previous edge, mounted identically to gate every route in this file.",
+    "callerEvidence": "routes/platformSecurityIncidents.ts:15 `import { authenticatePlatformAdmin, PlatformAdminRequest } from '../middleware/platformAuth.js';` and :46 `router.use(authenticatePlatformAdmin as express.RequestHandler, csrfProtection('platform'));`",
+    "targetEvidence": "middleware/platformAuth.ts:18 `export const authenticatePlatformAdmin = ...` — generic, domain-agnostic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/publicBooking.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+    "classification": "B",
+    "reasoning": "buildAvailableSlots/localDateTimeToClinicDate/DEFAULT_SLOT_DURATION_MINUTES are cleanly exported, well-typed public functions that compute the canonical appointment-slot availability; publicBooking.ts's own comments ('buildAvailableSlots used to compute the localStartTime the customer...', 'Mirrors buildAvailableSlots') show deliberate reuse of the single availability engine to avoid divergent slot logic between the WhatsApp bot flow and the public booking widget, rather than reaching into private internals.",
+    "callerEvidence": "routes/publicBooking.ts:10 `import { buildAvailableSlots, localDateTimeToClinicDate, DEFAULT_SLOT_DURATION_MINUTES } from '../services/whatsappAvailability.js';` and :150, :277, :286 usages with explanatory comments about mirroring the same computation.",
+    "targetEvidence": "services/whatsappAvailability.ts:156 `export const buildAvailableSlots = async (...)` — despite the filename, this is generic clinic-availability computation (working hours, off-days, overlap checks), not WhatsApp-specific, and correctly domain-mapped to clinical-appointments-availability.",
+    "followUpRequired": "File name 'whatsappAvailability.ts' is misleading given its content is generic slot-computation logic shared by both the WhatsApp bot and the public booking route; consider a rename to reduce future domain-map ambiguity (not urgent)."
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-notifications␟services/taskAssignmentNotifier.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic sendTaskAssignmentNotification notification-dispatch function as the noShows.ts edge above, used here from the tasks route that actually creates/reassigns the task.",
+    "callerEvidence": "routes/tasks.ts:8 `import { sendTaskAssignmentNotification } from '../services/taskAssignmentNotifier.js';` and :140 `await sendTaskAssignmentNotification(clinicId, updated);`",
+    "targetEvidence": "services/taskAssignmentNotifier.ts:5 `export async function sendTaskAssignmentNotification(clinicId, task)`.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/googleAiStudio.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
+    "classification": "C",
+    "reasoning": "redaction.ts's own doc comment declares itself 'THE single AI prompt privacy boundary for every active Gemini/Google AI Studio call path' and names googleAiStudio.ts explicitly as one of its three intended callers — this is a shared, cross-cutting PII-scrubbing gate any AI-calling code must route through, analogous to the rubric's encryption/secrets example.",
+    "callerEvidence": "services/googleAiStudio.ts:2 `import { getAiCustomerNamePlaceholder, redactSensitiveText } from './privacy/redaction.js';` and :159, :163, :215, :264 usages wrapping every piece of customer text sent to the AI provider.",
+    "targetEvidence": "services/privacy/redaction.ts:4-6 'This module is THE single AI prompt privacy boundary for every active Gemini/Google AI Studio call path (googleAiStudio.ts extraction + date-normalization, ...)'.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/imaging/public.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "fileExists is a generic storage-abstraction existence check (S3 HEAD or local fs.existsSync) with no imaging-specific behavior, used here purely to confirm an image blob is present before serving it.",
+    "callerEvidence": "services/imaging/public.ts:74 `import { fileExists } from '../fileStorage.js';` and :350 `let storageExistenceChecker: (ref: string) => Promise<boolean> = fileExists;`",
+    "targetEvidence": "services/fileStorage.ts:162 `export async function fileExists(ref: string): Promise<boolean>` — generic, storage-mode-agnostic existence check.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/dataRetentionManualRunAudit.ts␟core-platform-administration␟services/platformAdminAudit.ts␟import",
+    "classification": "C",
+    "reasoning": "writePlatformAdminAuditEventInTx is the shared, generic platform-admin audit-log writer (transaction-client-only signature, PlatformAdminAuditEvent table) — the rubric's 'audit logging' cross-cutting example — used by the privacy domain's manual-run audit trail exactly as it is used by every other platform-admin-triggered mutation.",
+    "callerEvidence": "services/privacy/dataRetentionManualRunAudit.ts:63 `import { writePlatformAdminAuditEventInTx } from '../platformAdminAudit.js';` and :140, :178 usages inside `prisma.$transaction`.",
+    "targetEvidence": "services/platformAdminAudit.ts:38 `export async function writePlatformAdminAuditEventInTx(tx, input)` — doc comment: generic durable audit trail for 'Platform Admin configuration changes', not privacy-specific.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/orphanFileInspection.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic fileExists storage-abstraction check as the imaging/public.ts edge above, used here to confirm whether attachment/image DB rows still have a backing file on disk/S3.",
+    "callerEvidence": "services/privacy/orphanFileInspection.ts:32 `import { fileExists } from '../fileStorage.js';` and :74, :84 `const exists = await fileExists(attachment.filePath); ... const exists = await fileExists(image.filePath);`",
+    "targetEvidence": "services/fileStorage.ts:162 `export async function fileExists(ref: string): Promise<boolean>`.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟clinical-patients␟routes/attachments.ts␟import",
+    "classification": "H",
+    "reasoning": "ATTACHMENT_MAX_FILE_SIZE_BYTES is a trivial numeric constant (10 MB multer limit), not business logic or PII, so the risk is low — but this is a genuine reverse-layering coupling: a privacy-domain SERVICE importing a constant out of a ROUTE file, which inverts the codebase's normal routes-call-services direction and reaches across into clinical-patients' route module rather than a shared constants file. It reads as pre-existing convenience code ('reuse the attachment upload cap'), not new/deliberate coupling, so LEGACY_TECHNICAL_DEBT fits better than a fresh violation.",
+    "callerEvidence": "services/privacy/patientPrivacyExportPackage.ts:46 `import { ATTACHMENT_MAX_FILE_SIZE_BYTES } from '../../routes/attachments.js';` and :69 `export const EXPORT_MAX_FILE_SIZE_BYTES = ATTACHMENT_MAX_FILE_SIZE_BYTES; // reuse the attachment upload cap`",
+    "targetEvidence": "routes/attachments.ts:60 `export const ATTACHMENT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB` — a plain config constant defined inline in a route file rather than a shared constants module.",
+    "followUpRequired": "Consider extracting ATTACHMENT_MAX_FILE_SIZE_BYTES into a shared constants/config module so services never need to import from a routes/ file; low priority given the constant carries no business logic or PII."
+  },
+  {
+    "edgeKey": "server/src/services/recallCandidateService.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyReconciliationResolver.ts␟import",
+    "classification": "B",
+    "reasoning": "legacyReconciliationResolver.ts's module doc comment explicitly names 'SMS, recall drafting' as the two legacy-gated senders this module exists to serve, and states 'This module is the single orchestration point both senders call' — recallCandidateService.ts is literally one of the two named, intended callers.",
+    "callerEvidence": "services/recallCandidateService.ts:8 `import { resolveCommunicationConsent, type LegacyGateSignal } from './communicationConsent/legacyReconciliationResolver.js';` and :415-418 building a `LegacyGateSignal` and calling `resolveCommunicationConsent(legacySignal, {...})`.",
+    "targetEvidence": "services/communicationConsent/legacyReconciliationResolver.ts:8-15 'senders that predate the central ... system (SMS, recall drafting) ... This module is the single orchestration point both senders call instead of chaining two independent checks'.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsCommunicationPurposeMap.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
+    "classification": "C",
+    "reasoning": "CommunicationPurpose is imported as a type-only reference (`import type`) into a small mapping-table file whose entire purpose (per its own doc comment) is to translate the SMS module's local purpose enum onto the central shared taxonomy — this is intentional reuse of a shared vocabulary/type, with zero runtime coupling.",
+    "callerEvidence": "services/sms/smsCommunicationPurposeMap.ts:13 `import type { CommunicationPurpose } from '../communicationConsent/taxonomy.js';` — doc comment: 'Maps the SMS module's own purpose ... onto the central KVKK-HIGH-007 consent CommunicationPurpose taxonomy'.",
+    "targetEvidence": "services/communicationConsent/taxonomy.ts:19-33 `export const COMMUNICATION_PURPOSES = [...] as const; export type CommunicationPurpose = ...` — a shared, cross-domain vocabulary type by design.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsService.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyReconciliationResolver.ts␟import",
+    "classification": "B",
+    "reasoning": "Same explicitly-named contract as the recallCandidateService.ts edge above — smsService.ts is the 'SMS' sender legacyReconciliationResolver.ts's doc comment names as one of its two intended callers.",
+    "callerEvidence": "services/sms/smsService.ts:36 `import { resolveCommunicationConsent, type LegacyGateSignal } from '../communicationConsent/legacyReconciliationResolver.js';` and :179-183 building `legacySignal` and calling `resolveCommunicationConsent(legacySignal, {...})`.",
+    "targetEvidence": "services/communicationConsent/legacyReconciliationResolver.ts:8-15 'senders that predate the central ... system (SMS, recall drafting) ... single orchestration point both senders call'.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/treatmentStockDeduction.ts␟inventory␟services/inventoryAlerts.ts␟import",
+    "classification": "C",
+    "reasoning": "checkAndNotifyLowStock is a small, self-contained notification-dispatch function (checks a threshold, then upserts a notification row) documented generically as running 'after any stock deduction' regardless of which domain triggered the deduction, and it fails silently so it can never break the caller — matching the rubric's 'notification dispatch' shared-pattern example.",
+    "callerEvidence": "services/treatmentStockDeduction.ts:3 `import { checkAndNotifyLowStock } from './inventoryAlerts.js';` and :190 `await checkAndNotifyLowStock(context.clinicId, requirement.inventoryItemId, tx);`",
+    "targetEvidence": "services/inventoryAlerts.ts:8 `// Creates or refreshes the low-stock notification after any stock deduction.` and :9 `export async function checkAndNotifyLowStock(clinicId, itemId, client = prisma)`, wrapped in try/catch swallowing all errors.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
+    "classification": "C",
+    "reasoning": "sanitizeAiMessageHistory is part of the same documented single AI-prompt privacy boundary as the googleAiStudio.ts edge above; metaWhatsAppAiProcessor.ts is exactly the kind of AI-call-path caller this module exists to serve.",
+    "callerEvidence": "services/whatsapp/metaWhatsAppAiProcessor.ts:69 `import { sanitizeAiMessageHistory } from '../privacy/redaction.js';` and :2464 `recentMessages: sanitizeAiMessageHistory(...)`.",
+    "targetEvidence": "services/privacy/redaction.ts:308 `export const sanitizeAiMessageHistory = (messages, options) => {...}` — generic message-history trimming/redaction for any AI prompt builder.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
+    "classification": "C",
+    "reasoning": "Same type-only shared-taxonomy import pattern as smsCommunicationPurposeMap.ts; this file's own doc comment says it 'Mirrors server/src/services/sms/smsCommunicationPurposeMap.ts exactly', confirming the intentional, repeated shared-vocabulary pattern.",
+    "callerEvidence": "services/whatsapp/whatsappCommunicationPurposeMap.ts:21 `import type { CommunicationPurpose } from '../communicationConsent/taxonomy.js';` — doc comment :7 'Mirrors server/src/services/sms/smsCommunicationPurposeMap.ts exactly'.",
+    "targetEvidence": "services/communicationConsent/taxonomy.ts:33 `export type CommunicationPurpose = (typeof COMMUNICATION_PURPOSES)[number];` — shared taxonomy type.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/communicationConsentPolicy.ts␟import",
+    "classification": "B",
+    "reasoning": "Same documented public entry point as the messages.ts edge above: assertCommunicationPermission is 'the flag-aware wrapper every outbound sender should call before dispatching a patient-facing message', and whatsappOutboundMessaging.ts is precisely such an outbound sender.",
+    "callerEvidence": "services/whatsapp/whatsappOutboundMessaging.ts:31 `import { assertCommunicationPermission } from '../communicationConsent/communicationConsentPolicy.js';` and :114 `const permission = await assertCommunicationPermission({...})`.",
+    "targetEvidence": "services/communicationConsent/communicationConsentPolicy.ts:214 'Flag-aware wrapper every outbound sender should call before dispatching a patient-facing message.'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/enforcementConfig.ts␟import",
+    "classification": "C",
+    "reasoning": "getCommunicationConsentEnforcementMode/isCommunicationConsentEnforcementEnabled are plain env-var-backed rollout-flag readers with no side effects and no privacy-domain business logic; every outbound sender is expected to read these directly to decide audit-vs-enforce behavior, a feature-flag-style shared config pattern.",
+    "callerEvidence": "services/whatsapp/whatsappOutboundMessaging.ts:34-35 `import { isCommunicationConsentEnforcementEnabled, getCommunicationConsentEnforcementMode } from ...` and :95, :99 usages.",
+    "targetEvidence": "services/communicationConsent/enforcementConfig.ts:36-43 `export function isCommunicationConsentEnforcementEnabled(): boolean { return process.env.COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED === 'true'; }` and sibling mode getter — pure env-flag readers.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
+    "classification": "C",
+    "reasoning": "Same type-only shared-vocabulary import as the two purpose-map edges above (`import type { CommunicationPurpose }`), used here to type the `consentPurpose` field passed into assertCommunicationPermission.",
+    "callerEvidence": "services/whatsapp/whatsappOutboundMessaging.ts:32 `import type { CommunicationPurpose } from '../communicationConsent/taxonomy.js';` and :73 `consentPurpose: CommunicationPurpose;`.",
+    "targetEvidence": "services/communicationConsent/taxonomy.ts:33 `export type CommunicationPurpose = ...` — shared taxonomy type.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappConversationAgent.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
+    "classification": "C",
+    "reasoning": "Same documented single AI-prompt privacy boundary as the two other redaction.ts edges above; whatsappConversationAgent.ts is one of the three call paths the module doc comment names explicitly ('whatsappAgentPrompt.ts conversation-agent decisions').",
+    "callerEvidence": "services/whatsappConversationAgent.ts:7 `import { redactSensitiveText } from './privacy/redaction.js';` and :283 `throw new Error(\\`WhatsApp conversation agent failed with ${response.status}: ${redactSensitiveText(errorText)}\\`);`",
+    "targetEvidence": "services/privacy/redaction.ts:4-9 'the single AI prompt privacy boundary for every active Gemini/Google AI Studio call path (... whatsappAgentPrompt.ts conversation-agent decisions ...)'.",
+    "followUpRequired": "none"
+  }
+]

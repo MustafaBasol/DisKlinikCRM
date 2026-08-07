@@ -1,0 +1,706 @@
+[
+  {
+    "edgeKey": "server/src/services/security/securitySignalService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/security/securitySignalService.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-security-incident-detection",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "54b180c99d9da3d1"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "security-incident (extension)"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/fileBackupDestination.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "callerPath": "server/src/services/fileBackupDestination.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/safeError.ts",
+    "accessKind": "import",
+    "callerDomain": "core-storage-abstraction",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "bb66cc4c32eda0e7"
+    ],
+    "callerSymbols": [
+      "safeErrorFields"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "storage"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-storage-abstraction",
+    "inclusionProbability": 0.7894736842105263
+  },
+  {
+    "edgeKey": "server/src/services/fileBackupService.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "callerPath": "server/src/services/fileBackupService.ts",
+    "ownerDomain": "core-shared-events-queue-idempotency",
+    "targetModelOrSymbol": "utils/jobLock.ts",
+    "accessKind": "import",
+    "callerDomain": "core-storage-abstraction",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "8c8dd92faca3bc00"
+    ],
+    "callerSymbols": [
+      "withJobLock"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "storage"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-storage-abstraction",
+    "inclusionProbability": 0.7894736842105263
+  },
+  {
+    "edgeKey": "server/src/services/fileBackupService.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "callerPath": "server/src/services/fileBackupService.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/safeError.ts",
+    "accessKind": "import",
+    "callerDomain": "core-storage-abstraction",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "edf3cf4e2b5dd425"
+    ],
+    "callerSymbols": [
+      "safeErrorFields"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "storage"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-storage-abstraction",
+    "inclusionProbability": 0.7894736842105263
+  },
+  {
+    "edgeKey": "server/src/services/fileStorage.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/fileStorage.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "core-storage-abstraction",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "f8fd33241069dec6"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "storage"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-storage-abstraction",
+    "inclusionProbability": 0.7894736842105263
+  },
+  {
+    "edgeKey": "server/src/services/fileStorage.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "callerPath": "server/src/services/fileStorage.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/safeError.ts",
+    "accessKind": "import",
+    "callerDomain": "core-storage-abstraction",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "fe06668d1ebc068b"
+    ],
+    "callerSymbols": [
+      "safeErrorFields"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "storage"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-storage-abstraction",
+    "inclusionProbability": 0.7894736842105263
+  },
+  {
+    "edgeKey": "server/src/jobs/externalCalendarInboundRetryJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/jobs/externalCalendarInboundRetryJob.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "e60a3081f98fdc4e"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "jobs -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/jobs/externalCalendarOutboundSyncJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "callerPath": "server/src/jobs/externalCalendarOutboundSyncJob.ts",
+    "ownerDomain": "core-shared-events-queue-idempotency",
+    "targetModelOrSymbol": "utils/jobLock.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "80a3e63acd8e59d9"
+    ],
+    "callerSymbols": [
+      "withJobLock"
+    ],
+    "edgeShape": "jobs -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/jobs/externalCalendarOutboundSyncJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/jobs/externalCalendarOutboundSyncJob.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "6b36e2ce8df57fe2"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "jobs -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/routes/externalCalendarOutboundSyncStatus.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/externalCalendarOutboundSyncStatus.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "0007bbc1e179dce7"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/routes/platformExternalCalendar.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/platformExternalCalendar.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a3ddaee978ec1fb3"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarConnectionService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/externalCalendar/externalCalendarConnectionService.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "ca37eacaac0da445"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarIdempotency.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/externalCalendar/externalCalendarIdempotency.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "ea9fa6932ab8cb5e"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarMappingService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/externalCalendar/externalCalendarMappingService.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "db0754e2720287b9"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts␟core-observability-ops-events␟services/operationalEventService.ts␟import",
+    "callerPath": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts",
+    "ownerDomain": "core-observability-ops-events",
+    "targetModelOrSymbol": "services/operationalEventService.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "e0a9cdbe613cda9d"
+    ],
+    "callerSymbols": [
+      "recordOperationalEvent"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+    "callerPath": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts",
+    "ownerDomain": "core-observability-ops-events",
+    "targetModelOrSymbol": "utils/logger.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "3f64d8672809e415"
+    ],
+    "callerSymbols": [
+      "logger"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "b0641b69f515c2ac"
+    ],
+    "callerSymbols": [
+      "getZonedDateTimeParts"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "integrations"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:external-calendar-integration",
+    "inclusionProbability": 0.8333333333333334
+  },
+  {
+    "edgeKey": "server/src/routes/compensationRules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/compensationRules.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "0650298d9eb46550"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/compensationRules.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/routes/compensationRules.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "2b24079eb436da16",
+      "6e3a5abb5be9d8dc"
+    ],
+    "callerSymbols": [
+      "practitionerCompensationRuleSchema",
+      "serviceCompensationRuleSchema"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/compensationRules.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/compensationRules.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "0e230ae1a1ac65aa"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/financeDashboard.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/financeDashboard.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "ca7aed61c0b0e3c2"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/financeDashboard.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/financeDashboard.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "6c8be0db0a830e7c"
+    ],
+    "callerSymbols": [
+      "getDateRange"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/practitionerEarnings.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "c1e6b7f77ffcf1c8"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/routes/practitionerEarnings.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "2a132ebb5cc7ce0a"
+    ],
+    "callerSymbols": [
+      "earningAdjustSchema"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/practitionerEarnings.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "c1c0bd497a7cb92d"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/routes/practitionerPayouts.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "caaa452d31227197"
+    ],
+    "callerSymbols": [
+      "practitionerPayoutSchema"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/practitionerPayouts.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "4005d392a8049250"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  }
+]

@@ -1,0 +1,706 @@
+[
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟clinical-appointments-availability␟routes/contactRequests.ts␟import",
+    "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+    "ownerDomain": "clinical-appointments-availability",
+    "targetModelOrSymbol": "routes/contactRequests.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "4817db0578d3bbfb"
+    ],
+    "callerSymbols": [
+      "upsertContactRequest"
+    ],
+    "edgeShape": "services -> routes",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+    "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+    "ownerDomain": "clinical-appointments-availability",
+    "targetModelOrSymbol": "services/whatsappAvailability.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "0e13e80b6dabe39e",
+      "d81cb60db3da12d4"
+    ],
+    "callerSymbols": [
+      "SavedAvailableSlot",
+      "buildAvailableSlots"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟core-observability-ops-events␟services/operationalEventService.ts␟import",
+    "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+    "ownerDomain": "core-observability-ops-events",
+    "targetModelOrSymbol": "services/operationalEventService.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "299a29be8bec6c4c"
+    ],
+    "callerSymbols": [
+      "recordOperationalEvent"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "505be83f85124bdc"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "0d758d0be99b7b88",
+      "1df2fc9829e15e6f",
+      "976a1f320697ebaa"
+    ],
+    "callerSymbols": [
+      "checkPractitionerAvailability",
+      "formatClinicDateTime",
+      "minutesToTime"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramClinicResolver.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/instagram/instagramClinicResolver.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a3502bd1fa27100f"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/utils/inboundRateLimiter.ts␟core-shared-platform-infrastructure␟utils/counterStore.ts␟import",
+    "callerPath": "server/src/utils/inboundRateLimiter.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/counterStore.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-shared-channel-infrastructure",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "d12be40264cdd778"
+    ],
+    "callerSymbols": [
+      "createCounterStore"
+    ],
+    "edgeShape": "utils -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/sms.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/sms.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-sms",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "62c01374045855a8"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-sms",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/sms.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/routes/sms.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-sms",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "b20bb12e00c80940"
+    ],
+    "callerSymbols": [
+      "smsSendSchema"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-sms",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/sms.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+    "callerPath": "server/src/routes/sms.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/prismaSelects.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-sms",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "68be5caa771a10a7",
+      "c92f0eae7103d70e"
+    ],
+    "callerSymbols": [
+      "patientContactSelect",
+      "userNameSelect"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-sms",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/sms/platformSmsProviders.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/sms/platformSmsProviders.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-sms",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "2f6a6a961b682871"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-sms",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsEntitlement.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/sms/smsEntitlement.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-sms",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "53f4eed3a9be6466"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-sms",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsService.ts␟core-observability-ops-events␟services/operationalEventService.ts␟import",
+    "callerPath": "server/src/services/sms/smsService.ts",
+    "ownerDomain": "core-observability-ops-events",
+    "targetModelOrSymbol": "services/operationalEventService.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-sms",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a6650b358fd81879"
+    ],
+    "callerSymbols": [
+      "recordOperationalEvent"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-sms",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsTemplating.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "callerPath": "server/src/services/sms/smsTemplating.ts",
+    "ownerDomain": "core-org-clinic-membership",
+    "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-sms",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "40daf349fd87e03c"
+    ],
+    "callerSymbols": [
+      "getClinicOperatingPreferences"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-sms",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/messages.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/routes/messages.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "3cc15bd1748137e7",
+      "436e8b5ea4aeda13",
+      "f7a61e4c51ff6227"
+    ],
+    "callerSymbols": [
+      "MessageTemplatePurpose",
+      "messageTemplateSchema",
+      "prepareMessageSchema"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/routes/messages.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+    "callerPath": "server/src/routes/messages.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/prismaSelects.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "42460f210e6ed94c",
+      "4c6c130e4ca81d1c",
+      "bd228ebbe200deb4"
+    ],
+    "callerSymbols": [
+      "patientContactSelect",
+      "userNameSelect",
+      "userPublicSelect"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/organizationWhatsApp.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "35fe6f408428671c"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟clinical-appointments-availability␟services/appointments/appointmentAvailabilityService.ts␟import",
+    "callerPath": "server/src/routes/whatsapp.ts",
+    "ownerDomain": "clinical-appointments-availability",
+    "targetModelOrSymbol": "services/appointments/appointmentAvailabilityService.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "973c834c88991e83"
+    ],
+    "callerSymbols": [
+      "checkPractitionerAvailabilityForSlot"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+    "callerPath": "server/src/routes/whatsapp.ts",
+    "ownerDomain": "clinical-appointments-availability",
+    "targetModelOrSymbol": "services/whatsappAvailability.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 4,
+    "findingIds": [
+      "277d55f6c63b3487",
+      "8efe2a2987126329",
+      "cbad3bd77e0f6954",
+      "e32e856c6a64447e"
+    ],
+    "callerSymbols": [
+      "SavedAvailableSlot",
+      "buildAvailableSlots",
+      "loadAvailabilityForDate",
+      "saveSlotsForState"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "callerPath": "server/src/routes/whatsapp.ts",
+    "ownerDomain": "core-org-clinic-membership",
+    "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "1a9ec4b7442fe906",
+      "710f127b39bda412"
+    ],
+    "callerSymbols": [
+      "ClinicOperatingPreferences",
+      "getClinicOperatingPreferences"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/whatsapp.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "0eb0173981859740"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/routes/whatsappInbox.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/whatsappInbox.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "9b262e94d1f5c8c6"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/clinicResolver.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/whatsapp/clinicResolver.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "f4f8e74519f973ab"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/conversationMessageStore.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/whatsapp/conversationMessageStore.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "484ac1ae72408d00"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟clinical-appointments-availability␟services/appointmentRequestSafety.ts␟import",
+    "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+    "ownerDomain": "clinical-appointments-availability",
+    "targetModelOrSymbol": "services/appointmentRequestSafety.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "7bd2e68b2c289b62",
+      "dc41df8a8b2402fa",
+      "eedf1a1e0e8ee3b1"
+    ],
+    "callerSymbols": [
+      "SlotConflictError",
+      "acquireAppointmentSlotLock",
+      "assertSlotAvailable"
+    ],
+    "edgeShape": "services -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "6ab3a9e2783cdc83"
+    ],
+    "callerSymbols": [
+      "MessageTemplatePurpose"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:messaging-whatsapp",
+    "inclusionProbability": 0.42857142857142855
+  }
+]

@@ -1,0 +1,245 @@
+[
+  {
+    "edgeKey": "server/src/routes/appointmentRequests.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+    "classification": "C",
+    "reasoning": "appointmentRequests.ts imports the shared pino structural logger for a fire-and-forget error log line. logger.ts is generic platform observability infra with no domain-specific logic, designed to be imported by any route/service.",
+    "callerEvidence": "server/src/routes/appointmentRequests.ts:21 `import { logger } from '../utils/logger.js';`; used at line 479 `.catch(err => logger.error({ appointmentId: appointment.id, clinicId, err }, 'appointment-requests: post-conversion sync/notify failed'))`",
+    "targetEvidence": "server/src/utils/logger.ts:20-27 exports a generic pino logger instance (`export const logger = pino({...})`) with allowlisted structured-logging fields; no domain-specific behavior.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/paymentPlans.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton used throughout the codebase for DB access. No domain-specific logic in db.ts.",
+    "callerEvidence": "server/src/routes/paymentPlans.ts:2 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 constructs and exports a single shared `PrismaClient` instance (`export default prisma;`) — pure platform infrastructure.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/paymentPlans.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "paymentPlans.ts imports `getParam`, a generic request-param extraction helper with no finance-specific logic, from the shared utils/helpers.ts grab-bag.",
+    "callerEvidence": "server/src/routes/paymentPlans.ts:5 `import { getParam } from '../utils/helpers.js';`",
+    "targetEvidence": "server/src/utils/helpers.ts:7-10 `export const getParam = (req: AuthRequest, key: string): string => { const value = req.params[key]; return Array.isArray(value) ? value[0] : value; };` — a generic, domain-agnostic helper.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "classification": "B",
+    "reasoning": "payments.ts calls the exported public function `getClinicOperatingPreferences(clinicId)` to fetch the clinic's default currency for a payment, going through the service's designed public API rather than reaching into its internals (prisma access, region-default tables, etc. all stay encapsulated in the service).",
+    "callerEvidence": "server/src/routes/payments.ts:10 `import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';`; used at line 75 `const operatingPreferences = await getClinicOperatingPreferences(clinicId);` then line 78 `currency: req.body.currency || operatingPreferences.currency`.",
+    "targetEvidence": "server/src/services/clinicOperatingPreferences.ts:162-185 exports `getClinicOperatingPreferences` as a clean async function returning normalized clinic-level operating preferences (currency/timezone/locale/etc.), with all Prisma/normalization detail internal to the service.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton.",
+    "callerEvidence": "server/src/routes/payments.ts:2 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "payments.ts imports `paymentSchema` from the shared, 687-line zod schema registry file `schemas/index.ts`, which aggregates request-validation schemas across many domains (finance, privacy, insurance, etc.) and is correctly domain-mapped as shared platform infra.",
+    "callerEvidence": "server/src/routes/payments.ts:6 `import { paymentSchema } from '../schemas/index.js';`; used at lines 76 and 138 for request body validation.",
+    "targetEvidence": "server/src/schemas/index.ts:292 `export const paymentSchema = z.object({...})` is one of dozens of unrelated schemas in this shared 687-line registry file (e.g. insuranceTypes, optionalUuid, legacySmsOptOutCorrectionSchema).",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic `getParam` helper as the paymentPlans.ts edge above; no finance-specific logic.",
+    "callerEvidence": "server/src/routes/payments.ts imports `getParam` from '../utils/helpers.js' (confirmed present alongside other utils imports in the file's import block).",
+    "targetEvidence": "server/src/utils/helpers.ts:7-10 generic param-extraction helper, domain-agnostic.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+    "classification": "C",
+    "reasoning": "payments.ts imports `patientContactSelect`, one of many generic reusable Prisma `select` projection objects (alongside userNameSelect, userPublicSelect, etc.) in the shared utils/prismaSelects.ts file, used here simply to shape a nested `patient` relation in a query.",
+    "callerEvidence": "server/src/routes/payments.ts:12 `import { patientContactSelect } from '../utils/prismaSelects.js';`; used at line 48 `patient: { select: patientContactSelect }`.",
+    "targetEvidence": "server/src/utils/prismaSelects.ts:30 `export const patientContactSelect = {...}` sits among other cross-domain select fragments (userNameSelect, userPublicSelect, userNameRoleSelect) in a shared utility file, not a finance-owned artifact.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/publicBooking.ts␟clinical-appointments-availability␟services/appointments/appointmentAvailabilityService.ts␟import",
+    "classification": "B",
+    "reasoning": "The target service's own header doc explicitly states it is the central, designed public contract for availability logic: \"All booking channels (AI flows, staff panel, public widget) and conversion paths should use these functions.\" publicBooking.ts (the public widget) consuming `checkPractitionerAvailabilityForSlot`, `acquireAppointmentSlotLock`, `assertSlotAvailable`, and `SlotConflictError` is exactly the intended cross-domain usage pattern, not a bypass of any abstraction.",
+    "callerEvidence": "server/src/routes/publicBooking.ts:5-8 imports `checkPractitionerAvailabilityForSlot, acquireAppointmentSlotLock, assertSlotAvailable, SlotConflictError` from '../services/appointments/appointmentAvailabilityService.js'; used at lines 336, 353, 361, 397.",
+    "targetEvidence": "server/src/services/appointments/appointmentAvailabilityService.ts:1-30 header comment: \"Central service for appointment availability logic. All booking channels (AI flows, staff panel, public widget) and conversion paths should use these functions...\"; line 110 exports `checkPractitionerAvailabilityForSlot`, and lines 52-59 re-export `assertSlotAvailable`, `acquireAppointmentSlotLock`, `SlotConflictError` from appointmentRequestSafety.js for single-import convenience.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/utils/auditLog.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "auditLog.ts is itself a shared cross-domain utility (imported by routes across many domains for `writeAuditLog`); its own import of the shared Prisma client to persist `AuditLog` rows is core platform infrastructure usage, not a domain violation.",
+    "callerEvidence": "server/src/utils/auditLog.ts:12 `import prisma from '../db.js';`; used at line 39 `await prisma.auditLog.create({...})`.",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/settings.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "classification": "B",
+    "reasoning": "settings.ts is the natural consumer/administration surface for clinic-level settings and calls the service's exported public API (`clinicOperatingPreferencesSchema`, `getClinicOperatingPreferences`, `upsertClinicOperatingPreferences`) to read/update operating preferences, without touching Prisma or internal region-default logic directly.",
+    "callerEvidence": "server/src/routes/settings.ts:10-14 `import { clinicOperatingPreferencesSchema, getClinicOperatingPreferences, upsertClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';`; used at line 88 `clinicOperatingPreferencesSchema.safeParse(...)`.",
+    "targetEvidence": "server/src/services/clinicOperatingPreferences.ts exports a clean public API (schema + getter + upserter) for clinic operating preferences; internals (Prisma calls, region defaults) stay encapsulated.",
+    "followUpRequired": "The service lives under core-org-clinic-membership but is consumed for config/settings purposes by both a payments route and a settings/config route — a reasonable case could be made this belongs in a shared config domain rather than org/clinic-membership. Not fixing, just flagging for future domain-map review.",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/services/platformSettings.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton.",
+    "callerEvidence": "server/src/services/platformSettings.ts:1 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/utils/passwordStepUp.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton for a shared auth utility.",
+    "callerEvidence": "server/src/utils/passwordStepUp.ts:23 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/jobs/clinicBulkExportCleanupJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "classification": "C",
+    "reasoning": "withJobLock is a generic, documented shared cron-lock utility (\"Cron job'lar için paylaşımlı lease kilidi\") used by many unrelated jobs to prevent duplicate concurrent runs across replicas — pure platform infrastructure with no privacy/retention-specific logic.",
+    "callerEvidence": "server/src/jobs/clinicBulkExportCleanupJob.ts:17 `import { withJobLock } from '../utils/jobLock.js';`",
+    "targetEvidence": "server/src/utils/jobLock.ts:1-18 header doc describes a generic DB-table-backed lease lock shared by all cron jobs (\"Süreç-içi overlap bayrakları tek süreçte yeterlidir ama API + ayrı worker ya da birden fazla replika çalıştığında...\").",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic shared cron-lock utility as above, used to prevent duplicate concurrent runs of the retention cleanup job.",
+    "callerEvidence": "server/src/jobs/dataRetentionCleanupJob.ts:29 `import { withJobLock } from '../utils/jobLock.js';`",
+    "targetEvidence": "server/src/utils/jobLock.ts:1-18 generic, domain-agnostic job-lease-lock utility.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton for the retention cleanup cron job.",
+    "callerEvidence": "server/src/jobs/dataRetentionCleanupJob.ts:22 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "classification": "C",
+    "reasoning": "safeErrorFields is a generic, documented log-sanitization helper explicitly intended for any route/service touching storage or exports (\"Raw exception objects... can carry local absolute paths, S3 endpoints/keys\"), not privacy-domain-specific logic.",
+    "callerEvidence": "server/src/routes/clinicBulkExport.ts:24 `import { safeErrorFields } from '../utils/safeError.js';`",
+    "targetEvidence": "server/src/utils/safeError.ts:1-15 generic error-field sanitizer explicitly designed to be reused by \"routes/services that touch storage or exports\".",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/clinicLegalProfile.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton.",
+    "callerEvidence": "server/src/routes/clinicLegalProfile.ts:18 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/communicationPreferences.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton.",
+    "callerEvidence": "server/src/routes/communicationPreferences.ts:23 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/communicationPreferences.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "communicationPreferences.ts imports `legacySmsOptOutCorrectionSchema` from the same shared, multi-domain schema registry file discussed above (schemas/index.ts), used purely for request body validation.",
+    "callerEvidence": "server/src/routes/communicationPreferences.ts:54 `import { legacySmsOptOutCorrectionSchema } from '../schemas/index.js';`; used at line 592 `legacySmsOptOutCorrectionSchema.safeParse(req.body)`.",
+    "targetEvidence": "server/src/schemas/index.ts:679 `export const legacySmsOptOutCorrectionSchema = z.object({...})` is one of many unrelated schemas in this 687-line shared registry file.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/publicClinicKvkk.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton.",
+    "callerEvidence": "server/src/routes/publicClinicKvkk.ts:12 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/services/channelConsentGate.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton.",
+    "callerEvidence": "server/src/services/channelConsentGate.ts:16 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/services/communicationConsent/communicationConsentAdmin.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton.",
+    "callerEvidence": "server/src/services/communicationConsent/communicationConsentAdmin.ts:29 `import prisma from '../../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton.",
+    "callerEvidence": "server/src/services/privacy/patientPrivacyExportPackage.ts:38 `import prisma from '../../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/services/publicBookingNoticeEvidence.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton.",
+    "callerEvidence": "server/src/services/publicBookingNoticeEvidence.ts:33 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/routes/platformSecurityIncidents.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "platformSecurityIncidents.ts imports `createRateLimiter`, a generic in-memory rate-limiter factory used by unrelated routes across the codebase (e.g. publicBooking.ts also uses it), with no security-domain-specific logic baked in.",
+    "callerEvidence": "server/src/routes/platformSecurityIncidents.ts:17 `import { createRateLimiter } from '../utils/helpers.js';`",
+    "targetEvidence": "server/src/utils/helpers.ts:168 `export const createRateLimiter = (max: number, windowMs: number, namespace: string): RateLimiter => {...}` — a generic, namespaced rate-limiter factory usable by any route.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  },
+  {
+    "edgeKey": "server/src/services/security/securityDetectionRules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default import of the shared Prisma client singleton.",
+    "callerEvidence": "server/src/services/security/securityDetectionRules.ts:37 `import prisma from '../../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 exports the single shared PrismaClient instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch1"
+  }
+]
