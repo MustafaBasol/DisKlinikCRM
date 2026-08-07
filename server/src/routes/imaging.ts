@@ -853,9 +853,12 @@ router.patch('/imaging/studies/:id/link', authorize([...IMAGING_CLINICAL_ROLES])
       // No delete route exists for ImagingStudy (archived, never hard-deleted)
       // and clinicId is immutable, so the study found above cannot have
       // vanished from scope in between — a 0-row result here can only mean
-      // the imagingRequestId/patientId consistency guard rejected the write.
+      // the imagingRequestId/patientId/clinicId consistency guard rejected
+      // the write (different patient, different clinic, or an anomalous
+      // linked ImagingRequest relation — see the guard's WHERE predicate
+      // above for the exact conditions).
       return res.status(409).json({
-        error: 'Study is linked to an imaging request for a different patient; unlink it before relinking to another patient',
+        error: 'Study is linked to an imaging request that is inconsistent with the target patient or clinic (different patient, different clinic, or an anomalous request relation); unlink it before relinking to another patient',
       });
     }
 
