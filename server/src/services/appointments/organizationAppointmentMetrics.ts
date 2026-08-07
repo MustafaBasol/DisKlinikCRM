@@ -15,6 +15,12 @@
  *   supply an already-authorized clinic id (e.g. from an organization-scoped,
  *   role-checked clinic list) — this function performs no authorization of
  *   its own and does not accept a raw request body/query clinic id.
+ * - Time context: `range` and `todayRange` are supplied by the caller, not
+ *   derived internally. `todayRange` in particular must be computed exactly
+ *   once by the caller for the whole request (e.g. once before a multi-clinic
+ *   Promise.all) and passed to every invocation — this function must never
+ *   call `new Date()`/`Date.now()` itself, or a request spanning local
+ *   midnight could hand different clinics different "today" windows.
  * - Output DTO: `OrganizationAppointmentMetrics`, a purpose-built aggregate —
  *   no Prisma `Appointment` record or field is returned.
  * - No raw Prisma leakage: every query is a `count()`; nothing is `select`ed.
@@ -33,6 +39,17 @@ export interface OrganizationAppointmentMetricsRange {
   to: Date;
 }
 
+export interface OrganizationAppointmentMetricsInput {
+  /** Date-range filter applied to all range-scoped counts (appointments, completed, cancelled, no-show). */
+  range: OrganizationAppointmentMetricsRange;
+  /**
+   * Request-wide "today" window (local-day boundaries), computed exactly
+   * once by the caller and reused across every clinic in the same request —
+   * never recomputed here from the current wall-clock time.
+   */
+  todayRange: OrganizationAppointmentMetricsRange;
+}
+
 export interface OrganizationAppointmentMetrics {
   todayAppointments: number;
   appointments: number;
@@ -44,17 +61,14 @@ export interface OrganizationAppointmentMetrics {
 
 export async function getOrganizationAppointmentMetrics(
   clinicId: string,
-  range: OrganizationAppointmentMetricsRange
+  input: OrganizationAppointmentMetricsInput
 ): Promise<OrganizationAppointmentMetrics> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
+  const { range, todayRange } = input;
 
   const [todayAppointments, appointments, completedAppointments, cancelledAppointments, noShowCount] =
     await Promise.all([
       prisma.appointment.count({
-        where: { clinicId, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' } },
+        where: { clinicId, startTime: { gte: todayRange.from, lt: todayRange.to }, status: { not: 'cancelled' } },
       }),
       prisma.appointment.count({
         where: { clinicId, startTime: { gte: range.from, lte: range.to }, status: { not: 'cancelled' } },

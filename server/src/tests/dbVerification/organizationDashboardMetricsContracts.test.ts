@@ -73,6 +73,10 @@ async function main() {
   const beforeRange = new Date('2025-12-01T00:00:00.000Z');
   const insideRange = new Date('2026-01-15T10:00:00.000Z');
   const range = { from: rangeFrom, to: rangeTo };
+  // The fixture's appointments all land on 2026-01-15 — this is deliberately
+  // NOT "real now" (the test may run any day), so any assertion keying off
+  // it proves the contract used the *injected* todayRange, not a live clock.
+  const todayRange = { from: new Date('2026-01-15T00:00:00.000Z'), to: new Date('2026-01-16T00:00:00.000Z') };
 
   const defaultPatientInRange = await createPatientWithPrimaryClinic({ organizationId: fx.orgId, clinicId: fx.defaultClinicId, createdAt: insideRange });
   await createPatientWithPrimaryClinic({ organizationId: fx.orgId, clinicId: fx.defaultClinicId, createdAt: beforeRange });
@@ -117,12 +121,13 @@ async function main() {
   section('Contract-level: purpose-built DTO shape + scoping + date filtering');
 
   await test('appointment contract: counts scoped to clinic + date range, DTO has exactly the expected keys', async () => {
-    const m = await getOrganizationAppointmentMetrics(fx.defaultClinicId, range);
+    const m = await getOrganizationAppointmentMetrics(fx.defaultClinicId, { range, todayRange });
     assert.deepEqual(Object.keys(m).sort(), ['appointments', 'cancelledAppointments', 'completedAppointments', 'noShowRate', 'todayAppointments'].sort());
     assert.equal(m.appointments, 2, 'appointments excludes cancelled (completed + no_show only)');
     assert.equal(m.completedAppointments, 1);
     assert.equal(m.cancelledAppointments, 1);
     assert.equal(m.noShowRate, 0.5, '1 no_show / 2 non-cancelled appointments');
+    assert.equal(m.todayAppointments, 2, 'todayAppointments must reflect the injected todayRange (completed + no_show), not the real wall-clock date');
   });
 
   await test('patient contract: newPatients respects date range, totalPatients is all-time, DTO shape is exact', async () => {
@@ -147,15 +152,16 @@ async function main() {
   });
 
   await test('sibling clinic results are isolated from default clinic (no cross-clinic bleed)', async () => {
-    const apptM = await getOrganizationAppointmentMetrics(fx.siblingClinicId, range);
+    const apptM = await getOrganizationAppointmentMetrics(fx.siblingClinicId, { range, todayRange });
     const payM = await getOrganizationPaymentMetrics(fx.siblingClinicId, range);
     assert.equal(apptM.completedAppointments, 1);
+    assert.equal(apptM.todayAppointments, 1, 'sibling clinic has exactly 1 non-cancelled appointment inside the injected todayRange');
     assert.equal(payM.revenue, 300);
   });
 
   await test('zero-data clinic: all four contracts return all-zero DTOs', async () => {
     const [apptM, patM, tcM, payM] = await Promise.all([
-      getOrganizationAppointmentMetrics(fx.unauthorizedClinicId, range),
+      getOrganizationAppointmentMetrics(fx.unauthorizedClinicId, { range, todayRange }),
       getOrganizationPatientMetrics(fx.unauthorizedClinicId, range),
       getOrganizationTreatmentCaseMetrics(fx.unauthorizedClinicId, range),
       getOrganizationPaymentMetrics(fx.unauthorizedClinicId, range),
@@ -164,6 +170,39 @@ async function main() {
     assert.deepEqual(patM, { newPatients: 0, totalPatients: 0 });
     assert.deepEqual(tcM, { activeTreatmentPlans: 0, completedTreatments: 0 });
     assert.deepEqual(payM, { revenue: 0, outstandingBalance: 0 });
+  });
+
+  await test('request-wide today interval: the same todayRange value, passed to two different clinics, is immune to the real wall clock ticking or crossing midnight between calls', async () => {
+    // Simulate `new Date()` (no-arg only — dated constructions like `new Date(iso)` pass through untouched)
+    // advancing by a full day between successive calls, mimicking a request that straddles local midnight
+    // while per-clinic work is still in flight. The pre-fix implementation called `new Date()` internally
+    // on every invocation to derive "today", so this would have shifted the second clinic's today-window by
+    // a day and silently changed its todayAppointments. The fixed contract takes todayRange as an input and
+    // must produce identical, correct results regardless of how many times the clock ticks between calls.
+    const RealDate = Date;
+    let noArgCalls = 0;
+    class TickingDate extends RealDate {
+      constructor(...args: any[]) {
+        if (args.length === 0) {
+          super(RealDate.UTC(2026, 0, 15 + noArgCalls, 8, 0, 0));
+          noArgCalls++;
+        } else {
+          // @ts-expect-error - forwarding constructor args to the real Date
+          super(...args);
+        }
+      }
+    }
+    // @ts-expect-error - intentional global override, restored in `finally`
+    global.Date = TickingDate;
+    try {
+      const first = await getOrganizationAppointmentMetrics(fx.defaultClinicId, { range, todayRange });
+      const second = await getOrganizationAppointmentMetrics(fx.siblingClinicId, { range, todayRange });
+      assert.equal(noArgCalls, 0, 'the fixed contract must never call `new Date()` internally');
+      assert.equal(first.todayAppointments, 2, 'default clinic must still resolve against the injected todayRange, not a ticking clock');
+      assert.equal(second.todayAppointments, 1, 'sibling clinic must still resolve against the same injected todayRange as the default clinic call before it');
+    } finally {
+      global.Date = RealDate;
+    }
   });
 
   // ─── Route-level: organizationDashboard composing the contracts under real tenant scoping ───
@@ -246,6 +285,35 @@ async function main() {
     assert.equal(res.body.summary.activeTreatmentPlans, rows.reduce((s, c) => s + c.activeTreatmentPlans, 0));
   });
 
+  await test('route-level: multiple clinics in the same request share one request-wide todayAppointments window', async () => {
+    // Uses the real, unmocked clock — a live end-to-end check that the route composes the contract
+    // correctly today, complementing the mocked-clock contract-level proof above.
+    const now = new Date();
+    now.setHours(12, 0, 0, 0);
+    const [todayDefaultPatient, todaySiblingPatient] = await Promise.all([
+      createPatientWithPrimaryClinic({ organizationId: fx.orgId, clinicId: fx.defaultClinicId, createdAt: now }),
+      createPatientWithPrimaryClinic({ organizationId: fx.orgId, clinicId: fx.siblingClinicId, createdAt: now }),
+    ]);
+    await prisma.appointment.createMany({
+      data: [
+        { clinicId: fx.defaultClinicId, patientId: todayDefaultPatient.id, practitionerId: practitioner.id, appointmentTypeId: defaultType.id, startTime: now, endTime: new Date(now.getTime() + 1_800_000), status: 'confirmed' },
+        { clinicId: fx.siblingClinicId, patientId: todaySiblingPatient.id, practitionerId: practitioner.id, appointmentTypeId: siblingType.id, startTime: now, endTime: new Date(now.getTime() + 1_800_000), status: 'confirmed' },
+      ],
+    });
+
+    const ownerUser = { organizationId: fx.orgId, canAccessAllClinics: true, allowedClinicIds: [], role: 'OWNER' };
+    const req = authRequest(ownerUser, { query: queryForRange });
+    const res = mockResponse();
+    await DASHBOARD_HANDLER(req, res as any, () => {});
+    assert.equal(res.statusCode, 200);
+    const rows = res.body.clinics as any[];
+    const defaultRow = rows.find((c: any) => c.clinicId === fx.defaultClinicId);
+    const siblingRow = rows.find((c: any) => c.clinicId === fx.siblingClinicId);
+    assert.equal(defaultRow.todayAppointments, 1, 'default clinic sees exactly the appointment created for the shared today window');
+    assert.equal(siblingRow.todayAppointments, 1, 'sibling clinic sees exactly the appointment created for the shared today window');
+    assert.equal(res.body.summary.todayAppointments, rows.reduce((s: number, c: any) => s + c.todayAppointments, 0), 'summary.todayAppointments must equal the sum of the per-clinic rows in the same response');
+  });
+
   // ─── Source-level direct-Prisma isolation proof ───
 
   section('Direct-Prisma isolation proof (source-level, not DB-level)');
@@ -256,6 +324,25 @@ async function main() {
     for (const model of ['prisma.appointment.', 'prisma.patient.', 'prisma.treatmentCase.', 'prisma.payment.']) {
       assert.ok(!src.includes(model), `organizationDashboard.ts must not reference ${model} directly`);
     }
+  });
+
+  await test('organizationDashboard.ts computes today/tomorrow once per request, not once per clinic', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(new URL('../../routes/organizationDashboard.ts', import.meta.url), 'utf8');
+    const mapStart = src.indexOf('clinics.map(async (clinic) => {');
+    const mapEnd = src.indexOf('const activeClinics = clinics.filter');
+    assert.ok(mapStart !== -1 && mapEnd !== -1 && mapStart < mapEnd, 'expected to locate the per-clinic composition block');
+    const perClinicBody = src.slice(mapStart, mapEnd);
+    assert.ok(!perClinicBody.includes('new Date('), 'the per-clinic composition callback must not recompute "today" — it must reuse the request-wide todayRange computed once before Promise.all');
+    const beforeMap = src.slice(0, mapStart);
+    assert.ok(beforeMap.includes('const todayRange = { from: today, to: tomorrow }'), 'expected a single request-wide todayRange computed before the per-clinic Promise.all');
+  });
+
+  await test('organizationAppointmentMetrics.ts never constructs its own Date — todayRange must be caller-supplied', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(new URL('../../services/appointments/organizationAppointmentMetrics.ts', import.meta.url), 'utf8');
+    const codeOnly = src.slice(src.indexOf('import prisma'));
+    assert.ok(!codeOnly.includes('new Date('), 'the appointment metrics contract must not derive "today" internally — it must accept todayRange as input');
   });
 
   const ok = summary();

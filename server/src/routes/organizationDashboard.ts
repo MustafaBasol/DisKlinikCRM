@@ -93,11 +93,20 @@ router.get(
         select: { id: true, name: true, slug: true, status: true, address: true },
       });
 
+      // Computed once for the whole request (not per clinic) so every clinic's
+      // todayAppointments uses the same "today" window, even if the request
+      // straddles local midnight while the per-clinic Promise.all is in flight.
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      const todayRange = { from: today, to: tomorrow };
+
       const clinicMetrics = await Promise.all(
         clinics.map(async (clinic) => {
           const [appointmentMetrics, patientMetrics, treatmentCaseMetrics, paymentMetrics, staffCount, doctorCount] =
             await Promise.all([
-              getOrganizationAppointmentMetrics(clinic.id, dateRange),
+              getOrganizationAppointmentMetrics(clinic.id, { range: dateRange, todayRange }),
               getOrganizationPatientMetrics(clinic.id, dateRange),
               getOrganizationTreatmentCaseMetrics(clinic.id, dateRange),
               getOrganizationPaymentMetrics(clinic.id, dateRange),
