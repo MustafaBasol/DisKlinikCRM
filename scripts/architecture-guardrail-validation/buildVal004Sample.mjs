@@ -1,6 +1,11 @@
 // F2-GUARDRAIL-VAL-004 deterministic stratified edge sample builder.
 //
-// Implements the F2-GUARDRAIL-VAL-004-REVIEW-A methodology addendum:
+// Implements the F2-GUARDRAIL-VAL-004-REVIEW-A methodology addendum, as
+// corrected by F2-GUARDRAIL-VAL-004-R1 (external architecture review on PR
+// #332: the high-risk census/oversample partition was originally keyed only
+// by ownerDomain, so a caller-side-only high-risk edge -- isHighRisk(e) is
+// true via EITHER endpoint, see highRiskCategories()/isHighRisk() below --
+// could silently fall into a standard, non-high-risk proportional stratum):
 //   - sampling/classification unit = distinct baseline-matcher edge
 //     (callerPath, ownerDomain, targetModelOrSymbol, accessKind), not raw
 //     scanner findings (see buildVal004EdgePopulation.mjs)
@@ -10,11 +15,14 @@
 //          brief §9 special check)
 //       2. route -> route cross-domain edges
 //       3. edges with clusterSize >= 5
-//       4. high-risk-domain (by ownerDomain) strata with remaining
-//          population <= 15
-//       5. any remaining non-high-risk ownerDomain stratum with
-//          population <= 5
-//   - high-risk-domain non-census strata: oversampled at ~2x the base
+//       4. high-risk group (isHighRisk(e), either endpoint), keyed by
+//          highRiskDomainKey(e) -- a deterministic, mutually-exclusive
+//          per-edge key so both-endpoints-high-risk edges are counted once
+//          -- strata with remaining population <= 15
+//       5. any remaining ownerDomain stratum (guaranteed non-high-risk by
+//          construction: every isHighRisk edge was already claimed by rule
+//          4) with population <= 5
+//   - high-risk-group non-census strata: oversampled at ~2x the base
 //     sampling fraction, floor 15 edges (capped at stratum population)
 //   - standard (non-high-risk) ownerDomain strata: proportional at the base
 //     fraction, floor 1 edge per non-empty stratum
@@ -117,6 +125,22 @@ export function isHighRisk(e) {
   return highRiskCategories(e).length > 0;
 }
 
+// Deterministic, mutually-exclusive high-risk grouping key for an edge that
+// satisfies isHighRisk(e). isHighRisk considers BOTH ownerDomain and
+// callerDomain, so an edge can be high-risk via either endpoint (or both);
+// this picks exactly one canonical domain per edge so census/oversample
+// strata partition the high-risk population without ambiguity or double
+// counting: ownerDomain wins when it is itself a high-risk domain (matching
+// the pre-fix behavior for owner-side-high-risk edges, minimizing
+// reclassification churn), otherwise callerDomain (guaranteed high-risk,
+// since isHighRisk(e) is true and ownerDomain was not). Returns null for a
+// non-high-risk edge -- callers must guard with isHighRisk(e)/e.highRisk.
+export function highRiskDomainKey(e) {
+  if ((HIGH_RISK_DOMAIN_CATEGORIES[e.ownerDomain] || []).length > 0) return e.ownerDomain;
+  if ((HIGH_RISK_DOMAIN_CATEGORIES[e.callerDomain] || []).length > 0) return e.callerDomain;
+  return null;
+}
+
 export function stableRank(edgeKey, seed) {
   return crypto.createHash('sha256').update(`${seed}|${edgeKey}`).digest('hex');
 }
@@ -179,18 +203,23 @@ export function buildSample(population, baselineShaArg, existingCallerPaths = ne
     'cluster5PlusCensus'
   );
 
-  // 4. high-risk domain (by ownerDomain) census where remaining pop <= 15
-  const remainingByOwnerDomain = new Map();
+  // 4. high-risk group (by highRiskDomainKey, EITHER endpoint) census where
+  //    remaining pop <= 15. Every edge with isHighRisk(e) true -- whether
+  //    the high-risk domain is the owner, the caller, or both -- is grouped
+  //    here exactly once via highRiskDomainKey(e), so a caller-side-only
+  //    high-risk edge can never fall through to the standard/small-cell
+  //    strata below (the pre-fix defect: those strata were keyed on
+  //    ownerDomain alone and missed caller-only high-risk edges).
+  const remainingByHighRiskKey = new Map();
   for (const e of remaining()) {
-    if (!remainingByOwnerDomain.has(e.ownerDomain)) remainingByOwnerDomain.set(e.ownerDomain, []);
-    remainingByOwnerDomain.get(e.ownerDomain).push(e);
+    if (!e.highRisk) continue;
+    const key = highRiskDomainKey(e);
+    if (!remainingByHighRiskKey.has(key)) remainingByHighRiskKey.set(key, []);
+    remainingByHighRiskKey.get(key).push(e);
   }
-  const highRiskDomainsPresent = [...remainingByOwnerDomain.keys()].filter(
-    (d) => (HIGH_RISK_DOMAIN_CATEGORIES[d] || []).length > 0
-  );
   const highRiskOversampleDomains = [];
-  for (const d of highRiskDomainsPresent.sort(compareCodeUnits)) {
-    const pool = remainingByOwnerDomain.get(d);
+  for (const d of [...remainingByHighRiskKey.keys()].sort(compareCodeUnits)) {
+    const pool = remainingByHighRiskKey.get(d);
     if (pool.length <= HIGH_RISK_CENSUS_THRESHOLD) {
       markCensus(pool, 'CENSUS_HIGH_RISK_DOMAIN_SMALL', `highRiskDomainCensus:${d}`);
     } else {
@@ -198,15 +227,18 @@ export function buildSample(population, baselineShaArg, existingCallerPaths = ne
     }
   }
 
-  // 5. small-cell census: non-high-risk ownerDomain strata with remaining pop <= 5
+  // 5. small-cell census: remaining ownerDomain strata (guaranteed
+  //    non-high-risk by construction -- every isHighRisk edge was already
+  //    routed to step 4 above, census or oversample-pending) with remaining
+  //    pop <= 5.
   const remainingByOwnerDomain2 = new Map();
   for (const e of remaining()) {
+    if (e.highRisk) continue; // already routed to the high-risk track in step 4
     if (!remainingByOwnerDomain2.has(e.ownerDomain)) remainingByOwnerDomain2.set(e.ownerDomain, []);
     remainingByOwnerDomain2.get(e.ownerDomain).push(e);
   }
   const standardDomains = [];
   for (const [d, pool] of remainingByOwnerDomain2) {
-    if ((HIGH_RISK_DOMAIN_CATEGORIES[d] || []).length > 0) continue; // already handled above
     if (pool.length <= SMALL_CELL_THRESHOLD) {
       markCensus(pool, 'CENSUS_SMALL_CELL', `smallCellCensus:${d}`);
     } else {
@@ -223,15 +255,23 @@ export function buildSample(population, baselineShaArg, existingCallerPaths = ne
 
   // High-risk oversample strata (2x base fraction, floor 15, capped at pop)
   for (const d of highRiskOversampleDomains.sort(compareCodeUnits)) {
-    const pool = remaining().filter((e) => e.ownerDomain === d);
+    const pool = remaining().filter((e) => e.highRisk && highRiskDomainKey(e) === d);
     const rawTarget = Math.round(HIGH_RISK_OVERSAMPLE_MULTIPLIER * baseFraction * pool.length);
     const target = Math.min(pool.length, Math.max(HIGH_RISK_FLOOR, rawTarget));
     strataAllocation.push({ domain: d, kind: 'HIGH_RISK_OVERSAMPLE', population: pool.length, target });
   }
 
-  // Standard proportional strata (base fraction, floor 1)
+  // Standard proportional strata (base fraction, floor 1). !e.highRisk is
+  // required here even though standardDomains only contains non-high-risk
+  // ownerDomain names: remaining() at this point still includes
+  // highRiskOversample-pending edges (not yet added to `included`, only
+  // counted), and a caller-side-only high-risk edge can share its
+  // (non-high-risk) ownerDomain with genuinely standard edges -- without
+  // this guard such an edge would be silently re-absorbed into the
+  // standard stratum's population/selection pool, reproducing the exact
+  // partition defect this rework fixes.
   for (const d of standardDomains.sort(compareCodeUnits)) {
-    const pool = remaining().filter((e) => e.ownerDomain === d);
+    const pool = remaining().filter((e) => !e.highRisk && e.ownerDomain === d);
     const rawTarget = Math.round(baseFraction * pool.length);
     const target = Math.min(pool.length, Math.max(1, rawTarget));
     strataAllocation.push({ domain: d, kind: 'STANDARD_PROPORTIONAL', population: pool.length, target });
@@ -239,7 +279,11 @@ export function buildSample(population, baselineShaArg, existingCallerPaths = ne
 
   for (const alloc of strataAllocation) {
     const pool = remaining()
-      .filter((e) => e.ownerDomain === alloc.domain)
+      .filter((e) =>
+        alloc.kind === 'HIGH_RISK_OVERSAMPLE'
+          ? e.highRisk && highRiskDomainKey(e) === alloc.domain
+          : !e.highRisk && e.ownerDomain === alloc.domain
+      )
       .map((e) => ({ e, rank: stableRank(e.edgeKey, seed) }));
     // Deterministic pseudo-random selection: ascending SHA-256 hash-rank
     // order, tie-broken by edgeKey (ties are not expected in practice).

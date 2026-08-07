@@ -4,21 +4,21 @@
   "seedFormula": "sha256(`${SEED_PREFIX}|${baselineSha}|${edgeKey}`) hex digest, ascending sort = selection rank",
   "N": 552,
   "n": 150,
-  "mandatoryCensusCount": 109,
-  "remainingBudget": 41,
-  "remainingPop": 443,
-  "baseFraction": 0.09255079006772009,
+  "mandatoryCensusCount": 144,
+  "remainingBudget": 6,
+  "remainingPop": 408,
+  "baseFraction": 0.014705882352941176,
   "strataAllocation": [
     {
       "domain": "core-audit-activity",
       "kind": "HIGH_RISK_OVERSAMPLE",
-      "population": 62,
+      "population": 63,
       "target": 15
     },
     {
       "domain": "core-identity-access",
       "kind": "HIGH_RISK_OVERSAMPLE",
-      "population": 55,
+      "population": 59,
       "target": 15
     },
     {
@@ -28,136 +28,141 @@
       "target": 15
     },
     {
-      "domain": "core-tenant-security",
+      "domain": "core-privacy-consent-retention-dsr",
       "kind": "HIGH_RISK_OVERSAMPLE",
       "population": 49,
       "target": 15
     },
     {
-      "domain": "clinical-appointments-availability",
-      "kind": "STANDARD_PROPORTIONAL",
-      "population": 9,
-      "target": 1
+      "domain": "core-storage-abstraction",
+      "kind": "HIGH_RISK_OVERSAMPLE",
+      "population": 19,
+      "target": 15
     },
     {
-      "domain": "core-observability-ops-events",
-      "kind": "STANDARD_PROPORTIONAL",
-      "population": 13,
-      "target": 1
+      "domain": "core-tenant-security",
+      "kind": "HIGH_RISK_OVERSAMPLE",
+      "population": 51,
+      "target": 15
+    },
+    {
+      "domain": "external-calendar-integration",
+      "kind": "HIGH_RISK_OVERSAMPLE",
+      "population": 18,
+      "target": 15
+    },
+    {
+      "domain": "messaging-whatsapp",
+      "kind": "HIGH_RISK_OVERSAMPLE",
+      "population": 35,
+      "target": 15
     },
     {
       "domain": "core-org-clinic-membership",
       "kind": "STANDARD_PROPORTIONAL",
-      "population": 16,
-      "target": 1
-    },
-    {
-      "domain": "core-shared-events-queue-idempotency",
-      "kind": "STANDARD_PROPORTIONAL",
-      "population": 9,
+      "population": 10,
       "target": 1
     },
     {
       "domain": "core-shared-platform-infrastructure",
       "kind": "STANDARD_PROPORTIONAL",
-      "population": 210,
-      "target": 19
+      "population": 84,
+      "target": 1
     }
   ],
   "unassignedCount": 0,
   "totalPopulationAccountedFor": 552,
   "strataPopulations": {
     "cluster5PlusCensus": 16,
-    "highRiskDomainCensus:clinical-basic-payments": 1,
-    "highRiskDomainCensus:core-config-secrets": 2,
+    "highRiskDomainCensus:clinical-basic-payments": 9,
+    "highRiskDomainCensus:core-config-secrets": 4,
     "highRiskDomainCensus:core-permissions-roles": 8,
-    "highRiskDomainCensus:core-privacy-consent-retention-dsr": 15,
-    "highRiskDomainCensus:core-security-incident-detection": 3,
-    "highRiskDomainCensus:core-storage-abstraction": 13,
-    "highRiskDomainCensus:external-calendar-integration": 2,
-    "highRiskDomainCensus:imaging-device-bridge": 3,
-    "highRiskDomainCensus:imaging-server-viewer": 2,
-    "highRiskDomainCensus:messaging-ai-orchestration": 13,
-    "highRiskDomainCensus:messaging-automation-recall-followup": 1,
+    "highRiskDomainCensus:core-security-incident-detection": 8,
+    "highRiskDomainCensus:finance-advanced-compensation": 12,
+    "highRiskDomainCensus:imaging-device-bridge": 8,
+    "highRiskDomainCensus:imaging-server-viewer": 6,
+    "highRiskDomainCensus:messaging-ai-orchestration": 14,
+    "highRiskDomainCensus:messaging-automation-recall-followup": 14,
     "highRiskDomainCensus:messaging-email": 4,
-    "highRiskDomainCensus:messaging-shared-channel-infrastructure": 8,
-    "highRiskDomainCensus:messaging-whatsapp": 6,
-    "highRiskOversample:core-audit-activity": 62,
-    "highRiskOversample:core-identity-access": 55,
+    "highRiskDomainCensus:messaging-instagram": 13,
+    "highRiskDomainCensus:messaging-shared-channel-infrastructure": 9,
+    "highRiskDomainCensus:messaging-sms": 8,
+    "highRiskOversample:core-audit-activity": 63,
+    "highRiskOversample:core-identity-access": 59,
     "highRiskOversample:core-platform-crypto": 20,
-    "highRiskOversample:core-tenant-security": 49,
+    "highRiskOversample:core-privacy-consent-retention-dsr": 49,
+    "highRiskOversample:core-storage-abstraction": 19,
+    "highRiskOversample:core-tenant-security": 51,
+    "highRiskOversample:external-calendar-integration": 18,
+    "highRiskOversample:messaging-whatsapp": 35,
     "orgDashCallerCensus": 4,
     "routeToRouteCensus": 1,
-    "smallCellCensus:clinical-patients": 1,
+    "smallCellCensus:clinical-appointments-availability": 2,
     "smallCellCensus:core-notifications": 2,
-    "smallCellCensus:core-platform-administration": 3,
+    "smallCellCensus:core-observability-ops-events": 1,
     "smallCellCensus:inventory": 1,
-    "standardProportional:clinical-appointments-availability": 9,
-    "standardProportional:core-observability-ops-events": 13,
-    "standardProportional:core-org-clinic-membership": 16,
-    "standardProportional:core-shared-events-queue-idempotency": 9,
-    "standardProportional:core-shared-platform-infrastructure": 210
+    "standardProportional:core-org-clinic-membership": 10,
+    "standardProportional:core-shared-platform-infrastructure": 84
   },
   "strataSampleCounts": {
     "cluster5PlusCensus": 16,
-    "highRiskDomainCensus:clinical-basic-payments": 1,
-    "highRiskDomainCensus:core-config-secrets": 2,
+    "highRiskDomainCensus:clinical-basic-payments": 9,
+    "highRiskDomainCensus:core-config-secrets": 4,
     "highRiskDomainCensus:core-permissions-roles": 8,
-    "highRiskDomainCensus:core-privacy-consent-retention-dsr": 15,
-    "highRiskDomainCensus:core-security-incident-detection": 3,
-    "highRiskDomainCensus:core-storage-abstraction": 13,
-    "highRiskDomainCensus:external-calendar-integration": 2,
-    "highRiskDomainCensus:imaging-device-bridge": 3,
-    "highRiskDomainCensus:imaging-server-viewer": 2,
-    "highRiskDomainCensus:messaging-ai-orchestration": 13,
-    "highRiskDomainCensus:messaging-automation-recall-followup": 1,
+    "highRiskDomainCensus:core-security-incident-detection": 8,
+    "highRiskDomainCensus:finance-advanced-compensation": 12,
+    "highRiskDomainCensus:imaging-device-bridge": 8,
+    "highRiskDomainCensus:imaging-server-viewer": 6,
+    "highRiskDomainCensus:messaging-ai-orchestration": 14,
+    "highRiskDomainCensus:messaging-automation-recall-followup": 14,
     "highRiskDomainCensus:messaging-email": 4,
-    "highRiskDomainCensus:messaging-shared-channel-infrastructure": 8,
-    "highRiskDomainCensus:messaging-whatsapp": 6,
+    "highRiskDomainCensus:messaging-instagram": 13,
+    "highRiskDomainCensus:messaging-shared-channel-infrastructure": 9,
+    "highRiskDomainCensus:messaging-sms": 8,
     "highRiskOversample:core-audit-activity": 15,
     "highRiskOversample:core-identity-access": 15,
     "highRiskOversample:core-platform-crypto": 15,
+    "highRiskOversample:core-privacy-consent-retention-dsr": 15,
+    "highRiskOversample:core-storage-abstraction": 15,
     "highRiskOversample:core-tenant-security": 15,
+    "highRiskOversample:external-calendar-integration": 15,
+    "highRiskOversample:messaging-whatsapp": 15,
     "orgDashCallerCensus": 4,
     "routeToRouteCensus": 1,
-    "smallCellCensus:clinical-patients": 1,
+    "smallCellCensus:clinical-appointments-availability": 2,
     "smallCellCensus:core-notifications": 2,
-    "smallCellCensus:core-platform-administration": 3,
+    "smallCellCensus:core-observability-ops-events": 1,
     "smallCellCensus:inventory": 1,
-    "standardProportional:clinical-appointments-availability": 1,
-    "standardProportional:core-observability-ops-events": 1,
     "standardProportional:core-org-clinic-membership": 1,
-    "standardProportional:core-shared-events-queue-idempotency": 1,
-    "standardProportional:core-shared-platform-infrastructure": 19
+    "standardProportional:core-shared-platform-infrastructure": 1
   },
-  "sampleSize": 192,
+  "sampleSize": 266,
   "sample": [
     {
-      "edgeKey": "server/src/jobs/clinicBulkExportCleanupJob.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "edgeKey": "server/src/jobs/clinicBulkExportCleanupJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
       "callerPath": "server/src/jobs/clinicBulkExportCleanupJob.ts",
-      "ownerDomain": "core-storage-abstraction",
-      "targetModelOrSymbol": "services/fileStorage.ts",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "utils/jobLock.ts",
       "accessKind": "import",
       "callerDomain": "core-privacy-consent-retention-dsr",
       "callerDomainVaries": false,
       "clusterSize": 1,
       "findingIds": [
-        "7998fba1fbdaffa3"
+        "a50095b7bb61b348"
       ],
       "callerSymbols": [
-        "cleanupStaleLocalExportPartialFiles"
+        "withJobLock"
       ],
-      "edgeShape": "jobs -> services",
+      "edgeShape": "jobs -> utils",
       "clusterSizeBucket": "1",
       "highRisk": true,
       "highRiskCategories": [
-        "privacy-kvkk",
-        "storage"
+        "privacy-kvkk"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
     },
     {
       "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-config-secrets␟services/platformSettings.ts␟import",
@@ -187,6 +192,84 @@
       "inclusionProbability": 1
     },
     {
+      "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+      "callerPath": "server/src/jobs/dataRetentionCleanupJob.ts",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "utils/jobLock.ts",
+      "accessKind": "import",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "58c3abd24ccdedff"
+      ],
+      "callerSymbols": [
+        "withJobLock"
+      ],
+      "edgeShape": "jobs -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
+    },
+    {
+      "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/jobs/dataRetentionCleanupJob.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "1cfb834a0bcfd887"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "jobs -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
+    },
+    {
+      "edgeKey": "server/src/jobs/externalCalendarInboundRetryJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/jobs/externalCalendarInboundRetryJob.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "external-calendar-integration",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "e60a3081f98fdc4e"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "jobs -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
+    },
+    {
       "edgeKey": "server/src/jobs/externalCalendarOutboundSyncJob.ts␟core-observability-ops-events␟utils/logger.ts␟import",
       "callerPath": "server/src/jobs/externalCalendarOutboundSyncJob.ts",
       "ownerDomain": "core-observability-ops-events",
@@ -208,9 +291,61 @@
         "integrations"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-observability-ops-events",
-      "inclusionProbability": 0.07692307692307693
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
+    },
+    {
+      "edgeKey": "server/src/jobs/externalCalendarOutboundSyncJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+      "callerPath": "server/src/jobs/externalCalendarOutboundSyncJob.ts",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "utils/jobLock.ts",
+      "accessKind": "import",
+      "callerDomain": "external-calendar-integration",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "80a3e63acd8e59d9"
+      ],
+      "callerSymbols": [
+        "withJobLock"
+      ],
+      "edgeShape": "jobs -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
+    },
+    {
+      "edgeKey": "server/src/jobs/externalCalendarOutboundSyncJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/jobs/externalCalendarOutboundSyncJob.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "external-calendar-integration",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "6b36e2ce8df57fe2"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "jobs -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
     },
     {
       "edgeKey": "server/src/jobs/imagingBridgeOfflineJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
@@ -234,34 +369,34 @@
         "imaging"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-events-queue-idempotency",
-      "inclusionProbability": 0.1111111111111111
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
+      "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/jobs/inboundEventRetryJob.ts␟messaging-whatsapp␟services/whatsapp/MetaCloudWhatsAppProvider.ts␟import",
-      "callerPath": "server/src/jobs/inboundEventRetryJob.ts",
-      "ownerDomain": "messaging-whatsapp",
-      "targetModelOrSymbol": "services/whatsapp/MetaCloudWhatsAppProvider.ts",
+      "edgeKey": "server/src/jobs/imagingBridgeOfflineJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/jobs/imagingBridgeOfflineJob.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
       "accessKind": "import",
-      "callerDomain": "core-shared-events-queue-idempotency",
+      "callerDomain": "imaging-device-bridge",
       "callerDomainVaries": false,
       "clusterSize": 1,
       "findingIds": [
-        "440fb33dccedc6f2"
+        "81baca8d2c9ba6ab"
       ],
       "callerSymbols": [
-        "MetaCloudWhatsAppProvider"
+        "default"
       ],
-      "edgeShape": "jobs -> services",
+      "edgeShape": "jobs -> root-or-other",
       "clusterSizeBucket": "1",
       "highRisk": true,
       "highRiskCategories": [
-        "messaging"
+        "imaging"
       ],
-      "partialBaselineResidue": true,
+      "partialBaselineResidue": false,
       "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
+      "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
       "inclusionProbability": 1
     },
     {
@@ -286,26 +421,52 @@
         "messaging"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
     },
     {
-      "edgeKey": "server/src/jobs/reminders.ts␟messaging-whatsapp␟services/whatsapp/whatsappOutboundMessaging.ts␟import",
+      "edgeKey": "server/src/jobs/reminders.ts␟core-observability-ops-events␟utils/logger.ts␟import",
       "callerPath": "server/src/jobs/reminders.ts",
-      "ownerDomain": "messaging-whatsapp",
-      "targetModelOrSymbol": "services/whatsapp/whatsappOutboundMessaging.ts",
+      "ownerDomain": "core-observability-ops-events",
+      "targetModelOrSymbol": "utils/logger.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-automation-recall-followup",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "6a6e2501d90f9691"
+      ],
+      "callerSymbols": [
+        "logger"
+      ],
+      "edgeShape": "jobs -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/reminders.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+      "callerPath": "server/src/jobs/reminders.ts",
+      "ownerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
       "accessKind": "import",
       "callerDomain": "messaging-automation-recall-followup",
       "callerDomainVaries": false,
       "clusterSize": 2,
       "findingIds": [
-        "583e4d65d4b8f700",
-        "ba70a6ce498279d5"
+        "4214bb52c3674bf6",
+        "edce1d844c3a8a5d"
       ],
       "callerSymbols": [
-        "OUTBOUND_ERRORS",
-        "sendProactiveWhatsAppMessage"
+        "ClinicOperatingPreferences",
+        "getClinicOperatingPreferences"
       ],
       "edgeShape": "jobs -> services",
       "clusterSizeBucket": "2-4",
@@ -315,7 +476,87 @@
       ],
       "partialBaselineResidue": true,
       "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/reminders.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+      "callerPath": "server/src/jobs/reminders.ts",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "utils/jobLock.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-automation-recall-followup",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "ada7904a0b2a8f83"
+      ],
+      "callerSymbols": [
+        "withJobLock"
+      ],
+      "edgeShape": "jobs -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/reminders.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/jobs/reminders.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-automation-recall-followup",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "0e837cfb4784d7a8"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "jobs -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/reminders.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+      "callerPath": "server/src/jobs/reminders.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/prismaSelects.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-automation-recall-followup",
+      "callerDomainVaries": false,
+      "clusterSize": 2,
+      "findingIds": [
+        "55b6da7a93386a03",
+        "dc8f206110eab325"
+      ],
+      "callerSymbols": [
+        "patientContactSelect",
+        "userPublicSelect"
+      ],
+      "edgeShape": "jobs -> utils",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
       "inclusionProbability": 1
     },
     {
@@ -340,35 +581,9 @@
         "messaging"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
-      "inclusionProbability": 1
-    },
-    {
-      "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟core-privacy-consent-retention-dsr␟jobs/dataRetentionCleanupJob.ts␟import",
-      "callerPath": "server/src/jobs/startBackgroundJobs.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "jobs/dataRetentionCleanupJob.ts",
-      "accessKind": "import",
-      "callerDomain": "core-shared-events-queue-idempotency",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "b67f12e2d867e83d"
-      ],
-      "callerSymbols": [
-        "startDataRetentionCleanupJob"
-      ],
-      "edgeShape": "jobs -> jobs",
-      "clusterSizeBucket": "1",
-      "highRisk": true,
-      "highRiskCategories": [
-        "privacy-kvkk"
-      ],
-      "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
     },
     {
       "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟core-storage-abstraction␟jobs/fileBackupJob.ts␟import",
@@ -392,9 +607,9 @@
         "storage"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
       "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟external-calendar-integration␟jobs/externalCalendarInboundRetryJob.ts␟import",
@@ -418,9 +633,9 @@
         "integrations"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:external-calendar-integration",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
     },
     {
       "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟external-calendar-integration␟jobs/externalCalendarOutboundSyncJob.ts␟import",
@@ -444,9 +659,9 @@
         "integrations"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:external-calendar-integration",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
     },
     {
       "edgeKey": "server/src/middleware/auth.ts␟core-permissions-roles␟utils/roles.ts␟import",
@@ -524,7 +739,31 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
+    },
+    {
+      "edgeKey": "server/src/routes/appointmentRequests.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+      "callerPath": "server/src/routes/appointmentRequests.ts",
+      "ownerDomain": "core-observability-ops-events",
+      "targetModelOrSymbol": "utils/logger.ts",
+      "accessKind": "import",
+      "callerDomain": "clinical-appointments-availability",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "e38618d8eabec7c5"
+      ],
+      "callerSymbols": [
+        "logger"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_SMALL_CELL",
+      "samplingStratum": "smallCellCensus:core-observability-ops-events",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/appointments.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
@@ -590,7 +829,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/attachments.ts␟core-storage-abstraction␟utils/filePreview.ts␟import",
@@ -614,9 +853,9 @@
         "storage"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
       "edgeKey": "server/src/routes/attachments.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
@@ -640,9 +879,9 @@
         "storage"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
       "edgeKey": "server/src/routes/auth.ts␟core-audit-activity␟utils/activity.ts␟import",
@@ -669,7 +908,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/routes/auth.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
@@ -772,31 +1011,56 @@
       "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
       "callerPath": "server/src/routes/clinicBulkExport.ts",
-      "ownerDomain": "core-storage-abstraction",
-      "targetModelOrSymbol": "services/fileStorage.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/safeError.ts",
       "accessKind": "import",
       "callerDomain": "core-privacy-consent-retention-dsr",
       "callerDomainVaries": false,
       "clusterSize": 1,
       "findingIds": [
-        "c21a110e8a54f4ae"
+        "d6f674ba2b8595c2"
       ],
       "callerSymbols": [
-        "openFileStream"
+        "safeErrorFields"
       ],
-      "edgeShape": "routes -> services",
+      "edgeShape": "routes -> utils",
       "clusterSizeBucket": "1",
       "highRisk": true,
       "highRiskCategories": [
-        "privacy-kvkk",
-        "storage"
+        "privacy-kvkk"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
+    },
+    {
+      "edgeKey": "server/src/routes/clinicLegalProfile.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/clinicLegalProfile.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "c7d590107ed9fc73"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
     },
     {
       "edgeKey": "server/src/routes/clinicRegistration.ts␟messaging-email␟services/emailService.ts␟import",
@@ -851,7 +1115,139 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
+    },
+    {
+      "edgeKey": "server/src/routes/communicationPreferences.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/communicationPreferences.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "2196ed059b29cf68"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
+    },
+    {
+      "edgeKey": "server/src/routes/communicationPreferences.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+      "callerPath": "server/src/routes/communicationPreferences.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "0038b2479ce75c9c"
+      ],
+      "callerSymbols": [
+        "legacySmsOptOutCorrectionSchema"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
+    },
+    {
+      "edgeKey": "server/src/routes/compensationRules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/compensationRules.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "0650298d9eb46550"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/compensationRules.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+      "callerPath": "server/src/routes/compensationRules.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 2,
+      "findingIds": [
+        "2b24079eb436da16",
+        "6e3a5abb5be9d8dc"
+      ],
+      "callerSymbols": [
+        "practitionerCompensationRuleSchema",
+        "serviceCompensationRuleSchema"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/compensationRules.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/compensationRules.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "0e230ae1a1ac65aa"
+      ],
+      "callerSymbols": [
+        "getParam"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/dentalChart.ts␟core-identity-access␟middleware/auth.ts␟import",
@@ -879,7 +1275,33 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
+    },
+    {
+      "edgeKey": "server/src/routes/externalCalendarOutboundSyncStatus.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/externalCalendarOutboundSyncStatus.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "external-calendar-integration",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "0007bbc1e179dce7"
+      ],
+      "callerSymbols": [
+        "getParam"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
     },
     {
       "edgeKey": "server/src/routes/externalCalendarWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
@@ -962,6 +1384,84 @@
       "inclusionProbability": 1
     },
     {
+      "edgeKey": "server/src/routes/financeDashboard.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/financeDashboard.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "ca7aed61c0b0e3c2"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/financeDashboard.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/financeDashboard.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "6c8be0db0a830e7c"
+      ],
+      "callerSymbols": [
+        "getDateRange"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/imaging.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "imaging-server-viewer",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "99b26e345f2747c3"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:imaging-server-viewer",
+      "inclusionProbability": 1
+    },
+    {
       "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
       "callerPath": "server/src/routes/imaging.ts",
       "ownerDomain": "core-shared-platform-infrastructure",
@@ -999,6 +1499,34 @@
       "partialBaselineResidue": false,
       "selectionReason": "CENSUS_CLUSTER_5PLUS",
       "samplingStratum": "cluster5PlusCensus",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/imaging.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "imaging-server-viewer",
+      "callerDomainVaries": false,
+      "clusterSize": 2,
+      "findingIds": [
+        "1f7f3f4d757190c5",
+        "d707988925419770"
+      ],
+      "callerSymbols": [
+        "createRateLimiter",
+        "getParam"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:imaging-server-viewer",
       "inclusionProbability": 1
     },
     {
@@ -1059,9 +1587,9 @@
         "storage"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
       "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
@@ -1086,9 +1614,9 @@
         "storage"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
       "edgeKey": "server/src/routes/imaging.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
@@ -1117,7 +1645,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/imaging.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
@@ -1148,7 +1676,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/imaging.ts␟imaging-device-bridge␟services/imaging/bridgeOnboardingConfig.ts␟import",
@@ -1235,6 +1763,32 @@
       "inclusionProbability": 1
     },
     {
+      "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/imagingBridgePublic.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "imaging-device-bridge",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "a905b5918d8c3a5f"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
+      "inclusionProbability": 1
+    },
+    {
       "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
       "callerPath": "server/src/routes/imagingBridgePublic.ts",
       "ownerDomain": "core-shared-platform-infrastructure",
@@ -1260,9 +1814,35 @@
         "imaging"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/imagingBridgePublic.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "imaging-device-bridge",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "a107bcb8b4ce0a26"
+      ],
+      "callerSymbols": [
+        "createRateLimiter"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
@@ -1287,9 +1867,9 @@
         "storage"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
       "edgeKey": "server/src/routes/imagingBridgePublic.ts␟imaging-server-viewer␟services/imaging/imagingRequestTransitions.ts␟import",
@@ -1380,7 +1960,85 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
+    },
+    {
+      "edgeKey": "server/src/routes/instagramInbox.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/instagramInbox.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "fef1d618712395ad"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/instagramInbox.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/instagramInbox.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "72fcdfa6d91c1dc8"
+      ],
+      "callerSymbols": [
+        "getParam"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/instagramInbox.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+      "callerPath": "server/src/routes/instagramInbox.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/prismaSelects.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "3de2007ce834713e"
+      ],
+      "callerSymbols": [
+        "patientContactSelect"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/instagramWebhook.ts␟core-audit-activity␟utils/auditLog.ts␟import",
@@ -1407,7 +2065,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/routes/instagramWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
@@ -1437,6 +2095,62 @@
       "inclusionProbability": 0.75
     },
     {
+      "edgeKey": "server/src/routes/instagramWebhook.ts␟core-shared-events-queue-idempotency␟services/messagingInboundIdempotency.ts␟import",
+      "callerPath": "server/src/routes/instagramWebhook.ts",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "services/messagingInboundIdempotency.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 3,
+      "findingIds": [
+        "41c416445aaf6656",
+        "7205cb8061aead57",
+        "c9241243163d4591"
+      ],
+      "callerSymbols": [
+        "createInboundEventOrDetectDuplicate",
+        "markInboundEventFailed",
+        "markInboundEventProcessed"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/instagramWebhook.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/instagramWebhook.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "a46df6e7b3657760"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
+    },
+    {
       "edgeKey": "server/src/routes/instagramWebhook.ts␟messaging-shared-channel-infrastructure␟utils/webhookVerification.ts␟import",
       "callerPath": "server/src/routes/instagramWebhook.ts",
       "ownerDomain": "messaging-shared-channel-infrastructure",
@@ -1461,6 +2175,30 @@
       "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
       "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
       "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/insuranceProvisions.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+      "callerPath": "server/src/routes/insuranceProvisions.ts",
+      "ownerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+      "accessKind": "import",
+      "callerDomain": "insurance",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "ed87a9cab0e16dca"
+      ],
+      "callerSymbols": [
+        "getClinicOperatingPreferences"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+      "samplingStratum": "standardProportional:core-org-clinic-membership",
+      "inclusionProbability": 0.1
     },
     {
       "edgeKey": "server/src/routes/inventory.ts␟core-identity-access␟middleware/auth.ts␟import",
@@ -1488,7 +2226,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
     },
     {
       "edgeKey": "server/src/routes/inventoryUnits.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
@@ -1512,59 +2250,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
       "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
-    },
-    {
-      "edgeKey": "server/src/routes/labOrders.ts␟core-identity-access␟middleware/auth.ts␟import",
-      "callerPath": "server/src/routes/labOrders.ts",
-      "ownerDomain": "core-identity-access",
-      "targetModelOrSymbol": "middleware/auth.ts",
-      "accessKind": "import",
-      "callerDomain": "lab-prosthetics-tracking",
-      "callerDomainVaries": false,
-      "clusterSize": 2,
-      "findingIds": [
-        "a4fcac1a9338d2c3",
-        "ef8b16cb529889b8"
-      ],
-      "callerSymbols": [
-        "AuthRequest",
-        "authorize"
-      ],
-      "edgeShape": "routes -> middleware",
-      "clusterSizeBucket": "2-4",
-      "highRisk": true,
-      "highRiskCategories": [
-        "auth"
-      ],
-      "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
-      "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
-    },
-    {
-      "edgeKey": "server/src/routes/labOrders.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
-      "callerPath": "server/src/routes/labOrders.ts",
-      "ownerDomain": "core-shared-platform-infrastructure",
-      "targetModelOrSymbol": "utils/helpers.ts",
-      "accessKind": "import",
-      "callerDomain": "lab-prosthetics-tracking",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "9920516155463c54"
-      ],
-      "callerSymbols": [
-        "getParam"
-      ],
-      "edgeShape": "routes -> utils",
-      "clusterSizeBucket": "1",
-      "highRisk": false,
-      "highRiskCategories": [],
-      "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "inclusionProbability": 0.011904761904761904
     },
     {
       "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
@@ -1622,9 +2308,9 @@
         "storage"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
       "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
@@ -1648,9 +2334,9 @@
         "storage"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
       "edgeKey": "server/src/routes/laboratories.ts␟core-identity-access␟middleware/auth.ts␟import",
@@ -1678,7 +2364,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
     },
     {
       "edgeKey": "server/src/routes/messages.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/communicationConsentPolicy.ts␟import",
@@ -1703,9 +2389,69 @@
         "privacy-kvkk"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
+    },
+    {
+      "edgeKey": "server/src/routes/messages.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+      "callerPath": "server/src/routes/messages.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-whatsapp",
+      "callerDomainVaries": false,
+      "clusterSize": 3,
+      "findingIds": [
+        "3cc15bd1748137e7",
+        "436e8b5ea4aeda13",
+        "f7a61e4c51ff6227"
+      ],
+      "callerSymbols": [
+        "MessageTemplatePurpose",
+        "messageTemplateSchema",
+        "prepareMessageSchema"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
+    },
+    {
+      "edgeKey": "server/src/routes/messages.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+      "callerPath": "server/src/routes/messages.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/prismaSelects.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-whatsapp",
+      "callerDomainVaries": false,
+      "clusterSize": 3,
+      "findingIds": [
+        "42460f210e6ed94c",
+        "4c6c130e4ca81d1c",
+        "bd228ebbe200deb4"
+      ],
+      "callerSymbols": [
+        "patientContactSelect",
+        "userNameSelect",
+        "userPublicSelect"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
     },
     {
       "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟core-platform-crypto␟utils/encryption.ts␟import",
@@ -1812,30 +2558,6 @@
       "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/routes/noShows.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
-      "callerPath": "server/src/routes/noShows.ts",
-      "ownerDomain": "core-shared-platform-infrastructure",
-      "targetModelOrSymbol": "utils/helpers.ts",
-      "accessKind": "import",
-      "callerDomain": "clinical-appointments-availability",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "292780c8667157b1"
-      ],
-      "callerSymbols": [
-        "getParam"
-      ],
-      "edgeShape": "routes -> utils",
-      "clusterSizeBucket": "1",
-      "highRisk": false,
-      "highRiskCategories": [],
-      "partialBaselineResidue": true,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
-    },
-    {
       "edgeKey": "server/src/routes/noShows.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
       "callerPath": "server/src/routes/noShows.ts",
       "ownerDomain": "core-tenant-security",
@@ -1859,7 +2581,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/notifications.ts␟core-identity-access␟middleware/auth.ts␟import",
@@ -1887,7 +2609,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
     },
     {
       "edgeKey": "server/src/routes/operationalMonitoring.ts␟core-permissions-roles␟utils/roles.ts␟import",
@@ -1918,30 +2640,6 @@
       "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
       "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
       "inclusionProbability": 1
-    },
-    {
-      "edgeKey": "server/src/routes/operationalMonitoring.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
-      "callerPath": "server/src/routes/operationalMonitoring.ts",
-      "ownerDomain": "core-shared-platform-infrastructure",
-      "targetModelOrSymbol": "utils/helpers.ts",
-      "accessKind": "import",
-      "callerDomain": "core-observability-ops-events",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "5824558a8973db3b"
-      ],
-      "callerSymbols": [
-        "getParam"
-      ],
-      "edgeShape": "routes -> utils",
-      "clusterSizeBucket": "1",
-      "highRisk": false,
-      "highRiskCategories": [],
-      "partialBaselineResidue": true,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
     },
     {
       "edgeKey": "server/src/routes/organizationBranches.ts␟core-permissions-roles␟utils/roles.ts␟import",
@@ -2105,6 +2803,32 @@
       "inclusionProbability": 0.75
     },
     {
+      "edgeKey": "server/src/routes/organizationInstagram.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/organizationInstagram.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "bee274cad3d2392c"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
+    },
+    {
       "edgeKey": "server/src/routes/organizationInstagram.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
       "callerPath": "server/src/routes/organizationInstagram.ts",
       "ownerDomain": "core-shared-platform-infrastructure",
@@ -2126,9 +2850,9 @@
         "messaging"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-audit-activity␟utils/activity.ts␟import",
@@ -2155,7 +2879,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-permissions-roles␟utils/roles.ts␟import",
@@ -2218,6 +2942,32 @@
       "inclusionProbability": 0.75
     },
     {
+      "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/organizationWhatsApp.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-whatsapp",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "35fe6f408428671c"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
+    },
+    {
       "edgeKey": "server/src/routes/patientEmergencyContacts.ts␟core-identity-access␟middleware/auth.ts␟import",
       "callerPath": "server/src/routes/patientEmergencyContacts.ts",
       "ownerDomain": "core-identity-access",
@@ -2243,34 +2993,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
-    },
-    {
-      "edgeKey": "server/src/routes/patientPrivacy.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
-      "callerPath": "server/src/routes/patientPrivacy.ts",
-      "ownerDomain": "core-storage-abstraction",
-      "targetModelOrSymbol": "services/fileStorage.ts",
-      "accessKind": "import",
-      "callerDomain": "core-privacy-consent-retention-dsr",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "59d7418efd1c86f4"
-      ],
-      "callerSymbols": [
-        "openFileStream"
-      ],
-      "edgeShape": "routes -> services",
-      "clusterSizeBucket": "1",
-      "highRisk": true,
-      "highRiskCategories": [
-        "privacy-kvkk",
-        "storage"
-      ],
-      "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "inclusionProbability": 0.2542372881355932
     },
     {
       "edgeKey": "server/src/routes/patients.ts␟core-identity-access␟middleware/auth.ts␟import",
@@ -2298,7 +3021,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
     },
     {
       "edgeKey": "server/src/routes/patients.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
@@ -2324,7 +3047,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/patientsImport.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
@@ -2350,7 +3073,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/paymentPlans.ts␟core-audit-activity␟utils/activity.ts␟import",
@@ -2377,7 +3100,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/routes/paymentPlans.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
@@ -2401,9 +3124,61 @@
         "finance"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-org-clinic-membership",
-      "inclusionProbability": 0.0625
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/paymentPlans.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/paymentPlans.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "clinical-basic-payments",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "e8fbf85e101ab408"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/paymentPlans.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/paymentPlans.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "clinical-basic-payments",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "97217bf4233cdcb0"
+      ],
+      "callerSymbols": [
+        "getParam"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/payments.ts␟core-audit-activity␟utils/activity.ts␟import",
@@ -2430,7 +3205,137 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
+    },
+    {
+      "edgeKey": "server/src/routes/payments.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+      "callerPath": "server/src/routes/payments.ts",
+      "ownerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+      "accessKind": "import",
+      "callerDomain": "clinical-basic-payments",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "491a51ec2f3710dd"
+      ],
+      "callerSymbols": [
+        "getClinicOperatingPreferences"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/payments.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "clinical-basic-payments",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "651f58d26d31e975"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+      "callerPath": "server/src/routes/payments.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "callerDomain": "clinical-basic-payments",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "a2c88df39d3dd8af"
+      ],
+      "callerSymbols": [
+        "paymentSchema"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/payments.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "clinical-basic-payments",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "bfe55e46851f785c"
+      ],
+      "callerSymbols": [
+        "getParam"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/payments.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+      "callerPath": "server/src/routes/payments.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/prismaSelects.ts",
+      "accessKind": "import",
+      "callerDomain": "clinical-basic-payments",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "71b599b4c601b957"
+      ],
+      "callerSymbols": [
+        "patientContactSelect"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/platformAdmin.ts␟core-config-secrets␟services/platformSettings.ts␟import",
@@ -2491,96 +3396,6 @@
       "inclusionProbability": 0.75
     },
     {
-      "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟jobs/dataRetentionCleanupJob.ts␟import",
-      "callerPath": "server/src/routes/platformAdmin.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "jobs/dataRetentionCleanupJob.ts",
-      "accessKind": "import",
-      "callerDomain": "core-platform-administration",
-      "callerDomainVaries": false,
-      "clusterSize": 3,
-      "findingIds": [
-        "6e90f3a44de5c9a8",
-        "8dcdc9ce9f37a480",
-        "fef2f3ca5646b0da"
-      ],
-      "callerSymbols": [
-        "DATA_RETENTION_JOB_LOCK_NAME",
-        "DATA_RETENTION_JOB_LOCK_TTL_MS",
-        "DataRetentionSummary"
-      ],
-      "edgeShape": "routes -> jobs",
-      "clusterSizeBucket": "2-4",
-      "highRisk": true,
-      "highRiskCategories": [
-        "privacy-kvkk"
-      ],
-      "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
-    },
-    {
-      "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyConsentCorrection.ts␟import",
-      "callerPath": "server/src/routes/platformAdmin.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "services/communicationConsent/legacyConsentCorrection.ts",
-      "accessKind": "import",
-      "callerDomain": "core-platform-administration",
-      "callerDomainVaries": false,
-      "clusterSize": 2,
-      "findingIds": [
-        "7dd243c94032ce8d",
-        "a7e3908c33199475"
-      ],
-      "callerSymbols": [
-        "LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY",
-        "isLegacyConsentCorrectionRuntimeEnabled"
-      ],
-      "edgeShape": "routes -> services",
-      "clusterSizeBucket": "2-4",
-      "highRisk": true,
-      "highRiskCategories": [
-        "privacy-kvkk"
-      ],
-      "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
-    },
-    {
-      "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟services/privacy/dataRetentionManualRunAudit.ts␟import",
-      "callerPath": "server/src/routes/platformAdmin.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "services/privacy/dataRetentionManualRunAudit.ts",
-      "accessKind": "import",
-      "callerDomain": "core-platform-administration",
-      "callerDomainVaries": false,
-      "clusterSize": 4,
-      "findingIds": [
-        "0d671675d0a849ee",
-        "43739e2ccf2a9555",
-        "85a75affc0e2987b",
-        "b90566c1d6158e53"
-      ],
-      "callerSymbols": [
-        "DataRetentionManualRunTerminalOutcome",
-        "recordManualRunStarted",
-        "recordManualRunTerminal",
-        "recordManualRunTerminalOnly"
-      ],
-      "edgeShape": "routes -> services",
-      "clusterSizeBucket": "2-4",
-      "highRisk": true,
-      "highRiskCategories": [
-        "privacy-kvkk"
-      ],
-      "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
-    },
-    {
       "edgeKey": "server/src/routes/platformExternalCalendar.ts␟core-platform-administration␟middleware/platformAuth.ts␟import",
       "callerPath": "server/src/routes/platformExternalCalendar.ts",
       "ownerDomain": "core-platform-administration",
@@ -2604,9 +3419,35 @@
         "integrations"
       ],
       "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_SMALL_CELL",
-      "samplingStratum": "smallCellCensus:core-platform-administration",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
+    },
+    {
+      "edgeKey": "server/src/routes/platformExternalCalendar.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/platformExternalCalendar.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "external-calendar-integration",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "a3ddaee978ec1fb3"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
     },
     {
       "edgeKey": "server/src/routes/platformSecurityIncidents.ts␟core-platform-administration␟middleware/platformAuth.ts␟import",
@@ -2632,8 +3473,34 @@
         "security-incident (extension)"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_SMALL_CELL",
-      "samplingStratum": "smallCellCensus:core-platform-administration",
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/platformSecurityIncidents.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/platformSecurityIncidents.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "core-security-incident-detection",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "0d951ab9a410c5b0"
+      ],
+      "callerSymbols": [
+        "createRateLimiter"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "security-incident (extension)"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
       "inclusionProbability": 1
     },
     {
@@ -2663,7 +3530,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
     },
     {
       "edgeKey": "server/src/routes/postTreatment.ts␟core-shared-platform-infrastructure␟db.ts␟import",
@@ -2687,9 +3554,9 @@
         "messaging"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/postTreatment.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
@@ -2713,9 +3580,9 @@
         "messaging"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-identity-access␟middleware/auth.ts␟import",
@@ -2744,7 +3611,85 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
+    },
+    {
+      "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/practitionerEarnings.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "c1e6b7f77ffcf1c8"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+      "callerPath": "server/src/routes/practitionerEarnings.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "2a132ebb5cc7ce0a"
+      ],
+      "callerSymbols": [
+        "earningAdjustSchema"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/practitionerEarnings.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "c1c0bd497a7cb92d"
+      ],
+      "callerSymbols": [
+        "getParam"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-audit-activity␟utils/activity.ts␟import",
@@ -2771,7 +3716,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟db.ts␟import",
@@ -2795,9 +3740,61 @@
         "finance"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+      "callerPath": "server/src/routes/practitionerPayouts.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "caaa452d31227197"
+      ],
+      "callerSymbols": [
+        "practitionerPayoutSchema"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/practitionerPayouts.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "4005d392a8049250"
+      ],
+      "callerSymbols": [
+        "getParam"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
@@ -2828,7 +3825,37 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
+    },
+    {
+      "edgeKey": "server/src/routes/publicBooking.ts␟clinical-appointments-availability␟services/appointments/appointmentAvailabilityService.ts␟import",
+      "callerPath": "server/src/routes/publicBooking.ts",
+      "ownerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/appointments/appointmentAvailabilityService.ts",
+      "accessKind": "import",
+      "callerDomain": "clinical-public-booking",
+      "callerDomainVaries": false,
+      "clusterSize": 4,
+      "findingIds": [
+        "06645ff4d5b4b81a",
+        "1bfdbde223c47cdf",
+        "a4005ec73a8ac85e",
+        "b8181cc24bd56795"
+      ],
+      "callerSymbols": [
+        "SlotConflictError",
+        "acquireAppointmentSlotLock",
+        "assertSlotAvailable",
+        "checkPractitionerAvailabilityForSlot"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_SMALL_CELL",
+      "samplingStratum": "smallCellCensus:clinical-appointments-availability",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/publicBooking.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
@@ -2854,9 +3881,9 @@
       "highRisk": false,
       "highRiskCategories": [],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:clinical-appointments-availability",
-      "inclusionProbability": 0.1111111111111111
+      "selectionReason": "CENSUS_SMALL_CELL",
+      "samplingStratum": "smallCellCensus:clinical-appointments-availability",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/publicBooking.ts␟core-privacy-consent-retention-dsr␟services/publicBookingNoticeEvidence.ts␟import",
@@ -2893,6 +3920,84 @@
       "inclusionProbability": 1
     },
     {
+      "edgeKey": "server/src/routes/publicClinicKvkk.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/publicClinicKvkk.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "68a8f8408e7ae6d1"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
+    },
+    {
+      "edgeKey": "server/src/routes/recall.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/recall.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-automation-recall-followup",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "1cdbd93d94a7c063"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/recall.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/recall.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-automation-recall-followup",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "bd1c9e2c90f15f74"
+      ],
+      "callerSymbols": [
+        "getParam"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "inclusionProbability": 1
+    },
+    {
       "edgeKey": "server/src/routes/reportExport.ts␟core-audit-activity␟utils/auditLog.ts␟import",
       "callerPath": "server/src/routes/reportExport.ts",
       "ownerDomain": "core-audit-activity",
@@ -2916,7 +4021,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/routes/reports.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
@@ -2942,7 +4047,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/schedules.ts␟core-permissions-roles␟utils/roles.ts␟import",
@@ -2971,30 +4076,6 @@
       "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/routes/schedules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
-      "callerPath": "server/src/routes/schedules.ts",
-      "ownerDomain": "core-shared-platform-infrastructure",
-      "targetModelOrSymbol": "db.ts",
-      "accessKind": "import",
-      "callerDomain": "clinical-appointments-availability",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "3666ec6da8c25167"
-      ],
-      "callerSymbols": [
-        "default"
-      ],
-      "edgeShape": "routes -> root-or-other",
-      "clusterSizeBucket": "1",
-      "highRisk": false,
-      "highRiskCategories": [],
-      "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
-    },
-    {
       "edgeKey": "server/src/routes/schedules.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
       "callerPath": "server/src/routes/schedules.ts",
       "ownerDomain": "core-tenant-security",
@@ -3018,7 +4099,37 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
+    },
+    {
+      "edgeKey": "server/src/routes/settings.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+      "callerPath": "server/src/routes/settings.ts",
+      "ownerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+      "accessKind": "import",
+      "callerDomain": "core-config-secrets",
+      "callerDomainVaries": false,
+      "clusterSize": 3,
+      "findingIds": [
+        "80cf490c53421f49",
+        "953120a612966f61",
+        "ea5df128fc47b6a8"
+      ],
+      "callerSymbols": [
+        "clinicOperatingPreferencesSchema",
+        "getClinicOperatingPreferences",
+        "upsertClinicOperatingPreferences"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:core-config-secrets",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/sms.ts␟core-audit-activity␟utils/activity.ts␟import",
@@ -3045,7 +4156,87 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
+    },
+    {
+      "edgeKey": "server/src/routes/sms.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/sms.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-sms",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "62c01374045855a8"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-sms",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/sms.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+      "callerPath": "server/src/routes/sms.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-sms",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "b20bb12e00c80940"
+      ],
+      "callerSymbols": [
+        "smsSendSchema"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-sms",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/sms.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+      "callerPath": "server/src/routes/sms.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/prismaSelects.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-sms",
+      "callerDomainVaries": false,
+      "clusterSize": 2,
+      "findingIds": [
+        "68be5caa771a10a7",
+        "c92f0eae7103d70e"
+      ],
+      "callerSymbols": [
+        "patientContactSelect",
+        "userNameSelect"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-sms",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/routes/tasks.ts␟core-identity-access␟middleware/auth.ts␟import",
@@ -3073,7 +4264,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
     },
     {
       "edgeKey": "server/src/routes/tasks.ts␟core-notifications␟services/taskAssignmentNotifier.ts␟import",
@@ -3127,7 +4318,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/tasks.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
@@ -3153,7 +4344,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/treatmentCases.ts␟core-identity-access␟middleware/auth.ts␟import",
@@ -3181,31 +4372,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
-    },
-    {
-      "edgeKey": "server/src/routes/treatmentCases.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
-      "callerPath": "server/src/routes/treatmentCases.ts",
-      "ownerDomain": "core-shared-platform-infrastructure",
-      "targetModelOrSymbol": "utils/safeError.ts",
-      "accessKind": "import",
-      "callerDomain": "clinical-treatment-cases",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "7e718358bfabbb97"
-      ],
-      "callerSymbols": [
-        "safeErrorFields"
-      ],
-      "edgeShape": "routes -> utils",
-      "clusterSizeBucket": "1",
-      "highRisk": false,
-      "highRiskCategories": [],
-      "partialBaselineResidue": true,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "inclusionProbability": 0.2542372881355932
     },
     {
       "edgeKey": "server/src/routes/treatmentCases.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
@@ -3235,7 +4402,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/treatmentCases.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
@@ -3265,7 +4432,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/treatmentPackages.ts␟core-audit-activity␟utils/activity.ts␟import",
@@ -3291,31 +4458,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
-    },
-    {
-      "edgeKey": "server/src/routes/treatmentPackages.ts␟core-shared-platform-infrastructure␟db.ts␟import",
-      "callerPath": "server/src/routes/treatmentPackages.ts",
-      "ownerDomain": "core-shared-platform-infrastructure",
-      "targetModelOrSymbol": "db.ts",
-      "accessKind": "import",
-      "callerDomain": "clinical-treatment-cases",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "09d9cb49fe62ff6e"
-      ],
-      "callerSymbols": [
-        "default"
-      ],
-      "edgeShape": "routes -> root-or-other",
-      "clusterSizeBucket": "1",
-      "highRisk": false,
-      "highRiskCategories": [],
-      "partialBaselineResidue": true,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟core-identity-access␟middleware/auth.ts␟import",
@@ -3343,7 +4486,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
     },
     {
       "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
@@ -3369,7 +4512,7 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟messaging-automation-recall-followup␟services/postTreatmentMessaging.ts␟import",
@@ -3421,7 +4564,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/routes/users.ts␟core-identity-access␟utils/passwordResetToken.ts␟import",
@@ -3449,7 +4592,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-identity-access",
-      "inclusionProbability": 0.2727272727272727
+      "inclusionProbability": 0.2542372881355932
     },
     {
       "edgeKey": "server/src/routes/users.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
@@ -3567,7 +4710,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-tenant-security",
-      "inclusionProbability": 0.30612244897959184
+      "inclusionProbability": 0.29411764705882354
     },
     {
       "edgeKey": "server/src/routes/usersImport.ts␟messaging-email␟services/emailService.ts␟import",
@@ -3620,6 +4763,92 @@
       "selectionReason": "CENSUS_ROUTE_TO_ROUTE",
       "samplingStratum": "routeToRouteCensus",
       "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟clinical-appointments-availability␟services/appointments/appointmentAvailabilityService.ts␟import",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "ownerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/appointments/appointmentAvailabilityService.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-whatsapp",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "973c834c88991e83"
+      ],
+      "callerSymbols": [
+        "checkPractitionerAvailabilityForSlot"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "ownerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/whatsappAvailability.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-whatsapp",
+      "callerDomainVaries": false,
+      "clusterSize": 4,
+      "findingIds": [
+        "277d55f6c63b3487",
+        "8efe2a2987126329",
+        "cbad3bd77e0f6954",
+        "e32e856c6a64447e"
+      ],
+      "callerSymbols": [
+        "SavedAvailableSlot",
+        "buildAvailableSlots",
+        "loadAvailabilityForDate",
+        "saveSlotsForState"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "ownerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-whatsapp",
+      "callerDomainVaries": false,
+      "clusterSize": 2,
+      "findingIds": [
+        "1a9ec4b7442fe906",
+        "710f127b39bda412"
+      ],
+      "callerSymbols": [
+        "ClinicOperatingPreferences",
+        "getClinicOperatingPreferences"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
     },
     {
       "edgeKey": "server/src/routes/whatsapp.ts␟core-platform-crypto␟utils/encryption.ts␟import",
@@ -3688,6 +4917,32 @@
       "selectionReason": "CENSUS_CLUSTER_5PLUS",
       "samplingStratum": "cluster5PlusCensus",
       "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/routes/whatsapp.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-whatsapp",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "0eb0173981859740"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
     },
     {
       "edgeKey": "server/src/routes/whatsapp.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
@@ -3922,7 +5177,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/routes/whatsappInbox.ts␟core-permissions-roles␟utils/roles.ts␟import",
@@ -3952,28 +5207,108 @@
       "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/services/clinicOperatingPreferences.ts␟core-shared-platform-infrastructure␟db.ts␟import",
-      "callerPath": "server/src/services/clinicOperatingPreferences.ts",
+      "edgeKey": "server/src/routes/whatsappInbox.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/routes/whatsappInbox.ts",
       "ownerDomain": "core-shared-platform-infrastructure",
-      "targetModelOrSymbol": "db.ts",
+      "targetModelOrSymbol": "utils/helpers.ts",
       "accessKind": "import",
-      "callerDomain": "core-org-clinic-membership",
+      "callerDomain": "messaging-whatsapp",
       "callerDomainVaries": false,
       "clusterSize": 1,
       "findingIds": [
-        "a918ee7e47a3711e"
+        "9b262e94d1f5c8c6"
+      ],
+      "callerSymbols": [
+        "getParam"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
+    },
+    {
+      "edgeKey": "server/src/services/channelConsentGate.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/channelConsentGate.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "a3423b7241ff0b53"
       ],
       "callerSymbols": [
         "default"
       ],
       "edgeShape": "services -> root-or-other",
       "clusterSizeBucket": "1",
-      "highRisk": false,
-      "highRiskCategories": [],
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
+    },
+    {
+      "edgeKey": "server/src/services/communicationConsent/communicationConsentAdmin.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/communicationConsent/communicationConsentAdmin.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "726b52d738d7297f"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
+    },
+    {
+      "edgeKey": "server/src/services/earningService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/earningService.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "finance-advanced-compensation",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "a881b64d1a2cef31"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/services/externalCalendar/digidentis/DigiDentisProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
@@ -4003,34 +5338,290 @@
       "inclusionProbability": 0.75
     },
     {
-      "edgeKey": "server/src/services/googleAiStudio.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
-      "callerPath": "server/src/services/googleAiStudio.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "services/privacy/redaction.ts",
+      "edgeKey": "server/src/services/externalCalendar/externalCalendarConnectionService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/externalCalendar/externalCalendarConnectionService.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
       "accessKind": "import",
-      "callerDomain": "messaging-ai-orchestration",
+      "callerDomain": "external-calendar-integration",
       "callerDomainVaries": false,
-      "clusterSize": 2,
+      "clusterSize": 1,
       "findingIds": [
-        "b4fd7f69697892ab",
-        "d8f93bdd515be8c1"
+        "ca37eacaac0da445"
       ],
       "callerSymbols": [
-        "getAiCustomerNamePlaceholder",
-        "redactSensitiveText"
+        "default"
       ],
-      "edgeShape": "services -> services",
-      "clusterSizeBucket": "2-4",
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
       "highRisk": true,
       "highRiskCategories": [
-        "ai",
-        "messaging",
-        "privacy-kvkk"
+        "integrations"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
+    },
+    {
+      "edgeKey": "server/src/services/externalCalendar/externalCalendarIdempotency.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/externalCalendar/externalCalendarIdempotency.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "external-calendar-integration",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "ea9fa6932ab8cb5e"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
+    },
+    {
+      "edgeKey": "server/src/services/externalCalendar/externalCalendarMappingService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/externalCalendar/externalCalendarMappingService.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "external-calendar-integration",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "db0754e2720287b9"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
+    },
+    {
+      "edgeKey": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts␟core-observability-ops-events␟services/operationalEventService.ts␟import",
+      "callerPath": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts",
+      "ownerDomain": "core-observability-ops-events",
+      "targetModelOrSymbol": "services/operationalEventService.ts",
+      "accessKind": "import",
+      "callerDomain": "external-calendar-integration",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "e0a9cdbe613cda9d"
+      ],
+      "callerSymbols": [
+        "recordOperationalEvent"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
+    },
+    {
+      "edgeKey": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+      "callerPath": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts",
+      "ownerDomain": "core-observability-ops-events",
+      "targetModelOrSymbol": "utils/logger.ts",
+      "accessKind": "import",
+      "callerDomain": "external-calendar-integration",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "3f64d8672809e415"
+      ],
+      "callerSymbols": [
+        "logger"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
+    },
+    {
+      "edgeKey": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "external-calendar-integration",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "b0641b69f515c2ac"
+      ],
+      "callerSymbols": [
+        "getZonedDateTimeParts"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:external-calendar-integration",
+      "inclusionProbability": 0.8333333333333334
+    },
+    {
+      "edgeKey": "server/src/services/fileBackupDestination.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+      "callerPath": "server/src/services/fileBackupDestination.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/safeError.ts",
+      "accessKind": "import",
+      "callerDomain": "core-storage-abstraction",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "bb66cc4c32eda0e7"
+      ],
+      "callerSymbols": [
+        "safeErrorFields"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
+    },
+    {
+      "edgeKey": "server/src/services/fileBackupService.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+      "callerPath": "server/src/services/fileBackupService.ts",
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "targetModelOrSymbol": "utils/jobLock.ts",
+      "accessKind": "import",
+      "callerDomain": "core-storage-abstraction",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "8c8dd92faca3bc00"
+      ],
+      "callerSymbols": [
+        "withJobLock"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
+    },
+    {
+      "edgeKey": "server/src/services/fileBackupService.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+      "callerPath": "server/src/services/fileBackupService.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/safeError.ts",
+      "accessKind": "import",
+      "callerDomain": "core-storage-abstraction",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "edf3cf4e2b5dd425"
+      ],
+      "callerSymbols": [
+        "safeErrorFields"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
+    },
+    {
+      "edgeKey": "server/src/services/fileStorage.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/fileStorage.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-storage-abstraction",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "f8fd33241069dec6"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
+    },
+    {
+      "edgeKey": "server/src/services/fileStorage.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+      "callerPath": "server/src/services/fileStorage.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/safeError.ts",
+      "accessKind": "import",
+      "callerDomain": "core-storage-abstraction",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "fe06668d1ebc068b"
+      ],
+      "callerSymbols": [
+        "safeErrorFields"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
       "edgeKey": "server/src/services/imaging/bridgePairing.ts␟core-platform-crypto␟utils/secrets.ts␟import",
@@ -4060,6 +5651,58 @@
       "inclusionProbability": 0.75
     },
     {
+      "edgeKey": "server/src/services/imaging/imagingRequestTransitions.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+      "callerPath": "server/src/services/imaging/imagingRequestTransitions.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "schemas/index.ts",
+      "accessKind": "import",
+      "callerDomain": "imaging-server-viewer",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "eef35d67bfdfbc9a"
+      ],
+      "callerSymbols": [
+        "IMAGING_REQUEST_STATUSES"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:imaging-server-viewer",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/services/imaging/public.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/imaging/public.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "imaging-server-viewer",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "7f3af2b9e11bff50"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:imaging-server-viewer",
+      "inclusionProbability": 1
+    },
+    {
       "edgeKey": "server/src/services/imaging/public.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
       "callerPath": "server/src/services/imaging/public.ts",
       "ownerDomain": "core-storage-abstraction",
@@ -4082,9 +5725,9 @@
         "storage"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
       "edgeKey": "server/src/services/instagram/InstagramMessagingProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
@@ -4112,6 +5755,142 @@
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-platform-crypto",
       "inclusionProbability": 0.75
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟clinical-appointments-availability␟routes/contactRequests.ts␟import",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "ownerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "routes/contactRequests.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "4817db0578d3bbfb"
+      ],
+      "callerSymbols": [
+        "upsertContactRequest"
+      ],
+      "edgeShape": "services -> routes",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "ownerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/whatsappAvailability.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 2,
+      "findingIds": [
+        "0e13e80b6dabe39e",
+        "d81cb60db3da12d4"
+      ],
+      "callerSymbols": [
+        "SavedAvailableSlot",
+        "buildAvailableSlots"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟core-observability-ops-events␟services/operationalEventService.ts␟import",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "ownerDomain": "core-observability-ops-events",
+      "targetModelOrSymbol": "services/operationalEventService.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "299a29be8bec6c4c"
+      ],
+      "callerSymbols": [
+        "recordOperationalEvent"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "505be83f85124bdc"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/helpers.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-instagram",
+      "callerDomainVaries": false,
+      "clusterSize": 3,
+      "findingIds": [
+        "0d758d0be99b7b88",
+        "1df2fc9829e15e6f",
+        "976a1f320697ebaa"
+      ],
+      "callerSymbols": [
+        "checkPractitionerAvailability",
+        "formatClinicDateTime",
+        "minutesToTime"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
@@ -4338,80 +6117,108 @@
       "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-whatsapp␟utils/whatsappDate.ts␟import",
-      "callerPath": "server/src/services/instagram/instagramAiConversationProcessor.ts",
-      "ownerDomain": "messaging-whatsapp",
-      "targetModelOrSymbol": "utils/whatsappDate.ts",
+      "edgeKey": "server/src/services/instagram/instagramClinicResolver.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/instagram/instagramClinicResolver.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
       "accessKind": "import",
       "callerDomain": "messaging-instagram",
       "callerDomainVaries": false,
-      "clusterSize": 2,
+      "clusterSize": 1,
       "findingIds": [
-        "7a2a68887f763eb3",
-        "e2daf2ccb361ccef"
+        "a3502bd1fa27100f"
       ],
       "callerSymbols": [
-        "WHATSAPP_ASSISTANT_TIME_ZONE",
-        "formatTurkishDateLong"
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/services/platformSettings.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/platformSettings.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-config-secrets",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "6db1026e64b5b2de"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:core-config-secrets",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/services/postTreatmentMessaging.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+      "callerPath": "server/src/services/postTreatmentMessaging.ts",
+      "ownerDomain": "core-observability-ops-events",
+      "targetModelOrSymbol": "utils/logger.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-automation-recall-followup",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "b18a6b651778eea2"
+      ],
+      "callerSymbols": [
+        "logger"
       ],
       "edgeShape": "services -> utils",
-      "clusterSizeBucket": "2-4",
+      "clusterSizeBucket": "1",
       "highRisk": true,
       "highRiskCategories": [
         "messaging"
       ],
       "partialBaselineResidue": true,
       "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
       "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/services/inventoryAlerts.ts␟core-shared-platform-infrastructure␟db.ts␟import",
-      "callerPath": "server/src/services/inventoryAlerts.ts",
+      "edgeKey": "server/src/services/postTreatmentMessaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/postTreatmentMessaging.ts",
       "ownerDomain": "core-shared-platform-infrastructure",
       "targetModelOrSymbol": "db.ts",
       "accessKind": "import",
-      "callerDomain": "inventory",
+      "callerDomain": "messaging-automation-recall-followup",
       "callerDomainVaries": false,
       "clusterSize": 1,
       "findingIds": [
-        "c067800de4f66a4f"
+        "951cae356e6fd648"
       ],
       "callerSymbols": [
         "default"
       ],
       "edgeShape": "services -> root-or-other",
       "clusterSizeBucket": "1",
-      "highRisk": false,
-      "highRiskCategories": [],
-      "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
-    },
-    {
-      "edgeKey": "server/src/services/messagingInboundIdempotency.ts␟core-shared-platform-infrastructure␟db.ts␟import",
-      "callerPath": "server/src/services/messagingInboundIdempotency.ts",
-      "ownerDomain": "core-shared-platform-infrastructure",
-      "targetModelOrSymbol": "db.ts",
-      "accessKind": "import",
-      "callerDomain": "core-shared-events-queue-idempotency",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "0b428f464fa60e64"
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
       ],
-      "callerSymbols": [
-        "default"
-      ],
-      "edgeShape": "services -> root-or-other",
-      "clusterSizeBucket": "1",
-      "highRisk": false,
-      "highRiskCategories": [],
-      "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "partialBaselineResidue": true,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/services/privacy/clinicBulkExportPackage.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
@@ -4484,32 +6291,6 @@
       "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/services/privacy/dataRetentionManualRunAudit.ts␟core-platform-administration␟services/platformAdminAudit.ts␟import",
-      "callerPath": "server/src/services/privacy/dataRetentionManualRunAudit.ts",
-      "ownerDomain": "core-platform-administration",
-      "targetModelOrSymbol": "services/platformAdminAudit.ts",
-      "accessKind": "import",
-      "callerDomain": "core-privacy-consent-retention-dsr",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "cd0275983096d7b2"
-      ],
-      "callerSymbols": [
-        "writePlatformAdminAuditEventInTx"
-      ],
-      "edgeShape": "services -> services",
-      "clusterSizeBucket": "1",
-      "highRisk": true,
-      "highRiskCategories": [
-        "privacy-kvkk"
-      ],
-      "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_SMALL_CELL",
-      "samplingStratum": "smallCellCensus:core-platform-administration",
-      "inclusionProbability": 1
-    },
-    {
       "edgeKey": "server/src/services/privacy/orphanFileInspection.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
       "callerPath": "server/src/services/privacy/orphanFileInspection.ts",
       "ownerDomain": "core-storage-abstraction",
@@ -4532,62 +6313,35 @@
         "storage"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
-      "inclusionProbability": 1
-    },
-    {
-      "edgeKey": "server/src/services/privacy/patientAnonymization.ts␟core-audit-activity␟utils/auditLog.ts␟import",
-      "callerPath": "server/src/services/privacy/patientAnonymization.ts",
-      "ownerDomain": "core-audit-activity",
-      "targetModelOrSymbol": "utils/auditLog.ts",
-      "accessKind": "import",
-      "callerDomain": "core-privacy-consent-retention-dsr",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "ecd3a0fd8ee2540e"
-      ],
-      "callerSymbols": [
-        "writeAuditLog"
-      ],
-      "edgeShape": "services -> utils",
-      "clusterSizeBucket": "1",
-      "highRisk": true,
-      "highRiskCategories": [
-        "audit",
-        "privacy-kvkk"
-      ],
-      "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
-      "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "samplingStratum": "highRiskOversample:core-storage-abstraction",
+      "inclusionProbability": 0.7894736842105263
     },
     {
-      "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟clinical-patients␟routes/attachments.ts␟import",
+      "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟core-shared-platform-infrastructure␟db.ts␟import",
       "callerPath": "server/src/services/privacy/patientPrivacyExportPackage.ts",
-      "ownerDomain": "clinical-patients",
-      "targetModelOrSymbol": "routes/attachments.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
       "accessKind": "import",
       "callerDomain": "core-privacy-consent-retention-dsr",
       "callerDomainVaries": false,
       "clusterSize": 1,
       "findingIds": [
-        "d2dbd44a56b46785"
+        "ff5443b9a98b0aab"
       ],
       "callerSymbols": [
-        "ATTACHMENT_MAX_FILE_SIZE_BYTES"
+        "default"
       ],
-      "edgeShape": "services -> routes",
+      "edgeShape": "services -> root-or-other",
       "clusterSizeBucket": "1",
       "highRisk": true,
       "highRiskCategories": [
         "privacy-kvkk"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_SMALL_CELL",
-      "samplingStratum": "smallCellCensus:clinical-patients",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
     },
     {
       "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
@@ -4625,6 +6379,32 @@
       "inclusionProbability": 1
     },
     {
+      "edgeKey": "server/src/services/publicBookingNoticeEvidence.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/publicBookingNoticeEvidence.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-privacy-consent-retention-dsr",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "6cf55deb6b3e60b1"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
+    },
+    {
       "edgeKey": "server/src/services/recallCandidateService.ts␟core-audit-activity␟utils/activity.ts␟import",
       "callerPath": "server/src/services/recallCandidateService.ts",
       "ownerDomain": "core-audit-activity",
@@ -4649,35 +6429,58 @@
       "partialBaselineResidue": false,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
+      "inclusionProbability": 0.23809523809523808
     },
     {
-      "edgeKey": "server/src/services/recallCandidateService.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyReconciliationResolver.ts␟import",
+      "edgeKey": "server/src/services/recallCandidateService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
       "callerPath": "server/src/services/recallCandidateService.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "services/communicationConsent/legacyReconciliationResolver.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
       "accessKind": "import",
       "callerDomain": "messaging-automation-recall-followup",
       "callerDomainVaries": false,
-      "clusterSize": 2,
+      "clusterSize": 1,
       "findingIds": [
-        "08ecb33761f65102",
-        "a47b2591a2f9d411"
+        "f077080c62a17c4a"
       ],
       "callerSymbols": [
-        "LegacyGateSignal",
-        "resolveCommunicationConsent"
+        "default"
       ],
-      "edgeShape": "services -> services",
-      "clusterSizeBucket": "2-4",
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
       "highRisk": true,
       "highRiskCategories": [
-        "messaging",
-        "privacy-kvkk"
+        "messaging"
       ],
       "partialBaselineResidue": false,
       "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/services/recallSettings.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/recallSettings.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-automation-recall-followup",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "f30291f49febb0e3"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
       "inclusionProbability": 1
     },
     {
@@ -4707,6 +6510,32 @@
       "inclusionProbability": 1
     },
     {
+      "edgeKey": "server/src/services/security/securityDetectionRules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/security/securityDetectionRules.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-security-incident-detection",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "21938db97b78422a"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "security-incident (extension)"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+      "inclusionProbability": 1
+    },
+    {
       "edgeKey": "server/src/services/security/securityIncidentService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
       "callerPath": "server/src/services/security/securityIncidentService.ts",
       "ownerDomain": "core-shared-platform-infrastructure",
@@ -4728,9 +6557,35 @@
         "security-incident (extension)"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/services/security/securitySignalService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/security/securitySignalService.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-security-incident-detection",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "54b180c99d9da3d1"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "security-incident (extension)"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+      "inclusionProbability": 1
     },
     {
       "edgeKey": "server/src/services/sms/platformSmsProviders.ts␟core-platform-crypto␟utils/encryption.ts␟import",
@@ -4762,6 +6617,32 @@
       "inclusionProbability": 0.75
     },
     {
+      "edgeKey": "server/src/services/sms/platformSmsProviders.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/sms/platformSmsProviders.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-sms",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "2f6a6a961b682871"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-sms",
+      "inclusionProbability": 1
+    },
+    {
       "edgeKey": "server/src/services/sms/smsCommunicationPurposeMap.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
       "callerPath": "server/src/services/sms/smsCommunicationPurposeMap.ts",
       "ownerDomain": "core-privacy-consent-retention-dsr",
@@ -4784,37 +6665,60 @@
         "privacy-kvkk"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
     },
     {
-      "edgeKey": "server/src/services/sms/smsService.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyReconciliationResolver.ts␟import",
-      "callerPath": "server/src/services/sms/smsService.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "services/communicationConsent/legacyReconciliationResolver.ts",
+      "edgeKey": "server/src/services/sms/smsEntitlement.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/sms/smsEntitlement.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
       "accessKind": "import",
       "callerDomain": "messaging-sms",
       "callerDomainVaries": false,
-      "clusterSize": 2,
+      "clusterSize": 1,
       "findingIds": [
-        "1e0edb6a93e5abf0",
-        "fa8ae2e3cd18fa4f"
+        "53f4eed3a9be6466"
       ],
       "callerSymbols": [
-        "LegacyGateSignal",
-        "resolveCommunicationConsent"
+        "default"
       ],
-      "edgeShape": "services -> services",
-      "clusterSizeBucket": "2-4",
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
       "highRisk": true,
       "highRiskCategories": [
-        "messaging",
-        "privacy-kvkk"
+        "messaging"
       ],
       "partialBaselineResidue": false,
       "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "samplingStratum": "highRiskDomainCensus:messaging-sms",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/services/sms/smsService.ts␟core-observability-ops-events␟services/operationalEventService.ts␟import",
+      "callerPath": "server/src/services/sms/smsService.ts",
+      "ownerDomain": "core-observability-ops-events",
+      "targetModelOrSymbol": "services/operationalEventService.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-sms",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "a6650b358fd81879"
+      ],
+      "callerSymbols": [
+        "recordOperationalEvent"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-sms",
       "inclusionProbability": 1
     },
     {
@@ -4839,24 +6743,24 @@
         "messaging"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-sms",
+      "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/services/taskAssignmentNotifier.ts␟messaging-whatsapp␟services/whatsapp/whatsappService.ts␟import",
-      "callerPath": "server/src/services/taskAssignmentNotifier.ts",
-      "ownerDomain": "messaging-whatsapp",
-      "targetModelOrSymbol": "services/whatsapp/whatsappService.ts",
+      "edgeKey": "server/src/services/sms/smsTemplating.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+      "callerPath": "server/src/services/sms/smsTemplating.ts",
+      "ownerDomain": "core-org-clinic-membership",
+      "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
       "accessKind": "import",
-      "callerDomain": "core-notifications",
+      "callerDomain": "messaging-sms",
       "callerDomainVaries": false,
       "clusterSize": 1,
       "findingIds": [
-        "03727afe41bc78be"
+        "40daf349fd87e03c"
       ],
       "callerSymbols": [
-        "sendWhatsAppMessage"
+        "getClinicOperatingPreferences"
       ],
       "edgeShape": "services -> services",
       "clusterSizeBucket": "1",
@@ -4866,7 +6770,7 @@
       ],
       "partialBaselineResidue": false,
       "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
+      "samplingStratum": "highRiskDomainCensus:messaging-sms",
       "inclusionProbability": 1
     },
     {
@@ -4948,6 +6852,88 @@
       "inclusionProbability": 0.75
     },
     {
+      "edgeKey": "server/src/services/whatsapp/clinicResolver.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/whatsapp/clinicResolver.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-whatsapp",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "f4f8e74519f973ab"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/conversationMessageStore.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/services/whatsapp/conversationMessageStore.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-whatsapp",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "484ac1ae72408d00"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟clinical-appointments-availability␟services/appointmentRequestSafety.ts␟import",
+      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+      "ownerDomain": "clinical-appointments-availability",
+      "targetModelOrSymbol": "services/appointmentRequestSafety.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-whatsapp",
+      "callerDomainVaries": false,
+      "clusterSize": 3,
+      "findingIds": [
+        "7bd2e68b2c289b62",
+        "dc41df8a8b2402fa",
+        "eedf1a1e0e8ee3b1"
+      ],
+      "callerSymbols": [
+        "SlotConflictError",
+        "acquireAppointmentSlotLock",
+        "assertSlotAvailable"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": true,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
+    },
+    {
       "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟core-audit-activity␟utils/activity.ts␟import",
       "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
       "ownerDomain": "core-audit-activity",
@@ -4972,34 +6958,7 @@
       "partialBaselineResidue": true,
       "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
       "samplingStratum": "highRiskOversample:core-audit-activity",
-      "inclusionProbability": 0.24193548387096775
-    },
-    {
-      "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
-      "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "services/privacy/redaction.ts",
-      "accessKind": "import",
-      "callerDomain": "messaging-whatsapp",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "8f6f785218af0b5c"
-      ],
-      "callerSymbols": [
-        "sanitizeAiMessageHistory"
-      ],
-      "edgeShape": "services -> services",
-      "clusterSizeBucket": "1",
-      "highRisk": true,
-      "highRiskCategories": [
-        "messaging",
-        "privacy-kvkk"
-      ],
-      "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
@@ -5162,87 +7121,30 @@
       "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
+      "edgeKey": "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
       "callerPath": "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "services/communicationConsent/taxonomy.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "schemas/index.ts",
       "accessKind": "import",
       "callerDomain": "messaging-whatsapp",
       "callerDomainVaries": false,
       "clusterSize": 1,
       "findingIds": [
-        "3e2978af700c9899"
+        "6ab3a9e2783cdc83"
       ],
       "callerSymbols": [
-        "CommunicationPurpose"
+        "MessageTemplatePurpose"
       ],
-      "edgeShape": "services -> services",
+      "edgeShape": "services -> root-or-other",
       "clusterSizeBucket": "1",
       "highRisk": true,
       "highRiskCategories": [
-        "messaging",
-        "privacy-kvkk"
+        "messaging"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
-    },
-    {
-      "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/communicationConsentPolicy.ts␟import",
-      "callerPath": "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "services/communicationConsent/communicationConsentPolicy.ts",
-      "accessKind": "import",
-      "callerDomain": "messaging-whatsapp",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "81215c1dfb221883"
-      ],
-      "callerSymbols": [
-        "assertCommunicationPermission"
-      ],
-      "edgeShape": "services -> services",
-      "clusterSizeBucket": "1",
-      "highRisk": true,
-      "highRiskCategories": [
-        "messaging",
-        "privacy-kvkk"
-      ],
-      "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
-    },
-    {
-      "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/enforcementConfig.ts␟import",
-      "callerPath": "server/src/services/whatsapp/whatsappOutboundMessaging.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "services/communicationConsent/enforcementConfig.ts",
-      "accessKind": "import",
-      "callerDomain": "messaging-whatsapp",
-      "callerDomainVaries": false,
-      "clusterSize": 2,
-      "findingIds": [
-        "4e5386c798113baa",
-        "cb2034760c94536b"
-      ],
-      "callerSymbols": [
-        "getCommunicationConsentEnforcementMode",
-        "isCommunicationConsentEnforcementEnabled"
-      ],
-      "edgeShape": "services -> services",
-      "clusterSizeBucket": "2-4",
-      "highRisk": true,
-      "highRiskCategories": [
-        "messaging",
-        "privacy-kvkk"
-      ],
-      "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
     },
     {
       "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
@@ -5267,9 +7169,9 @@
         "privacy-kvkk"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-privacy-consent-retention-dsr",
+      "inclusionProbability": 0.30612244897959184
     },
     {
       "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
@@ -5293,9 +7195,9 @@
         "messaging"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
-      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
-      "inclusionProbability": 0.09047619047619047
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:messaging-whatsapp",
+      "inclusionProbability": 0.42857142857142855
     },
     {
       "edgeKey": "server/src/services/whatsappAvailability.ts␟messaging-ai-orchestration␟services/whatsappInterpreter.ts␟import",
@@ -5366,6 +7268,35 @@
       "inclusionProbability": 1
     },
     {
+      "edgeKey": "server/src/services/whatsappBookingFlow.ts␟core-shared-platform-infrastructure␟utils/logRedaction.ts␟import",
+      "callerPath": "server/src/services/whatsappBookingFlow.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/logRedaction.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-ai-orchestration",
+      "callerDomainVaries": false,
+      "clusterSize": 2,
+      "findingIds": [
+        "77e2042973b35448",
+        "d6a57b0990a5648d"
+      ],
+      "callerSymbols": [
+        "redactPhone",
+        "summarizeTextForLog"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "2-4",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "inclusionProbability": 1
+    },
+    {
       "edgeKey": "server/src/services/whatsappBookingFlow.ts␟messaging-whatsapp␟utils/whatsappDate.ts␟import",
       "callerPath": "server/src/services/whatsappBookingFlow.ts",
       "ownerDomain": "messaging-whatsapp",
@@ -5401,59 +7332,30 @@
       "inclusionProbability": 1
     },
     {
-      "edgeKey": "server/src/services/whatsappConversationAgent.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
-      "callerPath": "server/src/services/whatsappConversationAgent.ts",
-      "ownerDomain": "core-privacy-consent-retention-dsr",
-      "targetModelOrSymbol": "services/privacy/redaction.ts",
+      "edgeKey": "server/src/utils/auditLog.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/utils/auditLog.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
       "accessKind": "import",
-      "callerDomain": "messaging-ai-orchestration",
+      "callerDomain": "core-audit-activity",
       "callerDomainVaries": false,
       "clusterSize": 1,
       "findingIds": [
-        "7f32972352e2fa9d"
+        "4f4fa053fade54e5"
       ],
       "callerSymbols": [
-        "redactSensitiveText"
+        "default"
       ],
-      "edgeShape": "services -> services",
+      "edgeShape": "utils -> root-or-other",
       "clusterSizeBucket": "1",
       "highRisk": true,
       "highRiskCategories": [
-        "ai",
-        "messaging",
-        "privacy-kvkk"
+        "audit"
       ],
       "partialBaselineResidue": false,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
-      "inclusionProbability": 1
-    },
-    {
-      "edgeKey": "server/src/services/whatsappStepAwareNlu.ts␟messaging-whatsapp␟services/whatsapp/humanHandoffPhrases.ts␟import",
-      "callerPath": "server/src/services/whatsappStepAwareNlu.ts",
-      "ownerDomain": "messaging-whatsapp",
-      "targetModelOrSymbol": "services/whatsapp/humanHandoffPhrases.ts",
-      "accessKind": "import",
-      "callerDomain": "messaging-ai-orchestration",
-      "callerDomainVaries": false,
-      "clusterSize": 1,
-      "findingIds": [
-        "77fb266f1a47e730"
-      ],
-      "callerSymbols": [
-        "isHumanHandoffPhrase"
-      ],
-      "edgeShape": "services -> services",
-      "clusterSizeBucket": "1",
-      "highRisk": true,
-      "highRiskCategories": [
-        "ai",
-        "messaging"
-      ],
-      "partialBaselineResidue": true,
-      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
-      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
-      "inclusionProbability": 1
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "inclusionProbability": 0.23809523809523808
     },
     {
       "edgeKey": "server/src/utils/clinicScope.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
@@ -5481,6 +7383,58 @@
       "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
       "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
       "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/utils/inboundRateLimiter.ts␟core-shared-platform-infrastructure␟utils/counterStore.ts␟import",
+      "callerPath": "server/src/utils/inboundRateLimiter.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "utils/counterStore.ts",
+      "accessKind": "import",
+      "callerDomain": "messaging-shared-channel-infrastructure",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "d12be40264cdd778"
+      ],
+      "callerSymbols": [
+        "createCounterStore"
+      ],
+      "edgeShape": "utils -> utils",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+      "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+      "inclusionProbability": 1
+    },
+    {
+      "edgeKey": "server/src/utils/passwordStepUp.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "callerPath": "server/src/utils/passwordStepUp.ts",
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "targetModelOrSymbol": "db.ts",
+      "accessKind": "import",
+      "callerDomain": "core-identity-access",
+      "callerDomainVaries": false,
+      "clusterSize": 1,
+      "findingIds": [
+        "72a423adbcc120d4"
+      ],
+      "callerSymbols": [
+        "default"
+      ],
+      "edgeShape": "utils -> root-or-other",
+      "clusterSizeBucket": "1",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "partialBaselineResidue": false,
+      "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "inclusionProbability": 0.2542372881355932
     }
   ]
 }

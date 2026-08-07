@@ -1,0 +1,236 @@
+[
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟clinical-appointments-availability␟routes/contactRequests.ts␟import",
+    "classification": "B",
+    "reasoning": "upsertContactRequest is an exported dedup helper for creating/updating ContactRequest rows, reused identically by whatsapp.ts, metaWhatsAppAiProcessor.ts, and this Instagram processor — all inbound-channel entry points that need to funnel unresolved conversations into the same CRM lead record. It is a consistent, intentional cross-domain capability, not an ad hoc reach-in.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:35 `import { upsertContactRequest } from '../../routes/contactRequests.js';` and :975 `const contactRequest = await upsertContactRequest({`",
+    "targetEvidence": "server/src/routes/contactRequests.ts:20 `export async function upsertContactRequest(args: {` — a plain exported async function (dedup-then-create/update against prisma.contactRequest), not a route handler itself.",
+    "followUpRequired": "upsertContactRequest is business logic exported from a routes/ file rather than a service module, and is imported by 3 separate cross-domain callers (services and routes alike). Consider extracting it into a proper service file; also worth revisiting whether routes/contactRequests.ts's domain-map placement under clinical-appointments-availability (vs. a general CRM/lead-intake domain) is the best fit.",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+    "classification": "B",
+    "reasoning": "buildAvailableSlots/SavedAvailableSlot form the shared slot-building API consumed identically by the Instagram, Evolution WhatsApp, and Meta WhatsApp AI processors and by routes/whatsapp.ts. Despite its legacy 'whatsapp' filename it is the designed common availability layer for all AI booking channels, not a one-off cross-domain reach-in.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:14-17 `import { buildAvailableSlots, type SavedAvailableSlot } from '../whatsappAvailability.js';`",
+    "targetEvidence": "server/src/services/whatsappAvailability.ts:11 `export type SavedAvailableSlot = {` and :156 `export const buildAvailableSlots = async (` — general-purpose slot builder, internally delegating to services/appointments/appointmentAvailabilityService.ts.",
+    "followUpRequired": "File name ('whatsappAvailability.ts') is misleading given it is shared by Instagram and WhatsApp alike; a rename or relocation could reduce future scanner/reviewer confusion, but this is cosmetic only.",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟core-observability-ops-events␟services/operationalEventService.ts␟import",
+    "classification": "C",
+    "reasoning": "recordOperationalEvent is a generic, swallow-all-errors operational event writer explicitly designed for cross-domain use (EventSource includes 'whatsapp' | 'meta_whatsapp' | 'instagram' | 'sms' | ...). This is platform observability infrastructure, not a domain-specific dependency.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:21 `import { recordOperationalEvent } from '../operationalEventService.js';`",
+    "targetEvidence": "server/src/services/operationalEventService.ts:14 `export type EventSource = 'whatsapp' | 'meta_whatsapp' | 'instagram' | 'sms' | 'appointment' | 'finance' | 'auth' | 'system' | ...` — explicitly multi-domain by design.",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client singleton. Classic platform infrastructure import present in nearly every service/route file in the codebase.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:2 `import prisma from '../../db.js';`",
+    "targetEvidence": "server/src/db.ts:14-23 constructs and exports a single `PrismaClient` instance with pooled `PrismaPg` adapter; `export default prisma;`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "formatClinicDateTime and minutesToTime are pure generic date/time formatting utilities used throughout the codebase. checkPractitionerAvailability is a heavier query helper but is exported from the same shared utils/helpers.ts module used generically across domains under the current architecture.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:23-27 `import { checkPractitionerAvailability, formatClinicDateTime, minutesToTime } from '../../utils/helpers.js';`",
+    "targetEvidence": "server/src/utils/helpers.ts:115 `export const formatClinicDateTime = (date: Date, timeZone: string) => {`, :17 `export const minutesToTime = ...`, :214 `export const checkPractitionerAvailability = async (`",
+    "followUpRequired": "checkPractitionerAvailability (utils/helpers.ts:214) is appointment-domain business logic (queries doctorAvailability/doctorOffDay) sitting in the generic helpers file rather than an appointments-domain service — a plausible F-style domain-classification gap worth a future look, though not blocking here.",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramClinicResolver.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client, used for straightforward clinic/connection lookups inside the resolver's own clinic-resolution logic. Standard platform infra usage.",
+    "callerEvidence": "server/src/services/instagram/instagramClinicResolver.ts:19 `import prisma from '../../db.js';` with usage e.g. :96 `const connection = await prisma.instagramConnection.findUnique({`",
+    "targetEvidence": "server/src/db.ts:23 `export default prisma;` — shared Prisma client singleton.",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/utils/inboundRateLimiter.ts␟core-shared-platform-infrastructure␟utils/counterStore.ts␟import",
+    "classification": "C",
+    "reasoning": "Both caller and target are generic platform rate-limiting infrastructure: inboundRateLimiter.ts is a thin generic limiter keyed by channel+connection+sender, built directly on the shared counterStore abstraction (Redis-backed with in-memory fallback). Utils-to-utils import of designed shared infra.",
+    "callerEvidence": "server/src/utils/inboundRateLimiter.ts:12 `import { createCounterStore } from './counterStore.js';` and :17 `const store = createCounterStore('inbound-ai');`",
+    "targetEvidence": "server/src/utils/counterStore.ts:1-9 documents itself as a 'Rate limit sayaçları için paylaşımlı store soyutlaması' (shared store abstraction for rate-limit counters), generic and channel-agnostic.",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/sms.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for clinic-scoped SMS status/usage/history queries. Standard platform infra usage, no cross-domain business logic reach-in.",
+    "callerEvidence": "server/src/routes/sms.ts:17 `import prisma from '../db.js';` used e.g. :43 `const platformRow = await prisma.platformSmsProvider.findFirst({`",
+    "targetEvidence": "server/src/db.ts:23 `export default prisma;`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/sms.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "smsSendSchema is a zod validation schema pulled from the central shared schema registry (schemas/index.ts), used for request-body validation the same way route files across the codebase use that registry.",
+    "callerEvidence": "server/src/routes/sms.ts:21 `import { smsSendSchema } from '../schemas/index.js';` used at :142 `const validation = smsSendSchema.safeParse(req.body);`",
+    "targetEvidence": "server/src/schemas/index.ts:1 `import { z } from 'zod';` — central shared zod-schema module aggregating request schemas across domains.",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/sms.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+    "classification": "C",
+    "reasoning": "patientContactSelect and userNameSelect are generic, reusable Prisma `select` object constants with no domain-specific logic, imported purely to shape query projections consistently across the codebase.",
+    "callerEvidence": "server/src/routes/sms.ts:26 `import { patientContactSelect, userNameSelect } from '../utils/prismaSelects.js';` used at :127-128 `patient: { select: patientContactSelect }, createdBy: { select: userNameSelect }`",
+    "targetEvidence": "server/src/utils/prismaSelects.ts:1-5 `export const userNameSelect = { id: true, firstName: true, lastName: true } as const;` — plain shared field-selection constants.",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/sms/platformSmsProviders.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for querying PlatformSmsProvider rows. Plain platform infra usage inside the SMS domain's own provider-config service.",
+    "callerEvidence": "server/src/services/sms/platformSmsProviders.ts:17 `import prisma from '../../db.js';` used at :76 `const row = await prisma.platformSmsProvider.findFirst({`",
+    "targetEvidence": "server/src/db.ts:23 `export default prisma;`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsEntitlement.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for entitlement/quota accounting queries against ClinicSmsSettings/SmsUsageCounter. Standard platform infra usage.",
+    "callerEvidence": "server/src/services/sms/smsEntitlement.ts:16 `import prisma from '../../db.js';` used at :119 `prisma.clinicSmsSettings.findUnique({` and :172 `const counter = await prisma.smsUsageCounter.findUnique({`",
+    "targetEvidence": "server/src/db.ts:23 `export default prisma;`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsService.ts␟core-observability-ops-events␟services/operationalEventService.ts␟import",
+    "classification": "C",
+    "reasoning": "recordOperationalEvent is used here to log blocked/failed SMS sends, exactly matching its documented purpose of recording integration failures for any EventSource including 'sms'. Generic observability infra.",
+    "callerEvidence": "server/src/services/sms/smsService.ts:19 `import { recordOperationalEvent } from '../operationalEventService.js';` used at :303 and :360 `recordOperationalEvent({`",
+    "targetEvidence": "server/src/services/operationalEventService.ts:14 `export type EventSource = 'whatsapp' | 'meta_whatsapp' | 'instagram' | 'sms' | ...` — explicitly includes 'sms' as a designed source.",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsTemplating.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "classification": "C",
+    "reasoning": "getClinicOperatingPreferences reads clinic-level timezone/currency/locale settings, a general org/clinic configuration accessor with no SMS-specific logic; smsTemplating.ts uses it purely to format dates in message bodies. This is the kind of broadly-consumed configuration lookup (like a settings service) that legitimately crosses many domains.",
+    "callerEvidence": "server/src/services/sms/smsTemplating.ts:7 `import { getClinicOperatingPreferences } from '../clinicOperatingPreferences.js';` used at :50 `? await getClinicOperatingPreferences(context.clinic.id)`",
+    "targetEvidence": "server/src/services/clinicOperatingPreferences.ts:162 `export async function getClinicOperatingPreferences(clinicId: string): Promise<ClinicOperatingPreferences> {` — reads Clinic.currency/timezone/defaultLanguage plus a generic Setting row.",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/messages.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "MessageTemplatePurpose, messageTemplateSchema, prepareMessageSchema are all pulled from the shared central schema registry for request validation — standard platform infra usage identical to every other route file's schema imports.",
+    "callerEvidence": "server/src/routes/messages.ts:6 `import { messageTemplateSchema, prepareMessageSchema } from '../schemas/index.js';` used at :159 `const validation = messageTemplateSchema.safeParse(req.body);` and :332 `const validation = prepareMessageSchema.safeParse(req.body);`",
+    "targetEvidence": "server/src/schemas/index.ts — central shared zod-schema module.",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/messages.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+    "classification": "C",
+    "reasoning": "patientContactSelect, userNameSelect, userPublicSelect are generic reusable Prisma select-shape constants with no domain-specific logic, used to project patient/user fields consistently.",
+    "callerEvidence": "server/src/routes/messages.ts:12 `import { patientContactSelect, userNameSelect, userPublicSelect } from '../utils/prismaSelects.js';` used at :439 `include: { patient: { select: patientContactSelect }, createdBy: { select: userNameSelect } },`",
+    "targetEvidence": "server/src/utils/prismaSelects.ts:1-15 plain shared field-selection constants (userNameSelect, userPublicSelect, ...).",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for organization-scoped WhatsApp connection management queries. Standard platform infra usage.",
+    "callerEvidence": "server/src/routes/organizationWhatsApp.ts:26 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:23 `export default prisma;`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟clinical-appointments-availability␟services/appointments/appointmentAvailabilityService.ts␟import",
+    "classification": "B",
+    "reasoning": "The target file's own header states it is the 'Central service for appointment availability logic' and that 'All booking channels (AI flows, staff panel, public widget) ... should use these functions to ensure consistent availability and overlap behavior' — an explicitly designed public contract that routes/whatsapp.ts is using exactly as intended.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:62 `import { checkPractitionerAvailabilityForSlot } from '../services/appointments/appointmentAvailabilityService.js';`",
+    "targetEvidence": "server/src/services/appointments/appointmentAvailabilityService.ts:1-9 header: 'Central service for appointment availability logic. All booking channels (AI flows, staff panel, public widget) and conversion paths should use these functions...'",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+    "classification": "B",
+    "reasoning": "Same shared availability-slot API as edge 2/19's sibling: buildAvailableSlots, loadAvailabilityForDate, saveSlotsForState, SavedAvailableSlot are consumed identically by routes/whatsapp.ts and the Instagram/Meta-WhatsApp AI processors. This is the common slot-building layer intentionally shared across all inbound booking channels.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:13-18 `import { buildAvailableSlots, loadAvailabilityForDate, saveSlotsForState, type SavedAvailableSlot } from '../services/whatsappAvailability.js';`",
+    "targetEvidence": "server/src/services/whatsappAvailability.ts:156 `export const buildAvailableSlots = async (`, :256 `export const loadAvailabilityForDate = async (`, :76 `export const saveSlotsForState = (`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "classification": "C",
+    "reasoning": "getClinicOperatingPreferences/ClinicOperatingPreferences are used purely to format dates/times in the clinic's configured locale/timezone (formatDateWithClinicPreference, formatTimeWithClinicPreference helpers), the same generic org-config read pattern seen from smsTemplating.ts.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:48-50 `import { getClinicOperatingPreferences, type ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';` used at :410 `const formatDateWithClinicPreference = (value: Date, preferences: ClinicOperatingPreferences) => {`",
+    "targetEvidence": "server/src/services/clinicOperatingPreferences.ts:162 `export async function getClinicOperatingPreferences(clinicId: string): Promise<ClinicOperatingPreferences> {`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client used for conversation-state upserts and other WhatsApp route queries. Standard platform infra usage.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:2 `import prisma from '../db.js';` used at :1026 `return prisma.whatsAppConversationState.upsert({`",
+    "targetEvidence": "server/src/db.ts:23 `export default prisma;`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsappInbox.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "getParam is a trivial generic helper that extracts a single value from an Express req.params entry (handles the string[] vs string ambiguity). Purely generic, no domain logic whatsoever.",
+    "callerEvidence": "server/src/routes/whatsappInbox.ts:24 `import { getParam } from '../utils/helpers.js';` used repeatedly e.g. :292 `const entryId = getParam(req, 'id');`",
+    "targetEvidence": "server/src/utils/helpers.ts:7-10 `export const getParam = (req: AuthRequest, key: string): string => { const value = req.params[key]; return Array.isArray(value) ? value[0] : value; };`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/clinicResolver.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for the resolver's own clinic-resolution queries (connection links, recent outbound/conversation lookups). Standard platform infra usage.",
+    "callerEvidence": "server/src/services/whatsapp/clinicResolver.ts (import of prisma from '../../db.js') used at :84 `const clinicLinks = await prisma.clinicWhatsAppConnection.findMany({` and :137 `const recentConversation = await prisma.whatsAppConversationState.findFirst({`",
+    "targetEvidence": "server/src/db.ts:23 `export default prisma;`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/conversationMessageStore.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client, injectable as a default parameter for testability. The file's own header describes it as the single write-path for WhatsAppConversationMessage, using prisma purely as the persistence mechanism.",
+    "callerEvidence": "server/src/services/whatsapp/conversationMessageStore.ts:16 `import prisma from '../../db.js';` used at :66 and :98 `db: ConversationMessageDb = prisma as unknown as ConversationMessageDb,`",
+    "targetEvidence": "server/src/db.ts:23 `export default prisma;`",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟clinical-appointments-availability␟services/appointmentRequestSafety.ts␟import",
+    "classification": "B",
+    "reasoning": "The target file's own header explicitly names 'Instagram DM, Meta WhatsApp, and Evolution WhatsApp AI flows' as the intended concurrent-safe callers of this advisory-lock module, and mandates the exact acquireAppointmentSlotLock → assertSlotAvailable → create sequence this processor implements. This is a designed, documented public contract, not an ad hoc reach-in.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:68 `import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../appointmentRequestSafety.js';` used at :905-911 `await acquireAppointmentSlotLock(tx, {...}); await assertSlotAvailable(tx, {...});`",
+    "targetEvidence": "server/src/services/appointmentRequestSafety.ts:1-9 header: 'Instagram DM, Meta WhatsApp, and Evolution WhatsApp AI flows check availability and then create an AppointmentRequest... The real concurrency guard is a PostgreSQL advisory transaction lock...'",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "Type-only import of MessageTemplatePurpose from the central shared schema registry, used purely as a lookup-table key type. No runtime coupling beyond referencing a shared type definition, the same pattern every domain uses to reference schemas/index.ts types.",
+    "callerEvidence": "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts:20 `import type { MessageTemplatePurpose } from '../../schemas/index.js';` used at :23 `export const MESSAGE_TEMPLATE_PURPOSE_TO_COMMUNICATION_PURPOSE: Record<MessageTemplatePurpose, CommunicationPurpose> = {`",
+    "targetEvidence": "server/src/schemas/index.ts — central shared zod-schema/type registry.",
+    "followUpRequired": "none",
+    "batch": "r1_batch4"
+  }
+]

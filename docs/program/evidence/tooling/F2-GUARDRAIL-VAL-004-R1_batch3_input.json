@@ -1,0 +1,715 @@
+[
+  {
+    "edgeKey": "server/src/services/earningService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/earningService.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a881b64d1a2cef31"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:finance-advanced-compensation",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/jobs/imagingBridgeOfflineJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/jobs/imagingBridgeOfflineJob.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-device-bridge",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "81baca8d2c9ba6ab"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "jobs -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/imagingBridgePublic.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-device-bridge",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a905b5918d8c3a5f"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/imagingBridgePublic.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-device-bridge",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a107bcb8b4ce0a26"
+    ],
+    "callerSymbols": [
+      "createRateLimiter"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/imaging.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-server-viewer",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "99b26e345f2747c3"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:imaging-server-viewer",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/imaging.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-server-viewer",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "1f7f3f4d757190c5",
+      "d707988925419770"
+    ],
+    "callerSymbols": [
+      "createRateLimiter",
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:imaging-server-viewer",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/imaging/imagingRequestTransitions.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "callerPath": "server/src/services/imaging/imagingRequestTransitions.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "schemas/index.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-server-viewer",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "eef35d67bfdfbc9a"
+    ],
+    "callerSymbols": [
+      "IMAGING_REQUEST_STATUSES"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:imaging-server-viewer",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/imaging/public.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/imaging/public.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-server-viewer",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "7f3af2b9e11bff50"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:imaging-server-viewer",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/insuranceProvisions.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "callerPath": "server/src/routes/insuranceProvisions.ts",
+    "ownerDomain": "core-org-clinic-membership",
+    "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+    "accessKind": "import",
+    "callerDomain": "insurance",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "ed87a9cab0e16dca"
+    ],
+    "callerSymbols": [
+      "getClinicOperatingPreferences"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "1",
+    "highRisk": false,
+    "highRiskCategories": [],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_STANDARD_PROPORTIONAL",
+    "samplingStratum": "standardProportional:core-org-clinic-membership",
+    "inclusionProbability": 0.1
+  },
+  {
+    "edgeKey": "server/src/services/whatsappBookingFlow.ts␟core-shared-platform-infrastructure␟utils/logRedaction.ts␟import",
+    "callerPath": "server/src/services/whatsappBookingFlow.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/logRedaction.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-ai-orchestration",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "77e2042973b35448",
+      "d6a57b0990a5648d"
+    ],
+    "callerSymbols": [
+      "redactPhone",
+      "summarizeTextForLog"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "ai",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+    "callerPath": "server/src/jobs/reminders.ts",
+    "ownerDomain": "core-observability-ops-events",
+    "targetModelOrSymbol": "utils/logger.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "6a6e2501d90f9691"
+    ],
+    "callerSymbols": [
+      "logger"
+    ],
+    "edgeShape": "jobs -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "callerPath": "server/src/jobs/reminders.ts",
+    "ownerDomain": "core-org-clinic-membership",
+    "targetModelOrSymbol": "services/clinicOperatingPreferences.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "4214bb52c3674bf6",
+      "edce1d844c3a8a5d"
+    ],
+    "callerSymbols": [
+      "ClinicOperatingPreferences",
+      "getClinicOperatingPreferences"
+    ],
+    "edgeShape": "jobs -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "callerPath": "server/src/jobs/reminders.ts",
+    "ownerDomain": "core-shared-events-queue-idempotency",
+    "targetModelOrSymbol": "utils/jobLock.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "ada7904a0b2a8f83"
+    ],
+    "callerSymbols": [
+      "withJobLock"
+    ],
+    "edgeShape": "jobs -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/jobs/reminders.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "0e837cfb4784d7a8"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "jobs -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+    "callerPath": "server/src/jobs/reminders.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/prismaSelects.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "55b6da7a93386a03",
+      "dc8f206110eab325"
+    ],
+    "callerSymbols": [
+      "patientContactSelect",
+      "userPublicSelect"
+    ],
+    "edgeShape": "jobs -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/recall.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/recall.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "1cdbd93d94a7c063"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/recall.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/recall.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "bd1c9e2c90f15f74"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/postTreatmentMessaging.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+    "callerPath": "server/src/services/postTreatmentMessaging.ts",
+    "ownerDomain": "core-observability-ops-events",
+    "targetModelOrSymbol": "utils/logger.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "b18a6b651778eea2"
+    ],
+    "callerSymbols": [
+      "logger"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/postTreatmentMessaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/postTreatmentMessaging.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "951cae356e6fd648"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/recallCandidateService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/recallCandidateService.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "f077080c62a17c4a"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/services/recallSettings.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/services/recallSettings.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "f30291f49febb0e3"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "services -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/instagramInbox.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/instagramInbox.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "fef1d618712395ad"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/instagramInbox.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "callerPath": "server/src/routes/instagramInbox.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/helpers.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "72fcdfa6d91c1dc8"
+    ],
+    "callerSymbols": [
+      "getParam"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/instagramInbox.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+    "callerPath": "server/src/routes/instagramInbox.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "utils/prismaSelects.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "3de2007ce834713e"
+    ],
+    "callerSymbols": [
+      "patientContactSelect"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟core-shared-events-queue-idempotency␟services/messagingInboundIdempotency.ts␟import",
+    "callerPath": "server/src/routes/instagramWebhook.ts",
+    "ownerDomain": "core-shared-events-queue-idempotency",
+    "targetModelOrSymbol": "services/messagingInboundIdempotency.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "41c416445aaf6656",
+      "7205cb8061aead57",
+      "c9241243163d4591"
+    ],
+    "callerSymbols": [
+      "createInboundEventOrDetectDuplicate",
+      "markInboundEventFailed",
+      "markInboundEventProcessed"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/instagramWebhook.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "a46df6e7b3657760"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/organizationInstagram.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "callerPath": "server/src/routes/organizationInstagram.ts",
+    "ownerDomain": "core-shared-platform-infrastructure",
+    "targetModelOrSymbol": "db.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "bee274cad3d2392c"
+    ],
+    "callerSymbols": [
+      "default"
+    ],
+    "edgeShape": "routes -> root-or-other",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:messaging-instagram",
+    "inclusionProbability": 1
+  }
+]

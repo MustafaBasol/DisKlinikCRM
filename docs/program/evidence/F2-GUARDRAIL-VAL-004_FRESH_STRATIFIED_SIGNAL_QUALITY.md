@@ -14,6 +14,15 @@
 
 Partway through this task, a user-supplied addendum (**`F2-GUARDRAIL-VAL-004-REVIEW-A`**, an "independent read-only methodology audit," verdict `REQUIRES_REVISION`) overrode the sampling-unit, sample-size, stratification, weighting, confidence-interval, and prior-round-comparison instructions in the original task brief. It did **not** change any scope boundary (still docs/evidence/tooling only, no domain-map/baseline/application change, enforcement still `NOT_AUTHORIZED`). This document follows the revised methodology throughout; where the original brief's language differs (e.g. "findings" vs "edges"), the revised, edge-level methodology is authoritative and is what was actually executed.
 
+### 0.1 F2-GUARDRAIL-VAL-004-R1 correction notice (external architecture review on PR #332)
+
+An external architecture review of PR #332 (reviewed head `e8e57bd8bb6ce7e3dd950a808cf4f1d31c1a8628`) found this evidence **not merge-safe** on two blocking methodology grounds. Both are corrected in this document/its tooling in place (this is a live, unmerged evidence package under active review, not a closed historical record — the program's append-only convention applies to the chronological tracker files, §3, not to this task's own not-yet-accepted evidence file):
+
+1. **High-risk sampling partition was asymmetric.** `highRiskCategories(e)`/`isHighRisk(e)` (`scripts/architecture-guardrail-validation/buildVal004Sample.mjs`) correctly flag an edge high-risk when **either** `ownerDomain` or `callerDomain` is a high-risk domain, but the census/oversample allocation that actually drove sampling was keyed only by `ownerDomain`. A caller-side-only high-risk edge (high-risk `callerDomain`, non-high-risk `ownerDomain`) could therefore be sampled under an ordinary standard-proportional/small-cell stratum instead of the approved high-risk policy. **Fixed:** the partition is now keyed by a new deterministic, mutually-exclusive `highRiskDomainKey(e)` (owner domain if it is itself high-risk, else caller domain — guaranteed non-null whenever `isHighRisk(e)` is true), so every high-risk edge is routed to the high-risk track regardless of which endpoint triggered it, and a fix-adjacent double-counting defect this rework surfaced (the standard-proportional pool re-querying the full remaining population without excluding already-high-risk-routed edges) was fixed alongside it. Full re-derivation: §4.3/§4.5 below.
+2. **The 21.10% figure was mislabeled as a formal `conservative violation-rate ceiling`.** It substituted a one-sided Clopper-Pearson bound only for non-census strata with zero observed violations; strata with ≥1 observed violation kept an unbounded plug-in rate, ambiguous edges were complete-case-omitted, and a weighted sum of independent per-stratum marginal 95% bounds does not itself carry a global/simultaneous 95% coverage guarantee. **Fixed (minimal-relabel path, per the review's own preferred option):** the computation is unchanged in substance but is now named and documented as a **zero-event sensitivity analysis** (`zeroEventSensitivityAnalysis()`, fields `sensitivityAcceptedRate`/`sensitivityViolationRate`/`hasConfidenceCoverage: false`), with an explicit, machine-readable disclaimer that it has no confidence-coverage guarantee and must not be used as merge/promotion/enforcement evidence. See §6.3.
+
+Both fixes changed the actual sampled/reviewed edge set (§4.5, §5) and therefore the headline numbers throughout §6 — this document's numbers are the **corrected, current** numbers, not the pre-review numbers the reviewer saw. `BLOCKING_ENFORCEMENT` remains `NOT_AUTHORIZED`, unchanged by this correction round.
+
 ---
 
 ## 1. Repository-state reconciliation performed
@@ -113,14 +122,27 @@ Primary weighting stratum = a strict, priority-ordered partition of all 552 edge
 1. **`organizationDashboard.ts` caller census** (VAL-004 brief §9 special check) — 4 edges.
 2. **route→route cross-domain census** — 1 edge.
 3. **clusterSize ≥5 census** — 16 edges.
-4. **High-risk-domain (by `ownerDomain`) census** where the domain's remaining population ≤15 — 15 domains, 81 edges. (High-risk domain set: the brief's named categories — tenancy, auth, privacy/KVKK, audit, storage, messaging, imaging, integrations, finance — plus a transparently-documented extension carried over from VAL-001's own `HIGH_RISK_DOMAINS` set covering `core-platform-crypto`/`core-config-secrets`/`core-security-incident-detection`, three self-evidently security-critical domains the brief's category list did not name individually.)
-5. **Small-cell census**: any remaining non-high-risk `ownerDomain` stratum with population ≤5 — 7 edges.
-6. **High-risk oversample** (population >15): target = `min(N_h, max(15, round(2 × baseFraction × N_h)))` — 4 domains (`core-audit-activity`, `core-identity-access`, `core-platform-crypto`, `core-tenant-security`), 15 each = 60 edges.
-7. **Standard proportional** (non-high-risk, population >5): target = `min(N_h, max(1, round(baseFraction × N_h)))` — 5 domains, 23 edges.
+4. **High-risk group census** — keyed by `highRiskDomainKey(e)` (owner domain if it is itself high-risk, else caller domain; every edge with `isHighRisk(e)` true, from **either** endpoint, is grouped here exactly once — see §0.1/§4.3.1) where the group's remaining population ≤15 — 13 groups, 117 edges.
+5. **Small-cell census**: any remaining `ownerDomain` stratum (guaranteed non-high-risk by construction — every high-risk edge was already claimed by rule 4) with population ≤5 — 4 domains, 6 edges.
+6. **High-risk oversample** (group population >15): target = `min(N_h, max(15, round(2 × baseFraction × N_h)))` — 8 groups (`core-audit-activity`, `core-identity-access`, `core-platform-crypto`, `core-privacy-consent-retention-dsr`, `core-storage-abstraction`, `core-tenant-security`, `external-calendar-integration`, `messaging-whatsapp`), 15 each = 120 edges.
+7. **Standard proportional** (non-high-risk, population >5): target = `min(N_h, max(1, round(baseFraction × N_h)))` — 2 domains, 2 edges.
 
-`baseFraction = remainingBudget / remainingPop` computed over the population *not* already claimed by mandatory census, `= 41 / 443 = 0.0926`.
+`baseFraction = remainingBudget / remainingPop` computed over the population *not* already claimed by mandatory census, `= 6 / 408 = 0.0147`.
 
 Obsolete VAL-001 strata (ownership-collision coverage, `UNRESOLVED`-domain coverage) were **not** carried forward — both conditions no longer exist in the current population (0 `UNRESOLVED`, 0 open F0-003 collisions).
+
+### 4.3.1 R1 fix: the high-risk grouping key (§0.1 finding 1)
+
+Pre-fix, step 4/6 above grouped strictly by `ownerDomain`; a caller-side-only high-risk edge (e.g. a job whose `callerDomain` is `core-privacy-consent-retention-dsr` importing a shared `core-shared-platform-infrastructure`-owned `db.ts`) fell through to the standard-proportional/small-cell path in step 5/7 instead. The fix introduces `highRiskDomainKey(e)`:
+
+```
+highRiskDomainKey(e) =
+  ownerDomain,  if ownerDomain is itself a documented high-risk domain
+  callerDomain, else if callerDomain is a documented high-risk domain
+  null,         otherwise (e is not high-risk)
+```
+
+This is deterministic (pure function of the edge), total over every `isHighRisk(e)` edge, and mutually exclusive (each edge maps to exactly one key, so a both-endpoints-high-risk edge — e.g. owner `core-tenant-security` and caller `core-audit-activity` — is grouped and counted once, under its `ownerDomain`, not twice). Fixing the grouping key alone surfaced a second, related defect: the standard-proportional population/selection queries re-filtered the *entire* remaining pool by `ownerDomain` alone, without excluding edges already routed to the high-risk track — silently re-absorbing caller-only-high-risk edges and inflating the standard stratum's counted population beyond `N`. Both are fixed together in `buildVal004Sample.mjs`; the partition is verified to sum to exactly `N` (`unassignedCount: 0`, was `-70` transiently during the fix before the second defect was caught) and is covered by 6 new regression tests in `__tests__/val004Determinism.test.js` (§10).
 
 ### 4.4 Deterministic selection
 
@@ -134,25 +156,45 @@ Re-running the sample builder against the same population file produces a byte-i
 
 ### 4.5 Sample size / strata / allocation result
 
-| | Value |
-|---|---|
-| N (population) | 552 |
-| n (target) | 150 |
-| Mandatory census count | 109 |
-| Actual reviewed sample | **192** |
-| Number of strata | 30 |
-| Sample fraction at edge level | 192/552 = 34.8% |
-| Underlying findings represented | 236 (sum of reviewed edges' cluster sizes) |
+| | Value (R1, corrected) | Value (pre-R1) |
+|---|---:|---:|
+| N (population) | 552 | 552 |
+| n (target) | 150 | 150 |
+| Mandatory census count | **144** | 109 |
+| Actual reviewed sample | **266** | 192 |
+| Number of strata | 30 | 30 |
+| Sample fraction at edge level | 266/552 = 48.2% | 34.8% |
+| Underlying findings represented | 436 (sum of reviewed edges' cluster sizes) | 236 |
 
-The actual reviewed sample (192) exceeds the 150 target — this is a **deliberate consequence of the mandatory-census and high-risk-oversample-floor rules**, not a deviation from the design; the "approximately 150" target in the original brief and the formula-derived 150 in the addendum are both explicitly compatible with census/floor protections increasing the total. No stratum's population was under-covered to keep the total near 150.
+The actual reviewed sample (266) exceeds the 150 target — this is a **deliberate consequence of the mandatory-census and high-risk-oversample-floor rules**, not a deviation from the design; the "approximately 150" target in the original brief and the formula-derived 150 in the addendum are both explicitly compatible with census/floor protections increasing the total. No stratum's population was under-covered to keep the total near 150. The jump from 192 to 266 versus the pre-R1 sample is entirely attributable to the §0.1/§4.3.1 partition fix: 107 caller-side-only high-risk edges that the pre-fix partition missed are now correctly census/oversample-included, and 33 edges from the pre-fix sample were not re-selected under the corrected partition/stratum boundaries (§4.5.1) — net **+74** (159 edges kept in both samples, unchanged classification reused; §5).
 
-Full per-stratum population/sample counts, allocation formula detail, and the complete 192-edge sample (with all fields) are in `docs/program/evidence/tooling/F2-GUARDRAIL-VAL-004_sample_manifest.json`.
+Full per-stratum population/sample counts, allocation formula detail, and the complete 266-edge sample (with all fields) are in `docs/program/evidence/tooling/F2-GUARDRAIL-VAL-004_sample_manifest.json`.
+
+### 4.5.1 Sample delta (pre-R1 → R1-corrected)
+
+| | Count |
+|---|---:|
+| Pre-R1 sample size | 192 |
+| R1-corrected sample size | 266 |
+| Edges kept (same edge selected both times) | 159 |
+| Edges removed (selected pre-R1, not selected post-fix) | 33 |
+| Edges newly added (selected only post-fix) | 107 |
+| Net change | +74 |
+| Reused classifications (kept edges, prior classification carried over unchanged) | 159 |
+| Newly manually classified (§5, read against current source, not inferred from prior evidence) | 107 |
+
+All 107 newly-added edges are caller-side-only high-risk edges (non-high-risk `ownerDomain`, high-risk `callerDomain`) that the pre-fix `ownerDomain`-only partition missed — independently confirmed by cross-referencing each added edge's `callerDomain` against the documented high-risk domain set. The 33 removed edges include 2 of the pre-R1 sample's 4 true-positive (`A`/`H`) edges (`server/src/jobs/inboundEventRetryJob.ts → services/whatsapp/MetaCloudWhatsAppProvider.ts` and `server/src/services/privacy/patientPrivacyExportPackage.ts → routes/attachments.ts`); both remain part of the N=552 population and are real, previously-confirmed findings (§5.2 of the pre-R1 version of this document, preserved in git history) — they are simply not part of *this* review's random sample under the corrected stratum boundaries. This is expected resampling variance, not evidence the findings were wrong.
 
 ---
 
 ## 5. Manual classification
 
-Every sampled edge was independently reviewed against **current source** (both caller and target files read directly in the task worktree; sibling findings under a multi-symbol edge spot-checked). Classification was performed by 5 parallel sub-agents, each assigned a disjoint domain-clustered batch (31/47/39/40/35 = 192 edges, no overlap, no gaps — validated by key-set diff against the sample manifest, 0 missing / 0 extra / 0 duplicates).
+Every sampled edge was independently reviewed against **current source** (both caller and target files read directly in the task worktree; sibling findings under a multi-symbol edge spot-checked). Classification was performed in two rounds:
+
+- **Original round (pre-R1):** 5 parallel sub-agents, each assigned a disjoint domain-clustered batch (31/47/39/40/35 = 192 edges). 159 of these 192 classifications carry forward unchanged into the corrected 266-edge sample (§4.5.1) — the same edge, same classification, not re-derived.
+- **R1 round (this correction, §0.1 finding 1):** the 107 edges newly added by the sampling-partition fix were classified fresh by 4 parallel sub-agents (27/27/27/26 = 107 edges), each independently reading the current caller and target source for every edge — **not** inferred from the prior round's evidence, per the review's explicit instruction, since none of these edges were part of the prior round.
+
+Combined: **266 edges, 0 overlap, 0 gaps** — validated by key-set diff against the corrected sample manifest (0 missing / 0 extra / 0 duplicates) and by the R1 batches' own per-batch order/key verification against their input files.
 
 **Taxonomy** (VAL-001's original 9-category taxonomy, reused verbatim, per REVIEW-A §H):
 
@@ -177,38 +219,45 @@ Every sampled edge was independently reviewed against **current source** (both c
 | C `SCANNER_OR_CLASSIFICATION_FALSE_POSITIVE` | E + F + G | All three are scanner/tooling artifacts, not real dependencies. |
 | D `AMBIGUOUS_OR_UNVERIFIED` | D + I | Both require a human/architect decision the classifier could not make unilaterally. |
 
-### 5.1 Classification counts (n=192)
+### 5.1 Classification counts (n=266, R1-corrected)
 
 | VAL-001 letter | Count | Brief category | Count |
 |---|---:|---|---:|
-| C | 143 | | |
-| B | 39 | **B accepted-expected** | **182** |
-| H | 3 | | |
-| A | 1 | **A true positive** | **4** |
+| C | 220 | | |
+| B | 39 | **B accepted-expected** | **259** |
+| H | 2 | | |
+| A | 0 | **A true positive** | **2** |
 | D | 4 | **D ambiguous** | **4** |
-| F | 2 | **C scanner FP** | **2** |
+| F | 1 | **C scanner FP** | **1** |
 | E | 0 | | |
 | G | 0 | | |
 | I | 0 | | |
 
-**192 = 143+39+3+1+4+2 ✓; 4+182+2+4 = 192 ✓.**
+**266 = 220+39+2+0+4+1 ✓; 2+259+1+4 = 266 ✓.**
 
-### 5.2 The 4 true-positive edges (A + H) — every one independently re-verified by this document's author against current source, not merely trusted from the sub-agent report
+All 107 newly-classified R1 edges (§4.5.1) are `C` (98) or `B` (9) — 0 new true positives (`A`/`H`), 0 new ambiguous (`D`), 0 new scanner/domain-map defects (`E`/`F`/`G`) were found among them. The count changes versus the pre-R1 192-edge round (§0.1) are fully attributable to §4.5.1's sample delta: 2 of the pre-R1 round's 4 true positives (1 `A`, 1 `H`) and 1 of its 2 scanner-FP (`F`) edges were among the 33 edges not re-selected under the corrected partition — not reclassified, not disputed, simply outside this round's sample (§4.5.1).
 
-1. **`server/src/jobs/inboundEventRetryJob.ts` → `services/whatsapp/MetaCloudWhatsAppProvider.ts`** (classification A). Directly imports and `new`-instantiates the concrete `MetaCloudWhatsAppProvider` class (lines 21, 89) and calls `.parseWebhook()`, bypassing the existing `services/whatsapp/whatsappProviderFactory.ts` factory — independently confirmed to exist and to be the designed abstraction for exactly this case (`meta_cloud_api: () => new MetaCloudWhatsAppProvider()`). Real, if low-severity, abstraction-layering bypass — no security/tenant impact identified.
-2. **`server/src/routes/whatsapp.ts` → `routes/contactRequests.ts`** (`upsertContactRequest`, classification H). Independently confirmed: `routes/whatsapp.ts` directly imports a Prisma-backed create/dedup function from another route file (`import { upsertContactRequest } from './contactRequests.js';`, confirmed at `contactRequests.ts`'s `export async function upsertContactRequest`, a real business function performing `prisma.contactRequest.findFirst`). Route-to-route dependency bypassing a service layer — the same anti-pattern already remediated for `getDateRange` under F2-ADR-ORG-DASH-001, not yet remediated here. This is also the sample's sole `routes -> routes` census edge.
-3. **`server/src/services/privacy/patientPrivacyExportPackage.ts` → `routes/attachments.ts`** (`ATTACHMENT_MAX_FILE_SIZE_BYTES`, classification H). A privacy-domain service importing a numeric config constant from a route file — real reverse-layering, trivially low-risk payload (no business logic, no PII).
-4. **`server/src/routes/imagingBridgePublic.ts` → `services/imaging/imagingRequestTransitions.ts`** (classification H). Confirmed as a genuine cross-owner import (BRG's public device-facing surface reaching into IMG-owned transition logic) with no facade — independently documented as a known, already-tracked gap in `F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md`, not new coupling.
+### 5.2 The 2 true-positive edges in the R1-corrected sample (both H) — every one independently re-verified by this document's author against current source, not merely trusted from the sub-agent report
 
-None of the 4 touch tenant isolation, authentication, or KVKK/privacy data handling in a way that constitutes a security defect — all are architecture-layering/debt findings.
+Of the pre-R1 round's 4 true positives (§0.1), 2 were not re-selected under the corrected partition (§4.5.1) and are not part of this round's reviewed sample; they remain real findings against the N=552 population, just outside this particular random draw. The 2 still in-sample:
 
-### 5.3 The 4 ambiguous edges (D)
+1. **`server/src/routes/whatsapp.ts` → `routes/contactRequests.ts`** (`upsertContactRequest`, classification H). Independently confirmed: `routes/whatsapp.ts` directly imports a Prisma-backed create/dedup function from another route file (`import { upsertContactRequest } from './contactRequests.js';`, confirmed at `contactRequests.ts`'s `export async function upsertContactRequest`, a real business function performing `prisma.contactRequest.findFirst`). Route-to-route dependency bypassing a service layer — the same anti-pattern already remediated for `getDateRange` under F2-ADR-ORG-DASH-001, not yet remediated here. This is also the sample's sole `routes -> routes` census edge (mandatory census rule 2 — always in-sample regardless of the partition fix).
+2. **`server/src/routes/imagingBridgePublic.ts` → `services/imaging/imagingRequestTransitions.ts`** (classification H). Confirmed as a genuine cross-owner import (BRG's public device-facing surface reaching into IMG-owned transition logic) with no facade — independently documented as a known, already-tracked gap in `F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md`, not new coupling.
 
-Three (`server/src/routes/imaging.ts` → `bridgeOnboardingConfig.ts` / `bridgePairing.ts` / `bridgeTokens.ts`) are a **full census of one entire stratum** (`highRiskDomainCensus:imaging-device-bridge`, N=3, all 3 reviewed, all 3 ambiguous). The classifying agent's finding, corroborated by prior program evidence (`F2-PREP-006-A`): `routes/imaging.ts` is domain-mapped wholesale to `imaging-server-viewer`, but 8 of its 27 routes are BRG-owned bridge-admin routes physically living in the same file — the "cross-domain" flag on these 3 edges is a **file-level domain-map granularity artifact**, not necessarily a real crossing, but not confidently resolvable without a domain-map change (out of this task's scope; reported, not fixed).
+**Not re-selected in this round** (removed from sample by the R1 partition fix, §4.5.1 — reported here for continuity, not re-verified this round):
+
+- `server/src/jobs/inboundEventRetryJob.ts` → `services/whatsapp/MetaCloudWhatsAppProvider.ts` (classification A, pre-R1 finding: bypasses `services/whatsapp/whatsappProviderFactory.ts`).
+- `server/src/services/privacy/patientPrivacyExportPackage.ts` → `routes/attachments.ts` (`ATTACHMENT_MAX_FILE_SIZE_BYTES`, classification H, pre-R1 finding: privacy-domain service importing a numeric config constant from a route file).
+
+None of the 2 in-sample true positives, nor the 2 not-re-selected ones, touch tenant isolation, authentication, or KVKK/privacy data handling in a way that constitutes a security defect — all are architecture-layering/debt findings.
+
+### 5.3 The 4 ambiguous edges (D) — unchanged by the R1 correction
+
+Three (`server/src/routes/imaging.ts` → `bridgeOnboardingConfig.ts` / `bridgePairing.ts` / `bridgeTokens.ts`) are still all-ambiguous, but the `highRiskDomainCensus:imaging-device-bridge` stratum they belong to grew from N=3 (pre-R1) to **N=8** under the corrected partition — 5 additional edges whose `callerDomain` is `imaging-device-bridge` (e.g. `imagingBridgeOfflineJob.ts`'s imports of shared job/db infrastructure) are now correctly census-included in this stratum by the R1 fix (§0.1/§4.3.1); all 5 are newly classified `C` (§5.1), so the stratum's ambiguity is now 3-of-8 reviewed (`n_h_effective` = 5), not 3-of-3. The classifying agents' original finding, corroborated by prior program evidence (`F2-PREP-006-A`), is unchanged: `routes/imaging.ts` is domain-mapped wholesale to `imaging-server-viewer`, but 8 of its 27 routes are BRG-owned bridge-admin routes physically living in the same file — the "cross-domain" flag on these 3 edges is a **file-level domain-map granularity artifact**, not necessarily a real crossing, but not confidently resolvable without a domain-map change (out of this task's scope; reported, not fixed).
 
 The 4th (`server/src/services/whatsappBookingFlow.ts` → `utils/whatsappDate.ts`) is a genuine ownership-ambiguity call: the target is domain-mapped to `messaging-whatsapp` but its content (pure Turkish date parsing, an AI-assistant timezone constant) reads as belonging to `messaging-ai-orchestration`. Reasonable engineers could assign it either way.
 
-**Scanner/domain-classification defect note (F, brief-C):** `server/src/services/instagram/instagramAiConversationProcessor.ts → utils/whatsappDate.ts` was independently classified F (not D) by a different reviewing agent on the same target file — the second agent judged the file's genericness decisively (zero WhatsApp-specific coupling, reused from Instagram code) rather than ambiguous. Both agents flagged the same underlying domain-map placement as questionable from two different callers — convergent, independent evidence that `utils/whatsappDate.ts`'s domain-map entry deserves review. The other F: `server/src/routes/usersImport.ts → utils/excelImport.ts` (mapped to `clinical-patients`, but the target serves two unrelated domains via `buildPatientTemplate`/`buildUserTemplate`).
+**Scanner/domain-classification defect note (F, brief-C):** the pre-R1 round independently found two `F` edges from two different reviewing agents converging on the same questionable domain-map entry: `server/src/services/instagram/instagramAiConversationProcessor.ts → utils/whatsappDate.ts` (classified F — the agent judged the file's genericness decisively, zero WhatsApp-specific coupling, reused from Instagram code) and `server/src/routes/usersImport.ts → utils/excelImport.ts` (mapped to `clinical-patients`, but the target serves two unrelated domains via `buildPatientTemplate`/`buildUserTemplate`). The `instagramAiConversationProcessor.ts` edge was **not re-selected** under the R1-corrected partition (§4.5.1) and is outside this round's sample; `usersImport.ts → utils/excelImport.ts` remains in-sample and is this round's sole `F`. The convergent domain-map concern about `utils/whatsappDate.ts` (§13 item 1) stands regardless — it was independent evidence from two callers, not dependent on either edge remaining in any one round's sample.
 
 ### 5.4 organizationDashboard.ts (VAL-004 brief §9 special check)
 
@@ -216,13 +265,14 @@ The 4th (`server/src/services/whatsappBookingFlow.ts` → `utils/whatsappDate.ts
 
 ### 5.5 Other reported (not fixed) follow-up items
 
-- `routes/contactRequests.ts`'s own domain-map assignment (`clinical-appointments-availability`) looks questionable on inspection — its content (channel/externalSenderId/patient-linking CRUD) reads as lead/contact-intake tracking, not appointment scheduling.
-- `checkPractitionerAvailability` (in `utils/helpers.ts`) is genuine appointments-availability business logic embedded in a nominally generic helpers file — candidate for relocation to `services/appointments/appointmentAvailabilityService.ts`.
+- `routes/contactRequests.ts`'s own domain-map assignment (`clinical-appointments-availability`) looks questionable on inspection — its content (channel/externalSenderId/patient-linking CRUD) reads as lead/contact-intake tracking, not appointment scheduling. *(Independently reconfirmed by an R1-round reviewing agent from a different caller, §0.1.)*
+- `checkPractitionerAvailability` (in `utils/helpers.ts`) is genuine appointments-availability business logic embedded in a nominally generic helpers file — candidate for relocation to `services/appointments/appointmentAvailabilityService.ts`. *(Independently reconfirmed by an R1-round reviewing agent, §0.1.)*
 - `services/whatsappBookingFlow.ts` is a misleadingly-named shared AI booking engine used by both WhatsApp and Instagram — a rename (e.g. `messagingBookingFlow.ts`) would better reflect its scope; its domain-map placement under `messaging-whatsapp` vs. `messaging-ai-orchestration` is the same tension noted in §5.3/§5.4.
+- `schemas/index.ts` is domain-mapped to `core-shared-platform-infrastructure` but is a large, monolithic Zod-schema registry spanning many unrelated business domains (patient, finance, insurance, messaging, ...) — legitimate under the current pre-modularization architecture (classified `C` throughout), but worth reconsidering if/when schemas are ever split per-domain. *(Newly noted by 3 independent R1-round reviewing agents across different batches, §0.1.)*
 
 None of these require a prohibited change to act on; all are reported for a separate follow-up task per this task's scope limits.
 
-Full per-edge classification records (edgeKey, reasoning, caller/target evidence citations, follow-up flags) are in `docs/program/evidence/tooling/F2-GUARDRAIL-VAL-004_classifications_merged.json` (192 records) and the 5 per-batch `*_classified.json` files.
+Full per-edge classification records (edgeKey, reasoning, caller/target evidence citations, follow-up flags) are in `docs/program/evidence/tooling/F2-GUARDRAIL-VAL-004_classifications_merged.json` (266 records, R1-corrected), the 5 original per-batch `*_classified.json` files (192 records, pre-R1, 159 still reused), and the 4 new `F2-GUARDRAIL-VAL-004-R1_batch{1..4}_classified.json` files (107 records, R1-only).
 
 ---
 
@@ -230,15 +280,17 @@ Full per-edge classification records (edgeKey, reasoning, caller/target evidence
 
 Script: `scripts/architecture-guardrail-validation/buildVal004Metrics.mjs` (new, checked in). Deterministic (re-run produces byte-identical output — verified).
 
-### 6.1 Raw as-sampled metrics (n=192, classified_non_ambiguous=188)
+All numbers in this section are **R1-corrected** (§0.1) — computed from the 266-edge sample and its merged classifications, not the pre-R1 192-edge round.
+
+### 6.1 Raw as-sampled metrics (n=266, classified_non_ambiguous=262)
 
 | Metric | Formula | Value |
 |---|---|---:|
-| True-positive precision | briefA / classified_non_ambiguous | 4/188 = **2.13%** |
-| False-positive rate | (briefB+briefC) / classified_non_ambiguous | 184/188 = **97.87%** |
-| Accepted-expected rate | briefB / classified_non_ambiguous | 182/188 = **96.81%** |
-| Scanner/classification-defect rate | briefC / classified_non_ambiguous | 2/188 = **1.06%** |
-| Ambiguity rate | briefD / total_sample | 4/192 = **2.08%** |
+| True-positive precision | briefA / classified_non_ambiguous | 2/262 = **0.76%** |
+| False-positive rate | (briefB+briefC) / classified_non_ambiguous | 260/262 = **99.24%** |
+| Accepted-expected rate | briefB / classified_non_ambiguous | 259/262 = **98.85%** |
+| Scanner/classification-defect rate | briefC / classified_non_ambiguous | 1/262 = **0.38%** |
+| Ambiguity rate | briefD / total_sample | 4/266 = **1.50%** |
 
 These are **unweighted, disproportionate-sample raw rates** — because high-risk strata were deliberately oversampled (up to ~4× their population share) and small strata were censused, this raw rate is **not** a valid population estimate on its own. It is reported per the brief's own §7 requirement, alongside the weighted estimate below (required by REVIEW-A §I).
 
@@ -247,76 +299,80 @@ These are **unweighted, disproportionate-sample raw rates** — because high-ris
 ```
 p_hat = Σ_h (N_h/N) × (fp_h/n_h)
 ```
-computed over the 29 of 30 strata with ≥1 non-ambiguous classified edge (`n_h_effective` > 0); one stratum (`highRiskDomainCensus:imaging-device-bridge`, N=3, all 3 census-reviewed, all 3 classified D/ambiguous) has **no estimable rate** and is excluded from the weighted sum, its 3-edge population share (0.54% of N) reported separately rather than silently dropped.
+computed over **all 30 of 30 strata** — every stratum has ≥1 non-ambiguous classified edge (`n_h_effective` > 0) under the R1-corrected sample. This is a change from the pre-R1 round (§0.1): the `highRiskDomainCensus:imaging-device-bridge` stratum that was previously fully ambiguous (N=3, 3/3 `D`) grew to N=8 under the partition fix (§5.3) and now has 5 non-ambiguous reviewed edges, so no stratum is excluded from the weighted sum this round.
 
 | | Value |
 |---|---:|
-| **Weighted population accepted-edge rate (p_hat)** | **99.27%** |
-| **Weighted population violation-rate complement (1 - p_hat)** | **0.73%** |
-| Covered population (N_h summed over estimable strata) | 549 / 552 |
-| Excluded stratum | `highRiskDomainCensus:imaging-device-bridge`, N=3, 100% ambiguous (see §5.3) |
+| **Weighted population accepted-edge rate (p_hat)** | **99.64%** |
+| **Weighted population violation-rate complement (1 - p_hat)** | **0.36%** |
+| Covered population (N_h summed over estimable strata) | 552 / 552 |
+| Excluded strata | none |
 
-**WEIGHTED_POPULATION_FP_ESTIMATE = 99.27% (accepted/expected), RAW_AS_SAMPLED_FP_RATE = 97.87%.** The weighted estimate is the headline number per REVIEW-A §I; the raw rate is reported alongside, not presented as the population estimate.
+**WEIGHTED_POPULATION_FP_ESTIMATE = 99.64% (accepted/expected), RAW_AS_SAMPLED_FP_RATE = 99.24%.** The weighted estimate is the headline number per REVIEW-A §I; the raw rate is reported alongside, not presented as the population estimate.
 
-### 6.3 Confidence intervals — and an important, transparently-reported degeneracy
+### 6.3 Confidence intervals, and the zero-event sensitivity analysis (relabeled per §0.1 finding 2 — no confidence-coverage claim)
 
-**Analytic (stratified, finite-population-correction):** 95% CI = **[99.27%, 99.27%]** (zero width).
-**Bootstrap (2,000 resamples, stratified, seed `F2-GUARDRAIL-VAL-004-BOOTSTRAP-v1`, deterministic mulberry32-from-SHA-256):** 95% CI = **[98.91%, 99.64%]**.
+**Analytic (stratified, finite-population-correction):** 95% CI = **[99.64%, 99.64%]** (zero width).
+**Bootstrap (2,000 resamples, stratified, seed `F2-GUARDRAIL-VAL-004-BOOTSTRAP-v1`, deterministic mulberry32-from-SHA-256):** 95% CI = **[99.28%, 99.82%]**.
 
-Both methods produce a **near-degenerate, narrow interval**. This is **not a computation defect** — it is a well-known statistical property (Wald/parametric-bootstrap degeneracy) that occurs when a stratum's *observed* sample proportion is exactly 0% or 100%: the plug-in sample variance `n/(n-1) × p × (1-p)` evaluates to exactly 0 when `p=1`. Several of this sample's largest strata (e.g. `highRiskOversample:core-audit-activity`, 15/15 sampled = 100% accepted; `highRiskOversample:core-identity-access`, `core-platform-crypto`, `core-tenant-security`, same pattern; `standardProportional:core-shared-platform-infrastructure`, 19/19) hit exactly this case. Additionally, several `standardProportional` strata were sampled at only `n_h=1` (floor), which provides no internal variance estimate at all.
+Both methods produce a **near-degenerate, narrow interval**. This is **not a computation defect** — it is a well-known statistical property (Wald/parametric-bootstrap degeneracy) that occurs when a stratum's *observed* sample proportion is exactly 0% or 100%: the plug-in sample variance `n/(n-1) × p × (1-p)` evaluates to exactly 0 when `p=1`. Several of this sample's largest strata (all 8 `highRiskOversample:*` strata, 15/15 sampled = 100% accepted each; `cluster5PlusCensus`, 16/16) hit exactly this case. Additionally, both `standardProportional` strata were sampled at only `n_h=1` (floor), which provides no internal variance estimate at all.
 
-**Per REVIEW-A §J ("do not overstate statistical certainty... flag the estimate as unstable"), a supplementary conservative bound was computed:** for every non-census, non-ambiguous stratum where **zero** violations were observed (`fp_h == n_h_effective`), the exact Clopper-Pearson one-sided 95% upper bound on the *true* violation rate (`1 - 0.05^(1/n)`) was substituted for the naive "0 observed" plug-in, before recomputing the weighted estimate:
+**This is explicitly NOT a formal confidence-covered population ceiling — see §0.1 finding 2.** The prior round of this document called the corresponding number a "conservative weighted violation-rate ceiling" implying formal 95% population coverage; an external architecture review correctly identified that the underlying computation does not support that claim: strata with ≥1 observed violation keep an *unbounded* plug-in rate (not itself upper-bounded for its own unobserved remainder), ambiguous edges are complete-case-excluded rather than folded in conservatively, and a weighted sum of independent per-stratum marginal one-sided 95% bounds carries **no stated simultaneous/global confidence-coverage guarantee**. Per REVIEW-A §J's own instruction ("do not overstate statistical certainty... flag the estimate as unstable") and the review's preferred minimal-relabel path, the function (`zeroEventSensitivityAnalysis()`, unchanged computation) and its output fields (`sensitivityAcceptedRate` / `sensitivityViolationRate` / `hasConfidenceCoverage: false`) are named to make this explicit. For every non-census, non-ambiguous stratum where **zero** violations were observed (`fp_h == n_h_effective`), the exact Clopper-Pearson one-sided bound on the *true* violation rate (`1 - 0.05^(1/n)`) is substituted for the naive "0 observed" plug-in before recomputing the weighted sum:
 
 | | Value |
 |---|---:|
-| Conservative weighted accepted-rate | **78.90%** |
-| **Conservative weighted violation-rate ceiling** | **21.10%** |
+| Sensitivity accepted-rate | **71.98%** |
+| **Sensitivity violation rate (NOT a confidence-covered ceiling)** | **28.02%** |
+| Has formal confidence coverage? | **No** — see disclaimer below |
 
-This ceiling is dominated by the five smallest oversampled/proportional strata (four `standardProportional` strata sampled at `n=1`, contributing a Clopper-Pearson ceiling of 95% each on their own small population share, plus the four `n=15`-of-larger-population high-risk oversample strata at an 18.1% ceiling each). **This is the statistically honest range to communicate:** the point estimate (99.27% accepted) and both computed intervals reflect what was *observed*, but the true population rate could plausibly be materially lower for the specific small-sample strata identified above, purely due to limited sample size in those cells — not because any concrete evidence of additional violations was found. A follow-up validation task increasing sample size specifically in the `n=1` `standardProportional` strata (`clinical-appointments-availability`, `core-observability-ops-events`, `core-org-clinic-membership`, `core-shared-events-queue-idempotency`) would tighten this bound materially. `ciAgreement` is reported as `DEGENERATE_NARROW_BOTH_METHODS_SEE_CONSERVATIVE_BOUND`, not `CONSISTENT`, to avoid implying false precision.
+> **`confidenceCoverageNote` (verbatim from `F2-GUARDRAIL-VAL-004_metrics.json`):** "NOT a formally covered simultaneous/global confidence bound. Non-zero-event non-census strata keep an unbounded plug-in rate, ambiguous edges are complete-case-excluded, and a sum of independent marginal one-sided bounds carries no stated joint coverage. Sensitivity-only; not valid merge/promotion/enforcement evidence."
+
+This sensitivity value moved from 21.10% (pre-R1) to 28.02% (R1-corrected) — not because uncertainty grew, but because the R1-corrected sample now includes 10 zero-observed-violation non-census strata subject to the substitution (the 8 `highRiskOversample:*` strata + `cluster5PlusCensus` + `highRiskDomainCensus:imaging-device-bridge`, the last newly eligible because it is no longer fully ambiguous, §6.2) versus 5 previously, plus both `n=1` `standardProportional` strata each still contributing a 95% Clopper-Pearson substitution on their own small population share (`core-org-clinic-membership` N=10, `core-shared-platform-infrastructure` N=84). **This is a transparency/robustness disclosure only, per §0.1 finding 2 — it must not be read as a merge-readiness, promotion, or CI-blocking enforcement signal**, and this document makes no such use of it. A follow-up validation task increasing sample size specifically in the two `n=1` `standardProportional` strata would tighten this sensitivity value materially, though even a tighter sensitivity value would still carry no formal confidence-coverage guarantee unless a genuinely simultaneous/global bound were separately derived (§0.1's rejected alternative path). `ciAgreement` is reported as `DEGENERATE_NARROW_BOTH_METHODS_SEE_SENSITIVITY_ANALYSIS`, not `CONSISTENT`, to avoid implying false precision.
 
 ### 6.4 High-risk-only metrics
 
 | | Value |
 |---|---:|
-| n (high-risk edges in sample) | 173 |
-| classified_non_ambiguous | 169 |
-| True positives (A+H) | 4 |
-| False-positive rate | 165/169 = **97.63%** |
-| Ambiguity rate | 4/173 = **2.31%** |
+| n (high-risk edges in sample) | 253 |
+| classified_non_ambiguous | 249 |
+| True positives (A+H) | 2 |
+| False-positive rate | 247/249 = **99.20%** |
+| Ambiguity rate | 4/253 = **1.58%** |
 
-All 4 true positives in the entire sample are high-risk-domain-touching (100% of true positives found were in high-risk strata) — consistent with those strata being deliberately oversampled for safety coverage.
+Both true positives in the R1-corrected sample are high-risk-domain-touching (100% of true positives found were in high-risk strata) — consistent with those strata being deliberately oversampled for safety coverage. `n` grew from 173 (pre-R1) to 253 — direct evidence the partition fix (§0.1/§4.3.1) materially increased high-risk coverage, as intended.
 
 ### 6.5 Metrics by edge shape (top families, n≥5)
 
 | Edge shape | n | classified_non_ambiguous | TP count | FP rate |
 |---|---:|---:|---:|---:|
-| routes → utils | 68 | 68 | 0 | 100% |
-| services → services | 31 | 31 | 0 | 100% |
-| routes → services | 29 | 26 | 1 | 96.2% |
-| routes → middleware | 17 | 17 | 0 | 100% |
-| services → utils | 16 | 15 | 0 | 100% |
-| routes → root-or-other | 7 | 7 | 0 | 100% |
-| services → root-or-other | 6 | 6 | 0 | 100% |
-| jobs → services | 5 | 5 | 1 | 80.0% |
+| routes → utils | 83 | 83 | 0 | 100% |
+| routes → services | 33 | 30 | 1 | 96.7% |
+| routes → root-or-other | 30 | 30 | 0 | 100% |
+| services → root-or-other | 27 | 27 | 0 | 100% |
+| services → services | 26 | 26 | 0 | 100% |
+| services → utils | 23 | 22 | 0 | 100% |
+| routes → middleware | 16 | 16 | 0 | 100% |
+| jobs → utils | 8 | 8 | 0 | 100% |
+| jobs → root-or-other | 6 | 6 | 0 | 100% |
 
-(Remaining families each n≤4; full table in `F2-GUARDRAIL-VAL-004_metrics.json`.) The `routes -> routes` (n=1, 0% FP — the sole census member is the whatsapp→contactRequests true positive) and `services -> routes` (n=1, 0% FP — the patientPrivacyExportPackage true positive) shapes are the only 100%-true-positive families, both singleton census strata.
+(Remaining families each n≤4; full table in `F2-GUARDRAIL-VAL-004_metrics.json`.) The `routes -> routes` shape (n=1, 0% FP) is still the sole census member and still the whatsapp→contactRequests true positive (§5.2), unaffected by the partition fix (mandatory census rule 2). The pre-R1 round's other 100%-true-positive singleton family, `services -> routes` (the patientPrivacyExportPackage true positive), is no longer in-sample (§4.5.1/§5.2); a different, non-true-positive edge now occupies that shape's n=1 slot.
 
 ### 6.6 Metrics by caller layer
 
 | Caller layer | n | TP count | FP rate |
 |---|---:|---:|---:|
-| routes | 123 | 2 | 98.3% |
-| services | 54 | 1 | 98.1% |
-| jobs | 12 | 1 | 91.7% |
+| routes | 163 | 2 | 98.75% |
+| services | 77 | 0 | 100% |
+| jobs | 20 | 0 | 100% |
+| utils | 4 | 0 | 100% |
 | middleware | 2 | 0 | 100% |
-| utils | 1 | 0 | 100% |
 
 ### 6.7 Metrics by cluster-size bucket
 
 | Bucket | n | TP count | FP rate |
 |---|---:|---:|---:|
-| 1 | 124 | 3 | 97.5% |
-| 2-4 | 52 | 1 | 98.0% |
+| 1 | 192 | 1 | 99.47% |
+| 2-4 | 58 | 1 | 98.25% |
 | 5+ | 16 | 0 | 100% |
 
 No evidence that larger multi-symbol clusters hide more violations than single-symbol edges — if anything the opposite (0 true positives among the 16 census-reviewed cluster≥5 edges).
@@ -327,23 +383,23 @@ No evidence that larger multi-symbol clusters hide more violations than single-s
 
 Per REVIEW-A §K, explicit and unambiguous:
 
-**VAL-001_RATE_COMPARISON = NOT_DIRECTLY_COMPARABLE.** Reasons: VAL-001 used a purposive, rule-based (non-probability) sample of raw findings, not edges; it pre-dated the domain-map/baseline reconciliation this task's population reflects; it deliberately oversampled several categories without population weighting; and VAL-001 itself explicitly disclaimed formal statistical inference. **Do not** read "8.9% (VAL-001) → 2.13%/0.73% (VAL-004)" as an improvement trendline — the sampling units, methodologies, and populations are not the same measurement.
+**VAL-001_RATE_COMPARISON = NOT_DIRECTLY_COMPARABLE.** Reasons: VAL-001 used a purposive, rule-based (non-probability) sample of raw findings, not edges; it pre-dated the domain-map/baseline reconciliation this task's population reflects; it deliberately oversampled several categories without population weighting; and VAL-001 itself explicitly disclaimed formal statistical inference. **Do not** read "8.9% (VAL-001) → 0.76%/0.36% (VAL-004, R1-corrected; was 2.13%/0.73% pre-R1, §0.1)" as an improvement trendline — the sampling units, methodologies, and populations are not the same measurement, and even the pre-R1 → R1 change within this same task reflects a sampling-partition correction, not a signal-quality change in the codebase.
 
 **VAL-003_NEW_COUNT_REDUCTION = BASELINE_COVERAGE_CHANGE_NOT_SIGNAL_QUALITY_MEASUREMENT.** VAL-003's `NEW` 1,024 → 846 reduction came entirely from accepted-baseline authoring (88 explicit + 90 sibling flips = 178), independently re-confirmed unchanged by this task's own fresh scan (846/193/1,039, byte-identical population). It reflects accepted-baseline *coverage*, not a change in scanner precision/recall — VAL-004 is the first population-estimating, edge-level signal-quality measurement taken *after* that coverage change, not a before/after comparison of the same measurement.
 
 **VAL-002 comparison:** not attempted — VAL-002 was a domain-map/baseline reconciliation task (config + baseline-authoring), not a false-positive sample; there is no VAL-002 rate to compare against.
 
-**Categories dominating remaining `NEW` findings (this sample):** overwhelmingly `C` (`EXPECTED_PLATFORM_SHARED_EDGE`, 143/192 = 74.5%) — shared/platform utility imports (auth middleware, role checks, db client, encryption/secrets, audit logging, storage abstraction) that are architecturally legitimate under the current pre-modularization structure. This is consistent with, though not statistically comparable to, VAL-001's own observation that `EXPECTED_PLATFORM_SHARED_EDGE` was its largest single category.
+**Categories dominating remaining `NEW` findings (this sample):** overwhelmingly `C` (`EXPECTED_PLATFORM_SHARED_EDGE`, 220/266 = 82.7%) — shared/platform utility imports (auth middleware, role checks, db client, encryption/secrets, audit logging, storage abstraction) that are architecturally legitimate under the current pre-modularization structure. This is consistent with, though not statistically comparable to, VAL-001's own observation that `EXPECTED_PLATFORM_SHARED_EDGE` was its largest single category.
 
-**Are remaining false positives concentrated in a small number of patterns?** Yes — the 2 scanner/domain-classification-defect (`F`) edges both trace to the same root cause (a generic utility file domain-mapped to a single narrow business domain despite serving multiple domains: `utils/whatsappDate.ts`, `utils/excelImport.ts`).
+**Are remaining false positives concentrated in a small number of patterns?** Yes — this round's sole scanner/domain-classification-defect (`F`) edge (`usersImport.ts → utils/excelImport.ts`) and the pre-R1 round's other `F` edge (`instagramAiConversationProcessor.ts → utils/whatsappDate.ts`, not re-selected under the R1-corrected partition, §5.3) both trace to the same root cause: a generic utility file domain-mapped to a single narrow business domain despite serving multiple domains.
 
-**Are remaining true positives concentrated in particular boundaries?** The 4 true positives span 4 distinct caller/target pairs with no single dominant pattern, though 3 of 4 involve route-or-service files reaching directly into another domain's concrete implementation/business function instead of its designed abstraction (factory, service layer) — a recognizable, if not statistically dominant, theme.
+**Are remaining true positives concentrated in particular boundaries?** The 2 true positives in the R1-corrected sample (§5.2) both involve route files reaching directly into another domain's concrete implementation/business function instead of its designed abstraction (a service layer) — the same theme the pre-R1 round's other 2 true positives (not re-selected this round, §5.2) also showed, so this observation is unchanged by the partition fix even though the specific in-sample edge set is smaller.
 
 ---
 
 ## 8. Scanner blind-spot note (REVIEW-A §M)
 
-This sampling exercise measures the **precision of the current scanner's detection surface**, which is strictly **import-syntax based** (`scripts/architecture-guardrail/lib/edgeExtraction.ts` parses static `import` statements only — no Prisma-call analysis, no dynamic `require`, no runtime dependency-injection tracing). **This cannot measure architectural violations outside that detection surface** — e.g. a route file reaching another domain's data via a shared service that itself does the cross-domain Prisma access (already flagged as an explicitly-unresolved, pre-existing gap for `organizationDashboard.ts` in F2-ADR-ORG-DASH-002 §"Explicitly NOT resolved"). **Do not infer "high scanner precision (99.27% accepted) = the repository has no boundary violations."** Detector precision (how often a flagged edge is real) and detector recall (how many real violations it flags) are conceptually separate; this task measured precision only.
+This sampling exercise measures the **precision of the current scanner's detection surface**, which is strictly **import-syntax based** (`scripts/architecture-guardrail/lib/edgeExtraction.ts` parses static `import` statements only — no Prisma-call analysis, no dynamic `require`, no runtime dependency-injection tracing). **This cannot measure architectural violations outside that detection surface** — e.g. a route file reaching another domain's data via a shared service that itself does the cross-domain Prisma access (already flagged as an explicitly-unresolved, pre-existing gap for `organizationDashboard.ts` in F2-ADR-ORG-DASH-002 §"Explicitly NOT resolved"). **Do not infer "high scanner precision (99.64% accepted) = the repository has no boundary violations."** Detector precision (how often a flagged edge is real) and detector recall (how many real violations it flags) are conceptually separate; this task measured precision only.
 
 ---
 
@@ -353,24 +409,35 @@ This sampling exercise measures the **precision of the current scanner's detecti
 |---|---|---|
 | Raw scan (3×) | sha256 + diff | byte-identical |
 | Edge-population derivation (3× against the 3 scan runs) | diff | byte-identical |
-| Sample manifest (2× against same population) | diff | byte-identical |
-| Metrics computation (2× against same sample+classifications) | diff | byte-identical |
+| Sample manifest, pre-R1 partition (2× against same population) | diff | byte-identical |
+| Metrics computation, pre-R1 sample (2× against same sample+classifications) | diff | byte-identical |
+| **Sample manifest, R1-corrected partition (2×+ against same population, post-fix code)** | diff | byte-identical |
+| **Metrics computation, R1-corrected sample (2×+ against same sample+classifications, post-fix code)** | diff | byte-identical |
+| **New synthetic-fixture regression test: `buildSample` byte-identical reruns on a mixed caller/owner-high-risk population** (`__tests__/val004Determinism.test.js`, §10) | `node --test` | pass |
 
-No non-determinism defect found at any stage.
+No non-determinism defect found at any stage, including after the R1 partition-fix rework.
 
 ---
 
-## 10. Test / validation results
+## 10. Test / validation results (R1)
 
 | Command | Exit | Result |
 |---|---:|---|
 | `npm run typecheck:guardrail` | 0 | clean, no output |
 | `npm run guardrail:test` | 0 | **74/74** passed |
 | `npm run test:runtime:unit` | 0 | **74/74** passed |
-| `node --test scripts/architecture-guardrail-validation/__tests__/*.test.js` | 0 | **44/44** passed (30 pre-existing + 14 new, in `val004Determinism.test.js`) |
+| `node --test scripts/architecture-guardrail-validation/__tests__/*.test.js` | 0 | **50/50** passed (30 pre-existing + 14 pre-R1 + **6 new R1 regression tests**, in `val004Determinism.test.js`) |
 | `git diff --check` | 0 | clean, no whitespace errors |
 
-New test file `scripts/architecture-guardrail-validation/__tests__/val004Determinism.test.js` covers: edge-population collapsing/reconciliation, input-order independence, `edgeKey` excludes `callerSymbol`, `targetSampleSize` formula, `edgeShape`/`isHighRisk` classifiers, `stableRank` determinism, full-stratum-assignment invariant, sample-builder byte-identical reruns, the VAL-001→brief taxonomy mapping (exhaustive), the fp-indicator semantics, the Clopper-Pearson bound, census-stratum zero-variance invariant, and an end-to-end rerun of the real checked-in sample+classifications.
+New test file `scripts/architecture-guardrail-validation/__tests__/val004Determinism.test.js` (pre-R1 portion, 14 tests) covers: edge-population collapsing/reconciliation, input-order independence, `edgeKey` excludes `callerSymbol`, `targetSampleSize` formula, `edgeShape`/`isHighRisk` classifiers, `stableRank` determinism, full-stratum-assignment invariant, sample-builder byte-identical reruns, the VAL-001→brief taxonomy mapping (exhaustive), the fp-indicator semantics, the Clopper-Pearson bound, census-stratum zero-variance invariant, and an end-to-end rerun of the real checked-in sample+classifications.
+
+**R1 addendum (6 new tests, §0.1):** on a synthetic mixed population containing a caller-side-only high-risk edge, an owner-side-only high-risk edge, a both-endpoints-high-risk edge (two distinct categories), and 20 genuinely standard edges —
+1. the caller-side-only high-risk edge cannot enter a `standardProportional`/`smallCellCensus` stratum (must land in a `highRiskDomainCensus`/`highRiskOversample` stratum keyed by its high-risk `callerDomain`);
+2. the owner-side-only high-risk edge gets high-risk census/oversample treatment (unchanged pre-fix behavior, still correct post-fix);
+3. the both-endpoints-high-risk edge is included **exactly once**, under one deterministic stratum (`highRiskDomainKey` ties-break to `ownerDomain`);
+4. the partition accounts for **exactly N** edges with no duplication and no gaps (`unassignedCount === 0`, `Σ strataPopulations === N`) — this is the direct regression test for the double-counting defect the fix surfaced and closed (§4.3.1);
+5. `buildSample` reruns remain byte-identical on this mixed population;
+6. `zeroEventSensitivityAnalysis()` makes no formal confidence-coverage claim (`hasConfidenceCoverage: false`) and uses non-ceiling field names (`sensitivityAcceptedRate`/`sensitivityViolationRate`, not `p_hat_conservative_*`).
 
 Per §11 of the task brief, full application regression was **not** run — this task's scope is docs/program/**, docs/program/evidence/**, and reproducible validation scripts only; no shared/core/tooling change triggers the repo's test-impact escalation rules (verified: no `server/`, `client/`, `prisma/`, or CI-workflow file touched).
 
@@ -393,15 +460,23 @@ Per §11 of the task brief, full application regression was **not** run — this
 
 ## 12. Files changed
 
-**New evidence/tooling (docs/program/evidence/tooling/):**
-`F2-GUARDRAIL-VAL-004_scan_run1.json`, `_scan_run2.json`, `_scan_run3.json`, `_edge_population.json`, `_sample_manifest.json`, `_batch{1..5}_*_input.json` (5), `_batch{1..5}_*_classified.json` (5), `_classifications_merged.json`, `_metrics.json`.
+**Pre-R1 (unchanged from the original round, retained for history):**
+`F2-GUARDRAIL-VAL-004_scan_run1.json`, `_scan_run2.json`, `_scan_run3.json`, `_edge_population.json`, `_batch{1..5}_*_input.json` (5), `_batch{1..5}_*_classified.json` (5) — all in `docs/program/evidence/tooling/`.
 
-**New reproducible scripts (scripts/architecture-guardrail-validation/):**
-`buildVal004EdgePopulation.mjs`, `buildVal004Sample.mjs`, `buildVal004Metrics.mjs`, `__tests__/val004Determinism.test.js`.
+**R1-modified (docs/program/evidence/tooling/):**
+`F2-GUARDRAIL-VAL-004_sample_manifest.json` (regenerated, R1-corrected partition, 266 edges), `F2-GUARDRAIL-VAL-004_classifications_merged.json` (regenerated, 159 reused + 107 newly classified = 266 records), `F2-GUARDRAIL-VAL-004_metrics.json` (regenerated from the corrected sample+classifications).
 
-**New main evidence doc:** `docs/program/evidence/F2-GUARDRAIL-VAL-004_FRESH_STRATIFIED_SIGNAL_QUALITY.md` (this file).
+**R1-new (docs/program/evidence/tooling/):**
+`F2-GUARDRAIL-VAL-004-R1_batch1_classified.json` .. `_batch4_classified.json` (4 files, 107 newly-classified edges, 27/27/27/26).
 
-**Modified (append-only corrections):** `docs/program/NORAMEDI_MASTER_TRACKER.md`, `docs/program/CURRENT_PHASE.md`, `docs/program/phases/F2_MODULAR_BOUNDARIES.md`, `docs/program/evidence/README.md`.
+**R1-modified (scripts/architecture-guardrail-validation/):**
+`buildVal004Sample.mjs` (high-risk partition fix — `highRiskDomainKey()`, symmetric census/oversample grouping, double-counting fix, §0.1/§4.3.1), `buildVal004Metrics.mjs` (`conservativeWeightedUpperBound` → `zeroEventSensitivityAnalysis`, `p_hat_conservative_*` → `sensitivityAcceptedRate`/`sensitivityViolationRate` + `hasConfidenceCoverage`/`confidenceCoverageNote`, §0.1/§6.3), `__tests__/val004Determinism.test.js` (+6 R1 regression tests, §10).
+
+**Unchanged from the original round:** `buildVal004EdgePopulation.mjs` (population derivation is unaffected by the sampling-partition fix).
+
+**This main evidence doc:** `docs/program/evidence/F2-GUARDRAIL-VAL-004_FRESH_STRATIFIED_SIGNAL_QUALITY.md` (this file, updated in place — §0.1).
+
+**Modified (append-only corrections, this R1 round added a new top entry to each, prior entries preserved):** `docs/program/NORAMEDI_MASTER_TRACKER.md`, `docs/program/CURRENT_PHASE.md`, `docs/program/phases/F2_MODULAR_BOUNDARIES.md`, `docs/program/evidence/README.md`.
 
 **Not touched:** `scripts/architecture-guardrail/**` (scanner itself), `scripts/architecture-guardrail/config/domain-map.json`, `docs/program/evidence/F2-GUARDRAIL-PREP-010-A_cross_domain_access_inventory.json` (accepted baseline), any `server/`, `client/`, `prisma/`, or CI workflow file.
 
@@ -409,13 +484,14 @@ Per §11 of the task brief, full application regression was **not** run — this
 
 ## 13. Unresolved findings (reported, not fixed — out of this task's authorization)
 
-1. `utils/whatsappDate.ts` domain-map placement (`messaging-whatsapp` vs. `messaging-ai-orchestration`) — independently flagged by two different reviewing agents from two different callers.
+1. `utils/whatsappDate.ts` domain-map placement (`messaging-whatsapp` vs. `messaging-ai-orchestration`) — independently flagged by two different reviewing agents from two different callers (§5.3).
 2. `utils/excelImport.ts` domain-map placement (`clinical-patients`, serves 2 unrelated domains).
-3. `routes/contactRequests.ts` domain-map placement (`clinical-appointments-availability` vs. its actual contact/lead-intake content).
-4. `routes/imaging.ts`'s file-level domain-map granularity vs. its embedded BRG-owned sub-routes (3-edge full census, all ambiguous) — a known, prior-documented (`F2-PREP-006-A`) issue, not new.
-5. 4 true-positive boundary/layering findings (§5.2) — none security/tenant-critical, all recommended for a separate, future remediation task (in the pattern of F2-ADR-ORG-DASH-001's `getDateRange` fix).
-6. `checkPractitionerAvailability` business logic embedded in `utils/helpers.ts`.
-7. Follow-up recommendation: increase sample size in the 4 `n=1` `standardProportional` strata and the fully-ambiguous `imaging-device-bridge` stratum in any subsequent validation round, to tighten the conservative bound in §6.3.
+3. `routes/contactRequests.ts` domain-map placement (`clinical-appointments-availability` vs. its actual contact/lead-intake content) — independently reconfirmed by an R1-round reviewing agent (§5.5).
+4. `routes/imaging.ts`'s file-level domain-map granularity vs. its embedded BRG-owned sub-routes (now an 8-edge stratum, 3 ambiguous, post-R1, §5.3) — a known, prior-documented (`F2-PREP-006-A`) issue, not new.
+5. The 2 true-positive boundary/layering findings in the R1-corrected sample, plus 2 more findings from the pre-R1 sample not re-selected this round but still valid against the population (§5.2) — none security/tenant-critical, all recommended for a separate, future remediation task (in the pattern of F2-ADR-ORG-DASH-001's `getDateRange` fix).
+6. `checkPractitionerAvailability` business logic embedded in `utils/helpers.ts` — independently reconfirmed by an R1-round reviewing agent (§5.5).
+7. Follow-up recommendation: increase sample size in the two `n=1` `standardProportional` strata (`core-org-clinic-membership`, `core-shared-platform-infrastructure`) in any subsequent validation round, to tighten the §6.3 sensitivity value — noting that even a tighter value would remain a sensitivity disclosure, not a formal confidence bound, unless a genuinely simultaneous/global bound is separately derived (§6.3).
+8. `schemas/index.ts` domain-map placement (`core-shared-platform-infrastructure`) — a large multi-domain Zod-schema registry; not currently a violation (all imports classified `C`), but worth reconsidering under future per-domain schema splitting (newly noted by 3 independent R1-round reviewing agents, §5.5).
 
 None of these require, and none received, a domain-map, baseline, or application-code change under this task.
 

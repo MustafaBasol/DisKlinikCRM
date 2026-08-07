@@ -1,0 +1,245 @@
+[
+  {
+    "edgeKey": "server/src/services/earningService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "earningService.ts imports the default Prisma client export from the shared db.ts module, exactly like dozens of other domains do. db.ts contains no finance-specific logic; it is generic platform infrastructure (Prisma client construction/pooling) legitimately consumed across all domains under the current pre-modularization architecture.",
+    "callerEvidence": "server/src/services/earningService.ts:1 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — constructs and exports a single shared `PrismaClient` instance (`const prisma = new PrismaClient({...}); export default prisma;`); no finance or domain-specific logic.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/jobs/imagingBridgeOfflineJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Same pattern as other jobs/routes: imports the shared default Prisma client for DB access. No imaging-bridge-specific logic lives in db.ts.",
+    "callerEvidence": "server/src/jobs/imagingBridgeOfflineJob.ts:15 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export, generic platform infrastructure.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard default-import of the shared Prisma client for DB access in a route file; identical usage shape to the rest of the corpus.",
+    "callerEvidence": "server/src/routes/imagingBridgePublic.ts:27 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "`createRateLimiter` is a generic, parameterized rate-limiter factory used to construct several unrelated limiters (heartbeat, upload, pairing, update) in this same file — it has no imaging-specific behavior and is designed as reusable platform infrastructure.",
+    "callerEvidence": "server/src/routes/imagingBridgePublic.ts:28,51-66 — `import { createRateLimiter } from '../utils/helpers.js';` then `const heartbeatIpLimiter = createRateLimiter(60, 60*1000, 'imaging-bridge-hb-ip'); ... const pairCodeLimiter = createRateLimiter(10, 60*60*1000, 'imaging-bridge-pair-code');`",
+    "targetEvidence": "server/src/utils/helpers.ts:168 — `export const createRateLimiter = (max: number, windowMs: number, namespace: string): RateLimiter => {...}`, a generic factory also used to build the app's login/forgot-password/resend-verification limiters (lines 186-205).",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for DB access, same pattern as elsewhere in the codebase.",
+    "callerEvidence": "server/src/routes/imaging.ts:25 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Both `createRateLimiter` and `getParam` are generic, domain-agnostic route helpers (rate-limiting factory and typed Express param accessor) used throughout the routes layer, not specific to imaging.",
+    "callerEvidence": "server/src/routes/imaging.ts:30,311 — `import { getParam, createRateLimiter } from '../utils/helpers.js';` then `const id = getParam(req, 'id');` (also used at lines 340, 488, 531, 712, 739, 750-751, 808, 860).",
+    "targetEvidence": "server/src/utils/helpers.ts:7,168 — `export const getParam = (req: AuthRequest, key: string): string => {...}` and `export const createRateLimiter = (...) => {...}`, both generic Express-layer utilities.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/services/imaging/imagingRequestTransitions.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "schemas/index.ts is a single, monolithic zod-schema module shared by many unrelated domains (patient, appointment, insurance, imaging, etc.); IMAGING_REQUEST_STATUSES is just one exported constant among many domain schemas co-located there. Consuming it is analogous to importing any other generic, cross-domain platform module.",
+    "callerEvidence": "server/src/services/imaging/imagingRequestTransitions.ts:12,14 — `import { IMAGING_REQUEST_STATUSES } from '../../schemas/index.js';` then `export type ImagingRequestStatus = (typeof IMAGING_REQUEST_STATUSES)[number];`",
+    "targetEvidence": "server/src/schemas/index.ts:1-50+ — a large shared schema file defining patient, appointment-type, insurance, and (further down) imaging status constants together; not owned by a single business domain.",
+    "followUpRequired": "schemas/index.ts is a very large multi-domain grab-bag file; a future task could evaluate whether splitting it per-domain would improve the accuracy of the domain map, but this is not a boundary violation today.",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/services/imaging/public.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for DB access, same pattern as elsewhere.",
+    "callerEvidence": "server/src/services/imaging/public.ts:73 — `import prisma from '../../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/insuranceProvisions.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "classification": "B",
+    "reasoning": "clinicOperatingPreferences.ts is owned by the clinic-membership domain (not a generic shared-infra file) and exposes a narrow, intentional exported function (`getClinicOperatingPreferences`) that resolves a clinic's currency/timezone/locale — a legitimate cross-domain read the insurance domain needs to format monetary amounts. The call goes through the designed public function, not into Prisma or internal helpers directly, so this reads as an intentional public-contract-style edge rather than a violation.",
+    "callerEvidence": "server/src/routes/insuranceProvisions.ts:7,117 — `import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';` then `const operatingPreferences = await getClinicOperatingPreferences(clinicId);`",
+    "targetEvidence": "server/src/services/clinicOperatingPreferences.ts:162-185 — `export async function getClinicOperatingPreferences(clinicId: string): Promise<ClinicOperatingPreferences> {...}`, a clean exported service function (reads clinic + setting rows, normalizes, returns typed preferences).",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappBookingFlow.ts␟core-shared-platform-infrastructure␟utils/logRedaction.ts␟import",
+    "classification": "C",
+    "reasoning": "logRedaction.ts is explicitly documented as a shared helper module designed to be reused by multiple call sites (its own header comment references whatsapp.ts and reminders.ts) to keep phone-number redaction consistent — textbook shared platform infrastructure, not messaging-domain-specific logic.",
+    "callerEvidence": "server/src/services/whatsappBookingFlow.ts:20,417 — `import { redactPhone, summarizeTextForLog } from '../utils/logRedaction.js';` then `phone: redactPhone(phone),` (also used at lines 754, 812-813, 865).",
+    "targetEvidence": "server/src/utils/logRedaction.ts:1-17 — header states \"Shared helpers for keeping PII out of operational logs... Matches the redaction format already established in server/src/routes/whatsapp.ts and server/src/jobs/reminders.ts... so new call sites don't introduce a third, inconsistent phone-redaction shape.\"",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard import of the shared pino logger instance for structured logging; logger.ts is generic observability infrastructure used app-wide, with no messaging-specific behavior.",
+    "callerEvidence": "server/src/jobs/reminders.ts:16,304 — `import { logger } from '../utils/logger.js';` then `logger.warn(...)` (also at line 525).",
+    "targetEvidence": "server/src/utils/logger.ts:24-27 — `export const logger = pino({ level: process.env.LOG_LEVEL || 'info', base: undefined });`, the single shared application logger.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "classification": "B",
+    "reasoning": "Same public-contract shape as the insuranceProvisions.ts edge: reminders.ts (messaging domain) reads clinic timezone/locale via the clinic-membership domain's exported `getClinicOperatingPreferences` function (plus its exported `ClinicOperatingPreferences` type) to correctly schedule/format reminder messages per clinic — a legitimate, intentional cross-domain dependency on a designed public API, not a reach into internals.",
+    "callerEvidence": "server/src/jobs/reminders.ts:10-11 — `import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js'; import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';`",
+    "targetEvidence": "server/src/services/clinicOperatingPreferences.ts:47,162 — exports `type ClinicOperatingPreferences` and `async function getClinicOperatingPreferences(clinicId)`, the clinic domain's public settings-resolution API.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "classification": "C",
+    "reasoning": "jobLock.ts is explicitly designed as a generic, reusable cron-job locking primitive (its header describes it as shared lease-lock infrastructure for any cron job across replicas), and reminders.ts uses it exactly as designed via the generic `withJobLock(name, ttl, fn)` API for two independently-named locks.",
+    "callerEvidence": "server/src/jobs/reminders.ts:19,641,654 — `import { withJobLock } from '../utils/jobLock.js';` then `withJobLock('reminders:notification', REMINDER_LOCK_TTL_MS, runDailyReminderJob)` and `withJobLock('reminders:post-treatment', REMINDER_LOCK_TTL_MS, processScheduledPostTreatmentMessages)`.",
+    "targetEvidence": "server/src/utils/jobLock.ts:1-18,87-111 — header: \"Cron job'lar için paylaşımlı lease kilidi\" (shared lease lock for cron jobs); `export async function withJobLock(name, ttlMs, fn)` is a generic, name-parameterized locking wrapper with no messaging-specific logic.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for DB access, same pattern as elsewhere.",
+    "callerEvidence": "server/src/jobs/reminders.ts:9 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+    "classification": "C",
+    "reasoning": "prismaSelects.ts exports generic, reusable Prisma `select` shape constants (e.g. `patientContactSelect`, `userPublicSelect`) with no domain-specific logic, applied to `patient`/`practitioner` relation selects across multiple query sites in this file — classic shared field-shape infrastructure.",
+    "callerEvidence": "server/src/jobs/reminders.ts:17,220-221 — `import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';` then `patient: { select: patientContactSelect }, practitioner: { select: userPublicSelect },` (also used at lines 354-355, 444).",
+    "targetEvidence": "server/src/utils/prismaSelects.ts:7-15,30-36 — `export const userPublicSelect = { id, firstName, lastName, email, phone, role, isActive } as const;` and `export const patientContactSelect = { id, firstName, lastName, email, phone } as const;`, generic reusable field-selection constants.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/recall.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for DB access, same pattern as elsewhere.",
+    "callerEvidence": "server/src/routes/recall.ts:3 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/recall.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "`getParam` is a generic, domain-agnostic Express param accessor used across the routes layer, same as in imaging.ts and instagramInbox.ts.",
+    "callerEvidence": "server/src/routes/recall.ts:6,150 — `import { getParam } from '../utils/helpers.js';` then `const id = getParam(req, 'id');` (also lines 249, 321, 379, 432).",
+    "targetEvidence": "server/src/utils/helpers.ts:7 — `export const getParam = (req: AuthRequest, key: string): string => {...}`, generic route utility.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/services/postTreatmentMessaging.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard import of the shared pino logger for structured logging, generic observability infrastructure with no messaging-specific logic.",
+    "callerEvidence": "server/src/services/postTreatmentMessaging.ts:13,458 — `import { logger } from '../utils/logger.js';` then `logger.warn(...)`.",
+    "targetEvidence": "server/src/utils/logger.ts:24-27 — shared `export const logger = pino({...})` instance.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/services/postTreatmentMessaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for DB access, same pattern as elsewhere.",
+    "callerEvidence": "server/src/services/postTreatmentMessaging.ts:8 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/services/recallCandidateService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for DB access, same pattern as elsewhere.",
+    "callerEvidence": "server/src/services/recallCandidateService.ts:1 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/services/recallSettings.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for DB access, same pattern as elsewhere.",
+    "callerEvidence": "server/src/services/recallSettings.ts:2 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramInbox.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for DB access, same pattern as elsewhere.",
+    "callerEvidence": "server/src/routes/instagramInbox.ts:20 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramInbox.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "`getParam` is a generic, domain-agnostic Express param accessor, same usage pattern as in imaging.ts and recall.ts.",
+    "callerEvidence": "server/src/routes/instagramInbox.ts:23,207 — `import { getParam } from '../utils/helpers.js';` then `const id = getParam(req, 'id');` (also lines 219, 273, 318, 335).",
+    "targetEvidence": "server/src/utils/helpers.ts:7 — `export const getParam = (req: AuthRequest, key: string): string => {...}`, generic route utility.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramInbox.ts␟core-shared-platform-infrastructure␟utils/prismaSelects.ts␟import",
+    "classification": "C",
+    "reasoning": "`patientContactSelect` is a generic, reusable Prisma select-shape constant applied to a `patient` relation select, no domain-specific logic; same shared-infra pattern as reminders.ts's use of prismaSelects.ts.",
+    "callerEvidence": "server/src/routes/instagramInbox.ts:33,731 — `import { patientContactSelect } from '../utils/prismaSelects.js';` then `patient: { select: patientContactSelect },`",
+    "targetEvidence": "server/src/utils/prismaSelects.ts:30-36 — `export const patientContactSelect = { id, firstName, lastName, email, phone } as const;`, a generic reusable field-selection constant.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟core-shared-events-queue-idempotency␟services/messagingInboundIdempotency.ts␟import",
+    "classification": "C",
+    "reasoning": "messagingInboundIdempotency.ts is a generic, channel-agnostic inbound-event dedupe module — its own types explicitly cover whatsapp/instagram/facebook_messenger channels and evolution/meta_cloud/meta_graph providers, and it is exported as a clean grouped API (`MessagingInboundIdempotencyService`). instagramWebhook.ts consumes it purely through this designed generic interface to detect/mark duplicate webhook deliveries, which is shared queue/idempotency platform infrastructure rather than instagram-specific coupling.",
+    "callerEvidence": "server/src/routes/instagramWebhook.ts:25-28,504,567,571 — `import { createInboundEventOrDetectDuplicate, markInboundEventFailed, markInboundEventProcessed } from '../services/messagingInboundIdempotency.js';` then `const inboundEvent = await deps.createInboundEventOrDetectDuplicate({...}); ... await deps.markInboundEventProcessed(inboundEvent.eventId); ... await deps.markInboundEventFailed(inboundEvent.eventId, error)...`",
+    "targetEvidence": "server/src/services/messagingInboundIdempotency.ts:4-5,37,84,97,113-117 — `type MessagingInboundChannel = 'whatsapp' | 'instagram' | 'facebook_messenger' | string;` and exported `createInboundEventOrDetectDuplicate`/`markInboundEventProcessed`/`markInboundEventFailed`, grouped into `export const MessagingInboundIdempotencyService = {...}` — a generic multi-channel idempotency service.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for DB access, same pattern as elsewhere.",
+    "callerEvidence": "server/src/routes/instagramWebhook.ts:11 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationInstagram.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Default import of the shared Prisma client for DB access, same pattern as elsewhere.",
+    "callerEvidence": "server/src/routes/organizationInstagram.ts:29 — `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:1-23 — shared `PrismaClient` singleton export.",
+    "followUpRequired": "none",
+    "batch": "r1_batch3"
+  }
+]

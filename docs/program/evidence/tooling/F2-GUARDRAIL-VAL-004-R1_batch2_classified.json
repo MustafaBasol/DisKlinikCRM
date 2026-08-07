@@ -1,0 +1,245 @@
+[
+  {
+    "edgeKey": "server/src/services/security/securitySignalService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "securitySignalService.ts imports the shared Prisma client singleton for its own domain's persistence (SecuritySignalEvent), the same generic pattern used by essentially every service in the codebase. db.ts is designed to be imported anywhere a Prisma-backed write/read is needed; there is no domain-specific coupling here.",
+    "callerEvidence": "server/src/services/security/securitySignalService.ts:46 `import prisma from '../../db.js';`, used at :394 `await prisma.securitySignalEvent.create({` and :435 `return await prisma.securitySignalEvent.count({`.",
+    "targetEvidence": "server/src/db.ts:1-23 — exports a single default PrismaClient instance (adapter-configured connection pool); pure generic DB-client infra, no domain logic.",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/fileBackupDestination.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "classification": "C",
+    "reasoning": "fileBackupDestination.ts imports safeErrorFields purely to produce a non-leaking, structured error summary for a console.error log line, which is exactly the helper's documented purpose (avoid leaking paths/keys/endpoints via raw error objects). Generic, designed-for-cross-domain-use logging helper.",
+    "callerEvidence": "server/src/services/fileBackupDestination.ts:86 `import { safeErrorFields } from '../utils/safeError.js';`, used at :344 `console.error('[file-backup-destination] manifest write failed', safeErrorFields(err));`.",
+    "targetEvidence": "server/src/utils/safeError.ts:1-16 — single exported function `safeErrorFields(err)` returning only `{errorName, errorCode}`, explicitly documented as a generic non-leaking log helper for any route/service touching storage or exports.",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/fileBackupService.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "classification": "C",
+    "reasoning": "fileBackupService.ts uses withJobLock to guard its cron-driven backup run against concurrent execution across replicas, which is precisely jobLock.ts's documented generic purpose (shared cross-process lease lock for any cron job). No backup-specific logic lives in jobLock.ts.",
+    "callerEvidence": "server/src/services/fileBackupService.ts:42 `import { withJobLock } from '../utils/jobLock.js';`, used at :174 `const acquired = await withJobLock(FILE_BACKUP_JOB_LOCK_NAME, FILE_BACKUP_JOB_LOCK_TTL_MS, async () => {`.",
+    "targetEvidence": "server/src/utils/jobLock.ts:1-111 — generic DB-backed lease lock (`acquireJobLock`/`releaseJobLock`/`withJobLock`) explicitly designed for reuse by any cron job in the codebase, not tied to a single domain.",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/fileBackupService.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic safeErrorFields usage as the fileBackupDestination.ts edge above — used three times to sanitize error objects before logging, matching the helper's designed purpose exactly.",
+    "callerEvidence": "server/src/services/fileBackupService.ts:41 `import { safeErrorFields } from '../utils/safeError.js';`, used at :269, :332, :489, e.g. :332 `const { errorCode } = safeErrorFields(err);`.",
+    "targetEvidence": "server/src/utils/safeError.ts:1-16 — generic non-leaking error-field helper (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/fileStorage.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "fileStorage.ts imports the shared Prisma client to look up ClinicBulkExportArchive rows as part of its stale-partial-file sweep; ordinary generic DB access, same pattern as every other service.",
+    "callerEvidence": "server/src/services/fileStorage.ts:38 `import prisma from '../db.js';`, used at :538 `prisma.clinicBulkExportArchive.findUnique({`.",
+    "targetEvidence": "server/src/db.ts:1-23 — shared default PrismaClient export (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/fileStorage.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "classification": "C",
+    "reasoning": "fileStorage.ts uses safeErrorFields four times (lstat/chmod/DB-lookup/unlink failure paths) purely to produce sanitized log fields, exactly matching the helper's designed generic purpose.",
+    "callerEvidence": "server/src/services/fileStorage.ts:39 `import { safeErrorFields } from '../utils/safeError.js';`, used at :314, :333, :584, :592, e.g. :314 `console.error('[fileStorage] TEMP_STORAGE_UNSAFE (lstat failed)', safeErrorFields(err));`.",
+    "targetEvidence": "server/src/utils/safeError.ts:1-16 — generic non-leaking error-field helper (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/jobs/externalCalendarInboundRetryJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "The retry job imports the shared Prisma client to query ExternalCalendarInboundEvent rows stuck in 'processing'; ordinary generic DB access for its own domain's data, no cross-domain reach.",
+    "callerEvidence": "server/src/jobs/externalCalendarInboundRetryJob.ts:14 `import prisma from '../db.js';`, used at :28 `const stuck = await prisma.externalCalendarInboundEvent.findMany({`.",
+    "targetEvidence": "server/src/db.ts:1-23 — shared default PrismaClient export (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/jobs/externalCalendarOutboundSyncJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "classification": "C",
+    "reasoning": "The outbound sync job wraps its cron entry point in withJobLock so the API process and a separate worker never process the same retry batch twice — exactly jobLock.ts's documented generic cross-process lease purpose.",
+    "callerEvidence": "server/src/jobs/externalCalendarOutboundSyncJob.ts:25 `import { withJobLock } from '../utils/jobLock.js';`, used at :115 `withJobLock('external-calendar-outbound-sync', 10 * 60 * 1000, runExternalCalendarOutboundSyncJob)`.",
+    "targetEvidence": "server/src/utils/jobLock.ts:1-111 — generic reusable cron lease lock (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/jobs/externalCalendarOutboundSyncJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "The job imports the shared Prisma client to read/update ExternalCalendarAppointmentLink rows for its own crash-recovery and retry logic; ordinary generic DB access.",
+    "callerEvidence": "server/src/jobs/externalCalendarOutboundSyncJob.ts:23 `import prisma from '../db.js';`, used at :42 `const stuck = await prisma.externalCalendarAppointmentLink.updateMany({` and :59/:72 `prisma.externalCalendarAppointmentLink.findMany({`.",
+    "targetEvidence": "server/src/db.ts:1-23 — shared default PrismaClient export (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/externalCalendarOutboundSyncStatus.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "The route imports getParam, a trivial generic Express route-param accessor with no domain logic, used identically across dozens of unrelated route files.",
+    "callerEvidence": "server/src/routes/externalCalendarOutboundSyncStatus.ts:24 `import { getParam } from '../utils/helpers.js';`, used at :77 and :105 `const id = getParam(req, 'id');`.",
+    "targetEvidence": "server/src/utils/helpers.ts:7-10 `export const getParam = (req: AuthRequest, key: string): string => { const value = req.params[key]; return Array.isArray(value) ? value[0] : value; };` — a generic, domain-agnostic Express helper (file also hosts date/rate-limit/availability helpers).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/platformExternalCalendar.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "The platform-admin route imports the shared Prisma client for its own clinic/user/appointmentType lookups; ordinary generic DB access, no boundary bypass (business logic itself is delegated to the connection/mapping services).",
+    "callerEvidence": "server/src/routes/platformExternalCalendar.ts:23 `import prisma from '../db.js';`, used at :68 `const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true, name: true } });` and :228/:232/:241.",
+    "targetEvidence": "server/src/db.ts:1-23 — shared default PrismaClient export (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarConnectionService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Generic Prisma client usage for the service's own ExternalCalendarIntegration/Clinic CRUD; no cross-domain reach, matches the pattern of every other service file.",
+    "callerEvidence": "server/src/services/externalCalendar/externalCalendarConnectionService.ts:15 `import prisma from '../../db.js';`, used at :121 `const row = await prisma.externalCalendarIntegration.findUnique({ where: { clinicId } });` and multiple further calls (:158,:172,:182,:202,:215,:258,:267,:296,:299).",
+    "targetEvidence": "server/src/db.ts:1-23 — shared default PrismaClient export (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarIdempotency.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Generic Prisma client usage to create/update ExternalCalendarInboundEvent rows for this module's own idempotency ledger; ordinary DB access, no cross-domain reach.",
+    "callerEvidence": "server/src/services/externalCalendar/externalCalendarIdempotency.ts:12 `import prisma from '../../db.js';`, used at :55 `const event = await prisma.externalCalendarInboundEvent.create({` and :80/:88/:97 `prisma.externalCalendarInboundEvent.update(...)`.",
+    "targetEvidence": "server/src/db.ts:1-23 — shared default PrismaClient export (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarMappingService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Generic Prisma client usage for the service's own User/AppointmentType lookups and ExternalCalendarMapping CRUD; ordinary DB access pattern, no cross-domain reach.",
+    "callerEvidence": "server/src/services/externalCalendar/externalCalendarMappingService.ts:11 `import prisma from '../../db.js';`, used at :42 `const user = await prisma.user.findFirst({` and :54/:92/:127/:172/:175/:199.",
+    "targetEvidence": "server/src/db.ts:1-23 — shared default PrismaClient export (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts␟core-observability-ops-events␟services/operationalEventService.ts␟import",
+    "classification": "C",
+    "reasoning": "externalCalendarOutboundSync.ts calls recordOperationalEvent to log a terminal sync failure as a resolvable operational event, exactly the documented, cross-domain-intended purpose of that writer (its own EventSource union already lists 'external_calendar' as a first-class source). This is the designed shared observability write path, not a bypass of any external-calendar-owned abstraction.",
+    "callerEvidence": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts:52 `import { recordOperationalEvent } from '../operationalEventService.js';`, used at :344 `await recordOperationalEvent({`.",
+    "targetEvidence": "server/src/services/operationalEventService.ts:13-14 defines `EventSource = 'whatsapp' | ... | 'external_calendar'`, i.e. the module is explicitly designed to accept events from the external-calendar domain (and every other domain) — a generic shared observability sink, not domain-owned business logic.",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+    "classification": "C",
+    "reasoning": "The module uses the shared pino logger instance for structured error/warn logging at several call sites, the same generic logging facility imported throughout the codebase.",
+    "callerEvidence": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts:53 `import { logger } from '../../utils/logger.js';`, used at :334 `logger.error(logFields, 'external-calendar-outbound-sync: sync attempt failed terminally');` and :336/:365/:570/:617.",
+    "targetEvidence": "server/src/utils/logger.ts:24-27 exports a single generic `logger = pino({...})` instance plus HTTP-log-privacy helpers; no domain-specific logic, designed for use by every module.",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "getZonedDateTimeParts is a generic timezone-conversion utility with no domain logic, used here to compute provider-local date/time parts; matches its documented generic purpose.",
+    "callerEvidence": "server/src/services/externalCalendar/externalCalendarOutboundSync.ts:54 `import { getZonedDateTimeParts } from '../../utils/helpers.js';`, used at :86 `const parts = getZonedDateTimeParts(date, PROVIDER_TIME_ZONE);`.",
+    "targetEvidence": "server/src/utils/helpers.ts:77-96 `export const getZonedDateTimeParts = (date: Date, timeZone: string) => {...}` — pure generic Intl-based timezone helper, no external-calendar-specific logic.",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/compensationRules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Generic Prisma client usage for the route's own PractitionerCompensationRule/ServiceCompensationRule CRUD; ordinary DB access pattern shared by every route file.",
+    "callerEvidence": "server/src/routes/compensationRules.ts:2 `import prisma from '../db.js';`, used at :24 `const rules = await prisma.practitionerCompensationRule.findMany({` and :47/:52/:80/:84/:110/:114/:138/:165/:166/:171/:202/:206.",
+    "targetEvidence": "server/src/db.ts:1-23 — shared default PrismaClient export (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/compensationRules.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "schemas/index.ts is the codebase's single shared Zod-schema module used by every route domain (patient, appointment, finance, etc.); compensationRules.ts imports its own two finance schemas from that shared file, matching the existing pre-modularization convention (e.g. schemas/index.ts itself imports from utils/helpers.ts).",
+    "callerEvidence": "server/src/routes/compensationRules.ts:6-8 `import { practitionerCompensationRuleSchema, serviceCompensationRuleSchema } from '../schemas/index.js';`, used at :40 `const validation = practitionerCompensationRuleSchema.safeParse(req.body);` and :157 `const validation = serviceCompensationRuleSchema.safeParse(req.body);`.",
+    "targetEvidence": "server/src/schemas/index.ts:425 `export const practitionerCompensationRuleSchema = z.object({` and :438 `export const serviceCompensationRuleSchema = z.object({` — both defined in the shared root schemas file alongside patient/appointment/insurance schemas.",
+    "followUpRequired": "schemas/index.ts is a large monolithic file mixing schemas for many distinct business domains (patient, finance, insurance, etc.) under one 'core-shared-platform-infrastructure' domain label. Not a defect today (matches the pre-modularization convention), but worth flagging for a future task if/when schema files get split per-domain.",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/compensationRules.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "getParam is the same trivial generic Express route-param accessor discussed above, used to read the `:id` path param.",
+    "callerEvidence": "server/src/routes/compensationRules.ts:5 `import { getParam } from '../utils/helpers.js';`, used at :72, :104, :196, e.g. `const id = getParam(req, 'id');`.",
+    "targetEvidence": "server/src/utils/helpers.ts:7-10 — generic getParam helper (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/financeDashboard.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Generic Prisma client usage for the dashboard's own Payment/PaymentPlanInstallment/PractitionerEarning aggregate queries; ordinary DB access pattern.",
+    "callerEvidence": "server/src/routes/financeDashboard.ts:17 `import prisma from '../db.js';`, used at :41 `const orgClinics = await prisma.clinic.findMany({` and :136/:142/:148/:154/:165/:171/:176/:182/:188/:196/:207/:230/:234/:239.",
+    "targetEvidence": "server/src/db.ts:1-23 — shared default PrismaClient export (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/financeDashboard.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "getDateRange is an explicitly-documented generic date-range helper (its own comment states it was relocated from organizationDashboard.ts under F2-ADR-ORG-DASH-001 specifically because it has 'no dashboard-specific logic' and is 'shared as-is by financeDashboard.ts and organizationDashboard.ts'). This is a textbook designed-for-reuse platform helper.",
+    "callerEvidence": "server/src/routes/financeDashboard.ts:21 `import { getDateRange } from '../utils/helpers.js';`, used at :90 `dateRange = getDateRange(`.",
+    "targetEvidence": "server/src/utils/helpers.ts:23-56, comment at :23-25 `// Relocated from routes/organizationDashboard.ts (F2-ADR-ORG-DASH-001) — a generic date-range helper with no dashboard-specific logic, shared as-is by financeDashboard.ts and organizationDashboard.ts.`",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Generic Prisma client usage for the route's own PractitionerEarning CRUD; ordinary DB access pattern.",
+    "callerEvidence": "server/src/routes/practitionerEarnings.ts:2 `import prisma from '../db.js';`, used at :45 `prisma.practitionerEarning.findMany({` and :50/:72/:116/:145/:174/:186/:217/:247.",
+    "targetEvidence": "server/src/db.ts:1-23 — shared default PrismaClient export (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared-root-schema-file pattern as compensationRules.ts: earningAdjustSchema is a finance-domain schema defined in the codebase's single shared Zod-schema module, imported here to validate a request body.",
+    "callerEvidence": "server/src/routes/practitionerEarnings.ts:6 `import { earningAdjustSchema } from '../schemas/index.js';`, used at :167 `const validation = earningAdjustSchema.safeParse(req.body);`.",
+    "targetEvidence": "server/src/schemas/index.ts:448 `export const earningAdjustSchema = z.object({` — defined in the shared root schemas file.",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "getParam is the same trivial generic Express route-param accessor discussed above.",
+    "callerEvidence": "server/src/routes/practitionerEarnings.ts:5 `import { getParam } from '../utils/helpers.js';`, used at :109, :134, :206, :236, e.g. `const id = getParam(req, 'id');`.",
+    "targetEvidence": "server/src/utils/helpers.ts:7-10 — generic getParam helper (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared-root-schema-file pattern: practitionerPayoutSchema is a finance-domain schema defined in the shared Zod-schema module, imported to validate a request body.",
+    "callerEvidence": "server/src/routes/practitionerPayouts.ts:6 `import { practitionerPayoutSchema } from '../schemas/index.js';`, used at :50 `const validation = practitionerPayoutSchema.safeParse(req.body);`.",
+    "targetEvidence": "server/src/schemas/index.ts:455 `export const practitionerPayoutSchema = z.object({` — defined in the shared root schemas file.",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "getParam is the same trivial generic Express route-param accessor discussed above.",
+    "callerEvidence": "server/src/routes/practitionerPayouts.ts:5 `import { getParam } from '../utils/helpers.js';`, used at :97, :113, e.g. `const id = getParam(req, 'id');`.",
+    "targetEvidence": "server/src/utils/helpers.ts:7-10 — generic getParam helper (see above).",
+    "followUpRequired": "none",
+    "batch": "r1_batch2"
+  }
+]

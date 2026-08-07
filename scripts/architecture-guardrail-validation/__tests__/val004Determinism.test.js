@@ -11,13 +11,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildEdgePopulation, edgeKey } from '../buildVal004EdgePopulation.mjs';
-import { buildSample, stableRank, targetSampleSize, edgeShape, isHighRisk } from '../buildVal004Sample.mjs';
+import { buildSample, stableRank, targetSampleSize, edgeShape, isHighRisk, highRiskDomainKey } from '../buildVal004Sample.mjs';
 import {
   briefCategory,
   fpIndicator,
   clopperPearsonZeroEventUpperBound,
   computeStrataStats,
   weightedEstimate,
+  zeroEventSensitivityAnalysis,
   buildMetrics,
 } from '../buildVal004Metrics.mjs';
 
@@ -206,4 +207,149 @@ test('end-to-end: buildMetrics reproduces the checked-in VAL-004 sample manifest
   const m2 = buildMetrics(sampleManifest, classifications);
   assert.deepEqual(m1, m2);
   assert.equal(m1.totalSampleReviewed, sampleManifest.sample.length);
+});
+
+// F2-GUARDRAIL-VAL-004-R1: regression tests for the symmetric (either-endpoint)
+// high-risk sampling partition fix. Pre-fix, the census/oversample allocation
+// was keyed only by ownerDomain, so a caller-side-only high-risk edge could
+// fall into an ordinary standardProportional/smallCellCensus ownerDomain
+// stratum instead of the approved high-risk sampling policy.
+
+function makeEdge(overrides) {
+  return {
+    edgeKey: overrides.edgeKey,
+    callerPath: overrides.callerPath || `server/src/routes/${overrides.edgeKey}.ts`,
+    ownerDomain: overrides.ownerDomain,
+    targetModelOrSymbol: overrides.targetModelOrSymbol || 'db.ts',
+    accessKind: 'import',
+    callerDomain: overrides.callerDomain,
+    callerDomainVaries: false,
+    clusterSize: overrides.clusterSize || 1,
+    findingIds: overrides.findingIds || [`${overrides.edgeKey}-f`],
+    callerSymbols: overrides.callerSymbols || ['default'],
+  };
+}
+
+// A large non-high-risk ownerDomain stratum (population > SMALL_CELL_THRESHOLD
+// and > HIGH_RISK_CENSUS_THRESHOLD's neighborhood is irrelevant here -- just
+// needs to stay out of every census rule) so it is sampled as
+// STANDARD_PROPORTIONAL rather than swallowed into a census rule, which
+// would make the "did the caller-only edge leak into it" assertion vacuous.
+function buildMixedHighRiskPopulation() {
+  const edges = [];
+  // 20 genuinely standard edges: non-high-risk owner AND caller.
+  for (let i = 0; i < 20; i++) {
+    edges.push(
+      makeEdge({
+        edgeKey: `standard-${i}`,
+        ownerDomain: 'core-shared-platform-infrastructure',
+        callerDomain: 'clinical-patients',
+      })
+    );
+  }
+  // 1 caller-side-only high-risk edge: non-high-risk owner, high-risk caller.
+  edges.push(
+    makeEdge({
+      edgeKey: 'caller-only-high-risk',
+      ownerDomain: 'core-shared-platform-infrastructure',
+      callerDomain: 'core-tenant-security',
+    })
+  );
+  // 1 owner-side-only high-risk edge: high-risk owner, non-high-risk caller.
+  edges.push(
+    makeEdge({
+      edgeKey: 'owner-only-high-risk',
+      ownerDomain: 'core-tenant-security',
+      callerDomain: 'clinical-patients',
+    })
+  );
+  // 1 both-sides-high-risk edge, two distinct high-risk categories.
+  edges.push(
+    makeEdge({
+      edgeKey: 'both-sides-high-risk',
+      ownerDomain: 'core-tenant-security',
+      callerDomain: 'core-audit-activity',
+    })
+  );
+  return { newDistinctEdgesTotal: edges.length, edges };
+}
+
+test('R1: caller-side-only high-risk edge cannot enter a standard proportional (or any non-high-risk) stratum', () => {
+  const population = buildMixedHighRiskPopulation();
+  const result = buildSample(population, 'r1-test-sha');
+  const edge = result.sample.find((e) => e.edgeKey === 'caller-only-high-risk');
+  assert.ok(edge, 'caller-only-high-risk edge must be present in the sample (it is high-risk, so inclusion is not probabilistic here)');
+  assert.ok(
+    edge.samplingStratum.startsWith('highRiskDomainCensus:') || edge.samplingStratum.startsWith('highRiskOversample:'),
+    `expected a high-risk stratum, got ${edge.samplingStratum}`
+  );
+  assert.ok(!edge.samplingStratum.startsWith('standardProportional:'));
+  assert.ok(!edge.samplingStratum.startsWith('smallCellCensus:'));
+  // The edge's high-risk domain (caller-side) must be the stratum key, not
+  // its non-high-risk ownerDomain.
+  assert.ok(edge.samplingStratum.endsWith(':core-tenant-security'));
+});
+
+test('R1: owner-side-only high-risk edge gets high-risk census/oversample treatment', () => {
+  const population = buildMixedHighRiskPopulation();
+  const result = buildSample(population, 'r1-test-sha');
+  const edge = result.sample.find((e) => e.edgeKey === 'owner-only-high-risk');
+  assert.ok(edge);
+  assert.ok(
+    edge.samplingStratum.startsWith('highRiskDomainCensus:') || edge.samplingStratum.startsWith('highRiskOversample:')
+  );
+  assert.ok(edge.samplingStratum.endsWith(':core-tenant-security'));
+});
+
+test('R1: both-side-high-risk edge is included exactly once, under one deterministic stratum', () => {
+  const population = buildMixedHighRiskPopulation();
+  const result = buildSample(population, 'r1-test-sha');
+  const matches = result.sample.filter((e) => e.edgeKey === 'both-sides-high-risk');
+  assert.equal(matches.length, 1, 'edge must appear exactly once in the sample, not once per high-risk category/endpoint');
+  const edge = matches[0];
+  assert.deepEqual(edge.highRiskCategories, ['audit', 'tenancy']);
+  assert.equal(
+    highRiskDomainKey({ ownerDomain: edge.ownerDomain, callerDomain: edge.callerDomain }),
+    'core-tenant-security',
+    'ownerDomain must win the deterministic tie-break when both endpoints are high-risk'
+  );
+  assert.ok(
+    edge.samplingStratum.startsWith('highRiskDomainCensus:') || edge.samplingStratum.startsWith('highRiskOversample:')
+  );
+});
+
+test('R1: sampling partition accounts for exactly N edges on a mixed caller/owner high-risk population (no double counting, no gaps)', () => {
+  const population = buildMixedHighRiskPopulation();
+  const result = buildSample(population, 'r1-test-sha');
+  assert.equal(result.N, 23);
+  assert.equal(result.unassignedCount, 0);
+  const strataPopSum = Object.values(result.strataPopulations).reduce((s, v) => s + v, 0);
+  assert.equal(strataPopSum, result.N);
+  // No edgeKey duplicated across strataSampleCounts/sample.
+  const seen = new Set();
+  for (const e of result.sample) {
+    assert.ok(!seen.has(e.edgeKey), `duplicate edge in sample: ${e.edgeKey}`);
+    seen.add(e.edgeKey);
+  }
+});
+
+test('R1: buildSample reruns remain byte-identical on a mixed caller/owner high-risk population', () => {
+  const population = buildMixedHighRiskPopulation();
+  const r1 = buildSample(population, 'r1-test-sha');
+  const r2 = buildSample(population, 'r1-test-sha');
+  assert.deepEqual(r1, r2);
+});
+
+test('R1: zeroEventSensitivityAnalysis makes no formal confidence-coverage claim and uses non-ceiling field names', () => {
+  const strata = [
+    { stratum: 'a', N_h: 20, n_h_effective: 5, fp_h: 0, rate_h: 1, estimable: true },
+    { stratum: 'b', N_h: 10, n_h_effective: 10, fp_h: 1, rate_h: 0.9, estimable: true },
+  ];
+  const result = zeroEventSensitivityAnalysis(strata, 30);
+  assert.equal(result.hasConfidenceCoverage, false);
+  assert.ok(typeof result.sensitivityViolationRate === 'number');
+  assert.ok(typeof result.sensitivityAcceptedRate === 'number');
+  assert.ok(!('p_hat_conservative_violation_rate_ceiling' in result));
+  assert.ok(!('p_hat_conservative_accepted_rate' in result));
+  assert.ok(/not.*confidence|no.*confidence/i.test(result.confidenceCoverageNote));
 });

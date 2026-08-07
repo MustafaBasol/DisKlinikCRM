@@ -1,6 +1,11 @@
 // F2-GUARDRAIL-VAL-004 signal-quality metrics: weighted population FP
 // estimate, raw as-sampled rate, stratified analytic CI (finite-population
-// correction), and a deterministic stratified bootstrap CI.
+// correction), a deterministic stratified bootstrap CI, and a supplementary
+// zero-event sensitivity analysis (see zeroEventSensitivityAnalysis() below
+// -- per F2-GUARDRAIL-VAL-004-R1, this is explicitly NOT a formal
+// confidence-covered population ceiling; it has no simultaneous/global
+// confidence-coverage guarantee and must not be used as merge/promotion/
+// enforcement evidence).
 //
 // Implements F2-GUARDRAIL-VAL-004-REVIEW-A section I/J.
 //
@@ -175,19 +180,28 @@ export function clopperPearsonZeroEventUpperBound(n, alpha = 0.05) {
   return 1 - Math.pow(alpha, 1 / n);
 }
 
-export function conservativeWeightedUpperBound(strata, coveredN) {
-  // For each estimable, non-census (n_h_effective < N_h) stratum with 0
-  // observed violations (fp_h === n_h_effective, i.e. rate_h === 1, meaning
-  // 0 true positives among reviewed items), substitute the exact
-  // Clopper-Pearson zero-event upper bound on the TRUE violation rate for
-  // that stratum in place of the naive "0 violations observed" plug-in.
-  // Strata with >=1 observed violation, or that are a full census
-  // (n_h_effective === N_h, no unobserved remainder), keep their own
-  // directly-observed rate (a census has no extrapolation uncertainty; a
-  // stratum with an observed violation already demonstrates non-zero risk
-  // and doesn't need this particular correction).
+// F2-GUARDRAIL-VAL-004-R1 (external architecture review on PR #332):
+// this is NOT a formal confidence-covered population ceiling and must not be
+// labeled or used as one. It is a one-sided SENSITIVITY calculation: for
+// each estimable, non-census (n_h_effective < N_h) stratum with 0 observed
+// violations, it substitutes the exact Clopper-Pearson zero-event one-sided
+// bound in place of the naive "0 violations observed" plug-in, to show how
+// much the headline weighted estimate would move if those specific
+// zero-event cells' true rate were assumed to sit at that conservative
+// value. It is NOT a formal bound because:
+//   - strata with >=1 observed violation keep their raw plug-in rate_h,
+//     which is itself NOT upper-bounded for its own unobserved remainder
+//   - ambiguous (briefD) reviewed edges are handled complete-case
+//     (excluded), not folded in conservatively
+//   - a weighted sum of independent per-stratum marginal 95% one-sided
+//     bounds does NOT itself carry a 95%, or any stated, simultaneous/global
+//     confidence-coverage guarantee over the full population
+// Do not use this value as merge-readiness, promotion, or CI-blocking
+// enforcement evidence. It is reported only as a transparency/robustness
+// disclosure alongside the headline weighted estimate (see buildMetrics()).
+export function zeroEventSensitivityAnalysis(strata, coveredN) {
   const detail = [];
-  let p_hat_conservative = 0;
+  let p_hat_sensitivity = 0;
   for (const s of strata) {
     if (!s.estimable) continue;
     const isCensus = s.n_h_effective >= s.N_h;
@@ -199,10 +213,17 @@ export function conservativeWeightedUpperBound(strata, coveredN) {
       corrected = true;
     }
     const w_h = s.N_h / coveredN;
-    p_hat_conservative += w_h * (1 - violationRateUsed);
+    p_hat_sensitivity += w_h * (1 - violationRateUsed);
     detail.push({ stratum: s.stratum, N_h: s.N_h, n_h_effective: s.n_h_effective, isCensus, corrected, violationRateUsed });
   }
-  return { p_hat_conservative_accepted_rate: p_hat_conservative, p_hat_conservative_violation_rate_ceiling: 1 - p_hat_conservative, detail: detail.filter((d) => d.corrected) };
+  return {
+    sensitivityAcceptedRate: p_hat_sensitivity,
+    sensitivityViolationRate: 1 - p_hat_sensitivity,
+    hasConfidenceCoverage: false,
+    confidenceCoverageNote:
+      'NOT a formally covered simultaneous/global confidence bound. Non-zero-event non-census strata keep an unbounded plug-in rate, ambiguous edges are complete-case-excluded, and a sum of independent marginal one-sided bounds carries no stated joint coverage. Sensitivity-only; not valid merge/promotion/enforcement evidence.',
+    detail: detail.filter((d) => d.corrected),
+  };
 }
 
 export function bootstrapCI(strata, N, seedStr, iterations = 2000) {
@@ -278,11 +299,11 @@ export function buildMetrics(sampleManifest, classifications) {
   const ciWidthBootstrap = bootstrap.ci95_percentile[1] - bootstrap.ci95_percentile[0];
   const degenerateNarrowCI = ciWidthAnalytic < 0.01 && ciWidthBootstrap < 0.02;
   const ciAgreement = degenerateNarrowCI
-    ? 'DEGENERATE_NARROW_BOTH_METHODS_SEE_CONSERVATIVE_BOUND'
+    ? 'DEGENERATE_NARROW_BOTH_METHODS_SEE_SENSITIVITY_ANALYSIS'
     : Math.abs(weighted.ci95_analytic[0] - bootstrap.ci95_percentile[0]) < 0.1
         && Math.abs(weighted.ci95_analytic[1] - bootstrap.ci95_percentile[1]) < 0.1
       ? 'CONSISTENT' : 'FLAG_FOR_REVIEW_MATERIAL_DISAGREEMENT';
-  const conservativeBound = conservativeWeightedUpperBound(strata, weighted.coveredN);
+  const sensitivityAnalysis = zeroEventSensitivityAnalysis(strata, weighted.coveredN);
 
   // High-risk-only subset metrics
   const hrJoined = joined.filter((j) => j.highRisk);
@@ -370,7 +391,7 @@ export function buildMetrics(sampleManifest, classifications) {
     weightedEstimate: weighted,
     bootstrapCI: bootstrap,
     ciAgreement,
-    conservativeBound,
+    sensitivityAnalysis,
     highRiskMetrics: hrMetrics,
     byEdgeShape: shapeMetrics,
     byCallerLayer: callerLayerMetrics,
@@ -401,7 +422,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     },
     bootstrapCI: metrics.bootstrapCI,
     ciAgreement: metrics.ciAgreement,
-    conservativeBound: metrics.conservativeBound,
+    sensitivityAnalysis: metrics.sensitivityAnalysis,
     highRiskMetrics: metrics.highRiskMetrics,
   }, null, 2));
 }
