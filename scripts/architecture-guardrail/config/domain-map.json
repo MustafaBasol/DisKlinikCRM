@@ -44,7 +44,16 @@
         "core-platform-crypto",
         "external-calendar-integration"
       ]
-    }
+    },
+    "subsequentCorrections": [
+      {
+        "task": "F2-ADR-ORG-DASH-002",
+        "date": "2026-08-06",
+        "baseSha": "46acae8415020cb0bd340fbc854c4187c43e3662",
+        "note": "Resolves the last remaining UNRESOLVED entry and the fourth (and final) F0-003-declared ownership collision: server/src/routes/organizationDashboard.ts UNRESOLVED -> core-org-clinic-membership. This supersedes — but does not rewrite — the F2-GUARDRAIL-VAL-002 note above and the ambiguousFilesMappedToUnresolved[0] historical record, both of which remain accurate as of their own dates. Decision basis (ADR-F2-ORG-DASH-OWNERSHIP, Option A): the route's authorization gate is authorize(['OWNER','ORG_ADMIN']) + canAccessOrganizationDashboard() = isOrganizationAdmin(), byte-identical to the organization-administration gate used by organizationBranches.ts and strictly narrower than the reporting gate (canAccessReports = OWNER|ORG_ADMIN|CLINIC_MANAGER|BILLING) that every reports.ts endpoint uses; the handler derives its own security scope from core-org-clinic-membership-owned state (Clinic.organizationId, Clinic.status, UserClinic, canAccessAllClinics, allowedClinicIds); its response rows are an organization branch directory (clinicId/clinicName/clinicSlug/status/address) enriched with metrics; and its sole consumer, src/pages/OrganizationDashboard.tsx, is already accepted-listed under core-org-clinic-membership in both F0-003 and F2-PREP-001. Guardrail effect is label-only: all 5 findings whose callerPath is this file are retained with identical finding IDs (computeFindingId excludes callerDomain), zero tuples added or removed, total findings unchanged at 1039. No violation is suppressed by this change. Explicitly NOT resolved by this entry: the file's direct cross-domain Prisma reads of Appointment / Patient / TreatmentCase / Payment, which remain open, now-non-normalized technical debt tracked for a future public-read-contract task (target end-state Option D). See docs/program/evidence/F2-ADR-ORG-DASH-002_ORGANIZATION_DASHBOARD_OWNERSHIP.md.",
+        "newDomainsIntroduced": []
+      }
+    ]
   },
   "scanRootPrefixes": [
     "server/src/routes/",
@@ -96,7 +105,7 @@
     "server/src/routes/notifications.ts": "core-notifications",
     "server/src/routes/operationalMonitoring.ts": "core-observability-ops-events",
     "server/src/routes/organizationBranches.ts": "core-org-clinic-membership",
-    "server/src/routes/organizationDashboard.ts": "UNRESOLVED",
+    "server/src/routes/organizationDashboard.ts": "core-org-clinic-membership",
     "server/src/routes/organizationInstagram.ts": "messaging-instagram",
     "server/src/routes/organizationWhatsApp.ts": "messaging-whatsapp",
     "server/src/routes/patientPrivacy.ts": "core-privacy-consent-retention-dsr",
