@@ -25,6 +25,10 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { canAccessOrganizationDashboard } from '../utils/roles.js';
 import { getDateRange } from '../utils/helpers.js';
+import { getOrganizationAppointmentMetrics } from '../services/appointments/organizationAppointmentMetrics.js';
+import { getOrganizationPatientMetrics } from '../services/patientOrganizationMetrics.js';
+import { getOrganizationTreatmentCaseMetrics } from '../services/treatmentCaseOrganizationMetrics.js';
+import { getOrganizationPaymentMetrics } from '../services/paymentOrganizationMetrics.js';
 
 const router = express.Router();
 
@@ -89,86 +93,32 @@ router.get(
         select: { id: true, name: true, slug: true, status: true, address: true },
       });
 
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+      // Computed once for the whole request (not per clinic) so every clinic's
+      // todayAppointments uses the same "today" window, even if the request
+      // straddles local midnight while the per-clinic Promise.all is in flight.
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      const todayRange = { from: today, to: tomorrow };
 
       const clinicMetrics = await Promise.all(
         clinics.map(async (clinic) => {
-          const [
-            todayAppointments,
-            appointments,
-            completedAppointments,
-            cancelledAppointments,
-            noShowCount,
-            newPatients,
-            totalPatients,
-            activeTreatmentPlans,
-            completedTreatments,
-            revenueAgg,
-            outstandingAgg,
-            staffCount,
-            doctorCount,
-          ] = await Promise.all([
-            // Bugünkü randevu (iptal edilmemiş)
-            prisma.appointment.count({
-              where: { clinicId: clinic.id, startTime: { gte: today, lt: tomorrow }, status: { not: 'cancelled' } },
-            }),
-            // Dönem randevusu (iptal edilmemiş)
-            prisma.appointment.count({
-              where: { clinicId: clinic.id, startTime: { gte: dateRange.from, lte: dateRange.to }, status: { not: 'cancelled' } },
-            }),
-            // Tamamlanan randevu
-            prisma.appointment.count({
-              where: { clinicId: clinic.id, startTime: { gte: dateRange.from, lte: dateRange.to }, status: 'completed' },
-            }),
-            // İptal edilen randevu
-            prisma.appointment.count({
-              where: { clinicId: clinic.id, startTime: { gte: dateRange.from, lte: dateRange.to }, status: 'cancelled' },
-            }),
-            // No-show
-            prisma.appointment.count({
-              where: { clinicId: clinic.id, startTime: { gte: dateRange.from, lte: dateRange.to }, status: 'no_show' },
-            }),
-            // Yeni hasta (dönemde)
-            prisma.patient.count({
-              where: { primaryClinicId: clinic.id, createdAt: { gte: dateRange.from, lte: dateRange.to }, deletedAt: null },
-            }),
-            // Toplam hasta (tüm zamanlar)
-            prisma.patient.count({
-              where: { primaryClinicId: clinic.id, deletedAt: null },
-            }),
-            // Aktif tedavi planı
-            prisma.treatmentCase.count({
-              where: { clinicId: clinic.id, stage: { notIn: ['completed', 'lost'] } },
-            }),
-            // Tamamlanan tedavi (dönemde)
-            prisma.treatmentCase.count({
-              where: { clinicId: clinic.id, stage: 'completed', closedAt: { gte: dateRange.from, lte: dateRange.to } },
-            }),
-            // Tahsil edilen ödeme (dönemde)
-            prisma.payment.aggregate({
-              where: { clinicId: clinic.id, paymentStatus: { in: ['paid', 'partial'] }, paidAt: { gte: dateRange.from, lte: dateRange.to } },
-              _sum: { amount: true },
-            }),
-            // Bekleyen bakiye (tüm zamanlar)
-            prisma.payment.aggregate({
-              where: { clinicId: clinic.id, paymentStatus: 'pending' },
-              _sum: { amount: true },
-            }),
-            // Toplam personel
-            prisma.userClinic.count({
-              where: { clinicId: clinic.id, isActive: true },
-            }),
-            // Doktor sayısı (DENTIST rolü, büyük/küçük harf duyarsız)
-            prisma.userClinic.count({
-              where: { clinicId: clinic.id, isActive: true, role: { equals: 'DENTIST', mode: 'insensitive' } },
-            }),
-          ]);
-
-          const revenue = Number(revenueAgg._sum.amount) || 0;
-          const outstandingBalance = Number(outstandingAgg._sum.amount) || 0;
-          // noShowRate: 0–1 aralığında ondalık (ör. 0.057 = %5.7)
-          const noShowRate = appointments > 0 ? Math.round((noShowCount / appointments) * 1000) / 1000 : 0;
+          const [appointmentMetrics, patientMetrics, treatmentCaseMetrics, paymentMetrics, staffCount, doctorCount] =
+            await Promise.all([
+              getOrganizationAppointmentMetrics(clinic.id, { range: dateRange, todayRange }),
+              getOrganizationPatientMetrics(clinic.id, dateRange),
+              getOrganizationTreatmentCaseMetrics(clinic.id, dateRange),
+              getOrganizationPaymentMetrics(clinic.id, dateRange),
+              // Toplam personel
+              prisma.userClinic.count({
+                where: { clinicId: clinic.id, isActive: true },
+              }),
+              // Doktor sayısı (DENTIST rolü, büyük/küçük harf duyarsız)
+              prisma.userClinic.count({
+                where: { clinicId: clinic.id, isActive: true, role: { equals: 'DENTIST', mode: 'insensitive' } },
+              }),
+            ]);
 
           return {
             clinicId: clinic.id,
@@ -176,18 +126,18 @@ router.get(
             clinicSlug: clinic.slug,
             status: clinic.status,
             address: clinic.address ?? null,
-            todayAppointments,
-            appointments,
-            completedAppointments,
-            cancelledAppointments,
-            noShowRate,
-            totalPatients,
-            newPatients,
-            revenue,
-            collectedPayments: revenue,
-            outstandingBalance,
-            activeTreatmentPlans,
-            completedTreatments,
+            todayAppointments: appointmentMetrics.todayAppointments,
+            appointments: appointmentMetrics.appointments,
+            completedAppointments: appointmentMetrics.completedAppointments,
+            cancelledAppointments: appointmentMetrics.cancelledAppointments,
+            noShowRate: appointmentMetrics.noShowRate,
+            totalPatients: patientMetrics.totalPatients,
+            newPatients: patientMetrics.newPatients,
+            revenue: paymentMetrics.revenue,
+            collectedPayments: paymentMetrics.revenue,
+            outstandingBalance: paymentMetrics.outstandingBalance,
+            activeTreatmentPlans: treatmentCaseMetrics.activeTreatmentPlans,
+            completedTreatments: treatmentCaseMetrics.completedTreatments,
             staffCount,
             doctorCount,
           };
