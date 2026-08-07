@@ -127,6 +127,13 @@ export function weightedEstimate(strata, N) {
   const excludedStrata = strata.filter((s) => !s.estimable);
   const coveredN = estimableStrata.reduce((s, st) => s + st.N_h, 0);
   const excludedN = excludedStrata.reduce((s, st) => s + st.N_h, 0);
+  if (coveredN === 0) {
+    throw new Error(
+      'weightedEstimate: coveredN is 0 -- every reviewed stratum is non-estimable ' +
+        '(all reviewed edges in every stratum are brief-D ambiguous/unverified), so a ' +
+        'weighted population FP estimate cannot be computed. Refusing to emit a NaN/Infinity metric.'
+    );
+  }
   // Renormalize weights over the covered population so weights sum to 1
   // (excluded strata's population share is reported separately, not
   // silently dropped from the denominator).
@@ -200,6 +207,13 @@ export function clopperPearsonZeroEventUpperBound(n, alpha = 0.05) {
 // enforcement evidence. It is reported only as a transparency/robustness
 // disclosure alongside the headline weighted estimate (see buildMetrics()).
 export function zeroEventSensitivityAnalysis(strata, coveredN) {
+  if (coveredN === 0) {
+    throw new Error(
+      'zeroEventSensitivityAnalysis: coveredN is 0 -- every reviewed stratum is non-estimable ' +
+        '(all reviewed edges in every stratum are brief-D ambiguous/unverified), so a ' +
+        'sensitivity-adjusted weighted rate cannot be computed. Refusing to emit a NaN/Infinity metric.'
+    );
+  }
   const detail = [];
   let p_hat_sensitivity = 0;
   for (const s of strata) {
@@ -229,6 +243,13 @@ export function zeroEventSensitivityAnalysis(strata, coveredN) {
 export function bootstrapCI(strata, N, seedStr, iterations = 2000) {
   const estimableStrata = strata.filter((s) => s.estimable);
   const coveredN = estimableStrata.reduce((s, st) => s + st.N_h, 0);
+  if (coveredN === 0) {
+    throw new Error(
+      'bootstrapCI: coveredN is 0 -- every reviewed stratum is non-estimable ' +
+        '(all reviewed edges in every stratum are brief-D ambiguous/unverified), so a ' +
+        'bootstrap CI cannot be computed. Refusing to emit a NaN/Infinity metric.'
+    );
+  }
   const rng = mulberry32(seedFromString(seedStr));
   const estimates = [];
   for (let iter = 0; iter < iterations; iter++) {
@@ -284,6 +305,13 @@ export function buildMetrics(sampleManifest, classifications) {
     briefTally[j.briefCat] = (briefTally[j.briefCat] || 0) + 1;
   }
   const classifiedNonAmbiguous = totalSample - (briefTally.briefD_ambiguous_unverified || 0);
+  if (classifiedNonAmbiguous === 0) {
+    throw new Error(
+      'buildMetrics: classifiedNonAmbiguous is 0 -- every reviewed sample edge is brief-D ' +
+        'ambiguous/unverified, so rawAsSampledMetrics (and the downstream weighted/bootstrap/' +
+        'sensitivity estimates) cannot be computed. Refusing to emit a NaN/Infinity metric.'
+    );
+  }
   const rawMetrics = {
     truePositivePrecision: (briefTally.briefA_true_positive || 0) / classifiedNonAmbiguous,
     falsePositiveRate: ((briefTally.briefB_accepted_expected || 0) + (briefTally.briefC_scanner_classification_fp || 0)) / classifiedNonAmbiguous,

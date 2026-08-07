@@ -18,6 +18,7 @@ import {
   clopperPearsonZeroEventUpperBound,
   computeStrataStats,
   weightedEstimate,
+  bootstrapCI,
   zeroEventSensitivityAnalysis,
   buildMetrics,
 } from '../buildVal004Metrics.mjs';
@@ -352,4 +353,106 @@ test('R1: zeroEventSensitivityAnalysis makes no formal confidence-coverage claim
   assert.ok(!('p_hat_conservative_violation_rate_ceiling' in result));
   assert.ok(!('p_hat_conservative_accepted_rate' in result));
   assert.ok(/not.*confidence|no.*confidence/i.test(result.confidenceCoverageNote));
+});
+
+// F2-GUARDRAIL-VAL-004-R2: fail-fast regression tests for the coveredN /
+// classifiedNonAmbiguous zero-denominator paths. Pre-fix, a sample where
+// every reviewed stratum is non-estimable (all reviewed edges are brief-D
+// ambiguous/unverified) silently produced NaN/Infinity p_hat/CI values
+// instead of a deterministic error.
+
+function makeAllAmbiguousStrata() {
+  // Two strata, both fully ambiguous: n_h_effective = 0 for each, so
+  // coveredN (sum of N_h over *estimable* strata) is 0.
+  return [
+    { stratum: 's1', N_h: 10, n_h_reviewed: 2, n_h_ambiguous: 2, n_h_effective: 0, fp_h: 0, rate_h: null, estimable: false },
+    { stratum: 's2', N_h: 5, n_h_reviewed: 1, n_h_ambiguous: 1, n_h_effective: 0, fp_h: 0, rate_h: null, estimable: false },
+  ];
+}
+
+test('weightedEstimate throws a clear deterministic error when coveredN is 0 (all strata non-estimable) instead of emitting NaN', () => {
+  const strata = makeAllAmbiguousStrata();
+  assert.throws(() => weightedEstimate(strata, 15), /coveredN is 0/);
+});
+
+test('bootstrapCI throws a clear deterministic error when coveredN is 0 (all strata non-estimable) instead of emitting NaN', () => {
+  const strata = makeAllAmbiguousStrata();
+  assert.throws(() => bootstrapCI(strata, 15, 'F2-GUARDRAIL-VAL-004-BOOTSTRAP-v1', 50), /coveredN is 0/);
+});
+
+test('zeroEventSensitivityAnalysis throws a clear deterministic error when coveredN is 0 instead of emitting NaN/Infinity', () => {
+  const strata = makeAllAmbiguousStrata();
+  assert.throws(() => zeroEventSensitivityAnalysis(strata, 0), /coveredN is 0/);
+});
+
+test('weightedEstimate/bootstrapCI/zeroEventSensitivityAnalysis succeed normally when at least one stratum is estimable (no false-positive guard trigger)', () => {
+  const strata = [
+    { stratum: 's1', N_h: 10, n_h_reviewed: 2, n_h_ambiguous: 2, n_h_effective: 0, fp_h: 0, rate_h: null, estimable: false },
+    { stratum: 's2', N_h: 5, n_h_reviewed: 3, n_h_ambiguous: 0, n_h_effective: 3, fp_h: 1, rate_h: 1 / 3, estimable: true },
+  ];
+  const weighted = weightedEstimate(strata, 15);
+  assert.equal(weighted.coveredN, 5);
+  assert.ok(Number.isFinite(weighted.p_hat));
+  const boot = bootstrapCI(strata, 15, 'seed-x', 50);
+  assert.ok(Number.isFinite(boot.meanEstimate));
+  const sens = zeroEventSensitivityAnalysis(strata, weighted.coveredN);
+  assert.ok(Number.isFinite(sens.sensitivityAcceptedRate));
+});
+
+function makeAllAmbiguousSampleManifestAndClassifications() {
+  const sample = [
+    {
+      edgeKey: 'edge-a',
+      samplingStratum: 'smallCellCensus:core-billing',
+      N_h: 2,
+      highRisk: false,
+      highRiskCategories: [],
+      edgeShape: 'routes -> services',
+      clusterSizeBucket: '1',
+      partialBaselineResidue: false,
+      ownerDomain: 'core-billing',
+      clusterSize: 1,
+    },
+    {
+      edgeKey: 'edge-b',
+      samplingStratum: 'smallCellCensus:core-billing',
+      N_h: 2,
+      highRisk: false,
+      highRiskCategories: [],
+      edgeShape: 'routes -> services',
+      clusterSizeBucket: '1',
+      partialBaselineResidue: false,
+      ownerDomain: 'core-billing',
+      clusterSize: 1,
+    },
+  ];
+  const sampleManifest = {
+    N: 2,
+    n: 2,
+    sample,
+    strataPopulations: { 'smallCellCensus:core-billing': 2 },
+  };
+  // D = DATA_OWNERSHIP_REVIEW_REQUIRED, I = SECURITY_OR_TENANT_HIGH_RISK --
+  // both map to briefD_ambiguous_unverified (see briefCategory()/BRIEF_MAP).
+  const classifications = [
+    { edgeKey: 'edge-a', classification: 'D' },
+    { edgeKey: 'edge-b', classification: 'I' },
+  ];
+  return { sampleManifest, classifications };
+}
+
+test('buildMetrics throws a clear deterministic error when classifiedNonAmbiguous is 0 (every reviewed edge is ambiguous) instead of emitting NaN metrics', () => {
+  const { sampleManifest, classifications } = makeAllAmbiguousSampleManifestAndClassifications();
+  assert.throws(() => buildMetrics(sampleManifest, classifications), /classifiedNonAmbiguous is 0/);
+});
+
+test('buildMetrics does not throw and produces finite metrics when at least one reviewed edge is non-ambiguous', () => {
+  const { sampleManifest, classifications } = makeAllAmbiguousSampleManifestAndClassifications();
+  // Flip one edge to a non-ambiguous classification so classifiedNonAmbiguous > 0.
+  classifications[0].classification = 'B'; // briefB_accepted_expected
+  const metrics = buildMetrics(sampleManifest, classifications);
+  assert.equal(metrics.classifiedNonAmbiguous, 1);
+  assert.ok(Number.isFinite(metrics.rawAsSampledMetrics.falsePositiveRate));
+  assert.ok(Number.isFinite(metrics.weightedEstimate.p_hat));
+  assert.ok(!Number.isNaN(metrics.weightedEstimate.p_hat));
 });

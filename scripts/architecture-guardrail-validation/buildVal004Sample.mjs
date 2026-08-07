@@ -35,7 +35,12 @@
 // reproduces a byte-identical sample manifest.
 //
 // Usage (from repo root):
-//   node scripts/architecture-guardrail-validation/buildVal004Sample.mjs <edgePopulationPath> <baselineSha> <outPath>
+//   node scripts/architecture-guardrail-validation/buildVal004Sample.mjs <edgePopulationPath> <baselineSha> <outPath> <scanReportPath>
+//
+// All four positional args are optional and independently default (see the
+// argv reads below) to the checked-in VAL-004 evidence paths; <scanReportPath>
+// (argv[5]) supplies the scan report used to flag "partial baseline residue"
+// edges (addendum section D.4 -- see buildSample()'s existingCallerPaths param).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
