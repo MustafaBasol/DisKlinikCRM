@@ -1,0 +1,1730 @@
+[
+  {
+    "edgeKey": "server/src/middleware/auth.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "middleware/auth.ts is itself the platform's authentication/authorization middleware; it imports normalizeRole to compute req.user.normalizedRole (auth.ts:185) and to canonicalize roles inside authorize() (auth.ts:223). This is the canonical, intended consumer of utils/roles.ts, not a boundary crossing between unrelated business domains — auth middleware and the role-normalization helper are two halves of the same platform RBAC mechanism.",
+    "callerEvidence": "server/src/middleware/auth.ts:4 `import { normalizeRole } from '../utils/roles.js';`; used at :185 `normalizedRole: normalizeRole(dbUser.role, canAccessAllClinics)` and :223 `const canonicalRole = normalizeRole(req.user.role, req.user.canAccessAllClinics).toLowerCase();`",
+    "targetEvidence": "server/src/utils/roles.ts:45 `export function normalizeRole(userRole: string, canAccessAllClinics: boolean = false): CanonicalRole { ... }` — documented (roles.ts:1-25) as the central role-normalization helper intended for use by authorize() and any consumer needing canonical roles.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+    "classification": "B",
+    "reasoning": "securityDetectionRules.ts explicitly documents itself as 'route/service-facing wrappers' meant to be called from routes across the codebase for KVKK-CRIT-003 mandatory detection. clinicBulkExport.ts calls all three imported signal functions exactly at the documented trigger points: lockout on step-up failure, request-burst on job creation, and token-replay on expired/already-downloaded token reuse.",
+    "callerEvidence": "server/src/routes/clinicBulkExport.ts:44-48 imports the three signal fns; called at :181 `evaluateExportStepUpLockoutSignal({...})` after a lockout, :216 `evaluateExportRequestBurstSignal({...})` after job creation, and :422/:480 `evaluateExportTokenReplaySignal({...reason...})` on replay/expired token attempts.",
+    "targetEvidence": "server/src/services/security/securityDetectionRules.ts:1-23 header doc: 'Thin, route/service-facing wrappers around securitySignalService.ts ... Rule 3: clinic export anomaly → evaluateExportStepUpLockoutSignal, evaluateExportTokenReplaySignal, ... evaluateExportRequestBurstSignal' — an explicitly documented external-facing entry point for non-security-domain callers.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/communicationPreferences.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard: imports authorize/AuthRequest and applies authorize([...]) as Express middleware on its endpoints, identical to virtually every other route file in the codebase. This is the expected, universal way any domain's routes authenticate/authorize requests.",
+    "callerEvidence": "server/src/routes/communicationPreferences.ts:24 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => { ... }` — the platform's single shared RBAC middleware factory; server/src/middleware/auth.ts:90 `export interface AuthRequest extends Request { user?: {...} }` — the shared typed request augmentation every route uses.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/dentalChart.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage: `authorize([...])` applied as middleware on each endpoint (e.g. dentalChart.ts:21), `AuthRequest` used as the handler's request type. Identical universal pattern to all other routes.",
+    "callerEvidence": "server/src/routes/dentalChart.ts:2 `import { authorize, AuthRequest } from '../middleware/auth.js';`; used e.g. :21 `authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST'])`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` and :90 `export interface AuthRequest extends Request {...}` — shared platform auth primitives.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/financeDashboard.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "normalizeRole is used purely for permission-tier computation inside finance route handlers (e.g. financeDashboard.ts:37, :59 to compute `role` for further gating), the same generic RBAC pattern used across the whole codebase, not a reach into finance-specific internals of the permissions domain.",
+    "callerEvidence": "server/src/routes/financeDashboard.ts:20 `import { normalizeRole } from '../utils/roles.js';`; used at :37 `const role = normalizeRole(user.role, user.canAccessAllClinics);`",
+    "targetEvidence": "server/src/utils/roles.ts:45 `export function normalizeRole(...)` — generic canonical-role helper with no finance-specific logic.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramInbox.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard use of authenticate/authorize/AuthRequest as route-level auth middleware/types (instagramInbox.ts:21-22, applied at :64-65 as router middleware), same universal pattern as all other route files.",
+    "callerEvidence": "server/src/routes/instagramInbox.ts:21 `import { authenticate, authorize } from '../middleware/auth.js';` and :22 `import type { AuthRequest } from '../middleware/auth.js';`; used at :64-65 `authenticate, authorize(['OWNER','ORG_ADMIN','CLINIC_MANAGER','RECEPTIONIST'])`.",
+    "targetEvidence": "server/src/middleware/auth.ts:104 `export const authenticate = async (...)` and :216 `export const authorize = (roles: string[]) => {...}` — shared platform middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/inventory.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files: authorize/AuthRequest imported and applied to gate endpoints.",
+    "callerEvidence": "server/src/routes/inventory.ts:4 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/labOrders.ts:7 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/laboratories.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/laboratories.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/notifications.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/notifications.ts:2 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/operationalMonitoring.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "canResolveOperationalEvents, canViewOperations, and normalizeRole are used purely as permission-gate checks inside operational monitoring route handlers, the standard cross-cutting RBAC pattern (verified import at operationalMonitoring.ts:19), not a reach into permissions-domain internals.",
+    "callerEvidence": "server/src/routes/operationalMonitoring.ts:18-19 `import { authorize, AuthRequest } from '../middleware/auth.js'; import { normalizeRole, canViewOperations, canResolveOperationalEvents } from '../utils/roles.js';`",
+    "targetEvidence": "server/src/utils/roles.ts:371 `export function canViewOperations(...)` and :382 `export function canResolveOperationalEvents(...)` — generic exported permission predicates, documented (roles.ts:363-386) as the Sprint 13 operational-monitoring permission helpers meant for exactly this kind of external route consumption.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationBranches.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "canAssignUserClinics, canManageBranches, normalizeRole imported and used as standard permission gates (organizationBranches.ts:27-28), matching the documented purpose of these exported roles.ts predicates.",
+    "callerEvidence": "server/src/routes/organizationBranches.ts:27-28 `import { authorize, AuthRequest } from '../middleware/auth.js'; import { normalizeRole, canManageBranches, canAssignUserClinics } from '../utils/roles.js';`",
+    "targetEvidence": "server/src/utils/roles.ts:215 `export function canManageBranches(...)` and :225 `export function canAssignUserClinics(...)` — documented (roles.ts:210-228) generic branch/assignment permission predicates.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "authorize(['OWNER','ORG_ADMIN']) is applied as route middleware (organizationDashboard.ts:51) and AuthRequest types the handler — the standard universal auth pattern.",
+    "callerEvidence": "server/src/routes/organizationDashboard.ts:25 `import { authorize, AuthRequest } from '../middleware/auth.js';`; used at :51 `authorize(['OWNER', 'ORG_ADMIN'])`.",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "canAccessOrganizationDashboard performs a second, defense-in-depth permission check after the authorize() middleware (organizationDashboard.ts:53), exactly matching its documented purpose in roles.ts as the org-dashboard access predicate. Generic cross-cutting RBAC use.",
+    "callerEvidence": "server/src/routes/organizationDashboard.ts:26 `import { canAccessOrganizationDashboard } from '../utils/roles.js';`; used at :53 `if (!canAccessOrganizationDashboard(req.user!)) { return res.status(403)... }`",
+    "targetEvidence": "server/src/utils/roles.ts:131 `export function canAccessOrganizationDashboard(user: UserForRole): boolean { return isOrganizationAdmin(user); }` — documented (roles.ts:123-130) as exactly this dashboard's access predicate.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "db.ts exports the single shared Prisma client instance used by literally every route/service in the codebase; importing `prisma` as the default export is the only sanctioned way to talk to the database anywhere in server/src.",
+    "callerEvidence": "server/src/routes/organizationDashboard.ts:24 `import prisma from '../db.js';`",
+    "targetEvidence": "server/src/db.ts:14-23 `const prisma = new PrismaClient({...}); export default prisma;` — the platform's single shared DB client.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationDashboard.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "getDateRange is explicitly documented in helpers.ts as a generic, dashboard-agnostic date-range utility relocated out of organizationDashboard.ts itself under ADR F2-ADR-ORG-DASH-001 specifically so it could be shared cleanly with financeDashboard.ts — this is the direct intended post-refactor consumption pattern, not a violation.",
+    "callerEvidence": "server/src/routes/organizationDashboard.ts:27 `import { getDateRange } from '../utils/helpers.js';`; used at :62 `dateRange = getDateRange(String(range), ...)`",
+    "targetEvidence": "server/src/utils/helpers.ts:23-25 `// Relocated from routes/organizationDashboard.ts (F2-ADR-ORG-DASH-001) — a generic date-range helper with no dashboard-specific logic, shared as-is by financeDashboard.ts and organizationDashboard.ts.`",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "canAssignWhatsAppToClinic, canManageWhatsAppConnections, canViewWhatsAppStatus are used repeatedly (organizationWhatsApp.ts, ~15 call sites e.g. :121, :195, :1192) as standard in-handler permission gates, matching their documented purpose in roles.ts as the WhatsApp-connection permission predicates.",
+    "callerEvidence": "server/src/routes/organizationWhatsApp.ts:29-32 imports `canManageWhatsAppConnections, canAssignWhatsAppToClinic, canViewWhatsAppStatus`; used e.g. :121 `if (!canViewWhatsAppStatus(req.user!)) {...}`, :1192 `if (!canAssignWhatsAppToClinic(req.user!)) {...}`",
+    "targetEvidence": "server/src/utils/roles.ts:265-286 `export function canManageWhatsAppConnections(...)`, `canAssignWhatsAppToClinic(...)`, `canViewWhatsAppStatus(...)` — documented (roles.ts:259-286) as the dedicated WhatsApp-connection permission helpers.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/patientEmergencyContacts.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files (authorize applied at patientEmergencyContacts.ts:137, :162).",
+    "callerEvidence": "server/src/routes/patientEmergencyContacts.ts:74 `import { authorize, AuthRequest } from '../middleware/auth.js';`; used at :137 `authorize(EMERGENCY_CONTACT_ROLES)`.",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/patients.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/patients.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/postTreatment.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/postTreatment.ts:16 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage: authorize([...]) applied inline on every handler (practitionerEarnings.ts:21,60,108,133,164), AuthRequest as handler type — universal pattern.",
+    "callerEvidence": "server/src/routes/practitionerEarnings.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`; used at :21 `authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING', 'DENTIST'])`.",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/schedules.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "normalizeRole used purely for permission-tier computation in schedules route handlers, generic cross-cutting RBAC pattern.",
+    "callerEvidence": "server/src/routes/schedules.ts:17 `import { normalizeRole } from '../utils/roles.js';`",
+    "targetEvidence": "server/src/utils/roles.ts:45 `export function normalizeRole(...)` — generic canonical-role helper.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/tasks.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage: authorize([...]) applied inline on each handler (treatmentCases.ts:37,69,108,144,220), AuthRequest as handler type.",
+    "callerEvidence": "server/src/routes/treatmentCases.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`; used at :37 `authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST'])`.",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟core-identity-access␟middleware/auth.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard route-level auth guard usage identical to all other route files.",
+    "callerEvidence": "server/src/routes/treatmentPlanProcedures.ts:3 `import { authorize, AuthRequest } from '../middleware/auth.js';`",
+    "targetEvidence": "server/src/middleware/auth.ts:216 `export const authorize = (roles: string[]) => {...}` — shared platform RBAC middleware.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟core-identity-access␟utils/passwordResetToken.ts␟import",
+    "classification": "C",
+    "reasoning": "users.ts calls createPasswordResetToken during staff-onboarding user creation to email a reset link, and RESET_TOKEN_EXPIRY_MINUTES to render the expiry in that email. This is the module's clean public API (a self-contained crypto/token helper analogous to a shared secrets utility) consumed exactly as intended — user creation legitimately needs to hand a new user a password-reset path, which is inherently an identity/auth concern any user-provisioning flow must invoke.",
+    "callerEvidence": "server/src/routes/users.ts:8 `import { createPasswordResetToken, RESET_TOKEN_EXPIRY_MINUTES } from '../utils/passwordResetToken.js';`; used at :204 `const { rawToken } = await createPasswordResetToken(user.id);` and :211 `expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES`.",
+    "targetEvidence": "server/src/utils/passwordResetToken.ts:12 `export async function createPasswordResetToken(userId: string): Promise<{ rawToken: string; expiresAt: Date }> {...}` and :4 `export const RESET_TOKEN_EXPIRY_MINUTES = 60;` — a small, self-contained public helper with no private internals exposed.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟clinical-appointments-availability␟routes/contactRequests.ts␟import",
+    "classification": "H",
+    "reasoning": "routes/whatsapp.ts (messaging-whatsapp) imports and calls upsertContactRequest, a Prisma-backed create/dedup business function, directly from another route file (routes/contactRequests.ts) rather than from a service layer — a route-to-route dependency that bypasses normal domain layering (routes are meant to be leaf consumers of services/utils, not exporters other routes import from). This mirrors the exact anti-pattern the codebase already remediated for getDateRange under F2-ADR-ORG-DASH-001 (see recent commit f762d6d), which relocated a route-file-exported helper into utils/ specifically to close this kind of route-to-route edge; this occurrence has not yet received the same treatment, so it reads as pre-existing/legacy debt of the same known category rather than new coupling. Separately, contactRequests.ts's domain-map assignment to 'clinical-appointments-availability' is itself questionable — its content (contactRequests.ts:20-74, GET/PATCH handlers) is lead/contact-inquiry tracking (channel, externalSenderId, patient linking), not appointment scheduling/availability — worth a domain-map correction independent of the routing fix.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:64 `import { upsertContactRequest } from './contactRequests.js';`; called at :1866 and :1914 `const contactRequest = await upsertContactRequest({ clinicId, channel: 'whatsapp', ... });`",
+    "targetEvidence": "server/src/routes/contactRequests.ts:20 `export async function upsertContactRequest(args: {...}) {...}` — a Prisma-backed dedup/create function defined and exported directly from a route file alongside its own Express router, not extracted to a service module.",
+    "followUpRequired": "Two separate items for an architect: (1) consider extracting upsertContactRequest out of routes/contactRequests.ts into a service module, matching the getDateRange precedent set by F2-ADR-ORG-DASH-001, to close the route-to-route edge; (2) reconsider contactRequests.ts's domain-map ownership — content suggests a lead/CRM-intake domain rather than 'clinical-appointments-availability'.",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsappInbox.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "normalizeRole imported and used purely for permission-tier computation inside WhatsApp inbox route handlers (whatsappInbox.ts:37,59,324,419), generic cross-cutting RBAC pattern.",
+    "callerEvidence": "server/src/routes/whatsappInbox.ts:25 `import { normalizeRole } from '../utils/roles.js';`; used at :37 `const role = normalizeRole(user.role, user.canAccessAllClinics);`",
+    "targetEvidence": "server/src/utils/roles.ts:45 `export function normalizeRole(...)` — generic canonical-role helper.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/clinicBulkExportPackage.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+    "classification": "B",
+    "reasoning": "securityDetectionRules.ts explicitly documents itself as route/service-facing wrappers meant for exactly this kind of cross-domain invocation. clinicBulkExportPackage.ts calls evaluateExportCleanupFailureSignal at the documented trigger (persistent storage-cleanup failure, package.ts:434) and evaluateExportGenerationIntegritySignal for generation-integrity failures, matching Rule 3's documented signal list.",
+    "callerEvidence": "server/src/services/privacy/clinicBulkExportPackage.ts:52-55 `import { evaluateExportGenerationIntegritySignal, evaluateExportCleanupFailureSignal } from '../security/securityDetectionRules.js';`; called at :434 `evaluateExportCleanupFailureSignal({ organizationId: row.organizationId, clinicId: row.clinicId, jobId });` inside finalizeArtifactDeletionOutcome's failure branch (comment at :426-429 explicitly ties this to KVKK-CRIT-003 Rule 3).",
+    "targetEvidence": "server/src/services/security/securityDetectionRules.ts:1-22 documents both evaluateExportGenerationIntegritySignal and evaluateExportCleanupFailureSignal as Rule 3 (clinic export anomaly) entry points; :369 `export function evaluateExportCleanupFailureSignal(...)`; :324 `export function evaluateExportGenerationIntegritySignal(...)`.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/services/reportExport/roleCheck.ts␟core-permissions-roles␟utils/roles.ts␟import",
+    "classification": "C",
+    "reasoning": "roleCheck.ts is explicitly documented as intentionally mirroring middleware/auth.ts's authorize() role-check logic for a data-driven role set that can't be statically wired as router middleware — it deliberately reuses normalizeRole to guarantee identical semantics to the standard authorize() path. Textbook shared-RBAC-helper reuse, not a boundary violation.",
+    "callerEvidence": "server/src/services/reportExport/roleCheck.ts:13 `import { normalizeRole } from '../../utils/roles.js';`; used at :20 `const canonicalRole = normalizeRole(user.role, user.canAccessAllClinics).toLowerCase();`",
+    "targetEvidence": "server/src/services/reportExport/roleCheck.ts:1-11 header doc: 'mirrors middleware/auth.ts's authorize() role-check logic exactly, for use OUTSIDE the static Express middleware factory pattern ... so the export path never grants access authorize() would have denied for the same report (and vice versa).'",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/utils/clinicScope.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+    "classification": "B",
+    "reasoning": "securityDetectionRules.ts's own doc comment for evaluateCrossTenantDenialSignal names clinicScope.ts as one of the two intended call sites ('the single shared clinic/organization scope-rejection helper'). clinicScope.ts calls it from recordCrossTenantDenialIfTargeted, invoked by both validateAndGetScope and validateAndGetClinicIdScope on access denial — exactly the documented integration point.",
+    "callerEvidence": "server/src/utils/clinicScope.ts:13 `import { evaluateCrossTenantDenialSignal } from '../services/security/securityDetectionRules.js';`; called at :30 inside `recordCrossTenantDenialIfTargeted(...)`, itself invoked from :94 and :217 on access-denied paths.",
+    "targetEvidence": "server/src/services/security/securityDetectionRules.ts:146-153 doc comment: 'Rule 2 — instruments the single shared clinic/organization scope-rejection helper (validateAndGetClinicIdScope / buildClinicScopeWhere), not individual routes.' — clinicScope.ts is the explicitly documented caller.",
+    "followUpRequired": "none",
+    "batch": "batch1_identity_access"
+  },
+  {
+    "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-config-secrets␟services/platformSettings.ts␟import",
+    "classification": "C",
+    "reasoning": "getPlatformSetting is a generic platform-wide config accessor (arbitrary string key -> string value) with no privacy-domain-specific logic; the DSR job uses it only to read a feature-flag-like runtime toggle, exactly the shared-config-store pattern any domain is expected to use.",
+    "callerEvidence": "server/src/jobs/dataRetentionCleanupJob.ts:28 imports getPlatformSetting; used at line 454: `const val = await getPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY);` to read a generic runtime config flag.",
+    "targetEvidence": "server/src/services/platformSettings.ts:11-17 - getPlatformSetting is a generic key/value getter over the PlatformSetting table (`client.platformSetting.findUnique({where:{key}})`), not privacy/DSR-domain business logic.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/middleware/platformAuth.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "classification": "C",
+    "reasoning": "getSecret is the codebase's standard generic secret-retrieval helper used to fetch any named env secret with production-strength validation; platformAuth.ts using it to fetch its own JWT secret is the intended platform-wide usage pattern, not a reach into crypto-domain internals.",
+    "callerEvidence": "server/src/middleware/platformAuth.ts:3 imports getSecret; used at line 7: `const PLATFORM_JWT_SECRET = getSecret('PLATFORM_JWT_SECRET', 'platform-admin-secret-change-this');` - module-level secret resolution for platform-admin JWT signing.",
+    "targetEvidence": "server/src/utils/secrets.ts:1-11 - getSecret(envName, devFallback) is a generic env-var-with-production-hardening helper (throws in prod if weak/default), no crypto-domain business logic.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/appointmentRequests.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "logActivity takes a generic entityType/action payload and writes to a shared ActivityLog table; every business route in this codebase is expected to call it after mutations, matching rubric C's 'audit logging' example verbatim.",
+    "callerEvidence": "server/src/routes/appointmentRequests.ts:4 imports logActivity; called at lines 200, 442, 521, e.g. `await logActivity({...})` after appointment-request mutations.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 - logActivity(data) is a generic fire-and-forget activity-log writer (`prisma.activityLog.create`) parameterized by clinicId/entityType/action, with no appointments-domain logic.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/appointments.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "classification": "C",
+    "reasoning": "relationGuards.ts functions are explicitly generic cross-entity tenant-membership checks (parameterized by any entity id + clinicId), the intended shared mechanism for any route to prevent cross-tenant relation injection. All 4 symbols verified in use at the cited lines.",
+    "callerEvidence": "server/src/routes/appointments.ts:24-27 imports findAppointmentTypeInClinic, findPatientInClinic, findTreatmentCaseInClinic, findUserAssignedToClinic; used together at lines 330-340 and 477-480 to validate all foreign keys belong to the target clinic before create/update.",
+    "targetEvidence": "server/src/utils/relationGuards.ts - each function (findPatientInClinic L4, findAppointmentTypeInClinic L19, findTreatmentCaseInClinic L26, findUserAssignedToClinic L50) is a generic 'does entity X belong to clinic Y' tenant-scoped existence check reused across many domains.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/auth.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared audit-logging utility as edge 2 - auth.ts records login/account activity via the generic logActivity() call, the standard cross-domain pattern.",
+    "callerEvidence": "server/src/routes/auth.ts:7 imports logActivity; called at lines 145, 259, 477 for login/auth-related activity records.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/externalCalendarWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "classification": "C",
+    "reasoning": "Pure environment/production-hardening guard with zero calendar-domain logic; any webhook route needing 'secret required in prod' semantics is expected to import this from the shared secrets utility.",
+    "callerEvidence": "server/src/routes/externalCalendarWebhook.ts:32 imports requireWebhookSecretInProduction; used at line 84: `if (!hasSecret && !requireWebhookSecretInProduction(null))`.",
+    "targetEvidence": "server/src/utils/secrets.ts:13-15 - requireWebhookSecretInProduction(secret) is a generic boolean helper: true unless NODE_ENV==='production' and secret is empty.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "clinicScope.ts is explicitly documented as the central, codebase-wide tenant-isolation filter; imaging.ts using it on essentially every handler is exactly the intended universal pattern, not a boundary violation.",
+    "callerEvidence": "server/src/routes/imaging.ts:33 imports validateAndGetClinicIdScope, resolveEffectiveClinicId; used at ~15 call sites (e.g. lines 187, 264, 289, 415, 439...) to scope every query/mutation to the caller's accessible clinics.",
+    "targetEvidence": "server/src/utils/clinicScope.ts - file header states 'Merkezi Guvenlik Filtresi' (central security filter) used by all routes for tenant scoping; validateAndGetClinicIdScope (L210) and resolveEffectiveClinicId (L147) are generic, model-agnostic.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared relation-guard utility as edge 3; imaging.ts validates that a referenced patient/appointment/treatment-case actually belongs to the clinic before creating an imaging request - the intended reuse pattern.",
+    "callerEvidence": "server/src/routes/imaging.ts:34 imports findPatientInClinic, findAppointmentInClinic, findTreatmentCaseInClinic; used at lines 229, 236, 243 to validate imaging-request foreign keys against the clinic.",
+    "targetEvidence": "server/src/utils/relationGuards.ts (see edge 3) - generic tenant-membership existence checks.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "classification": "C",
+    "reasoning": "Generic audit-log writer with no Instagram-domain logic; matches rubric C's 'audit logging' example exactly.",
+    "callerEvidence": "server/src/routes/instagramWebhook.ts:20 imports writeAuditLog; used at line 67: `writeAuditLog({...})` on a webhook-security event.",
+    "targetEvidence": "server/src/utils/auditLog.ts:37-58 - writeAuditLog is a generic fire-and-forget audit writer (`prisma.auditLog.create`) parameterized by organizationId/action/entityType, documented for cross-domain use ('import { writeAuditLog } from ../utils/auditLog.js').",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic production-hardening guard as edge 5, reused for Instagram's webhook secret check.",
+    "callerEvidence": "server/src/routes/instagramWebhook.ts:21 imports requireWebhookSecretInProduction; used at line 306.",
+    "targetEvidence": "server/src/utils/secrets.ts:13-15 (see edge 5).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "encryption.ts is the codebase's single shared crypto utility for any at-rest secret; WhatsApp webhook code decrypting its own stored secret via the shared helper is the intended, universal usage.",
+    "callerEvidence": "server/src/routes/metaWhatsAppWebhook.ts:30 imports decryptSecretTagged; used at lines 231 and 374 to decrypt a stored webhook secret before comparing signatures.",
+    "targetEvidence": "server/src/utils/encryption.ts:72-76 - decryptSecretTagged is a generic AES-256-GCM decrypt-with-version-prefix helper, documented at file header as 'AES-256-GCM symmetric encryption for secrets at rest'.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic guard as edge 5/9, reused for the Meta WhatsApp webhook secret check.",
+    "callerEvidence": "server/src/routes/metaWhatsAppWebhook.ts:29 imports requireWebhookSecretInProduction; used at lines 232, 375.",
+    "targetEvidence": "server/src/utils/secrets.ts:13-15 (see edge 5).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/noShows.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Same central tenant-scope utility as edge 6; used exactly as intended to enumerate accessible clinicIds before filtering no-show records.",
+    "callerEvidence": "server/src/routes/noShows.ts:17 imports getAccessibleClinicIds; used at lines 65 and 240 to scope no-show queries to clinics the user can access.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:128-139 - getAccessibleClinicIds(user) is a generic 'list clinics this user may see' helper, model-agnostic.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationInstagram.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Both symbols verified in use encrypting Instagram credentials before DB write - the exact intended cross-domain usage of the shared encryption utility (encrypt any secret at rest).",
+    "callerEvidence": "server/src/routes/organizationInstagram.ts:39 imports encryptSecret, encryptSecretTagged; used repeatedly (e.g. lines 229,232,246,379,384,398) to encrypt Instagram access tokens / webhook secrets before persisting.",
+    "targetEvidence": "server/src/utils/encryption.ts:34-41, 64-66 - generic AES-256-GCM encrypt helpers documented for 'WhatsApp API keys and access tokens' but generically applicable to any secret string.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared activity-logging utility, used after WhatsApp connection mutations - standard cross-domain audit pattern.",
+    "callerEvidence": "server/src/routes/organizationWhatsApp.ts:34 imports logActivity; used at e.g. line 255.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "This is the canonical documented use case for encryption.ts per its own file header; textbook shared-crypto-utility usage.",
+    "callerEvidence": "server/src/routes/organizationWhatsApp.ts:36 imports encryptSecret, encryptSecretTagged; used at ~10 sites (lines 221,224,227,230,369,372,375,378,871,1057,1083) encrypting WhatsApp/Evolution API keys, access tokens, webhook secrets.",
+    "targetEvidence": "server/src/utils/encryption.ts (see edge 13) - this is literally the use case the file's header docstring calls out ('Used to encrypt WhatsApp API keys and access tokens before persisting to DB').",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/patients.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Same central tenant-scope utility as edges 6/12; patients.ts is exactly the kind of clinical route the file's own docstring says must always use it ('Kural 2: Frontend'den gelen selectedClinicId asla guvenilmez').",
+    "callerEvidence": "server/src/routes/patients.ts:8 imports validateAndGetScope; used at lines 23 and 62 to scope patient list/detail queries.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:87-99 - validateAndGetScope(user, selectedClinicId, res) builds the org+clinic Prisma where-filter and sends 403 on denial; the central security filter (see edge 6).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/patientsImport.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic accessible-clinics helper, used to scope bulk patient-import operations to clinics the importing user may access.",
+    "callerEvidence": "server/src/routes/patientsImport.ts:16 imports getAccessibleClinicIds; used at lines 67, 237, 291.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:128-139 (see edge 12).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/paymentPlans.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging call after payment-plan mutations.",
+    "callerEvidence": "server/src/routes/paymentPlans.ts:4 imports logActivity; used at lines 179, 251, 284.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging call after payment mutations.",
+    "callerEvidence": "server/src/routes/payments.ts:4 imports logActivity; used at lines 104, 180, 226.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-config-secrets␟services/platformSettings.ts␟import",
+    "classification": "C",
+    "reasoning": "platformAdmin.ts is the platform-administration UI's backend, and platformSettings.ts is a generic settings store - this is the primary intended caller of a shared config service, textbook C.",
+    "callerEvidence": "server/src/routes/platformAdmin.ts:21 imports getPlatformSetting, setPlatformSetting, unsetPlatformSetting; used at lines 1066, 1079, 1127, 1155, 1164 to read/write runtime config flags (data-retention toggle, legacy-consent-correction toggle).",
+    "targetEvidence": "server/src/services/platformSettings.ts:11-50 - all three are generic key/value get/set/delete operations over the PlatformSetting table with no privacy or platform-admin-specific business logic embedded.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic tagged-secret encrypt/decrypt helpers as edge 10/13, applied here to a TOTP secret instead of a webhook secret - same shared-crypto-utility pattern.",
+    "callerEvidence": "server/src/routes/platformAdmin.ts:27 imports encryptSecretTagged, decryptSecretTagged; used at lines 99, 182, 200, 226 to encrypt/decrypt an admin's TOTP secret.",
+    "targetEvidence": "server/src/utils/encryption.ts:64-76 (see edge 10).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging call after payout mutations.",
+    "callerEvidence": "server/src/routes/practitionerPayouts.ts:4 imports logActivity; used at lines 83, 131.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "All three symbols verified in use for standard clinic-scoping of payout queries/mutations; identical pattern to every other route in this batch.",
+    "callerEvidence": "server/src/routes/practitionerPayouts.ts:7 imports validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId; used at lines 29, 54, 100, 116.",
+    "targetEvidence": "server/src/utils/clinicScope.ts (see edges 6/12/16) - all three generic tenant-scope helpers.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/reportExport.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "classification": "C",
+    "reasoning": "Trivial generic request-metadata extractor documented as part of the shared audit-log utility API; used exactly as intended to enrich an audit entry.",
+    "callerEvidence": "server/src/routes/reportExport.ts:25 imports extractRequestMeta; used at line 95: `...extractRequestMeta(req)` spread into an audit-log payload.",
+    "targetEvidence": "server/src/utils/auditLog.ts:102-110 - extractRequestMeta(req) is a generic helper pulling ip/userAgent off any Express request object, no domain logic.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/reports.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Same central tenant-scope utility; reporting queries scoping to accessible clinics is exactly its intended purpose regardless of which domain the report covers.",
+    "callerEvidence": "server/src/routes/reports.ts:4 imports validateAndGetClinicIdScope; used at lines 30, 165, 235, 335, 407 across 5 different report handlers.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:210-222 (see edge 6).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/schedules.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard accessible-clinics scoping for schedule queries.",
+    "callerEvidence": "server/src/routes/schedules.ts:16 imports getAccessibleClinicIds; used at line 39.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:128-139 (see edge 12).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/sms.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging call after SMS-related mutation.",
+    "callerEvidence": "server/src/routes/sms.ts:20 imports logActivity; used at line 182.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "All three generic tenant-scope helpers used identically to every other route domain in this batch.",
+    "callerEvidence": "server/src/routes/tasks.ts:7 imports validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId; used at lines 19, 53, 75.",
+    "targetEvidence": "server/src/utils/clinicScope.ts (see edges 6/12/16).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "classification": "C",
+    "reasoning": "Despite its 'Task'-sounding name, validateTaskRelations is a generic relation-bag validator (patientId/appointmentId/treatmentCaseId/assignedToId) built from the same shared relationGuards primitives as edges 3/7 - same shared tenant-security utility.",
+    "callerEvidence": "server/src/routes/tasks.ts:9 imports validateTaskRelations; used at lines 81 and 117 to validate a task's patient/appointment/treatmentCase/assignee all belong to the clinic.",
+    "targetEvidence": "server/src/utils/relationGuards.ts:85-116 - validateTaskRelations(data, clinicId) is itself a generic composition of the other relationGuards find*InClinic checks, taking an arbitrary relation-bag + clinicId.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Same central tenant-scope utility used at 5 call sites in the treatment-cases route, consistent with every other domain's usage.",
+    "callerEvidence": "server/src/routes/treatmentCases.ts:8 imports validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId; used at lines 42, 74, 113, 149, 221.",
+    "targetEvidence": "server/src/utils/clinicScope.ts (see edges 6/12/16).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic relation-guard functions as edge 3, reused to validate treatment-case foreign keys belong to the clinic.",
+    "callerEvidence": "server/src/routes/treatmentCases.ts:12-14 imports findAppointmentTypeInClinic, findPatientInClinic, findUserAssignedToClinic; used at lines 235-237 and 304-306 to validate foreign keys.",
+    "targetEvidence": "server/src/utils/relationGuards.ts (see edge 3).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPackages.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging calls after treatment-package mutations.",
+    "callerEvidence": "server/src/routes/treatmentPackages.ts:5 imports logActivity; used at lines 204, 261, 291, 394.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard accessible-clinics scoping, used at 5 call sites.",
+    "callerEvidence": "server/src/routes/treatmentPlanProcedures.ts:14 imports getAccessibleClinicIds; used at lines 52, 83, 129, 243, 377.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:128-139 (see edge 12).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging calls after user-management mutations.",
+    "callerEvidence": "server/src/routes/users.ts:5 imports logActivity; used at lines 196, 301, 416, 502.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/usersImport.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard accessible-clinics scoping for bulk user-import operations.",
+    "callerEvidence": "server/src/routes/usersImport.ts:18 imports getAccessibleClinicIds; used at lines 76, 241, 283.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:128-139 (see edge 12).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared tagged-secret decrypt helper as edge 10, this file's canonical documented use case.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:56 imports decryptSecretTagged; used at line 1145: `return decryptSecretTagged(value);`.",
+    "targetEvidence": "server/src/utils/encryption.ts:72-76 (see edge 10).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsappInbox.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "classification": "C",
+    "reasoning": "Both symbols verified in consistent paired use (writeAuditLog + extractRequestMeta spread) at all 4 call sites - the documented standard audit-log call pattern.",
+    "callerEvidence": "server/src/routes/whatsappInbox.ts:26 imports writeAuditLog, extractRequestMeta; used together at 4 sites (lines 371/381, 580/589, 655/665, 786/796).",
+    "targetEvidence": "server/src/utils/auditLog.ts (see edges 8 and 24).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/digidentis/DigiDentisProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "File header of encryption.ts states 'Decryption happens only inside provider implementations - never in responses' - DigiDentisProvider is exactly such a provider implementation, the documented intended call site.",
+    "callerEvidence": "server/src/services/externalCalendar/digidentis/DigiDentisProvider.ts:12 imports decryptSecret; used at lines 76 and 163 to decrypt a stored OAuth client secret and webhook secret.",
+    "targetEvidence": "server/src/utils/encryption.ts:47-55 - decryptSecret(ciphertext) is the base generic AES-256-GCM decrypt primitive.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/services/imaging/bridgePairing.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic env-secret helper as edge 1/39, used to fetch a pairing-pepper secret with production-strength validation.",
+    "callerEvidence": "server/src/services/imaging/bridgePairing.ts:12 imports getSecret; used at line 20: `return getSecret('IMAGING_BRIDGE_PAIRING_PEPPER', DEV_PEPPER_FALLBACK);`.",
+    "targetEvidence": "server/src/utils/secrets.ts:1-11 (see edge 1).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/InstagramMessagingProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Same documented provider-implementation decrypt pattern as edge 38, here decrypting an Instagram access token inside the messaging provider.",
+    "callerEvidence": "server/src/services/instagram/InstagramMessagingProvider.ts:17 imports decryptSecret; used at line 85: `const token = decryptSecret(encrypted).trim();`.",
+    "targetEvidence": "server/src/utils/encryption.ts:47-55 (see edge 38).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/patientAnonymization.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "classification": "C",
+    "reasoning": "Privacy/anonymization service recording its own action via the shared audit-log writer - expected cross-domain audit pattern, and arguably core to why audit logging exists as a shared utility at all.",
+    "callerEvidence": "server/src/services/privacy/patientAnonymization.ts:16 imports writeAuditLog; used at line 430.",
+    "targetEvidence": "server/src/utils/auditLog.ts:37-58 (see edge 8).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/services/recallCandidateService.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging calls from the recall-candidate service.",
+    "callerEvidence": "server/src/services/recallCandidateService.ts:2 imports logActivity; used at lines 271, 384, 497.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/services/sms/platformSmsProviders.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "File comment at line 8 of platformSmsProviders.ts explicitly documents 'Credentials are encrypted at rest with encryptJson() and are decrypted only...' - self-documented intended shared-crypto usage.",
+    "callerEvidence": "server/src/services/sms/platformSmsProviders.ts:18 imports decryptJson, encryptJson; used at lines 64, 84, 111 to encrypt/decrypt SMS provider credential JSON blobs.",
+    "targetEvidence": "server/src/utils/encryption.ts:82-97 - decryptJson/encryptJson are generic JSON-object encrypt/decrypt wrappers around the same AES-256-GCM primitive.",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Same documented provider-implementation decrypt pattern, decrypting the Evolution API key.",
+    "callerEvidence": "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts:20 imports decryptSecret; used at line 61: `apiKey = decryptSecret(rawKey);`.",
+    "targetEvidence": "server/src/utils/encryption.ts:47-55 (see edge 38).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Same documented provider-implementation decrypt pattern, decrypting the Meta Cloud access token.",
+    "callerEvidence": "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts:31 imports decryptSecret; used at line 41: `return decryptSecret(raw);`.",
+    "targetEvidence": "server/src/utils/encryption.ts:47-55 (see edge 38).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging calls from the WhatsApp AI message processor.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:53 imports logActivity; used at lines 774, 857, 958, 1076.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none",
+    "batch": "batch2_tenant_audit_crypto"
+  },
+  {
+    "edgeKey": "server/src/jobs/clinicBulkExportCleanupJob.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "cleanupStaleLocalExportPartialFiles is a generic storage-abstraction sweep function in fileStorage.ts, the codebase's single S3/local storage abstraction layer. Any job that produces on-disk export artifacts is expected to reuse this rather than reimplement filesystem cleanup, matching the rubric's 'storage abstraction' example verbatim.",
+    "callerEvidence": "jobs/clinicBulkExportCleanupJob.ts:23 `import { cleanupStaleLocalExportPartialFiles } from '../services/fileStorage.js';` and :50 `const deletedPartials = await cleanupStaleLocalExportPartialFiles(STALE_PARTIAL_FILE_MAX_AGE_MS);`",
+    "targetEvidence": "services/fileStorage.ts:529 `export async function cleanupStaleLocalExportPartialFiles(...)` — doc comment explicitly frames it as a general local-mode partial-artifact sweep, not privacy-domain-specific logic.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/jobs/externalCalendarOutboundSyncJob.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+    "classification": "C",
+    "reasoning": "logger is the shared pino structured logger every module in the codebase is expected to import for observability; this is the textbook 'observability/logging' shared-platform pattern from the rubric, with no domain-specific coupling at all.",
+    "callerEvidence": "jobs/externalCalendarOutboundSyncJob.ts:26 `import { logger } from '../utils/logger.js';` and multiple `logger.warn/info/error(...)` calls (e.g. line 85, 101).",
+    "targetEvidence": "utils/logger.ts:24 `export const logger = pino({...})` — a single shared, privacy-hardened structured logger instance with no owning-domain logic.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/jobs/imagingBridgeOfflineJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+    "classification": "C",
+    "reasoning": "withJobLock is the shared cross-replica cron lease-lock utility explicitly designed (per its own doc comment) to be used by any scheduled job in the codebase to prevent double-execution; it carries no imaging-specific or domain-specific logic.",
+    "callerEvidence": "jobs/imagingBridgeOfflineJob.ts:16 `import { withJobLock } from '../utils/jobLock.js';` and :46 `withJobLock('imaging-bridge-offline', 2 * 60 * 1000, runImagingBridgeOfflineJob)`.",
+    "targetEvidence": "utils/jobLock.ts:87 `export async function withJobLock(name, ttlMs, fn)` — doc comment: 'Cron job'lar için paylaşımlı lease kilidi', a generic named-lock primitive for any job.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟core-privacy-consent-retention-dsr␟jobs/dataRetentionCleanupJob.ts␟import",
+    "classification": "B",
+    "reasoning": "startDataRetentionCleanupJob is the job's own documented external entry point ('Run with: startDataRetentionCleanupJob()' in the file's header doc comment), and startBackgroundJobs.ts is the single central bootstrapper whose entire purpose is to call every job's designated start function at process boot regardless of owning domain.",
+    "callerEvidence": "jobs/startBackgroundJobs.ts:13 `import { startDataRetentionCleanupJob } from './dataRetentionCleanupJob.js';` and :27 `startDataRetentionCleanupJob();`",
+    "targetEvidence": "jobs/dataRetentionCleanupJob.ts:16 doc comment `Run with: startDataRetentionCleanupJob()` and :445 `export function startDataRetentionCleanupJob(...)` — the documented, intended external entry point.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟core-storage-abstraction␟jobs/fileBackupJob.ts␟import",
+    "classification": "B",
+    "reasoning": "startFileBackupJob is fileBackupJob.ts's sole exported symbol, designed as the module's external entry point, called from the same central job-bootstrapper pattern as every other scheduled job in this codebase (see the sibling dataRetentionCleanupJob edge above).",
+    "callerEvidence": "jobs/startBackgroundJobs.ts:20 `import { startFileBackupJob } from './fileBackupJob.js';` and :34 `startFileBackupJob();`",
+    "targetEvidence": "jobs/fileBackupJob.ts:34 `export function startFileBackupJob(): void { ... cron.schedule(...) }` — the only exported symbol, clearly the module's designed entry point.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/attachments.ts␟core-storage-abstraction␟utils/filePreview.ts␟import",
+    "classification": "C",
+    "reasoning": "isInlinePreviewable is a tiny shared mime-type-whitelist helper explicitly documented as generic ('shared whitelist for inline attachment preview'), used identically by every route that serves uploaded files. This is a textbook shared-utility edge, not a reach into private attachment-domain logic.",
+    "callerEvidence": "routes/attachments.ts:6 `import { isInlinePreviewable } from '../utils/filePreview.js';` and :259 `if (!isInlinePreviewable(attachment.mimeType)) {`",
+    "targetEvidence": "utils/filePreview.ts:1 doc comment 'shared whitelist for inline (in-browser) attachment preview' and :15 `export function isInlinePreviewable(mimeType: string): boolean`.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/attachments.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+    "classification": "C",
+    "reasoning": "isAllowedFileSignature is the shared magic-byte upload validator whose own doc comment says it was extracted from duplicated logic in attachments.ts and labOrders.ts specifically to be a shared cross-route utility.",
+    "callerEvidence": "routes/attachments.ts:5 `import { isAllowedFileSignature } from '../utils/fileSignature.js';` and :137 `if (!isAllowedFileSignature(req.file.buffer, req.file.mimetype, req.file.originalname, ALLOWED_EXTENSIONS_BY_MIME)) {`",
+    "targetEvidence": "utils/fileSignature.ts:4 doc comment 'attachments.ts ve labOrders.ts'teki kopya yardımcıların ortaklaştırılmış hali' (shared/consolidated helper from these exact two callers).",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "openFileStream is fileStorage.ts's public streaming-read API, generically documented to work for any caller regardless of domain, local or S3 mode. clinicBulkExport.ts uses it exactly as intended: to stream a file back to the client.",
+    "callerEvidence": "routes/clinicBulkExport.ts:43 `import { openFileStream } from '../services/fileStorage.js';` and :436 `const stream = await openFileStream(validation.archive.storageKey);`",
+    "targetEvidence": "services/fileStorage.ts:105 `export async function openFileStream(ref: string): Promise<Readable | null>` — doc comment: 'Dosyayı okunabilir stream olarak açar' (generic, storage-mode-agnostic).",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟utils/filePreview.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared inline-preview whitelist as the attachments.ts edge above, reused verbatim by the imaging route for the same purpose (deciding Content-Disposition).",
+    "callerEvidence": "routes/imaging.ts:28 `import { isInlinePreviewable } from '../utils/filePreview.js';` and :766 `if (mode === 'preview' && !isInlinePreviewable(image.mimeType) && !isDicom) {`",
+    "targetEvidence": "utils/filePreview.ts:15 `export function isInlinePreviewable(mimeType: string): boolean` — generic mime whitelist, no imaging-specific logic.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared magic-byte signature validator as the attachments.ts edge above; imaging.ts uses it to validate uploaded image/DICOM bytes against the declared mime type before storing.",
+    "callerEvidence": "routes/imaging.ts:27 `import { isAllowedFileSignature } from '../utils/fileSignature.js';` and :604 `if (!isAllowedFileSignature(req.file.buffer, effectiveMime, req.file.originalname, IMAGING_EXTENSIONS_BY_MIME)) {`",
+    "targetEvidence": "utils/fileSignature.ts:38 `export function isAllowedFileSignature(...)` — generic signature/extension/mime consistency check, DICOM support included generically.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared upload-signature validator reused a third time, here by the device-bridge's public ingestion endpoint, exactly the kind of any-domain-may-use shared utility the rubric describes.",
+    "callerEvidence": "routes/imagingBridgePublic.ts:33 `import { isAllowedFileSignature } from '../utils/fileSignature.js';` and :291 `if (!isAllowedFileSignature(req.file.buffer, effectiveMime, req.file.originalname, IMAGING_EXTENSIONS_BY_MIME)) {`",
+    "targetEvidence": "utils/fileSignature.ts:38 `export function isAllowedFileSignature(...)` — same generic helper as above.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟utils/filePreview.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared inline-preview whitelist used identically by the lab-orders attachment-preview route.",
+    "callerEvidence": "routes/labOrders.ts:5 `import { isInlinePreviewable } from '../utils/filePreview.js';` and :452 `if (!isInlinePreviewable(attachment.mimeType)) {`",
+    "targetEvidence": "utils/filePreview.ts:15 `export function isInlinePreviewable(mimeType: string): boolean`.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+    "classification": "C",
+    "reasoning": "labOrders.ts is literally one of the two files named in fileSignature.ts's own doc comment as the source this shared helper was extracted from — about as clear a shared-utility edge as exists in this codebase.",
+    "callerEvidence": "routes/labOrders.ts:4 `import { isAllowedFileSignature } from '../utils/fileSignature.js';` and :348 `if (!isAllowedFileSignature(req.file.buffer, req.file.mimetype, req.file.originalname, ALLOWED_EXTENSIONS_BY_MIME)) {`",
+    "targetEvidence": "utils/fileSignature.ts:4 'attachments.ts ve labOrders.ts'teki kopya yardımcıların ortaklaştırılmış hali'.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/messages.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/communicationConsentPolicy.ts␟import",
+    "classification": "B",
+    "reasoning": "assertCommunicationPermission is explicitly documented as 'the flag-aware wrapper every outbound sender should call' before dispatching a patient-facing message — this is the KVKK-HIGH-007 consent domain's designed, published entry point for exactly this kind of cross-domain caller.",
+    "callerEvidence": "routes/messages.ts:23 `import { assertCommunicationPermission } from '../services/communicationConsent/communicationConsentPolicy.js';` and :534 `const permission = await assertCommunicationPermission({...})`.",
+    "targetEvidence": "services/communicationConsent/communicationConsentPolicy.ts:214 doc comment 'Flag-aware wrapper every outbound sender should call before dispatching a patient-facing message.'",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/noShows.ts␟core-notifications␟services/taskAssignmentNotifier.ts␟import",
+    "classification": "C",
+    "reasoning": "sendTaskAssignmentNotification is a self-contained notification-dispatch function (rubric explicitly lists 'notification dispatch' as a shared/platform pattern) with its own internal try/catch so a notification failure never breaks the caller's route logic.",
+    "callerEvidence": "routes/noShows.ts:24 `import { sendTaskAssignmentNotification } from '../services/taskAssignmentNotifier.js';` and :613 `await sendTaskAssignmentNotification(appointment.clinicId, task);`",
+    "targetEvidence": "services/taskAssignmentNotifier.ts:5 `export async function sendTaskAssignmentNotification(clinicId, task)` — generic single-purpose WhatsApp task-assignment notifier, not no-show-specific logic.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/patientPrivacy.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic openFileStream storage-abstraction read API as the clinicBulkExport.ts edge above, used here to stream a KVKK export archive back to the requesting admin.",
+    "callerEvidence": "routes/patientPrivacy.ts:34 `import { openFileStream } from '../services/fileStorage.js';` and :609 `const stream = await openFileStream(validation.archive.storageKey);`",
+    "targetEvidence": "services/fileStorage.ts:105 `export async function openFileStream(ref: string): Promise<Readable | null>`.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/paymentPlans.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+    "classification": "C",
+    "reasoning": "getClinicOperatingPreferences is a generic clinic-scoped settings getter (currency/timezone/locale/date format) — a cross-cutting, tenant-scope-config-resolution style utility any domain formatting money/dates for a clinic is expected to call, matching the rubric's 'tenant-scope resolution' / shared-config example.",
+    "callerEvidence": "routes/paymentPlans.ts:7 `import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';` and :145 `const operatingPreferences = await getClinicOperatingPreferences(clinicId);`",
+    "targetEvidence": "services/clinicOperatingPreferences.ts:162 `export async function getClinicOperatingPreferences(clinicId: string): Promise<ClinicOperatingPreferences>` — generic region/currency/timezone/date-format resolver with no payment-specific logic.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟jobs/dataRetentionCleanupJob.ts␟import",
+    "classification": "B",
+    "reasoning": "dataRetentionCleanupJob.ts's own doc comment names routes/platformAdmin.ts by file path as the intended second caller of this exact lock name/TTL/summary type, so the manual admin-triggered run and the scheduled cron never race — this is an explicit, documented cross-domain contract, not an incidental reach-in.",
+    "callerEvidence": "routes/platformAdmin.ts:12-13 `import type { DataRetentionSummary } from '../jobs/dataRetentionCleanupJob.js'; import { DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS } from '../jobs/dataRetentionCleanupJob.js';` and :1383 `holdingLock = await acquireJobLock(DATA_RETENTION_JOB_LOCK_NAME, DATA_RETENTION_JOB_LOCK_TTL_MS);`",
+    "targetEvidence": "jobs/dataRetentionCleanupJob.ts:435-443 'used by BOTH the scheduled cron below and the platform-admin manual run route (routes/platformAdmin.ts), so a manual live run and a scheduled tick ... can never execute their delete/anonymize batches ... at the same time.'",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyConsentCorrection.ts␟import",
+    "classification": "B",
+    "reasoning": "legacyConsentCorrection.ts's doc comment explicitly names 'the PATCH settings route in platformAdmin.ts' as the intended caller for the transaction-scoped runtime-toggle read, and platformAdmin.ts implements exactly that PATCH/DELETE settings pair as the platform-admin kill-switch UI backend for this privacy feature.",
+    "callerEvidence": "routes/platformAdmin.ts:23-24 `import { LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, isLegacyConsentCorrectionRuntimeEnabled } from ...` and :1100-1143 the PATCH `/privacy/legacy-consent-correction/settings` handler.",
+    "targetEvidence": "services/communicationConsent/legacyConsentCorrection.ts:56-61 'Pass a Prisma.TransactionClient to read the value from inside a caller's transaction — see the PATCH settings route in platformAdmin.ts'.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟services/privacy/dataRetentionManualRunAudit.ts␟import",
+    "classification": "B",
+    "reasoning": "dataRetentionManualRunAudit.ts's module doc comment literally names 'POST /api/platform/privacy/data-retention/run (routes/platformAdmin.ts)' as the caller this entire audit module exists to serve — the clearest possible documented public-contract edge in this batch.",
+    "callerEvidence": "routes/platformAdmin.ts:16-19 `import { recordManualRunStarted, recordManualRunTerminal, recordManualRunTerminalOnly, type DataRetentionManualRunTerminalOutcome } from ...` and calls at :1281, :1299, :1428, :1476.",
+    "targetEvidence": "services/privacy/dataRetentionManualRunAudit.ts:2-9 'dataRetentionManualRunAudit.ts — RETENTION-MANUAL-RUN-AUDIT-001 ... Durable, two-phase audit trail for POST /api/platform/privacy/data-retention/run (routes/platformAdmin.ts).'",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/platformExternalCalendar.ts␟core-platform-administration␟middleware/platformAuth.ts␟import",
+    "classification": "C",
+    "reasoning": "authenticatePlatformAdmin/PlatformAdminRequest is the shared platform-admin authentication middleware every platform-scoped route in the codebase must mount; this is the textbook 'auth/authorization middleware' example from the rubric.",
+    "callerEvidence": "routes/platformExternalCalendar.ts:21 `import { authenticatePlatformAdmin, PlatformAdminRequest } from '../middleware/platformAuth.js';` and :48 `router.use(authenticatePlatformAdmin as express.RequestHandler, csrfProtection('platform'));`",
+    "targetEvidence": "middleware/platformAuth.ts:18 `export const authenticatePlatformAdmin = (req, res, next) => {...}` — generic JWT-based platform-admin session verifier, no calendar-integration-specific logic.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/platformSecurityIncidents.ts␟core-platform-administration␟middleware/platformAuth.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared platform-admin auth middleware as the previous edge, mounted identically to gate every route in this file.",
+    "callerEvidence": "routes/platformSecurityIncidents.ts:15 `import { authenticatePlatformAdmin, PlatformAdminRequest } from '../middleware/platformAuth.js';` and :46 `router.use(authenticatePlatformAdmin as express.RequestHandler, csrfProtection('platform'));`",
+    "targetEvidence": "middleware/platformAuth.ts:18 `export const authenticatePlatformAdmin = ...` — generic, domain-agnostic.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/publicBooking.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+    "classification": "B",
+    "reasoning": "buildAvailableSlots/localDateTimeToClinicDate/DEFAULT_SLOT_DURATION_MINUTES are cleanly exported, well-typed public functions that compute the canonical appointment-slot availability; publicBooking.ts's own comments ('buildAvailableSlots used to compute the localStartTime the customer...', 'Mirrors buildAvailableSlots') show deliberate reuse of the single availability engine to avoid divergent slot logic between the WhatsApp bot flow and the public booking widget, rather than reaching into private internals.",
+    "callerEvidence": "routes/publicBooking.ts:10 `import { buildAvailableSlots, localDateTimeToClinicDate, DEFAULT_SLOT_DURATION_MINUTES } from '../services/whatsappAvailability.js';` and :150, :277, :286 usages with explanatory comments about mirroring the same computation.",
+    "targetEvidence": "services/whatsappAvailability.ts:156 `export const buildAvailableSlots = async (...)` — despite the filename, this is generic clinic-availability computation (working hours, off-days, overlap checks), not WhatsApp-specific, and correctly domain-mapped to clinical-appointments-availability.",
+    "followUpRequired": "File name 'whatsappAvailability.ts' is misleading given its content is generic slot-computation logic shared by both the WhatsApp bot and the public booking route; consider a rename to reduce future domain-map ambiguity (not urgent).",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-notifications␟services/taskAssignmentNotifier.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic sendTaskAssignmentNotification notification-dispatch function as the noShows.ts edge above, used here from the tasks route that actually creates/reassigns the task.",
+    "callerEvidence": "routes/tasks.ts:8 `import { sendTaskAssignmentNotification } from '../services/taskAssignmentNotifier.js';` and :140 `await sendTaskAssignmentNotification(clinicId, updated);`",
+    "targetEvidence": "services/taskAssignmentNotifier.ts:5 `export async function sendTaskAssignmentNotification(clinicId, task)`.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/googleAiStudio.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
+    "classification": "C",
+    "reasoning": "redaction.ts's own doc comment declares itself 'THE single AI prompt privacy boundary for every active Gemini/Google AI Studio call path' and names googleAiStudio.ts explicitly as one of its three intended callers — this is a shared, cross-cutting PII-scrubbing gate any AI-calling code must route through, analogous to the rubric's encryption/secrets example.",
+    "callerEvidence": "services/googleAiStudio.ts:2 `import { getAiCustomerNamePlaceholder, redactSensitiveText } from './privacy/redaction.js';` and :159, :163, :215, :264 usages wrapping every piece of customer text sent to the AI provider.",
+    "targetEvidence": "services/privacy/redaction.ts:4-6 'This module is THE single AI prompt privacy boundary for every active Gemini/Google AI Studio call path (googleAiStudio.ts extraction + date-normalization, ...)'.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/imaging/public.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "fileExists is a generic storage-abstraction existence check (S3 HEAD or local fs.existsSync) with no imaging-specific behavior, used here purely to confirm an image blob is present before serving it.",
+    "callerEvidence": "services/imaging/public.ts:74 `import { fileExists } from '../fileStorage.js';` and :350 `let storageExistenceChecker: (ref: string) => Promise<boolean> = fileExists;`",
+    "targetEvidence": "services/fileStorage.ts:162 `export async function fileExists(ref: string): Promise<boolean>` — generic, storage-mode-agnostic existence check.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/dataRetentionManualRunAudit.ts␟core-platform-administration␟services/platformAdminAudit.ts␟import",
+    "classification": "C",
+    "reasoning": "writePlatformAdminAuditEventInTx is the shared, generic platform-admin audit-log writer (transaction-client-only signature, PlatformAdminAuditEvent table) — the rubric's 'audit logging' cross-cutting example — used by the privacy domain's manual-run audit trail exactly as it is used by every other platform-admin-triggered mutation.",
+    "callerEvidence": "services/privacy/dataRetentionManualRunAudit.ts:63 `import { writePlatformAdminAuditEventInTx } from '../platformAdminAudit.js';` and :140, :178 usages inside `prisma.$transaction`.",
+    "targetEvidence": "services/platformAdminAudit.ts:38 `export async function writePlatformAdminAuditEventInTx(tx, input)` — doc comment: generic durable audit trail for 'Platform Admin configuration changes', not privacy-specific.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/orphanFileInspection.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic fileExists storage-abstraction check as the imaging/public.ts edge above, used here to confirm whether attachment/image DB rows still have a backing file on disk/S3.",
+    "callerEvidence": "services/privacy/orphanFileInspection.ts:32 `import { fileExists } from '../fileStorage.js';` and :74, :84 `const exists = await fileExists(attachment.filePath); ... const exists = await fileExists(image.filePath);`",
+    "targetEvidence": "services/fileStorage.ts:162 `export async function fileExists(ref: string): Promise<boolean>`.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟clinical-patients␟routes/attachments.ts␟import",
+    "classification": "H",
+    "reasoning": "ATTACHMENT_MAX_FILE_SIZE_BYTES is a trivial numeric constant (10 MB multer limit), not business logic or PII, so the risk is low — but this is a genuine reverse-layering coupling: a privacy-domain SERVICE importing a constant out of a ROUTE file, which inverts the codebase's normal routes-call-services direction and reaches across into clinical-patients' route module rather than a shared constants file. It reads as pre-existing convenience code ('reuse the attachment upload cap'), not new/deliberate coupling, so LEGACY_TECHNICAL_DEBT fits better than a fresh violation.",
+    "callerEvidence": "services/privacy/patientPrivacyExportPackage.ts:46 `import { ATTACHMENT_MAX_FILE_SIZE_BYTES } from '../../routes/attachments.js';` and :69 `export const EXPORT_MAX_FILE_SIZE_BYTES = ATTACHMENT_MAX_FILE_SIZE_BYTES; // reuse the attachment upload cap`",
+    "targetEvidence": "routes/attachments.ts:60 `export const ATTACHMENT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB` — a plain config constant defined inline in a route file rather than a shared constants module.",
+    "followUpRequired": "Consider extracting ATTACHMENT_MAX_FILE_SIZE_BYTES into a shared constants/config module so services never need to import from a routes/ file; low priority given the constant carries no business logic or PII.",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/recallCandidateService.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyReconciliationResolver.ts␟import",
+    "classification": "B",
+    "reasoning": "legacyReconciliationResolver.ts's module doc comment explicitly names 'SMS, recall drafting' as the two legacy-gated senders this module exists to serve, and states 'This module is the single orchestration point both senders call' — recallCandidateService.ts is literally one of the two named, intended callers.",
+    "callerEvidence": "services/recallCandidateService.ts:8 `import { resolveCommunicationConsent, type LegacyGateSignal } from './communicationConsent/legacyReconciliationResolver.js';` and :415-418 building a `LegacyGateSignal` and calling `resolveCommunicationConsent(legacySignal, {...})`.",
+    "targetEvidence": "services/communicationConsent/legacyReconciliationResolver.ts:8-15 'senders that predate the central ... system (SMS, recall drafting) ... This module is the single orchestration point both senders call instead of chaining two independent checks'.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsCommunicationPurposeMap.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
+    "classification": "C",
+    "reasoning": "CommunicationPurpose is imported as a type-only reference (`import type`) into a small mapping-table file whose entire purpose (per its own doc comment) is to translate the SMS module's local purpose enum onto the central shared taxonomy — this is intentional reuse of a shared vocabulary/type, with zero runtime coupling.",
+    "callerEvidence": "services/sms/smsCommunicationPurposeMap.ts:13 `import type { CommunicationPurpose } from '../communicationConsent/taxonomy.js';` — doc comment: 'Maps the SMS module's own purpose ... onto the central KVKK-HIGH-007 consent CommunicationPurpose taxonomy'.",
+    "targetEvidence": "services/communicationConsent/taxonomy.ts:19-33 `export const COMMUNICATION_PURPOSES = [...] as const; export type CommunicationPurpose = ...` — a shared, cross-domain vocabulary type by design.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsService.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyReconciliationResolver.ts␟import",
+    "classification": "B",
+    "reasoning": "Same explicitly-named contract as the recallCandidateService.ts edge above — smsService.ts is the 'SMS' sender legacyReconciliationResolver.ts's doc comment names as one of its two intended callers.",
+    "callerEvidence": "services/sms/smsService.ts:36 `import { resolveCommunicationConsent, type LegacyGateSignal } from '../communicationConsent/legacyReconciliationResolver.js';` and :179-183 building `legacySignal` and calling `resolveCommunicationConsent(legacySignal, {...})`.",
+    "targetEvidence": "services/communicationConsent/legacyReconciliationResolver.ts:8-15 'senders that predate the central ... system (SMS, recall drafting) ... single orchestration point both senders call'.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/treatmentStockDeduction.ts␟inventory␟services/inventoryAlerts.ts␟import",
+    "classification": "C",
+    "reasoning": "checkAndNotifyLowStock is a small, self-contained notification-dispatch function (checks a threshold, then upserts a notification row) documented generically as running 'after any stock deduction' regardless of which domain triggered the deduction, and it fails silently so it can never break the caller — matching the rubric's 'notification dispatch' shared-pattern example.",
+    "callerEvidence": "services/treatmentStockDeduction.ts:3 `import { checkAndNotifyLowStock } from './inventoryAlerts.js';` and :190 `await checkAndNotifyLowStock(context.clinicId, requirement.inventoryItemId, tx);`",
+    "targetEvidence": "services/inventoryAlerts.ts:8 `// Creates or refreshes the low-stock notification after any stock deduction.` and :9 `export async function checkAndNotifyLowStock(clinicId, itemId, client = prisma)`, wrapped in try/catch swallowing all errors.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
+    "classification": "C",
+    "reasoning": "sanitizeAiMessageHistory is part of the same documented single AI-prompt privacy boundary as the googleAiStudio.ts edge above; metaWhatsAppAiProcessor.ts is exactly the kind of AI-call-path caller this module exists to serve.",
+    "callerEvidence": "services/whatsapp/metaWhatsAppAiProcessor.ts:69 `import { sanitizeAiMessageHistory } from '../privacy/redaction.js';` and :2464 `recentMessages: sanitizeAiMessageHistory(...)`.",
+    "targetEvidence": "services/privacy/redaction.ts:308 `export const sanitizeAiMessageHistory = (messages, options) => {...}` — generic message-history trimming/redaction for any AI prompt builder.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
+    "classification": "C",
+    "reasoning": "Same type-only shared-taxonomy import pattern as smsCommunicationPurposeMap.ts; this file's own doc comment says it 'Mirrors server/src/services/sms/smsCommunicationPurposeMap.ts exactly', confirming the intentional, repeated shared-vocabulary pattern.",
+    "callerEvidence": "services/whatsapp/whatsappCommunicationPurposeMap.ts:21 `import type { CommunicationPurpose } from '../communicationConsent/taxonomy.js';` — doc comment :7 'Mirrors server/src/services/sms/smsCommunicationPurposeMap.ts exactly'.",
+    "targetEvidence": "services/communicationConsent/taxonomy.ts:33 `export type CommunicationPurpose = (typeof COMMUNICATION_PURPOSES)[number];` — shared taxonomy type.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/communicationConsentPolicy.ts␟import",
+    "classification": "B",
+    "reasoning": "Same documented public entry point as the messages.ts edge above: assertCommunicationPermission is 'the flag-aware wrapper every outbound sender should call before dispatching a patient-facing message', and whatsappOutboundMessaging.ts is precisely such an outbound sender.",
+    "callerEvidence": "services/whatsapp/whatsappOutboundMessaging.ts:31 `import { assertCommunicationPermission } from '../communicationConsent/communicationConsentPolicy.js';` and :114 `const permission = await assertCommunicationPermission({...})`.",
+    "targetEvidence": "services/communicationConsent/communicationConsentPolicy.ts:214 'Flag-aware wrapper every outbound sender should call before dispatching a patient-facing message.'",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/enforcementConfig.ts␟import",
+    "classification": "C",
+    "reasoning": "getCommunicationConsentEnforcementMode/isCommunicationConsentEnforcementEnabled are plain env-var-backed rollout-flag readers with no side effects and no privacy-domain business logic; every outbound sender is expected to read these directly to decide audit-vs-enforce behavior, a feature-flag-style shared config pattern.",
+    "callerEvidence": "services/whatsapp/whatsappOutboundMessaging.ts:34-35 `import { isCommunicationConsentEnforcementEnabled, getCommunicationConsentEnforcementMode } from ...` and :95, :99 usages.",
+    "targetEvidence": "services/communicationConsent/enforcementConfig.ts:36-43 `export function isCommunicationConsentEnforcementEnabled(): boolean { return process.env.COMMUNICATION_CONSENT_ENFORCEMENT_ENABLED === 'true'; }` and sibling mode getter — pure env-flag readers.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
+    "classification": "C",
+    "reasoning": "Same type-only shared-vocabulary import as the two purpose-map edges above (`import type { CommunicationPurpose }`), used here to type the `consentPurpose` field passed into assertCommunicationPermission.",
+    "callerEvidence": "services/whatsapp/whatsappOutboundMessaging.ts:32 `import type { CommunicationPurpose } from '../communicationConsent/taxonomy.js';` and :73 `consentPurpose: CommunicationPurpose;`.",
+    "targetEvidence": "services/communicationConsent/taxonomy.ts:33 `export type CommunicationPurpose = ...` — shared taxonomy type.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappConversationAgent.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
+    "classification": "C",
+    "reasoning": "Same documented single AI-prompt privacy boundary as the two other redaction.ts edges above; whatsappConversationAgent.ts is one of the three call paths the module doc comment names explicitly ('whatsappAgentPrompt.ts conversation-agent decisions').",
+    "callerEvidence": "services/whatsappConversationAgent.ts:7 `import { redactSensitiveText } from './privacy/redaction.js';` and :283 `throw new Error(\\`WhatsApp conversation agent failed with ${response.status}: ${redactSensitiveText(errorText)}\\`);`",
+    "targetEvidence": "services/privacy/redaction.ts:4-9 'the single AI prompt privacy boundary for every active Gemini/Google AI Studio call path (... whatsappAgentPrompt.ts conversation-agent decisions ...)'.",
+    "followUpRequired": "none",
+    "batch": "batch3_privacy_storage_misc"
+  },
+  {
+    "edgeKey": "server/src/jobs/inboundEventRetryJob.ts␟messaging-whatsapp␟services/whatsapp/MetaCloudWhatsAppProvider.ts␟import",
+    "classification": "A",
+    "reasoning": "The caller directly imports and `new`-instantiates the concrete `MetaCloudWhatsAppProvider` class (inboundEventRetryJob.ts:21,89) to call `.parseWebhook()`, bypassing the domain's own designed abstraction seam. `whatsappProviderFactory.ts` exists specifically to hand back a `WhatsAppProvider`-typed instance via `getWhatsAppProvider('meta_cloud_api')`, and `parseWebhook` is part of the `WhatsAppProvider` interface (WhatsAppProvider.ts:104), so the factory would satisfy this exact call without ever naming the concrete class. This is an avoidable, direct reach into another domain's private implementation class.",
+    "callerEvidence": "server/src/jobs/inboundEventRetryJob.ts:21 `import { MetaCloudWhatsAppProvider } from '../services/whatsapp/MetaCloudWhatsAppProvider.js';` and :89 `const provider = new MetaCloudWhatsAppProvider();`",
+    "targetEvidence": "server/src/services/whatsapp/whatsappProviderFactory.ts:13 `meta_cloud_api: () => new MetaCloudWhatsAppProvider(),` and WhatsAppProvider.ts:104 `parseWebhook(payload: unknown, connection: WhatsAppConnectionRecord): ParsedWebhookEvent;` — the factory+interface already cover this exact use case.",
+    "followUpRequired": "Low-priority refactor suggestion: swap the direct `new MetaCloudWhatsAppProvider()` for `getWhatsAppProvider('meta_cloud_api')` from whatsappProviderFactory.ts to close this bypass; not urgent (job is scoped to meta_cloud_api only by design) but worth a ticket.",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟messaging-whatsapp␟services/whatsapp/whatsappOutboundMessaging.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappOutboundMessaging.ts's own header explicitly documents itself as the dispatcher for 'Automated/scheduled messages (reminders, payment notices)' — reminders.ts is its named intended consumer, not an incidental one. Both symbols (`sendProactiveWhatsAppMessage`, `OUTBOUND_ERRORS`) are used for real send calls and error-code branching.",
+    "callerEvidence": "server/src/jobs/reminders.ts:14 `import { sendProactiveWhatsAppMessage, OUTBOUND_ERRORS } from '../services/whatsapp/whatsappOutboundMessaging.js';`, used at :282 `sendProactiveWhatsAppMessage({...})` and :295-296 `sendResult.code === OUTBOUND_ERRORS.BLOCKED_BY_CONSENT`",
+    "targetEvidence": "server/src/services/whatsapp/whatsappOutboundMessaging.ts:3-4 'Automated/scheduled messages (reminders, payment notices) must use Meta-approved templates...' — reminders is named in the module's own doc comment as the intended caller.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟messaging-whatsapp␟services/whatsapp/whatsappService.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappService.ts's own header states 'All application code (routes, jobs, reminders) calls this service' — reminders.ts is explicitly named as an intended caller of the unified send API, used here for a practitioner-facing notification (not a template-gated proactive patient message).",
+    "callerEvidence": "server/src/jobs/reminders.ts:13 `import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';`, used at :400 `sendWhatsAppMessage(clinic.id, { phone: practitioner.phone, text: body })`",
+    "targetEvidence": "server/src/services/whatsapp/whatsappService.ts:3-4 'All application code (routes, jobs, reminders) calls this service. Provider resolution happens here — callers never reference a specific provider.'",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟external-calendar-integration␟jobs/externalCalendarInboundRetryJob.ts␟import",
+    "classification": "B",
+    "reasoning": "startBackgroundJobs.ts is the program's single documented composition root ('Tüm cron job'ların tek noktadan başlatılması') whose entire job is to call every job module's own exported `start*` function. `startExternalCalendarInboundRetryJob` is exactly that module's intended external-facing entry point — every other job in this same file is imported the identical way, so this is not domain-specific coupling, it's the bootstrap pattern.",
+    "callerEvidence": "server/src/jobs/startBackgroundJobs.ts:21 `import { startExternalCalendarInboundRetryJob } from './externalCalendarInboundRetryJob.js';`, called at :35 inside `startBackgroundJobs()`",
+    "targetEvidence": "server/src/jobs/externalCalendarInboundRetryJob.ts exports `runExternalCalendarInboundRetryJob`/`startExternalCalendarInboundRetryJob` as its public registration entry point (cron job pattern identical to all sibling jobs in the same file).",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟external-calendar-integration␟jobs/externalCalendarOutboundSyncJob.ts␟import",
+    "classification": "B",
+    "reasoning": "Same composition-root pattern as the sibling edge above: startBackgroundJobs.ts calls `startExternalCalendarOutboundSyncJob`, the job module's own exported public start function, alongside 11 other domains' job-start calls in the identical style.",
+    "callerEvidence": "server/src/jobs/startBackgroundJobs.ts:22 `import { startExternalCalendarOutboundSyncJob } from './externalCalendarOutboundSyncJob.js';`, called at :36",
+    "targetEvidence": "server/src/jobs/externalCalendarOutboundSyncJob.ts — cron-registered job exporting its own `start*` entry point, mirroring `inboundEventRetryJob.ts`'s shape per its own header comment.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/auth.ts␟messaging-email␟services/emailService.ts␟import",
+    "classification": "C",
+    "reasoning": "emailService.ts's `sendMail` is a generic SMTP-dispatch wrapper (to/subject/html/text in, sent/reason out) with zero domain-specific business logic or data model — a textbook 'notification dispatch' shared utility per the rubric's explicit C examples. auth.ts uses it for password-reset and email-verification transactional mail.",
+    "callerEvidence": "server/src/routes/auth.ts:16 `import { sendMail } from '../services/emailService.js';`, used at :410 and :599 for password-reset/verification emails",
+    "targetEvidence": "server/src/services/emailService.ts:34 `export async function sendMail(options: SendMailOptions): Promise<SendMailResult>` — generic transport wrapper around nodemailer, no auth/business-domain coupling.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/clinicRegistration.ts␟messaging-email␟services/emailService.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic `sendMail` transactional-email dispatch utility as the auth.ts edge, used here to deliver the admin's email-verification link after clinic self-registration. No clinic-registration business logic lives in emailService.ts.",
+    "callerEvidence": "server/src/routes/clinicRegistration.ts:6 `import { sendMail } from '../services/emailService.js';`, used at :166 `sendMail({ to: adminEmail, ...emailPayload })`",
+    "targetEvidence": "server/src/services/emailService.ts:34 generic `sendMail()` — see prior edge's target evidence.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/financeDashboard.ts␟clinical-basic-payments␟utils/overdueReceivables.ts␟import",
+    "classification": "B",
+    "reasoning": "overdueReceivables.ts's own header comment names financeDashboard.ts as one of its two explicit intended consumers ('the Finance Dashboard's summary.overdueAmount (server/src/routes/financeDashboard.ts...)'), and states it is the single source of truth combining two receivable sources specifically to fix a previously-broken finance dashboard card. This is about as explicit a documented cross-domain public contract as exists in this codebase.",
+    "callerEvidence": "server/src/routes/financeDashboard.ts:23 `import { overdueReceivablesAmount } from '../utils/overdueReceivables.js';`, used at :162 and :238",
+    "targetEvidence": "server/src/utils/overdueReceivables.ts:1-8 '...single source of truth for: ... the Finance Dashboard's summary.overdueAmount (server/src/routes/financeDashboard.ts, which previously filtered on the literal PaymentPlanInstallment.status === \"overdue\" — a value nothing ever writes, so that card was always 0)'",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟imaging-device-bridge␟services/imaging/bridgeOnboardingConfig.ts␟import",
+    "classification": "D",
+    "reasoning": "domain-map assigns all of routes/imaging.ts to imaging-server-viewer, but the program's own prior evidence task (F2-PREP-006-A) directly re-derived the route inventory and found 8 of imaging.ts's 27 routes (30%) exclusively manage BRG (imaging-device-bridge)-owned functionality with zero IMG-owned model touches — explicitly stating 'The file's name does not describe roughly a third of its own content.' `getBridgeOnboardingConfig` is called from imaging.ts's bridge-onboarding-config route (line 1300), which is one of those BRG routes physically co-located in the wrong-domain-labeled file — this is a caller domain-map granularity dispute, not a real cross-domain reach (the calling code is functionally BRG's own admin surface).",
+    "callerEvidence": "server/src/routes/imaging.ts:46 `import { getBridgeOnboardingConfig } from '../services/imaging/bridgeOnboardingConfig.js';`, used at :1300 `res.json(getBridgeOnboardingConfig());` inside a bridge-onboarding-config route",
+    "targetEvidence": "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md §3/§4: bridgeOnboardingConfig.ts is BRG-owned, 'Consumed by imaging.ts only'; §11 finding #1: 'imaging.ts's name does not match ~30% of its own content (BRG routes).'",
+    "followUpRequired": "Domain-map granularity issue already identified by the program itself (F2-PREP-006-A §10 proposed IMG/BRG split); no new action needed from this validation, just corroborates the existing proposal.",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟imaging-device-bridge␟services/imaging/bridgePairing.ts␟import",
+    "classification": "D",
+    "reasoning": "Same caller domain-map granularity issue as the bridgeOnboardingConfig edge: all 4 symbols (`PAIRING_CODE_TTL_MS`, `formatPairingCodeForDisplay`, `generatePairingCode`, `hashPairingCode`) are used inside imaging.ts's bridge-pairing-creation route (lines 1206-1239), one of the file's 8 BRG-owned routes per F2-PREP-006-A's independently re-derived route inventory. Functionally this is BRG code calling its own BRG service; the 'cross-domain' flag is an artifact of imaging.ts being domain-mapped as a single unit.",
+    "callerEvidence": "server/src/routes/imaging.ts:48-52 `import { generatePairingCode, formatPairingCodeForDisplay, hashPairingCode, PAIRING_CODE_TTL_MS } from '../services/imaging/bridgePairing.js';`, all 4 used at :1206-1239",
+    "targetEvidence": "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md §4: bridgePairing.ts is BRG-owned, consumed by imaging.ts (create) and imagingBridgePublic.ts (redeem) — a same-domain (BRG) call from imaging.ts's embedded bridge routes.",
+    "followUpRequired": "Same domain-map granularity note as the bridgeOnboardingConfig edge — already tracked by F2-PREP-006-A/E.",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟imaging-device-bridge␟services/imaging/bridgeTokens.ts␟import",
+    "classification": "D",
+    "reasoning": "Same pattern again: `generateBridgeToken` is called from imaging.ts's bridge-agent-registration route (line 1021), one of the file's embedded BRG routes. bridgeTokens.ts is BRG-owned and 'Consumed by imaging.ts (create), imagingBridgePublic.ts (verify)' per the program's own inventory — this is BRG calling BRG, mislabeled cross-domain only because imaging.ts as a whole is domain-mapped to imaging-server-viewer.",
+    "callerEvidence": "server/src/routes/imaging.ts:45 `import { generateBridgeToken } from '../services/imaging/bridgeTokens.js';`, used at :1021 `const { token, tokenHash } = generateBridgeToken();`",
+    "targetEvidence": "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md §4: bridgeTokens.ts | BRG | Consumed by imaging.ts (create), imagingBridgePublic.ts (verify).",
+    "followUpRequired": "Same domain-map granularity note — already tracked by F2-PREP-006-A/E.",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟imaging-server-viewer␟services/imaging/imagingRequestTransitions.ts␟import",
+    "classification": "H",
+    "reasoning": "This is a genuine, real cross-owner import — imagingRequestTransitions.ts is IMG-owned but imagingBridgePublic.ts is BRG's own public device-facing surface, and it calls `canAttachStudyToRequest`/uses `ImagingRequestStatus` directly with no facade in between. Critically, this exact edge is already independently documented by the program's own architecture evidence as a known gap: F2-PREP-006-A explicitly labels it 'cross-owner import, no facade' at the frozen baseline, i.e. this is pre-existing, already-tracked technical debt in a domain the program has explicitly frozen for pilot planning, not new coupling introduced by recent work.",
+    "callerEvidence": "server/src/routes/imagingBridgePublic.ts:41 `import { canAttachStudyToRequest, type ImagingRequestStatus } from '../services/imaging/imagingRequestTransitions.js';`, used at :284 `if (!canAttachStudyToRequest(found.status as ImagingRequestStatus))`",
+    "targetEvidence": "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md §4: 'imagingRequestTransitions.ts | IMG | imaging.ts and imagingBridgePublic.ts (cross-owner import, no facade)' — the program's own prior evidence already names this exact edge as a known gap at this same baseline.",
+    "followUpRequired": "Already tracked: F2-PREP-006-C §9 migration-order step 4 ('Formalize imagingBridgePublic.ts as the documented external module boundary') covers this. No new action required from this validation beyond cross-referencing.",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟imaging-server-viewer␟services/imaging/imagingUploadValidation.ts␟import",
+    "classification": "B",
+    "reasoning": "imagingUploadValidation.ts's own header comment explicitly documents itself as shared infrastructure: 'routes/imaging.ts (manual upload) and routes/imagingBridgePublic.ts (bridge upload) share the same MIME/extension/size rules — single source here.' The program's own F2-PREP-006-A inventory independently confirms this as 'SHARED (IMG+BRG) — explicitly documented as shared in its own header comment,' calling it 'a positive, well-documented finding.' All 4 symbols are used for upload validation in imagingBridgePublic.ts.",
+    "callerEvidence": "server/src/routes/imagingBridgePublic.ts:36-40 `import { IMAGING_ALLOWED_MIME, IMAGING_EXTENSIONS_BY_MIME, MAX_FILE_MB, normalizeDeclaredMime } from '../services/imaging/imagingUploadValidation.js';`, used at :91,93,204,290-291",
+    "targetEvidence": "server/src/services/imaging/imagingUploadValidation.ts:1-5 'routes/imaging.ts (manuel yükleme) ve routes/imagingBridgePublic.ts (köprü yükleme) aynı MIME/uzantı/boyut kurallarını paylaşır — tek kaynak burada.'",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟messaging-shared-channel-infrastructure␟utils/webhookVerification.ts␟import",
+    "classification": "C",
+    "reasoning": "webhookVerification.ts is a generic, provider-agnostic Meta webhook-challenge verifier (mode/token/challenge in, ok/reason out) with zero Instagram- or WhatsApp-specific logic, domain-mapped to 'messaging-shared-channel-infrastructure' precisely because it is meant to be reused by every Meta-family webhook route. This is a textbook shared/platform cross-cutting utility.",
+    "callerEvidence": "server/src/routes/instagramWebhook.ts:23 `import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';`, used at :328 and :360 to answer Meta's hub.verify_token challenge",
+    "targetEvidence": "server/src/utils/webhookVerification.ts:17 `export function verifyMetaWebhookChallenge(params: {...})` — generic mode/token/challenge validator, no Instagram-specific data or types.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟messaging-shared-channel-infrastructure␟utils/webhookVerification.ts␟import",
+    "classification": "C",
+    "reasoning": "Identical shared utility as the instagramWebhook.ts edge: the same generic `verifyMetaWebhookChallenge` function, reused verbatim by the WhatsApp Meta webhook route for the identical hub.verify_token handshake.",
+    "callerEvidence": "server/src/routes/metaWhatsAppWebhook.ts:31 `import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';`, used at :173 and :313",
+    "targetEvidence": "server/src/utils/webhookVerification.ts:17 `verifyMetaWebhookChallenge()` — see prior edge's target evidence.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟messaging-automation-recall-followup␟services/postTreatmentMessaging.ts␟import",
+    "classification": "B",
+    "reasoning": "`triggerOnProcedureCompleted` lives under postTreatmentMessaging.ts's own '// ── Procedure completed trigger ──' section — a function named and shaped specifically to be invoked by procedure-completion code elsewhere in the codebase (an event-trigger entry point, not a reach into internal message-rendering logic). treatmentPlanProcedures.ts calls it exactly when a procedure is marked complete.",
+    "callerEvidence": "server/src/routes/treatmentPlanProcedures.ts:13 `import { triggerOnProcedureCompleted } from '../services/postTreatmentMessaging.js';`, used at :204 and :335 when `completingOnCreate`/`completingNow` is true",
+    "targetEvidence": "server/src/services/postTreatmentMessaging.ts:240-242 `// ── Procedure completed trigger ──` / `export async function triggerOnProcedureCompleted(args: {...})` — purpose-built external trigger entry point.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟messaging-email␟services/emailTemplates.ts␟import",
+    "classification": "C",
+    "reasoning": "emailTemplates.ts is a generic HTML-templating helper (brand layout + subject/html/text builders) with no user-management business logic; `buildStaffOnboardingEmail` is one of several template builders (alongside password-reset, email-verification) meant to be called by any route that needs to send a specific transactional email shape. This mirrors the sendMail() 'notification dispatch' pattern classified C elsewhere in this batch.",
+    "callerEvidence": "server/src/routes/users.ts:7 `import { buildStaffOnboardingEmail } from '../services/emailTemplates.js';`, used at :207 to build a staff-invite email, then dispatched via `sendMail`",
+    "targetEvidence": "server/src/services/emailTemplates.ts:1-40 generic `baseLayout()` HTML wrapper shared by all template builders (`buildPasswordResetEmail`, `buildStaffOnboardingEmail`, etc.) — no domain-specific data model.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/usersImport.ts␟messaging-email␟services/emailService.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic `sendMail` transactional-dispatch utility as the auth.ts/clinicRegistration.ts edges, used here to send bulk-import invitation emails to newly created staff.",
+    "callerEvidence": "server/src/routes/usersImport.ts:26 `import { sendMail } from '../services/emailService.js';`, used at :376 `sendMail({ to: newUser.email, subject, html, text })`",
+    "targetEvidence": "server/src/services/emailService.ts:34 generic `sendMail()` — see auth.ts edge's target evidence.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
+    "classification": "B",
+    "reasoning": "messaging-ai-orchestration exists specifically to serve the WhatsApp/Instagram channel processors with AI-driven NLU; routes/whatsapp.ts is the primary consumer of its extraction/date-normalization functions. Both symbols are used for real AI-assisted extraction, not incidental references. Outbound text is passed through `redactSensitiveText()` before being embedded in the Google AI Studio prompt (googleAiStudio.ts:163,264), so no unmitigated PII-to-third-party concern was observed here.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:10 `import { extractAssistantInputWithGoogleAi, normalizeDateWithGoogleAi } from '../services/googleAiStudio.js';`, used at :952, :3308, :3726",
+    "targetEvidence": "server/src/services/googleAiStudio.ts:2,163 `import { ..., redactSensitiveText } from './privacy/redaction.js';` ... `Latest customer message: ${JSON.stringify(redactSensitiveText(args.text))}` — the AI-orchestration domain's entire purpose is to be called by messaging channels, with PII redaction applied before the external API call.",
+    "followUpRequired": "none — PII redaction before the external Google AI Studio call is already in place; noted per task brief but not a new concern.",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/whatsappAgentSchema.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappAgentSchema.ts is the Zod-schema/type module defining the AI agent's decision shape, imported type-only by whatsapp.ts to type its own agent-decision handling. This is the schema module's designed purpose — to be the shared contract type between the AI-orchestration decision producer and its WhatsApp-channel consumer.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:12 `import type { WhatsAppAgentDecision } from '../services/whatsappAgentSchema.js';`",
+    "targetEvidence": "server/src/services/whatsappAgentSchema.ts:1-15 Zod-based schema/type definitions (`whatsappAgentIntentValues`, `whatsappAgentActionValues`, etc.) purpose-built as the agent-decision contract.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/whatsappConversationAgent.ts␟import",
+    "classification": "B",
+    "reasoning": "`resolveWhatsAppConversationAgentDecision` is the AI-orchestration domain's top-level decision-resolution entry point, called directly by routes/whatsapp.ts's inbound-message handling to get the AI-driven next action. This is the core intended integration point between the WhatsApp channel and the AI orchestration layer.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:11 `import { resolveWhatsAppConversationAgentDecision, type WhatsAppConversationAgentSource } from '../services/whatsappConversationAgent.js';`, used at :3461",
+    "targetEvidence": "server/src/services/whatsappConversationAgent.ts:18 exports `getGoogleAiStudioConfig` and the main resolution function that orchestrates the agent prompt/decision pipeline for WhatsApp callers.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-shared-channel-infrastructure␟utils/inboundRateLimiter.ts␟import",
+    "classification": "C",
+    "reasoning": "inboundRateLimiter.ts's own header explicitly scopes itself as a cross-channel utility ('Rate limiter for inbound AI message processing'), keyed generically by channel+connection+sender with no WhatsApp-specific logic — the domain-map's own 'messaging-shared-channel-infrastructure' label matches its actual generic design.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:59 `import { checkInboundRateLimit } from '../utils/inboundRateLimiter.js';`, used at :3905",
+    "targetEvidence": "server/src/utils/inboundRateLimiter.ts:1-4 'Rate limiter for inbound AI message processing. Keyed by: channel + connectionId + sender' — generic, channel-agnostic by design.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-shared-channel-infrastructure␟utils/messageSanitizer.ts␟import",
+    "classification": "C",
+    "reasoning": "messageSanitizer.ts's header explicitly states it is 'Used by all AI-connected inbound channels (Evolution WhatsApp, Meta WhatsApp, Instagram DM) before text reaches any AI layer' — self-documented shared/platform utility, exactly matching its domain-map label.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:58 `import { sanitizeInboundMessageText } from '../utils/messageSanitizer.js';`, used at :2674",
+    "targetEvidence": "server/src/utils/messageSanitizer.ts:1-5 'Used by all AI-connected inbound channels (Evolution WhatsApp, Meta WhatsApp, Instagram DM) before text reaches any AI layer.'",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
+    "classification": "B",
+    "reasoning": "Same AI-orchestration entry point as the whatsapp.ts edge, here consumed by the Instagram AI processor for date normalization — confirming the AI-orchestration layer is genuinely meant to serve multiple messaging channels (WhatsApp AND Instagram), not just WhatsApp.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:3 `import { normalizeDateWithGoogleAi } from '../googleAiStudio.js';`, used at :1194, :1597, :3726-equivalent call sites within this file",
+    "targetEvidence": "server/src/services/googleAiStudio.ts — `normalizeDateWithGoogleAi` is a generic date-normalization AI call, channel-agnostic by signature (text/date/timezone in, ISO date out).",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappAgentSchema.ts␟import",
+    "classification": "B",
+    "reasoning": "Type-only import of the shared agent-decision contract (`WhatsAppAgentDecision`), reused by the Instagram processor because Instagram's AI conversation flow shares the same agent-decision shape as WhatsApp's — the schema module is domain-owned by messaging-ai-orchestration precisely so it can be a shared contract across channels.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:13 `import type { WhatsAppAgentDecision } from '../whatsappAgentSchema.js';`, used at :1099",
+    "targetEvidence": "server/src/services/whatsappAgentSchema.ts — shared decision/type schema (see whatsapp.ts edge's target evidence).",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappConversationAgent.ts␟import",
+    "classification": "B",
+    "reasoning": "`resolveWhatsAppConversationAgentDecision` is called directly by the Instagram AI processor at its own agent-resolution point, mirroring the whatsapp.ts route's usage — this function is the AI-orchestration domain's shared resolution entry point across both channels.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:12 `import { resolveWhatsAppConversationAgentDecision } from '../whatsappConversationAgent.js';`, used at :2368",
+    "targetEvidence": "server/src/services/whatsappConversationAgent.ts:18 shared resolution/config entry point — see whatsapp.ts edge's target evidence.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappInterpreter.ts␟import",
+    "classification": "B",
+    "reasoning": "`interpretTimeRequest` is a pure, channel-agnostic Turkish time-expression parser exported by the AI-orchestration domain and consumed by the Instagram processor for the same time-preference interpretation WhatsApp uses — a deliberate shared NLU building block, not a reach into WhatsApp-private logic (whatsappInterpreter.ts itself is domain-owned by messaging-ai-orchestration, not messaging-whatsapp).",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:18 `import { interpretTimeRequest } from '../whatsappInterpreter.js';`, used at :465",
+    "targetEvidence": "server/src/services/whatsappInterpreter.ts:1-13 exports `TimePreference`/`InterpretedTimeRequest` and Turkish-language time-parsing logic with no channel-specific coupling.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappStepAwareNlu.ts␟import",
+    "classification": "B",
+    "reasoning": "`resolveStepAwareWhatsAppIntent` is called extensively (7+ call sites) by the Instagram processor for step-aware intent classification — despite its 'WhatsApp'-flavored name, the module is domain-owned by messaging-ai-orchestration and its own doc comment describes it as a generic 'step-aware semantic fallback' consulted by deterministic booking-flow handlers, which both channels share.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:46 `import { resolveStepAwareWhatsAppIntent } from '../whatsappStepAwareNlu.js';`, used at :1399,1529,1618,1629,1856,2015,2201,2309 etc.",
+    "targetEvidence": "server/src/services/whatsappStepAwareNlu.ts:1-15 'Step-aware semantic fallback for the WhatsApp booking flow... This module NEVER creates or confirms appointments and NEVER resolves patient identity' — generic NLU fallback, AI-orchestration owned.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-shared-channel-infrastructure␟utils/inboundRateLimiter.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic, channel-agnostic rate limiter as the whatsapp.ts edge, here used with `'instagram'` as the channel key — directly confirming the utility's designed cross-channel reuse.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:33 `import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';`, used at :2527 `checkInboundRateLimit('instagram', args.instagramConnectionId, args.externalSenderId)`",
+    "targetEvidence": "server/src/utils/inboundRateLimiter.ts:23 `buildKey(channel: string, connectionId: string, sender: string)` — channel is a caller-supplied parameter, confirming cross-channel design.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-shared-channel-infrastructure␟utils/messageSanitizer.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared sanitizer as the whatsapp.ts edge; its own header names Instagram DM explicitly as one of the 'all AI-connected inbound channels' it is meant to serve.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:32 `import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';`, used at :2520",
+    "targetEvidence": "server/src/utils/messageSanitizer.ts:4 'Used by all AI-connected inbound channels (Evolution WhatsApp, Meta WhatsApp, Instagram DM) before text reaches any AI layer.'",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-whatsapp␟utils/whatsappDate.ts␟import",
+    "classification": "F",
+    "reasoning": "whatsappDate.ts's actual content (turkishMonths/turkishWeekdays lookup tables, `formatTurkishDateLong`, `normalizeDateFromTurkishInput`, etc.) is generic Turkish-locale date parsing/formatting with zero WhatsApp API or business-logic coupling — the file was domain-mapped to messaging-whatsapp purely by its filename. Its own use by the Instagram AI processor (a different messaging channel entirely) for the identical date-formatting need is direct evidence the utility is actually channel-agnostic and was over-narrowly assigned by the domain-map generator, not a real WhatsApp-domain boundary crossing.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:29-31 `import { formatTurkishDateLong, WHATSAPP_ASSISTANT_TIME_ZONE } from '../../utils/whatsappDate.js';`, used at :258, :446",
+    "targetEvidence": "server/src/utils/whatsappDate.ts:1,277 `export const WHATSAPP_ASSISTANT_TIME_ZONE = 'Europe/Paris';` / `export const formatTurkishDateLong = (isoDate, timeZone = WHATSAPP_ASSISTANT_TIME_ZONE) => {...}` — no WhatsApp import, API call, or business rule anywhere in the 294-line file; grep for 'whatsapp' inside the file body matches only the constant's own name.",
+    "followUpRequired": "Domain-map correction candidate: consider re-labeling utils/whatsappDate.ts as shared/platform (or messaging-shared-channel-infrastructure) given it is now confirmed multi-channel; the 'WHATSAPP_ASSISTANT_TIME_ZONE' constant name is misleading relative to its actual scope.",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/taskAssignmentNotifier.ts␟messaging-whatsapp␟services/whatsapp/whatsappService.ts␟import",
+    "classification": "B",
+    "reasoning": "Same unified send API as the reminders.ts edge — whatsappService.ts's header names 'jobs' generally as an intended caller category and states 'All application code... calls this service'; taskAssignmentNotifier.ts (core-notifications) uses it to notify a staff member of a task assignment via the standard send path.",
+    "callerEvidence": "server/src/services/taskAssignmentNotifier.ts:3 `import { sendWhatsAppMessage } from './whatsapp/whatsappService.js';`, used at :33 `sendWhatsAppMessage(clinicId, { phone: assignee.phone, text: body })`",
+    "targetEvidence": "server/src/services/whatsapp/whatsappService.ts:3-4 'All application code (routes, jobs, reminders) calls this service.'",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
+    "classification": "B",
+    "reasoning": "metaWhatsAppAiProcessor.ts is messaging-whatsapp's own AI-driven inbound processor; calling into messaging-ai-orchestration's `normalizeDateWithGoogleAi` for date extraction is precisely the intended division of labor between the channel-specific processor and the shared AI-orchestration layer.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:26 `import { normalizeDateWithGoogleAi } from '../googleAiStudio.js';`, used at :1203, :1837",
+    "targetEvidence": "server/src/services/googleAiStudio.ts — channel-agnostic AI date-normalization function (see whatsapp.ts edge's target evidence).",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/whatsappAgentSchema.ts␟import",
+    "classification": "B",
+    "reasoning": "Type-only import of the shared agent-decision contract, used to type this processor's own decision-logging helper — same pattern as every other consumer of whatsappAgentSchema.ts in this batch.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:39 `import type { WhatsAppAgentDecision } from '../whatsappAgentSchema.js';`, used at :1100",
+    "targetEvidence": "server/src/services/whatsappAgentSchema.ts — shared decision/type schema.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/whatsappConversationAgent.ts␟import",
+    "classification": "B",
+    "reasoning": "`resolveWhatsAppConversationAgentDecision` is called at this processor's own final agent-resolution step (line 2456), the same shared entry point used by whatsapp.ts and the Instagram processor.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:36 `import { resolveWhatsAppConversationAgentDecision } from '../whatsappConversationAgent.js';`, used at :2456",
+    "targetEvidence": "server/src/services/whatsappConversationAgent.ts:18 shared resolution entry point.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/whatsappStepAwareNlu.ts␟import",
+    "classification": "B",
+    "reasoning": "`resolveStepAwareWhatsAppIntent` is called at 9+ sites throughout this processor for step-aware NLU fallback — this is the primary, designed consumer of the function (it is literally the WhatsApp processor, matching the module's own 'WhatsApp booking flow' framing), the clearest-cut B in this batch.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:37 `import { resolveStepAwareWhatsAppIntent } from '../whatsappStepAwareNlu.js';`, used at :1618,1770,1878,2144,2265,2357 etc.",
+    "targetEvidence": "server/src/services/whatsappStepAwareNlu.ts:1-6 'Step-aware semantic fallback for the WhatsApp booking flow. Deterministic step handlers (whatsappBookingFlow.ts) run FIRST...' — explicitly framed around the WhatsApp flow this processor implements.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-shared-channel-infrastructure␟utils/inboundRateLimiter.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic cross-channel rate limiter as the other inboundRateLimiter.ts edges, used here with the `'meta_whatsapp'` channel key.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:67 `import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';`, used at :2608 `checkInboundRateLimit('meta_whatsapp', args.connectionId, args.phone)`",
+    "targetEvidence": "server/src/utils/inboundRateLimiter.ts:23 channel-parameterized rate-limit key builder.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-shared-channel-infrastructure␟utils/messageSanitizer.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared sanitizer as the other messageSanitizer.ts edges in this batch, used here for Meta WhatsApp's inbound text before the AI layer.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:66 `import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';`, used at :2601",
+    "targetEvidence": "server/src/utils/messageSanitizer.ts:4 explicit multi-channel scope statement.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappAvailability.ts␟messaging-ai-orchestration␟services/whatsappInterpreter.ts␟import",
+    "classification": "C",
+    "reasoning": "This is a type-only import of `TimePreference` (`import type { TimePreference } from './whatsappInterpreter.js';`) — a small, shared vocabulary type ('afternoon'|'morning'|'noon'|'evening') used to filter appointment slots by the AI-parsed time-of-day preference. It carries zero runtime coupling (erased at compile time) and matches the rubric's own 'shared helpers/constants/types' example under platform-shared edges rather than a reach into AI-orchestration's private logic.",
+    "callerEvidence": "server/src/services/whatsappAvailability.ts:2 `import type { TimePreference } from './whatsappInterpreter.js';`, used at :40 `filterSlotsByTimePreference(slots: SavedAvailableSlot[], preference: TimePreference)`",
+    "targetEvidence": "server/src/services/whatsappInterpreter.ts:1 `export type TimePreference = 'afternoon' | 'morning' | 'noon' | 'evening';` — a plain exported union type, not business logic.",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappStepAwareNlu.ts␟messaging-whatsapp␟services/whatsapp/humanHandoffPhrases.ts␟import",
+    "classification": "B",
+    "reasoning": "humanHandoffPhrases.ts's own header comment documents this exact edge by name: it was extracted specifically to de-duplicate two previously drifted keyword lists in metaWhatsAppAiProcessor.ts and whatsappStepAwareNlu.ts, stating 'Both call sites now import this single pure predicate instead.' This is a deliberate, documented shared-predicate refactor, not an incidental cross-domain reach.",
+    "callerEvidence": "server/src/services/whatsappStepAwareNlu.ts:20 `import { isHumanHandoffPhrase } from './whatsapp/humanHandoffPhrases.js';`",
+    "targetEvidence": "server/src/services/whatsapp/humanHandoffPhrases.ts:1-13 'single source of truth for \"the user wants a human\" phrase detection... Both call sites now import this single pure predicate instead.'",
+    "followUpRequired": "none",
+    "batch": "batch4_messaging_ai_imaging_finance"
+  },
+  {
+    "edgeKey": "server/src/jobs/metaTemplateSyncJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "server/src/db.ts (line 23) is a single Prisma client singleton with zero business logic — it only wraps PrismaClient construction with connection-pool env-var tuning. Any domain job/route/service importing the default export to run queries is the intended shared-platform DB-access pattern.",
+    "callerEvidence": "jobs/metaTemplateSyncJob.ts:15 `import prisma from '../db.js';` — used as the standard Prisma client.",
+    "targetEvidence": "db.ts:14-23 `const prisma = new PrismaClient({ adapter: new PrismaPg(...) }); export default prisma;` — pure connection singleton, no domain logic.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/appointments.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "5 of the 6 symbols (getParam, timeToMinutes, minutesToTime, getZonedDateParts, localDateTimeToClinicDate) are generic request/date helpers used across many unrelated domains. checkPractitionerAvailability is more domain-flavored (queries DoctorAvailability/DoctorOffDay/ClinicWorkingHours) but since the caller IS clinical-appointments-availability itself, there is no actual cross-domain boundary crossing in practice.",
+    "callerEvidence": "routes/appointments.ts:6 imports checkPractitionerAvailability; used at appointments.ts:345 and :494 `await checkPractitionerAvailability(clinicId, practitionerId, startTime, endTime)`.",
+    "targetEvidence": "utils/helpers.ts:214-268 checkPractitionerAvailability queries prisma.doctorAvailability/doctorOffDay/clinicWorkingHours directly — genuinely availability-domain business logic sitting inside a 'shared' helpers file.",
+    "followUpRequired": "checkPractitionerAvailability (utils/helpers.ts:214-268) is availability-domain business logic, not a generic helper — consider relocating it to services/appointments/appointmentAvailabilityService.ts so the helpers.ts file stays purely generic. Low priority since the only caller shares its domain.",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/auth.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "All 9 imported symbols are generic rate-limiter and password-validation utilities with no identity-domain-specific data model access.",
+    "callerEvidence": "routes/auth.ts:8-13 imports checkLoginAttempt, recordLoginAttempt, resetLoginAttempts, validatePassword, checkForgotPasswordAttempt, recordForgotPasswordAttempt, checkResendVerificationAttempt, recordResendVerificationAttempt, createRateLimiter.",
+    "targetEvidence": "utils/helpers.ts:161-210 — createRateLimiter is a generic Redis/memory-backed counter factory; validatePassword (141-154) is pure string validation. No Prisma/domain model access.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "schemas/index.ts is a single monolithic zod-schema barrel file shared by every domain in the codebase (patients, appointments, imaging, etc. all co-located in one file, e.g. patientSchema at line 24, imagingDeviceSchema at line 567). Each route only pulls its own domain's schemas from the shared file — the intended platform pattern for this codebase's current structure.",
+    "callerEvidence": "routes/imaging.ts imports imagingBridgePairingCreateSchema, imagingBridgeSchema, imagingDeviceSchema, imagingDeviceUpdateSchema, imagingRequestSchema, imagingRequestUpdateSchema, imagingStudyLinkSchema, imagingStudyUploadSchema — all imaging-only schemas.",
+    "targetEvidence": "schemas/index.ts:567-680 defines imagingDeviceSchema, imagingRequestSchema, imagingStudyUploadSchema, imagingBridgeSchema etc. alongside unrelated domains' schemas in the same file (patientSchema at line 24 etc.) — a single central validation-schema module.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "services/fileStorage.ts is an explicit storage abstraction (local disk vs S3) with no domain-owned data model access — exactly the kind of cross-cutting utility the rubric names as an expected shared edge.",
+    "callerEvidence": "routes/imaging.ts:29 `import { buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile } from '../services/fileStorage.js';` used at lines 611-770 to save/serve/delete uploaded imaging files.",
+    "targetEvidence": "services/fileStorage.ts:1-99 header comment: 'fileStorage.ts — Hasta/lab dosyaları için depolama soyutlaması' (storage abstraction for patient/lab files); functions operate purely on Buffer/stream + storage key, no imaging-specific logic.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared zod-schema barrel file as edge #3; imagingBridgePublic.ts only imports its own imaging-bridge schemas.",
+    "callerEvidence": "routes/imagingBridgePublic.ts:43-45 imports imagingBridgeHeartbeatSchema, imagingBridgeStudyUploadSchema, imagingBridgePublicPairSchema; used at lines 150, 243, 407 via `.safeParse(...)`.",
+    "targetEvidence": "schemas/index.ts:624-680 defines imagingBridgeSchema, imagingBridgeHeartbeatSchema, imagingBridgePairingCreateSchema, imagingBridgePublicPairSchema, imagingBridgeStudyUploadSchema.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/inventoryUnits.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam, a trivial express request-param extractor with no domain coupling.",
+    "callerEvidence": "routes/inventoryUnits.ts:83 `const id = getParam(req, 'id');`",
+    "targetEvidence": "utils/helpers.ts:7-10 `export const getParam = (req, key) => { const value = req.params[key]; return Array.isArray(value) ? value[0] : value; };`",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam, same trivial param extractor as edge #6.",
+    "callerEvidence": "routes/labOrders.ts imports and uses getParam(req, ...) for route param extraction (same pattern verified across multiple routes in this batch).",
+    "targetEvidence": "utils/helpers.ts:7-10 getParam — generic express helper, no domain logic.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "Same storage-abstraction functions as edge #4 (buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile) used for lab-order file attachments — generic, no domain-owned data access.",
+    "callerEvidence": "routes/labOrders.ts imports buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile from services/fileStorage.js to persist/serve lab order attachments.",
+    "targetEvidence": "services/fileStorage.ts:71-118, 467 — generic key/save/open/delete storage primitives, no lab-domain knowledge.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/noShows.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam.",
+    "callerEvidence": "routes/noShows.ts:84,159 `const id = getParam(req, 'id');`",
+    "targetEvidence": "utils/helpers.ts:7-10 getParam — generic express helper.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/operationalMonitoring.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam.",
+    "callerEvidence": "routes/operationalMonitoring.ts imports getParam for express route-param extraction (verified pattern consistent with all other single-symbol getParam edges in this batch).",
+    "targetEvidence": "utils/helpers.ts:7-10 getParam — generic express helper.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationInstagram.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam.",
+    "callerEvidence": "routes/organizationInstagram.ts imports getParam for express route-param extraction (verified pattern consistent with all other single-symbol getParam edges in this batch).",
+    "targetEvidence": "utils/helpers.ts:7-10 getParam — generic express helper.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/postTreatment.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "routes/postTreatment.ts:15 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/postTreatment.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam.",
+    "callerEvidence": "routes/postTreatment.ts imports getParam for express route-param extraction (verified pattern consistent with all other single-symbol getParam edges in this batch).",
+    "targetEvidence": "utils/helpers.ts:7-10 getParam — generic express helper.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "routes/practitionerPayouts.ts:2 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/publicBooking.ts␟core-privacy-consent-retention-dsr␟services/publicBookingNoticeEvidence.ts␟import",
+    "classification": "B",
+    "reasoning": "publicBookingNoticeEvidence.ts is an explicitly documented cross-domain contract: its header states it exists precisely to prove KVKK notice delivery for public-booking submissions, and all 5 imported symbols are its full documented public API (resolvePublishedLegalProfile, issueOrReuseNoticeEvidence, validateNoticeEvidenceToken, linkNoticeEvidenceToRequest, normalizeNoticeLanguage) — no private internals are reached.",
+    "callerEvidence": "routes/publicBooking.ts imports issueOrReuseNoticeEvidence, linkNoticeEvidenceToRequest, normalizeNoticeLanguage, resolvePublishedLegalProfile, validateNoticeEvidenceToken.",
+    "targetEvidence": "services/publicBookingNoticeEvidence.ts:1-29 header explains this module exists specifically to serve the public-booking flow's KVKK evidence requirement; exports at lines 59, 105, 155, 237, 265 are exactly the symbols imported.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/schedules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "routes/schedules.ts:13 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "classification": "C",
+    "reasoning": "safeErrorFields is a generic, structured, non-leaking error-logging helper explicitly documented for use by any route/service to avoid leaking paths/keys in logs — a textbook shared-observability utility.",
+    "callerEvidence": "routes/treatmentCases.ts:10,212 `import { safeErrorFields } from '../utils/safeError.js';` ... `console.error('Proposal PDF generation failed', { treatmentCaseId: id, ...safeErrorFields(err) });`",
+    "targetEvidence": "utils/safeError.ts:1-15 header: 'structured, non-leaking error fields for log lines... Routes/services that touch storage or exports must log via this helper instead of the raw error.'",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPackages.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "routes/treatmentPackages.ts:3 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "All 6 symbols (formatClinicDateTime, getParam, getZonedDateParts, localDateTimeToClinicDate, timeToMinutes, validatePassword) are generic timezone-formatting/param/password utilities used identically across many unrelated route files.",
+    "callerEvidence": "routes/users.ts:10-15 imports the 6 symbols; used e.g. at line 70-71 `getZonedDateParts(appointment.startTime, timeZone)` and line 85 `localDateTimeToClinicDate(date, '00:00', timeZone)`.",
+    "targetEvidence": "utils/helpers.ts:58-137 getZonedDateParts/localDateTimeToClinicDate/formatClinicDateTime are pure Intl.DateTimeFormat wrappers with no domain data access.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/usersImport.ts␟clinical-patients␟utils/excelImport.ts␟import",
+    "classification": "F",
+    "reasoning": "utils/excelImport.ts is domain-mapped to clinical-patients, but the file is actually a generic Excel template/parse utility used by BOTH patient import and user import (buildPatientTemplate and buildUserTemplate live side by side, lines 42 and 141). usersImport.ts (core-org-clinic-membership) only imports the user-specific and fully generic symbols (buildUserTemplate, parseExcelFile, MAX_IMPORT_ROWS, MAX_FILE_SIZE_BYTES, ImportRowResult) — none of the imported symbols touch patient data at all. The cross-domain flag is an artifact of the domain-map assigning this shared two-feature utility file to only one of its two consuming domains.",
+    "callerEvidence": "routes/usersImport.ts imports ImportRowResult, MAX_FILE_SIZE_BYTES, MAX_IMPORT_ROWS, buildUserTemplate, parseExcelFile — all either generic constants/types or the user-template builder, none patient-specific.",
+    "targetEvidence": "utils/excelImport.ts:42 buildPatientTemplate(...) and :141 buildUserTemplate(...) are separate, independent exports in the same generic ExcelJS wrapper file; parseExcelFile (:241) and cellToString (:20) are fully generic.",
+    "followUpRequired": "Domain-map should probably reclassify utils/excelImport.ts as core-shared-platform-infrastructure (or split the file), since it genuinely serves two unrelated domains (clinical-patients and core-org-clinic-membership) with no shared code between the two template builders.",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-privacy-consent-retention-dsr␟services/channelConsentGate.ts␟import",
+    "classification": "B",
+    "reasoning": "channelConsentGate.ts is explicitly documented as the required consent gate that all channel (WhatsApp/Instagram) message-handling code must call before creating patients/appointment requests. whatsapp.ts imports exactly the module's full documented public API (checkChannelConsent, parseConsentReply, logChannelConsent, loadConsentMetadata, plus 4 exported prompt-text constants) — no private internals.",
+    "callerEvidence": "routes/whatsapp.ts imports CONSENT_ACCEPTED_TEXT, CONSENT_DECLINED_TEXT, CONSENT_REPROMPT_TEXT, MISSING_LEGAL_PROFILE_BLOCK_TEXT, checkChannelConsent, loadConsentMetadata, logChannelConsent, parseConsentReply.",
+    "targetEvidence": "services/channelConsentGate.ts:1-14 header: 'Consent gate for WhatsApp and Instagram channels. Before creating any patient, appointment request, or contact request from a channel message, callers must: 1. Call checkChannelConsent() ... 3. call parseConsentReply() and then logChannelConsent().'",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "All 5 symbols (formatClinicDateTime, getZonedDateParts, localDateTimeToClinicDate, minutesToTime, timeToMinutes) are the same generic timezone/date helpers used across the codebase, no whatsapp-specific coupling.",
+    "callerEvidence": "routes/whatsapp.ts imports formatClinicDateTime, getZonedDateParts, localDateTimeToClinicDate, minutesToTime, timeToMinutes for clinic-local time formatting.",
+    "targetEvidence": "utils/helpers.ts:12-137 — pure Intl.DateTimeFormat / arithmetic date helpers, no Prisma or domain data access.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/whatsappPublicApi.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappPublicApi.ts's name and content (whatsappAppointmentRequestSchema, whatsappAvailabilityQuerySchema, whatsappAppointmentLookupQuerySchema, getProvidedWhatsappSecret, validateWhatsappApiSecret) is explicitly the public request-validation/auth surface for the WhatsApp public API endpoints hosted in routes/whatsapp.ts. All 5 imported symbols are exported top-level functions/schemas intended for exactly this consumption.",
+    "callerEvidence": "routes/whatsapp.ts imports getProvidedWhatsappSecret, validateWhatsappApiSecret, whatsappAppointmentLookupQuerySchema, whatsappAppointmentRequestSchema, whatsappAvailabilityQuerySchema.",
+    "targetEvidence": "services/whatsappPublicApi.ts:10-73 defines exactly these schemas/functions as its full export surface; no internal-only symbols are reached.",
+    "followUpRequired": "The file contains zero AI-orchestration logic (pure zod schemas + secret-header comparison) — its domain-map placement under messaging-ai-orchestration rather than messaging-whatsapp is questionable, though it does not change this edge's classification since it is consumed as an intended public contract either way.",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/clinicOperatingPreferences.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/clinicOperatingPreferences.ts:2 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappBookingFlow.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappBookingFlow.ts's step-handler functions are built with fully generic, dependency-injected signatures (AwaitingTimeDependencies takes prisma/clinicId/phone/text/callbacks, not a WhatsApp-specific message object), confirming they were designed as a reusable, channel-agnostic booking state machine. instagramAiConversationProcessor.ts genuinely reuses this engine end-to-end (6 call sites: handleAwaitingServiceStep, handleAwaitingDateStep x2, handleAwaitingTimeStep, isDeterministicConfirmationReply, handleAwaitingConfirmationStep), extending BookingStateJson at line 67. This is deliberate cross-channel code reuse of the domain's public exports, not a private-internals reach.",
+    "callerEvidence": "services/instagram/instagramAiConversationProcessor.ts:5-11 imports handleAwaitingConfirmationStep, handleAwaitingDateStep, handleAwaitingServiceStep, handleAwaitingTimeStep, isDeterministicConfirmationReply, type BookingStateJson; used at lines 1458, 1496, 1581, 1695, 1796, 1922; extends the type at line 67 `type InstagramAssistantStateJson = BookingStateJson & {...}`.",
+    "targetEvidence": "services/whatsappBookingFlow.ts:75-100 AwaitingTimeDependencies is parameterized generically (prisma, clinicId, phone, text, callbacks) rather than WhatsApp-message-shaped, evidencing the module was built for cross-channel reuse.",
+    "followUpRequired": "The file is still named whatsappBookingFlow.ts despite being the shared booking engine for both WhatsApp and Instagram AI conversations. Recommend renaming/relocating (e.g. messagingBookingFlow.ts) to reflect actual scope — naming/architecture debt, not a boundary violation.",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/inventoryAlerts.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/inventoryAlerts.ts:1 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/messagingInboundIdempotency.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/messagingInboundIdempotency.ts:2 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/clinicBulkExportPackage.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "All 8 imported symbols (buildExportStorageKey, buildExportTempFilePath, deleteFile, ensureExportTempDir, fileExists, getExportTempDir, parseExportTempFileName, saveFileFromPath) are generic export-staging storage primitives with no privacy/consent-domain data access — the storage abstraction explicitly supports an 'exports/' key namespace for exactly this use case.",
+    "callerEvidence": "services/privacy/clinicBulkExportPackage.ts imports the 8 export-storage helper functions to stage/persist ZIP export packages.",
+    "targetEvidence": "services/fileStorage.ts:209-211 buildExportStorageKey, :226-228 getExportTempDir, :303+ ensureExportTempDir — generic filesystem/S3 export-staging primitives with extensive security hardening (symlink/ownership checks) but no privacy-domain business logic.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic export-storage primitives as edge #28 (buildExportStorageKey, deleteFile, openFileStream, saveFileFromPath, statFile), no domain-owned data model access.",
+    "callerEvidence": "services/privacy/patientPrivacyExportPackage.ts imports buildExportStorageKey, deleteFile, openFileStream, saveFileFromPath, statFile.",
+    "targetEvidence": "services/fileStorage.ts:105-118 openFileStream, :182-200 statFile, :209-211 buildExportStorageKey — generic storage primitives.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/security/securityIncidentService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/security/securityIncidentService.ts:33 `import prisma from '../../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/sms/smsService.ts:18 `import prisma from '../../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/whatsapp/whatsappOutboundMessaging.ts:26 `import prisma from '../../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappBookingFlow.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappAvailability.ts contains genuine clinical-appointments-availability business logic (buildAvailableSlots directly queries Clinic/AppointmentType/User/DoctorOffDay/DoctorAvailability/ClinicWorkingHours and calls checkAppointmentOverlap/checkAppointmentRequestConflict). whatsappBookingFlow.ts (the AI booking orchestrator) consumes only its exported functions (loadAvailabilityForDate is the documented entry point; the rest are formatting/filtering helpers built on its own return types) — a legitimate, expected dependency of the conversational booking layer on the real availability domain, not a reach into private internals.",
+    "callerEvidence": "services/whatsappBookingFlow.ts:2-11 imports createAvailabilitySnapshot, findNearbySlotsForTime, filterSlotsByTimePreference, filterSlotsByTimeThreshold, formatSlotListMessage, loadAvailabilityForDate, slotIdentity, type SavedAvailableSlot.",
+    "targetEvidence": "services/whatsappAvailability.ts:156-269 buildAvailableSlots/loadAvailabilityForDate query prisma.clinic/appointmentType/user/doctorOffDay/doctorAvailability/clinicWorkingHours and call checkAppointmentOverlap (services/appointments/appointmentAvailabilityService.ts) — genuine availability-domain logic exposed via a public loadAvailabilityForDate entry point.",
+    "followUpRequired": "none",
+    "batch": "batch5_platform_infra_cluster5plus"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappBookingFlow.ts␟messaging-whatsapp␟utils/whatsappDate.ts␟import",
+    "classification": "D",
+    "reasoning": "utils/whatsappDate.ts is domain-mapped to messaging-whatsapp, but its only consumer in this batch is whatsappBookingFlow.ts (messaging-ai-orchestration), and the module's own WHATSAPP_ASSISTANT_TIME_ZONE constant plus its purpose (parsing Turkish natural-language date expressions for the conversational booking assistant) suggest it was purpose-built as a support utility for the AI booking flow, not for the raw WhatsApp channel/transport layer (which owns EvolutionWhatsAppProvider, metaInboundDelivery, etc.). Whether this file belongs under messaging-whatsapp or messaging-ai-orchestration is a genuine, reasonable ownership question — not a real architectural violation, since the code contains no channel-transport logic at all (pure text/date parsing).",
+    "callerEvidence": "services/whatsappBookingFlow.ts:13-19 imports formatTurkishDateLong, formatTurkishDateWithWeekday, getPastMonthDayCorrectedDate, normalizeDateFromTurkishInput, WHATSAPP_ASSISTANT_TIME_ZONE.",
+    "targetEvidence": "utils/whatsappDate.ts:1 `export const WHATSAPP_ASSISTANT_TIME_ZONE = 'Europe/Paris';` and lines 98-231 normalizeDateFromTurkishInput — pure Turkish-language date-string parsing, no WhatsApp API/transport code, no Prisma access.",
+    "followUpRequired": "Recommend an ownership review: utils/whatsappDate.ts appears purpose-built for the AI booking assistant (messaging-ai-orchestration) rather than the WhatsApp channel/transport layer (messaging-whatsapp) that owns files like services/whatsapp/EvolutionWhatsAppProvider.ts. Reclassifying it (or renaming/relocating to reflect the AI-assistant scope) would resolve this edge.",
+    "batch": "batch5_platform_infra_cluster5plus"
+  }
+]

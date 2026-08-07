@@ -1,0 +1,378 @@
+[
+  {
+    "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-config-secrets␟services/platformSettings.ts␟import",
+    "classification": "C",
+    "reasoning": "getPlatformSetting is a generic platform-wide config accessor (arbitrary string key -> string value) with no privacy-domain-specific logic; the DSR job uses it only to read a feature-flag-like runtime toggle, exactly the shared-config-store pattern any domain is expected to use.",
+    "callerEvidence": "server/src/jobs/dataRetentionCleanupJob.ts:28 imports getPlatformSetting; used at line 454: `const val = await getPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY);` to read a generic runtime config flag.",
+    "targetEvidence": "server/src/services/platformSettings.ts:11-17 - getPlatformSetting is a generic key/value getter over the PlatformSetting table (`client.platformSetting.findUnique({where:{key}})`), not privacy/DSR-domain business logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/middleware/platformAuth.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "classification": "C",
+    "reasoning": "getSecret is the codebase's standard generic secret-retrieval helper used to fetch any named env secret with production-strength validation; platformAuth.ts using it to fetch its own JWT secret is the intended platform-wide usage pattern, not a reach into crypto-domain internals.",
+    "callerEvidence": "server/src/middleware/platformAuth.ts:3 imports getSecret; used at line 7: `const PLATFORM_JWT_SECRET = getSecret('PLATFORM_JWT_SECRET', 'platform-admin-secret-change-this');` - module-level secret resolution for platform-admin JWT signing.",
+    "targetEvidence": "server/src/utils/secrets.ts:1-11 - getSecret(envName, devFallback) is a generic env-var-with-production-hardening helper (throws in prod if weak/default), no crypto-domain business logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/appointmentRequests.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "logActivity takes a generic entityType/action payload and writes to a shared ActivityLog table; every business route in this codebase is expected to call it after mutations, matching rubric C's 'audit logging' example verbatim.",
+    "callerEvidence": "server/src/routes/appointmentRequests.ts:4 imports logActivity; called at lines 200, 442, 521, e.g. `await logActivity({...})` after appointment-request mutations.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 - logActivity(data) is a generic fire-and-forget activity-log writer (`prisma.activityLog.create`) parameterized by clinicId/entityType/action, with no appointments-domain logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/appointments.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "classification": "C",
+    "reasoning": "relationGuards.ts functions are explicitly generic cross-entity tenant-membership checks (parameterized by any entity id + clinicId), the intended shared mechanism for any route to prevent cross-tenant relation injection. All 4 symbols verified in use at the cited lines.",
+    "callerEvidence": "server/src/routes/appointments.ts:24-27 imports findAppointmentTypeInClinic, findPatientInClinic, findTreatmentCaseInClinic, findUserAssignedToClinic; used together at lines 330-340 and 477-480 to validate all foreign keys belong to the target clinic before create/update.",
+    "targetEvidence": "server/src/utils/relationGuards.ts - each function (findPatientInClinic L4, findAppointmentTypeInClinic L19, findTreatmentCaseInClinic L26, findUserAssignedToClinic L50) is a generic 'does entity X belong to clinic Y' tenant-scoped existence check reused across many domains.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/auth.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared audit-logging utility as edge 2 - auth.ts records login/account activity via the generic logActivity() call, the standard cross-domain pattern.",
+    "callerEvidence": "server/src/routes/auth.ts:7 imports logActivity; called at lines 145, 259, 477 for login/auth-related activity records.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/externalCalendarWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "classification": "C",
+    "reasoning": "Pure environment/production-hardening guard with zero calendar-domain logic; any webhook route needing 'secret required in prod' semantics is expected to import this from the shared secrets utility.",
+    "callerEvidence": "server/src/routes/externalCalendarWebhook.ts:32 imports requireWebhookSecretInProduction; used at line 84: `if (!hasSecret && !requireWebhookSecretInProduction(null))`.",
+    "targetEvidence": "server/src/utils/secrets.ts:13-15 - requireWebhookSecretInProduction(secret) is a generic boolean helper: true unless NODE_ENV==='production' and secret is empty.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "clinicScope.ts is explicitly documented as the central, codebase-wide tenant-isolation filter; imaging.ts using it on essentially every handler is exactly the intended universal pattern, not a boundary violation.",
+    "callerEvidence": "server/src/routes/imaging.ts:33 imports validateAndGetClinicIdScope, resolveEffectiveClinicId; used at ~15 call sites (e.g. lines 187, 264, 289, 415, 439...) to scope every query/mutation to the caller's accessible clinics.",
+    "targetEvidence": "server/src/utils/clinicScope.ts - file header states 'Merkezi Guvenlik Filtresi' (central security filter) used by all routes for tenant scoping; validateAndGetClinicIdScope (L210) and resolveEffectiveClinicId (L147) are generic, model-agnostic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared relation-guard utility as edge 3; imaging.ts validates that a referenced patient/appointment/treatment-case actually belongs to the clinic before creating an imaging request - the intended reuse pattern.",
+    "callerEvidence": "server/src/routes/imaging.ts:34 imports findPatientInClinic, findAppointmentInClinic, findTreatmentCaseInClinic; used at lines 229, 236, 243 to validate imaging-request foreign keys against the clinic.",
+    "targetEvidence": "server/src/utils/relationGuards.ts (see edge 3) - generic tenant-membership existence checks.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "classification": "C",
+    "reasoning": "Generic audit-log writer with no Instagram-domain logic; matches rubric C's 'audit logging' example exactly.",
+    "callerEvidence": "server/src/routes/instagramWebhook.ts:20 imports writeAuditLog; used at line 67: `writeAuditLog({...})` on a webhook-security event.",
+    "targetEvidence": "server/src/utils/auditLog.ts:37-58 - writeAuditLog is a generic fire-and-forget audit writer (`prisma.auditLog.create`) parameterized by organizationId/action/entityType, documented for cross-domain use ('import { writeAuditLog } from ../utils/auditLog.js').",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic production-hardening guard as edge 5, reused for Instagram's webhook secret check.",
+    "callerEvidence": "server/src/routes/instagramWebhook.ts:21 imports requireWebhookSecretInProduction; used at line 306.",
+    "targetEvidence": "server/src/utils/secrets.ts:13-15 (see edge 5).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "encryption.ts is the codebase's single shared crypto utility for any at-rest secret; WhatsApp webhook code decrypting its own stored secret via the shared helper is the intended, universal usage.",
+    "callerEvidence": "server/src/routes/metaWhatsAppWebhook.ts:30 imports decryptSecretTagged; used at lines 231 and 374 to decrypt a stored webhook secret before comparing signatures.",
+    "targetEvidence": "server/src/utils/encryption.ts:72-76 - decryptSecretTagged is a generic AES-256-GCM decrypt-with-version-prefix helper, documented at file header as 'AES-256-GCM symmetric encryption for secrets at rest'.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic guard as edge 5/9, reused for the Meta WhatsApp webhook secret check.",
+    "callerEvidence": "server/src/routes/metaWhatsAppWebhook.ts:29 imports requireWebhookSecretInProduction; used at lines 232, 375.",
+    "targetEvidence": "server/src/utils/secrets.ts:13-15 (see edge 5).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/noShows.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Same central tenant-scope utility as edge 6; used exactly as intended to enumerate accessible clinicIds before filtering no-show records.",
+    "callerEvidence": "server/src/routes/noShows.ts:17 imports getAccessibleClinicIds; used at lines 65 and 240 to scope no-show queries to clinics the user can access.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:128-139 - getAccessibleClinicIds(user) is a generic 'list clinics this user may see' helper, model-agnostic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationInstagram.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Both symbols verified in use encrypting Instagram credentials before DB write - the exact intended cross-domain usage of the shared encryption utility (encrypt any secret at rest).",
+    "callerEvidence": "server/src/routes/organizationInstagram.ts:39 imports encryptSecret, encryptSecretTagged; used repeatedly (e.g. lines 229,232,246,379,384,398) to encrypt Instagram access tokens / webhook secrets before persisting.",
+    "targetEvidence": "server/src/utils/encryption.ts:34-41, 64-66 - generic AES-256-GCM encrypt helpers documented for 'WhatsApp API keys and access tokens' but generically applicable to any secret string.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared activity-logging utility, used after WhatsApp connection mutations - standard cross-domain audit pattern.",
+    "callerEvidence": "server/src/routes/organizationWhatsApp.ts:34 imports logActivity; used at e.g. line 255.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "This is the canonical documented use case for encryption.ts per its own file header; textbook shared-crypto-utility usage.",
+    "callerEvidence": "server/src/routes/organizationWhatsApp.ts:36 imports encryptSecret, encryptSecretTagged; used at ~10 sites (lines 221,224,227,230,369,372,375,378,871,1057,1083) encrypting WhatsApp/Evolution API keys, access tokens, webhook secrets.",
+    "targetEvidence": "server/src/utils/encryption.ts (see edge 13) - this is literally the use case the file's header docstring calls out ('Used to encrypt WhatsApp API keys and access tokens before persisting to DB').",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/patients.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Same central tenant-scope utility as edges 6/12; patients.ts is exactly the kind of clinical route the file's own docstring says must always use it ('Kural 2: Frontend'den gelen selectedClinicId asla guvenilmez').",
+    "callerEvidence": "server/src/routes/patients.ts:8 imports validateAndGetScope; used at lines 23 and 62 to scope patient list/detail queries.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:87-99 - validateAndGetScope(user, selectedClinicId, res) builds the org+clinic Prisma where-filter and sends 403 on denial; the central security filter (see edge 6).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/patientsImport.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic accessible-clinics helper, used to scope bulk patient-import operations to clinics the importing user may access.",
+    "callerEvidence": "server/src/routes/patientsImport.ts:16 imports getAccessibleClinicIds; used at lines 67, 237, 291.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:128-139 (see edge 12).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/paymentPlans.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging call after payment-plan mutations.",
+    "callerEvidence": "server/src/routes/paymentPlans.ts:4 imports logActivity; used at lines 179, 251, 284.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging call after payment mutations.",
+    "callerEvidence": "server/src/routes/payments.ts:4 imports logActivity; used at lines 104, 180, 226.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-config-secrets␟services/platformSettings.ts␟import",
+    "classification": "C",
+    "reasoning": "platformAdmin.ts is the platform-administration UI's backend, and platformSettings.ts is a generic settings store - this is the primary intended caller of a shared config service, textbook C.",
+    "callerEvidence": "server/src/routes/platformAdmin.ts:21 imports getPlatformSetting, setPlatformSetting, unsetPlatformSetting; used at lines 1066, 1079, 1127, 1155, 1164 to read/write runtime config flags (data-retention toggle, legacy-consent-correction toggle).",
+    "targetEvidence": "server/src/services/platformSettings.ts:11-50 - all three are generic key/value get/set/delete operations over the PlatformSetting table with no privacy or platform-admin-specific business logic embedded.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic tagged-secret encrypt/decrypt helpers as edge 10/13, applied here to a TOTP secret instead of a webhook secret - same shared-crypto-utility pattern.",
+    "callerEvidence": "server/src/routes/platformAdmin.ts:27 imports encryptSecretTagged, decryptSecretTagged; used at lines 99, 182, 200, 226 to encrypt/decrypt an admin's TOTP secret.",
+    "targetEvidence": "server/src/utils/encryption.ts:64-76 (see edge 10).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging call after payout mutations.",
+    "callerEvidence": "server/src/routes/practitionerPayouts.ts:4 imports logActivity; used at lines 83, 131.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "All three symbols verified in use for standard clinic-scoping of payout queries/mutations; identical pattern to every other route in this batch.",
+    "callerEvidence": "server/src/routes/practitionerPayouts.ts:7 imports validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId; used at lines 29, 54, 100, 116.",
+    "targetEvidence": "server/src/utils/clinicScope.ts (see edges 6/12/16) - all three generic tenant-scope helpers.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/reportExport.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "classification": "C",
+    "reasoning": "Trivial generic request-metadata extractor documented as part of the shared audit-log utility API; used exactly as intended to enrich an audit entry.",
+    "callerEvidence": "server/src/routes/reportExport.ts:25 imports extractRequestMeta; used at line 95: `...extractRequestMeta(req)` spread into an audit-log payload.",
+    "targetEvidence": "server/src/utils/auditLog.ts:102-110 - extractRequestMeta(req) is a generic helper pulling ip/userAgent off any Express request object, no domain logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/reports.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Same central tenant-scope utility; reporting queries scoping to accessible clinics is exactly its intended purpose regardless of which domain the report covers.",
+    "callerEvidence": "server/src/routes/reports.ts:4 imports validateAndGetClinicIdScope; used at lines 30, 165, 235, 335, 407 across 5 different report handlers.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:210-222 (see edge 6).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/schedules.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard accessible-clinics scoping for schedule queries.",
+    "callerEvidence": "server/src/routes/schedules.ts:16 imports getAccessibleClinicIds; used at line 39.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:128-139 (see edge 12).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/sms.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging call after SMS-related mutation.",
+    "callerEvidence": "server/src/routes/sms.ts:20 imports logActivity; used at line 182.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "All three generic tenant-scope helpers used identically to every other route domain in this batch.",
+    "callerEvidence": "server/src/routes/tasks.ts:7 imports validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId; used at lines 19, 53, 75.",
+    "targetEvidence": "server/src/utils/clinicScope.ts (see edges 6/12/16).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "classification": "C",
+    "reasoning": "Despite its 'Task'-sounding name, validateTaskRelations is a generic relation-bag validator (patientId/appointmentId/treatmentCaseId/assignedToId) built from the same shared relationGuards primitives as edges 3/7 - same shared tenant-security utility.",
+    "callerEvidence": "server/src/routes/tasks.ts:9 imports validateTaskRelations; used at lines 81 and 117 to validate a task's patient/appointment/treatmentCase/assignee all belong to the clinic.",
+    "targetEvidence": "server/src/utils/relationGuards.ts:85-116 - validateTaskRelations(data, clinicId) is itself a generic composition of the other relationGuards find*InClinic checks, taking an arbitrary relation-bag + clinicId.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Same central tenant-scope utility used at 5 call sites in the treatment-cases route, consistent with every other domain's usage.",
+    "callerEvidence": "server/src/routes/treatmentCases.ts:8 imports validateAndGetClinicIdScope, getAccessibleClinicIds, resolveEffectiveClinicId; used at lines 42, 74, 113, 149, 221.",
+    "targetEvidence": "server/src/utils/clinicScope.ts (see edges 6/12/16).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic relation-guard functions as edge 3, reused to validate treatment-case foreign keys belong to the clinic.",
+    "callerEvidence": "server/src/routes/treatmentCases.ts:12-14 imports findAppointmentTypeInClinic, findPatientInClinic, findUserAssignedToClinic; used at lines 235-237 and 304-306 to validate foreign keys.",
+    "targetEvidence": "server/src/utils/relationGuards.ts (see edge 3).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPackages.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging calls after treatment-package mutations.",
+    "callerEvidence": "server/src/routes/treatmentPackages.ts:5 imports logActivity; used at lines 204, 261, 291, 394.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard accessible-clinics scoping, used at 5 call sites.",
+    "callerEvidence": "server/src/routes/treatmentPlanProcedures.ts:14 imports getAccessibleClinicIds; used at lines 52, 83, 129, 243, 377.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:128-139 (see edge 12).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging calls after user-management mutations.",
+    "callerEvidence": "server/src/routes/users.ts:5 imports logActivity; used at lines 196, 301, 416, 502.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/usersImport.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard accessible-clinics scoping for bulk user-import operations.",
+    "callerEvidence": "server/src/routes/usersImport.ts:18 imports getAccessibleClinicIds; used at lines 76, 241, 283.",
+    "targetEvidence": "server/src/utils/clinicScope.ts:128-139 (see edge 12).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared tagged-secret decrypt helper as edge 10, this file's canonical documented use case.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:56 imports decryptSecretTagged; used at line 1145: `return decryptSecretTagged(value);`.",
+    "targetEvidence": "server/src/utils/encryption.ts:72-76 (see edge 10).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsappInbox.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "classification": "C",
+    "reasoning": "Both symbols verified in consistent paired use (writeAuditLog + extractRequestMeta spread) at all 4 call sites - the documented standard audit-log call pattern.",
+    "callerEvidence": "server/src/routes/whatsappInbox.ts:26 imports writeAuditLog, extractRequestMeta; used together at 4 sites (lines 371/381, 580/589, 655/665, 786/796).",
+    "targetEvidence": "server/src/utils/auditLog.ts (see edges 8 and 24).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/digidentis/DigiDentisProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "File header of encryption.ts states 'Decryption happens only inside provider implementations - never in responses' - DigiDentisProvider is exactly such a provider implementation, the documented intended call site.",
+    "callerEvidence": "server/src/services/externalCalendar/digidentis/DigiDentisProvider.ts:12 imports decryptSecret; used at lines 76 and 163 to decrypt a stored OAuth client secret and webhook secret.",
+    "targetEvidence": "server/src/utils/encryption.ts:47-55 - decryptSecret(ciphertext) is the base generic AES-256-GCM decrypt primitive.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/imaging/bridgePairing.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic env-secret helper as edge 1/39, used to fetch a pairing-pepper secret with production-strength validation.",
+    "callerEvidence": "server/src/services/imaging/bridgePairing.ts:12 imports getSecret; used at line 20: `return getSecret('IMAGING_BRIDGE_PAIRING_PEPPER', DEV_PEPPER_FALLBACK);`.",
+    "targetEvidence": "server/src/utils/secrets.ts:1-11 (see edge 1).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/InstagramMessagingProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Same documented provider-implementation decrypt pattern as edge 38, here decrypting an Instagram access token inside the messaging provider.",
+    "callerEvidence": "server/src/services/instagram/InstagramMessagingProvider.ts:17 imports decryptSecret; used at line 85: `const token = decryptSecret(encrypted).trim();`.",
+    "targetEvidence": "server/src/utils/encryption.ts:47-55 (see edge 38).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/patientAnonymization.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "classification": "C",
+    "reasoning": "Privacy/anonymization service recording its own action via the shared audit-log writer - expected cross-domain audit pattern, and arguably core to why audit logging exists as a shared utility at all.",
+    "callerEvidence": "server/src/services/privacy/patientAnonymization.ts:16 imports writeAuditLog; used at line 430.",
+    "targetEvidence": "server/src/utils/auditLog.ts:37-58 (see edge 8).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/recallCandidateService.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging calls from the recall-candidate service.",
+    "callerEvidence": "server/src/services/recallCandidateService.ts:2 imports logActivity; used at lines 271, 384, 497.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/sms/platformSmsProviders.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "File comment at line 8 of platformSmsProviders.ts explicitly documents 'Credentials are encrypted at rest with encryptJson() and are decrypted only...' - self-documented intended shared-crypto usage.",
+    "callerEvidence": "server/src/services/sms/platformSmsProviders.ts:18 imports decryptJson, encryptJson; used at lines 64, 84, 111 to encrypt/decrypt SMS provider credential JSON blobs.",
+    "targetEvidence": "server/src/utils/encryption.ts:82-97 - decryptJson/encryptJson are generic JSON-object encrypt/decrypt wrappers around the same AES-256-GCM primitive.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Same documented provider-implementation decrypt pattern, decrypting the Evolution API key.",
+    "callerEvidence": "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts:20 imports decryptSecret; used at line 61: `apiKey = decryptSecret(rawKey);`.",
+    "targetEvidence": "server/src/utils/encryption.ts:47-55 (see edge 38).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "classification": "C",
+    "reasoning": "Same documented provider-implementation decrypt pattern, decrypting the Meta Cloud access token.",
+    "callerEvidence": "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts:31 imports decryptSecret; used at line 41: `return decryptSecret(raw);`.",
+    "targetEvidence": "server/src/utils/encryption.ts:47-55 (see edge 38).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "classification": "C",
+    "reasoning": "Standard shared audit-logging calls from the WhatsApp AI message processor.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:53 imports logActivity; used at lines 774, 857, 958, 1076.",
+    "targetEvidence": "server/src/utils/activity.ts:14-53 (see edge 2).",
+    "followUpRequired": "none"
+  }
+]

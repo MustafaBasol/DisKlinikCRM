@@ -1,0 +1,282 @@
+[
+  {
+    "edgeKey": "server/src/jobs/metaTemplateSyncJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "server/src/db.ts (line 23) is a single Prisma client singleton with zero business logic — it only wraps PrismaClient construction with connection-pool env-var tuning. Any domain job/route/service importing the default export to run queries is the intended shared-platform DB-access pattern.",
+    "callerEvidence": "jobs/metaTemplateSyncJob.ts:15 `import prisma from '../db.js';` — used as the standard Prisma client.",
+    "targetEvidence": "db.ts:14-23 `const prisma = new PrismaClient({ adapter: new PrismaPg(...) }); export default prisma;` — pure connection singleton, no domain logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/appointments.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "5 of the 6 symbols (getParam, timeToMinutes, minutesToTime, getZonedDateParts, localDateTimeToClinicDate) are generic request/date helpers used across many unrelated domains. checkPractitionerAvailability is more domain-flavored (queries DoctorAvailability/DoctorOffDay/ClinicWorkingHours) but since the caller IS clinical-appointments-availability itself, there is no actual cross-domain boundary crossing in practice.",
+    "callerEvidence": "routes/appointments.ts:6 imports checkPractitionerAvailability; used at appointments.ts:345 and :494 `await checkPractitionerAvailability(clinicId, practitionerId, startTime, endTime)`.",
+    "targetEvidence": "utils/helpers.ts:214-268 checkPractitionerAvailability queries prisma.doctorAvailability/doctorOffDay/clinicWorkingHours directly — genuinely availability-domain business logic sitting inside a 'shared' helpers file.",
+    "followUpRequired": "checkPractitionerAvailability (utils/helpers.ts:214-268) is availability-domain business logic, not a generic helper — consider relocating it to services/appointments/appointmentAvailabilityService.ts so the helpers.ts file stays purely generic. Low priority since the only caller shares its domain."
+  },
+  {
+    "edgeKey": "server/src/routes/auth.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "All 9 imported symbols are generic rate-limiter and password-validation utilities with no identity-domain-specific data model access.",
+    "callerEvidence": "routes/auth.ts:8-13 imports checkLoginAttempt, recordLoginAttempt, resetLoginAttempts, validatePassword, checkForgotPasswordAttempt, recordForgotPasswordAttempt, checkResendVerificationAttempt, recordResendVerificationAttempt, createRateLimiter.",
+    "targetEvidence": "utils/helpers.ts:161-210 — createRateLimiter is a generic Redis/memory-backed counter factory; validatePassword (141-154) is pure string validation. No Prisma/domain model access.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "schemas/index.ts is a single monolithic zod-schema barrel file shared by every domain in the codebase (patients, appointments, imaging, etc. all co-located in one file, e.g. patientSchema at line 24, imagingDeviceSchema at line 567). Each route only pulls its own domain's schemas from the shared file — the intended platform pattern for this codebase's current structure.",
+    "callerEvidence": "routes/imaging.ts imports imagingBridgePairingCreateSchema, imagingBridgeSchema, imagingDeviceSchema, imagingDeviceUpdateSchema, imagingRequestSchema, imagingRequestUpdateSchema, imagingStudyLinkSchema, imagingStudyUploadSchema — all imaging-only schemas.",
+    "targetEvidence": "schemas/index.ts:567-680 defines imagingDeviceSchema, imagingRequestSchema, imagingStudyUploadSchema, imagingBridgeSchema etc. alongside unrelated domains' schemas in the same file (patientSchema at line 24 etc.) — a single central validation-schema module.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "services/fileStorage.ts is an explicit storage abstraction (local disk vs S3) with no domain-owned data model access — exactly the kind of cross-cutting utility the rubric names as an expected shared edge.",
+    "callerEvidence": "routes/imaging.ts:29 `import { buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile } from '../services/fileStorage.js';` used at lines 611-770 to save/serve/delete uploaded imaging files.",
+    "targetEvidence": "services/fileStorage.ts:1-99 header comment: 'fileStorage.ts — Hasta/lab dosyaları için depolama soyutlaması' (storage abstraction for patient/lab files); functions operate purely on Buffer/stream + storage key, no imaging-specific logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared zod-schema barrel file as edge #3; imagingBridgePublic.ts only imports its own imaging-bridge schemas.",
+    "callerEvidence": "routes/imagingBridgePublic.ts:43-45 imports imagingBridgeHeartbeatSchema, imagingBridgeStudyUploadSchema, imagingBridgePublicPairSchema; used at lines 150, 243, 407 via `.safeParse(...)`.",
+    "targetEvidence": "schemas/index.ts:624-680 defines imagingBridgeSchema, imagingBridgeHeartbeatSchema, imagingBridgePairingCreateSchema, imagingBridgePublicPairSchema, imagingBridgeStudyUploadSchema.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/inventoryUnits.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam, a trivial express request-param extractor with no domain coupling.",
+    "callerEvidence": "routes/inventoryUnits.ts:83 `const id = getParam(req, 'id');`",
+    "targetEvidence": "utils/helpers.ts:7-10 `export const getParam = (req, key) => { const value = req.params[key]; return Array.isArray(value) ? value[0] : value; };`",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam, same trivial param extractor as edge #6.",
+    "callerEvidence": "routes/labOrders.ts imports and uses getParam(req, ...) for route param extraction (same pattern verified across multiple routes in this batch).",
+    "targetEvidence": "utils/helpers.ts:7-10 getParam — generic express helper, no domain logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "Same storage-abstraction functions as edge #4 (buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile) used for lab-order file attachments — generic, no domain-owned data access.",
+    "callerEvidence": "routes/labOrders.ts imports buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile from services/fileStorage.js to persist/serve lab order attachments.",
+    "targetEvidence": "services/fileStorage.ts:71-118, 467 — generic key/save/open/delete storage primitives, no lab-domain knowledge.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/noShows.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam.",
+    "callerEvidence": "routes/noShows.ts:84,159 `const id = getParam(req, 'id');`",
+    "targetEvidence": "utils/helpers.ts:7-10 getParam — generic express helper.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/operationalMonitoring.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam.",
+    "callerEvidence": "routes/operationalMonitoring.ts imports getParam for express route-param extraction (verified pattern consistent with all other single-symbol getParam edges in this batch).",
+    "targetEvidence": "utils/helpers.ts:7-10 getParam — generic express helper.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/organizationInstagram.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam.",
+    "callerEvidence": "routes/organizationInstagram.ts imports getParam for express route-param extraction (verified pattern consistent with all other single-symbol getParam edges in this batch).",
+    "targetEvidence": "utils/helpers.ts:7-10 getParam — generic express helper.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/postTreatment.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "routes/postTreatment.ts:15 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/postTreatment.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "Single generic symbol getParam.",
+    "callerEvidence": "routes/postTreatment.ts imports getParam for express route-param extraction (verified pattern consistent with all other single-symbol getParam edges in this batch).",
+    "targetEvidence": "utils/helpers.ts:7-10 getParam — generic express helper.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "routes/practitionerPayouts.ts:2 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/publicBooking.ts␟core-privacy-consent-retention-dsr␟services/publicBookingNoticeEvidence.ts␟import",
+    "classification": "B",
+    "reasoning": "publicBookingNoticeEvidence.ts is an explicitly documented cross-domain contract: its header states it exists precisely to prove KVKK notice delivery for public-booking submissions, and all 5 imported symbols are its full documented public API (resolvePublishedLegalProfile, issueOrReuseNoticeEvidence, validateNoticeEvidenceToken, linkNoticeEvidenceToRequest, normalizeNoticeLanguage) — no private internals are reached.",
+    "callerEvidence": "routes/publicBooking.ts imports issueOrReuseNoticeEvidence, linkNoticeEvidenceToRequest, normalizeNoticeLanguage, resolvePublishedLegalProfile, validateNoticeEvidenceToken.",
+    "targetEvidence": "services/publicBookingNoticeEvidence.ts:1-29 header explains this module exists specifically to serve the public-booking flow's KVKK evidence requirement; exports at lines 59, 105, 155, 237, 265 are exactly the symbols imported.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/schedules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "routes/schedules.ts:13 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+    "classification": "C",
+    "reasoning": "safeErrorFields is a generic, structured, non-leaking error-logging helper explicitly documented for use by any route/service to avoid leaking paths/keys in logs — a textbook shared-observability utility.",
+    "callerEvidence": "routes/treatmentCases.ts:10,212 `import { safeErrorFields } from '../utils/safeError.js';` ... `console.error('Proposal PDF generation failed', { treatmentCaseId: id, ...safeErrorFields(err) });`",
+    "targetEvidence": "utils/safeError.ts:1-15 header: 'structured, non-leaking error fields for log lines... Routes/services that touch storage or exports must log via this helper instead of the raw error.'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPackages.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "routes/treatmentPackages.ts:3 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "All 6 symbols (formatClinicDateTime, getParam, getZonedDateParts, localDateTimeToClinicDate, timeToMinutes, validatePassword) are generic timezone-formatting/param/password utilities used identically across many unrelated route files.",
+    "callerEvidence": "routes/users.ts:10-15 imports the 6 symbols; used e.g. at line 70-71 `getZonedDateParts(appointment.startTime, timeZone)` and line 85 `localDateTimeToClinicDate(date, '00:00', timeZone)`.",
+    "targetEvidence": "utils/helpers.ts:58-137 getZonedDateParts/localDateTimeToClinicDate/formatClinicDateTime are pure Intl.DateTimeFormat wrappers with no domain data access.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/usersImport.ts␟clinical-patients␟utils/excelImport.ts␟import",
+    "classification": "F",
+    "reasoning": "utils/excelImport.ts is domain-mapped to clinical-patients, but the file is actually a generic Excel template/parse utility used by BOTH patient import and user import (buildPatientTemplate and buildUserTemplate live side by side, lines 42 and 141). usersImport.ts (core-org-clinic-membership) only imports the user-specific and fully generic symbols (buildUserTemplate, parseExcelFile, MAX_IMPORT_ROWS, MAX_FILE_SIZE_BYTES, ImportRowResult) — none of the imported symbols touch patient data at all. The cross-domain flag is an artifact of the domain-map assigning this shared two-feature utility file to only one of its two consuming domains.",
+    "callerEvidence": "routes/usersImport.ts imports ImportRowResult, MAX_FILE_SIZE_BYTES, MAX_IMPORT_ROWS, buildUserTemplate, parseExcelFile — all either generic constants/types or the user-template builder, none patient-specific.",
+    "targetEvidence": "utils/excelImport.ts:42 buildPatientTemplate(...) and :141 buildUserTemplate(...) are separate, independent exports in the same generic ExcelJS wrapper file; parseExcelFile (:241) and cellToString (:20) are fully generic.",
+    "followUpRequired": "Domain-map should probably reclassify utils/excelImport.ts as core-shared-platform-infrastructure (or split the file), since it genuinely serves two unrelated domains (clinical-patients and core-org-clinic-membership) with no shared code between the two template builders."
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-privacy-consent-retention-dsr␟services/channelConsentGate.ts␟import",
+    "classification": "B",
+    "reasoning": "channelConsentGate.ts is explicitly documented as the required consent gate that all channel (WhatsApp/Instagram) message-handling code must call before creating patients/appointment requests. whatsapp.ts imports exactly the module's full documented public API (checkChannelConsent, parseConsentReply, logChannelConsent, loadConsentMetadata, plus 4 exported prompt-text constants) — no private internals.",
+    "callerEvidence": "routes/whatsapp.ts imports CONSENT_ACCEPTED_TEXT, CONSENT_DECLINED_TEXT, CONSENT_REPROMPT_TEXT, MISSING_LEGAL_PROFILE_BLOCK_TEXT, checkChannelConsent, loadConsentMetadata, logChannelConsent, parseConsentReply.",
+    "targetEvidence": "services/channelConsentGate.ts:1-14 header: 'Consent gate for WhatsApp and Instagram channels. Before creating any patient, appointment request, or contact request from a channel message, callers must: 1. Call checkChannelConsent() ... 3. call parseConsentReply() and then logChannelConsent().'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+    "classification": "C",
+    "reasoning": "All 5 symbols (formatClinicDateTime, getZonedDateParts, localDateTimeToClinicDate, minutesToTime, timeToMinutes) are the same generic timezone/date helpers used across the codebase, no whatsapp-specific coupling.",
+    "callerEvidence": "routes/whatsapp.ts imports formatClinicDateTime, getZonedDateParts, localDateTimeToClinicDate, minutesToTime, timeToMinutes for clinic-local time formatting.",
+    "targetEvidence": "utils/helpers.ts:12-137 — pure Intl.DateTimeFormat / arithmetic date helpers, no Prisma or domain data access.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/whatsappPublicApi.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappPublicApi.ts's name and content (whatsappAppointmentRequestSchema, whatsappAvailabilityQuerySchema, whatsappAppointmentLookupQuerySchema, getProvidedWhatsappSecret, validateWhatsappApiSecret) is explicitly the public request-validation/auth surface for the WhatsApp public API endpoints hosted in routes/whatsapp.ts. All 5 imported symbols are exported top-level functions/schemas intended for exactly this consumption.",
+    "callerEvidence": "routes/whatsapp.ts imports getProvidedWhatsappSecret, validateWhatsappApiSecret, whatsappAppointmentLookupQuerySchema, whatsappAppointmentRequestSchema, whatsappAvailabilityQuerySchema.",
+    "targetEvidence": "services/whatsappPublicApi.ts:10-73 defines exactly these schemas/functions as its full export surface; no internal-only symbols are reached.",
+    "followUpRequired": "The file contains zero AI-orchestration logic (pure zod schemas + secret-header comparison) — its domain-map placement under messaging-ai-orchestration rather than messaging-whatsapp is questionable, though it does not change this edge's classification since it is consumed as an intended public contract either way."
+  },
+  {
+    "edgeKey": "server/src/services/clinicOperatingPreferences.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/clinicOperatingPreferences.ts:2 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappBookingFlow.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappBookingFlow.ts's step-handler functions are built with fully generic, dependency-injected signatures (AwaitingTimeDependencies takes prisma/clinicId/phone/text/callbacks, not a WhatsApp-specific message object), confirming they were designed as a reusable, channel-agnostic booking state machine. instagramAiConversationProcessor.ts genuinely reuses this engine end-to-end (6 call sites: handleAwaitingServiceStep, handleAwaitingDateStep x2, handleAwaitingTimeStep, isDeterministicConfirmationReply, handleAwaitingConfirmationStep), extending BookingStateJson at line 67. This is deliberate cross-channel code reuse of the domain's public exports, not a private-internals reach.",
+    "callerEvidence": "services/instagram/instagramAiConversationProcessor.ts:5-11 imports handleAwaitingConfirmationStep, handleAwaitingDateStep, handleAwaitingServiceStep, handleAwaitingTimeStep, isDeterministicConfirmationReply, type BookingStateJson; used at lines 1458, 1496, 1581, 1695, 1796, 1922; extends the type at line 67 `type InstagramAssistantStateJson = BookingStateJson & {...}`.",
+    "targetEvidence": "services/whatsappBookingFlow.ts:75-100 AwaitingTimeDependencies is parameterized generically (prisma, clinicId, phone, text, callbacks) rather than WhatsApp-message-shaped, evidencing the module was built for cross-channel reuse.",
+    "followUpRequired": "The file is still named whatsappBookingFlow.ts despite being the shared booking engine for both WhatsApp and Instagram AI conversations. Recommend renaming/relocating (e.g. messagingBookingFlow.ts) to reflect actual scope — naming/architecture debt, not a boundary violation."
+  },
+  {
+    "edgeKey": "server/src/services/inventoryAlerts.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/inventoryAlerts.ts:1 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/messagingInboundIdempotency.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/messagingInboundIdempotency.ts:2 `import prisma from '../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/clinicBulkExportPackage.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "All 8 imported symbols (buildExportStorageKey, buildExportTempFilePath, deleteFile, ensureExportTempDir, fileExists, getExportTempDir, parseExportTempFileName, saveFileFromPath) are generic export-staging storage primitives with no privacy/consent-domain data access — the storage abstraction explicitly supports an 'exports/' key namespace for exactly this use case.",
+    "callerEvidence": "services/privacy/clinicBulkExportPackage.ts imports the 8 export-storage helper functions to stage/persist ZIP export packages.",
+    "targetEvidence": "services/fileStorage.ts:209-211 buildExportStorageKey, :226-228 getExportTempDir, :303+ ensureExportTempDir — generic filesystem/S3 export-staging primitives with extensive security hardening (symlink/ownership checks) but no privacy-domain business logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic export-storage primitives as edge #28 (buildExportStorageKey, deleteFile, openFileStream, saveFileFromPath, statFile), no domain-owned data model access.",
+    "callerEvidence": "services/privacy/patientPrivacyExportPackage.ts imports buildExportStorageKey, deleteFile, openFileStream, saveFileFromPath, statFile.",
+    "targetEvidence": "services/fileStorage.ts:105-118 openFileStream, :182-200 statFile, :209-211 buildExportStorageKey — generic storage primitives.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/security/securityIncidentService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/security/securityIncidentService.ts:33 `import prisma from '../../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/sms/smsService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/sms/smsService.ts:18 `import prisma from '../../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+    "classification": "C",
+    "reasoning": "Plain Prisma client default import, same as edge #0.",
+    "callerEvidence": "services/whatsapp/whatsappOutboundMessaging.ts:26 `import prisma from '../../db.js';`",
+    "targetEvidence": "db.ts:23 `export default prisma;` — shared client singleton.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappBookingFlow.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappAvailability.ts contains genuine clinical-appointments-availability business logic (buildAvailableSlots directly queries Clinic/AppointmentType/User/DoctorOffDay/DoctorAvailability/ClinicWorkingHours and calls checkAppointmentOverlap/checkAppointmentRequestConflict). whatsappBookingFlow.ts (the AI booking orchestrator) consumes only its exported functions (loadAvailabilityForDate is the documented entry point; the rest are formatting/filtering helpers built on its own return types) — a legitimate, expected dependency of the conversational booking layer on the real availability domain, not a reach into private internals.",
+    "callerEvidence": "services/whatsappBookingFlow.ts:2-11 imports createAvailabilitySnapshot, findNearbySlotsForTime, filterSlotsByTimePreference, filterSlotsByTimeThreshold, formatSlotListMessage, loadAvailabilityForDate, slotIdentity, type SavedAvailableSlot.",
+    "targetEvidence": "services/whatsappAvailability.ts:156-269 buildAvailableSlots/loadAvailabilityForDate query prisma.clinic/appointmentType/user/doctorOffDay/doctorAvailability/clinicWorkingHours and call checkAppointmentOverlap (services/appointments/appointmentAvailabilityService.ts) — genuine availability-domain logic exposed via a public loadAvailabilityForDate entry point.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappBookingFlow.ts␟messaging-whatsapp␟utils/whatsappDate.ts␟import",
+    "classification": "D",
+    "reasoning": "utils/whatsappDate.ts is domain-mapped to messaging-whatsapp, but its only consumer in this batch is whatsappBookingFlow.ts (messaging-ai-orchestration), and the module's own WHATSAPP_ASSISTANT_TIME_ZONE constant plus its purpose (parsing Turkish natural-language date expressions for the conversational booking assistant) suggest it was purpose-built as a support utility for the AI booking flow, not for the raw WhatsApp channel/transport layer (which owns EvolutionWhatsAppProvider, metaInboundDelivery, etc.). Whether this file belongs under messaging-whatsapp or messaging-ai-orchestration is a genuine, reasonable ownership question — not a real architectural violation, since the code contains no channel-transport logic at all (pure text/date parsing).",
+    "callerEvidence": "services/whatsappBookingFlow.ts:13-19 imports formatTurkishDateLong, formatTurkishDateWithWeekday, getPastMonthDayCorrectedDate, normalizeDateFromTurkishInput, WHATSAPP_ASSISTANT_TIME_ZONE.",
+    "targetEvidence": "utils/whatsappDate.ts:1 `export const WHATSAPP_ASSISTANT_TIME_ZONE = 'Europe/Paris';` and lines 98-231 normalizeDateFromTurkishInput — pure Turkish-language date-string parsing, no WhatsApp API/transport code, no Prisma access.",
+    "followUpRequired": "Recommend an ownership review: utils/whatsappDate.ts appears purpose-built for the AI booking assistant (messaging-ai-orchestration) rather than the WhatsApp channel/transport layer (messaging-whatsapp) that owns files like services/whatsapp/EvolutionWhatsAppProvider.ts. Reclassifying it (or renaming/relocating to reflect the AI-assistant scope) would resolve this edge."
+  }
+]

@@ -1,0 +1,322 @@
+[
+  {
+    "edgeKey": "server/src/jobs/inboundEventRetryJob.ts␟messaging-whatsapp␟services/whatsapp/MetaCloudWhatsAppProvider.ts␟import",
+    "classification": "A",
+    "reasoning": "The caller directly imports and `new`-instantiates the concrete `MetaCloudWhatsAppProvider` class (inboundEventRetryJob.ts:21,89) to call `.parseWebhook()`, bypassing the domain's own designed abstraction seam. `whatsappProviderFactory.ts` exists specifically to hand back a `WhatsAppProvider`-typed instance via `getWhatsAppProvider('meta_cloud_api')`, and `parseWebhook` is part of the `WhatsAppProvider` interface (WhatsAppProvider.ts:104), so the factory would satisfy this exact call without ever naming the concrete class. This is an avoidable, direct reach into another domain's private implementation class.",
+    "callerEvidence": "server/src/jobs/inboundEventRetryJob.ts:21 `import { MetaCloudWhatsAppProvider } from '../services/whatsapp/MetaCloudWhatsAppProvider.js';` and :89 `const provider = new MetaCloudWhatsAppProvider();`",
+    "targetEvidence": "server/src/services/whatsapp/whatsappProviderFactory.ts:13 `meta_cloud_api: () => new MetaCloudWhatsAppProvider(),` and WhatsAppProvider.ts:104 `parseWebhook(payload: unknown, connection: WhatsAppConnectionRecord): ParsedWebhookEvent;` — the factory+interface already cover this exact use case.",
+    "followUpRequired": "Low-priority refactor suggestion: swap the direct `new MetaCloudWhatsAppProvider()` for `getWhatsAppProvider('meta_cloud_api')` from whatsappProviderFactory.ts to close this bypass; not urgent (job is scoped to meta_cloud_api only by design) but worth a ticket."
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟messaging-whatsapp␟services/whatsapp/whatsappOutboundMessaging.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappOutboundMessaging.ts's own header explicitly documents itself as the dispatcher for 'Automated/scheduled messages (reminders, payment notices)' — reminders.ts is its named intended consumer, not an incidental one. Both symbols (`sendProactiveWhatsAppMessage`, `OUTBOUND_ERRORS`) are used for real send calls and error-code branching.",
+    "callerEvidence": "server/src/jobs/reminders.ts:14 `import { sendProactiveWhatsAppMessage, OUTBOUND_ERRORS } from '../services/whatsapp/whatsappOutboundMessaging.js';`, used at :282 `sendProactiveWhatsAppMessage({...})` and :295-296 `sendResult.code === OUTBOUND_ERRORS.BLOCKED_BY_CONSENT`",
+    "targetEvidence": "server/src/services/whatsapp/whatsappOutboundMessaging.ts:3-4 'Automated/scheduled messages (reminders, payment notices) must use Meta-approved templates...' — reminders is named in the module's own doc comment as the intended caller.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/jobs/reminders.ts␟messaging-whatsapp␟services/whatsapp/whatsappService.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappService.ts's own header states 'All application code (routes, jobs, reminders) calls this service' — reminders.ts is explicitly named as an intended caller of the unified send API, used here for a practitioner-facing notification (not a template-gated proactive patient message).",
+    "callerEvidence": "server/src/jobs/reminders.ts:13 `import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';`, used at :400 `sendWhatsAppMessage(clinic.id, { phone: practitioner.phone, text: body })`",
+    "targetEvidence": "server/src/services/whatsapp/whatsappService.ts:3-4 'All application code (routes, jobs, reminders) calls this service. Provider resolution happens here — callers never reference a specific provider.'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟external-calendar-integration␟jobs/externalCalendarInboundRetryJob.ts␟import",
+    "classification": "B",
+    "reasoning": "startBackgroundJobs.ts is the program's single documented composition root ('Tüm cron job'ların tek noktadan başlatılması') whose entire job is to call every job module's own exported `start*` function. `startExternalCalendarInboundRetryJob` is exactly that module's intended external-facing entry point — every other job in this same file is imported the identical way, so this is not domain-specific coupling, it's the bootstrap pattern.",
+    "callerEvidence": "server/src/jobs/startBackgroundJobs.ts:21 `import { startExternalCalendarInboundRetryJob } from './externalCalendarInboundRetryJob.js';`, called at :35 inside `startBackgroundJobs()`",
+    "targetEvidence": "server/src/jobs/externalCalendarInboundRetryJob.ts exports `runExternalCalendarInboundRetryJob`/`startExternalCalendarInboundRetryJob` as its public registration entry point (cron job pattern identical to all sibling jobs in the same file).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟external-calendar-integration␟jobs/externalCalendarOutboundSyncJob.ts␟import",
+    "classification": "B",
+    "reasoning": "Same composition-root pattern as the sibling edge above: startBackgroundJobs.ts calls `startExternalCalendarOutboundSyncJob`, the job module's own exported public start function, alongside 11 other domains' job-start calls in the identical style.",
+    "callerEvidence": "server/src/jobs/startBackgroundJobs.ts:22 `import { startExternalCalendarOutboundSyncJob } from './externalCalendarOutboundSyncJob.js';`, called at :36",
+    "targetEvidence": "server/src/jobs/externalCalendarOutboundSyncJob.ts — cron-registered job exporting its own `start*` entry point, mirroring `inboundEventRetryJob.ts`'s shape per its own header comment.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/auth.ts␟messaging-email␟services/emailService.ts␟import",
+    "classification": "C",
+    "reasoning": "emailService.ts's `sendMail` is a generic SMTP-dispatch wrapper (to/subject/html/text in, sent/reason out) with zero domain-specific business logic or data model — a textbook 'notification dispatch' shared utility per the rubric's explicit C examples. auth.ts uses it for password-reset and email-verification transactional mail.",
+    "callerEvidence": "server/src/routes/auth.ts:16 `import { sendMail } from '../services/emailService.js';`, used at :410 and :599 for password-reset/verification emails",
+    "targetEvidence": "server/src/services/emailService.ts:34 `export async function sendMail(options: SendMailOptions): Promise<SendMailResult>` — generic transport wrapper around nodemailer, no auth/business-domain coupling.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/clinicRegistration.ts␟messaging-email␟services/emailService.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic `sendMail` transactional-email dispatch utility as the auth.ts edge, used here to deliver the admin's email-verification link after clinic self-registration. No clinic-registration business logic lives in emailService.ts.",
+    "callerEvidence": "server/src/routes/clinicRegistration.ts:6 `import { sendMail } from '../services/emailService.js';`, used at :166 `sendMail({ to: adminEmail, ...emailPayload })`",
+    "targetEvidence": "server/src/services/emailService.ts:34 generic `sendMail()` — see prior edge's target evidence.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/financeDashboard.ts␟clinical-basic-payments␟utils/overdueReceivables.ts␟import",
+    "classification": "B",
+    "reasoning": "overdueReceivables.ts's own header comment names financeDashboard.ts as one of its two explicit intended consumers ('the Finance Dashboard's summary.overdueAmount (server/src/routes/financeDashboard.ts...)'), and states it is the single source of truth combining two receivable sources specifically to fix a previously-broken finance dashboard card. This is about as explicit a documented cross-domain public contract as exists in this codebase.",
+    "callerEvidence": "server/src/routes/financeDashboard.ts:23 `import { overdueReceivablesAmount } from '../utils/overdueReceivables.js';`, used at :162 and :238",
+    "targetEvidence": "server/src/utils/overdueReceivables.ts:1-8 '...single source of truth for: ... the Finance Dashboard's summary.overdueAmount (server/src/routes/financeDashboard.ts, which previously filtered on the literal PaymentPlanInstallment.status === \"overdue\" — a value nothing ever writes, so that card was always 0)'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟imaging-device-bridge␟services/imaging/bridgeOnboardingConfig.ts␟import",
+    "classification": "D",
+    "reasoning": "domain-map assigns all of routes/imaging.ts to imaging-server-viewer, but the program's own prior evidence task (F2-PREP-006-A) directly re-derived the route inventory and found 8 of imaging.ts's 27 routes (30%) exclusively manage BRG (imaging-device-bridge)-owned functionality with zero IMG-owned model touches — explicitly stating 'The file's name does not describe roughly a third of its own content.' `getBridgeOnboardingConfig` is called from imaging.ts's bridge-onboarding-config route (line 1300), which is one of those BRG routes physically co-located in the wrong-domain-labeled file — this is a caller domain-map granularity dispute, not a real cross-domain reach (the calling code is functionally BRG's own admin surface).",
+    "callerEvidence": "server/src/routes/imaging.ts:46 `import { getBridgeOnboardingConfig } from '../services/imaging/bridgeOnboardingConfig.js';`, used at :1300 `res.json(getBridgeOnboardingConfig());` inside a bridge-onboarding-config route",
+    "targetEvidence": "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md §3/§4: bridgeOnboardingConfig.ts is BRG-owned, 'Consumed by imaging.ts only'; §11 finding #1: 'imaging.ts's name does not match ~30% of its own content (BRG routes).'",
+    "followUpRequired": "Domain-map granularity issue already identified by the program itself (F2-PREP-006-A §10 proposed IMG/BRG split); no new action needed from this validation, just corroborates the existing proposal."
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟imaging-device-bridge␟services/imaging/bridgePairing.ts␟import",
+    "classification": "D",
+    "reasoning": "Same caller domain-map granularity issue as the bridgeOnboardingConfig edge: all 4 symbols (`PAIRING_CODE_TTL_MS`, `formatPairingCodeForDisplay`, `generatePairingCode`, `hashPairingCode`) are used inside imaging.ts's bridge-pairing-creation route (lines 1206-1239), one of the file's 8 BRG-owned routes per F2-PREP-006-A's independently re-derived route inventory. Functionally this is BRG code calling its own BRG service; the 'cross-domain' flag is an artifact of imaging.ts being domain-mapped as a single unit.",
+    "callerEvidence": "server/src/routes/imaging.ts:48-52 `import { generatePairingCode, formatPairingCodeForDisplay, hashPairingCode, PAIRING_CODE_TTL_MS } from '../services/imaging/bridgePairing.js';`, all 4 used at :1206-1239",
+    "targetEvidence": "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md §4: bridgePairing.ts is BRG-owned, consumed by imaging.ts (create) and imagingBridgePublic.ts (redeem) — a same-domain (BRG) call from imaging.ts's embedded bridge routes.",
+    "followUpRequired": "Same domain-map granularity note as the bridgeOnboardingConfig edge — already tracked by F2-PREP-006-A/E."
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟imaging-device-bridge␟services/imaging/bridgeTokens.ts␟import",
+    "classification": "D",
+    "reasoning": "Same pattern again: `generateBridgeToken` is called from imaging.ts's bridge-agent-registration route (line 1021), one of the file's embedded BRG routes. bridgeTokens.ts is BRG-owned and 'Consumed by imaging.ts (create), imagingBridgePublic.ts (verify)' per the program's own inventory — this is BRG calling BRG, mislabeled cross-domain only because imaging.ts as a whole is domain-mapped to imaging-server-viewer.",
+    "callerEvidence": "server/src/routes/imaging.ts:45 `import { generateBridgeToken } from '../services/imaging/bridgeTokens.js';`, used at :1021 `const { token, tokenHash } = generateBridgeToken();`",
+    "targetEvidence": "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md §4: bridgeTokens.ts | BRG | Consumed by imaging.ts (create), imagingBridgePublic.ts (verify).",
+    "followUpRequired": "Same domain-map granularity note — already tracked by F2-PREP-006-A/E."
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟imaging-server-viewer␟services/imaging/imagingRequestTransitions.ts␟import",
+    "classification": "H",
+    "reasoning": "This is a genuine, real cross-owner import — imagingRequestTransitions.ts is IMG-owned but imagingBridgePublic.ts is BRG's own public device-facing surface, and it calls `canAttachStudyToRequest`/uses `ImagingRequestStatus` directly with no facade in between. Critically, this exact edge is already independently documented by the program's own architecture evidence as a known gap: F2-PREP-006-A explicitly labels it 'cross-owner import, no facade' at the frozen baseline, i.e. this is pre-existing, already-tracked technical debt in a domain the program has explicitly frozen for pilot planning, not new coupling introduced by recent work.",
+    "callerEvidence": "server/src/routes/imagingBridgePublic.ts:41 `import { canAttachStudyToRequest, type ImagingRequestStatus } from '../services/imaging/imagingRequestTransitions.js';`, used at :284 `if (!canAttachStudyToRequest(found.status as ImagingRequestStatus))`",
+    "targetEvidence": "docs/program/evidence/F2-PREP-006-A_IMG_BRG_OWNERSHIP_AND_IMPLEMENTATION_INVENTORY.md §4: 'imagingRequestTransitions.ts | IMG | imaging.ts and imagingBridgePublic.ts (cross-owner import, no facade)' — the program's own prior evidence already names this exact edge as a known gap at this same baseline.",
+    "followUpRequired": "Already tracked: F2-PREP-006-C §9 migration-order step 4 ('Formalize imagingBridgePublic.ts as the documented external module boundary') covers this. No new action required from this validation beyond cross-referencing."
+  },
+  {
+    "edgeKey": "server/src/routes/imagingBridgePublic.ts␟imaging-server-viewer␟services/imaging/imagingUploadValidation.ts␟import",
+    "classification": "B",
+    "reasoning": "imagingUploadValidation.ts's own header comment explicitly documents itself as shared infrastructure: 'routes/imaging.ts (manual upload) and routes/imagingBridgePublic.ts (bridge upload) share the same MIME/extension/size rules — single source here.' The program's own F2-PREP-006-A inventory independently confirms this as 'SHARED (IMG+BRG) — explicitly documented as shared in its own header comment,' calling it 'a positive, well-documented finding.' All 4 symbols are used for upload validation in imagingBridgePublic.ts.",
+    "callerEvidence": "server/src/routes/imagingBridgePublic.ts:36-40 `import { IMAGING_ALLOWED_MIME, IMAGING_EXTENSIONS_BY_MIME, MAX_FILE_MB, normalizeDeclaredMime } from '../services/imaging/imagingUploadValidation.js';`, used at :91,93,204,290-291",
+    "targetEvidence": "server/src/services/imaging/imagingUploadValidation.ts:1-5 'routes/imaging.ts (manuel yükleme) ve routes/imagingBridgePublic.ts (köprü yükleme) aynı MIME/uzantı/boyut kurallarını paylaşır — tek kaynak burada.'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟messaging-shared-channel-infrastructure␟utils/webhookVerification.ts␟import",
+    "classification": "C",
+    "reasoning": "webhookVerification.ts is a generic, provider-agnostic Meta webhook-challenge verifier (mode/token/challenge in, ok/reason out) with zero Instagram- or WhatsApp-specific logic, domain-mapped to 'messaging-shared-channel-infrastructure' precisely because it is meant to be reused by every Meta-family webhook route. This is a textbook shared/platform cross-cutting utility.",
+    "callerEvidence": "server/src/routes/instagramWebhook.ts:23 `import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';`, used at :328 and :360 to answer Meta's hub.verify_token challenge",
+    "targetEvidence": "server/src/utils/webhookVerification.ts:17 `export function verifyMetaWebhookChallenge(params: {...})` — generic mode/token/challenge validator, no Instagram-specific data or types.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟messaging-shared-channel-infrastructure␟utils/webhookVerification.ts␟import",
+    "classification": "C",
+    "reasoning": "Identical shared utility as the instagramWebhook.ts edge: the same generic `verifyMetaWebhookChallenge` function, reused verbatim by the WhatsApp Meta webhook route for the identical hub.verify_token handshake.",
+    "callerEvidence": "server/src/routes/metaWhatsAppWebhook.ts:31 `import { verifyMetaWebhookChallenge } from '../utils/webhookVerification.js';`, used at :173 and :313",
+    "targetEvidence": "server/src/utils/webhookVerification.ts:17 `verifyMetaWebhookChallenge()` — see prior edge's target evidence.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟messaging-automation-recall-followup␟services/postTreatmentMessaging.ts␟import",
+    "classification": "B",
+    "reasoning": "`triggerOnProcedureCompleted` lives under postTreatmentMessaging.ts's own '// ── Procedure completed trigger ──' section — a function named and shaped specifically to be invoked by procedure-completion code elsewhere in the codebase (an event-trigger entry point, not a reach into internal message-rendering logic). treatmentPlanProcedures.ts calls it exactly when a procedure is marked complete.",
+    "callerEvidence": "server/src/routes/treatmentPlanProcedures.ts:13 `import { triggerOnProcedureCompleted } from '../services/postTreatmentMessaging.js';`, used at :204 and :335 when `completingOnCreate`/`completingNow` is true",
+    "targetEvidence": "server/src/services/postTreatmentMessaging.ts:240-242 `// ── Procedure completed trigger ──` / `export async function triggerOnProcedureCompleted(args: {...})` — purpose-built external trigger entry point.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟messaging-email␟services/emailTemplates.ts␟import",
+    "classification": "C",
+    "reasoning": "emailTemplates.ts is a generic HTML-templating helper (brand layout + subject/html/text builders) with no user-management business logic; `buildStaffOnboardingEmail` is one of several template builders (alongside password-reset, email-verification) meant to be called by any route that needs to send a specific transactional email shape. This mirrors the sendMail() 'notification dispatch' pattern classified C elsewhere in this batch.",
+    "callerEvidence": "server/src/routes/users.ts:7 `import { buildStaffOnboardingEmail } from '../services/emailTemplates.js';`, used at :207 to build a staff-invite email, then dispatched via `sendMail`",
+    "targetEvidence": "server/src/services/emailTemplates.ts:1-40 generic `baseLayout()` HTML wrapper shared by all template builders (`buildPasswordResetEmail`, `buildStaffOnboardingEmail`, etc.) — no domain-specific data model.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/usersImport.ts␟messaging-email␟services/emailService.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic `sendMail` transactional-dispatch utility as the auth.ts/clinicRegistration.ts edges, used here to send bulk-import invitation emails to newly created staff.",
+    "callerEvidence": "server/src/routes/usersImport.ts:26 `import { sendMail } from '../services/emailService.js';`, used at :376 `sendMail({ to: newUser.email, subject, html, text })`",
+    "targetEvidence": "server/src/services/emailService.ts:34 generic `sendMail()` — see auth.ts edge's target evidence.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
+    "classification": "B",
+    "reasoning": "messaging-ai-orchestration exists specifically to serve the WhatsApp/Instagram channel processors with AI-driven NLU; routes/whatsapp.ts is the primary consumer of its extraction/date-normalization functions. Both symbols are used for real AI-assisted extraction, not incidental references. Outbound text is passed through `redactSensitiveText()` before being embedded in the Google AI Studio prompt (googleAiStudio.ts:163,264), so no unmitigated PII-to-third-party concern was observed here.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:10 `import { extractAssistantInputWithGoogleAi, normalizeDateWithGoogleAi } from '../services/googleAiStudio.js';`, used at :952, :3308, :3726",
+    "targetEvidence": "server/src/services/googleAiStudio.ts:2,163 `import { ..., redactSensitiveText } from './privacy/redaction.js';` ... `Latest customer message: ${JSON.stringify(redactSensitiveText(args.text))}` — the AI-orchestration domain's entire purpose is to be called by messaging channels, with PII redaction applied before the external API call.",
+    "followUpRequired": "none — PII redaction before the external Google AI Studio call is already in place; noted per task brief but not a new concern."
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/whatsappAgentSchema.ts␟import",
+    "classification": "B",
+    "reasoning": "whatsappAgentSchema.ts is the Zod-schema/type module defining the AI agent's decision shape, imported type-only by whatsapp.ts to type its own agent-decision handling. This is the schema module's designed purpose — to be the shared contract type between the AI-orchestration decision producer and its WhatsApp-channel consumer.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:12 `import type { WhatsAppAgentDecision } from '../services/whatsappAgentSchema.js';`",
+    "targetEvidence": "server/src/services/whatsappAgentSchema.ts:1-15 Zod-based schema/type definitions (`whatsappAgentIntentValues`, `whatsappAgentActionValues`, etc.) purpose-built as the agent-decision contract.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/whatsappConversationAgent.ts␟import",
+    "classification": "B",
+    "reasoning": "`resolveWhatsAppConversationAgentDecision` is the AI-orchestration domain's top-level decision-resolution entry point, called directly by routes/whatsapp.ts's inbound-message handling to get the AI-driven next action. This is the core intended integration point between the WhatsApp channel and the AI orchestration layer.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:11 `import { resolveWhatsAppConversationAgentDecision, type WhatsAppConversationAgentSource } from '../services/whatsappConversationAgent.js';`, used at :3461",
+    "targetEvidence": "server/src/services/whatsappConversationAgent.ts:18 exports `getGoogleAiStudioConfig` and the main resolution function that orchestrates the agent prompt/decision pipeline for WhatsApp callers.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-shared-channel-infrastructure␟utils/inboundRateLimiter.ts␟import",
+    "classification": "C",
+    "reasoning": "inboundRateLimiter.ts's own header explicitly scopes itself as a cross-channel utility ('Rate limiter for inbound AI message processing'), keyed generically by channel+connection+sender with no WhatsApp-specific logic — the domain-map's own 'messaging-shared-channel-infrastructure' label matches its actual generic design.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:59 `import { checkInboundRateLimit } from '../utils/inboundRateLimiter.js';`, used at :3905",
+    "targetEvidence": "server/src/utils/inboundRateLimiter.ts:1-4 'Rate limiter for inbound AI message processing. Keyed by: channel + connectionId + sender' — generic, channel-agnostic by design.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟messaging-shared-channel-infrastructure␟utils/messageSanitizer.ts␟import",
+    "classification": "C",
+    "reasoning": "messageSanitizer.ts's header explicitly states it is 'Used by all AI-connected inbound channels (Evolution WhatsApp, Meta WhatsApp, Instagram DM) before text reaches any AI layer' — self-documented shared/platform utility, exactly matching its domain-map label.",
+    "callerEvidence": "server/src/routes/whatsapp.ts:58 `import { sanitizeInboundMessageText } from '../utils/messageSanitizer.js';`, used at :2674",
+    "targetEvidence": "server/src/utils/messageSanitizer.ts:1-5 'Used by all AI-connected inbound channels (Evolution WhatsApp, Meta WhatsApp, Instagram DM) before text reaches any AI layer.'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
+    "classification": "B",
+    "reasoning": "Same AI-orchestration entry point as the whatsapp.ts edge, here consumed by the Instagram AI processor for date normalization — confirming the AI-orchestration layer is genuinely meant to serve multiple messaging channels (WhatsApp AND Instagram), not just WhatsApp.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:3 `import { normalizeDateWithGoogleAi } from '../googleAiStudio.js';`, used at :1194, :1597, :3726-equivalent call sites within this file",
+    "targetEvidence": "server/src/services/googleAiStudio.ts — `normalizeDateWithGoogleAi` is a generic date-normalization AI call, channel-agnostic by signature (text/date/timezone in, ISO date out).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappAgentSchema.ts␟import",
+    "classification": "B",
+    "reasoning": "Type-only import of the shared agent-decision contract (`WhatsAppAgentDecision`), reused by the Instagram processor because Instagram's AI conversation flow shares the same agent-decision shape as WhatsApp's — the schema module is domain-owned by messaging-ai-orchestration precisely so it can be a shared contract across channels.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:13 `import type { WhatsAppAgentDecision } from '../whatsappAgentSchema.js';`, used at :1099",
+    "targetEvidence": "server/src/services/whatsappAgentSchema.ts — shared decision/type schema (see whatsapp.ts edge's target evidence).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappConversationAgent.ts␟import",
+    "classification": "B",
+    "reasoning": "`resolveWhatsAppConversationAgentDecision` is called directly by the Instagram AI processor at its own agent-resolution point, mirroring the whatsapp.ts route's usage — this function is the AI-orchestration domain's shared resolution entry point across both channels.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:12 `import { resolveWhatsAppConversationAgentDecision } from '../whatsappConversationAgent.js';`, used at :2368",
+    "targetEvidence": "server/src/services/whatsappConversationAgent.ts:18 shared resolution/config entry point — see whatsapp.ts edge's target evidence.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappInterpreter.ts␟import",
+    "classification": "B",
+    "reasoning": "`interpretTimeRequest` is a pure, channel-agnostic Turkish time-expression parser exported by the AI-orchestration domain and consumed by the Instagram processor for the same time-preference interpretation WhatsApp uses — a deliberate shared NLU building block, not a reach into WhatsApp-private logic (whatsappInterpreter.ts itself is domain-owned by messaging-ai-orchestration, not messaging-whatsapp).",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:18 `import { interpretTimeRequest } from '../whatsappInterpreter.js';`, used at :465",
+    "targetEvidence": "server/src/services/whatsappInterpreter.ts:1-13 exports `TimePreference`/`InterpretedTimeRequest` and Turkish-language time-parsing logic with no channel-specific coupling.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappStepAwareNlu.ts␟import",
+    "classification": "B",
+    "reasoning": "`resolveStepAwareWhatsAppIntent` is called extensively (7+ call sites) by the Instagram processor for step-aware intent classification — despite its 'WhatsApp'-flavored name, the module is domain-owned by messaging-ai-orchestration and its own doc comment describes it as a generic 'step-aware semantic fallback' consulted by deterministic booking-flow handlers, which both channels share.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:46 `import { resolveStepAwareWhatsAppIntent } from '../whatsappStepAwareNlu.js';`, used at :1399,1529,1618,1629,1856,2015,2201,2309 etc.",
+    "targetEvidence": "server/src/services/whatsappStepAwareNlu.ts:1-15 'Step-aware semantic fallback for the WhatsApp booking flow... This module NEVER creates or confirms appointments and NEVER resolves patient identity' — generic NLU fallback, AI-orchestration owned.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-shared-channel-infrastructure␟utils/inboundRateLimiter.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic, channel-agnostic rate limiter as the whatsapp.ts edge, here used with `'instagram'` as the channel key — directly confirming the utility's designed cross-channel reuse.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:33 `import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';`, used at :2527 `checkInboundRateLimit('instagram', args.instagramConnectionId, args.externalSenderId)`",
+    "targetEvidence": "server/src/utils/inboundRateLimiter.ts:23 `buildKey(channel: string, connectionId: string, sender: string)` — channel is a caller-supplied parameter, confirming cross-channel design.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-shared-channel-infrastructure␟utils/messageSanitizer.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared sanitizer as the whatsapp.ts edge; its own header names Instagram DM explicitly as one of the 'all AI-connected inbound channels' it is meant to serve.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:32 `import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';`, used at :2520",
+    "targetEvidence": "server/src/utils/messageSanitizer.ts:4 'Used by all AI-connected inbound channels (Evolution WhatsApp, Meta WhatsApp, Instagram DM) before text reaches any AI layer.'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-whatsapp␟utils/whatsappDate.ts␟import",
+    "classification": "F",
+    "reasoning": "whatsappDate.ts's actual content (turkishMonths/turkishWeekdays lookup tables, `formatTurkishDateLong`, `normalizeDateFromTurkishInput`, etc.) is generic Turkish-locale date parsing/formatting with zero WhatsApp API or business-logic coupling — the file was domain-mapped to messaging-whatsapp purely by its filename. Its own use by the Instagram AI processor (a different messaging channel entirely) for the identical date-formatting need is direct evidence the utility is actually channel-agnostic and was over-narrowly assigned by the domain-map generator, not a real WhatsApp-domain boundary crossing.",
+    "callerEvidence": "server/src/services/instagram/instagramAiConversationProcessor.ts:29-31 `import { formatTurkishDateLong, WHATSAPP_ASSISTANT_TIME_ZONE } from '../../utils/whatsappDate.js';`, used at :258, :446",
+    "targetEvidence": "server/src/utils/whatsappDate.ts:1,277 `export const WHATSAPP_ASSISTANT_TIME_ZONE = 'Europe/Paris';` / `export const formatTurkishDateLong = (isoDate, timeZone = WHATSAPP_ASSISTANT_TIME_ZONE) => {...}` — no WhatsApp import, API call, or business rule anywhere in the 294-line file; grep for 'whatsapp' inside the file body matches only the constant's own name.",
+    "followUpRequired": "Domain-map correction candidate: consider re-labeling utils/whatsappDate.ts as shared/platform (or messaging-shared-channel-infrastructure) given it is now confirmed multi-channel; the 'WHATSAPP_ASSISTANT_TIME_ZONE' constant name is misleading relative to its actual scope."
+  },
+  {
+    "edgeKey": "server/src/services/taskAssignmentNotifier.ts␟messaging-whatsapp␟services/whatsapp/whatsappService.ts␟import",
+    "classification": "B",
+    "reasoning": "Same unified send API as the reminders.ts edge — whatsappService.ts's header names 'jobs' generally as an intended caller category and states 'All application code... calls this service'; taskAssignmentNotifier.ts (core-notifications) uses it to notify a staff member of a task assignment via the standard send path.",
+    "callerEvidence": "server/src/services/taskAssignmentNotifier.ts:3 `import { sendWhatsAppMessage } from './whatsapp/whatsappService.js';`, used at :33 `sendWhatsAppMessage(clinicId, { phone: assignee.phone, text: body })`",
+    "targetEvidence": "server/src/services/whatsapp/whatsappService.ts:3-4 'All application code (routes, jobs, reminders) calls this service.'",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
+    "classification": "B",
+    "reasoning": "metaWhatsAppAiProcessor.ts is messaging-whatsapp's own AI-driven inbound processor; calling into messaging-ai-orchestration's `normalizeDateWithGoogleAi` for date extraction is precisely the intended division of labor between the channel-specific processor and the shared AI-orchestration layer.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:26 `import { normalizeDateWithGoogleAi } from '../googleAiStudio.js';`, used at :1203, :1837",
+    "targetEvidence": "server/src/services/googleAiStudio.ts — channel-agnostic AI date-normalization function (see whatsapp.ts edge's target evidence).",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/whatsappAgentSchema.ts␟import",
+    "classification": "B",
+    "reasoning": "Type-only import of the shared agent-decision contract, used to type this processor's own decision-logging helper — same pattern as every other consumer of whatsappAgentSchema.ts in this batch.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:39 `import type { WhatsAppAgentDecision } from '../whatsappAgentSchema.js';`, used at :1100",
+    "targetEvidence": "server/src/services/whatsappAgentSchema.ts — shared decision/type schema.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/whatsappConversationAgent.ts␟import",
+    "classification": "B",
+    "reasoning": "`resolveWhatsAppConversationAgentDecision` is called at this processor's own final agent-resolution step (line 2456), the same shared entry point used by whatsapp.ts and the Instagram processor.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:36 `import { resolveWhatsAppConversationAgentDecision } from '../whatsappConversationAgent.js';`, used at :2456",
+    "targetEvidence": "server/src/services/whatsappConversationAgent.ts:18 shared resolution entry point.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/whatsappStepAwareNlu.ts␟import",
+    "classification": "B",
+    "reasoning": "`resolveStepAwareWhatsAppIntent` is called at 9+ sites throughout this processor for step-aware NLU fallback — this is the primary, designed consumer of the function (it is literally the WhatsApp processor, matching the module's own 'WhatsApp booking flow' framing), the clearest-cut B in this batch.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:37 `import { resolveStepAwareWhatsAppIntent } from '../whatsappStepAwareNlu.js';`, used at :1618,1770,1878,2144,2265,2357 etc.",
+    "targetEvidence": "server/src/services/whatsappStepAwareNlu.ts:1-6 'Step-aware semantic fallback for the WhatsApp booking flow. Deterministic step handlers (whatsappBookingFlow.ts) run FIRST...' — explicitly framed around the WhatsApp flow this processor implements.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-shared-channel-infrastructure␟utils/inboundRateLimiter.ts␟import",
+    "classification": "C",
+    "reasoning": "Same generic cross-channel rate limiter as the other inboundRateLimiter.ts edges, used here with the `'meta_whatsapp'` channel key.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:67 `import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';`, used at :2608 `checkInboundRateLimit('meta_whatsapp', args.connectionId, args.phone)`",
+    "targetEvidence": "server/src/utils/inboundRateLimiter.ts:23 channel-parameterized rate-limit key builder.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-shared-channel-infrastructure␟utils/messageSanitizer.ts␟import",
+    "classification": "C",
+    "reasoning": "Same shared sanitizer as the other messageSanitizer.ts edges in this batch, used here for Meta WhatsApp's inbound text before the AI layer.",
+    "callerEvidence": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts:66 `import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';`, used at :2601",
+    "targetEvidence": "server/src/utils/messageSanitizer.ts:4 explicit multi-channel scope statement.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappAvailability.ts␟messaging-ai-orchestration␟services/whatsappInterpreter.ts␟import",
+    "classification": "C",
+    "reasoning": "This is a type-only import of `TimePreference` (`import type { TimePreference } from './whatsappInterpreter.js';`) — a small, shared vocabulary type ('afternoon'|'morning'|'noon'|'evening') used to filter appointment slots by the AI-parsed time-of-day preference. It carries zero runtime coupling (erased at compile time) and matches the rubric's own 'shared helpers/constants/types' example under platform-shared edges rather than a reach into AI-orchestration's private logic.",
+    "callerEvidence": "server/src/services/whatsappAvailability.ts:2 `import type { TimePreference } from './whatsappInterpreter.js';`, used at :40 `filterSlotsByTimePreference(slots: SavedAvailableSlot[], preference: TimePreference)`",
+    "targetEvidence": "server/src/services/whatsappInterpreter.ts:1 `export type TimePreference = 'afternoon' | 'morning' | 'noon' | 'evening';` — a plain exported union type, not business logic.",
+    "followUpRequired": "none"
+  },
+  {
+    "edgeKey": "server/src/services/whatsappStepAwareNlu.ts␟messaging-whatsapp␟services/whatsapp/humanHandoffPhrases.ts␟import",
+    "classification": "B",
+    "reasoning": "humanHandoffPhrases.ts's own header comment documents this exact edge by name: it was extracted specifically to de-duplicate two previously drifted keyword lists in metaWhatsAppAiProcessor.ts and whatsappStepAwareNlu.ts, stating 'Both call sites now import this single pure predicate instead.' This is a deliberate, documented shared-predicate refactor, not an incidental cross-domain reach.",
+    "callerEvidence": "server/src/services/whatsappStepAwareNlu.ts:20 `import { isHumanHandoffPhrase } from './whatsapp/humanHandoffPhrases.js';`",
+    "targetEvidence": "server/src/services/whatsapp/humanHandoffPhrases.ts:1-13 'single source of truth for \"the user wants a human\" phrase detection... Both call sites now import this single pure predicate instead.'",
+    "followUpRequired": "none"
+  }
+]

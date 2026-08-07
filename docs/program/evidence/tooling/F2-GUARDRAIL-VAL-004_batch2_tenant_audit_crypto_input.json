@@ -1,0 +1,1294 @@
+[
+  {
+    "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-config-secrets␟services/platformSettings.ts␟import",
+    "callerPath": "server/src/jobs/dataRetentionCleanupJob.ts",
+    "ownerDomain": "core-config-secrets",
+    "targetModelOrSymbol": "services/platformSettings.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "ba864c63b883814b"
+    ],
+    "callerSymbols": [
+      "getPlatformSetting"
+    ],
+    "edgeShape": "jobs -> services",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-config-secrets",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/middleware/platformAuth.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "callerPath": "server/src/middleware/platformAuth.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/secrets.ts",
+    "accessKind": "import",
+    "callerDomain": "core-platform-administration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "3023f4bc4f93760b"
+    ],
+    "callerSymbols": [
+      "getSecret"
+    ],
+    "edgeShape": "middleware -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/routes/appointmentRequests.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/routes/appointmentRequests.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-appointments-availability",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "89727e1b21c0ea78"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/appointments.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "callerPath": "server/src/routes/appointments.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/relationGuards.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-appointments-availability",
+    "callerDomainVaries": false,
+    "clusterSize": 4,
+    "findingIds": [
+      "9c0559fc3d20047c",
+      "b68afac00462f972",
+      "bbfe2e71608a4666",
+      "cac6d51ab1835708"
+    ],
+    "callerSymbols": [
+      "findAppointmentTypeInClinic",
+      "findPatientInClinic",
+      "findTreatmentCaseInClinic",
+      "findUserAssignedToClinic"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/auth.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/routes/auth.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "core-identity-access",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "44531dc1e40f77f0"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "auth"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/externalCalendarWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "callerPath": "server/src/routes/externalCalendarWebhook.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/secrets.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "c108af6b6e96179d"
+    ],
+    "callerSymbols": [
+      "requireWebhookSecretInProduction"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "integrations"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/imaging.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-server-viewer",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "5939bc0711995048",
+      "865198f58cdd3d41"
+    ],
+    "callerSymbols": [
+      "resolveEffectiveClinicId",
+      "validateAndGetClinicIdScope"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging",
+      "tenancy"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/imaging.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "callerPath": "server/src/routes/imaging.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/relationGuards.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-server-viewer",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "43a355fb42f0d8e2",
+      "b94be9cbe176e460",
+      "e83525ee9affdbbd"
+    ],
+    "callerSymbols": [
+      "findAppointmentInClinic",
+      "findPatientInClinic",
+      "findTreatmentCaseInClinic"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "imaging",
+      "tenancy"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "callerPath": "server/src/routes/instagramWebhook.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/auditLog.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "9beafda223b4f2de"
+    ],
+    "callerSymbols": [
+      "writeAuditLog"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/instagramWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "callerPath": "server/src/routes/instagramWebhook.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/secrets.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "25ef1584604c02a5"
+    ],
+    "callerSymbols": [
+      "requireWebhookSecretInProduction"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "callerPath": "server/src/routes/metaWhatsAppWebhook.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/encryption.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "c6913008cf98d4a2"
+    ],
+    "callerSymbols": [
+      "decryptSecretTagged"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "callerPath": "server/src/routes/metaWhatsAppWebhook.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/secrets.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "9b955ef5624343fc"
+    ],
+    "callerSymbols": [
+      "requireWebhookSecretInProduction"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/routes/noShows.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/noShows.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-appointments-availability",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "7d6f94b45e34de1c"
+    ],
+    "callerSymbols": [
+      "getAccessibleClinicIds"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/organizationInstagram.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "callerPath": "server/src/routes/organizationInstagram.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/encryption.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "459f344f39c6ae36",
+      "b9eb1e5593972375"
+    ],
+    "callerSymbols": [
+      "encryptSecret",
+      "encryptSecretTagged"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/routes/organizationWhatsApp.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "5e59cfbb3dda0e82"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "callerPath": "server/src/routes/organizationWhatsApp.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/encryption.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "394f8c2eb2abd00c",
+      "dcaadec0eff99816"
+    ],
+    "callerSymbols": [
+      "encryptSecret",
+      "encryptSecretTagged"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/routes/patients.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/patients.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-patients",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "cee9044e51e93f0a"
+    ],
+    "callerSymbols": [
+      "validateAndGetScope"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/patientsImport.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/patientsImport.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-patients",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "6a92b7fc25469c08"
+    ],
+    "callerSymbols": [
+      "getAccessibleClinicIds"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/paymentPlans.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/routes/paymentPlans.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-basic-payments",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "7dff8ad50cdb19f4"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/payments.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/routes/payments.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-basic-payments",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "2d8e032c2808c50c"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "finance"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-config-secrets␟services/platformSettings.ts␟import",
+    "callerPath": "server/src/routes/platformAdmin.ts",
+    "ownerDomain": "core-config-secrets",
+    "targetModelOrSymbol": "services/platformSettings.ts",
+    "accessKind": "import",
+    "callerDomain": "core-platform-administration",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "99d3ab0429f4ea93",
+      "d4ef24805a869a86",
+      "f2d992de8c9db51d"
+    ],
+    "callerSymbols": [
+      "getPlatformSetting",
+      "setPlatformSetting",
+      "unsetPlatformSetting"
+    ],
+    "edgeShape": "routes -> services",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "CENSUS_HIGH_RISK_DOMAIN_SMALL",
+    "samplingStratum": "highRiskDomainCensus:core-config-secrets",
+    "inclusionProbability": 1
+  },
+  {
+    "edgeKey": "server/src/routes/platformAdmin.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "callerPath": "server/src/routes/platformAdmin.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/encryption.ts",
+    "accessKind": "import",
+    "callerDomain": "core-platform-administration",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "1817e06707028e25",
+      "e8b0c23278bafa57"
+    ],
+    "callerSymbols": [
+      "decryptSecretTagged",
+      "encryptSecretTagged"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/routes/practitionerPayouts.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "e98372c2e167d4c5"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "finance"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/practitionerPayouts.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "finance-advanced-compensation",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "39b557fa2bf213f1",
+      "4e6d8b14ead878c0",
+      "52e7e0f040930845"
+    ],
+    "callerSymbols": [
+      "getAccessibleClinicIds",
+      "resolveEffectiveClinicId",
+      "validateAndGetClinicIdScope"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "finance",
+      "tenancy"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/reportExport.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "callerPath": "server/src/routes/reportExport.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/auditLog.ts",
+    "accessKind": "import",
+    "callerDomain": "reporting-analytics",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "248957ca628a5d9f"
+    ],
+    "callerSymbols": [
+      "extractRequestMeta"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/reports.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/reports.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "reporting-analytics",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "9b95d0b0d6c209ed"
+    ],
+    "callerSymbols": [
+      "validateAndGetClinicIdScope"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/schedules.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/schedules.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-appointments-availability",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "60bd5eab977bfa91"
+    ],
+    "callerSymbols": [
+      "getAccessibleClinicIds"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/sms.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/routes/sms.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-sms",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "cdf2678d3d7c47ad"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/tasks.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-tasks-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "625534820665f258",
+      "64f97e3ac8320172",
+      "e263e873b63667a2"
+    ],
+    "callerSymbols": [
+      "getAccessibleClinicIds",
+      "resolveEffectiveClinicId",
+      "validateAndGetClinicIdScope"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/tasks.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "callerPath": "server/src/routes/tasks.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/relationGuards.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-tasks-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "b9d3fe192b4dfd4c"
+    ],
+    "callerSymbols": [
+      "validateTaskRelations"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/treatmentCases.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-treatment-cases",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "1d3426e54f784445",
+      "49e88be6d573008a",
+      "ec94ff2501ad9611"
+    ],
+    "callerSymbols": [
+      "getAccessibleClinicIds",
+      "resolveEffectiveClinicId",
+      "validateAndGetClinicIdScope"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentCases.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+    "callerPath": "server/src/routes/treatmentCases.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/relationGuards.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-treatment-cases",
+    "callerDomainVaries": false,
+    "clusterSize": 3,
+    "findingIds": [
+      "31486e3dc7abefce",
+      "770e5ea4ff99503a",
+      "dac742d45856ac35"
+    ],
+    "callerSymbols": [
+      "findAppointmentTypeInClinic",
+      "findPatientInClinic",
+      "findUserAssignedToClinic"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPackages.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/routes/treatmentPackages.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-treatment-cases",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "b9ddaeed99a5b346"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/treatmentPlanProcedures.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "clinical-dental-chart-procedures",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "4daab609da67adf8"
+    ],
+    "callerSymbols": [
+      "getAccessibleClinicIds"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/users.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/routes/users.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "d2d12c6cdd34e1bb"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/routes/usersImport.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+    "callerPath": "server/src/routes/usersImport.ts",
+    "ownerDomain": "core-tenant-security",
+    "targetModelOrSymbol": "utils/clinicScope.ts",
+    "accessKind": "import",
+    "callerDomain": "core-org-clinic-membership",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "6ec80d15214c27df"
+    ],
+    "callerSymbols": [
+      "getAccessibleClinicIds"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "tenancy"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-tenant-security",
+    "inclusionProbability": 0.30612244897959184
+  },
+  {
+    "edgeKey": "server/src/routes/whatsapp.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "callerPath": "server/src/routes/whatsapp.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/encryption.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "83e1d386e2aeead0"
+    ],
+    "callerSymbols": [
+      "decryptSecretTagged"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/routes/whatsappInbox.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "callerPath": "server/src/routes/whatsappInbox.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/auditLog.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "7c584b9b0f5d579f",
+      "903e673173238f1e"
+    ],
+    "callerSymbols": [
+      "extractRequestMeta",
+      "writeAuditLog"
+    ],
+    "edgeShape": "routes -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/services/externalCalendar/digidentis/DigiDentisProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "callerPath": "server/src/services/externalCalendar/digidentis/DigiDentisProvider.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/encryption.ts",
+    "accessKind": "import",
+    "callerDomain": "external-calendar-integration",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "f9d16c8ca778960f"
+    ],
+    "callerSymbols": [
+      "decryptSecret"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "integrations"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/services/imaging/bridgePairing.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+    "callerPath": "server/src/services/imaging/bridgePairing.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/secrets.ts",
+    "accessKind": "import",
+    "callerDomain": "imaging-device-bridge",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "d3a99c50cec197e7"
+    ],
+    "callerSymbols": [
+      "getSecret"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "imaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/services/instagram/InstagramMessagingProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "callerPath": "server/src/services/instagram/InstagramMessagingProvider.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/encryption.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-instagram",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "3cf55f0b49647c7c"
+    ],
+    "callerSymbols": [
+      "decryptSecret"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/services/privacy/patientAnonymization.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+    "callerPath": "server/src/services/privacy/patientAnonymization.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/auditLog.ts",
+    "accessKind": "import",
+    "callerDomain": "core-privacy-consent-retention-dsr",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "ecd3a0fd8ee2540e"
+    ],
+    "callerSymbols": [
+      "writeAuditLog"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "privacy-kvkk"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/services/recallCandidateService.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/services/recallCandidateService.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-automation-recall-followup",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "3761591bde6191fb"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  },
+  {
+    "edgeKey": "server/src/services/sms/platformSmsProviders.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "callerPath": "server/src/services/sms/platformSmsProviders.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/encryption.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-sms",
+    "callerDomainVaries": false,
+    "clusterSize": 2,
+    "findingIds": [
+      "1deebd37096dc6a4",
+      "4588a88c2ac3df4e"
+    ],
+    "callerSymbols": [
+      "decryptJson",
+      "encryptJson"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "2-4",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "callerPath": "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/encryption.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "7784dc66de55985d"
+    ],
+    "callerSymbols": [
+      "decryptSecret"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+    "callerPath": "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts",
+    "ownerDomain": "core-platform-crypto",
+    "targetModelOrSymbol": "utils/encryption.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "30762b7975bb1c73"
+    ],
+    "callerSymbols": [
+      "decryptSecret"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "crypto-secrets (extension)",
+      "messaging"
+    ],
+    "partialBaselineResidue": false,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-platform-crypto",
+    "inclusionProbability": 0.75
+  },
+  {
+    "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟core-audit-activity␟utils/activity.ts␟import",
+    "callerPath": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts",
+    "ownerDomain": "core-audit-activity",
+    "targetModelOrSymbol": "utils/activity.ts",
+    "accessKind": "import",
+    "callerDomain": "messaging-whatsapp",
+    "callerDomainVaries": false,
+    "clusterSize": 1,
+    "findingIds": [
+      "f4d24e31a4eddc95"
+    ],
+    "callerSymbols": [
+      "logActivity"
+    ],
+    "edgeShape": "services -> utils",
+    "clusterSizeBucket": "1",
+    "highRisk": true,
+    "highRiskCategories": [
+      "audit",
+      "messaging"
+    ],
+    "partialBaselineResidue": true,
+    "selectionReason": "SAMPLED_HIGH_RISK_OVERSAMPLE",
+    "samplingStratum": "highRiskOversample:core-audit-activity",
+    "inclusionProbability": 0.24193548387096775
+  }
+]

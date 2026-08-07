@@ -1,0 +1,3755 @@
+{
+  "N": 552,
+  "n": 150,
+  "totalSampleReviewed": 192,
+  "totalFindingsRepresentedBySample": 349,
+  "sampleFractionAtEdgeLevel": 0.34782608695652173,
+  "val001Tally": {
+    "C": 143,
+    "A": 1,
+    "B": 39,
+    "D": 4,
+    "H": 3,
+    "F": 2
+  },
+  "briefTally": {
+    "briefB_accepted_expected": 182,
+    "briefA_true_positive": 4,
+    "briefD_ambiguous_unverified": 4,
+    "briefC_scanner_classification_fp": 2
+  },
+  "classifiedNonAmbiguous": 188,
+  "rawAsSampledMetrics": {
+    "truePositivePrecision": 0.02127659574468085,
+    "falsePositiveRate": 0.9787234042553191,
+    "acceptedExpectedRate": 0.9680851063829787,
+    "scannerClassificationDefectRate": 0.010638297872340425,
+    "ambiguityRate": 0.020833333333333332
+  },
+  "strata": [
+    {
+      "stratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "n_h_reviewed": 16,
+      "n_h_ambiguous": 1,
+      "n_h_effective": 15,
+      "fp_h": 15,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:clinical-basic-payments",
+      "N_h": 1,
+      "n_h_reviewed": 1,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 1,
+      "fp_h": 1,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:core-config-secrets",
+      "N_h": 2,
+      "n_h_reviewed": 2,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 2,
+      "fp_h": 2,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:core-permissions-roles",
+      "N_h": 8,
+      "n_h_reviewed": 8,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 8,
+      "fp_h": 8,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "n_h_reviewed": 15,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 15,
+      "fp_h": 15,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:core-security-incident-detection",
+      "N_h": 3,
+      "n_h_reviewed": 3,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 3,
+      "fp_h": 3,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "n_h_reviewed": 13,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 13,
+      "fp_h": 13,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:external-calendar-integration",
+      "N_h": 2,
+      "n_h_reviewed": 2,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 2,
+      "fp_h": 2,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:imaging-device-bridge",
+      "N_h": 3,
+      "n_h_reviewed": 3,
+      "n_h_ambiguous": 3,
+      "n_h_effective": 0,
+      "fp_h": 0,
+      "rate_h": null,
+      "estimable": false
+    },
+    {
+      "stratum": "highRiskDomainCensus:imaging-server-viewer",
+      "N_h": 2,
+      "n_h_reviewed": 2,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 2,
+      "fp_h": 1,
+      "rate_h": 0.5,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "n_h_reviewed": 13,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 13,
+      "fp_h": 13,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "N_h": 1,
+      "n_h_reviewed": 1,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 1,
+      "fp_h": 1,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:messaging-email",
+      "N_h": 4,
+      "n_h_reviewed": 4,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 4,
+      "fp_h": 4,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+      "N_h": 8,
+      "n_h_reviewed": 8,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 8,
+      "fp_h": 8,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskDomainCensus:messaging-whatsapp",
+      "N_h": 6,
+      "n_h_reviewed": 6,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 6,
+      "fp_h": 5,
+      "rate_h": 0.8333333333333334,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "n_h_reviewed": 15,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 15,
+      "fp_h": 15,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "n_h_reviewed": 15,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 15,
+      "fp_h": 15,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "n_h_reviewed": 15,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 15,
+      "fp_h": 15,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "n_h_reviewed": 15,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 15,
+      "fp_h": 15,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "orgDashCallerCensus",
+      "N_h": 4,
+      "n_h_reviewed": 4,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 4,
+      "fp_h": 4,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "routeToRouteCensus",
+      "N_h": 1,
+      "n_h_reviewed": 1,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 1,
+      "fp_h": 0,
+      "rate_h": 0,
+      "estimable": true
+    },
+    {
+      "stratum": "smallCellCensus:clinical-patients",
+      "N_h": 1,
+      "n_h_reviewed": 1,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 1,
+      "fp_h": 0,
+      "rate_h": 0,
+      "estimable": true
+    },
+    {
+      "stratum": "smallCellCensus:core-notifications",
+      "N_h": 2,
+      "n_h_reviewed": 2,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 2,
+      "fp_h": 2,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "smallCellCensus:core-platform-administration",
+      "N_h": 3,
+      "n_h_reviewed": 3,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 3,
+      "fp_h": 3,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "smallCellCensus:inventory",
+      "N_h": 1,
+      "n_h_reviewed": 1,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 1,
+      "fp_h": 1,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "standardProportional:clinical-appointments-availability",
+      "N_h": 9,
+      "n_h_reviewed": 1,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 1,
+      "fp_h": 1,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "standardProportional:core-observability-ops-events",
+      "N_h": 13,
+      "n_h_reviewed": 1,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 1,
+      "fp_h": 1,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "standardProportional:core-org-clinic-membership",
+      "N_h": 16,
+      "n_h_reviewed": 1,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 1,
+      "fp_h": 1,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "standardProportional:core-shared-events-queue-idempotency",
+      "N_h": 9,
+      "n_h_reviewed": 1,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 1,
+      "fp_h": 1,
+      "rate_h": 1,
+      "estimable": true
+    },
+    {
+      "stratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "n_h_reviewed": 19,
+      "n_h_ambiguous": 0,
+      "n_h_effective": 19,
+      "fp_h": 19,
+      "rate_h": 1,
+      "estimable": true
+    }
+  ],
+  "weightedEstimate": {
+    "p_hat": 0.9927140255009107,
+    "variance": 0,
+    "se": 0,
+    "ci95_analytic": [
+      0.9927140255009107,
+      0.9927140255009107
+    ],
+    "coveredN": 549,
+    "excludedN": 3,
+    "excludedStrata": [
+      {
+        "stratum": "highRiskDomainCensus:imaging-device-bridge",
+        "N_h": 3,
+        "n_h_reviewed": 3
+      }
+    ],
+    "singletonStrataNoVariance": [
+      "highRiskDomainCensus:clinical-basic-payments",
+      "highRiskDomainCensus:messaging-automation-recall-followup",
+      "routeToRouteCensus",
+      "smallCellCensus:clinical-patients",
+      "smallCellCensus:inventory",
+      "standardProportional:clinical-appointments-availability",
+      "standardProportional:core-observability-ops-events",
+      "standardProportional:core-org-clinic-membership",
+      "standardProportional:core-shared-events-queue-idempotency"
+    ]
+  },
+  "bootstrapCI": {
+    "iterations": 2000,
+    "seed": "F2-GUARDRAIL-VAL-004-BOOTSTRAP-v1",
+    "ci95_percentile": [
+      0.9890710382513661,
+      0.9963570127504554
+    ],
+    "meanEstimate": 0.9926803278688673
+  },
+  "ciAgreement": "DEGENERATE_NARROW_BOTH_METHODS_SEE_CONSERVATIVE_BOUND",
+  "conservativeBound": {
+    "p_hat_conservative_accepted_rate": 0.7889768438159703,
+    "p_hat_conservative_violation_rate_ceiling": 0.21102315618402967,
+    "detail": [
+      {
+        "stratum": "cluster5PlusCensus",
+        "N_h": 16,
+        "n_h_effective": 15,
+        "isCensus": false,
+        "corrected": true,
+        "violationRateUsed": 0.18103627252208465
+      },
+      {
+        "stratum": "highRiskOversample:core-audit-activity",
+        "N_h": 62,
+        "n_h_effective": 15,
+        "isCensus": false,
+        "corrected": true,
+        "violationRateUsed": 0.18103627252208465
+      },
+      {
+        "stratum": "highRiskOversample:core-identity-access",
+        "N_h": 55,
+        "n_h_effective": 15,
+        "isCensus": false,
+        "corrected": true,
+        "violationRateUsed": 0.18103627252208465
+      },
+      {
+        "stratum": "highRiskOversample:core-platform-crypto",
+        "N_h": 20,
+        "n_h_effective": 15,
+        "isCensus": false,
+        "corrected": true,
+        "violationRateUsed": 0.18103627252208465
+      },
+      {
+        "stratum": "highRiskOversample:core-tenant-security",
+        "N_h": 49,
+        "n_h_effective": 15,
+        "isCensus": false,
+        "corrected": true,
+        "violationRateUsed": 0.18103627252208465
+      },
+      {
+        "stratum": "standardProportional:clinical-appointments-availability",
+        "N_h": 9,
+        "n_h_effective": 1,
+        "isCensus": false,
+        "corrected": true,
+        "violationRateUsed": 0.95
+      },
+      {
+        "stratum": "standardProportional:core-observability-ops-events",
+        "N_h": 13,
+        "n_h_effective": 1,
+        "isCensus": false,
+        "corrected": true,
+        "violationRateUsed": 0.95
+      },
+      {
+        "stratum": "standardProportional:core-org-clinic-membership",
+        "N_h": 16,
+        "n_h_effective": 1,
+        "isCensus": false,
+        "corrected": true,
+        "violationRateUsed": 0.95
+      },
+      {
+        "stratum": "standardProportional:core-shared-events-queue-idempotency",
+        "N_h": 9,
+        "n_h_effective": 1,
+        "isCensus": false,
+        "corrected": true,
+        "violationRateUsed": 0.95
+      },
+      {
+        "stratum": "standardProportional:core-shared-platform-infrastructure",
+        "N_h": 210,
+        "n_h_effective": 19,
+        "isCensus": false,
+        "corrected": true,
+        "violationRateUsed": 0.14586850331224344
+      }
+    ]
+  },
+  "highRiskMetrics": {
+    "n": 173,
+    "classifiedNonAmbiguous": 169,
+    "truePositiveCount": 4,
+    "falsePositiveRate": 0.9763313609467456,
+    "ambiguityRate": 0.023121387283236993
+  },
+  "byEdgeShape": [
+    {
+      "edgeShape": "routes -> utils",
+      "n": 68,
+      "classifiedNonAmbiguous": 68,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "services -> services",
+      "n": 31,
+      "classifiedNonAmbiguous": 31,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "routes -> services",
+      "n": 29,
+      "classifiedNonAmbiguous": 26,
+      "truePositiveCount": 1,
+      "falsePositiveRate": 0.9615384615384616
+    },
+    {
+      "edgeShape": "routes -> middleware",
+      "n": 17,
+      "classifiedNonAmbiguous": 17,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "services -> utils",
+      "n": 16,
+      "classifiedNonAmbiguous": 15,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "routes -> root-or-other",
+      "n": 7,
+      "classifiedNonAmbiguous": 7,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "services -> root-or-other",
+      "n": 6,
+      "classifiedNonAmbiguous": 6,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "jobs -> services",
+      "n": 5,
+      "classifiedNonAmbiguous": 5,
+      "truePositiveCount": 1,
+      "falsePositiveRate": 0.8
+    },
+    {
+      "edgeShape": "jobs -> jobs",
+      "n": 4,
+      "classifiedNonAmbiguous": 4,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "jobs -> utils",
+      "n": 2,
+      "classifiedNonAmbiguous": 2,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "middleware -> utils",
+      "n": 2,
+      "classifiedNonAmbiguous": 2,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "jobs -> root-or-other",
+      "n": 1,
+      "classifiedNonAmbiguous": 1,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "routes -> jobs",
+      "n": 1,
+      "classifiedNonAmbiguous": 1,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "edgeShape": "routes -> routes",
+      "n": 1,
+      "classifiedNonAmbiguous": 1,
+      "truePositiveCount": 1,
+      "falsePositiveRate": 0
+    },
+    {
+      "edgeShape": "services -> routes",
+      "n": 1,
+      "classifiedNonAmbiguous": 1,
+      "truePositiveCount": 1,
+      "falsePositiveRate": 0
+    },
+    {
+      "edgeShape": "utils -> services",
+      "n": 1,
+      "classifiedNonAmbiguous": 1,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    }
+  ],
+  "byCallerLayer": [
+    {
+      "callerLayer": "routes",
+      "n": 123,
+      "classifiedNonAmbiguous": 120,
+      "truePositiveCount": 2,
+      "falsePositiveRate": 0.9833333333333333
+    },
+    {
+      "callerLayer": "services",
+      "n": 54,
+      "classifiedNonAmbiguous": 53,
+      "truePositiveCount": 1,
+      "falsePositiveRate": 0.9811320754716981
+    },
+    {
+      "callerLayer": "jobs",
+      "n": 12,
+      "classifiedNonAmbiguous": 12,
+      "truePositiveCount": 1,
+      "falsePositiveRate": 0.9166666666666666
+    },
+    {
+      "callerLayer": "middleware",
+      "n": 2,
+      "classifiedNonAmbiguous": 2,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    },
+    {
+      "callerLayer": "utils",
+      "n": 1,
+      "classifiedNonAmbiguous": 1,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    }
+  ],
+  "byClusterSizeBucket": [
+    {
+      "clusterSizeBucket": "1",
+      "n": 124,
+      "classifiedNonAmbiguous": 122,
+      "truePositiveCount": 3,
+      "falsePositiveRate": 0.9754098360655737
+    },
+    {
+      "clusterSizeBucket": "2-4",
+      "n": 52,
+      "classifiedNonAmbiguous": 51,
+      "truePositiveCount": 1,
+      "falsePositiveRate": 0.9803921568627451
+    },
+    {
+      "clusterSizeBucket": "5+",
+      "n": 16,
+      "classifiedNonAmbiguous": 15,
+      "truePositiveCount": 0,
+      "falsePositiveRate": 1
+    }
+  ],
+  "joined": [
+    {
+      "edgeKey": "server/src/jobs/clinicBulkExportCleanupJob.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk",
+        "storage"
+      ],
+      "edgeShape": "jobs -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/dataRetentionCleanupJob.ts␟core-config-secrets␟services/platformSettings.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-config-secrets",
+      "N_h": 2,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "jobs -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-config-secrets",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/externalCalendarOutboundSyncJob.ts␟core-observability-ops-events␟utils/logger.ts␟import",
+      "samplingStratum": "standardProportional:core-observability-ops-events",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "edgeShape": "jobs -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-observability-ops-events",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/imagingBridgeOfflineJob.ts␟core-shared-events-queue-idempotency␟utils/jobLock.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-events-queue-idempotency",
+      "N_h": 9,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "edgeShape": "jobs -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-events-queue-idempotency",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/inboundEventRetryJob.ts␟messaging-whatsapp␟services/whatsapp/MetaCloudWhatsAppProvider.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
+      "N_h": 6,
+      "val001Classification": "A",
+      "briefCat": "briefA_true_positive",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "jobs -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-whatsapp",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/metaTemplateSyncJob.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "jobs -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/reminders.ts␟messaging-whatsapp␟services/whatsapp/whatsappOutboundMessaging.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
+      "N_h": 6,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "jobs -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-whatsapp",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/jobs/reminders.ts␟messaging-whatsapp␟services/whatsapp/whatsappService.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
+      "N_h": 6,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "jobs -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-whatsapp",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟core-privacy-consent-retention-dsr␟jobs/dataRetentionCleanupJob.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "edgeShape": "jobs -> jobs",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟core-storage-abstraction␟jobs/fileBackupJob.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "edgeShape": "jobs -> jobs",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟external-calendar-integration␟jobs/externalCalendarInboundRetryJob.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:external-calendar-integration",
+      "N_h": 2,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "edgeShape": "jobs -> jobs",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "external-calendar-integration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/jobs/startBackgroundJobs.ts␟external-calendar-integration␟jobs/externalCalendarOutboundSyncJob.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:external-calendar-integration",
+      "N_h": 2,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "edgeShape": "jobs -> jobs",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "external-calendar-integration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/middleware/auth.ts␟core-permissions-roles␟utils/roles.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "middleware -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-permissions-roles",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/middleware/platformAuth.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)"
+      ],
+      "edgeShape": "middleware -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/appointmentRequests.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/appointments.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 6
+    },
+    {
+      "edgeKey": "server/src/routes/appointments.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 4
+    },
+    {
+      "edgeKey": "server/src/routes/attachments.ts␟core-storage-abstraction␟utils/filePreview.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/attachments.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/auth.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "auth"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/auth.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 9
+    },
+    {
+      "edgeKey": "server/src/routes/auth.ts␟messaging-email␟services/emailService.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-email",
+      "N_h": 4,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth",
+        "messaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-email",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+      "N_h": 3,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk",
+        "security-incident (extension)"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-security-incident-detection",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/clinicBulkExport.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk",
+        "storage"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/clinicRegistration.ts␟messaging-email␟services/emailService.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-email",
+      "N_h": 4,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-email",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/communicationPreferences.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/dentalChart.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/externalCalendarWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "integrations"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/financeDashboard.ts␟clinical-basic-payments␟utils/overdueReceivables.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:clinical-basic-payments",
+      "N_h": 1,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "clinical-basic-payments",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/financeDashboard.ts␟core-permissions-roles␟utils/roles.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth",
+        "finance"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-permissions-roles",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 8
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging",
+        "storage"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 5
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟utils/filePreview.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging",
+        "storage"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging",
+        "storage"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging",
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging",
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟imaging-device-bridge␟services/imaging/bridgeOnboardingConfig.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
+      "N_h": 3,
+      "val001Classification": "D",
+      "briefCat": "briefD_ambiguous_unverified",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "imaging-device-bridge",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟imaging-device-bridge␟services/imaging/bridgePairing.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
+      "N_h": 3,
+      "val001Classification": "D",
+      "briefCat": "briefD_ambiguous_unverified",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "imaging-device-bridge",
+      "clusterSize": 4
+    },
+    {
+      "edgeKey": "server/src/routes/imaging.ts␟imaging-device-bridge␟services/imaging/bridgeTokens.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:imaging-device-bridge",
+      "N_h": 3,
+      "val001Classification": "D",
+      "briefCat": "briefD_ambiguous_unverified",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "imaging-device-bridge",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-shared-platform-infrastructure␟schemas/index.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/imagingBridgePublic.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging",
+        "storage"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/imagingBridgePublic.ts␟imaging-server-viewer␟services/imaging/imagingRequestTransitions.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:imaging-server-viewer",
+      "N_h": 2,
+      "val001Classification": "H",
+      "briefCat": "briefA_true_positive",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "imaging-server-viewer",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/imagingBridgePublic.ts␟imaging-server-viewer␟services/imaging/imagingUploadValidation.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:imaging-server-viewer",
+      "N_h": 2,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "imaging-server-viewer",
+      "clusterSize": 4
+    },
+    {
+      "edgeKey": "server/src/routes/instagramInbox.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth",
+        "messaging"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/instagramWebhook.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/instagramWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/instagramWebhook.ts␟messaging-shared-channel-infrastructure␟utils/webhookVerification.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "messaging-shared-channel-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/inventory.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/inventoryUnits.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/labOrders.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/labOrders.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 5
+    },
+    {
+      "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟utils/filePreview.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/labOrders.ts␟core-storage-abstraction␟utils/fileSignature.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "storage"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/laboratories.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/messages.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/communicationConsentPolicy.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/metaWhatsAppWebhook.ts␟messaging-shared-channel-infrastructure␟utils/webhookVerification.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-shared-channel-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/noShows.ts␟core-notifications␟services/taskAssignmentNotifier.ts␟import",
+      "samplingStratum": "smallCellCensus:core-notifications",
+      "N_h": 2,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-notifications",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/noShows.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/noShows.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/notifications.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/operationalMonitoring.ts␟core-permissions-roles␟utils/roles.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-permissions-roles",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/operationalMonitoring.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/organizationBranches.ts␟core-permissions-roles␟utils/roles.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-permissions-roles",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/organizationDashboard.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "orgDashCallerCensus",
+      "N_h": 4,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/organizationDashboard.ts␟core-permissions-roles␟utils/roles.ts␟import",
+      "samplingStratum": "orgDashCallerCensus",
+      "N_h": 4,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-permissions-roles",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/organizationDashboard.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "orgDashCallerCensus",
+      "N_h": 4,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/organizationDashboard.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "orgDashCallerCensus",
+      "N_h": 4,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/organizationInstagram.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/organizationInstagram.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-permissions-roles␟utils/roles.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-permissions-roles",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/organizationWhatsApp.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/patientEmergencyContacts.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/patientPrivacy.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk",
+        "storage"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/patients.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/patients.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/patientsImport.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/paymentPlans.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "finance"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/paymentPlans.ts␟core-org-clinic-membership␟services/clinicOperatingPreferences.ts␟import",
+      "samplingStratum": "standardProportional:core-org-clinic-membership",
+      "N_h": 16,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-org-clinic-membership",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/payments.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "finance"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/platformAdmin.ts␟core-config-secrets␟services/platformSettings.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-config-secrets",
+      "N_h": 2,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-config-secrets",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/platformAdmin.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟jobs/dataRetentionCleanupJob.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "edgeShape": "routes -> jobs",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyConsentCorrection.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/platformAdmin.ts␟core-privacy-consent-retention-dsr␟services/privacy/dataRetentionManualRunAudit.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 4
+    },
+    {
+      "edgeKey": "server/src/routes/platformExternalCalendar.ts␟core-platform-administration␟middleware/platformAuth.ts␟import",
+      "samplingStratum": "smallCellCensus:core-platform-administration",
+      "N_h": 3,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "integrations"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-platform-administration",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/platformSecurityIncidents.ts␟core-platform-administration␟middleware/platformAuth.ts␟import",
+      "samplingStratum": "smallCellCensus:core-platform-administration",
+      "N_h": 3,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "security-incident (extension)"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-administration",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/postTreatment.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth",
+        "messaging"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/postTreatment.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/postTreatment.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/practitionerEarnings.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth",
+        "finance"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "finance"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance"
+      ],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/practitionerPayouts.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "finance",
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/publicBooking.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+      "samplingStratum": "standardProportional:clinical-appointments-availability",
+      "N_h": 9,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "clinical-appointments-availability",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/publicBooking.ts␟core-privacy-consent-retention-dsr␟services/publicBookingNoticeEvidence.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 5
+    },
+    {
+      "edgeKey": "server/src/routes/reportExport.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/reports.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/schedules.ts␟core-permissions-roles␟utils/roles.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-permissions-roles",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/schedules.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/schedules.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/sms.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/tasks.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/tasks.ts␟core-notifications␟services/taskAssignmentNotifier.ts␟import",
+      "samplingStratum": "smallCellCensus:core-notifications",
+      "N_h": 2,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-notifications",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/tasks.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/tasks.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/treatmentCases.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/treatmentCases.ts␟core-shared-platform-infrastructure␟utils/safeError.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/treatmentCases.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/treatmentCases.ts␟core-tenant-security␟utils/relationGuards.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 3
+    },
+    {
+      "edgeKey": "server/src/routes/treatmentPackages.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/treatmentPackages.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟core-identity-access␟middleware/auth.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> middleware",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/treatmentPlanProcedures.ts␟messaging-automation-recall-followup␟services/postTreatmentMessaging.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-automation-recall-followup",
+      "N_h": 1,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "messaging-automation-recall-followup",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/users.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/users.ts␟core-identity-access␟utils/passwordResetToken.ts␟import",
+      "samplingStratum": "highRiskOversample:core-identity-access",
+      "N_h": 55,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-identity-access",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/users.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 6
+    },
+    {
+      "edgeKey": "server/src/routes/users.ts␟messaging-email␟services/emailTemplates.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-email",
+      "N_h": 4,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-email",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/usersImport.ts␟clinical-patients␟utils/excelImport.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "F",
+      "briefCat": "briefC_scanner_classification_fp",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": true,
+      "ownerDomain": "clinical-patients",
+      "clusterSize": 5
+    },
+    {
+      "edgeKey": "server/src/routes/usersImport.ts␟core-tenant-security␟utils/clinicScope.ts␟import",
+      "samplingStratum": "highRiskOversample:core-tenant-security",
+      "N_h": 49,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "tenancy"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-tenant-security",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/usersImport.ts␟messaging-email␟services/emailService.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-email",
+      "N_h": 4,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-email",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟clinical-appointments-availability␟routes/contactRequests.ts␟import",
+      "samplingStratum": "routeToRouteCensus",
+      "N_h": 1,
+      "val001Classification": "H",
+      "briefCat": "briefA_true_positive",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> routes",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "clinical-appointments-availability",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟core-privacy-consent-retention-dsr␟services/channelConsentGate.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 8
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟core-shared-platform-infrastructure␟utils/helpers.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 5
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/whatsappAgentSchema.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/whatsappConversationAgent.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟messaging-ai-orchestration␟services/whatsappPublicApi.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "routes -> services",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 5
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟messaging-shared-channel-infrastructure␟utils/inboundRateLimiter.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-shared-channel-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/whatsapp.ts␟messaging-shared-channel-infrastructure␟utils/messageSanitizer.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-shared-channel-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/routes/whatsappInbox.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/routes/whatsappInbox.ts␟core-permissions-roles␟utils/roles.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth",
+        "messaging"
+      ],
+      "edgeShape": "routes -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-permissions-roles",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/clinicOperatingPreferences.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/externalCalendar/digidentis/DigiDentisProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "integrations"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/googleAiStudio.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/services/imaging/bridgePairing.ts␟core-platform-crypto␟utils/secrets.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "imaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/imaging/public.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "imaging",
+        "storage"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/InstagramMessagingProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappAgentSchema.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappBookingFlow.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 6
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappConversationAgent.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappInterpreter.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-ai-orchestration␟services/whatsappStepAwareNlu.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-shared-channel-infrastructure␟utils/inboundRateLimiter.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-shared-channel-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-shared-channel-infrastructure␟utils/messageSanitizer.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-shared-channel-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/instagram/instagramAiConversationProcessor.ts␟messaging-whatsapp␟utils/whatsappDate.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
+      "N_h": 6,
+      "val001Classification": "F",
+      "briefCat": "briefC_scanner_classification_fp",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-whatsapp",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/services/inventoryAlerts.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/messagingInboundIdempotency.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/privacy/clinicBulkExportPackage.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+      "N_h": 3,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk",
+        "security-incident (extension)"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-security-incident-detection",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/services/privacy/clinicBulkExportPackage.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk",
+        "storage"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 8
+    },
+    {
+      "edgeKey": "server/src/services/privacy/dataRetentionManualRunAudit.ts␟core-platform-administration␟services/platformAdminAudit.ts␟import",
+      "samplingStratum": "smallCellCensus:core-platform-administration",
+      "N_h": 3,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-administration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/privacy/orphanFileInspection.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-storage-abstraction",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk",
+        "storage"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/privacy/patientAnonymization.ts␟core-audit-activity␟utils/auditLog.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟clinical-patients␟routes/attachments.ts␟import",
+      "samplingStratum": "smallCellCensus:clinical-patients",
+      "N_h": 1,
+      "val001Classification": "H",
+      "briefCat": "briefA_true_positive",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> routes",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "clinical-patients",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/privacy/patientPrivacyExportPackage.ts␟core-storage-abstraction␟services/fileStorage.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "privacy-kvkk",
+        "storage"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-storage-abstraction",
+      "clusterSize": 5
+    },
+    {
+      "edgeKey": "server/src/services/recallCandidateService.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/recallCandidateService.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyReconciliationResolver.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/services/reportExport/roleCheck.ts␟core-permissions-roles␟utils/roles.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-permissions-roles",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "auth"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-permissions-roles",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/security/securityIncidentService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "security-incident (extension)"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/sms/platformSmsProviders.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/services/sms/smsCommunicationPurposeMap.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/sms/smsService.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/legacyReconciliationResolver.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/services/sms/smsService.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/taskAssignmentNotifier.ts␟messaging-whatsapp␟services/whatsapp/whatsappService.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
+      "N_h": 6,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "messaging-whatsapp",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/treatmentStockDeduction.ts␟inventory␟services/inventoryAlerts.ts␟import",
+      "samplingStratum": "smallCellCensus:inventory",
+      "N_h": 1,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": false,
+      "highRiskCategories": [],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "inventory",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/EvolutionWhatsAppProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/MetaCloudWhatsAppProvider.ts␟core-platform-crypto␟utils/encryption.ts␟import",
+      "samplingStratum": "highRiskOversample:core-platform-crypto",
+      "N_h": 20,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "crypto-secrets (extension)",
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-platform-crypto",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟core-audit-activity␟utils/activity.ts␟import",
+      "samplingStratum": "highRiskOversample:core-audit-activity",
+      "N_h": 62,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "audit",
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-audit-activity",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/googleAiStudio.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/whatsappAgentSchema.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/whatsappConversationAgent.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-ai-orchestration␟services/whatsappStepAwareNlu.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-shared-channel-infrastructure␟utils/inboundRateLimiter.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-shared-channel-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/metaWhatsAppAiProcessor.ts␟messaging-shared-channel-infrastructure␟utils/messageSanitizer.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-shared-channel-infrastructure",
+      "N_h": 8,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-shared-channel-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/whatsappCommunicationPurposeMap.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/communicationConsentPolicy.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/enforcementConfig.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "2-4",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 2
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-privacy-consent-retention-dsr␟services/communicationConsent/taxonomy.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsapp/whatsappOutboundMessaging.ts␟core-shared-platform-infrastructure␟db.ts␟import",
+      "samplingStratum": "standardProportional:core-shared-platform-infrastructure",
+      "N_h": 210,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "messaging"
+      ],
+      "edgeShape": "services -> root-or-other",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-shared-platform-infrastructure",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsappAvailability.ts␟messaging-ai-orchestration␟services/whatsappInterpreter.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-ai-orchestration",
+      "N_h": 13,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "messaging-ai-orchestration",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsappBookingFlow.ts␟clinical-appointments-availability␟services/whatsappAvailability.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": false,
+      "ownerDomain": "clinical-appointments-availability",
+      "clusterSize": 8
+    },
+    {
+      "edgeKey": "server/src/services/whatsappBookingFlow.ts␟messaging-whatsapp␟utils/whatsappDate.ts␟import",
+      "samplingStratum": "cluster5PlusCensus",
+      "N_h": 16,
+      "val001Classification": "D",
+      "briefCat": "briefD_ambiguous_unverified",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> utils",
+      "clusterSizeBucket": "5+",
+      "partialBaselineResidue": false,
+      "ownerDomain": "messaging-whatsapp",
+      "clusterSize": 5
+    },
+    {
+      "edgeKey": "server/src/services/whatsappConversationAgent.ts␟core-privacy-consent-retention-dsr␟services/privacy/redaction.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-privacy-consent-retention-dsr",
+      "N_h": 15,
+      "val001Classification": "C",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging",
+        "privacy-kvkk"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": false,
+      "ownerDomain": "core-privacy-consent-retention-dsr",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/services/whatsappStepAwareNlu.ts␟messaging-whatsapp␟services/whatsapp/humanHandoffPhrases.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:messaging-whatsapp",
+      "N_h": 6,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "ai",
+        "messaging"
+      ],
+      "edgeShape": "services -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "messaging-whatsapp",
+      "clusterSize": 1
+    },
+    {
+      "edgeKey": "server/src/utils/clinicScope.ts␟core-security-incident-detection␟services/security/securityDetectionRules.ts␟import",
+      "samplingStratum": "highRiskDomainCensus:core-security-incident-detection",
+      "N_h": 3,
+      "val001Classification": "B",
+      "briefCat": "briefB_accepted_expected",
+      "highRisk": true,
+      "highRiskCategories": [
+        "security-incident (extension)",
+        "tenancy"
+      ],
+      "edgeShape": "utils -> services",
+      "clusterSizeBucket": "1",
+      "partialBaselineResidue": true,
+      "ownerDomain": "core-security-incident-detection",
+      "clusterSize": 1
+    }
+  ]
+}
