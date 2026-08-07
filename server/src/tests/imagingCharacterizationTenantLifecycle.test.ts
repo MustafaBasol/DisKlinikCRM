@@ -21,19 +21,21 @@
  * PostgreSQL instance via the real Prisma client (server/src/db.ts). No
  * mocking of clinicScope/authorize/rate-limiter logic.
  *
- * CT-23 note (VERIFIED_DEFECT, no production fix applied — out of this
- * task's test-only scope): the characterization-test catalogue's own
+ * CT-23 note (F2-CT-23, fixed): the characterization-test catalogue's own
  * assertion text for CT-23 ("a study originating from an ImagingRequest
- * cannot be relinked inconsistently with that request's own patient") does
- * NOT hold against current behavior. LinkImagingStudy
- * (PATCH /imaging/studies/:id/link, server/src/routes/imaging.ts:807-854)
- * validates the newly-supplied patientId/appointmentId/treatmentCaseId
- * against the clinic only — it never reads or compares against
- * study.imagingRequestId or that request's own patientId. This is
- * reproduced twice below (two independent fixture scenarios) and reported
- * as a VERIFIED_DEFECT in the evidence doc; the test asserts the ACTUAL
- * (permissive) current behavior, per this task's characterization mandate —
- * it does not change routes/imaging.ts.
+ * cannot be relinked inconsistently with that request's own patient") did
+ * NOT hold against the behavior at this suite's original authoring baseline
+ * — see docs/program/evidence/F2-PREP-007-B_IMAGING_CHARACTERIZATION_TENANT_LIFECYCLE_EVIDENCE.md
+ * for that original VERIFIED_DEFECT finding (reproduced twice against the
+ * then-current permissive behavior). Task F2-CT-23 closed that gap:
+ * `PATCH /imaging/studies/:id/link` (server/src/routes/imaging.ts) now
+ * rejects (409) relinking a request-originated study to a patient other
+ * than that request's own patientId, via a guarded conditional update that
+ * re-checks the invariant at commit time. The two reproductions below are
+ * updated in place to assert the corrected (fail-closed) behavior — see
+ * server/src/tests/dbVerification/imagingStudyRequestPatientConsistency.test.ts
+ * for the full F2-CT-23 regression suite (all contract cases, cross-clinic/
+ * cross-org, nonexistent request, concurrency).
  *
  * Run (requires DATABASE_URL pointing at a disposable Postgres with
  * migrations applied):
@@ -524,10 +526,9 @@ async function main() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // CT-23 — study-from-ImagingRequest relink consistency
-  // (VERIFIED_DEFECT vs. the catalogued assertion — see file header)
+  // CT-23 — study-from-ImagingRequest relink consistency (FIXED — F2-CT-23)
   // ═══════════════════════════════════════════════════════════════════════
-  section('CT-23: relink consistency against the originating ImagingRequest (VERIFIED_DEFECT, reproduced twice)');
+  section('CT-23: relink consistency against the originating ImagingRequest (fixed, reconfirmed twice)');
   {
     const linkChain = getFullChain(imagingRouter as any, 'patch', '/imaging/studies/:id/link');
 
@@ -560,26 +561,25 @@ async function main() {
       return { fx, staff, patientOriginal, patientOther, request, study, res };
     }
 
-    await test('REPRODUCTION 1/2: relinking a request-originated study to a DIFFERENT patient than the request\'s own patient currently SUCCEEDS (200) with no consistency check', async () => {
-      const { patientOther, study, res } = await runRelinkScenario('a');
-      assert.equal(res.statusCode, 200, `expected the current (permissive) behavior to accept the relink; got ${res.statusCode}: ${JSON.stringify(res.body)}`);
-      assert.equal(res.body.patientId, patientOther.id);
+    await test('RECONFIRMATION 1/2: relinking a request-originated study to a DIFFERENT patient than the request\'s own patient is now REJECTED (409), state left untouched', async () => {
+      const { patientOriginal, study, request, res } = await runRelinkScenario('a');
+      assert.equal(res.statusCode, 409, `expected the fixed (fail-closed) behavior to reject the relink; got ${res.statusCode}: ${JSON.stringify(res.body)}`);
       const studyRow = await prisma.imagingStudy.findUniqueOrThrow({ where: { id: study.id }, include: { imagingRequest: true } });
-      assert.equal(studyRow.patientId, patientOther.id, 'study now points at the new patient');
-      assert.notEqual(studyRow.imagingRequestId, null, 'imagingRequestId is left pointing at the original request — NOT cleared or re-validated');
-      assert.notEqual(
+      assert.equal(studyRow.patientId, patientOriginal.id, 'rejected relink must leave study.patientId unchanged');
+      assert.equal(studyRow.imagingRequestId, request.id, 'rejected relink must leave imagingRequestId unchanged');
+      assert.equal(
         studyRow.patientId,
         studyRow.imagingRequest!.patientId,
-        'INCONSISTENT STATE: study.patientId no longer matches the patient of the ImagingRequest it still references — this is the gap the CT-23 catalogue assertion expected to be rejected',
+        'study.patientId and its still-referenced ImagingRequest.patientId remain consistent after the rejected write',
       );
     });
 
-    await test('REPRODUCTION 2/2: identical result on an independent fixture set — the permissive behavior is deterministic, not a one-off/flake', async () => {
-      const { patientOther, study, res } = await runRelinkScenario('b');
-      assert.equal(res.statusCode, 200, `expected the current (permissive) behavior to accept the relink; got ${res.statusCode}: ${JSON.stringify(res.body)}`);
+    await test('RECONFIRMATION 2/2: identical result on an independent fixture set — the fail-closed behavior is deterministic, not a one-off/flake', async () => {
+      const { patientOriginal, study, res } = await runRelinkScenario('b');
+      assert.equal(res.statusCode, 409, `expected the fixed (fail-closed) behavior to reject the relink; got ${res.statusCode}: ${JSON.stringify(res.body)}`);
       const studyRow = await prisma.imagingStudy.findUniqueOrThrow({ where: { id: study.id }, include: { imagingRequest: true } });
-      assert.equal(studyRow.patientId, patientOther.id);
-      assert.notEqual(studyRow.patientId, studyRow.imagingRequest!.patientId);
+      assert.equal(studyRow.patientId, patientOriginal.id);
+      assert.equal(studyRow.patientId, studyRow.imagingRequest!.patientId);
     });
   }
 

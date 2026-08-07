@@ -821,15 +821,48 @@ router.patch('/imaging/studies/:id/link', authorize([...IMAGING_CLINICAL_ROLES])
     });
     if (!linksOk) return;
 
-    const updated = await prisma.imagingStudy.update({
-      where: { id },
+    // CT-23: a study that still carries an imagingRequestId must not be
+    // relinked to a patient other than that request's own patientId — doing
+    // so would leave imagingRequestId dangling at the ORIGINAL patient while
+    // study.patientId points at a DIFFERENT one. ImagingRequest.patientId is
+    // immutable after creation (schemas/index.ts) and this route has no
+    // field to change/clear imagingRequestId itself (that is /unlink's job),
+    // so the only way to satisfy the invariant here is to reject the relink.
+    // The condition is re-applied inside the update's own WHERE predicate
+    // below (never a read-then-trust write) — matching the guarded-update
+    // pattern already used by services/imaging/public.ts and the bridge
+    // ingest route — so a concurrent /unlink clearing imagingRequestId
+    // between this check and the write is still resolved correctly by the
+    // database at commit time, not by this in-memory read.
+    const result = await prisma.imagingStudy.updateMany({
+      where: {
+        id,
+        clinicId: study.clinicId,
+        OR: [
+          { imagingRequestId: null },
+          { imagingRequest: { clinicId: study.clinicId, patientId } },
+        ],
+      },
       data: {
         patientId,
         appointmentId: appointmentId ?? null,
         treatmentCaseId: treatmentCaseId ?? null,
       },
-      include: studyInclude,
     });
+    if (result.count === 0) {
+      // No delete route exists for ImagingStudy (archived, never hard-deleted)
+      // and clinicId is immutable, so the study found above cannot have
+      // vanished from scope in between — a 0-row result here can only mean
+      // the imagingRequestId/patientId/clinicId consistency guard rejected
+      // the write (different patient, different clinic, or an anomalous
+      // linked ImagingRequest relation — see the guard's WHERE predicate
+      // above for the exact conditions).
+      return res.status(409).json({
+        error: 'Study is linked to an imaging request that is inconsistent with the target patient or clinic (different patient, different clinic, or an anomalous request relation); unlink it before relinking to another patient',
+      });
+    }
+
+    const updated = await prisma.imagingStudy.findUniqueOrThrow({ where: { id }, include: studyInclude });
 
     await auditImaging(req, study.clinicId, 'imaging_study_linked', 'imaging_study', id, {
       previousPatientId: study.patientId,
