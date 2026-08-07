@@ -2,7 +2,7 @@
   "schemaVersion": "1.0.0",
   "generatedAt": null,
   "deterministic": true,
-  "repositorySha": "46acae8415020cb0bd340fbc854c4187c43e3662",
+  "repositorySha": "52e99d1c1fe8b25a453ce64125ce65624898791f",
   "scope": {
     "scanRoots": [
       "server/src/jobs",
@@ -4544,7 +4544,7 @@
       "ownerDomain": "core-identity-access",
       "targetModelOrSymbol": "middleware/auth.ts",
       "accessKind": "import",
-      "callerDomain": "UNRESOLVED",
+      "callerDomain": "core-org-clinic-membership",
       "baselineStatus": "NEW",
       "baselineEdgeId": null
     },
@@ -4555,7 +4555,7 @@
       "ownerDomain": "core-identity-access",
       "targetModelOrSymbol": "middleware/auth.ts",
       "accessKind": "import",
-      "callerDomain": "UNRESOLVED",
+      "callerDomain": "core-org-clinic-membership",
       "baselineStatus": "NEW",
       "baselineEdgeId": null
     },
@@ -4566,7 +4566,7 @@
       "ownerDomain": "core-permissions-roles",
       "targetModelOrSymbol": "utils/roles.ts",
       "accessKind": "import",
-      "callerDomain": "UNRESOLVED",
+      "callerDomain": "core-org-clinic-membership",
       "baselineStatus": "NEW",
       "baselineEdgeId": null
     },
@@ -4577,7 +4577,7 @@
       "ownerDomain": "core-shared-platform-infrastructure",
       "targetModelOrSymbol": "db.ts",
       "accessKind": "import",
-      "callerDomain": "UNRESOLVED",
+      "callerDomain": "core-org-clinic-membership",
       "baselineStatus": "NEW",
       "baselineEdgeId": null
     },
@@ -4588,7 +4588,7 @@
       "ownerDomain": "core-shared-platform-infrastructure",
       "targetModelOrSymbol": "utils/helpers.ts",
       "accessKind": "import",
-      "callerDomain": "UNRESOLVED",
+      "callerDomain": "core-org-clinic-membership",
       "baselineStatus": "NEW",
       "baselineEdgeId": null
     },

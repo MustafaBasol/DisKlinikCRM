@@ -30,6 +30,16 @@
         "4. No organizationDashboard.ts-involving edge was added, per F2-ADR-ORG-DASH-002's parallel-isolation requirement (independently verified: 0 of the 88 candidates or their swept-in same-edge siblings involve organizationDashboard.ts as caller or target).",
         "5. classificationCounts updated below to include the 88 new edges (all ACCEPTED_PUBLIC_CONTRACT); the original 71-edge scope is preserved in scopeNote for historical traceability."
       ]
+    },
+    {
+      "revision": "F2-GUARDRAIL-PREP-010-A-R3 (F2-GUARDRAIL-VAL-003-R2)",
+      "appliedAtCommit": "this file, on branch fix/f2-guardrail-val-003-baseline-match-key-reconciliation, after rebasing PR #330 onto post-PR-#331 origin/main (9196ceb9a8beff561af55ff2d15b13c0a7874bc2)",
+      "reason": "PR #331 (F2-ADR-ORG-DASH-002) merged to main, changing scripts/architecture-guardrail/config/domain-map.json (organizationDashboard.ts UNRESOLVED -> core-org-clinic-membership). PR #330 required rebase/reconciliation onto the new main baseline; this task independently re-derived the entire VAL-003 pipeline from scratch against the rebased head (not assumed carried-over) to verify the 88-candidate/158-edge result still holds under the new domain-map.",
+      "changes": [
+        "Independently re-ran buildVal003Candidates.mjs, verifyVal003Candidates.mjs, generateVal003BaselineEntries.mjs, and verifyVal003AfterScan.mjs from a restored pre-VAL-003 (71-edge) baseline, against a fresh --deterministic guardrail scan of the rebased head (52e99d1c1fe8b25a453ce64125ce65624898791f).",
+        "Result: byte-identical 88-candidate set, byte-identical CDA-073..CDA-160 edge content, 88 explicit flips, 90 swept-in sibling flips, 178 total flips, 0 unattributed, 0 organizationDashboard involvement -- no count or content difference from the pre-rebase F2-GUARDRAIL-VAL-003-R1 result. PR #331 own domain-map.json change only affects organizationDashboard.ts findings (callerDomain UNRESOLVED -> core-org-clinic-membership on 5 findings), none of which are among these 88 candidates or their 90 siblings.",
+        "No edge (CDA-001..CDA-160) content, ID, or classification changed by this task; correctionHistory and classificationCounts fields (both curated documentation, not script output) restored from the pre-rebase committed file since the edges[] array they describe is unchanged."
+      ]
     }
   ],
   "parallelWave": {
