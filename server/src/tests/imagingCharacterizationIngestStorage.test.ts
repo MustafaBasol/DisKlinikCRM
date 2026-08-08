@@ -28,9 +28,19 @@
  *           failures on the bridge upload route create no partial
  *           ImagingStudy/ImagingImage rows.
  *
- * This suite is characterization-only: it observes and pins CURRENT
- * behavior. It does not converge manual/bridge ingest, does not fix storage
- * compensation, and makes no production-code change.
+ * F2-IMG-AUDIT-001-FIX regression coverage (added alongside the fix, not
+ * part of the original F2-PREP-007-C catalogue above): CT-10 and CT-11 are
+ * extended with AuditLog row/action/metadata assertions proving the
+ * sequential pre-check duplicate path now emits the same audit evidence as
+ * the P2002 race duplicate path (previously asymmetric — see
+ * docs/program/evidence/F2-IMG-AUDIT-PREP-001_IMAGING_INGEST_AUDIT_ASYMMETRY_CHARACTERIZATION.md).
+ * A new `ct10CrossTenant` test proves the duplicate pre-check — and its
+ * new AuditLog write — stay clinicId-scoped (no cross-tenant leakage).
+ *
+ * This suite is otherwise characterization-only: it observes and pins
+ * CURRENT behavior. It does not converge manual/bridge ingest, does not fix
+ * storage compensation, and (apart from the audit-parity assertions above)
+ * makes no production-code change.
  *
  * Storage isolation: BASE_UPLOAD_DIR in services/fileStorage.ts is a
  * module-level `path.resolve(process.cwd(), 'uploads')` constant computed
@@ -386,6 +396,12 @@ async function ct10() {
     const filesAfterFirst = listClinicUploadFiles(clinicId);
     assert.equal(filesAfterFirst.length, 1, 'exactly one file must exist after the first (winning) upload');
 
+    // F2-IMG-AUDIT-001: the first (non-duplicate) ingest's own AuditLog
+    // behavior must be unchanged by this fix — exactly one row, duplicate:false.
+    const auditAfterFirst = await prisma.auditLog.findMany({ where: { clinicId, entityId: studyId, action: 'imaging_bridge_study_ingested' } });
+    assert.equal(auditAfterFirst.length, 1, 'the first ingest must write exactly one AuditLog row (pre-existing behavior, unchanged)');
+    assert.equal((auditAfterFirst[0].metadata as any).duplicate, false);
+
     const second = await callBridgeUpload(token, { ingestKey, modality: 'IO' }, fakeMulterFile('ct10-b.png', 'image/png', buf));
     assert.equal(second.statusCode, 200, 'the duplicate short-circuit returns 200, not 201');
     assert.equal(second.body.ok, true);
@@ -403,6 +419,81 @@ async function ct10() {
     // first file.
     const filesAfterSecond = listClinicUploadFiles(clinicId);
     assert.equal(filesAfterSecond.length, 1, 'the sequential-duplicate call must not write a second file to storage');
+
+    // F2-IMG-AUDIT-001 fix: the sequential pre-check duplicate must now emit
+    // the same AuditLog evidence the P2002 race duplicate already emits
+    // (CT-11) — exactly one additional row, correctly clinic-scoped,
+    // pointing at the pre-existing study, with duplicate:true.
+    const auditAfterSecond = await prisma.auditLog.findMany({
+      where: { clinicId, entityId: studyId, action: 'imaging_bridge_study_ingested' },
+      orderBy: { createdAt: 'asc' },
+    });
+    assert.equal(auditAfterSecond.length, 2, 'the sequential-duplicate call must add exactly one new AuditLog row');
+    const dupRow = auditAfterSecond[1];
+    assert.equal(dupRow.organizationId, auditAfterFirst[0].organizationId, 'the duplicate audit row must share the same organizationId as the original ingest');
+    assert.equal(dupRow.entityType, 'imaging_study');
+    assert.equal((dupRow.metadata as any).duplicate, true);
+    assert.equal((dupRow.metadata as any).modality, 'IO');
+    assert.equal(typeof (dupRow.metadata as any).fileSize, 'number');
+
+    // No PHI, bridge token, or filename may appear anywhere in the
+    // duplicate-path audit metadata.
+    const metadataText = JSON.stringify(dupRow.metadata);
+    for (const forbidden of ['ct10-a.png', 'ct10-b.png', token, 'firstName', 'lastName', 'patientId']) {
+      assert.equal(metadataText.includes(forbidden), false, `audit metadata must not contain "${forbidden}"`);
+    }
+
+    // Repeated sequential duplicate requests: no dedup is performed anywhere
+    // in this codepath today (the P2002 race path writes one row per losing
+    // racer, per CT-11) — the established policy is one AuditLog row per
+    // duplicate-detection event, not once-per-(clinicId,ingestKey). This
+    // pins that policy for the sequential pre-check path too, rather than
+    // inventing a new one.
+    const third = await callBridgeUpload(token, { ingestKey, modality: 'IO' }, fakeMulterFile('ct10-c.png', 'image/png', buf));
+    assert.equal(third.statusCode, 200);
+    assert.equal(third.body.duplicate, true);
+    const auditAfterThird = await prisma.auditLog.count({ where: { clinicId, entityId: studyId, action: 'imaging_bridge_study_ingested' } });
+    assert.equal(auditAfterThird, 3, 'a third, repeated sequential-duplicate call must add a third AuditLog row (matches the existing P2002-path no-dedup policy)');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// F2-IMG-AUDIT-001 — cross-tenant duplicate lookup remains fail-closed:
+// an ingestKey that collides only in ANOTHER clinic must never be treated
+// as a duplicate, and must never leak that other clinic's studyId into
+// this clinic's AuditLog.
+// ═══════════════════════════════════════════════════════════════════════
+
+async function ct10CrossTenant() {
+  section('F2-IMG-AUDIT-001 — sequential duplicate pre-check stays clinicId-scoped (no cross-tenant leakage)');
+  const fixtureA = await newFixture('ct10xt-a');
+  const fixtureB = await newFixture('ct10xt-b');
+  const { token: tokenA } = await newBridgeAgent(fixtureA.clinicId, fixtureA.owner.id);
+  const buf = pngBuffer('ct10xt');
+  const ingestKey = sha256Hex(buf);
+
+  await test('F2-IMG-AUDIT-001: an ingestKey that already exists in a DIFFERENT clinic is not treated as a duplicate in this clinic', async () => {
+    // Seed clinic B with a study under the SAME ingestKey — same bytes could
+    // legitimately be captured independently at two different clinics.
+    const seed = await callBridgeUpload(
+      (await newBridgeAgent(fixtureB.clinicId, fixtureB.owner.id)).token,
+      { ingestKey, modality: 'IO' },
+      fakeMulterFile('ct10xt-seed.png', 'image/png', buf),
+    );
+    assert.equal(seed.statusCode, 201);
+
+    // Clinic A ingesting the identical bytes must NOT short-circuit as a
+    // duplicate — the pre-check is scoped to `clinicId: agent.clinicId`.
+    const resA = await callBridgeUpload(tokenA, { ingestKey, modality: 'IO' }, fakeMulterFile('ct10xt-a.png', 'image/png', buf));
+    assert.equal(resA.statusCode, 201, 'clinic A must create its own independent study, not resolve to clinic B\'s');
+    assert.equal(resA.body.duplicate, false);
+    assert.notEqual(resA.body.studyId, seed.body.studyId, 'clinic A\'s study must never be clinic B\'s studyId');
+
+    const auditRowsA = await prisma.auditLog.findMany({ where: { clinicId: fixtureA.clinicId, action: 'imaging_bridge_study_ingested' } });
+    assert.equal(auditRowsA.length, 1, 'clinic A must have exactly one AuditLog row, for its own ingest only');
+    assert.equal(auditRowsA[0].entityId, resA.body.studyId);
+    assert.notEqual(auditRowsA[0].entityId, seed.body.studyId, 'clinic A\'s AuditLog must never reference clinic B\'s studyId');
+    assert.equal(auditRowsA[0].organizationId, fixtureA.fixtures.orgId);
   });
 }
 
@@ -445,6 +536,17 @@ async function ct11Rep(repLabel: string) {
 
     const files = listClinicUploadFiles(clinicId);
     assert.equal(files.length, 1, 'the race loser\'s uploaded file must be deleted — no orphan may remain on disk');
+
+    // F2-IMG-AUDIT-001 regression guard: the P2002 race path's own AuditLog
+    // behavior (the side this fix mirrors) must remain exactly as it was —
+    // one row per racer (winner duplicate:false, loser duplicate:true), both
+    // pointing at the single surviving study.
+    const auditRows = await prisma.auditLog.findMany({
+      where: { clinicId, entityId: resA.body.studyId, action: 'imaging_bridge_study_ingested' },
+    });
+    assert.equal(auditRows.length, 2, 'the P2002 race must still produce exactly two AuditLog rows (one per racer), unchanged by the sequential-duplicate fix');
+    const dupFlags = auditRows.map((r) => (r.metadata as any).duplicate).sort();
+    assert.deepEqual(dupFlags, [false, true], 'exactly one winner (duplicate:false) and one loser (duplicate:true) row must exist');
   });
 }
 
@@ -733,6 +835,7 @@ async function main() {
   await ct07();
   await ct08();
   await ct10();
+  await ct10CrossTenant();
   await ct11();
   await ct12();
   await ct13();

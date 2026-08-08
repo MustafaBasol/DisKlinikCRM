@@ -264,6 +264,27 @@ router.post('/imaging/bridge/studies', (req: Request, res: Response, next) => {
         where: { id: agent.id },
         data: { status: 'online', lastSeenAt: new Date() },
       });
+
+      // Audit parity (F2-IMG-AUDIT-001): the sequential pre-check duplicate
+      // is the same logical event as the P2002 race duplicate below — both
+      // must leave the same AuditLog trace. Metadata: yalnızca güvenli
+      // tanımlayıcı/sayaçlar — dosya adı, hasta verisi ya da token/hash
+      // ASLA yazılmaz.
+      await writeAuditLog({
+        organizationId: agent.clinic.organizationId,
+        clinicId,
+        action: 'imaging_bridge_study_ingested',
+        entityType: 'imaging_study',
+        entityId: existingByIngestKey.id,
+        metadata: {
+          deviceId: v.deviceId ?? null,
+          modality: v.modality ?? 'OTHER',
+          fileSize: req.file.size,
+          mimeType: normalizeDeclaredMime(req.file.mimetype, req.file.originalname),
+          duplicate: true,
+        },
+      });
+
       return res.status(200).json({ ok: true, studyId: existingByIngestKey.id, duplicate: true });
     }
 
