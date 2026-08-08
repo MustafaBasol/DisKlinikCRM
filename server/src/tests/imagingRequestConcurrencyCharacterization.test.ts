@@ -1,45 +1,51 @@
 /**
  * imagingRequestConcurrencyCharacterization.test.ts — F2-PREP-007-D / CT-32
  *
- * Characterizes (does NOT fix) the ImagingRequest PATCH concurrency gap
- * tracked as CR-03 / BLK-02 / FP-06 and accepted by
- * docs/program/architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md §10 as
- * a "pre-contract-exposure blocker" — blocking before Stage 1 exposes
- * UpdateImagingRequest/CancelImagingRequest to any caller beyond imaging.ts
- * itself, but explicitly NOT blocking for Stage 0 characterization, whose
- * job is to prove the current gap exists, not close it.
+ * HISTORY (preserved per the F2-PREP-006-E contract's own instruction for
+ * CT-32 — revise, do not delete, when the characterized gap is closed):
  *
- * Current implementation (server/src/routes/imaging.ts, PATCH
- * /api/imaging/requests/:id and PATCH /api/imaging/requests/:id/cancel) reads
- * the row via a plain findFirst, validates the requested transition against
- * that in-memory snapshot, then calls prisma.imagingRequest.update({ where:
- * { id } }) unconditionally — no SELECT ... FOR UPDATE, no transaction, no
- * WHERE-status guard, no version/updatedAt column on the model. Two
- * concurrent requests that both read the row before either commits its write
- * both pass transition validation and both writes land — last-write-wins,
- * with no 409 and no re-validation after the race window. This test proves
- * that with two REAL concurrent HTTP requests against a REAL disposable
- * PostgreSQL-backed running server instance — no sleeps, no artificial
- * synchronization barrier, no injected hook into route code (all of which
- * are out of scope: this is a characterization test, not a fix).
+ * As originally written (F2-PREP-007-D, Stage 0), this file characterized —
+ * proved, did not fix — the ImagingRequest PATCH concurrency gap tracked as
+ * CR-03 / BLK-02 / FP-06: PATCH /api/imaging/requests/:id and PATCH
+ * /api/imaging/requests/:id/cancel each read the row via a plain findFirst,
+ * validated the requested transition against that in-memory snapshot, then
+ * called prisma.imagingRequest.update({ where: { id } }) unconditionally —
+ * no SELECT ... FOR UPDATE, no transaction, no WHERE-status guard, no
+ * version/updatedAt column on the model. Two concurrent requests that both
+ * read the row before either committed its write both passed transition
+ * validation and both writes landed — last-write-wins, with no 409 and no
+ * re-validation after the race window. Across 30 real, concurrent,
+ * un-synchronized HTTP-request rounds (no sleeps, Promise.all only, real
+ * disposable-Postgres-backed server), this reproduced on literally every
+ * round — a deterministic baseline, not a rare flake.
  *
- * Per this task's explicit brief: this test MUST NOT add locks, versions,
- * updatedAt guards, transactions, or retries to the production route/service
- * code, and must not touch imagingRequestTransitions.ts. When CR-03's guard
- * is eventually implemented (Stage 2 per the contract), this file's
- * assertions are expected to change (SEQUENTIAL_SAFE_REJECTION or an
- * equivalent guarded-deterministic outcome becoming the only observed
- * classification) — it should be REVISED at that point, not deleted, per the
- * contract's own instruction for CT-32.
+ * FIX (F2-CT-32-R1, this revision): server/src/routes/imaging.ts's PATCH and
+ * cancel handlers now use a compare-and-set write — the WHERE clause is
+ * conditioned on the EXACT status value read (`status: existing.status`,
+ * combined with the same clinic scope already used for the read), via
+ * `prisma.imagingRequest.updateMany`. Whichever request's write reaches
+ * Postgres first commits; the row is then locked/re-evaluated for the
+ * second writer's WHERE clause, which no longer matches (status already
+ * changed) — `count !== 1` is surfaced as a controlled `409
+ * concurrent_transition`, never a silent second success. Same pattern as
+ * server/src/services/security/securityIncidentService.ts's
+ * applyLifecycleTransition() and this file's own sibling LinkImagingStudy
+ * guard (imaging.ts, POST /imaging/studies). No schema/migration, no
+ * process-local mutex, no serializable transaction, no sleeps, no
+ * hidden-conflict retry loop.
+ *
+ * This file is REVISED, not deleted: it now asserts the corrected,
+ * regression-proof behavior (exactly one winner, the loser gets a
+ * controlled 409, no clobber) instead of the original defect. The original
+ * per-round/aggregate assertions it replaces are preserved above in this
+ * comment block and in git history (this revision's commit), per the
+ * contract's instruction not to pretend the defect never existed.
  *
  * Run with: tsx src/tests/imagingRequestConcurrencyCharacterization.test.ts
  * Requires DATABASE_URL to point at a disposable Postgres (F1-003-P2A
  * pattern) BEFORE this file is imported — server/src/db.ts opens a live pg
- * pool at import time. Not wired into any npm aggregate/CI layer script by
- * this task (that would require server/package.json changes, out of scope
- * per this task's constraints) — same as the existing, similarly-unwired
- * server/src/tests/dbVerification/inventoryUnitConversionConcurrency.test.ts
- * precedent. Run manually against a disposable Postgres for now.
+ * pool at import time. Wired into `test:imaging-characterization` (see
+ * server/package.json), which runs as part of `server:test:disposable-db`.
  */
 
 import 'dotenv/config';
@@ -167,7 +173,7 @@ function issueJson(
   });
 }
 
-// ─── Round outcome classification ───
+// ─── Round outcome classification (post-fix) ───
 //
 // Two concurrent requests race the same ImagingRequest row, seeded fresh at
 // 'requested' each round:
@@ -177,29 +183,31 @@ function issueJson(
 // Both target statuses are reachable from 'requested' per
 // imagingRequestTransitions.ts's ALLOWED_REQUEST_TRANSITIONS, so a
 // transition-validity rejection is never the reason either request could
-// fail — only the race window (whether both requests read the row before
-// either commits its write) determines the outcome:
+// fail. Pre-fix, this repo's own evidence (30/30 rounds) showed the two
+// requests' reads deterministically overlap in this exact harness (no
+// sleeps, Promise.all only) — every round hit the race window. Post-fix,
+// the compare-and-set write means the race window no longer matters: at
+// most one write can ever commit against a given read snapshot.
 //
-//   BOTH_SUCCESS_SILENT_CLOBBER — both requests read 'requested' before
-//     either write committed. Both pass validateRequestTransition, both
-//     writes land, both HTTP responses report 200 with their own intended
-//     status. Exactly one of the two statuses is the row's actual final
-//     persisted value; the other response's 200 body is stale from the
-//     moment it was sent — the client that "lost" is never told. This is
-//     the CR-03/BLK-02/FP-06 gap this test exists to characterize.
+//   EXACTLY_ONE_WINNER — exactly one response is 200 and the other is 409.
+//     This is the ONLY expected/passing shape now — whether the requests
+//     genuinely overlapped (loser's code is 'concurrent_transition', the
+//     CAS guard) or happened not to (loser's code is 'already_terminal',
+//     the pre-existing transition-validation rejection) is recorded for
+//     visibility below but is not itself asserted, since both are correct,
+//     non-clobbering outcomes.
 //
-//   SEQUENTIAL_SAFE_REJECTION — one request's write fully committed before
-//     the other's read executed. The second request then reads an
-//     already-terminal-or-diverged status and validateRequestTransition
-//     correctly rejects it with 409. No clobber occurs in this ordering,
-//     but it reflects the two requests happening not to overlap, not a
-//     guard in the production code.
+//   BOTH_SUCCESS_SILENT_CLOBBER — both requests report 200. This was the
+//     CR-03/BLK-02/FP-06 defect this file originally characterized (see the
+//     header comment's HISTORY section) and must never occur again now that
+//     the guard is implemented — asserted to never occur, below.
 //
-//   UNEXPECTED — anything else (a 404/500/other status pair). Would
-//     indicate a fixture or harness defect, not the concurrency behavior
-//     under characterization — asserted to never occur, below.
+//   UNEXPECTED — anything else (a 404/500/other status pair, or a 409 with
+//     neither expected code). Would indicate a fixture/harness defect or a
+//     genuine regression, not a known-good concurrency outcome — asserted
+//     to never occur, below.
 
-type RoundClassification = 'BOTH_SUCCESS_SILENT_CLOBBER' | 'SEQUENTIAL_SAFE_REJECTION' | 'UNEXPECTED';
+type RoundClassification = 'EXACTLY_ONE_WINNER' | 'BOTH_SUCCESS_SILENT_CLOBBER' | 'UNEXPECTED';
 
 interface RoundOutcome {
   round: number;
@@ -208,12 +216,13 @@ interface RoundOutcome {
   cancel: HttpJsonResult;
   finalPersistedStatus: string;
   classification: RoundClassification;
+  loserCode: string | undefined;
 }
 
 function classifyRound(patch: HttpJsonResult, cancel: HttpJsonResult): RoundClassification {
   if (patch.statusCode === 200 && cancel.statusCode === 200) return 'BOTH_SUCCESS_SILENT_CLOBBER';
   if ((patch.statusCode === 200 && cancel.statusCode === 409) || (patch.statusCode === 409 && cancel.statusCode === 200)) {
-    return 'SEQUENTIAL_SAFE_REJECTION';
+    return 'EXACTLY_ONE_WINNER';
   }
   return 'UNEXPECTED';
 }
@@ -248,6 +257,7 @@ async function runRound(port: number, token: string, clinicId: string, patientId
   ]);
 
   const finalRow = await prisma.imagingRequest.findUniqueOrThrow({ where: { id: seeded.id } });
+  const loser = patch.statusCode === 409 ? patch : cancel.statusCode === 409 ? cancel : undefined;
 
   return {
     round,
@@ -256,6 +266,7 @@ async function runRound(port: number, token: string, clinicId: string, patientId
     cancel,
     finalPersistedStatus: finalRow.status,
     classification: classifyRound(patch, cancel),
+    loserCode: loser?.body?.code,
   };
 }
 
@@ -321,46 +332,40 @@ async function main() {
         const outcome = await runRound(port, token, fixtures.defaultClinicId, patient.id, staffUser.id, round);
         outcomes.push(outcome);
 
-        await test(`round ${round}: neither response is an unexpected status (never a crash/404/500 under raw concurrency)`, () => {
+        await test(`round ${round}: neither response is an unexpected status (never a crash/404/500, and never both-200, under raw concurrency)`, () => {
           assert.notEqual(
             outcome.classification,
             'UNEXPECTED',
-            `round ${round}: got patch=${outcome.patch.statusCode} cancel=${outcome.cancel.statusCode} (final=${outcome.finalPersistedStatus}) — neither the expected BOTH_SUCCESS_SILENT_CLOBBER nor SEQUENTIAL_SAFE_REJECTION shape`,
+            `round ${round}: got patch=${outcome.patch.statusCode} cancel=${outcome.cancel.statusCode} (final=${outcome.finalPersistedStatus}) — not the expected EXACTLY_ONE_WINNER shape`,
           );
         });
 
-        if (outcome.classification === 'BOTH_SUCCESS_SILENT_CLOBBER') {
-          await test(`round ${round}: both concurrent requests report HTTP 200 (both silently "succeed")`, () => {
-            assert.equal(outcome.patch.statusCode, 200);
-            assert.equal(outcome.cancel.statusCode, 200);
-          });
-          await test(`round ${round}: each response body honestly reflects its OWN intended write (not an error, not the other request's outcome)`, () => {
-            assert.equal(outcome.patch.body?.status, 'scheduled');
-            assert.equal(outcome.cancel.body?.status, 'cancelled');
-          });
-          await test(`round ${round}: final persisted status is exactly one of the two racing targets, not a third/corrupted value`, () => {
-            assert.ok(
-              outcome.finalPersistedStatus === 'scheduled' || outcome.finalPersistedStatus === 'cancelled',
-              `unexpected final persisted status "${outcome.finalPersistedStatus}"`,
-            );
-          });
-          await test(`round ${round}: the losing response's 200 body no longer matches the final persisted row (silent clobber, no 409, no re-validation)`, () => {
-            const loserClaimedStatus = outcome.finalPersistedStatus === 'scheduled' ? 'cancelled' : 'scheduled';
-            assert.notEqual(
-              outcome.finalPersistedStatus,
-              loserClaimedStatus,
-              'the loser\'s claimed status must diverge from the final persisted row for this to be a genuine silent clobber',
-            );
-          });
-        } else {
-          // SEQUENTIAL_SAFE_REJECTION: recorded, not treated as a failure —
-          // this ordering simply did not exercise the race window this
-          // round; see the classification comment above.
-          await test(`round ${round}: sequential-safe ordering — the second-arriving write correctly received 409 already_terminal, no clobber this round`, () => {
-            const statuses = [outcome.patch.statusCode, outcome.cancel.statusCode].sort();
-            assert.deepEqual(statuses, [200, 409]);
-          });
-        }
+        await test(`round ${round}: the CR-03/BLK-02/FP-06 silent-clobber gap does not reproduce — both requests never report 200`, () => {
+          assert.notEqual(
+            outcome.classification,
+            'BOTH_SUCCESS_SILENT_CLOBBER',
+            `round ${round}: got patch=${outcome.patch.statusCode} cancel=${outcome.cancel.statusCode} — the guarded write must reject the loser with 409, not silently accept both`,
+          );
+        });
+
+        await test(`round ${round}: exactly one of the two concurrent requests wins (the other receives a controlled 409)`, () => {
+          const statuses = [outcome.patch.statusCode, outcome.cancel.statusCode].sort();
+          assert.deepEqual(statuses, [200, 409]);
+        });
+
+        await test(`round ${round}: the winning response body honestly reflects its own write, and matches the final persisted row`, () => {
+          const winner = outcome.patch.statusCode === 200 ? outcome.patch : outcome.cancel;
+          const expectedWinnerStatus = winner === outcome.patch ? 'scheduled' : 'cancelled';
+          assert.equal(winner.body?.status, expectedWinnerStatus);
+          assert.equal(outcome.finalPersistedStatus, expectedWinnerStatus, 'final persisted row must match the winner, never a corrupted/third value');
+        });
+
+        await test(`round ${round}: the losing response carries a known conflict code (concurrent_transition or already_terminal), never a silent success`, () => {
+          assert.ok(
+            outcome.loserCode === 'concurrent_transition' || outcome.loserCode === 'already_terminal',
+            `round ${round}: unexpected loser code "${outcome.loserCode}"`,
+          );
+        });
       }
     });
   } finally {
@@ -388,28 +393,39 @@ async function main() {
   });
 
   const clobberRounds = outcomes.filter((o) => o.classification === 'BOTH_SUCCESS_SILENT_CLOBBER');
-  const sequentialRounds = outcomes.filter((o) => o.classification === 'SEQUENTIAL_SAFE_REJECTION');
+  const winnerRounds = outcomes.filter((o) => o.classification === 'EXACTLY_ONE_WINNER');
   const unexpectedRounds = outcomes.filter((o) => o.classification === 'UNEXPECTED');
-  const scheduledWon = clobberRounds.filter((o) => o.finalPersistedStatus === 'scheduled').length;
-  const cancelledWon = clobberRounds.filter((o) => o.finalPersistedStatus === 'cancelled').length;
+  const scheduledWon = winnerRounds.filter((o) => o.finalPersistedStatus === 'scheduled').length;
+  const cancelledWon = winnerRounds.filter((o) => o.finalPersistedStatus === 'cancelled').length;
+  const concurrentConflicts = winnerRounds.filter((o) => o.loserCode === 'concurrent_transition').length;
+  const sequentialConflicts = winnerRounds.filter((o) => o.loserCode === 'already_terminal').length;
 
   console.log(`  Rounds run: ${outcomes.length}`);
-  console.log(`  BOTH_SUCCESS_SILENT_CLOBBER (the CR-03/BLK-02/FP-06 gap): ${clobberRounds.length}/${outcomes.length}`);
+  console.log(`  EXACTLY_ONE_WINNER (guard held, no clobber): ${winnerRounds.length}/${outcomes.length}`);
   console.log(`    -> PATCH (scheduled) won: ${scheduledWon}, cancel (cancelled) won: ${cancelledWon}`);
-  console.log(`  SEQUENTIAL_SAFE_REJECTION (no overlap this round): ${sequentialRounds.length}/${outcomes.length}`);
+  console.log(`    -> loser code concurrent_transition (genuine race caught by CAS): ${concurrentConflicts}`);
+  console.log(`    -> loser code already_terminal (no overlap this round): ${sequentialConflicts}`);
+  console.log(`  BOTH_SUCCESS_SILENT_CLOBBER (the CR-03/BLK-02/FP-06 gap — must be 0 post-fix): ${clobberRounds.length}/${outcomes.length}`);
   console.log(`  UNEXPECTED: ${unexpectedRounds.length}/${outcomes.length}`);
 
-  await test('aggregate: zero UNEXPECTED outcomes across all rounds (raw concurrency never crashes or 4xx/5xx-misbehaves outside the two known shapes)', () => {
+  await test('aggregate: zero UNEXPECTED outcomes across all rounds (raw concurrency never crashes or 4xx/5xx-misbehaves outside the known shape)', () => {
     assert.equal(unexpectedRounds.length, 0, `${unexpectedRounds.length} round(s) produced an unexpected status pairing`);
   });
 
-  await test('aggregate: the silent-clobber gap (CR-03/BLK-02/FP-06) reproduces on every round — deterministic current-behavior baseline, not a rare flake', () => {
+  await test('aggregate: the silent-clobber gap (CR-03/BLK-02/FP-06) never reproduces — regression proof, not a rare-pass', () => {
     assert.equal(
       clobberRounds.length,
+      0,
+      `expected 0 of ${outcomes.length} rounds to hit BOTH_SUCCESS_SILENT_CLOBBER; got ${clobberRounds.length}. ` +
+        'This means the F2-CT-32-R1 compare-and-set guard in server/src/routes/imaging.ts has regressed — investigate before merging.',
+    );
+  });
+
+  await test('aggregate: every round produced exactly one winner (guard held on every round, not just most)', () => {
+    assert.equal(
+      winnerRounds.length,
       outcomes.length,
-      `expected all ${outcomes.length} rounds to hit BOTH_SUCCESS_SILENT_CLOBBER; ${sequentialRounds.length} instead resolved sequentially-safe. ` +
-        'If this assertion starts failing because CR-03\'s guard has been implemented elsewhere, this test must be REVISED (not deleted) per the ' +
-        'F2-PREP-006-E contract\'s own instruction for CT-32, and blockerDecisions.imagingRequestPatchConcurrency should be updated to reflect the fix.',
+      `expected all ${outcomes.length} rounds to resolve EXACTLY_ONE_WINNER; ${unexpectedRounds.length} were unexpected and ${clobberRounds.length} clobbered`,
     );
   });
 

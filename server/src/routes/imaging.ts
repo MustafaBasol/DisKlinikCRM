@@ -202,7 +202,7 @@ async function findRequestInScope(req: AuthRequest, res: Response, id: string) {
     res.status(404).json({ error: 'Imaging request not found' });
     return null;
   }
-  return request;
+  return { request, scope };
 }
 
 /**
@@ -490,12 +490,13 @@ router.patch('/imaging/requests/:id', authorize([...IMAGING_CLINICAL_ROLES]), as
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
-    const existing = await findRequestInScope(req, res, id);
-    if (!existing) return;
+    const found = await findRequestInScope(req, res, id);
+    if (!found) return;
+    const { request: existing, scope } = found;
 
     const data = validation.data;
 
-    if (data.status && data.status !== existing.status) {
+    if (data.status !== undefined && data.status !== existing.status) {
       const transition = validateRequestTransition(existing.status as ImagingRequestStatus, data.status);
       if (!transition.ok) return res.status(409).json({ error: transition.message, code: transition.code });
     }
@@ -508,11 +509,33 @@ router.patch('/imaging/requests/:id', authorize([...IMAGING_CLINICAL_ROLES]), as
     });
     if (!linksOk) return;
 
-    const request = await prisma.imagingRequest.update({
-      where: { id },
-      data,
-      include: requestInclude,
-    });
+    let request: Prisma.ImagingRequestGetPayload<{ include: typeof requestInclude }>;
+
+    if (data.status !== undefined) {
+      // CT-32/CR-03/BLK-02/FP-06: the write is conditioned on the exact
+      // status value read above, not merely "is this transition valid" —
+      // same compare-and-set pattern as securityIncidentService.ts's
+      // applyLifecycleTransition() and this file's own LinkImagingStudy
+      // guard (above). Two concurrent requests reading the same starting
+      // status can no longer both commit their write: the loser's
+      // updateMany matches zero rows and is rejected below instead of
+      // silently clobbering whichever request wrote first.
+      const cas = await prisma.imagingRequest.updateMany({
+        where: { id, status: existing.status, ...scope },
+        data,
+      });
+      if (cas.count !== 1) {
+        return res.status(409).json({
+          error: 'Imaging request was concurrently modified by another request; reload and retry.',
+          code: 'concurrent_transition',
+        });
+      }
+      request = await prisma.imagingRequest.findFirstOrThrow({ where: { id, ...scope }, include: requestInclude });
+    } else {
+      // No status field in this payload — not part of the state-machine
+      // race CT-32 characterizes; keep the prior unconditioned single write.
+      request = await prisma.imagingRequest.update({ where: { id }, data, include: requestInclude });
+    }
 
     await auditImaging(req, existing.clinicId, 'imaging_request_updated', 'imaging_request', id, {
       fromStatus: existing.status,
@@ -531,17 +554,32 @@ router.patch('/imaging/requests/:id/cancel', authorize([...IMAGING_CLINICAL_ROLE
   const id = getParam(req, 'id');
 
   try {
-    const existing = await findRequestInScope(req, res, id);
-    if (!existing) return;
+    const found = await findRequestInScope(req, res, id);
+    if (!found) return;
+    const { request: existing, scope } = found;
 
     const transition = validateRequestTransition(existing.status as ImagingRequestStatus, 'cancelled');
     if (!transition.ok) return res.status(409).json({ error: transition.message, code: transition.code });
 
-    const request = await prisma.imagingRequest.update({
-      where: { id },
+    // Same CAS guard as the PATCH handler above: the write only lands if the
+    // row's status still matches what we just read. Preserves the existing
+    // non-idempotent cancel contract (a second, sequential cancel of an
+    // already-cancelled request still gets 'already_terminal' above, before
+    // this point is ever reached) while ensuring that when two cancels (or a
+    // PATCH and a cancel) race the same 'requested'/'scheduled' row, exactly
+    // one write commits and the other receives a controlled conflict.
+    const cas = await prisma.imagingRequest.updateMany({
+      where: { id, status: existing.status, ...scope },
       data: { status: 'cancelled' },
-      include: requestInclude,
     });
+    if (cas.count !== 1) {
+      return res.status(409).json({
+        error: 'Imaging request was concurrently modified by another request; reload and retry.',
+        code: 'concurrent_transition',
+      });
+    }
+
+    const request = await prisma.imagingRequest.findFirstOrThrow({ where: { id, ...scope }, include: requestInclude });
 
     await auditImaging(req, existing.clinicId, 'imaging_request_cancelled', 'imaging_request', id, {
       fromStatus: existing.status,
