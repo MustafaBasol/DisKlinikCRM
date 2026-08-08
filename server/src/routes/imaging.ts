@@ -24,9 +24,8 @@ import multer from 'multer';
 import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
-import { isAllowedFileSignature } from '../utils/fileSignature.js';
 import { isInlinePreviewable } from '../utils/filePreview.js';
-import { buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile } from '../services/fileStorage.js';
+import { openFileStream } from '../services/fileStorage.js';
 import { getParam, createRateLimiter } from '../utils/helpers.js';
 import { logActivity } from '../utils/activity.js';
 import { writeAuditLog } from '../utils/auditLog.js';
@@ -57,10 +56,14 @@ import {
 } from '../services/imaging/imagingRequestTransitions.js';
 import {
   IMAGING_ALLOWED_MIME,
-  IMAGING_EXTENSIONS_BY_MIME,
   MAX_FILE_MB,
   normalizeDeclaredMime,
 } from '../services/imaging/imagingUploadValidation.js';
+import {
+  ingestImagingStudyCore,
+  ImagingIngestFileValidationError,
+  ImagingIngestRequestCasConflictError,
+} from '../services/imaging/imagingIngestCore.js';
 
 const router = express.Router();
 
@@ -609,7 +612,6 @@ router.post('/imaging/studies', authorize([...IMAGING_CLINICAL_ROLES]), handleUp
   if (!clinicId) return res.status(403).json({ error: 'Access denied to requested clinic' });
 
   const v = validation.data;
-  let storageKey: string | null = null;
 
   try {
     // İstem bağlantısı: yalnızca açık (requested/scheduled) istemler kabul eder;
@@ -638,64 +640,29 @@ router.post('/imaging/studies', authorize([...IMAGING_CLINICAL_ROLES]), handleUp
     });
     if (!linksOk) return;
 
-    const effectiveMime = normalizeDeclaredMime(req.file.mimetype, req.file.originalname);
-    if (!isAllowedFileSignature(req.file.buffer, effectiveMime, req.file.originalname, IMAGING_EXTENSIONS_BY_MIME)) {
-      return res.status(400).json({
-        error: 'Dosya içeriği doğrulanamadı',
-        detail: 'Dosya uzantısı, MIME tipi veya dosya imzası desteklenen türlerle eşleşmiyor',
-      });
-    }
-
-    storageKey = buildStorageKey(clinicId, req.file.originalname);
-    await saveFile(storageKey, req.file.buffer, effectiveMime);
-
-    const study = await prisma.$transaction(async (tx) => {
-      const created = await tx.imagingStudy.create({
-        data: {
-          clinicId,
-          patientId,
-          appointmentId,
-          treatmentCaseId,
-          deviceId: v.deviceId ?? null,
-          imagingRequestId: request?.id ?? null,
-          modality: v.modality,
-          studyDate: v.studyDate ?? new Date(),
-          description: v.description ?? null,
-          source: 'manual_upload',
-          status: 'active',
-          createdById: req.user!.id,
-        },
-      });
-
-      await tx.imagingImage.create({
-        data: {
-          clinicId,
-          studyId: created.id,
-          fileName: fileNameFromKey(storageKey!),
-          originalName: req.file!.originalname,
-          fileSize: req.file!.size,
-          mimeType: effectiveMime,
-          filePath: storageKey!,
-        },
-      });
-
-      if (request) {
-        // Yarışa dayanıklı: durum hâlâ açıksa 'received'a geçir, değilse iptal et.
-        const updated = await tx.imagingRequest.updateMany({
-          where: { id: request.id, clinicId, status: { in: ['requested', 'scheduled'] } },
-          data: { status: 'received' },
-        });
-        if (updated.count === 0) {
-          throw Object.assign(new Error('Imaging request is not open for new studies'), { statusCode: 409 });
-        }
-      }
-
-      return created;
+    const { studyId, effectiveMime } = await ingestImagingStudyCore({
+      clinicId,
+      source: 'manual_upload',
+      createdById: req.user!.id,
+      bridgeAgentId: null,
+      ingestKey: null,
+      patientId,
+      appointmentId,
+      treatmentCaseId,
+      deviceId: v.deviceId ?? null,
+      modality: v.modality,
+      studyDate: v.studyDate ?? null,
+      description: v.description ?? null,
+      imagingRequestId: request?.id ?? null,
+      fileBuffer: req.file.buffer,
+      originalName: req.file.originalname,
+      declaredMimeType: req.file.mimetype,
+      fileSize: req.file.size,
     });
 
-    const full = await prisma.imagingStudy.findUnique({ where: { id: study.id }, include: studyInclude });
+    const full = await prisma.imagingStudy.findUnique({ where: { id: studyId }, include: studyInclude });
 
-    await auditImaging(req, clinicId, 'imaging_study_uploaded', 'imaging_study', study.id, {
+    await auditImaging(req, clinicId, 'imaging_study_uploaded', 'imaging_study', studyId, {
       modality: v.modality,
       fileSize: req.file.size,
       mimeType: effectiveMime,
@@ -707,7 +674,7 @@ router.post('/imaging/studies', authorize([...IMAGING_CLINICAL_ROLES]), handleUp
         clinicId,
         userId: req.user!.id,
         entityType: 'imaging_study',
-        entityId: study.id,
+        entityId: studyId,
         action: 'create',
         patientId,
         appointmentId,
@@ -718,9 +685,15 @@ router.post('/imaging/studies', authorize([...IMAGING_CLINICAL_ROLES]), handleUp
 
     res.status(201).json(redactStudyLegalHoldReason(full!, canSeeLegalHoldReason(req)));
   } catch (err: any) {
-    // Depoya yazıldıktan sonra DB işlemi başarısız olduysa dosyayı geri sil.
-    if (storageKey) await deleteFile(storageKey).catch(() => {});
-    if (err?.statusCode === 409) return res.status(409).json({ error: err.message });
+    if (err instanceof ImagingIngestFileValidationError) {
+      return res.status(400).json({
+        error: 'Dosya içeriği doğrulanamadı',
+        detail: 'Dosya uzantısı, MIME tipi veya dosya imzası desteklenen türlerle eşleşmiyor',
+      });
+    }
+    if (err instanceof ImagingIngestRequestCasConflictError || err?.statusCode === 409) {
+      return res.status(409).json({ error: err.message });
+    }
     console.error('[imaging] upload error:', err?.message ?? err);
     res.status(500).json({ error: 'Failed to upload imaging study' });
   }

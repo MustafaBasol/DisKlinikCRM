@@ -30,15 +30,17 @@ import { writeAuditLog } from '../utils/auditLog.js';
 import { generateBridgeToken, hashBridgeToken } from '../services/imaging/bridgeTokens.js';
 import { getBridgeUpdateConfig } from '../services/imaging/bridgeUpdateConfig.js';
 import { hashPairingCode, normalizePairingCodeInput } from '../services/imaging/bridgePairing.js';
-import { isAllowedFileSignature } from '../utils/fileSignature.js';
-import { buildStorageKey, deleteFile, fileNameFromKey, saveFile } from '../services/fileStorage.js';
 import {
   IMAGING_ALLOWED_MIME,
-  IMAGING_EXTENSIONS_BY_MIME,
   MAX_FILE_MB,
   normalizeDeclaredMime,
 } from '../services/imaging/imagingUploadValidation.js';
 import { canAttachStudyToRequest, type ImagingRequestStatus } from '../services/imaging/imagingRequestTransitions.js';
+import {
+  ingestImagingStudyCore,
+  ImagingIngestFileValidationError,
+  ImagingIngestRequestCasConflictError,
+} from '../services/imaging/imagingIngestCore.js';
 import {
   imagingBridgeHeartbeatSchema,
   imagingBridgeStudyUploadSchema,
@@ -213,7 +215,6 @@ router.post('/imaging/bridge/studies', (req: Request, res: Response, next) => {
   });
 }, async (req: Request, res: Response) => {
   let tokenHashForSlot: string | null = null;
-  let storageKey: string | null = null;
 
   try {
     const ipKey = req.ip ?? 'unknown';
@@ -287,65 +288,36 @@ router.post('/imaging/bridge/studies', (req: Request, res: Response, next) => {
       request = found;
     }
 
-    const effectiveMime = normalizeDeclaredMime(req.file.mimetype, req.file.originalname);
-    if (!isAllowedFileSignature(req.file.buffer, effectiveMime, req.file.originalname, IMAGING_EXTENSIONS_BY_MIME)) {
-      return res.status(400).json({ error: 'File content could not be validated' });
-    }
-
-    storageKey = buildStorageKey(clinicId, req.file.originalname);
-    await saveFile(storageKey, req.file.buffer, effectiveMime);
-
     let duplicate = false;
     let studyId: string;
+    let effectiveMime: string;
     try {
-      const created = await prisma.$transaction(async (tx) => {
-        const study = await tx.imagingStudy.create({
-          data: {
-            clinicId,
-            patientId: request?.patientId ?? null,
-            deviceId: v.deviceId ?? null,
-            imagingRequestId: request?.id ?? null,
-            modality: v.modality ?? 'OTHER',
-            studyDate: v.studyDate ?? new Date(),
-            source: 'bridge',
-            status: 'active',
-            createdById: null,
-            bridgeAgentId: agent.id,
-            ingestKey: v.ingestKey,
-          },
-        });
-
-        await tx.imagingImage.create({
-          data: {
-            clinicId,
-            studyId: study.id,
-            fileName: fileNameFromKey(storageKey!),
-            originalName: req.file!.originalname,
-            fileSize: req.file!.size,
-            mimeType: effectiveMime,
-            filePath: storageKey!,
-          },
-        });
-
-        if (request) {
-          const updated = await tx.imagingRequest.updateMany({
-            where: { id: request.id, clinicId, status: { in: ['requested', 'scheduled'] } },
-            data: { status: 'received' },
-          });
-          if (updated.count === 0) {
-            throw Object.assign(new Error('Imaging request is not open for new studies'), { statusCode: 409 });
-          }
-        }
-
-        return study;
+      const result = await ingestImagingStudyCore({
+        clinicId,
+        source: 'bridge',
+        createdById: null,
+        bridgeAgentId: agent.id,
+        ingestKey: v.ingestKey,
+        patientId: request?.patientId ?? null,
+        appointmentId: null,
+        treatmentCaseId: null,
+        deviceId: v.deviceId ?? null,
+        modality: v.modality ?? 'OTHER',
+        studyDate: v.studyDate ?? null,
+        description: null,
+        imagingRequestId: request?.id ?? null,
+        fileBuffer: req.file.buffer,
+        originalName: req.file.originalname,
+        declaredMimeType: req.file.mimetype,
+        fileSize: req.file.size,
       });
-      studyId = created.id;
+      studyId = result.studyId;
+      effectiveMime = result.effectiveMime;
     } catch (txErr: any) {
       // Yarış: aynı anda iki istek aynı clinicId+ingestKey ile yükledi — unique
-      // constraint P2002 verir. Az önce yazılan dosyayı sil, var olan study'yi dön.
+      // constraint P2002 verir. Dosya zaten core tarafından silindi; var olan
+      // study'yi dön.
       if (txErr?.code === 'P2002') {
-        await deleteFile(storageKey).catch(() => {});
-        storageKey = null;
         const existing = await prisma.imagingStudy.findFirst({
           where: { clinicId, ingestKey: v.ingestKey },
           select: { id: true },
@@ -353,6 +325,7 @@ router.post('/imaging/bridge/studies', (req: Request, res: Response, next) => {
         if (!existing) throw txErr;
         studyId = existing.id;
         duplicate = true;
+        effectiveMime = normalizeDeclaredMime(req.file.mimetype, req.file.originalname);
       } else {
         throw txErr;
       }
@@ -382,8 +355,12 @@ router.post('/imaging/bridge/studies', (req: Request, res: Response, next) => {
 
     res.status(duplicate ? 200 : 201).json({ ok: true, studyId, duplicate });
   } catch (err: any) {
-    if (storageKey) await deleteFile(storageKey).catch(() => {});
-    if (err?.statusCode === 409) return res.status(409).json({ error: err.message });
+    if (err instanceof ImagingIngestFileValidationError) {
+      return res.status(400).json({ error: 'File content could not be validated' });
+    }
+    if (err instanceof ImagingIngestRequestCasConflictError || err?.statusCode === 409) {
+      return res.status(409).json({ error: err.message });
+    }
     console.error('[imaging-bridge] upload error:', err?.message ?? err);
     if (!res.headersSent) res.status(500).json({ error: 'Failed to ingest imaging study' });
   } finally {

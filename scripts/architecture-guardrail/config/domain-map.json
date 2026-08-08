@@ -158,6 +158,7 @@
     "server/src/services/imaging/bridgePairing.ts": "imaging-device-bridge",
     "server/src/services/imaging/bridgeTokens.ts": "imaging-device-bridge",
     "server/src/services/imaging/bridgeUpdateConfig.ts": "imaging-device-bridge",
+    "server/src/services/imaging/imagingIngestCore.ts": "imaging-server-viewer",
     "server/src/services/imaging/imagingRequestTransitions.ts": "imaging-server-viewer",
     "server/src/services/imaging/imagingUploadValidation.ts": "imaging-server-viewer",
     "server/src/services/imaging/releaseMetadataValidation.ts": "imaging-device-bridge",
