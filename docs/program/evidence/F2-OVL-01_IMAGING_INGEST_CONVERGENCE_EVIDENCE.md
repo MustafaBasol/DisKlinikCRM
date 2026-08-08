@@ -180,10 +180,10 @@ No change. Every relation remains clinic/org-scoped exactly as before; `CT-23` (
 
 ## 22. PR / CI / review status
 
-- **PR URL/number:** to be recorded once opened.
-- **Head SHA:** to be recorded once opened.
-- **PR CI:** pending.
-- **Review threads:** none yet — PR not yet opened.
+- **PR URL/number:** https://github.com/MustafaBasol/DisKlinikCRM/pull/338 (PR #338).
+- **Head SHA:** `a6a4caba0eb3cba9ab828da99cc860d688fdb413`.
+- **PR CI:** pending at the time this section was last updated — see the PR itself for current status.
+- **Review threads:** none yet.
 - **Accepted findings:** none yet.
 - **Rejected/unverified claims:** none yet.
 
