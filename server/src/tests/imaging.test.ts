@@ -630,6 +630,11 @@ async function main() {
 
   const bridgePublicSrc = hbSrc; // alias — same file, read once above
   const jobSrc = src('../jobs/imagingBridgeOfflineJob.ts');
+  // F2-OVL-01: file-signature validation and storage-write/compensation
+  // mechanics moved into the shared manual/bridge ingest core — some
+  // source-regression checks below now read this file instead of/in
+  // addition to imagingBridgePublic.ts.
+  const ingestCoreSrc = src('../services/imaging/imagingIngestCore.ts');
 
   await test('upload endpoint recomputes sha256 server-side instead of trusting the client hash', () => {
     assert.ok(bridgePublicSrc.includes("crypto.createHash('sha256').update(req.file.buffer).digest('hex')"),
@@ -657,10 +662,16 @@ async function main() {
     assert.ok(/model ImagingStudy \{[\s\S]*?createdBy\s+User\?/.test(schemaSrc));
   });
 
-  await test('failed transaction cleans up the just-saved file', () => {
-    // Both the generic catch and the P2002 duplicate-race branch must call deleteFile.
-    const deleteCalls = bridgePublicSrc.match(/deleteFile\(storageKey\)/g) ?? [];
-    assert.ok(deleteCalls.length >= 2, 'expected cleanup on both the generic failure path and the P2002 race path');
+  await test('failed transaction cleans up the just-saved file (F2-OVL-01: shared ingest core)', () => {
+    // Storage-write + transaction + best-effort compensation now live in the
+    // shared ingestImagingStudyCore — a single catch there handles BOTH the
+    // generic failure path and the P2002 duplicate-race path (any thrown
+    // transaction error), so the route itself no longer needs its own
+    // deleteFile(storageKey) call at all.
+    const coreDeleteCalls = ingestCoreSrc.match(/deleteFile\(storageKey\)/g) ?? [];
+    assert.ok(coreDeleteCalls.length >= 1, 'expected the shared ingest core to compensate a failed transaction');
+    assert.equal(bridgePublicSrc.includes('deleteFile('), false,
+      'the bridge route must no longer perform its own storage compensation — that is now the core\'s job');
   });
 
   await test('upload is rate-limited by IP and by token, distinct from heartbeat limiters', () => {
@@ -671,7 +682,10 @@ async function main() {
 
   await test('upload enforces the same MAX_FILE_MB / magic-byte checks as manual upload', () => {
     assert.ok(bridgePublicSrc.includes('MAX_FILE_MB'));
-    assert.ok(bridgePublicSrc.includes('isAllowedFileSignature('));
+    // F2-OVL-01: magic-byte validation now lives once in the shared ingest
+    // core (imported by both the manual and bridge routes) instead of being
+    // duplicated inline in this route file.
+    assert.ok(ingestCoreSrc.includes('isAllowedFileSignature('));
   });
 
   await test('no filename, token, tokenHash, or PHI enters the bridge audit metadata', () => {
