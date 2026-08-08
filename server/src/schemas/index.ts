@@ -592,14 +592,35 @@ export const imagingRequestSchema = z.object({
 
 // patientId is immutable after creation — link corrections go through the
 // study link/unlink endpoints, not the request.
+//
+// expectedStatus (F2-CT-32-R2, optional, additive): the caller's own belief
+// about the request's current status, captured before this request was
+// formed/dispatched. When present, the PATCH handler rejects with 409
+// concurrent_transition unless the row's actual current status still
+// matches it — a check anchored to the CLIENT's pre-request observation
+// rather than to whenever the server's own read happens to execute, so it
+// stays correct regardless of connection-pool/event-loop scheduling (same
+// technique as patientEmergencyContactsConcurrency.ts's
+// expectedCurrentPrimaryContactId token-protected mode). Omitted entirely,
+// behavior is unchanged from F2-CT-32-R1 — existing callers that don't send
+// it keep the same (CAS-only) guarantee they always had.
 export const imagingRequestUpdateSchema = z.object({
   appointmentId: optionalId,
   treatmentCaseId: optionalId,
   requestedModality: z.enum(IMAGING_MODALITIES).optional(),
   requestedDeviceId: optionalId,
   status: z.enum(IMAGING_REQUEST_STATUSES).optional(),
+  expectedStatus: z.enum(IMAGING_REQUEST_STATUSES).optional(),
   priority: z.enum(IMAGING_REQUEST_PRIORITIES).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
+});
+
+// F2-CT-32-R2: optional body for PATCH /imaging/requests/:id/cancel, mirroring
+// imagingRequestUpdateSchema's expectedStatus precondition. The cancel route
+// previously read no body at all; this is purely additive — an absent body
+// (or an absent expectedStatus field) preserves F2-CT-32-R1 behavior exactly.
+export const imagingRequestCancelSchema = z.object({
+  expectedStatus: z.enum(IMAGING_REQUEST_STATUSES).optional(),
 });
 
 export const imagingStudyUploadSchema = z.object({

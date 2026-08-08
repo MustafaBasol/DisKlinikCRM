@@ -36,6 +36,7 @@ import {
   imagingDeviceUpdateSchema,
   imagingRequestSchema,
   imagingRequestUpdateSchema,
+  imagingRequestCancelSchema,
   imagingStudyUploadSchema,
   imagingStudyLinkSchema,
   imagingBridgeSchema,
@@ -66,6 +67,32 @@ import {
 } from '../services/imaging/imagingIngestCore.js';
 
 const router = express.Router();
+
+/**
+ * TEST-ONLY deterministic synchronization hooks for the PATCH/cancel
+ * ImagingRequest transition race (F2-CT-32-R2). No-op unless a test
+ * explicitly installs them via installImagingRequestRaceTestHooks — normal
+ * request handling never sets this. Same rationale/pattern as
+ * installEmergencyContactRaceTestHooks (patientEmergencyContactsConcurrency.ts):
+ * a natural Promise.all() race cannot be forced onto a specific schedule on
+ * demand, and proving/disproving a hypothesized interleaving (e.g. "does the
+ * cancel handler's read need to land after the PATCH handler's write has
+ * already committed to reproduce the gap") requires forcing that exact
+ * schedule deterministically, every run.
+ */
+export interface ImagingRequestRaceTestHooks {
+  patchBeforeRead?: () => Promise<void> | void;
+  patchAfterCas?: () => Promise<void> | void;
+  cancelBeforeRead?: () => Promise<void> | void;
+  cancelAfterCas?: () => Promise<void> | void;
+}
+
+let activeImagingRequestRaceHooks: ImagingRequestRaceTestHooks | null = null;
+
+/** TEST-ONLY. Never call outside a disposable-Postgres test process. */
+export function installImagingRequestRaceTestHooks(hooks: ImagingRequestRaceTestHooks | null): void {
+  activeImagingRequestRaceHooks = hooks;
+}
 
 // Klinik görüntüler tıbbi kayıttır: BILLING ve ASSISTANT hiçbir listede yok.
 const IMAGING_CLINICAL_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST'] as const;
@@ -493,11 +520,31 @@ router.patch('/imaging/requests/:id', authorize([...IMAGING_CLINICAL_ROLES]), as
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    await activeImagingRequestRaceHooks?.patchBeforeRead?.();
     const found = await findRequestInScope(req, res, id);
     if (!found) return;
     const { request: existing, scope } = found;
 
-    const data = validation.data;
+    const { expectedStatus, ...data } = validation.data;
+
+    // F2-CT-32-R2: expectedStatus is the caller's OWN belief about the
+    // request's status, captured before this request was formed — unlike
+    // `existing.status` (this handler's own read, which can legitimately
+    // execute after a competing PATCH/cancel has already committed; see
+    // this file's installImagingRequestRaceTestHooks header comment and
+    // patientEmergencyContactsConcurrency.ts's identical, already-accepted
+    // precedent), it cannot be made stale by connection-pool/event-loop
+    // scheduling. When supplied and it no longer matches reality, reject
+    // immediately — even though `existing.status` alone might legally
+    // support the requested transition — so a caller that raced a
+    // concurrent, overlapping mutation on this same row never gets a false
+    // 200 for a transition it validated against stale knowledge.
+    if (expectedStatus !== undefined && expectedStatus !== existing.status) {
+      return res.status(409).json({
+        error: 'Imaging request was concurrently modified by another request; reload and retry.',
+        code: 'concurrent_transition',
+      });
+    }
 
     if (data.status !== undefined && data.status !== existing.status) {
       const transition = validateRequestTransition(existing.status as ImagingRequestStatus, data.status);
@@ -527,6 +574,7 @@ router.patch('/imaging/requests/:id', authorize([...IMAGING_CLINICAL_ROLES]), as
         where: { id, status: existing.status, ...scope },
         data,
       });
+      await activeImagingRequestRaceHooks?.patchAfterCas?.();
       if (cas.count !== 1) {
         return res.status(409).json({
           error: 'Imaging request was concurrently modified by another request; reload and retry.',
@@ -556,10 +604,27 @@ router.patch('/imaging/requests/:id', authorize([...IMAGING_CLINICAL_ROLES]), as
 router.patch('/imaging/requests/:id/cancel', authorize([...IMAGING_CLINICAL_ROLES]), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
 
+  // F2-CT-32-R2: body is optional and additive — this route previously read
+  // no body at all (F2-CT-32-R1 contract). An absent/empty body still parses
+  // successfully (every field on imagingRequestCancelSchema is optional),
+  // leaving expectedStatus undefined and preserving prior behavior exactly.
+  const validation = imagingRequestCancelSchema.safeParse(req.body ?? {});
+  if (!validation.success) return res.status(400).json({ error: validation.error.format() });
+  const { expectedStatus } = validation.data;
+
   try {
+    await activeImagingRequestRaceHooks?.cancelBeforeRead?.();
     const found = await findRequestInScope(req, res, id);
     if (!found) return;
     const { request: existing, scope } = found;
+
+    // Same rationale as the PATCH handler's expectedStatus check above.
+    if (expectedStatus !== undefined && expectedStatus !== existing.status) {
+      return res.status(409).json({
+        error: 'Imaging request was concurrently modified by another request; reload and retry.',
+        code: 'concurrent_transition',
+      });
+    }
 
     const transition = validateRequestTransition(existing.status as ImagingRequestStatus, 'cancelled');
     if (!transition.ok) return res.status(409).json({ error: transition.message, code: transition.code });
@@ -575,6 +640,7 @@ router.patch('/imaging/requests/:id/cancel', authorize([...IMAGING_CLINICAL_ROLE
       where: { id, status: existing.status, ...scope },
       data: { status: 'cancelled' },
     });
+    await activeImagingRequestRaceHooks?.cancelAfterCas?.();
     if (cas.count !== 1) {
       return res.status(409).json({
         error: 'Imaging request was concurrently modified by another request; reload and retry.',
