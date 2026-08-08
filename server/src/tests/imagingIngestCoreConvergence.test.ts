@@ -35,6 +35,41 @@
  *      this proves the bridge route gets identical 409 + storage-compensation
  *      behavior, not just the manual route.
  *
+ *      NOTE (F2-OVL-01-R1): section 5 below drives this through the real
+ *      bridge route handler (`callBridgeUpload` -> `runChain`), started with
+ *      a plain `Promise.all`. That proves the ROUTE's observable 201/409
+ *      response contract and its storage compensation — it does NOT by
+ *      itself prove both concurrent requests reached the shared core's
+ *      `ingestImagingStudyCore()` CAS transition. The route performs its own
+ *      `imagingRequest` open-state pre-check (a plain read-then-branch, not
+ *      DB-locked) before ever calling the core; a real interleaving where
+ *      request A commits and request B's *route-level* pre-check then reads
+ *      the now-`received` status would also produce a 201/409 pair, entirely
+ *      via the route's own pre-check — without request B ever entering the
+ *      core or exercising `ImagingIngestRequestCasConflictError`. Section 5
+ *      is retained as route-level conflict/error-shape/compensation
+ *      characterization only; it is not cited as core-CAS proof.
+ *
+ *   6. Direct core-level CAS concurrency (deterministic proof, no route): two
+ *      concurrent `ingestImagingStudyCore()` calls invoked directly — no
+ *      route, no pre-check — racing the exact same open ImagingRequest. Both
+ *      calls unconditionally reach the core's own `imagingRequest.updateMany`
+ *      CAS transition inside their own `prisma.$transaction`; there is no
+ *      application-level branch that could let either call skip it. Real
+ *      Postgres serializes the two concurrent `UPDATE ... WHERE status IN
+ *      (...)` statements on the same row via ordinary row-level locking under
+ *      READ COMMITTED (the second updater blocks on the first updater's row
+ *      lock, then re-evaluates its WHERE predicate once unblocked) — so
+ *      exactly one call's CAS predicate matches and the other's necessarily
+ *      matches zero rows, deterministically, on every run and under every
+ *      interleaving, independent of Node's own scheduling. This is the same
+ *      "let the database serialize it" reasoning already relied on by
+ *      imagingRequestConcurrencyGuard.test.ts (F2-CT-32-R1) — no artificial
+ *      sleep or synchronization seam is needed because the property under
+ *      test (at most one writer's WHERE clause can match) is a Postgres
+ *      guarantee, not a JS-timing coincidence. This is the proof that
+ *      resolves the F2-OVL-01-R1 blocking finding.
+ *
  * Requires DATABASE_URL to point at a disposable Postgres (migrated) before
  * running. Run: cd server && npx tsx src/tests/imagingIngestCoreConvergence.test.ts
  */
@@ -357,6 +392,15 @@ async function testStructuralIsolation() {
 // ═══════════════════════════════════════════════════════════════════════
 // 5 — Route-level gap-fill: bridge-side CAS conflict (previously only
 //     characterized for the manual route as CT-13).
+//
+//     ROUTE-LEVEL CLASSIFICATION ONLY (F2-OVL-01-R1): this proves the bridge
+//     ROUTE's observable 201/409 response contract, error shape, and storage
+//     compensation. It does NOT by itself prove that the losing request's
+//     rejection came from the shared core's CAS (as opposed to the route's
+//     own pre-core `imagingRequest` open-state pre-check reading an
+//     already-`received` row) — see the header comment's point 5 for why,
+//     and section 6 below (`testDirectCoreCasConcurrency`) for the
+//     deterministic core-level proof.
 // ═══════════════════════════════════════════════════════════════════════
 
 const BRIDGE_UPLOAD_CHAIN_RAW = getFullChain(imagingBridgePublicRouter as any, 'post', '/imaging/bridge/studies');
@@ -370,7 +414,7 @@ async function callBridgeUpload(token: string, body: Record<string, unknown>, fi
 }
 
 async function testBridgeCasConflict() {
-  section('5 — Bridge-side ImagingRequest CAS conflict (gap-fill: CT-13 only covered the manual route pre-convergence)');
+  section('5 — Bridge ROUTE-level conflict/error-shape/compensation behavior (gap-fill: CT-13 only covered the manual route pre-convergence). NOT independent proof of core-CAS entry — see section 6.');
   const { fixtures, owner, clinicId } = await newFixture('bridge-cas');
   const { token } = await newBridgeAgent(clinicId, owner.id);
   const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId });
@@ -378,7 +422,7 @@ async function testBridgeCasConflict() {
     data: { clinicId, patientId: patient.id, requestedModality: 'IO', status: 'requested', requestedByUserId: owner.id },
   });
 
-  await test('two concurrent bridge ingests racing to close the same open ImagingRequest: one wins (201), one loses (409) via the shared core\'s CAS, and the loser\'s file is compensated', async () => {
+  await test('route-level: two concurrent bridge ingests racing to close the same open ImagingRequest: one wins (201), one loses (409), and the loser\'s file is compensated (does not independently prove which layer\'s check produced the 409 — see section 6 for the deterministic core-CAS proof)', async () => {
     const bufA = pngBuffer('bridge-cas-a');
     const bufB = pngBuffer('bridge-cas-b');
     const [resA, resB] = await Promise.all([
@@ -406,6 +450,122 @@ async function testBridgeCasConflict() {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// 6 — F2-OVL-01-R1: Direct core-level CAS concurrency (deterministic proof,
+//     no route). Resolves the F2-OVL-01-R1 blocking finding: section 5
+//     drives the race through the bridge ROUTE, which performs its own
+//     unlocked open-state pre-check before ever calling the core, so it
+//     cannot by itself prove the loser reached `ingestImagingStudyCore()`'s
+//     CAS transition. This section calls `ingestImagingStudyCore()` directly
+//     — twice, concurrently, no route, no pre-check in between — so both
+//     calls are structurally guaranteed to reach the core's own
+//     `imagingRequest.updateMany` CAS transition; there is no code path by
+//     which either call could be rejected before entering the core.
+//
+//     No sleep and no test-only synchronization seam is used or needed:
+//     both calls independently open a `prisma.$transaction` and issue an
+//     `UPDATE imaging_request SET status = 'received' WHERE id = ... AND
+//     status IN ('requested','scheduled')` against the identical row. Under
+//     Postgres's normal READ COMMITTED row-level locking, whichever UPDATE
+//     arrives second blocks on the first updater's row lock and then
+//     re-evaluates its own WHERE predicate against the now-committed data —
+//     so at most one of the two statements can ever match the row, on every
+//     run, regardless of exact JS scheduling/interleaving. This is the same
+//     "let Postgres serialize it" reasoning imagingRequestConcurrencyGuard
+//     .test.ts (F2-CT-32-R1) already relies on for the equivalent PATCH/
+//     cancel CAS guard, so no new synchronization primitive is introduced
+//     here — see that file's header comment for the precedent.
+// ═══════════════════════════════════════════════════════════════════════
+
+async function testDirectCoreCasConcurrency() {
+  section('6 — F2-OVL-01-R1: direct core-level CAS concurrency (deterministic, no route, no pre-check)');
+  const { fixtures, owner, clinicId, siblingClinicId } = await newFixture('core-cas');
+  const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId });
+  const request = await prisma.imagingRequest.create({
+    data: { clinicId, patientId: patient.id, requestedModality: 'IO', status: 'requested', requestedByUserId: owner.id },
+  });
+
+  // Tenant-scope control: an unrelated open ImagingRequest in a SIBLING
+  // clinic, present throughout the race, must remain completely untouched —
+  // proves the CAS predicate's clinicId scoping holds even under genuine
+  // concurrent DB contention (not just the single-call cross-clinic-id
+  // misuse already covered by section 1).
+  const siblingPatient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: siblingClinicId });
+  const siblingRequest = await prisma.imagingRequest.create({
+    data: { clinicId: siblingClinicId, patientId: siblingPatient.id, requestedModality: 'IO', status: 'requested', requestedByUserId: owner.id },
+  });
+
+  await test('two concurrent ingestImagingStudyCore() calls against the SAME open ImagingRequest: exactly one resolves, one rejects with ImagingIngestRequestCasConflictError raised by the shared core itself', async () => {
+    const bufA = pngBuffer('core-cas-a');
+    const bufB = pngBuffer('core-cas-b');
+
+    const [outcomeA, outcomeB] = await Promise.allSettled([
+      ingestImagingStudyCore({
+        ...baseCoreInput(clinicId, bufA, 'core-cas-a.png'),
+        source: 'bridge',
+        createdById: null,
+        bridgeAgentId: null,
+        ingestKey: sha256Hex(bufA),
+        imagingRequestId: request.id,
+      }),
+      ingestImagingStudyCore({
+        ...baseCoreInput(clinicId, bufB, 'core-cas-b.png'),
+        source: 'bridge',
+        createdById: null,
+        bridgeAgentId: null,
+        ingestKey: sha256Hex(bufB),
+        imagingRequestId: request.id,
+      }),
+    ]);
+
+    const outcomes = [outcomeA, outcomeB];
+    const fulfilled = outcomes.filter((o): o is PromiseFulfilledResult<Awaited<ReturnType<typeof ingestImagingStudyCore>>> => o.status === 'fulfilled');
+    const rejected = outcomes.filter((o): o is PromiseRejectedResult => o.status === 'rejected');
+
+    // 1/2. Exactly one call succeeds, exactly one rejects with the shared
+    // core's own typed CAS-conflict error (not a generic/Prisma error, not a
+    // route-shaped error — this call never went through a route).
+    assert.equal(fulfilled.length, 1, `expected exactly one direct core call to succeed, got ${fulfilled.length}`);
+    assert.equal(rejected.length, 1, `expected exactly one direct core call to reject, got ${rejected.length}`);
+    assert.ok(
+      rejected[0].reason instanceof ImagingIngestRequestCasConflictError,
+      `the losing direct core call must reject with ImagingIngestRequestCasConflictError, got: ${rejected[0].reason instanceof Error ? rejected[0].reason.stack : String(rejected[0].reason)}`,
+    );
+
+    // 3. The ImagingRequest ends as 'received'.
+    const finalRequest = await prisma.imagingRequest.findUniqueOrThrow({ where: { id: request.id } });
+    assert.equal(finalRequest.status, 'received');
+
+    // 4/7. Exactly one ImagingStudy survives, and it is the winner's — the
+    // loser's whole transaction (ImagingStudy insert included) rolled back.
+    const winnerStudyId = fulfilled[0].value.studyId;
+    const studies = await prisma.imagingStudy.findMany({ where: { clinicId } });
+    assert.equal(studies.length, 1, 'exactly one ImagingStudy must survive under the caller\'s clinic — the loser\'s transaction must be fully rolled back, not just its request-update');
+    assert.equal(studies[0].id, winnerStudyId, 'the surviving ImagingStudy must belong to the winning call');
+    assert.equal(studies[0].imagingRequestId, request.id);
+
+    // 5. Exactly one ImagingImage survives, owned by the winning study.
+    const images = await prisma.imagingImage.findMany({ where: { clinicId } });
+    assert.equal(images.length, 1, 'exactly one ImagingImage must survive — no orphaned image row from the losing transaction');
+    assert.equal(images[0].studyId, winnerStudyId);
+
+    // 6/8. Exactly one physical storage object survives — the loser's
+    // already-written file (written before its own transaction ran) must
+    // have been compensated (deleted) by the core's own catch-block, not
+    // left orphaned on disk.
+    const survivingFiles = listClinicUploadFiles(clinicId);
+    assert.equal(survivingFiles.length, 1, 'exactly one physical storage object must survive; the loser\'s must be compensated/deleted by the core');
+
+    // 9. No cross-clinic row is touched — the sibling clinic's unrelated
+    // open ImagingRequest and study count are unaffected by this race.
+    const finalSiblingRequest = await prisma.imagingRequest.findUniqueOrThrow({ where: { id: siblingRequest.id } });
+    assert.equal(finalSiblingRequest.status, 'requested', 'a concurrent same-content-shape race in one clinic must never touch an unrelated ImagingRequest in a sibling clinic');
+    const siblingStudyCount = await prisma.imagingStudy.count({ where: { clinicId: siblingClinicId } });
+    assert.equal(siblingStudyCount, 0, 'no ImagingStudy may be created under the sibling clinic as a side effect of this race');
+    assert.equal(listClinicUploadFiles(siblingClinicId).length, 0, 'no storage object may be written under the sibling clinic as a side effect of this race');
+  });
+}
+
 // ─── Run ────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -413,6 +573,7 @@ async function main() {
   await testPathSpecificFields();
   await testStructuralIsolation();
   await testBridgeCasConflict();
+  await testDirectCoreCasConcurrency();
 
   const ok = summary();
   await localCleanup();

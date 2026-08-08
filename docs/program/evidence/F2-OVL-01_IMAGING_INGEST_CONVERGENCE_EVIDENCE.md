@@ -2,9 +2,10 @@
 
 **Phase:** F2 — Modular Boundaries and Public Contracts, Imaging Pilot Stage 2
 **Task ID:** F2-OVL-01 (ClickUp `869ed1pz1`)
-**Date:** 2026-08-08
+**Date:** 2026-08-08 (original delivery); **R1 correction:** 2026-08-08
 **Branch:** `fix/f2-ovl-01-imaging-ingest-convergence`
 **Baseline:** `origin/main` @ `5a6944ae60b182f1c79c96c9febead7b25c59d9b` (merge commit of PR #335, `F2-CT-32-R1` — this task's own hard-start gate; independently re-verified `MERGED` with an exact post-merge main CI match before any runtime/test file was touched)
+**R1 status:** an external architecture re-review of PR #338 filed a blocking finding that the original bridge-route concurrency test did not deterministically prove the loser reached the shared core's CAS (see §16A). Corrected by this revision — verification-only, `imagingIngestCore.ts` unmodified. `STAGE_2_COMPLETE = FALSE`; do not merge.
 
 This document is the delivery evidence for F2-OVL-01. It assumes the reader has [F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md](../architecture/F2-PREP-006-E_IMAGING_BOUNDARY_CONTRACT.md) (§8 convergence decision, §14 audit open question) and [F2-PREP-007-C_IMAGING_CHARACTERIZATION_INGEST_STORAGE_EVIDENCE.md](F2-PREP-007-C_IMAGING_CHARACTERIZATION_INGEST_STORAGE_EVIDENCE.md) (the CT-07/08/10/11/12/13/14/27 characterization baseline this convergence must reproduce exactly).
 
@@ -120,7 +121,11 @@ Manual: unchanged full-study 201 body (`redactStudyLegalHoldReason(full, canSeeL
 - `docs/program/CURRENT_PHASE.md`, `docs/program/NORAMEDI_MASTER_TRACKER.md`, `docs/program/phases/F2_MODULAR_BOUNDARIES.md`, `docs/program/evidence/README.md` — additive program-status updates.
 - This file (new).
 
-No `server/prisma/schema.prisma` or migration file touched.
+**F2-OVL-01-R1 correction (files changed in R1, additive to the above — nothing above this line was touched by R1):**
+- `server/src/tests/imagingIngestCoreConvergence.test.ts` — added the new direct core-level CAS concurrency test (test section 6); revised the header comment and the bridge-route test's (section 5) comments/test-name to reclassify it as route-level-only proof. No other test in this file changed.
+- This file — added §16A and updated §§15/16/22/23/24/25/26 to document the R1 correction.
+
+No `server/prisma/schema.prisma` or migration file touched, in either the original delivery or R1.
 
 ## 15. Exact test commands and pass/fail counts
 
@@ -145,18 +150,51 @@ No `server/prisma/schema.prisma` or migration file touched.
 | `imagingCharacterizationIngestStorage.test.ts` (CT-07/08/10/11/12/13/14/27 — **unmodified test file, zero test-body changes**, re-run end-to-end against both refactored routes) | **13/13** |
 | `imagingRequestConcurrencyCharacterization.test.ts` (CT-32) | **154/154** |
 | `imagingRequestConcurrencyGuard.test.ts` (F2-CT-32-R1 guard suite) | **73/73** |
-| `imagingIngestCoreConvergence.test.ts` (new, this task) | **8/8** |
+| `imagingIngestCoreConvergence.test.ts` (this task; **9/9** after the F2-OVL-01-R1 correction — see the R1 section below) | **9/9** |
 | `imagingLifecycleFacade.test.ts` | **34/34** |
 | `dbVerification/imagingStudyRequestPatientConsistency.test.ts` (CT-23) | **12/12** |
 | `dbVerification/detectImagingStudyRequestPatientMismatch.test.ts` (CT-23-R1) | **7/7** |
 
 The unmodified CT-07/08/10/11/12/13/14/27 suite passing without any test-body edit is the direct end-to-end characterization proof that manual+bridge ingest behavior — successful ingest, request-linked ingest, sequential and concurrent (P2002) duplicate races, non-idempotent manual duplicates, CAS-conflict storage compensation, and oversized/invalid-type/malformed-multipart rejection — is unchanged by this convergence.
 
-The new `imagingIngestCoreConvergence.test.ts` (**8/8**) additionally proves, directly at the core level (not reachable by any pre-existing route-level test):
+The `imagingIngestCoreConvergence.test.ts` suite (**9/9**, post-R1) additionally proves, directly at the core level (not reachable by any pre-existing route-level test):
 1. **Tenant-scoped CAS with full rollback:** a cross-clinic `imagingRequestId` fails closed as a CAS conflict, and the *entire* transaction — including the `ImagingStudy` row itself — rolls back, not just the request update; the written storage file is compensated.
 2. **Path-specific field persistence through the one shared function:** `source: 'manual_upload'` persists `createdById` and leaves `bridgeAgentId`/`ingestKey` null; `source: 'bridge'` persists `bridgeAgentId`+`ingestKey` and leaves `createdById` null; `ImagingImage` fields are equivalent regardless of which path drove the same core call.
 3. **Structural isolation:** the core's own `import` statements never reference `express`, `writeAuditLog`/`auditLog`, or `logActivity`/`utils/activity` — a source scan restricted to actual import lines (not the file's own header comment, which documents these same exclusions by name).
-4. **Bridge-side `ImagingRequest` CAS-conflict gap-fill:** two concurrent bridge ingests racing to close the same open `ImagingRequest` — previously this exact race was only characterized for the manual route as CT-13 (pre-convergence, the two routes had textually-identical but independently-maintained CAS code). This new test proves the bridge route now gets identical 409 + storage-compensation behavior via the shared core, closing that gap.
+4. **Bridge ROUTE-level conflict/error-shape/compensation behavior (reclassified, F2-OVL-01-R1):** two concurrent bridge ingest HTTP requests racing to close the same open `ImagingRequest` produce one 201 + one 409 with storage compensation. **This proves the route's observable response contract only** — see the R1 section below for why it does not, by itself, prove the loser reached the shared core's CAS.
+5. **Direct core-level CAS concurrency (F2-OVL-01-R1, the deterministic proof):** two concurrent `ingestImagingStudyCore()` calls, invoked directly with no route and no pre-check in between, racing the same open `ImagingRequest`. See the R1 section below for full detail.
+
+## 16A. F2-OVL-01-R1 correction — deterministic shared-core CAS concurrency proof
+
+**Status:** this section is an amendment layered on top of §§1–16 above (unchanged, describes the original PR #338 delivery); it does not replace them. This correction is a **verification-only** change — `imagingIngestCore.ts` (the runtime implementation) was not modified.
+
+**Blocking finding (external architecture re-review):** the pre-R1 bridge-route concurrency test (test file section 5) started two bridge route handlers with a plain `Promise.all`, with no barrier ensuring both requests had completed the ROUTE's own `ImagingRequest` open-state pre-check before either entered `ingestImagingStudyCore()`. Because that pre-check is a plain read-then-branch (not DB-locked), the observed 201/409 pair was also consistent with an interleaving where request A commits, then request B's own route-level pre-check reads the now-`received` row and returns 409 — entirely via the route's pre-check, without request B ever entering the shared core or exercising `ImagingIngestRequestCasConflictError`. The original evidence doc (pre-R1 §16 point 4) therefore overstated that test as proof of the shared core's internal CAS path; it only proved the route's *observable response contract*.
+
+**Correction applied:** added a new test section (`testDirectCoreCasConcurrency`, test file section 6) that calls `ingestImagingStudyCore()` directly, twice, concurrently — no route, no pre-check of any kind — against the same `clinicId` and the same open `ImagingRequest`, with different file buffers/storage keys/ingest keys. Because both calls unconditionally reach the core's own `prisma.$transaction` and its `imagingRequest.updateMany` CAS statement, there is no code path in this test by which either call could be rejected before entering the core — both calls are structurally guaranteed to exercise the shared core's CAS transition, closing the exact gap the blocking finding identified.
+
+**Deterministic synchronization strategy — no test-only seam needed:** no sleep and no test-only synchronization hook was added (the repository precedent for such a hook, `installEmergencyContactRaceTestHooks` in `patientEmergencyContactsConcurrency.ts`, was reviewed and found unnecessary here). The two concurrent `UPDATE "ImagingRequest" SET status = 'received' WHERE id = ... AND "clinicId" = ... AND status IN ('requested','scheduled')` statements target the identical row. Under Postgres's normal READ COMMITTED row-level locking, whichever UPDATE statement arrives second blocks on the first updater's row lock and, once unblocked, re-evaluates its own WHERE predicate against the now-committed data — so at most one of the two statements can ever match the row, on every run, regardless of exact Node/event-loop scheduling. This is a hard Postgres guarantee, not a probabilistic/timing-dependent outcome, and is the same "let the database serialize it" reasoning `imagingRequestConcurrencyGuard.test.ts` (F2-CT-32-R1) already relies on for the equivalent PATCH/cancel CAS guard (see that file's own header comment).
+
+**Proof both competing operations exercised the shared-core CAS:** both operations are the literal same `ingestImagingStudyCore()` function call (same import used elsewhere in this suite), invoked with no intervening route/pre-check code — there is no branch between "test calls the function" and "the function's own transaction runs" that either call could take instead. The losing call's rejection is asserted to be `instanceof ImagingIngestRequestCasConflictError` (the shared core's own typed error class, importable only from `imagingIngestCore.ts`), not a generic error, not a route-shaped 409 body, not a Prisma error — this is only throwable from inside the core's own CAS branch.
+
+**Success/error classification (exact):** exactly one of the two `Promise.allSettled` outcomes is `status: 'fulfilled'` (its `.value.studyId` is the winner), and exactly one is `status: 'rejected'` with `.reason instanceof ImagingIngestRequestCasConflictError`.
+
+**DB final-state proof:** `ImagingRequest.status === 'received'`; `prisma.imagingStudy.findMany({where:{clinicId}})` has length 1 and its `id` equals the winner's `studyId`; `prisma.imagingImage.findMany({where:{clinicId}})` has length 1 and its `studyId` equals the winner's `studyId` (the loser's `ImagingStudy`+`ImagingImage` inserts, both issued inside its own now-rolled-back transaction, do not persist).
+
+**Storage final-state proof:** exactly one file remains on disk under the clinic's upload directory (`listClinicUploadFiles(clinicId).length === 1`) — the loser's already-written file (written before its transaction ran, per the core's storage-then-transaction ordering) was removed by the core's own catch-block `deleteFile(storageKey).catch(() => {})` compensation.
+
+**Tenant-scope proof:** an unrelated open `ImagingRequest` in a SIBLING clinic, seeded before the race and present throughout, is asserted unchanged afterward: its `status` is still `'requested'`, the sibling clinic's `ImagingStudy` count is `0`, and the sibling clinic's upload directory has `0` files. This proves the CAS predicate's `clinicId` scoping holds under genuine concurrent DB contention, not just the single-call cross-clinic-id-misuse case already covered by test section 1 (§8 above).
+
+**Route-level test reclassification:** the pre-existing bridge-route 201/409 test (test file section 5) is retained unchanged in mechanics, but its section header and test-name comments were revised to state explicitly that it proves ROUTE-LEVEL conflict/error-shape/compensation behavior only, and is not independent proof that the loser's rejection came from the shared core's CAS. That proof now rests exclusively on the new direct-core test (section 6).
+
+**Updated test-file totals:** `imagingIngestCoreConvergence.test.ts` now runs **9 tests** (previously 8; +1 for the new direct-core CAS test) — **9/9 passed, 0 failed**, executed against real disposable PostgreSQL via `npm run test:runtime:postgres` (see §16 table and §R1-validation below).
+
+**Scope discipline (confirmed, nothing beyond the correction touched):** `imagingIngestCore.ts` unmodified — the blocking finding was a verification defect, not a runtime-code defect, and no implementation change was warranted or made. No change to auth/RBAC, clinic resolution, bridge token behavior, `ingestKey` dedupe semantics, P2002 handling, audit semantics, `ActivityLog` semantics, public request/response shape, `prisma/schema.prisma`, migration files, CT-23, CT-32, Stage 3 caller migration, or BLK-01 architecture. `F2-IMG-AUDIT-001`/`F2-IMG-AUDIT-002` remain separate, open, unresolved decisions — not touched by this correction.
+
+**Stage/authorization status (restated per the F2-OVL-01-R1 task brief):**
+- Stage 2: `IN_PROGRESS` / `NOT_COMPLETE` / `EXIT_GATE_NOT_SATISFIED`
+- Stage 3: `NOT_AUTHORIZED`
+- `BLOCKING_ENFORCEMENT`: `NOT_AUTHORIZED`
+- `STAGE_2_COMPLETE = FALSE`
 
 ## 17. Migration status
 
@@ -181,24 +219,27 @@ No change. Every relation remains clinic/org-scoped exactly as before; `CT-23` (
 ## 22. PR / CI / review status
 
 - **PR URL/number:** https://github.com/MustafaBasol/DisKlinikCRM/pull/338 (PR #338).
-- **Head SHA:** `a6a4caba0eb3cba9ab828da99cc860d688fdb413`.
-- **PR CI:** pending at the time this section was last updated — see the PR itself for current status.
-- **Review threads:** none yet.
-- **Accepted findings:** none yet.
-- **Rejected/unverified claims:** none yet.
+- **Pre-R1 reviewed head SHA:** `beed1b34fa9162571040ab2f860a84f0742aed57`.
+- **Post-R1 head SHA:** see the delivery report accompanying this correction (this doc is updated in the same commit as the code change, so its own commit's parent is the pre-R1 SHA above).
+- **PR CI:** see the PR itself / delivery report for the current run status against the R1 head.
+- **Review threads:** the F2-OVL-01-R1 blocking finding (this section addresses it); no other threads at time of writing.
+- **Accepted findings:** the F2-OVL-01-R1 blocking finding (verification defect in the original bridge-route concurrency test) — corrected by §16A.
+- **Rejected/unverified claims:** none.
 
 ## 23. Current task status
 
-`AGENT_COMPLETED` / `TESTS_PASSED` — `PR_OPENED` once opened / `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`.
+`AGENT_COMPLETED` / `TESTS_PASSED` (this correction's own validation — see §16A) / `PR_OPENED` (already open as #338) / `PR_CI_PASSED` (see delivery report for current run) / `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`.
+
+`STAGE_2_COMPLETE = FALSE`.
 
 ## 24. Merge safety
 
-All mandatory validation commands pass; no schema/migration change; no public API/frontend contract change; no behavior change to any external caller of either route. Two program-tracked open follow-ups (`F2-IMG-AUDIT-001`/`F2-IMG-AUDIT-002`) remain explicitly unresolved and do not block this PR, per the task's own instruction not to silently resolve them.
+All mandatory validation commands pass; no schema/migration change; no public API/frontend contract change; no behavior change to any external caller of either route; `imagingIngestCore.ts` unmodified by the R1 correction (verification-only). Two program-tracked open follow-ups (`F2-IMG-AUDIT-001`/`F2-IMG-AUDIT-002`) remain explicitly unresolved and do not block this PR, per the task's own instruction not to silently resolve them. **Do not merge** — Stage 3 and blocking-enforcement are `NOT_AUTHORIZED` regardless of local test results; merge requires a separate, independent decision beyond this task.
 
 ## 25. Deployment safety
 
-No environment/config/dependency change. Safe to deploy independently of any other in-flight branch — the two routes' external contracts are byte-for-byte unchanged.
+No environment/config/dependency change. Safe to deploy independently of any other in-flight branch — the two routes' external contracts are byte-for-byte unchanged. Not deployed by this task.
 
 ## 26. Exact next action
 
-Open one focused PR against `main` (do not merge). Await architecture/program-controller review, in particular a decision on `F2-IMG-AUDIT-001`/`F2-IMG-AUDIT-002` before either is implemented. Stage 2 remains `IN_PROGRESS`/`NOT_COMPLETE`/`EXIT_GATE_NOT_SATISFIED` until this PR merges and post-merge `origin/main` CI is independently re-verified.
+External architecture re-review of PR #338 (this correction's target reviewer). Do not merge. Stage 2 remains `IN_PROGRESS`/`NOT_COMPLETE`/`EXIT_GATE_NOT_SATISFIED`; Stage 3 remains `NOT_AUTHORIZED`; `BLOCKING_ENFORCEMENT` remains `NOT_AUTHORIZED`, until this PR merges and post-merge `origin/main` CI is independently re-verified. A decision on `F2-IMG-AUDIT-001`/`F2-IMG-AUDIT-002` also remains outstanding before either is implemented.
