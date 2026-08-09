@@ -1123,14 +1123,20 @@ router.patch('/privacy/legacy-consent-correction/settings', async (req: Platform
   // (pg_advisory_xact_lock), so it never needs manual cleanup.
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY}))`;
-    const previousEnabled = await isLegacyConsentCorrectionRuntimeEnabled(tx);
+    // Raw string-or-null read (not the boolean-coercing
+    // isLegacyConsentCorrectionRuntimeEnabled helper) — mirrors the DELETE
+    // handler below. The boolean helper collapses "no row exists" (null) and
+    // an explicit 'false' row into the same `false`, which would then get
+    // `String()`-coerced into the STRING 'false' here, destroying the
+    // absent-vs-explicit-false distinction the audit trail must preserve.
+    const previousValue = await getPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, tx);
     await setPlatformSetting(LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, String(runtimeEnabled), tx);
     await writePlatformAdminAuditEventInTx(tx, {
       actorPlatformAdminId: req.platformAdmin?.id ?? null,
       action: 'platform_setting.updated',
       resourceType: 'platform_setting',
       resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY,
-      previousValue: String(previousEnabled),
+      previousValue,
       newValue: String(runtimeEnabled),
       outcome: 'success',
     });

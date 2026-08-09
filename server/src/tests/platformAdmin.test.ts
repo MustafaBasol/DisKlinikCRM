@@ -640,6 +640,82 @@ async function cleanAuditRows() {
   });
 }
 
+// ── Deterministic ordering helpers for forced PATCH/DELETE race tests ────────
+// F2-CI-FLAKE-LEGACY-CONSENT-001: a plain Promise.all() race (as in the
+// "concurrent enable/reset" test below) lands on whichever legal
+// serialization order the real Postgres scheduler happens to pick — that is
+// sufficient to prove both orderings stay coherent across many runs, but not
+// sufficient to force one specific ordering on demand for a fast,
+// non-probabilistic assertion. These helpers hold the SAME transaction-scoped
+// advisory lock the route handlers use (keyed to
+// LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY) via a separate, externally
+// controlled `prisma.$transaction` call, queue two route requests behind it
+// in a chosen order (confirmed via pg_locks, not a fixed sleep), then release.
+// Postgres's advisory-lock wait queue grants the longest-waiting requester
+// first — verified empirically (15/15 forced orderings landed as queued, in a
+// standalone check against this same disposable-Postgres setup) — so this
+// produces the requested ordering deterministically, every run. Test-only: no
+// production code is touched, hooked, or made aware that tests exist.
+async function holdLegacyConsentAdvisoryLock(): Promise<{ release: () => void; released: Promise<void> }> {
+  let releaseHolder!: () => void;
+  const blocker = new Promise<void>((resolve) => { releaseHolder = resolve; });
+  let lockAcquired!: () => void;
+  const acquired = new Promise<void>((resolve) => { lockAcquired = resolve; });
+  const released = prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY}))`;
+    lockAcquired();
+    await blocker;
+  }).then(() => undefined);
+  await acquired;
+  return { release: releaseHolder, released };
+}
+
+async function waitForAdvisoryWaiters(count: number, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*)::bigint AS n FROM pg_locks WHERE locktype = 'advisory' AND granted = false
+    `;
+    if (Number(rows[0]?.n ?? 0) >= count) return;
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for ${count} advisory-lock waiter(s); saw ${Number(rows[0]?.n ?? 0)}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+/**
+ * Runs the PATCH(true) and DELETE handlers concurrently against a real
+ * Postgres, but forces one to enter the advisory-lock wait queue strictly
+ * before the other, so the resulting serialization order is deterministic
+ * rather than a 50/50 real-DB race. `order: 'patch-first'` forces PATCH to
+ * commit before DELETE; `'delete-first'` forces the reverse.
+ */
+async function runForcedPatchDeleteOrder(order: 'patch-first' | 'delete-first') {
+  const patchChain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const deleteChain = getRouteMiddlewareChain(platformAdminRouter as any, 'delete', '/privacy/legacy-consent-correction/settings');
+  const patchRes = mockPlatformRes();
+  const deleteRes = mockPlatformRes();
+
+  const holder = await holdLegacyConsentAdvisoryLock();
+
+  const firstCall = order === 'patch-first'
+    ? runChain(patchChain, mockPlatformReq({ runtimeEnabled: true }), patchRes)
+    : runChain(deleteChain, mockPlatformReq(), deleteRes);
+  await waitForAdvisoryWaiters(1);
+
+  const secondCall = order === 'patch-first'
+    ? runChain(deleteChain, mockPlatformReq(), deleteRes)
+    : runChain(patchChain, mockPlatformReq({ runtimeEnabled: true }), patchRes);
+  await waitForAdvisoryWaiters(2);
+
+  holder.release();
+  await holder.released;
+  await Promise.all([firstCall, secondCall]);
+
+  return { patchRes, deleteRes };
+}
+
 await test('PATCH settings: successful false→true toggle creates exactly one durable PlatformAdminAuditEvent row (platform-scope, admin-attributed, no patient data/secrets)', async () => {
   await cleanAuditRows();
   await prisma.platformSetting.upsert({
@@ -695,6 +771,32 @@ await test('PATCH settings: successful true→false toggle creates exactly one d
 
   const signalCount = await prisma.securitySignalEvent.count({ where: { ruleKey: 'platform_admin.config_change.v1' } });
   assert.equal(signalCount, 0, 'a platform-admin config change must never be written to SecuritySignalEvent');
+});
+
+await test('PATCH settings: enabling from a truly ABSENT baseline (no PlatformSetting row at all) creates an audit row with previousValue=null, not the boolean-coerced string "false" (regression test for F2-CI-FLAKE-LEGACY-CONSENT-001)', async () => {
+  await cleanAuditRows();
+  await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const res = mockPlatformRes();
+  await runChain(chain, mockPlatformReq({ runtimeEnabled: true }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.runtimeEnabled, true);
+
+  const row = await prisma.platformSetting.findUnique({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(row?.value, 'true');
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  assert.equal(rows.length, 1, 'exactly one durable audit row must be created for one successful toggle');
+  assert.equal(
+    rows[0].previousValue,
+    null,
+    'an absent PlatformSetting row must be recorded as null, not the boolean-coerced string "false" — the two are semantically distinct prior states and collapsing them is exactly the bug this test guards against',
+  );
+  assert.equal(rows[0].newValue, 'true');
+  assert.equal(rows[0].outcome, 'success');
 });
 
 await test('PATCH settings: rejected (non-boolean) toggle attempt never creates a PlatformAdminAuditEvent — no misleading success record on a failed attempt', async () => {
@@ -1034,6 +1136,157 @@ await test('PATCH and DELETE settings: concurrent enable/reset operations serial
     });
   }
 });
+
+await test('PATCH and DELETE settings: forced DELETE-first ordering deterministically records previousValue=null on the PATCH that recreates the absent row (not a probabilistic race — every run)', async () => {
+  await cleanAuditRows();
+  const baselineValue = 'false';
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: baselineValue },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: baselineValue },
+  });
+
+  const { patchRes, deleteRes } = await runForcedPatchDeleteOrder('delete-first');
+  assert.equal(patchRes.statusCode, 200);
+  assert.equal(deleteRes.statusCode, 200);
+
+  const finalSetting = await prisma.platformSetting.findUnique({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  assert.equal(finalSetting?.value, 'true', 'DELETE was forced to commit first (clearing the row to truly absent), then PATCH recreated it with true');
+
+  const updateRows = await prisma.platformAdminAuditEvent.findMany({
+    where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  const resetRows = await prisma.platformAdminAuditEvent.findMany({
+    where: { action: RESET_AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  assert.equal(updateRows.length, 1, 'the successful PATCH must create exactly one update audit row');
+  assert.equal(resetRows.length, 1, 'the successful DELETE must create exactly one reset audit row');
+
+  assert.equal(resetRows[0]!.previousValue, baselineValue, 'DELETE (forced first committer) must have read the true pre-race baseline');
+  assert.equal(resetRows[0]!.newValue, null);
+  assert.equal(
+    updateRows[0]!.previousValue,
+    null,
+    'PATCH (forced second committer, reading inside its own transaction after DELETE committed) must record the setting as truly absent — not the string "false" — at the exact moment it read it',
+  );
+  assert.equal(updateRows[0]!.newValue, 'true');
+});
+
+await test('PATCH and DELETE settings: forced PATCH-first ordering deterministically records the correct non-stale audit chain (not a probabilistic race — every run)', async () => {
+  await cleanAuditRows();
+  const baselineValue = 'false';
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: baselineValue },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: baselineValue },
+  });
+
+  const { patchRes, deleteRes } = await runForcedPatchDeleteOrder('patch-first');
+  assert.equal(patchRes.statusCode, 200);
+  assert.equal(deleteRes.statusCode, 200);
+
+  const finalSetting = await prisma.platformSetting.findUnique({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  assert.equal(finalSetting, null, 'PATCH was forced to commit first (setting true), then DELETE removed the row again');
+
+  const updateRows = await prisma.platformAdminAuditEvent.findMany({
+    where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  const resetRows = await prisma.platformAdminAuditEvent.findMany({
+    where: { action: RESET_AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+  });
+  assert.equal(updateRows.length, 1, 'the successful PATCH must create exactly one update audit row');
+  assert.equal(resetRows.length, 1, 'the successful DELETE must create exactly one reset audit row');
+
+  assert.equal(updateRows[0]!.previousValue, baselineValue, 'PATCH (forced first committer) must have read the true pre-race baseline');
+  assert.equal(updateRows[0]!.newValue, 'true');
+  assert.equal(
+    resetRows[0]!.previousValue,
+    'true',
+    "DELETE (forced second committer) must have read PATCH's freshly committed true value from inside its own transaction, not a stale pre-transaction baseline",
+  );
+  assert.equal(resetRows[0]!.newValue, null);
+});
+
+await test("PATCH+DELETE settings: a concurrently-failing DELETE (forced FK violation) never corrupts a concurrently-succeeding PATCH's committed value or audit trail", async () => {
+  await cleanAuditRows();
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: 'false' },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: 'false' },
+  });
+
+  const patchChain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const deleteChain = getRouteMiddlewareChain(platformAdminRouter as any, 'delete', '/privacy/legacy-consent-correction/settings');
+
+  const goodPatchReq = mockPlatformReq({ runtimeEnabled: true });
+  // Same real-FK-violation technique as the single-request/PATCH+PATCH
+  // atomicity tests above, but the failing side is now DELETE.
+  const ghostDeleteReq = { body: {}, platformAdmin: { id: 'admin-does-not-exist-ghost-delete', email: 'ghost-delete@platform.test' } } as any;
+  const patchRes = mockPlatformRes();
+  const ghostDeleteRes = mockPlatformRes();
+
+  const [patchOutcome, deleteOutcome] = await Promise.allSettled([
+    runChain(patchChain, goodPatchReq, patchRes),
+    runChain(deleteChain, ghostDeleteReq, ghostDeleteRes),
+  ]);
+  assert.equal(patchOutcome.status, 'fulfilled', 'the valid concurrent PATCH must succeed regardless of the concurrent DELETE failing');
+  assert.equal(deleteOutcome.status, 'rejected', 'the FK-violating concurrent DELETE must reject, not silently succeed');
+
+  const row = await prisma.platformSetting.findUnique({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(row?.value, 'true', "the setting must reflect only the successful PATCH — the failed DELETE's removal must have fully rolled back, whichever order the two transactions ran in");
+
+  const updateRows = await prisma.platformAdminAuditEvent.findMany({ where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  const resetRows = await prisma.platformAdminAuditEvent.findMany({ where: { action: RESET_AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(updateRows.length, 1, 'only the successful PATCH may leave an update audit row');
+  assert.equal(resetRows.length, 0, "the failed DELETE must roll back its audit insert along with its (never-committed) setting deletion");
+  assert.equal(updateRows[0]!.previousValue, 'false', 'the failed DELETE never actually committed a removal, so PATCH must always read the true baseline regardless of transaction ordering');
+  assert.equal(updateRows[0]!.newValue, 'true');
+
+  const ghostAuditCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: 'admin-does-not-exist-ghost-delete' } });
+  assert.equal(ghostAuditCount, 0);
+});
+
+await test("PATCH+DELETE settings: a concurrently-failing PATCH (forced FK violation) never corrupts a concurrently-succeeding DELETE's committed value or audit trail", async () => {
+  await cleanAuditRows();
+  await prisma.platformSetting.upsert({
+    where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY },
+    update: { value: 'false' },
+    create: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY, value: 'false' },
+  });
+
+  const patchChain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/legacy-consent-correction/settings');
+  const deleteChain = getRouteMiddlewareChain(platformAdminRouter as any, 'delete', '/privacy/legacy-consent-correction/settings');
+
+  const ghostPatchReq = { body: { runtimeEnabled: true }, platformAdmin: { id: 'admin-does-not-exist-ghost-patch', email: 'ghost-patch@platform.test' } } as any;
+  const goodDeleteReq = mockPlatformReq();
+  const ghostPatchRes = mockPlatformRes();
+  const deleteRes = mockPlatformRes();
+
+  const [patchOutcome, deleteOutcome] = await Promise.allSettled([
+    runChain(patchChain, ghostPatchReq, ghostPatchRes),
+    runChain(deleteChain, goodDeleteReq, deleteRes),
+  ]);
+  assert.equal(deleteOutcome.status, 'fulfilled', 'the valid concurrent DELETE must succeed regardless of the concurrent PATCH failing');
+  assert.equal(patchOutcome.status, 'rejected', 'the FK-violating concurrent PATCH must reject, not silently succeed');
+
+  const row = await prisma.platformSetting.findUnique({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(row, null, "the setting must reflect only the successful DELETE — the failed PATCH's write must have fully rolled back, whichever order the two transactions ran in");
+
+  const updateRows = await prisma.platformAdminAuditEvent.findMany({ where: { action: AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  const resetRows = await prisma.platformAdminAuditEvent.findMany({ where: { action: RESET_AUDIT_ACTION, resourceKey: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
+  assert.equal(updateRows.length, 0, 'the failed PATCH must roll back its audit insert along with its (never-committed) setting write');
+  assert.equal(resetRows.length, 1, 'only the successful DELETE may leave a reset audit row');
+  assert.equal(resetRows[0]!.previousValue, 'false', 'the failed PATCH never actually committed a write, so DELETE must always read the true baseline regardless of transaction ordering');
+  assert.equal(resetRows[0]!.newValue, null);
+
+  const ghostAuditCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: 'admin-does-not-exist-ghost-patch' } });
+  assert.equal(ghostAuditCount, 0);
+});
+
 await test('PATCH settings: admin-attributed console log is emitted on toggle (existing platform-admin observability convention), leaving the DB row as the final restored state', async () => {
   const logSpy: string[] = [];
   const originalLog = console.log;
