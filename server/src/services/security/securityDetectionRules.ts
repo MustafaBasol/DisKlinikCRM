@@ -43,11 +43,36 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/**
+ * In-flight fire-and-forget detection-rule work, tracked only so tests can
+ * await durable completion (see flushPendingSecurityDetectionWork below).
+ * Every evaluate*Signal export stays synchronous/non-blocking for real
+ * callers — this is bookkeeping only, never awaited on the production path.
+ */
+const pendingDetectionWork = new Set<Promise<void>>();
+
 async function safely(fn: () => Promise<void>): Promise<void> {
-  try {
-    await fn();
-  } catch (err) {
+  const work = fn().catch((err) => {
     console.error('[security-detection] rule evaluation failed:', err instanceof Error ? err.message : String(err));
+  });
+  pendingDetectionWork.add(work);
+  try {
+    await work;
+  } finally {
+    pendingDetectionWork.delete(work);
+  }
+}
+
+/**
+ * Test-only deterministic barrier: awaits every detection-rule evaluation
+ * currently in flight (recordSecuritySignal + countSignalsInWindow +
+ * upsertIncidentFromSignal's transaction, none of which the caller of an
+ * evaluate*Signal function ever awaits). Replaces fixed sleep()s in tests
+ * that previously raced real DB round-trip latency against a guessed delay.
+ */
+export async function flushPendingSecurityDetectionWork(): Promise<void> {
+  while (pendingDetectionWork.size > 0) {
+    await Promise.allSettled(Array.from(pendingDetectionWork));
   }
 }
 
