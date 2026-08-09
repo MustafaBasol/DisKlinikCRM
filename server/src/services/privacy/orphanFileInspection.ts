@@ -30,13 +30,17 @@
  * F2-STAGE3-IMPL-001: the inspectOrphans ImagingImage lifecycle-review/
  * existence-check path below is migrated to ImagingLifecyclePort
  * (server/src/services/imaging/public.ts) instead of direct Prisma access.
- * markConfirmedMissing's ImagingImage write is an explicitly deferred
- * exception — see its own doc comment.
+ *
+ * F2-STAGE3-DEFERRED-GAPA-001: markConfirmedMissing's ImagingImage write is
+ * now also migrated to ImagingLifecyclePort.markStorageMissing(clinicId,
+ * imageId) — see its own doc comment. It requires an explicit, caller-
+ * supplied, already-authorization-validated clinicId (same contract as
+ * inspectOrphans above).
  */
 
 import prisma from '../../db.js';
 import { fileExists } from '../fileStorage.js';
-import { getImagesForLifecycleReview, checkImageStorageExists } from '../imaging/public.js';
+import { getImagesForLifecycleReview, checkImageStorageExists, markStorageMissing } from '../imaging/public.js';
 
 export interface OrphanCheckEntry {
   id: string;
@@ -72,8 +76,8 @@ export async function inspectOrphans(params: {
   // ImagingImage lifecycle-review/existence-check path migrated to
   // ImagingLifecyclePort (F2-STAGE3-IMPL-001) — no direct Prisma access to
   // ImagingImage/ImagingStudy remains on this path. markConfirmedMissing
-  // below is an explicitly deferred exception (see its own doc comment) and
-  // must not be confused with this migrated path.
+  // below is also migrated (F2-STAGE3-DEFERRED-GAPA-001, see its own doc
+  // comment) via a separate ImagingLifecyclePort call.
   const imagingImagesAll = await getImagesForLifecycleReview(clinicId, patientId);
   // getImagesForLifecycleReview has no take/limit of its own — apply the
   // same BATCH_SIZE cap here as the pre-migration direct query (`take:
@@ -122,16 +126,22 @@ export async function inspectOrphans(params: {
  * this only marks a DB row as "physically confirmed missing" for operator
  * visibility) and never deletes rows or files.
  *
- * DEFERRED EXCEPTION (F2-STAGE3-IMPL-001): this function's direct
- * `prisma.imagingImage.update(...)` call is explicitly OUT OF SCOPE for the
- * ImagingLifecyclePort migration — it lacks a clinicId parameter (its input
- * is only `{ id, kind }`) and has zero production callers today. It is NOT
- * part of, and must not be confused with, the migrated inspectOrphans
- * lifecycle-review/existence-check path above. Migrating this call requires
- * either a clinicId-bearing input or a port contract extension, neither of
- * which this task authorizes.
+ * F2-STAGE3-DEFERRED-GAPA-001: the imaging branch is now tenant-scoped
+ * through ImagingLifecyclePort.markStorageMissing(clinicId, imageId) — no
+ * direct `prisma.imagingImage` mutation remains on this path. `clinicId`
+ * must already be an authorization-validated clinic scope resolved by the
+ * caller (same contract as inspectOrphans above / F2-PREP-009 §3) — never a
+ * raw, unvalidated req.user.clinicId/body/query/JWT value passed straight
+ * through, and never derived from the entry's own id. A missing or
+ * cross-tenant imaging id fails closed identically (ImagingNotFoundError,
+ * caught below and simply not counted in `marked`) — indistinguishable from
+ * outside this function, matching the port's own non-enumeration guarantee.
+ *
+ * The attachment branch is unchanged (out of scope for this task) — it
+ * remains an id-only Prisma write, preserving its existing behavior exactly.
  */
 export async function markConfirmedMissing(
+  clinicId: string,
   entries: Pick<OrphanCheckEntry, 'id' | 'kind'>[],
 ): Promise<{ marked: number }> {
   const now = new Date();
@@ -144,10 +154,7 @@ export async function markConfirmedMissing(
           data: { storageVerifiedMissingAt: now },
         });
       } else {
-        await prisma.imagingImage.update({
-          where: { id: entry.id },
-          data: { storageVerifiedMissingAt: now },
-        });
+        await markStorageMissing(clinicId, entry.id);
       }
       marked++;
     } catch (err) {
