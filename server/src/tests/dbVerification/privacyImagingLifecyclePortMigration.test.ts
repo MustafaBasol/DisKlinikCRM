@@ -1,8 +1,8 @@
 /**
- * privacyImagingLifecyclePortMigration.test.ts — F2-STAGE3-IMPL-001
- * regression suite for the initial Privacy/KVKK ImagingLifecyclePort caller
- * migration (server/src/services/privacy/{patientAnonymization,
- * orphanFileInspection}.ts).
+ * privacyImagingLifecyclePortMigration.test.ts — F2-STAGE3-IMPL-001 /
+ * F2-STAGE3-DEFERRED-GAPA-001 regression suite for the Privacy/KVKK
+ * ImagingLifecyclePort caller migration (server/src/services/privacy/
+ * {patientAnonymization, orphanFileInspection}.ts).
  *
  * Proves, against a REAL disposable PostgreSQL instance via the real Prisma
  * client (server/src/db.ts) and the REAL exported service functions:
@@ -18,7 +18,12 @@
  *   I. existing BATCH_SIZE truncation behavior is equivalent
  *   J. cross-tenant/cross-clinic imaging cannot be acted on or inspected
  *   K. a clinicId that does not own the target does not leak existence
- *   L. the explicitly deferred markConfirmedMissing path remains untouched
+ *   L. markConfirmedMissing (F2-STAGE3-DEFERRED-GAPA-001) is now
+ *      tenant-scoped through ImagingLifecyclePort.markStorageMissing —
+ *      same-clinic marking succeeds, cross-clinic and nonexistent imaging
+ *      ids fail identically without mutation or existence leakage, the
+ *      write is idempotent, the attachment branch is unchanged, and no
+ *      storage key/filename is ever logged
  *   M. deletionReviewInventory.ts remains untouched (out of scope)
  *
  * Also covers a legal-hold TOCTOU race (a hold acquired between the
@@ -290,6 +295,7 @@ async function main() {
   {
     const fx = await createClinicFixtureSet('f2s3orph');
     trackClinics(fx.defaultClinicId, fx.crossOrgClinicId);
+    const staff = await createStaffUser({ organizationId: fx.orgId, clinicId: fx.defaultClinicId, role: 'OWNER' });
 
     const patient = await createTestPatient({ organizationId: fx.orgId, clinicId: fx.defaultClinicId, firstName: 'PortOrphanTarget' });
     const study = await prisma.imagingStudy.create({
@@ -389,22 +395,98 @@ async function main() {
       assert.deepEqual(result.entries, []);
     });
 
-    await test('L: the explicitly deferred markConfirmedMissing path remains untouched — still a direct prisma.imagingImage.update with no clinicId parameter, and still behaves identically', async () => {
+    await test('L1: markConfirmedMissing now requires an explicit clinicId and delegates its imaging branch to ImagingLifecyclePort.markStorageMissing — no direct prisma.imagingImage write remains on this path (F2-STAGE3-DEFERRED-GAPA-001)', async () => {
       const srcPath = new URL('../../services/privacy/orphanFileInspection.ts', import.meta.url);
       const src = fs.readFileSync(srcPath, 'utf8');
       const fnMatch = src.match(/export async function markConfirmedMissing\(([\s\S]*?)\): Promise<\{ marked: number \}> \{([\s\S]*?)\n\}/);
-      assert.ok(fnMatch, 'markConfirmedMissing must still exist with its original signature shape');
+      assert.ok(fnMatch, 'markConfirmedMissing must still exist with its original return shape');
       const [, params, body] = fnMatch!;
-      assert.ok(!/clinicId/.test(params!), 'markConfirmedMissing must NOT have gained a clinicId parameter (out of scope for this task)');
-      assert.ok(/prisma\.imagingImage\.update\(/.test(body!), 'markConfirmedMissing must still call prisma.imagingImage.update directly (deferred, not migrated)');
-      assert.ok(!/checkImageStorageExists|getImagesForLifecycleReview|redactForAnonymization/.test(body!), 'markConfirmedMissing must not use ImagingLifecyclePort');
+      assert.ok(/clinicId:\s*string/.test(params!), 'markConfirmedMissing must now take an explicit clinicId: string parameter');
+      assert.ok(!/prisma\.imagingImage\.(update|updateMany)\(/.test(body!), 'markConfirmedMissing must no longer call prisma.imagingImage directly — no id-only imaging write remains');
+      assert.ok(/markStorageMissing\(/.test(body!), 'markConfirmedMissing must delegate its imaging branch to ImagingLifecyclePort.markStorageMissing');
+      assert.ok(/prisma\.patientAttachment\.update\(/.test(body!), 'the attachment branch must remain an unchanged direct Prisma write (out of scope)');
+    });
 
-      const result = await markConfirmedMissing([{ id: missingImage.id, kind: 'imaging_image' }]);
+    await test('L2: same-clinic mark succeeds — stamps storageVerifiedMissingAt only on the confirmed-missing ImagingImage row, never the present one', async () => {
+      const result = await markConfirmedMissing(fx.defaultClinicId, [{ id: missingImage.id, kind: 'imaging_image' }]);
       assert.equal(result.marked, 1);
       const missingRow = await prisma.imagingImage.findUniqueOrThrow({ where: { id: missingImage.id } });
       const presentRow = await prisma.imagingImage.findUniqueOrThrow({ where: { id: presentImage.id } });
       assert.ok(missingRow.storageVerifiedMissingAt, 'confirmed-missing row must be stamped');
       assert.equal(presentRow.storageVerifiedMissingAt, null, 'present row must never be touched by marking a different row missing');
+    });
+
+    await test('L2b: repeated mark of the same row remains idempotent — no error, still counted as marked, row still stamped', async () => {
+      const before = (await prisma.imagingImage.findUniqueOrThrow({ where: { id: missingImage.id } })).storageVerifiedMissingAt;
+      const result = await markConfirmedMissing(fx.defaultClinicId, [{ id: missingImage.id, kind: 'imaging_image' }]);
+      assert.equal(result.marked, 1, 'a repeat mark of an already-stamped row must not error and must still count as marked');
+      const after = (await prisma.imagingImage.findUniqueOrThrow({ where: { id: missingImage.id } })).storageVerifiedMissingAt;
+      assert.ok(before && after, 'row must remain stamped across repeated calls');
+    });
+
+    let crossTenantConsoleErrorCalls: unknown[][] = [];
+    const originalConsoleErrorForL = console.error;
+
+    await test('L3: a cross-clinic imaging id cannot be mutated — clinic A scope against clinic B\'s image id marks nothing and leaves the row untouched', async () => {
+      const otherPatient = await createTestPatient({ organizationId: fx.orgId, clinicId: fx.crossOrgClinicId, firstName: 'CrossTenantTarget' });
+      const otherStudy = await prisma.imagingStudy.create({
+        data: { clinicId: fx.crossOrgClinicId, patientId: otherPatient.id, modality: 'PX', status: 'active' },
+      });
+      const otherMissingKey = `${fx.crossOrgClinicId}/${randomUUID()}-does-not-exist.bin`;
+      const otherImage = await prisma.imagingImage.create({
+        data: { clinicId: fx.crossOrgClinicId, studyId: otherStudy.id, fileName: 'other-missing.bin', originalName: 'other-missing.bin', fileSize: 42, mimeType: 'application/octet-stream', filePath: otherMissingKey },
+      });
+
+      crossTenantConsoleErrorCalls = [];
+      console.error = (...args: unknown[]) => { crossTenantConsoleErrorCalls.push(args); };
+      let result: Awaited<ReturnType<typeof markConfirmedMissing>>;
+      try {
+        // clinic A's (fx.defaultClinicId) scope, but the target image belongs to clinic B (fx.crossOrgClinicId).
+        result = await markConfirmedMissing(fx.defaultClinicId, [{ id: otherImage.id, kind: 'imaging_image' }]);
+      } finally {
+        console.error = originalConsoleErrorForL;
+      }
+      assert.equal(result.marked, 0, 'a cross-tenant imaging id must never be counted as marked');
+      const otherRow = await prisma.imagingImage.findUniqueOrThrow({ where: { id: otherImage.id } });
+      assert.equal(otherRow.storageVerifiedMissingAt, null, 'the cross-tenant row must never be mutated by another clinic\'s scope');
+    });
+
+    await test('L4: a nonexistent imaging id fails identically to a cross-tenant id — no distinguishable state (non-enumeration preserved)', async () => {
+      const nonexistentId = randomUUID();
+      const result = await markConfirmedMissing(fx.defaultClinicId, [{ id: nonexistentId, kind: 'imaging_image' }]);
+      assert.equal(result.marked, 0, 'a nonexistent imaging id must fail exactly like a cross-tenant one — both simply not counted, never a distinguishable error/count');
+    });
+
+    await test('L5: no raw storageKey/original filename is ever logged for a failed (cross-tenant) mark attempt', () => {
+      assert.ok(crossTenantConsoleErrorCalls.length >= 1, 'the cross-tenant failure in L3 must have been logged');
+      const logged = JSON.stringify(crossTenantConsoleErrorCalls);
+      assert.ok(!logged.includes('other-missing.bin'), 'logged error must never contain the imaging row\'s storage key/filename');
+      assert.ok(!logged.includes(fx.crossOrgClinicId + '/'), 'logged error must never contain the imaging row\'s storage key prefix');
+    });
+
+    await test('L6: the attachment branch is unchanged — an id-only PatientAttachment mark still succeeds exactly as before, unaffected by the clinicId parameter', async () => {
+      const attachmentPatient = await createTestPatient({ organizationId: fx.orgId, clinicId: fx.defaultClinicId, firstName: 'AttachmentTarget' });
+      const attachmentKey = `${fx.defaultClinicId}/${randomUUID()}-missing-attachment.bin`;
+      const attachment = await prisma.patientAttachment.create({
+        data: {
+          clinicId: fx.defaultClinicId,
+          patientId: attachmentPatient.id,
+          fileName: 'missing-attachment.bin',
+          originalName: 'missing-attachment.bin',
+          fileSize: 10,
+          mimeType: 'application/octet-stream',
+          filePath: attachmentKey,
+          uploadedById: staff.id,
+        },
+      });
+
+      const result = await markConfirmedMissing(fx.defaultClinicId, [{ id: attachment.id, kind: 'attachment' }]);
+      assert.equal(result.marked, 1);
+      const row = await prisma.patientAttachment.findUniqueOrThrow({ where: { id: attachment.id } });
+      assert.ok(row.storageVerifiedMissingAt, 'attachment row must be stamped exactly as before the migration');
+
+      await prisma.patientAttachment.deleteMany({ where: { id: attachment.id } });
+      await prisma.patient.deleteMany({ where: { id: attachmentPatient.id } });
     });
 
     await test('M: deletionReviewInventory.ts remains untouched — still reads ImagingImage directly and does not import ImagingLifecyclePort (out of scope for F2-STAGE3-IMPL-001)', () => {

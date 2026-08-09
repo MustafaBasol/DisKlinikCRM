@@ -106,8 +106,15 @@ function section(title: string) {
   console.log(`\n${title}`);
 }
 
+/**
+ * Reads source text for structural inspection, normalizing CRLF -> LF first.
+ * These assertions check code structure/content, never the on-disk line-
+ * ending style, so normalizing here keeps them portable across checkouts
+ * (e.g. Windows with core.autocrlf=true) without weakening what they check.
+ */
 async function readSource(relPath: string): Promise<string> {
-  return fs.readFile(new URL(`../${relPath}`, import.meta.url), 'utf8');
+  const raw = await fs.readFile(new URL(`../${relPath}`, import.meta.url), 'utf8');
+  return raw.replace(/\r\n/g, '\n');
 }
 
 /** Strips /** *\/ block comments and // line comments so structural checks
