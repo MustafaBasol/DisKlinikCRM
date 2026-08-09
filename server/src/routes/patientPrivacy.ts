@@ -33,6 +33,7 @@ import { buildDeletionReviewInventory } from '../services/privacy/deletionReview
 import {
   collectBridgeImagingActivityForPatient,
   mergePatientActivityHistory,
+  MAX_PATIENT_ACTIVITY_HISTORY_ROWS,
 } from '../services/privacy/patientActivityHistoryExport.js';
 import { inspectOrphans } from '../services/privacy/orphanFileInspection.js';
 import { openFileStream } from '../services/fileStorage.js';
@@ -288,7 +289,10 @@ async function collectStructuredExportData(
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
-          take: 500,
+          // Per-source fetch cap; mergePatientActivityHistory applies the
+          // authoritative final global cap (MAX_PATIENT_ACTIVITY_HISTORY_ROWS)
+          // across both sources combined — see that function's doc comment.
+          take: MAX_PATIENT_ACTIVITY_HISTORY_ROWS,
         }),
         // F2-IMG-AUDIT-003: bridge-linked imaging ingest events (AuditLog,
         // machine actor — see F2-IMG-AUDIT-002) surfaced into the same

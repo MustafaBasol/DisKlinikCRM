@@ -36,8 +36,28 @@ import prisma from '../../db.js';
 const BRIDGE_IMAGING_AUDIT_ACTION = 'imaging_bridge_study_ingested';
 const BRIDGE_IMAGING_ENTITY_TYPE = 'imaging_study';
 
-/** Cap mirrors the existing `activityLogs` export query's `take: 500` (patientPrivacy.ts). */
-const MAX_BRIDGE_IMAGING_AUDIT_ROWS = 500;
+/**
+ * Global cardinality ceiling for the merged `activityHistory` export field.
+ * Before F2-IMG-AUDIT-003 this was the export's only cap (ActivityLog's own
+ * `take: 500`, since ActivityLog was the only source). Now that bridge
+ * AuditLog rows are merged in as a second source, each source is still capped
+ * at this same number at fetch time (see `MAX_BRIDGE_IMAGING_AUDIT_ROWS`
+ * below and the `take: 500` on the ActivityLog query in patientPrivacy.ts),
+ * but `mergePatientActivityHistory` must ALSO apply this as a final cap on
+ * the merged, sorted result — otherwise two independently-capped 500-row
+ * sources produce up to 1000 exported rows, silently breaking this
+ * backward-compatibility contract (F2-IMG-AUDIT-003-R1).
+ */
+export const MAX_PATIENT_ACTIVITY_HISTORY_ROWS = 500;
+
+/** Per-source fetch cap for bridge AuditLog rows; mirrors MAX_PATIENT_ACTIVITY_HISTORY_ROWS. */
+const MAX_BRIDGE_IMAGING_AUDIT_ROWS = MAX_PATIENT_ACTIVITY_HISTORY_ROWS;
+
+/**
+ * Explicit rank for the deterministic secondary sort key. Arbitrary but
+ * stable — only its relative ordering matters, not the values themselves.
+ */
+const SOURCE_RANK: Record<ActivityHistorySource, number> = { staff: 0, bridge: 1 };
 
 export type ActivityHistorySource = 'staff' | 'bridge';
 
@@ -115,7 +135,8 @@ export async function collectBridgeImagingActivityForPatient(
 
 /**
  * Merges the staff ActivityLog projection with the bridge AuditLog
- * projection into one `activityHistory` list.
+ * projection into one `activityHistory` list, sorted newest-first and capped
+ * at `MAX_PATIENT_ACTIVITY_HISTORY_ROWS` total.
  *
  * Dedupe identity is `${source}:${id}` — each row's own structured primary
  * key from its origin table, never free-text description. This is
@@ -127,6 +148,17 @@ export async function collectBridgeImagingActivityForPatient(
  * a source-prefixed key makes accidental cross-table collision structurally
  * impossible, while a same-row re-fetch (e.g. an upstream retry) still
  * collapses to one entry.
+ *
+ * Ordering is `createdAt` DESC, with a deterministic tie-break (source rank,
+ * then `id` lexical) for equal timestamps — never reliant on Map insertion
+ * order, which is not a stable contract across the two independently-fetched
+ * sources.
+ *
+ * The final `.slice(0, MAX_PATIENT_ACTIVITY_HISTORY_ROWS)` preserves the
+ * pre-F2-IMG-AUDIT-003 global cap: each source is independently capped at
+ * `MAX_PATIENT_ACTIVITY_HISTORY_ROWS` rows at fetch time, so without this
+ * final cap a patient with >500 rows in both sources could export up to
+ * 2x the historical maximum (F2-IMG-AUDIT-003-R1).
  */
 export function mergePatientActivityHistory(
   staffRows: StaffActivityLogRow[],
@@ -139,5 +171,13 @@ export function mergePatientActivityHistory(
   for (const row of bridgeRows) {
     merged.set(`bridge:${row.id}`, row);
   }
-  return Array.from(merged.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return Array.from(merged.values())
+    .sort((a, b) => {
+      const byCreatedAt = b.createdAt.getTime() - a.createdAt.getTime();
+      if (byCreatedAt !== 0) return byCreatedAt;
+      const bySource = SOURCE_RANK[a.source] - SOURCE_RANK[b.source];
+      if (bySource !== 0) return bySource;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    })
+    .slice(0, MAX_PATIENT_ACTIVITY_HISTORY_ROWS);
 }
