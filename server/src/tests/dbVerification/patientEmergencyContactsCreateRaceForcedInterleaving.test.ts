@@ -1,19 +1,22 @@
 /**
- * patientEmergencyContactsCreateRaceForcedInterleaving.test.ts — F1-004-P1-R2-R3.
+ * patientEmergencyContactsCreateRaceForcedInterleaving.test.ts — F1-004-P1-R2-R3,
+ * F2-CT-32-R3.
  *
  * A NATURAL Promise.all() race (patientEmergencyContactsPrimaryConcurrency.test.ts)
  * cannot be forced to hit a specific interleaving on demand: the CREATE-race
- * bug this file exists to characterize reproduced on GitHub Actions CI (run
- * 31020654709 attempt 1, round 0/100 of the CREATE stress scenario) but did
- * NOT reproduce in 500 independent local rounds against a low-latency local
- * disposable Postgres. This suite uses the real, production test-only
- * synchronization hooks (installEmergencyContactRaceTestHooks —
- * server/src/services/patientEmergencyContactsConcurrency.ts) wired into the
- * REAL route handlers (POST/PUT patientEmergencyContacts.ts via
- * resolvePrimaryPromotion) to force a SPECIFIC, deterministic interleaving —
- * request B's entire promoting critical section (from its very first
- * statement) is held back until request A's whole transaction has committed
- * — every run, not hoping timing jitter lands on it.
+ * bug this file exists to characterize reproduced on GitHub Actions CI twice
+ * under R2 — run 31020654709 attempt 1 (round 0/100) and again post-R2, main
+ * run 31330815502 (round 0 of the single-race scenario) — but did NOT
+ * reproduce in hundreds of independent local rounds against a low-latency
+ * local disposable Postgres either time. This suite uses the real,
+ * production test-only synchronization hooks
+ * (installEmergencyContactRaceTestHooks — server/src/services/
+ * patientEmergencyContactsConcurrency.ts) wired into the REAL route handlers
+ * (POST/PUT patientEmergencyContacts.ts via resolvePrimaryPromotion) to force
+ * a SPECIFIC, deterministic interleaving — request B's entire promoting
+ * critical section (from its very first statement) is held back until
+ * request A's whole transaction has committed — every run, not hoping timing
+ * jitter lands on it.
  *
  * Proves two things, both against a REAL disposable Postgres (no mocked
  * Prisma, no in-memory simulation):
@@ -25,15 +28,24 @@
  *     client's own observed belief, never against a same-request timing
  *     signal that can be delayed by scheduling.
  *
- *  2. Legacy mode (no precondition — an un-updated client) still exhibits
- *     the known residual race under this forced interleaving. This is
- *     retained deliberately as a characterization test, NOT a regression to
- *     fix: it documents that the legacy fallback path is knowingly not
- *     race-free (see resolvePrimaryPromotion's header comment for the proof
- *     that no purely server-side signal can close this particular gap), and
- *     it protects against silently losing the forced-interleaving mechanism
- *     itself (if this ever stopped reproducing, the gate/hook wiring would
- *     need re-verification before trusting test 1's guarantee).
+ *  2. Legacy mode (no precondition — an un-updated client), as of F2-CT-32-R3,
+ *     no longer exhibits this race under NATURAL scheduling (see
+ *     patientEmergencyContactsPrimaryConcurrency.test.ts's scenario 1/1b,
+ *     500 real-Postgres rounds) — R3 replaced the "prior read vs current
+ *     read" value comparison with a non-blocking advisory-lock attempt
+ *     (tryAcquireEmergencyContactPrimaryLock), so contention is now decided
+ *     by Postgres's own atomic lock arbitration, not by comparing two
+ *     independently-timed reads. Under THIS file's artificial FULL
+ *     serialization (B does not even attempt the lock until after A's
+ *     transaction has already committed and released it), legacy mode still
+ *     exhibits the race — this is retained deliberately as a
+ *     characterization test, NOT a regression to fix: it documents that this
+ *     one specific, non-naturally-occurring edge is knowingly not closeable
+ *     (see resolvePrimaryPromotion's header comment for the proof that no
+ *     purely server-side signal can close it), and it protects against
+ *     silently losing the forced-interleaving mechanism itself (if this ever
+ *     stopped reproducing, the gate/hook wiring would need re-verification
+ *     before trusting test 1's guarantee).
  *
  * Run: DATABASE_URL=... npx tsx src/tests/dbVerification/patientEmergencyContactsCreateRaceForcedInterleaving.test.ts
  */
@@ -108,13 +120,6 @@ function buildForcedHooks(gateAt: keyof EmergencyContactRaceTestHooks, observati
   };
 
   const hooks: EmergencyContactRaceTestHooks = {
-    beforePriorRead: async (ctx) => {
-      const label = als.getStore()?.label ?? '?';
-      await record(label, 'beforePriorRead', ctx.tx);
-      if (gateAt === 'beforePriorRead' && label === 'B') {
-        await aCommittedPromise;
-      }
-    },
     beforeLock: async (ctx) => {
       const label = als.getStore()?.label ?? '?';
       await record(label, 'beforeLock', ctx.tx);
@@ -128,6 +133,10 @@ function buildForcedHooks(gateAt: keyof EmergencyContactRaceTestHooks, observati
       if (gateAt === 'afterLock' && label === 'B') {
         await aCommittedPromise;
       }
+    },
+    onLockContention: async (ctx) => {
+      const label = als.getStore()?.label ?? '?';
+      await record(label, 'onLockContention (legacy try-lock found it held)', ctx.tx);
     },
     afterCurrentRead: async (ctx) => {
       const label = als.getStore()?.label ?? '?';
@@ -223,25 +232,34 @@ async function scenarioTokenProtectedForcedInterleaving() {
   }
 }
 
-// ── 2. Legacy (no precondition) mode: documents the known residual gap ─────
+// ── 2. Legacy (no precondition) mode: F2-CT-32-R3 closes the natural-race gap,
+//      documents the (unavoidable, non-naturally-reproducing) forced-full-
+//      serialization edge that still cannot be closed without a token ──────
 
 async function scenarioLegacyModeForcedInterleavingCharacterization() {
-  section('2. Legacy CREATE (no expectedCurrentPrimaryContactId): the SAME forced interleaving still reproduces the known residual race — characterization test, not a bug to fix here');
+  section('2. Legacy CREATE (no expectedCurrentPrimaryContactId): F2-CT-32-R3 closes the natural race; only forced FULL serialization (B never even attempts the lock until after A commits) can still produce it — documents why the token remains the only airtight option for that edge');
 
-  await test('legacy mode: forced full-serialization at beforePriorRead reproduces A=201/B=201 deterministically (documents why the token exists)', async () => {
-    // Gates at beforePriorRead, not beforeLock: R2's fix already closes a
-    // delay confined to the lock-wait itself (prior-read still executes
-    // early, correctly capturing "null" before A commits — see scenario 1's
-    // beforeLock gate, which legacy mode ALSO passes). The residual gap this
-    // file exists to characterize requires B's entire critical section,
-    // starting at its very FIRST statement (the prior read), to be delayed
-    // past A's commit — exactly what F1-004-P1-R2-R3 proved happens under
-    // real CI connection-pool/event-loop scheduling.
-    const { resA, resB, finalPrimaryCount, observations } = await runForcedRound({ gateAt: 'beforePriorRead', aToken: undefined, bToken: undefined });
+  await test('legacy mode: forced full-serialization at beforeLock still reproduces A=201/B=201 deterministically (the one edge no server-side signal can close without a client precondition — see resolvePrimaryPromotion header comment)', async () => {
+    // Gates at beforeLock: F2-CT-32-R3 removed the separate "prior" read
+    // entirely (see patientEmergencyContactsConcurrency.ts's header comment)
+    // — legacy mode's very FIRST database statement is now the non-blocking
+    // try-lock attempt itself. Forcing B to wait at beforeLock means B does
+    // not even ATTEMPT the lock until after A's afterCommit hook fires,
+    // which only fires after A's real transaction has already committed and
+    // released the lock — so B's try-lock finds it free, acquires
+    // uncontended, and legitimately proceeds as what Postgres itself sees as
+    // a fully sequential replacement. This is the one edge R3 does not (and,
+    // per the header comment's proof, cannot) close without a client
+    // precondition — it requires an entire competing transaction's round
+    // trip of delay, not just a lagging read, which is why it no longer
+    // reproduces under the NATURAL Promise.all() race in
+    // patientEmergencyContactsPrimaryConcurrency.test.ts's scenario 1/1b,
+    // only under this artificial full-serialization gate.
+    const { resA, resB, finalPrimaryCount, observations } = await runForcedRound({ gateAt: 'beforeLock', aToken: undefined, bToken: undefined });
     const bothSucceeded = resA.statusCode === 201 && resB.statusCode === 201;
     assert.ok(
       bothSucceeded,
-      `expected the legacy path's known residual race to reproduce under forced full-serialization (proving the mechanism this file exists to characterize) — got A=${resA.statusCode} B=${resB.statusCode}. ` +
+      `expected the legacy path's residual full-serialization edge to reproduce under forced full-serialization (proving the mechanism this file exists to characterize) — got A=${resA.statusCode} B=${resB.statusCode}. ` +
         `If this assertion starts failing, the forced-interleaving mechanism itself may be broken — re-verify before trusting scenario 1's guarantee. Observations: ${JSON.stringify(observations)}`,
     );
     // Even in the known-bad legacy case, exactly one row ends up primary in

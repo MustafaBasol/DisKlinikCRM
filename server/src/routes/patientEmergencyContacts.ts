@@ -45,10 +45,12 @@
  *     overlapped at the HTTP layer from two that were genuinely sequential,
  *     once the losing request's entire transaction happens to execute after
  *     the winner's commit. When the field is OMITTED (an older client), the
- *     route falls back to F1-004-P1-R2's best-effort "prior vs current"
- *     server-side comparison — closes the gap PR #310 had, but is knowingly
- *     NOT race-free against the F1-004-P1-R2-R3 mechanism; never claim
- *     otherwise for that path.
+ *     route falls back to F2-CT-32-R3's non-blocking advisory-lock-attempt
+ *     comparison (see resolvePrimaryPromotion's header comment) — closes the
+ *     natural-race gap PR #310/R2 had, but is knowingly not PROVABLY
+ *     race-free against an artificially forced full-serialization
+ *     interleaving (see patientEmergencyContactsCreateRaceForcedInterleaving.test.ts's
+ *     scenario 2); never claim otherwise for that path.
  *   - When two requests race to become primary for the same patient, the
  *     loser either fails the precondition/optimistic-concurrency check
  *     (PrimaryContactConflictError) or, in the rare case both reach the
