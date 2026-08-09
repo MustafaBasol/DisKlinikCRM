@@ -399,6 +399,31 @@ export const attachmentService = {
   },
 };
 
+// Mirrors server/src/schemas/index.ts's IMAGING_REQUEST_STATUSES.
+export type ImagingRequestStatus = 'requested' | 'scheduled' | 'received' | 'cancelled' | 'failed';
+
+// F2-CT-32-R2-R1: expectedStatus is required here (not optional) so that no
+// first-party caller can compile without supplying the caller-observed
+// status. This is a compile-time-only guarantee — the backend field itself
+// remains optional (server/src/schemas/index.ts's imagingRequestUpdateSchema)
+// for legacy/external callers outside this codebase, who therefore keep the
+// weaker, CAS-only concurrency guarantee described in
+// docs/program/evidence/F2-CT-32-R2_IMAGING_REQUEST_RESIDUAL_RACE_REMEDIATION.md.
+// expectedStatus must come from the request row the caller already has in
+// hand (e.g. `request.status` from state already loaded by the UI) — never
+// from a fresh GET performed immediately before this call, which would just
+// relocate the same race one HTTP round-trip earlier.
+export type ImagingRequestUpdateData = {
+  expectedStatus: ImagingRequestStatus;
+  appointmentId?: string | null;
+  treatmentCaseId?: string | null;
+  requestedModality?: string;
+  requestedDeviceId?: string | null;
+  status?: ImagingRequestStatus;
+  priority?: 'routine' | 'urgent' | null;
+  notes?: string | null;
+};
+
 export const imagingService = {
   // ── Cihazlar ──
   // clinicId açıkça geçilir — yalnızca global localStorage interceptor'ına
@@ -422,8 +447,9 @@ export const imagingService = {
   getRequests: (params?: { status?: string; patientId?: string }) =>
     api.get('/imaging/requests', { params }),
   createRequest: (data: any) => api.post('/imaging/requests', data),
-  updateRequest: (id: string, data: any) => api.patch(`/imaging/requests/${id}`, data),
-  cancelRequest: (id: string) => api.patch(`/imaging/requests/${id}/cancel`),
+  updateRequest: (id: string, data: ImagingRequestUpdateData) => api.patch(`/imaging/requests/${id}`, data),
+  cancelRequest: (id: string, expectedStatus: ImagingRequestStatus) =>
+    api.patch(`/imaging/requests/${id}/cancel`, { expectedStatus }),
 
   // ── Çalışmalar ──
   getPatientStudies: (patientId: string, includeArchived = false) =>
