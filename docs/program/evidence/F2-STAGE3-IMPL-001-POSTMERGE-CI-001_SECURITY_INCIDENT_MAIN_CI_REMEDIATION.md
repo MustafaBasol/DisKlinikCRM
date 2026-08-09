@@ -133,7 +133,7 @@ Single, self-contained commit on `fix/f2-stage3-postmerge-securityincident-ci`. 
 
 - `AGENT_COMPLETED`: TRUE
 - `TESTS_PASSED`: TRUE — `test:security-incidents` 55/55, repeated 6× post-fix including 3× under an adversarial delay that deterministically broke the pre-fix code; `typecheck` clean; `git diff --check` clean
-- `PR_OPENED`: see PR link recorded in `CURRENT_PHASE.md` / `NORAMEDI_MASTER_TRACKER.md` for this task
+- `PR_OPENED`: TRUE — [PR #345](https://github.com/MustafaBasol/DisKlinikCRM/pull/345), head `9a2a7a63617682a0a3d248a8c4299a42ecf609a3` (reconciled against `origin/main` @ `53c2aba` after PR #343 merged during this task, doc-only merge conflict, no `server/` file touched by the reconciliation)
 - `MERGED`: FALSE
 - `DEPLOYED`: FALSE
 - `PRODUCTION_VERIFIED`: FALSE
