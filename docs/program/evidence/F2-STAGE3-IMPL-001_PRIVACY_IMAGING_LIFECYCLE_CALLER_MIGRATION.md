@@ -5,7 +5,8 @@
 **Type:** Implementation — mechanical boundary migration, no product-behavior change
 **Branch:** `feature/f2-stage3-impl-001-privacy-imaging-lifecycle-migration`
 **Baseline:** `origin/main` @ `27c54f3aa81af4eecc33e79d77e366a0fe4915bc` (merge commit for PR #342, `fix/f2-ct-32-r2-imaging-request-residual-race`; exact post-merge main CI run `31304621261`, `GREEN` after rerun) — independently re-confirmed via `git fetch origin --prune` + `git rev-parse origin/main` + `git log -1 --oneline origin/main` before branching; no further `origin/main` advancement observed at task start.
-**Commit:** `92f77f414cf64b465716c85913c6c65fead85e5e`
+**Commit:** `92f77f414cf64b465716c85913c6c65fead85e5e` (code), `560acdd74d0751456681706dfd238c29539cb845` (docs)
+**PR:** [#344](https://github.com/MustafaBasol/DisKlinikCRM/pull/344), head `560acdd74d0751456681706dfd238c29539cb845`, base `main`, `OPEN`/`MERGEABLE`, not merged. **PR CI: `success`, 10/10 `ci-layers` jobs pass** (run [`31307552547`](https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/31307552547), independently re-verified via `gh pr checks 344`/`gh pr view 344`) — Layer 1 (5 jobs, architecture guardrail/frontend/server typecheck/test-runtime tooling/workflow validation) all pass; Layer 2 (non-disposable backend) pass, 1m12s; **Layer 3 (disposable PostgreSQL — the job that actually re-runs CT-05/CT-23/CT-30 and the new `privacyImagingLifecyclePortMigration.test.ts` in CI, not just locally) pass, 8m30s**; Layer 4 (disposable PostgreSQL + MinIO storage integration) pass, 44s; Layer 5 (full-suite/compatibility fail-safe, backend + frontend) pass, 6m30s + 27s.
 
 ## 1. Authorization basis
 
@@ -168,8 +169,9 @@ No public route, HTTP response shape, service function return shape, redaction c
 
 - `AGENT_COMPLETED`: TRUE
 - `TESTS_PASSED`: TRUE (see §13 — full disposable-PostgreSQL `server:test:disposable-db` aggregate, `outcome.exitCode: 0`; `typecheck`/`guardrail:test`/`guardrail:scan`/`git diff --check` all clean/passing)
-- `PR_OPENED`: TRUE (see final report for PR number/URL)
-- `MERGED`: FALSE (explicitly not requested)
+- `PR_OPENED`: TRUE — [PR #344](https://github.com/MustafaBasol/DisKlinikCRM/pull/344), head `560acdd`
+- `PR_CI_PASSED`: TRUE — 10/10 `ci-layers` jobs `success`, run `31307552547`, independently re-verified via `gh pr checks 344`
+- `MERGED`: FALSE (explicitly not requested — this task does not merge)
 - `DEPLOYED`: FALSE
 - `PRODUCTION_VERIFIED`: FALSE
 
