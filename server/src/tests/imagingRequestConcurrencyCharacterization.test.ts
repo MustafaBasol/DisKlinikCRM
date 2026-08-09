@@ -41,6 +41,40 @@
  * comment block and in git history (this revision's commit), per the
  * contract's instruction not to pretend the defect never existed.
  *
+ * FIX (F2-CT-32-R2, this revision): the F2-CT-32-R1 guard above is airtight
+ * for any writer whose own read is stale AT WRITE TIME, but real post-merge
+ * main CI (run 31276844302, round 1/30) proved a narrower residual gap: if
+ * one request's ENTIRE operation (read, validate, CAS write, commit) landed
+ * before the OTHER request's own read even executed, the second request
+ * legitimately observed the first's already-committed result — a real,
+ * currently-valid predecessor state (`scheduled` is a valid predecessor of
+ * `cancelled`) — and its own compare-and-set correctly matched and
+ * committed. Both requests reported 200, even though neither caller waited
+ * for the other. Proven deterministically (not by hoping timing jitter
+ * lands on it) via a forced-interleaving harness in
+ * imagingRequestConcurrencyForcedInterleaving.test.ts, which also proves the
+ * fix below closes it. Root cause and fix rationale mirror
+ * patientEmergencyContactsConcurrency.ts's F1-004-P1-R2-R3 precedent
+ * exactly: no signal visible only from inside the second request's own
+ * transaction — however early its statements run — can distinguish "this
+ * raced a concurrent write" from "this is a deliberate, later, sequential
+ * call", because at the point a delayed read executes, the two operations
+ * are, from PostgreSQL's own point of view, genuinely and unambiguously
+ * sequential. Closing it requires a signal captured OUTSIDE this request's
+ * own execution: `expectedStatus`, an optional field on both the PATCH body
+ * and (new, also optional) the cancel body — the caller's own belief about
+ * the row's status, captured before this request was dispatched. When
+ * supplied and it no longer matches the row's actual current status, the
+ * handler rejects with 409 concurrent_transition immediately, regardless of
+ * when its own read happened to execute. This test now supplies it (see
+ * runRound below) — the same technique as
+ * patientEmergencyContactsConcurrency.ts's token-protected mode
+ * (expectedCurrentPrimaryContactId). Older callers that omit the field keep
+ * the exact F2-CT-32-R1 behavior (and its narrow residual gap) — see
+ * imagingRequestConcurrencyForcedInterleaving.test.ts section 1, which
+ * characterizes that this is a deliberate, accepted trade-off, not an
+ * oversight.
+ *
  * Run with: tsx src/tests/imagingRequestConcurrencyCharacterization.test.ts
  * Requires DATABASE_URL to point at a disposable Postgres (F1-003-P2A
  * pattern) BEFORE this file is imported — server/src/db.ts opens a live pg
@@ -242,17 +276,26 @@ async function runRound(port: number, token: string, clinicId: string, patientId
   // any kind — Promise.all is the only synchronization: both requests are
   // genuinely in flight concurrently over real sockets against the real
   // disposable-Postgres-backed running server instance.
+  //
+  // expectedStatus (F2-CT-32-R2): each caller's own belief about the row's
+  // status, captured here — before either request is dispatched — exactly
+  // like a real client would capture it from what it last rendered. This is
+  // what makes the guard airtight even under the adverse CI timing that
+  // produced BOTH_SUCCESS_SILENT_CLOBBER pre-fix (see this file's header
+  // comment and imagingRequestConcurrencyForcedInterleaving.test.ts): the
+  // comparison never depends on when either handler's own read executes.
   const [patch, cancel] = await Promise.all([
     issueJson(port, {
       method: 'PATCH',
       path: `/api/imaging/requests/${seeded.id}`,
       token,
-      body: { status: 'scheduled' },
+      body: { status: 'scheduled', expectedStatus: 'requested' },
     }),
     issueJson(port, {
       method: 'PATCH',
       path: `/api/imaging/requests/${seeded.id}/cancel`,
       token,
+      body: { expectedStatus: 'requested' },
     }),
   ]);
 
