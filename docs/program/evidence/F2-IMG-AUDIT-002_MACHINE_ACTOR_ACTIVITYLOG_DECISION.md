@@ -4,15 +4,15 @@
 **Task ID:** F2-IMG-AUDIT-002-DECIDE
 **ClickUp:** 869efu8ce
 **Mode:** READ-ONLY / ARCHITECTURE DECISION
-**Date:** 2026-08-09
+**Date:** 2026-08-09 (R1 reconciliation/wording correction: 2026-08-09, PR #343, same PR, not yet merged)
 **Branch:** `docs/f2-img-audit-002-decide`
-**Baseline:** `main` @ `abc7c040430df08c5c7b81b73c2dfd2bb26000b7`
+**Task-start baseline:** `main` @ `abc7c040430df08c5c7b81b73c2dfd2bb26000b7` — the baseline the §1–§11 analysis below (schema read, consumer trace, precedent search) was actually performed against. This is **not** this PR's final base — see below.
+**Final reconciliation baseline (R1):** `origin/main` @ `6a248ea1c359b2e86f39f9fff0b1d8577357fc10` — the exact PR #344 (`F2-STAGE3-IMPL-001-R1`) merge commit, independently re-confirmed via `git fetch origin main` / `git rev-parse origin/main`. This branch was reconciled onto that exact SHA with a normal `git merge` (no rebase, no force-push) to produce this PR's current head. **Intervening commits characterized:** `abc7c040..6a248ea` (`F2-CT-32-R2`/PR #342, `F2-STAGE3-IMPL-001`+`-R1`/PR #344) were independently diffed against `server/prisma/schema.prisma`, `server/src/routes/imagingBridgePublic.ts`, `server/src/utils/activity.ts`, `server/src/routes/dashboard.ts`, `server/src/routes/patientPrivacy.ts`, and `server/src/services/communicationConsent/legacyConsentCorrection.ts` — **zero changes** to any of them (empty diff). PR #344 migrated `patientAnonymization.ts`/`orphanFileInspection.ts` onto `ImagingLifecyclePort`, an unrelated Privacy/KVKK imaging-lifecycle surface; it did not touch `ActivityLog`, `AuditLog`, or the bridge ingest route. The schema/consumer/precedent evidence gathered in §1–§11 against the task-start baseline is therefore still accurate against this final reconciliation baseline — nothing here is re-litigated, only the base-SHA record and the wording corrections in §4/§6/§9/§11 below are new in this R1 pass.
 
 No runtime code, Prisma schema, migrations, routes, or audit/activity behavior were read-modified or
 changed to produce this document. This resolves the design question deferred by
 [F2-IMG-AUDIT-001_BRIDGE_DUPLICATE_AUDIT_PARITY.md](F2-IMG-AUDIT-001_BRIDGE_DUPLICATE_AUDIT_PARITY.md)
-§24 and characterized (not decided) by
-[F2-IMG-AUDIT-PREP-001_IMAGING_INGEST_AUDIT_ASYMMETRY_CHARACTERIZATION.md](F2-IMG-AUDIT-PREP-001_IMAGING_INGEST_AUDIT_ASYMMETRY_CHARACTERIZATION.md).
+§24 and characterized (not decided) by `F2-IMG-AUDIT-PREP-001_IMAGING_INGEST_AUDIT_ASYMMETRY_CHARACTERIZATION.md` (referenced by prior task briefs; not itself a committed file in this repository as of this reconciliation — its characterization is not relied on for any claim in this document, which independently re-derives the schema/consumer/precedent evidence in §2–§5 directly from source).
 
 ---
 
@@ -96,21 +96,32 @@ writes to it.
 
 ## 4. Is `AuditLog` already the correct machine-event sink? (Q3)
 
-Yes, and this is not a design proposal — it is already how the bridge behaves for every other event on
-this exact route. Post F2-IMG-AUDIT-001-FIX, all three ingest outcomes (new study, sequential-duplicate,
-concurrent P2002-duplicate) write `AuditLog` rows with `actorUserId: null`/`actorRole: null` (an explicit,
-nullable, already-modeled "no human actor" state), scoped correctly by `organizationId`/`clinicId`,
-immutable, indexed, and — per independent, pre-existing codebase documentation found at
-`server/src/services/communicationConsent/legacyConsentCorrection.ts:217-227` (unrelated feature, not
-authored for this task) — explicitly treated elsewhere in this codebase as **the authoritative
-compliance/evidence record**, with `ActivityLog` characterized in that same comment as a
-"best-effort... operational projection" whose loss leaves "the correction row + AuditLog entry... the
-sole authoritative evidence."
+Yes, as the established bridge-event sink — this is not a design proposal, it is already how the bridge
+behaves for every other event on this exact route. Post F2-IMG-AUDIT-001-FIX, all three ingest outcomes
+(new study, sequential-duplicate, concurrent P2002-duplicate) write `AuditLog` rows with
+`actorUserId: null`/`actorRole: null` (an explicit, nullable, already-modeled "no human actor" state),
+scoped correctly by `organizationId`/`clinicId`, immutable, and indexed.
+
+**On `AuditLog`'s authority — scoped correction (R1):** independent, pre-existing codebase documentation
+at `server/src/services/communicationConsent/legacyConsentCorrection.ts:217-227` (unrelated feature, not
+authored for this task) explicitly treats `AuditLog` as authoritative evidence **for that one flow** —
+its own comment states "the correction row + AuditLog entry... the sole authoritative evidence" for a
+legacy-consent-correction action, characterizing `ActivityLog` there as a "best-effort... operational
+projection." That is a flow-specific statement about one feature's own evidence model, not a
+codebase-wide invariant — this document does not claim `AuditLog` is *the* codebase-wide authoritative
+compliance record. What the evidence actually supports, scoped precisely: (1) `AuditLog` is the
+established bridge audit sink — every bridge ingest outcome already writes there, with correctly nullable
+actor fields; (2) at least one other, unrelated flow in this codebase independently made the same
+architectural choice (treat `AuditLog` as authoritative for its own evidence needs) for its own reasons.
+Those two facts are corroborating precedent for Option A's soundness, not proof that `AuditLog` is
+universally authoritative across every compliance surface in this repository — see §6a for the one
+identified surface (per-patient KVKK export) where it currently is *not* the source read from.
 
 This is corroborating, not conclusive, evidence (it was not cross-checked against `docs/compliance/**`,
-which remains out of this task's authorized inspection scope — flagged as unverified in PREP-001 §6 and
-still unverified here). It is nonetheless the only concrete, pre-existing statement in the codebase about
-the two tables' relative authority, and it directly supports Option A.
+which remains out of this task's authorized inspection scope). It is nonetheless a concrete, pre-existing
+statement in the codebase about how this codebase treats `AuditLog`'s authority in at least one flow, and
+it supports Option A as a reasonable, precedented choice — not as a claim that all KVKK/compliance
+completeness concerns are thereby resolved (see §6a/§11).
 
 ## 5. Existing precedent for machine/AI-actor `ActivityLog` writes — found and evaluated (Q7 evidence)
 
@@ -173,6 +184,28 @@ Yes, for the general case, with one narrow, real exception (§7):
   attributed to a borrowed human account, actively **degrades** that feed's stated purpose — showing
   which staff member did what — by mixing in device traffic that no staff member performed.
 
+## 6a. Two distinct KVKK surfaces — do not conflate (R1 clarification)
+
+This decision's scope and this decision's compliance implication are two different things, and this
+document previously did not separate them clearly enough. Stated explicitly:
+
+1. **Bridge ingest audit capture** — the question this task (`F2-IMG-AUDIT-002`) actually decides: whether
+   the bridge's own ingest event needs an `ActivityLog` write. It does not; it is already captured in
+   `AuditLog` for 100% of outcomes (§4/§6). This part is fully handled by Option A.
+2. **Per-patient KVKK data-subject export completeness** — a **separate, already-identified gap** (§7):
+   `patientPrivacy.ts`'s per-patient export builds its `activityHistory` field exclusively from
+   `ActivityLog`, never `AuditLog`. Because the bridge never writes to `ActivityLog` (by design, per this
+   decision) and does write a real, resolvable `patientId` when `imagingRequestId` is supplied, a
+   KVKK export for that patient will omit the bridge ingestion event that a manually-uploaded equivalent
+   would show. This gap is **not created** by accepting Option A here — it already exists on current
+   `main` — but Option A also does not close it.
+
+**Therefore: `F2-IMG-AUDIT-002 = NO_ACTION_REQUIRED` resolves surface (1) only.** It must not be read, cited,
+or summarized elsewhere in this program's documentation as "KVKK satisfied," "KVKK completeness resolved,"
+or any equivalent blanket claim. Surface (2) remains open, tracked as the proposed follow-up
+**F2-IMG-AUDIT-003** (§11) — a route/export-query-only fix, no `ActivityLog` schema or actor-model change
+required to close it.
+
 ## 7. One real, narrow asymmetry found — not a machine-actor problem (Q6)
 
 Independent verification surfaced a genuine gap, but it is **not** the gap F2-IMG-AUDIT-002 was framed
@@ -209,7 +242,7 @@ entity type), not an ActivityLog-writer gap. See §11 for the proposed follow-up
 | Criterion | A: AuditLog only (status quo) | B: actorType/actorId | C: SystemActivity model | D: synthetic principal |
 |---|---|---|---|---|
 | Tenant isolation | Unaffected — `AuditLog` already `organizationId`/`clinicId` scoped, proven by F2-IMG-AUDIT-001-FIX's cross-tenant test | Requires new tenant-scoping proof on every existing `ActivityLog` reader (dashboard, patient timeline, both export paths) | New model needs its own tenant-scoping proof from scratch | `User.clinicId` already scoped, but a synthetic row still needs auth/role modeling to avoid becoming a privileged bypass account |
-| KVKK/auditability | Already satisfied — `AuditLog` is the documented authoritative record (§4) | No compliance gain over A; duplicates an already-audited event | Same — plus a third log table to reconcile during any future audit/export work | Same, plus misattribution risk if the synthetic identity is ever mistaken for a real accountable person |
+| KVKK/auditability | Bridge ingest capture already satisfied — `AuditLog` is the established bridge sink (§4). Per-patient KVKK export completeness is a **separate, not-yet-closed** gap (§6a/§7) — Option A does not itself satisfy it | No compliance gain over A; duplicates an already-audited event | Same — plus a third log table to reconcile during any future audit/export work | Same, plus misattribution risk if the synthetic identity is ever mistaken for a real accountable person |
 | Actor attribution | Truthful: `actorUserId: null` correctly states "no human actor" | Truthful *if* implemented correctly, but no such implementation exists today (§5 shows only a borrowed-identity workaround, not a real polymorphic model) | Truthful, cleanest separation, but highest build cost for the least-justified need | **Not truthful** unless carefully scoped — a synthetic "user" is easy to later mistake for a real staff account (as §5's precedent already risks) |
 | Immutability | Unaffected | Unaffected | Unaffected | Unaffected |
 | Backward compatibility | Zero change | Every `ActivityLog` consumer (`dashboard.ts` include, `PatientDetail.tsx` unguarded `log.user` access, `clinicBulkExportPackage.ts` field allowlist, patient timeline) must be individually audited for null/synthetic-actor handling | New model has zero existing consumers to break, but zero existing consumers to reuse either | `PatientDetail.tsx:374`'s unguarded `log.user.firstName` access would need an explicit guard or the synthetic user needs real `firstName`/`lastName` values — either way, touches shared UI |
@@ -244,6 +277,26 @@ entity type), not an ActivityLog-writer gap. See §11 for the proposed follow-up
 `F2-IMG-AUDIT-002 = NO_ACTION_REQUIRED` for the question as originally framed (bridge machine-actor
 `ActivityLog` parity).
 
+**Final decision — explicit summary:**
+
+- `ActivityLog` is, and remains, a **human-staff activity-feed** table (§3): keyed to four patient-adjacent
+  business entities, joined to `User` for display at two UI call sites, one of which throws on an
+  unresolvable `user`.
+- `ActivityLog.userId` is a **mandatory, non-nullable `User` foreign key** (§2) — confirmed unchanged on
+  the final reconciliation baseline (`6a248ea1c359b2e86f39f9fff0b1d8577357fc10`).
+- The imaging bridge (`imagingBridgePublic.ts`) is a **machine actor** — bearer-token authenticated, no
+  human `User` session, no `req.user` to attribute a write to (§1).
+- The existing WhatsApp/Instagram "borrowed real staff `User`" pattern (§5) is evaluated here as an
+  **anti-pattern this decision does not adopt or endorse as approved precedent** — it is technical debt
+  already present elsewhere in the codebase, not a template for the bridge.
+- `AuditLog` **remains the bridge's audit sink**, unchanged, exactly as implemented by
+  F2-IMG-AUDIT-001-FIX (`actorUserId: null`/`actorRole: null`, tenant-scoped, immutable) — see §4 for the
+  precise, scoped basis for this (not a claim of codebase-wide authority).
+- **No schema, migration, or runtime code change** is made or required by this decision (§12/§13/§16).
+- **KVKK per-patient export completeness for bridge-linked imaging remains a separate, open, not-yet-closed
+  gap** (§6a/§7), tracked as the proposed follow-up `F2-IMG-AUDIT-003` below — `NO_ACTION_REQUIRED` on this
+  task does **not** mean that gap is resolved.
+
 One narrowly-scoped, independent follow-up is proposed from the evidence in §7 — **not** a machine-actor
 schema change:
 
@@ -273,10 +326,14 @@ shape?) and is explicitly **not** authorized or scoped by this decision — flag
 
 | File | Change |
 |---|---|
-| `docs/program/evidence/F2-IMG-AUDIT-002_MACHINE_ACTOR_ACTIVITYLOG_DECISION.md` | New — this document |
+| `docs/program/evidence/F2-IMG-AUDIT-002_MACHINE_ACTOR_ACTIVITYLOG_DECISION.md` | Original (this document) + R1 wording/baseline correction (this pass) |
+| `docs/program/NORAMEDI_MASTER_TRACKER.md` | R1 — additive top entry recording this reconciliation |
+| `docs/program/phases/F2_MODULAR_BOUNDARIES.md` | R1 — additive status-line correction appended |
+| `docs/program/evidence/README.md` | R1 — additive index row for this evidence file |
+| `docs/program/CURRENT_PHASE.md` | R1 — additive; F2-STAGE3-IMPL-001/PR #344's existing top entry is not rewritten or regressed |
 
-No runtime, test, schema, migration, or route file was modified. Verified by `git status`/`git diff`
-scoped outside `docs/program/evidence/`: no changes.
+No runtime, test, schema, migration, or route file was modified in either the original pass or this R1
+correction. Verified by `git status`/`git diff` scoped outside `docs/program/`: no changes.
 
 ## 16. Explicit exclusions (per task's hard prohibitions — none of the following were done)
 
@@ -287,5 +344,16 @@ polymorphic actor column was added. `prisma/schema.prisma` was not modified. No 
 
 ## 17. Merge safety
 
-Docs-only addition under `docs/program/evidence/`. No code, schema, or test file touched. Safe to merge
-once reviewed — carries zero runtime risk by construction (nothing outside this one new file changed).
+Docs-only addition/correction under `docs/program/`. No code, schema, migration, or test file touched in
+either the original pass or this R1 reconciliation — carries zero runtime risk by construction. No runtime
+tests are required for a docs-only change.
+
+## 18. Status (R1)
+
+`F2-IMG-AUDIT-002-DECIDE = NO_ACTION_REQUIRED` (unchanged by this R1 pass — this correction fixes wording
+and reconciles the PR against current `main`; it does not reopen or re-litigate the accepted Option A
+decision). PR #343: `DOCS_ONLY` / `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`. Reconciled
+against `origin/main` @ `6a248ea1c359b2e86f39f9fff0b1d8577357fc10` (exact PR #344 merge commit) via a
+normal `git merge` (no rebase, no force-push) — zero conflicts, zero source files touched by the
+reconciliation. `F2-IMG-AUDIT-003` (KVKK per-patient export completeness, §6a/§11) remains proposed only,
+not implemented, not authorized by this document.
