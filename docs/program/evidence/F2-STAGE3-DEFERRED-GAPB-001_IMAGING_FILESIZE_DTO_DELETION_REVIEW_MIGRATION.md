@@ -281,13 +281,13 @@ prior direct-Prisma read with no data-loss or migration implications.
 13. Migration status: **NONE**.
 14. Guardrail delta: §11.
 15. Rollback: §12.
-16. Commit SHA: recorded once committed (§ below, updated post-commit).
-17. PR number/head: recorded once opened.
-18. Exact-head CI: pending PR open.
+16. Commit SHA: `a46085b` (implementation + test + evidence commit).
+17. PR number/head: [#348](https://github.com/MustafaBasol/DisKlinikCRM/pull/348), head `a46085b`.
+18. Exact-head CI: pending, check PR #348 status directly.
 19. Agent completed? **YES**.
 20. Tests passed? **YES** (typecheck, targeted suites, guardrail test/scan, full disposable
     PostgreSQL regression — all green, 0 failures).
-21. PR opened? recorded once opened.
+21. PR opened? **YES** — #348.
 22. Merged? **NO**.
 23. Deployed? **NO**.
 24. Production verified? **NO**.
