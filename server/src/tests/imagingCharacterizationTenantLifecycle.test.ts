@@ -697,7 +697,7 @@ async function main() {
     });
 
     await test('markConfirmedMissing: stamps storageVerifiedMissingAt only on the confirmed-missing ImagingImage row, never the present one', async () => {
-      const result = await markConfirmedMissing([{ id: missingImage.id, kind: 'imaging_image' }]);
+      const result = await markConfirmedMissing(fx.defaultClinicId, [{ id: missingImage.id, kind: 'imaging_image' }]);
       assert.equal(result.marked, 1);
       const missingRow = await prisma.imagingImage.findUniqueOrThrow({ where: { id: missingImage.id } });
       const presentRow = await prisma.imagingImage.findUniqueOrThrow({ where: { id: presentImage.id } });
