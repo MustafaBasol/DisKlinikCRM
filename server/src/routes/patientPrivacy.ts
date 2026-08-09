@@ -30,6 +30,10 @@ import {
   ExportLeaseLostError,
 } from '../services/privacy/patientPrivacyExportPackage.js';
 import { buildDeletionReviewInventory } from '../services/privacy/deletionReviewInventory.js';
+import {
+  collectBridgeImagingActivityForPatient,
+  mergePatientActivityHistory,
+} from '../services/privacy/patientActivityHistoryExport.js';
 import { inspectOrphans } from '../services/privacy/orphanFileInspection.js';
 import { openFileStream } from '../services/fileStorage.js';
 import { safeErrorFields } from '../utils/safeError.js';
@@ -103,6 +107,7 @@ async function collectStructuredExportData(
         whatsappInboxEntries,
         instagramInboxEntries,
         activityLogs,
+        bridgeImagingActivity,
         privacyRequests,
         emergencyContacts,
         medicalHistory,
@@ -285,6 +290,11 @@ async function collectStructuredExportData(
           orderBy: { createdAt: 'desc' },
           take: 500,
         }),
+        // F2-IMG-AUDIT-003: bridge-linked imaging ingest events (AuditLog,
+        // machine actor — see F2-IMG-AUDIT-002) surfaced into the same
+        // export projection, tenant-scoped and allowlisted; see
+        // patientActivityHistoryExport.ts for the full rationale.
+        collectBridgeImagingActivityForPatient(patientId, clinicId, organizationId),
         prisma.patientPrivacyRequest.findMany({
           where: { patientId, clinicId },
           select: {
@@ -363,7 +373,7 @@ async function collectStructuredExportData(
           instagramInboxEntries,
           note: 'Raw message text and payloads are excluded from the data export for privacy compliance.',
         },
-        activityHistory: activityLogs,
+        activityHistory: mergePatientActivityHistory(activityLogs, bridgeImagingActivity),
         privacyRequests,
         emergencyContacts,
         medicalHistory,
