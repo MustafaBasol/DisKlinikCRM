@@ -182,19 +182,32 @@ async function main() {
       const results = await getImagesForLifecycleReview(fixtures.defaultClinicId, patientA.id);
       assert.equal(results.length, 1);
       const dto: ImagingLifecycleImageDto = results[0]!;
-      assert.deepEqual(Object.keys(dto).sort(), ['clinicId', 'id', 'legalHold', 'patientId', 'storageKey', 'studyId'].sort());
+      assert.deepEqual(
+        Object.keys(dto).sort(),
+        ['clinicId', 'fileSize', 'id', 'legalHold', 'patientId', 'storageKey', 'studyId'].sort(),
+      );
       assert.equal(dto.id, imageA.id);
       assert.equal(dto.studyId, studyA.id);
       assert.equal(dto.clinicId, fixtures.defaultClinicId);
       assert.equal(dto.patientId, patientA.id);
       assert.equal(dto.legalHold, false);
       assert.equal(dto.storageKey, imageA.filePath);
+      assert.equal(dto.fileSize, imageA.fileSize);
+      assert.equal(typeof dto.fileSize, 'number');
       // fields that must never appear on the DTO
       assert.ok(!('fileName' in dto));
       assert.ok(!('mimeType' in dto));
-      assert.ok(!('fileSize' in dto));
       assert.ok(!('legalHoldReason' in dto));
       assert.ok(!('originalName' in dto));
+    });
+
+    await test('getImagesForLifecycleReview: fileSize mirrors the Prisma schema Int (non-nullable) — never null/undefined, matching ImagingImage.fileSize exactly (F2-STAGE3-DEFERRED-GAPB-001)', async () => {
+      const results = await getImagesForLifecycleReview(fixtures.defaultClinicId, patientA.id);
+      const dto = results.find((r) => r.id === imageA.id)!;
+      assert.notEqual(dto.fileSize, null);
+      assert.notEqual(dto.fileSize, undefined);
+      const row = await prisma.imagingImage.findUniqueOrThrow({ where: { id: imageA.id }, select: { fileSize: true } });
+      assert.equal(dto.fileSize, row.fileSize, 'DTO fileSize must exactly mirror the underlying ImagingImage.fileSize column, no unit conversion');
     });
 
     await test('deterministic ordering: createdAt asc, id asc tiebreaker', async () => {

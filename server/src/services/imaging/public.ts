@@ -122,6 +122,14 @@ export interface ImagingLifecycleImageDto {
   patientId: string | null;
   legalHold: boolean;
   storageKey: string;
+  /**
+   * Mirrors `ImagingImage.fileSize` (Prisma schema: `Int`, not nullable) —
+   * never converted/rounded, never fabricated when absent, because absence
+   * cannot occur at the DB level (F2-STAGE3-DEFERRED-GAPB-001). Added solely
+   * so deletionReviewInventory.ts can compute estimatedBytes without its own
+   * direct Prisma read; not a general-purpose Imaging field.
+   */
+  fileSize: number;
 }
 
 // ─── RedactionReason (small closed set; reuses PatientPrivacyRequest's own
@@ -344,6 +352,7 @@ export async function getImagesForLifecycleReview(
       studyId: true,
       clinicId: true,
       filePath: true,
+      fileSize: true,
       study: { select: { patientId: true, legalHold: true } },
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -356,6 +365,7 @@ export async function getImagesForLifecycleReview(
     patientId: image.study?.patientId ?? null,
     legalHold: Boolean(image.study?.legalHold),
     storageKey: image.filePath,
+    fileSize: image.fileSize,
   }));
 }
 

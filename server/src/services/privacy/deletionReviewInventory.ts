@@ -35,6 +35,7 @@
  */
 
 import prisma from '../../db.js';
+import { getImagesForLifecycleReview } from '../imaging/public.js';
 
 export interface DeletionReviewInventory {
   patientId: string;
@@ -119,17 +120,14 @@ export async function buildDeletionReviewInventory(params: {
       where: { clinicId, patientId },
       select: { legalHold: true, fileSize: true },
     }),
-    prisma.imagingImage.findMany({
-      where: { clinicId, study: { patientId } },
-      select: { fileSize: true, study: { select: { legalHold: true } } },
-    }),
+    getImagesForLifecycleReview(clinicId, patientId),
   ]);
 
   const attachmentLegalHold = attachmentRows.filter((a) => a.legalHold).length;
   const attachmentBytes = attachmentRows.reduce((sum, a) => sum + (a.fileSize ?? 0), 0);
 
-  const imagingLegalHold = imagingImageRows.filter((i) => i.study?.legalHold).length;
-  const imagingBytes = imagingImageRows.reduce((sum, i) => sum + (i.fileSize ?? 0), 0);
+  const imagingLegalHold = imagingImageRows.filter((i) => i.legalHold).length;
+  const imagingBytes = imagingImageRows.reduce((sum, i) => sum + i.fileSize, 0);
 
   const blockers: DeletionReviewBlocker[] = [{ code: 'DRY_RUN_ONLY' }];
   if (attachmentLegalHold > 0) {
