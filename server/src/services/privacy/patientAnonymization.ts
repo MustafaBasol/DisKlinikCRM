@@ -15,6 +15,11 @@
 import prisma from '../../db.js';
 import { writeAuditLog } from '../../utils/auditLog.js';
 import { logActivity } from '../../utils/activity.js';
+import {
+  getImagesForLifecycleReview,
+  redactForAnonymization,
+  ImagingLegalHoldViolationError,
+} from '../imaging/public.js';
 
 export type AnonymizePatientArgs = {
   clinicId: string;
@@ -96,33 +101,50 @@ async function redactPatientAttachments(clinicId: string, patientId: string): Pr
 
 /**
  * Same redaction semantics as redactPatientAttachments, applied to
- * ImagingImage rows belonging to the patient's ImagingStudy records.
+ * ImagingImage rows belonging to the patient's ImagingStudy records — via
+ * ImagingLifecyclePort (F2-STAGE3-IMPL-001), not direct Prisma access.
  * ImagingImage has no legalHold field of its own — it inherits its parent
- * study's hold (docs/compliance/53).
+ * study's hold (docs/compliance/53), which the port's DTO already surfaces.
+ *
+ * Legal-hold caller-side adapter: ImagingLifecyclePort.redactForAnonymization
+ * throws ImagingLegalHoldViolationError for a held image rather than silently
+ * skipping it (the port never mutates a held image), so this caller checks
+ * the DTO's `legalHold` flag itself and never calls the port for those rows —
+ * preserving the pre-migration skip/count semantics instead of surfacing a
+ * new failure. The same error is also caught around the port call itself, as
+ * a defense against a legal hold acquired in the race window between the
+ * lifecycle-review read and the redact call (the port's write-time recheck
+ * catches that race; pre-migration direct-Prisma code had no such recheck).
+ *
+ * Known counter divergence vs. pre-migration behavior: the port's DTO does
+ * not expose `originalName`, so this caller cannot distinguish "already
+ * redacted by a prior run" from "redacted just now" the way the old
+ * `originalName === ANON_TEXT` pre-check did. Both cases now call
+ * redactForAnonymization (idempotent — a no-op that resolves without
+ * throwing for an already-redacted row) and both increment `redacted`.
+ * Pre-migration, an already-redacted row was silently excluded from every
+ * counter bucket on a re-run. This only affects a second/idempotent
+ * anonymization run on the same patient; failure/legal-hold/total semantics
+ * are otherwise identical. See F2-STAGE3-IMPL-001 evidence doc.
  */
 async function redactPatientImagingImages(clinicId: string, patientId: string): Promise<RedactionCounters> {
   const counters = emptyCounters();
-  const images = await prisma.imagingImage.findMany({
-    where: { clinicId, study: { patientId } },
-    select: { id: true, originalName: true, study: { select: { legalHold: true } } },
-  });
+  const images = await getImagesForLifecycleReview(clinicId, patientId);
   counters.total = images.length;
 
   for (const image of images) {
-    if (image.study?.legalHold) {
+    if (image.legalHold) {
       counters.skippedLegalHold++;
       continue;
     }
-    if (image.originalName === ANON_TEXT) {
-      continue;
-    }
     try {
-      await prisma.imagingImage.update({
-        where: { id: image.id },
-        data: { originalName: ANON_TEXT },
-      });
+      await redactForAnonymization(clinicId, image.id, 'anonymization');
       counters.redacted++;
     } catch (err) {
+      if (err instanceof ImagingLegalHoldViolationError) {
+        counters.skippedLegalHold++;
+        continue;
+      }
       counters.failed++;
       console.error('[patientAnonymization] imaging image redaction failed', image.id, err);
     }

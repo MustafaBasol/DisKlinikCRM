@@ -26,10 +26,17 @@
  * Expired PatientPrivacyExportArchive rows are a separate, already-bounded
  * "temporary expired object" category handled entirely by
  * patientPrivacyExportCleanupJob.ts — not part of this inspection.
+ *
+ * F2-STAGE3-IMPL-001: the inspectOrphans ImagingImage lifecycle-review/
+ * existence-check path below is migrated to ImagingLifecyclePort
+ * (server/src/services/imaging/public.ts) instead of direct Prisma access.
+ * markConfirmedMissing's ImagingImage write is an explicitly deferred
+ * exception — see its own doc comment.
  */
 
 import prisma from '../../db.js';
 import { fileExists } from '../fileStorage.js';
+import { getImagesForLifecycleReview, checkImageStorageExists } from '../imaging/public.js';
 
 export interface OrphanCheckEntry {
   id: string;
@@ -62,11 +69,17 @@ export async function inspectOrphans(params: {
     take: BATCH_SIZE,
   });
 
-  const imagingImages = await prisma.imagingImage.findMany({
-    where: { clinicId, study: { patientId } },
-    select: { id: true, filePath: true, study: { select: { legalHold: true } } },
-    take: BATCH_SIZE,
-  });
+  // ImagingImage lifecycle-review/existence-check path migrated to
+  // ImagingLifecyclePort (F2-STAGE3-IMPL-001) — no direct Prisma access to
+  // ImagingImage/ImagingStudy remains on this path. markConfirmedMissing
+  // below is an explicitly deferred exception (see its own doc comment) and
+  // must not be confused with this migrated path.
+  const imagingImagesAll = await getImagesForLifecycleReview(clinicId, patientId);
+  // getImagesForLifecycleReview has no take/limit of its own — apply the
+  // same BATCH_SIZE cap here as the pre-migration direct query (`take:
+  // BATCH_SIZE`) so this inspection never silently widens beyond its
+  // historical bound.
+  const imagingImages = imagingImagesAll.slice(0, BATCH_SIZE);
 
   const entries: OrphanCheckEntry[] = [];
 
@@ -81,12 +94,12 @@ export async function inspectOrphans(params: {
   }
 
   for (const image of imagingImages) {
-    const exists = await fileExists(image.filePath);
+    const exists = await checkImageStorageExists(clinicId, image.id);
     entries.push({
       id: image.id,
       kind: 'imaging_image',
       classification: exists ? 'activeLinkedObject' : 'dbRowPhysicalMissing',
-      legalHold: Boolean(image.study?.legalHold),
+      legalHold: image.legalHold,
     });
   }
 
@@ -108,6 +121,15 @@ export async function inspectOrphans(params: {
  * inspectOrphans() call. Never legal-hold-gated (there is nothing to delete —
  * this only marks a DB row as "physically confirmed missing" for operator
  * visibility) and never deletes rows or files.
+ *
+ * DEFERRED EXCEPTION (F2-STAGE3-IMPL-001): this function's direct
+ * `prisma.imagingImage.update(...)` call is explicitly OUT OF SCOPE for the
+ * ImagingLifecyclePort migration — it lacks a clinicId parameter (its input
+ * is only `{ id, kind }`) and has zero production callers today. It is NOT
+ * part of, and must not be confused with, the migrated inspectOrphans
+ * lifecycle-review/existence-check path above. Migrating this call requires
+ * either a clinicId-bearing input or a port contract extension, neither of
+ * which this task authorizes.
  */
 export async function markConfirmedMissing(
   entries: Pick<OrphanCheckEntry, 'id' | 'kind'>[],
