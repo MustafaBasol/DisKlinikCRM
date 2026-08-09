@@ -24,7 +24,13 @@
  *      ids fail identically without mutation or existence leakage, the
  *      write is idempotent, the attachment branch is unchanged, and no
  *      storage key/filename is ever logged
- *   M. deletionReviewInventory.ts remains untouched (out of scope)
+ *   M. deletionReviewInventory.ts uses ImagingLifecyclePort, not direct Prisma
+ *      (F2-STAGE3-DEFERRED-GAPB-001 — supersedes the prior "remains
+ *      untouched, out of scope" characterization from F2-STAGE3-IMPL-001)
+ *   N-R. deletionReviewInventory.ts imaging counts/estimatedBytes/blockers are
+ *      byte-for-byte compatible with the pre-migration direct-Prisma
+ *      implementation, including zero-imaging and cross-clinic isolation
+ *      cases, with no storage-key/path/filename leakage into the response
  *
  * Also covers a legal-hold TOCTOU race (a hold acquired between the
  * lifecycle-review read and the port's redact call), which the pre-migration
@@ -44,6 +50,7 @@ import { randomUUID } from 'node:crypto';
 
 import { anonymizePatientData } from '../../services/privacy/patientAnonymization.js';
 import { inspectOrphans, markConfirmedMissing } from '../../services/privacy/orphanFileInspection.js';
+import { buildDeletionReviewInventory } from '../../services/privacy/deletionReviewInventory.js';
 import {
   checkImageStorageExists,
   ImagingNotFoundError,
@@ -489,11 +496,94 @@ async function main() {
       await prisma.patient.deleteMany({ where: { id: attachmentPatient.id } });
     });
 
-    await test('M: deletionReviewInventory.ts remains untouched — still reads ImagingImage directly and does not import ImagingLifecyclePort (out of scope for F2-STAGE3-IMPL-001)', () => {
+    await test('M: deletionReviewInventory.ts is migrated onto ImagingLifecyclePort — no direct prisma.imagingImage access remains (F2-STAGE3-DEFERRED-GAPB-001)', () => {
       const srcPath = new URL('../../services/privacy/deletionReviewInventory.ts', import.meta.url);
       const src = fs.readFileSync(srcPath, 'utf8');
-      assert.ok(/prisma\.imagingImage\.findMany\(/.test(src), 'deletionReviewInventory.ts must still read ImagingImage directly via Prisma');
-      assert.ok(!/from ['"]\.\.\/imaging\/public\.js['"]/.test(src), 'deletionReviewInventory.ts must not import ImagingLifecyclePort — extending its DTO (fileSize) is not authorized by this task');
+      assert.ok(!/prisma\.imagingImage/.test(src), 'deletionReviewInventory.ts must no longer touch prisma.imagingImage directly');
+      assert.ok(/getImagesForLifecycleReview\(/.test(src), 'deletionReviewInventory.ts must call ImagingLifecyclePort.getImagesForLifecycleReview');
+      assert.ok(/from ['"]\.\.\/imaging\/public\.js['"]/.test(src), 'deletionReviewInventory.ts must import from the ImagingLifecyclePort facade');
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // N-R — deletionReviewInventory.ts imaging counts/bytes via ImagingLifecyclePort
+  // (F2-STAGE3-DEFERRED-GAPB-001)
+  // ═══════════════════════════════════════════════════════════════════════
+  section('N-R: deletionReviewInventory.ts imaging via ImagingLifecyclePort (F2-STAGE3-DEFERRED-GAPB-001)');
+  {
+    const fx = await createClinicFixtureSet('f2gapbdri');
+    trackClinics(fx.defaultClinicId, fx.crossOrgClinicId);
+
+    const patient = await createTestPatient({ organizationId: fx.orgId, clinicId: fx.defaultClinicId, firstName: 'GapbDeletionReview' });
+    const studyPlain = await prisma.imagingStudy.create({
+      data: { clinicId: fx.defaultClinicId, patientId: patient.id, modality: 'PX', status: 'active', legalHold: false },
+    });
+    const studyHeld = await prisma.imagingStudy.create({
+      data: { clinicId: fx.defaultClinicId, patientId: patient.id, modality: 'CT', status: 'active', legalHold: true, legalHoldReason: 'gapb hold' },
+    });
+    const imagePlain = await prisma.imagingImage.create({
+      data: { clinicId: fx.defaultClinicId, studyId: studyPlain.id, fileName: 'gp.bin', originalName: 'gapb-plain.jpg', fileSize: 123, mimeType: 'application/octet-stream', filePath: `${fx.defaultClinicId}/gapb-plain-${randomUUID()}.bin` },
+    });
+    const imageHeld = await prisma.imagingImage.create({
+      data: { clinicId: fx.defaultClinicId, studyId: studyHeld.id, fileName: 'gh.bin', originalName: 'gapb-held.jpg', fileSize: 456, mimeType: 'application/octet-stream', filePath: `${fx.defaultClinicId}/gapb-held-${randomUUID()}.bin` },
+    });
+
+    await test('N: imaging total/legalHold/retainedClinical/estimatedBytes are exactly compatible with pre-migration arithmetic (port-backed)', async () => {
+      const inventory = await buildDeletionReviewInventory({ clinicId: fx.defaultClinicId, patientId: patient.id, organizationId: fx.orgId });
+      assert.equal(inventory.imaging.total, 2);
+      assert.equal(inventory.imaging.legalHold, 1);
+      assert.equal(inventory.imaging.retainedClinical, 2);
+      assert.equal(inventory.imaging.estimatedBytes, 123 + 456);
+      const blockerCodes = inventory.blockers.map((b) => b.code);
+      assert.ok(blockerCodes.includes('IMAGING_RETENTION_NOT_APPROVED'), 'any imaging presence still blocks a dry-run deletion');
+      assert.ok(blockerCodes.includes('IMAGING_LEGAL_HOLD'), 'legal-hold imaging is still reported as its own distinct blocker');
+      const legalHoldBlocker = inventory.blockers.find((b) => b.code === 'IMAGING_LEGAL_HOLD');
+      assert.equal(legalHoldBlocker?.count, 1);
+    });
+
+    await test('O: zero-imaging patient produces zero imaging count/bytes and no IMAGING_* blockers (unchanged zero-imaging behavior)', async () => {
+      const emptyPatient = await createTestPatient({ organizationId: fx.orgId, clinicId: fx.defaultClinicId, firstName: 'GapbNoImaging' });
+      const inventory = await buildDeletionReviewInventory({ clinicId: fx.defaultClinicId, patientId: emptyPatient.id, organizationId: fx.orgId });
+      assert.equal(inventory.imaging.total, 0);
+      assert.equal(inventory.imaging.legalHold, 0);
+      assert.equal(inventory.imaging.retainedClinical, 0);
+      assert.equal(inventory.imaging.estimatedBytes, 0);
+      const blockerCodes = inventory.blockers.map((b) => b.code);
+      assert.ok(!blockerCodes.includes('IMAGING_RETENTION_NOT_APPROVED'));
+      assert.ok(!blockerCodes.includes('IMAGING_LEGAL_HOLD'));
+    });
+
+    await test('P: same patientId under a clinicId that does not own it returns zero imaging count/bytes (tenant isolation, no cross-clinic aggregation)', async () => {
+      const inventory = await buildDeletionReviewInventory({ clinicId: fx.crossOrgClinicId, patientId: patient.id, organizationId: fx.otherOrgId });
+      assert.equal(inventory.imaging.total, 0);
+      assert.equal(inventory.imaging.legalHold, 0);
+      assert.equal(inventory.imaging.retainedClinical, 0);
+      assert.equal(inventory.imaging.estimatedBytes, 0);
+      const blockerCodes = inventory.blockers.map((b) => b.code);
+      assert.ok(!blockerCodes.includes('IMAGING_RETENTION_NOT_APPROVED'), 'a non-owning clinicId must never see the owning clinic\'s imaging blockers');
+    });
+
+    await test('Q: a same-patientId, same-clinicId call is unaffected by an unrelated cross-org clinic\'s imaging (no cross-clinic bleed into counts)', async () => {
+      const otherPatient = await createTestPatient({ organizationId: fx.otherOrgId, clinicId: fx.crossOrgClinicId, firstName: 'GapbCrossClinicNoise' });
+      const otherStudy = await prisma.imagingStudy.create({
+        data: { clinicId: fx.crossOrgClinicId, patientId: otherPatient.id, modality: 'PX', status: 'active', legalHold: false },
+      });
+      await prisma.imagingImage.create({
+        data: { clinicId: fx.crossOrgClinicId, studyId: otherStudy.id, fileName: 'noise.bin', originalName: 'noise.jpg', fileSize: 999999, mimeType: 'application/octet-stream', filePath: `${fx.crossOrgClinicId}/noise-${randomUUID()}.bin` },
+      });
+
+      const inventory = await buildDeletionReviewInventory({ clinicId: fx.defaultClinicId, patientId: patient.id, organizationId: fx.orgId });
+      assert.equal(inventory.imaging.total, 2, 'must still see only its own 2 images, unaffected by the unrelated cross-clinic image');
+      assert.equal(inventory.imaging.estimatedBytes, 123 + 456, 'estimatedBytes must never include another clinic\'s imaging bytes');
+    });
+
+    await test('R: no new storage/path/filename leakage — response JSON never contains a storageKey/filePath or original filename', async () => {
+      const inventory = await buildDeletionReviewInventory({ clinicId: fx.defaultClinicId, patientId: patient.id, organizationId: fx.orgId });
+      const json = JSON.stringify(inventory);
+      assert.ok(!json.includes(imagePlain.filePath), 'response must never include a raw storage key/path');
+      assert.ok(!json.includes(imageHeld.filePath), 'response must never include a raw storage key/path');
+      assert.ok(!json.includes('gapb-plain.jpg'), 'response must never include the original filename');
+      assert.ok(!json.includes('gapb-held.jpg'), 'response must never include the original filename');
     });
   }
 
