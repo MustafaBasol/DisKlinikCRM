@@ -120,14 +120,19 @@ async function redactPatientAttachments(clinicId: string, patientId: string): Pr
  * `{ changed: boolean }` mutation outcome (not lifecycle read-state, no
  * PII/PHI) precisely so this caller can restore the pre-migration counter
  * semantics that the port's original void-returning contract could not
- * express — `redacted` is incremented only when `changed === true`, i.e.
- * only when THIS call (or a concurrent writer racing it, per the port's own
- * post-mutation classification) actually flipped an unredacted row. A row
- * that was already redacted by an earlier run resolves without throwing but
- * with `changed: false`, and is correctly excluded from `redacted` on an
- * idempotent re-run, exactly as the old `originalName === ANON_TEXT`
- * pre-check excluded it. `total`/`skippedLegalHold`/`failed` semantics are
- * unaffected. See F2-STAGE3-IMPL-001-R1 evidence doc.
+ * express — `redacted` is incremented only when THIS port call returns
+ * `changed: true`, i.e. only when THIS call itself actually flipped an
+ * unredacted row via its own atomic originalName CAS. If a concurrent writer
+ * races this call and wins (its own CAS flips the row first), this call's
+ * CAS matches zero rows and returns `changed: false`, so it does NOT
+ * increment this caller's `redacted` counter — the winning writer's own call
+ * is the one that observes `changed: true` and increments its own counters.
+ * A row that was already redacted by an earlier run resolves without
+ * throwing but with `changed: false`, and is correctly excluded from
+ * `redacted` on an idempotent re-run, exactly as the old
+ * `originalName === ANON_TEXT` pre-check excluded it. `total`/
+ * `skippedLegalHold`/`failed` semantics are unaffected. See
+ * F2-STAGE3-IMPL-001-R1 evidence doc.
  */
 async function redactPatientImagingImages(clinicId: string, patientId: string): Promise<RedactionCounters> {
   const counters = emptyCounters();

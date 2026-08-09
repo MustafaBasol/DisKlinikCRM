@@ -128,10 +128,11 @@ None of these documents' other claims (baseline SHAs, PR numbers, CI run IDs, fi
 cd server && npm run typecheck                                    -> clean, 0 errors
 npm run test:patient-privacy                                      -> 38/38 passed
 npm run test:runtime:postgres -- --summary-file=postgres-run-summary.json
-  -> orchestrator outcome, including:
-     test:privacy-imaging-lifecycle-migration                     -> see exact count below
-     test:imaging-lifecycle-facade                                -> see exact count below
-     test:imaging-characterization (6-suite chain)                -> see exact count below
+  -> orchestrator outcome.exitCode: 0, "tests passed", "cleanup succeeded", including:
+     test:privacy-imaging-lifecycle-migration                     -> 18/18 passed (17/17 + 1 new)
+     test:imaging-lifecycle-facade                                -> 36/36 passed (34/34 + 2 new)
+     test:imaging-characterization (6-suite chain)                -> all pass, unaffected by this amendment
+     migrations                                                   -> 72/72 existing applied; no new migration
 npm run guardrail:test  (repo root)                                -> 74/74 passed
 npm run guardrail:scan  (repo root)                                -> exit 0; no findings attributable to this task
                                                                        (identical resolvedBaselineEdgeIds
@@ -140,7 +141,7 @@ npm run guardrail:scan  (repo root)                                -> exit 0; no
 git diff --check                                                  -> clean, exit 0
 ```
 
-Exact disposable-PostgreSQL counts, migration result, and full command transcript are recorded in the final task report (this task's PR #344 continuation commit message / program-controller report), not duplicated here to avoid a second source of truth that could drift from the actual run.
+**Exact-head CI (F2-STAGE3-IMPL-001-R2 reconciliation, current head `39364f117874668c2bde34fe1fbca03de7430245`):** independently re-verified via `gh pr checks 344`/`gh run list` — `ci` run `31310907422` `SUCCESS`, `windows-bridge-pr` run `31310907297` `SUCCESS`. PR #344 remains `OPEN`/`MERGEABLE` — `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`.
 
 ## 14. Files changed
 
@@ -156,7 +157,14 @@ No schema/migration file. No route file. No other service file.
 
 ## 15. Rollback
 
-`git revert` the commit(s) on this branch that make this amendment — the prior `Promise<void>` signature and unconditional `counters.redacted++` are restored exactly, since no schema/migration/route file is touched. The idempotent-rerun test would need its assertion reverted alongside (part of the same revert), restoring the previously-accepted `redacted === 1` divergence behavior.
+Exact current commit chain on this branch (`feature/f2-stage3-impl-001-privacy-imaging-lifecycle-migration`), oldest first:
+
+1. `92f77f4` — `refactor(privacy): migrate imaging lifecycle callers to public contract` (the original `F2-STAGE3-IMPL-001` code change).
+2. `560acdd` — `docs(f2): document F2-STAGE3-IMPL-001 privacy imaging lifecycle migration` (original docs).
+3. `ea2d0c0` — `docs(f2): record PR #344 green CI on F2-STAGE3-IMPL-001` (docs only).
+4. `39364f1` — `fix(imaging): redactForAnonymization returns mutation outcome (F2-STAGE3-IMPL-001-R1)` (this amendment: current head).
+
+To roll back this amendment only (restoring the prior `Promise<void>` signature, the unconditional `counters.redacted++`, and the accepted idempotent-rerun divergence), `git revert 39364f1` — no schema/migration/route file is touched by that commit, so the revert is clean; the idempotent-rerun test's assertion reverts alongside as part of the same commit. To roll back the entire `F2-STAGE3-IMPL-001` slice (both the original migration and this amendment), `git revert` commits 4→1 in that order (`39364f1`, `ea2d0c0`, `560acdd`, `92f77f4`) restores the pre-migration direct-Prisma `ImagingImage`/`ImagingStudy` access in both `patientAnonymization.ts` and `orphanFileInspection.ts` exactly — no schema rollback needed or possible (none was ever applied by this task).
 
 ## 16. PR / merge state
 
@@ -165,8 +173,9 @@ Continues on existing **PR #344** (`feature/f2-stage3-impl-001-privacy-imaging-l
 ## 17. Lifecycle status
 
 - `AGENT_COMPLETED`: TRUE
-- `TESTS_PASSED`: see final task report for exact counts
+- `TESTS_PASSED`: TRUE — patient privacy 38/38, imaging lifecycle facade 36/36, privacy imaging lifecycle migration 18/18, guardrail unit 74/74, runtime postgres exit 0, migrations 72/72 existing/no new migration
 - `PR_OPENED`: TRUE (pre-existing, PR #344)
+- `PR_CI_PASSED`: TRUE — exact head `39364f117874668c2bde34fe1fbca03de7430245`: `ci` run `31310907422` `SUCCESS`, `windows-bridge-pr` run `31310907297` `SUCCESS`
 - `MERGED`: FALSE
 - `DEPLOYED`: FALSE
 - `PRODUCTION_VERIFIED`: FALSE
