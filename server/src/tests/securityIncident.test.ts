@@ -124,6 +124,7 @@ import {
   evaluateCrossTenantDenialSignal,
   evaluateExportStepUpLockoutSignal,
   evaluateExportTokenReplaySignal,
+  flushPendingSecurityDetectionWork,
 } from '../services/security/securityDetectionRules.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -499,13 +500,13 @@ async function runDetectionRuleTests() {
       const accountHash = hashAccountIdentifier(account)!;
 
       evaluateAuthLoginFailureSignal({ accountIdentifier: account, context: 'clinic', organizationId: orgId, clinicId, ip: '203.0.113.9' });
-      await sleep(150);
+      await flushPendingSecurityDetectionWork();
       const belowThreshold = await prisma.securityIncident.findFirst({ where: { affectedResourceId: accountHash, sourceRule: 'auth.brute_force.v1' } });
       assert.equal(belowThreshold, null, 'a single failure must not create an incident');
 
       evaluateAuthLoginFailureSignal({ accountIdentifier: account, context: 'clinic', organizationId: orgId, clinicId, ip: '203.0.113.9' });
       evaluateAuthLoginFailureSignal({ accountIdentifier: account, context: 'clinic', organizationId: orgId, clinicId, ip: '203.0.113.9' });
-      await sleep(200);
+      await flushPendingSecurityDetectionWork();
       const atThreshold = await prisma.securityIncident.findFirst({ where: { affectedResourceId: accountHash, sourceRule: 'auth.brute_force.v1' } });
       assert.ok(atThreshold, 'threshold-crossing failures must create an incident');
       assert.equal(atThreshold!.organizationId, orgId);
@@ -533,7 +534,7 @@ async function runDetectionRuleTests() {
           attemptedResourceType: 'clinic', attemptedResourceId: 'target-clinic-a', method: 'GET', routeTemplate: '/patients',
         });
       }
-      await sleep(200);
+      await flushPendingSecurityDetectionWork();
       const actorHashSingle = hashAccountIdentifier(actorSingle)!;
       const singleResourceIncident = await prisma.securityIncident.findFirst({ where: { affectedResourceId: actorHashSingle, sourceRule: 'access.cross_tenant.v1' } });
       assert.ok(singleResourceIncident);
@@ -542,7 +543,7 @@ async function runDetectionRuleTests() {
       const actorMulti = randomUUID();
       evaluateCrossTenantDenialSignal({ actorUserId: actorMulti, actorOrganizationId: orgId, actorClinicId: clinicId, attemptedResourceType: 'clinic', attemptedResourceId: 'target-clinic-b', method: 'GET', routeTemplate: '/patients' });
       evaluateCrossTenantDenialSignal({ actorUserId: actorMulti, actorOrganizationId: orgId, actorClinicId: clinicId, attemptedResourceType: 'clinic', attemptedResourceId: 'target-clinic-c', method: 'GET', routeTemplate: '/appointments' });
-      await sleep(200);
+      await flushPendingSecurityDetectionWork();
       const actorHashMulti = hashAccountIdentifier(actorMulti)!;
       const multiResourceIncident = await prisma.securityIncident.findFirst({ where: { affectedResourceId: actorHashMulti, sourceRule: 'access.cross_tenant.v1' } });
       assert.ok(multiResourceIncident);
@@ -555,7 +556,7 @@ async function runDetectionRuleTests() {
   await test('23. A single accidental cross-tenant denial creates no incident', async () => {
     const actor = randomUUID();
     evaluateCrossTenantDenialSignal({ actorUserId: actor, actorOrganizationId: orgId, actorClinicId: clinicId, attemptedResourceType: 'clinic', attemptedResourceId: 'target-clinic-lonely', method: 'GET', routeTemplate: '/patients' });
-    await sleep(150);
+    await flushPendingSecurityDetectionWork();
     const actorHash = hashAccountIdentifier(actor)!;
     const incident = await prisma.securityIncident.findFirst({ where: { affectedResourceId: actorHash, sourceRule: 'access.cross_tenant.v1' } });
     assert.equal(incident, null);
@@ -564,7 +565,7 @@ async function runDetectionRuleTests() {
   await test('24. Export step-up lockout creates an incident immediately (not thresholded)', async () => {
     const actorUserId = randomUUID();
     evaluateExportStepUpLockoutSignal({ organizationId: orgId, clinicId, actorUserId });
-    await sleep(150);
+    await flushPendingSecurityDetectionWork();
     const incident = await prisma.securityIncident.findFirst({ where: { sourceRule: 'export.step_up_lockout.v1', clinicId } });
     assert.ok(incident, 'a single lockout must be surfaced immediately');
   });
@@ -575,14 +576,14 @@ async function runDetectionRuleTests() {
     try {
       const actorUserId = randomUUID();
       evaluateExportTokenReplaySignal({ organizationId: orgId, clinicId, actorUserId, reason: 'expired' });
-      await sleep(150);
+      await flushPendingSecurityDetectionWork();
       const clinicHash = (await import('../services/security/securitySignalService.js')).hashResourceId(clinicId);
       const below = await prisma.securityIncident.findFirst({ where: { sourceRule: 'export.token_replay.v1', affectedResourceId: clinicHash, organizationId: orgId } });
       assert.equal(below, null);
 
       evaluateExportTokenReplaySignal({ organizationId: orgId, clinicId, actorUserId, reason: 'expired' });
       evaluateExportTokenReplaySignal({ organizationId: orgId, clinicId, actorUserId, reason: 'already_downloaded' });
-      await sleep(200);
+      await flushPendingSecurityDetectionWork();
       const atThreshold = await prisma.securityIncident.findFirst({ where: { sourceRule: 'export.token_replay.v1', affectedResourceId: clinicHash, organizationId: orgId } });
       assert.ok(atThreshold);
     } finally {
