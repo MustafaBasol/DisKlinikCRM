@@ -177,7 +177,7 @@ async function main() {
       assert.equal(activityRows.length, 1, 'exactly one activity log row for this anonymization run');
     });
 
-    await test('idempotent re-run: already-anonymized patient re-runs imaging redaction as a documented, safe no-op (failed stays 0, held row still untouched, plain row still redacted)', async () => {
+    await test('idempotent re-run: already-anonymized patient re-runs imaging redaction as a true safe no-op (failed stays 0, held row still untouched, plain row still redacted, redacted count stays 0 — F2-STAGE3-IMPL-001-R1)', async () => {
       const second = await anonymizePatientData({
         clinicId: fx.defaultClinicId, patientId: patient.id, actorUserId: staff.id,
         actorRole: staff.role, organizationId: fx.orgId, reason: 'second run',
@@ -185,17 +185,43 @@ async function main() {
       assert.equal(second.alreadyAnonymized, true);
       assert.equal(second.imagingResults.failed, 0);
       assert.equal(second.imagingResults.skippedLegalHold, 1, 'held image is still skipped by the DTO legalHold flag, never re-touched');
-      // Documented counter divergence (F2-STAGE3-IMPL-001): the port's DTO
-      // does not expose originalName, so an idempotent no-op redaction now
-      // counts toward `redacted` instead of being silently excluded from
-      // every bucket the way the old originalName-sentinel check did. This
-      // assertion locks in and documents that exact, accepted behavior.
-      assert.equal(second.imagingResults.redacted, 1, 'idempotent no-op redaction is counted as redacted (documented divergence — see patientAnonymization.ts)');
+      // F2-STAGE3-IMPL-001-R1: redactForAnonymization now returns a
+      // { changed: boolean } mutation outcome, and the caller increments
+      // `redacted` only when changed === true. An idempotent no-op
+      // redaction (the row was already redacted) reports changed: false, so
+      // it is correctly excluded from `redacted` on a re-run — restoring
+      // exact pre-migration counter semantics. This is no longer a
+      // documented divergence; it is the exact pre-migration behavior.
+      assert.equal(second.imagingResults.redacted, 0, 'an idempotent no-op redaction must not be counted toward redacted');
 
       const plainRow = await prisma.imagingImage.findUniqueOrThrow({ where: { id: imagePlain.id } });
       assert.equal(plainRow.originalName, '[ANONYMIZED]', 'still anonymized, not double-mutated or reverted');
       const heldRow = await prisma.imagingImage.findUniqueOrThrow({ where: { id: imageHeld.id } });
       assert.equal(heldRow.originalName, 'patient-held.jpg', 'legal-hold row must remain untouched on re-run too');
+    });
+
+    await test('new image added after anonymization: a re-run redacts only the new image, leaves the already-redacted image unchanged, and counts exactly one new redaction (compat test C)', async () => {
+      const studyLate = await prisma.imagingStudy.create({
+        data: { clinicId: fx.defaultClinicId, patientId: patient.id, modality: 'PX', status: 'active', legalHold: false },
+      });
+      const imageLate = await prisma.imagingImage.create({
+        data: { clinicId: fx.defaultClinicId, studyId: studyLate.id, fileName: 'l.bin', originalName: 'patient-late.jpg', fileSize: 10, mimeType: 'application/octet-stream', filePath: `${fx.defaultClinicId}/late-${randomUUID()}.bin` },
+      });
+
+      const third = await anonymizePatientData({
+        clinicId: fx.defaultClinicId, patientId: patient.id, actorUserId: staff.id,
+        actorRole: staff.role, organizationId: fx.orgId, reason: 'third run, new image added',
+      });
+
+      assert.equal(third.imagingResults.total, 3, 'plain + held + newly-added late image');
+      assert.equal(third.imagingResults.redacted, 1, 'only the new image is a real redaction; the already-redacted plain image is not recounted');
+      assert.equal(third.imagingResults.skippedLegalHold, 1);
+      assert.equal(third.imagingResults.failed, 0);
+
+      const plainRow = await prisma.imagingImage.findUniqueOrThrow({ where: { id: imagePlain.id } });
+      assert.equal(plainRow.originalName, '[ANONYMIZED]', 'old already-redacted image stays as-is, not double-mutated');
+      const lateRow = await prisma.imagingImage.findUniqueOrThrow({ where: { id: imageLate.id } });
+      assert.equal(lateRow.originalName, '[ANONYMIZED]', 'newly-added image must be redacted by this run');
     });
 
     // ── Legal-hold TOCTOU race: hold acquired AFTER the lifecycle-review

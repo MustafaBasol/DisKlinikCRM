@@ -372,6 +372,40 @@ async function main() {
       assert.equal(row!.originalName, '[ANONYMIZED]');
     });
 
+    // ── 8c. Mutation outcome result (F2-STAGE3-IMPL-001-R1) ───────────────
+    section('8c. Mutation outcome result (F2-STAGE3-IMPL-001-R1)');
+
+    await test('returns { changed: true } for a first, real redaction and { changed: false } for an idempotent repeat', async () => {
+      const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id });
+      const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
+
+      const first = await redactForAnonymization(fixtures.defaultClinicId, image.id, validReason);
+      assert.deepEqual(first, { changed: true }, 'first real redaction must report changed: true');
+
+      const second = await redactForAnonymization(fixtures.defaultClinicId, image.id, validReason);
+      assert.deepEqual(second, { changed: false }, 'idempotent repeat must report changed: false, not true');
+    });
+
+    await test('a concurrent benign already-redacted outcome (write raced by another writer) reports changed: false, not true', async () => {
+      const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id });
+      const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
+
+      __setRedactionPreMutationBarrierForTest(async () => {
+        // Simulate a concurrent writer completing the exact same redaction
+        // in the window between this call's read and its own write.
+        await prisma.imagingImage.update({ where: { id: image.id }, data: { originalName: '[ANONYMIZED]' } });
+      });
+      try {
+        const outcome = await redactForAnonymization(fixtures.defaultClinicId, image.id, validReason);
+        assert.deepEqual(outcome, { changed: false }, 'a benign concurrent-writer already-redacted outcome must report changed: false');
+      } finally {
+        __setRedactionPreMutationBarrierForTest(null);
+      }
+
+      const row = await prisma.imagingImage.findUnique({ where: { id: image.id } });
+      assert.equal(row!.originalName, '[ANONYMIZED]');
+    });
+
     await test('legal hold: refuses to redact and does not silently bypass', async () => {
       const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id, legalHold: true });
       const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });

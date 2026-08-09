@@ -85,7 +85,7 @@ for (const image of images) {
 
 This reproduces the pre-migration skip/count behavior for the common case (a legal-held image is never passed to the port at all). The `catch (ImagingLegalHoldViolationError)` branch additionally covers a TOCTOU race the pre-migration direct-Prisma code could not detect (a hold acquired between the lifecycle-review read and the write) — the port's own write-time predicate recheck throws in that case, and the adapter maps it back onto `skippedLegalHold`, not a new failure. Regression-tested directly (see §11, "legal-hold race" test).
 
-**Known, documented counter divergence:** the port's DTO does not expose `originalName`, so the adapter cannot distinguish "already redacted by a prior run" from "redacted just now" the way the old `originalName === ANON_TEXT` pre-check did. Both cases now call `redactForAnonymization` (idempotent — a no-op for an already-redacted row) and both increment `redacted`. Pre-migration, an already-redacted row on a second/idempotent run was silently excluded from every counter bucket. This affects only a second/idempotent anonymization run on the same patient — `total`/`skippedLegalHold`/`failed` semantics and all first-run values are unchanged. Not authorized to fix via a port DTO extension (out of this task's scope); documented in code (`patientAnonymization.ts`'s doc comment) and locked in by an explicit new regression test.
+**Counter divergence — superseded by F2-STAGE3-IMPL-001-R1:** at merge time, the port's DTO did not expose `originalName`, so the adapter could not distinguish "already redacted by a prior run" from "redacted just now" the way the old `originalName === ANON_TEXT` pre-check did. Both cases called `redactForAnonymization` (idempotent — a no-op for an already-redacted row) and both incremented `redacted` — so an already-redacted row on a second/idempotent run was counted toward `redacted` instead of being silently excluded from every counter bucket, as it had been pre-migration. **This divergence is fixed as of F2-STAGE3-IMPL-001-R1**: `redactForAnonymization` now returns `Promise<{ changed: boolean }>` (an additive amendment; DTO unchanged), and the adapter increments `redacted` only when `changed === true`, restoring exact pre-migration counter semantics on a re-run. See `docs/program/evidence/F2-STAGE3-IMPL-001-R1_IMAGING_LIFECYCLE_REDACTION_MUTATION_OUTCOME_AMENDMENT.md`.
 
 ## 7. Orphan inspection — behavior preserved
 
@@ -126,7 +126,7 @@ New file: `server/src/tests/dbVerification/privacyImagingLifecyclePortMigration.
 - **C** — legal-held image preserves skip/count, never mutated
 - **D** — first-run counters exactly match pre-migration semantics (`total=2, redacted=1, skippedLegalHold=1, failed=0`)
 - **E** — audit/activity ownership unchanged, exactly one row each, no storage key/path/pre-redaction filename in metadata
-- Idempotent-rerun test locking in the documented counter divergence (§6)
+- Idempotent-rerun test (§6) — assertion corrected by F2-STAGE3-IMPL-001-R1 to `redacted === 0`, no longer locking in a divergence
 - Legal-hold TOCTOU race test (adapter maps the port's race-detected `ImagingLegalHoldViolationError` to `skippedLegalHold`, not `failed`)
 - **F** — port usage proof for `inspectOrphans` (via `__setImagingStorageExistenceCheckerForTest` call-tracking hook)
 - **G** — missing/present classification exact match (both hooked and live-storage variants)

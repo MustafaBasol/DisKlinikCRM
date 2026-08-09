@@ -116,16 +116,18 @@ async function redactPatientAttachments(clinicId: string, patientId: string): Pr
  * lifecycle-review read and the redact call (the port's write-time recheck
  * catches that race; pre-migration direct-Prisma code had no such recheck).
  *
- * Known counter divergence vs. pre-migration behavior: the port's DTO does
- * not expose `originalName`, so this caller cannot distinguish "already
- * redacted by a prior run" from "redacted just now" the way the old
- * `originalName === ANON_TEXT` pre-check did. Both cases now call
- * redactForAnonymization (idempotent — a no-op that resolves without
- * throwing for an already-redacted row) and both increment `redacted`.
- * Pre-migration, an already-redacted row was silently excluded from every
- * counter bucket on a re-run. This only affects a second/idempotent
- * anonymization run on the same patient; failure/legal-hold/total semantics
- * are otherwise identical. See F2-STAGE3-IMPL-001 evidence doc.
+ * Counter fidelity (F2-STAGE3-IMPL-001-R1): redactForAnonymization returns a
+ * `{ changed: boolean }` mutation outcome (not lifecycle read-state, no
+ * PII/PHI) precisely so this caller can restore the pre-migration counter
+ * semantics that the port's original void-returning contract could not
+ * express — `redacted` is incremented only when `changed === true`, i.e.
+ * only when THIS call (or a concurrent writer racing it, per the port's own
+ * post-mutation classification) actually flipped an unredacted row. A row
+ * that was already redacted by an earlier run resolves without throwing but
+ * with `changed: false`, and is correctly excluded from `redacted` on an
+ * idempotent re-run, exactly as the old `originalName === ANON_TEXT`
+ * pre-check excluded it. `total`/`skippedLegalHold`/`failed` semantics are
+ * unaffected. See F2-STAGE3-IMPL-001-R1 evidence doc.
  */
 async function redactPatientImagingImages(clinicId: string, patientId: string): Promise<RedactionCounters> {
   const counters = emptyCounters();
@@ -138,8 +140,8 @@ async function redactPatientImagingImages(clinicId: string, patientId: string): 
       continue;
     }
     try {
-      await redactForAnonymization(clinicId, image.id, 'anonymization');
-      counters.redacted++;
+      const outcome = await redactForAnonymization(clinicId, image.id, 'anonymization');
+      if (outcome.changed) counters.redacted++;
     } catch (err) {
       if (err instanceof ImagingLegalHoldViolationError) {
         counters.skippedLegalHold++;
