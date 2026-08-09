@@ -250,27 +250,54 @@ export function __setRedactionPreMutationBarrierForTest(
  * `clinicId` must already be authorization-validated by the caller (F2-PREP-009
  * §3) — this facade applies it as a trusted predicate on both the read and
  * the write, it does not re-run authorization.
+ *
+ * MUTATION OUTCOME (F2-STAGE3-IMPL-001-R1): returns `{ changed: boolean }` —
+ * `changed: true` only when THIS call actually flipped the row's
+ * originalName from unredacted to redacted; `changed: false` whenever the
+ * row was already redacted, whether that redaction happened on an earlier
+ * call (the top-of-function idempotent short-circuit) or by a concurrent
+ * writer that won the race between this call's read and its write (the
+ * zero-row-recheck branch below). This is a mutation-outcome signal only —
+ * never lifecycle read-state, never PII/PHI, and existing callers that
+ * ignore the return value are unaffected (legal-hold/not-found/tenant
+ * semantics and every DB predicate are byte-for-byte unchanged from
+ * F2-IMPL-001-A-R3).
  */
 export async function redactForAnonymization(
   clinicId: string,
   imageId: string,
   reason: RedactionReason,
-): Promise<void> {
+): Promise<{ changed: boolean }> {
   if (!isRedactionReason(reason)) throw new ImagingInvalidRedactionReasonError();
 
   const image = await findOwnedImage(clinicId, imageId);
   if (!image) throw new ImagingNotFoundError();
   if (image.study.legalHold) throw new ImagingLegalHoldViolationError();
-  if (image.originalName === REDACTED_PLACEHOLDER) return;
+  if (image.originalName === REDACTED_PLACEHOLDER) return { changed: false };
 
   if (preMutationBarrier) await preMutationBarrier();
 
   // The mutation predicate re-checks legalHold: false at write time — never
   // relies solely on the read above. A concurrently-acquired hold between
   // the read and this statement now causes a 0-row result here instead of a
-  // silently successful write.
+  // silently successful write. It also re-checks originalName !== the
+  // placeholder (F2-STAGE3-IMPL-001-R1) — an atomic compare-and-set, not
+  // just the top-of-function idempotent short-circuit above: without this,
+  // two genuinely concurrent callers racing the same not-yet-redacted row
+  // would BOTH match a WHERE clause that only constrains id/clinicId/
+  // legalHold, both get a nonzero `updateMany` count, and both incorrectly
+  // report `changed: true`. With it, exactly one writer's UPDATE can match
+  // a row still holding the pre-redaction value; Postgres serializes the
+  // second writer's UPDATE behind the first's row lock, and by the time it
+  // re-evaluates its own WHERE clause the row already reads as redacted, so
+  // it correctly falls into the zero-row branch below.
   const result = await prisma.imagingImage.updateMany({
-    where: { id: imageId, clinicId, study: { clinicId, legalHold: false } },
+    where: {
+      id: imageId,
+      clinicId,
+      study: { clinicId, legalHold: false },
+      originalName: { not: REDACTED_PLACEHOLDER },
+    },
     data: { originalName: REDACTED_PLACEHOLDER },
   });
   if (result.count === 0) {
@@ -284,7 +311,7 @@ export async function redactForAnonymization(
     // for an imageId already proven to belong to this clinicId.
     const recheck = await findOwnedImage(clinicId, imageId);
     if (!recheck) throw new ImagingNotFoundError();
-    if (recheck.originalName === REDACTED_PLACEHOLDER) return; // completed by a concurrent writer; same end-state
+    if (recheck.originalName === REDACTED_PLACEHOLDER) return { changed: false }; // completed by a concurrent writer; same end-state
     // Row exists, belongs to this tenant, and is not yet redacted — the
     // only predicate field capable of independently flipping between our
     // read and our write is study.legalHold (id/clinicId/study.clinicId are
@@ -292,6 +319,7 @@ export async function redactForAnonymization(
     // explained by a legal hold that was in effect at mutation time.
     throw new ImagingLegalHoldViolationError();
   }
+  return { changed: true };
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────
