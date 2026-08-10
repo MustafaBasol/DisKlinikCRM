@@ -186,7 +186,7 @@ Configuration rollback (if the `DATABASE_URL` fail-hard needs to be bypassed in 
 
 - **Agent completed?** Yes — the five selected gaps are implemented, tested, and documented.
 - **Tests passed?** Yes, directly observed by this task (typecheck, all 4 new test files, full `server:test:non-disposable`, full `server:test:disposable-db` via the disposable-Postgres orchestrator) — not an externally-confirmed `TESTS_PASSED` state per `NORAMEDI_MASTER_TRACKER.md` §2.3's stricter definition, but the exact commands/counts above are reproducible by anyone.
-- **PR opened?** Yes, once opened (see PR link in `CURRENT_PHASE.md`/tracker once available) — this document is written to be accurate at that point.
+- **PR opened?** Yes — [PR #355](https://github.com/MustafaBasol/DisKlinikCRM/pull/355).
 - **PR CI passed?** Not yet known at authoring time — to be confirmed once CI runs on the opened PR.
 - **Merged?** No.
 - **Deployed?** No.
