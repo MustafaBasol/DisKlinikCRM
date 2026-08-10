@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { getRequiredDatabaseUrl } from './utils/databaseUrl.js';
 
 // Havuz boyutu ortamdan ayarlanabilir; pg varsayılanı 10 bağlantıdır ve
 // eşzamanlı yük altında (çok klinik online) havuz tükenmesine yol açar.
@@ -13,7 +14,7 @@ const parsePositiveInt = (value: string | undefined, fallback: number): number =
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
-    connectionString: process.env.DATABASE_URL!,
+    connectionString: getRequiredDatabaseUrl(),
     max: parsePositiveInt(process.env.DB_POOL_MAX, 10),
     connectionTimeoutMillis: parsePositiveInt(process.env.DB_POOL_CONNECT_TIMEOUT_MS, 10_000),
     idleTimeoutMillis: parsePositiveInt(process.env.DB_POOL_IDLE_TIMEOUT_MS, 30_000),

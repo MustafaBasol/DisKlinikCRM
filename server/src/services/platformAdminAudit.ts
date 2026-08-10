@@ -22,6 +22,7 @@
  */
 
 import { Prisma } from '@prisma/client';
+import prisma from '../db.js';
 
 export interface PlatformAdminAuditEventInput {
   actorPlatformAdminId: string | null;
@@ -51,4 +52,19 @@ export async function writePlatformAdminAuditEventInTx(
       safeMetadata: input.safeMetadata != null ? (input.safeMetadata as Prisma.InputJsonValue) : undefined,
     },
   });
+}
+
+/**
+ * Standalone convenience wrapper for call sites with no surrounding
+ * transaction of their own (e.g. an operational trigger like a manual backup
+ * run, which isn't itself a DB row mutation). Wraps the insert in its own
+ * single-statement transaction purely for signature symmetry with
+ * writePlatformAdminAuditEventInTx — there is nothing else to roll back
+ * alongside one insert. Prefer writePlatformAdminAuditEventInTx directly
+ * when the audit write must be atomic with an existing mutation.
+ */
+export async function writePlatformAdminAuditEvent(
+  input: PlatformAdminAuditEventInput,
+): Promise<void> {
+  await prisma.$transaction((tx) => writePlatformAdminAuditEventInTx(tx, input));
 }

@@ -75,6 +75,8 @@ import { isEncryptionKeyConfigured } from './utils/encryption.js';
 import { getSessionCookieDeploymentWarnings } from './utils/sessionCookies.js';
 import { getBearerFallbackWarnings } from './utils/authFallback.js';
 import { httpLogger, logUnhandledError } from './utils/logger.js';
+import { attachRequestIdHeader } from './middleware/requestId.js';
+import { resolveApiBackgroundJobsOwnership } from './utils/backgroundJobsOwnership.js';
 
 dotenv.config();
 
@@ -153,6 +155,7 @@ app.use((_req, res, next) => {
   }
   next();
 });
+app.use(attachRequestIdHeader);
 app.use(cors(corsOptions));
 // Büyük JSON listeleri (randevu/hasta) gzip ile ~5-10x küçülür; nginx gzip
 // yapılandırılmışsa çift sıkıştırma olmaz (Content-Encoding varsa atlanır).
@@ -282,10 +285,15 @@ const server = app.listen(port, host, () => {
   // API replikalarında RUN_BACKGROUND_JOBS=false verilir, job'ları yalnızca
   // `npm run start:worker` süreci koşturur. Bayrak ayarlanmazsa tek süreçli
   // kurulumdaki mevcut davranış korunur.
-  if (process.env.RUN_BACKGROUND_JOBS !== 'false') {
+  //
+  // The decision itself is always logged (not just the opt-out branch) so an
+  // operator can grep production startup logs and positively confirm which
+  // mode this process is in — see utils/backgroundJobsOwnership.ts for why
+  // the underlying default is intentionally unchanged.
+  const jobsOwnership = resolveApiBackgroundJobsOwnership();
+  console.log(`[jobs] API background-jobs ownership: ownsJobs=${jobsOwnership.ownsJobs} (${jobsOwnership.reason})`);
+  if (jobsOwnership.ownsJobs) {
     startBackgroundJobs();
-  } else {
-    console.log('[jobs] RUN_BACKGROUND_JOBS=false — background jobs delegated to the worker process.');
   }
 });
 

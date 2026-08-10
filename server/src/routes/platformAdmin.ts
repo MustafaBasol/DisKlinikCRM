@@ -36,7 +36,7 @@ import {
 import { resolveSmsRouting, SMS_ROUTING_POLICIES } from '../services/sms/smsRoutingPolicy.js';
 import { getSmsEntitlement } from '../services/sms/smsEntitlement.js';
 import { evaluateAuthLoginFailureSignal } from '../services/security/securityDetectionRules.js';
-import { writePlatformAdminAuditEventInTx } from '../services/platformAdminAudit.js';
+import { writePlatformAdminAuditEventInTx, writePlatformAdminAuditEvent } from '../services/platformAdminAudit.js';
 
 const router = express.Router();
 
@@ -1144,7 +1144,7 @@ router.patch('/privacy/legacy-consent-correction/settings', async (req: Platform
 
   // console.log retained for local/ops tailing convenience — the durable
   // record above is the actual audit evidence, not this line.
-  console.log(`[platform-privacy] Legacy consent correction runtime toggle set to ${runtimeEnabled} by admin ${req.platformAdmin?.email}`);
+  console.log(`[platform-privacy] Legacy consent correction runtime toggle set to ${runtimeEnabled} by admin ${req.platformAdmin?.id}`);
   res.json({ runtimeEnabled });
 });
 
@@ -1189,7 +1189,7 @@ router.delete('/privacy/legacy-consent-correction/settings', async (req: Platfor
   });
 
   console.log(
-    `[platform-privacy] Legacy consent correction runtime setting reset to default/absent by admin ${req.platformAdmin?.email}`,
+    `[platform-privacy] Legacy consent correction runtime setting reset to default/absent by admin ${req.platformAdmin?.id}`,
   );
 
   res.json({
@@ -1580,16 +1580,43 @@ router.get('/backups/logs', async (req, res: Response) => {
 });
 
 // POST /api/platform/backups/run
+//
+// R-019: this operational trigger had zero durable audit evidence before —
+// only a console.log line that also leaked the admin's email. A durable
+// PlatformAdminAuditEvent row is now written for both outcomes (best-effort:
+// a failed audit write is logged but never blocks the response, since a
+// backup run is non-destructive and the underlying operation already
+// succeeded/failed on its own merits by the time the audit write runs).
 router.post('/backups/run', async (req: PlatformAdminRequest, res: Response) => {
+  const actorPlatformAdminId = req.platformAdmin?.id ?? null;
   try {
     const { runBackup, isBackupRunning } = await import('../services/backupService.js');
     if (isBackupRunning()) {
       return res.status(409).json({ error: 'A backup is already running' });
     }
-    console.log(`[platform-backup] Manual backup triggered by admin ${req.platformAdmin?.email}`);
+    console.log(`[platform-backup] Manual backup triggered by admin ${actorPlatformAdminId}`);
     const result = await runBackup();
+    await writePlatformAdminAuditEvent({
+      actorPlatformAdminId,
+      action: 'backup.manual_run.completed',
+      resourceType: 'backup',
+      resourceKey: 'database',
+      outcome: 'success',
+    }).catch((auditErr) => {
+      console.error('[platform-backup] Failed to write audit event for completed manual backup run', auditErr);
+    });
     res.json(result);
   } catch (err: any) {
+    await writePlatformAdminAuditEvent({
+      actorPlatformAdminId,
+      action: 'backup.manual_run.failed',
+      resourceType: 'backup',
+      resourceKey: 'database',
+      outcome: 'error',
+      safeMetadata: { errorType: err?.name ?? 'Error' },
+    }).catch((auditErr) => {
+      console.error('[platform-backup] Failed to write audit event for failed manual backup run', auditErr);
+    });
     res.status(500).json({ error: `Backup run failed: ${err?.message ?? 'Unknown error'}` });
   }
 });
@@ -1600,16 +1627,37 @@ router.post('/backups/restore-test', async (req: PlatformAdminRequest, res: Resp
   if (filename !== undefined && typeof filename !== 'string') {
     return res.status(400).json({ error: 'filename must be a string' });
   }
+  const actorPlatformAdminId = req.platformAdmin?.id ?? null;
   try {
     const { runRestoreTest, isRestoreTestRunning } = await import('../services/backupService.js');
     if (isRestoreTestRunning()) {
       return res.status(409).json({ error: 'A restore test is already running' });
     }
-    console.log(`[platform-backup] Restore test triggered by admin ${req.platformAdmin?.email}, file: ${filename ?? 'latest'}`);
+    console.log(`[platform-backup] Restore test triggered by admin ${actorPlatformAdminId}, file: ${filename ?? 'latest'}`);
     const result = await runRestoreTest(filename);
+    await writePlatformAdminAuditEvent({
+      actorPlatformAdminId,
+      action: 'backup.restore_test.completed',
+      resourceType: 'backup',
+      resourceKey: 'restore_test',
+      outcome: 'success',
+      safeMetadata: { filename: filename ?? 'latest' },
+    }).catch((auditErr) => {
+      console.error('[platform-backup] Failed to write audit event for completed restore test', auditErr);
+    });
     res.json(result);
   } catch (err: any) {
     const status = err?.message?.includes('Invalid') || err?.message?.includes('not found') ? 400 : 500;
+    await writePlatformAdminAuditEvent({
+      actorPlatformAdminId,
+      action: 'backup.restore_test.failed',
+      resourceType: 'backup',
+      resourceKey: 'restore_test',
+      outcome: 'error',
+      safeMetadata: { filename: filename ?? 'latest', errorType: err?.name ?? 'Error' },
+    }).catch((auditErr) => {
+      console.error('[platform-backup] Failed to write audit event for failed restore test', auditErr);
+    });
     res.status(status).json({ error: err?.message ?? 'Restore test failed' });
   }
 });
@@ -1637,7 +1685,7 @@ router.post('/file-backups/run', async (req: PlatformAdminRequest, res: Response
     if (isFileBackupRunning()) {
       return res.status(409).json({ error: 'A file backup run is already in progress' });
     }
-    console.log(`[platform-file-backup] Manual backup run triggered by admin ${req.platformAdmin?.email}`);
+    console.log(`[platform-file-backup] Manual backup run triggered by admin ${req.platformAdmin?.id}`);
     const result = await runFileBackup({ trigger: 'manual' });
     res.json(result);
   } catch (err: any) {
@@ -1657,7 +1705,7 @@ router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest,
     if (isFileBackupRestoreRehearsalRunning()) {
       return res.status(409).json({ error: 'A restore rehearsal is already running' });
     }
-    console.log(`[platform-file-backup] Restore rehearsal triggered by admin ${req.platformAdmin?.email}`);
+    console.log(`[platform-file-backup] Restore rehearsal triggered by admin ${req.platformAdmin?.id}`);
     const result = await runFileBackupRestoreRehearsal(sampleSize);
     res.json(result);
   } catch (err: any) {
@@ -1696,7 +1744,7 @@ router.post(
         });
       }
 
-      console.log(`[platform-mail-test] Test email sent to ${recipient} by admin ${req.platformAdmin?.email}`);
+      console.log(`[platform-mail-test] Test email sent by admin ${req.platformAdmin?.id}`);
 
       return res.json({
         success: true,
