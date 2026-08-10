@@ -40,6 +40,7 @@ import prisma from '../db.js';
 import { openFileStream } from './fileStorage.js';
 import { safeErrorFields } from '../utils/safeError.js';
 import { withJobLock } from '../utils/jobLock.js';
+import { listImagesForBackup } from './imaging/ops.js';
 import {
   isFileBackupDestinationConfigured,
   getFileBackupDestinationKind,
@@ -85,12 +86,6 @@ export const FILE_BACKUP_JOB_LOCK_TTL_MS = 60 * 60 * 1000; // 1 hour
 type SourceModelName = 'PatientAttachment' | 'LabOrderAttachment' | 'ImagingImage';
 type SourceDomain = 'attachments' | 'lab-attachments' | 'imaging';
 
-const SOURCE_MODELS: Array<{ name: SourceModelName; prismaKey: 'patientAttachment' | 'labOrderAttachment' | 'imagingImage'; domain: SourceDomain }> = [
-  { name: 'PatientAttachment', prismaKey: 'patientAttachment', domain: 'attachments' },
-  { name: 'LabOrderAttachment', prismaKey: 'labOrderAttachment', domain: 'lab-attachments' },
-  { name: 'ImagingImage', prismaKey: 'imagingImage', domain: 'imaging' },
-];
-
 interface SourceRow {
   id: string;
   clinicId: string;
@@ -98,8 +93,15 @@ interface SourceRow {
   fileSize: number;
 }
 
-/** Paginated, read-only enumeration of one source model's rows. Never mutates anything. */
-async function* iterateSourceRows(prismaKey: (typeof SOURCE_MODELS)[number]['prismaKey'], batchSize: number): AsyncGenerator<SourceRow> {
+/**
+ * Paginated, read-only enumeration of one PatientAttachment/LabOrderAttachment
+ * row set. Never mutates anything. Not used for ImagingImage — see
+ * iterateImagingRowsForBackup below, which reads Imaging rows through
+ * imaging/ops.ts's narrow, Imaging-owned platform contract instead of a
+ * direct Prisma model access (F2-STAGE3-GAPD-001; F2-STAGE3-EXIT-DECIDE-001
+ * accepted architecture decision).
+ */
+async function* iterateGenericSourceRows(prismaKey: 'patientAttachment' | 'labOrderAttachment', batchSize: number): AsyncGenerator<SourceRow> {
   let cursor: string | undefined;
   for (;;) {
     const rows: SourceRow[] = await (prisma as any)[prismaKey].findMany({
@@ -114,6 +116,33 @@ async function* iterateSourceRows(prismaKey: (typeof SOURCE_MODELS)[number]['pri
     if (rows.length < batchSize) return;
   }
 }
+
+/**
+ * Same enumeration contract as iterateGenericSourceRows (paginated,
+ * read-only, stable id-ascending order, identical termination rule), but
+ * sourced from imaging/ops.ts's listImagesForBackup instead of a direct,
+ * generic Prisma bracket-access to the Imaging model. This is the platform
+ * backup sweep's intentionally global (cross-tenant, no clinicId)
+ * enumeration — see ops.ts's header for why that scope is correct here.
+ */
+async function* iterateImagingRowsForBackup(batchSize: number): AsyncGenerator<SourceRow> {
+  let cursor: string | undefined;
+  for (;;) {
+    const { rows, nextCursor } = await listImagesForBackup({ cursor, limit: batchSize });
+    if (rows.length === 0) return;
+    for (const row of rows) {
+      yield { id: row.id, clinicId: row.clinicId, filePath: row.storageKeyOrFilePath, fileSize: row.fileSize };
+    }
+    if (!nextCursor) return;
+    cursor = nextCursor;
+  }
+}
+
+const SOURCE_MODELS: Array<{ name: SourceModelName; domain: SourceDomain; rows: (batchSize: number) => AsyncGenerator<SourceRow> }> = [
+  { name: 'PatientAttachment', domain: 'attachments', rows: (batchSize) => iterateGenericSourceRows('patientAttachment', batchSize) },
+  { name: 'LabOrderAttachment', domain: 'lab-attachments', rows: (batchSize) => iterateGenericSourceRows('labOrderAttachment', batchSize) },
+  { name: 'ImagingImage', domain: 'imaging', rows: iterateImagingRowsForBackup },
+];
 
 async function hashReadable(stream: Readable): Promise<{ sha256: string; bytes: number }> {
   const hash = crypto.createHash('sha256');
@@ -197,7 +226,7 @@ async function runFileBackupLocked(options: { trigger?: 'scheduled' | 'manual' }
 
   try {
     for (const cfg of SOURCE_MODELS) {
-      for await (const row of iterateSourceRows(cfg.prismaKey, getBatchSize())) {
+      for await (const row of cfg.rows(getBatchSize())) {
         filesScanned++;
         try {
           // Immutable-by-design source data (no update endpoint exists for

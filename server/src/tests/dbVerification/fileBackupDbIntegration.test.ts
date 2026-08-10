@@ -89,18 +89,28 @@ async function main() {
   const imagingStudy = await prisma.imagingStudy.create({
     data: { clinicId: fixtures.defaultClinicId, patientId: patientA.id, modality: 'PX' },
   });
+  // F2-STAGE3-GAPD-001: a second ImagingImage/ImagingStudy pair in clinic B
+  // (a different org entirely) — proves the Imaging read-port migration's
+  // global, cross-tenant enumeration still reaches every clinic, not just
+  // the "default" one, with no clinicId filter silently narrowing coverage.
+  const imagingStudyB = await prisma.imagingStudy.create({
+    data: { clinicId: fixtures.crossOrgClinicId, patientId: patientB.id, modality: 'PX' },
+  });
 
   // ── Seed one attachment per model in clinic A, plus one PatientAttachment
-  // in clinic B (different org entirely) to test tenant isolation.
+  // and one ImagingImage in clinic B (different org entirely) to test tenant
+  // isolation and cross-clinic Imaging read-port coverage.
   const contentA1 = Buffer.from(`attachment-A1-${randomUUID()}`);
   const contentA2 = Buffer.from(`lab-attachment-A1-${randomUUID()}`);
   const contentA3 = Buffer.from(`imaging-A1-${randomUUID()}`);
   const contentB1 = Buffer.from(`attachment-B1-${randomUUID()}`);
+  const contentB2 = Buffer.from(`imaging-B1-${randomUUID()}`);
 
   const keyA1 = await writePrimaryFile(fixtures.defaultClinicId, contentA1);
   const keyA2 = await writePrimaryFile(fixtures.defaultClinicId, contentA2);
   const keyA3 = await writePrimaryFile(fixtures.defaultClinicId, contentA3);
   const keyB1 = await writePrimaryFile(fixtures.crossOrgClinicId, contentB1);
+  const keyB2 = await writePrimaryFile(fixtures.crossOrgClinicId, contentB2);
 
   const patientAttachmentA1 = await prisma.patientAttachment.create({
     data: {
@@ -149,6 +159,17 @@ async function main() {
       uploadedById: staffB.id,
     },
   });
+  const imagingImageB1 = await prisma.imagingImage.create({
+    data: {
+      clinicId: fixtures.crossOrgClinicId,
+      studyId: imagingStudyB.id,
+      fileName: 'i2.bin',
+      originalName: 'i2.bin',
+      fileSize: contentB2.length,
+      mimeType: 'application/octet-stream',
+      filePath: keyB2,
+    },
+  });
 
   const { runFileBackup, restoreFileToPath, runFileBackupRestoreRehearsal, isFileBackupRunning } = await import('../../services/fileBackupService.js');
   const dest = await import('../../services/fileBackupDestination.js');
@@ -161,12 +182,35 @@ async function main() {
   delete process.env.FILE_BACKUP_S3_BUCKET;
 
   let firstRun: Awaited<ReturnType<typeof runFileBackup>>;
-  await test('first run backs up and verifies all 4 seeded files (2 clinics)', async () => {
+  await test('first run backs up and verifies all 5 seeded files (2 clinics, including Imaging in both)', async () => {
     firstRun = await runFileBackup({ trigger: 'manual' });
     assertEqual(firstRun.status, 'completed', 'run status');
-    assert(firstRun.filesCopied >= 4, `expected >=4 files copied, got ${firstRun.filesCopied}`);
-    assert(firstRun.filesVerified >= 4, `expected >=4 files verified, got ${firstRun.filesVerified}`);
+    assert(firstRun.filesCopied >= 5, `expected >=5 files copied, got ${firstRun.filesCopied}`);
+    assert(firstRun.filesVerified >= 5, `expected >=5 files verified, got ${firstRun.filesVerified}`);
     assertEqual(firstRun.filesFailed, 0, 'no failures expected');
+  });
+
+  await test('Imaging read-port migration parity: destination key is tenant-scoped and domain-scoped, no cross-clinic overlap, both clinics reached by the global ops-port enumeration', async () => {
+    const entryImgA = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: imagingImageA1.id } });
+    const entryImgB = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: imagingImageB1.id } });
+    assertEqual(entryImgA.destinationKey, `file-backups/imaging/${fixtures.defaultClinicId}/${imagingImageA1.id}.bin`, 'imaging A1 key shape unchanged after ops-port migration');
+    assertEqual(entryImgB.destinationKey, `file-backups/imaging/${fixtures.crossOrgClinicId}/${imagingImageB1.id}.bin`, 'imaging B1 key shape unchanged after ops-port migration');
+    assert(entryImgA.destinationKey !== entryImgB.destinationKey, 'imaging keys must not collide across clinics');
+    assertEqual(entryImgA.clinicId, fixtures.defaultClinicId, 'imaging entry A clinicId matches its own clinic');
+    assertEqual(entryImgB.clinicId, fixtures.crossOrgClinicId, 'imaging entry B clinicId matches its own clinic — proves the global (no-clinicId-filter) ops-port enumeration did not omit or mis-attribute a non-default clinic');
+    assertEqual(entryImgA.sourceSizeBytes, contentA3.length, 'imaging A1 fileSize accounting via the ops-port DTO matches real source byte count exactly');
+    assertEqual(entryImgB.sourceSizeBytes, contentB2.length, 'imaging B1 fileSize accounting via the ops-port DTO matches real source byte count exactly');
+  });
+
+  await test('Imaging read-port migration parity: ImagingImage record restores from backup and checksum matches (restore path unaffected by the enumeration-side migration)', async () => {
+    const restoreDir = await fs.mkdtemp(path.join(os.tmpdir(), 'file-backup-review-restore-img-'));
+    try {
+      const result = await restoreFileToPath({ sourceModel: 'ImagingImage', sourceRecordId: imagingImageA1.id, outputDir: restoreDir });
+      assertEqual(result.success, true, 'restore succeeds for an ImagingImage record after the ops-port migration');
+      assertEqual(result.checksumMatch, true, 'checksum matches original imaging content');
+    } finally {
+      await fs.rm(restoreDir, { recursive: true, force: true });
+    }
   });
 
   await test('destination keys are tenant-scoped: clinicId is a distinct path segment, no cross-clinic path overlap', async () => {
@@ -194,7 +238,7 @@ async function main() {
     const countBefore = await prisma.fileBackupEntry.count({ where: { sourceRecordId: patientAttachmentA1.id, status: 'verified' } });
     const secondRun = await runFileBackup({ trigger: 'manual' });
     assertEqual(secondRun.filesCopied, 0, 'second run should copy nothing new');
-    assert(secondRun.filesSkipped >= 4, `expected >=4 skipped, got ${secondRun.filesSkipped}`);
+    assert(secondRun.filesSkipped >= 5, `expected >=5 skipped, got ${secondRun.filesSkipped}`);
     const countAfter = await prisma.fileBackupEntry.count({ where: { sourceRecordId: patientAttachmentA1.id, status: 'verified' } });
     assertEqual(countAfter, countBefore, 'no duplicate verified entry created on idempotent re-run');
   });
@@ -235,6 +279,24 @@ async function main() {
     await runFileBackup({ trigger: 'manual' });
     const entry = await prisma.fileBackupEntry.findFirst({ where: { sourceRecordId: orphanRow.id } });
     assert(entry, 'entry recorded for missing source');
+    assertEqual(entry!.status, 'missing_source', 'status is missing_source');
+  });
+
+  await test('Imaging read-port migration parity: missing source file (read via the ops-port) is recorded as missing_source, not silently dropped', async () => {
+    const orphanImagingRow = await prisma.imagingImage.create({
+      data: {
+        clinicId: fixtures.defaultClinicId,
+        studyId: imagingStudy.id,
+        fileName: 'missing-img.bin',
+        originalName: 'missing-img.bin',
+        fileSize: 10,
+        mimeType: 'application/octet-stream',
+        filePath: `${fixtures.defaultClinicId}/does-not-exist-${randomUUID()}.bin`,
+      },
+    });
+    await runFileBackup({ trigger: 'manual' });
+    const entry = await prisma.fileBackupEntry.findFirst({ where: { sourceRecordId: orphanImagingRow.id } });
+    assert(entry, 'entry recorded for missing imaging source');
     assertEqual(entry!.status, 'missing_source', 'status is missing_source');
   });
 
@@ -452,8 +514,8 @@ async function main() {
   await prisma.fileBackupRun.deleteMany({}).catch(() => {});
   await prisma.patientAttachment.deleteMany({ where: { clinicId: { in: [fixtures.defaultClinicId, fixtures.crossOrgClinicId] } } }).catch(() => {});
   await prisma.labOrderAttachment.deleteMany({ where: { clinicId: fixtures.defaultClinicId } }).catch(() => {});
-  await prisma.imagingImage.deleteMany({ where: { clinicId: fixtures.defaultClinicId } }).catch(() => {});
-  await prisma.imagingStudy.deleteMany({ where: { id: imagingStudy.id } }).catch(() => {});
+  await prisma.imagingImage.deleteMany({ where: { clinicId: { in: [fixtures.defaultClinicId, fixtures.crossOrgClinicId] } } }).catch(() => {});
+  await prisma.imagingStudy.deleteMany({ where: { id: { in: [imagingStudy.id, imagingStudyB.id] } } }).catch(() => {});
   await prisma.labWorkOrder.deleteMany({ where: { id: labWorkOrder.id } }).catch(() => {});
   await prisma.laboratory.deleteMany({ where: { id: laboratory.id } }).catch(() => {});
   for (const dir of createdUploadDirs) await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
