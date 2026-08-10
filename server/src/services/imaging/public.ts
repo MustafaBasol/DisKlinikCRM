@@ -6,12 +6,16 @@
  * docs/program/architecture/F2-PREP-009_IMAGING_LIFECYCLE_PORT_TENANT_CONTEXT_CONTRACT_AMENDMENT.md,
  * amending F2-PREP-006-E §9 / F2-PREP-008 §9.4).
  *
- * Zero callers at merge time (docs/program/evidence/F2-IMPL-001-A_*): the
- * three existing Privacy/KVKK direct-Prisma callers
- * (deletionReviewInventory.ts, orphanFileInspection.ts,
- * patientAnonymization.ts) keep their current direct access unchanged.
- * Migrating them onto this facade is Stage 3 caller-migration work, not
- * performed here.
+ * Zero callers of the four-method slice at the F2-IMPL-001-A merge point
+ * (docs/program/evidence/F2-IMPL-001-A_*). The three Privacy/KVKK direct-
+ * Prisma callers that motivated this facade — patientAnonymization.ts,
+ * orphanFileInspection.ts, deletionReviewInventory.ts — were migrated onto
+ * it in later, separate Stage 3 caller-migration tasks (F2-STAGE3-IMPL-001,
+ * F2-GAPA-001, F2-GAPB-001 respectively; see each file's own imports of this
+ * module). The additive `getBridgeStudyIdsForPatient` query below
+ * (F2-STAGE3-GAPC-001) adds a fourth caller, migrating
+ * patientActivityHistoryExport.ts's former direct `prisma.imagingStudy.findMany`
+ * dependency off of the Imaging domain.
  *
  * Excluded by design (explicitly not authorized for this slice): any command
  * touching `LinkImagingStudy` (CT-23 surface) or
@@ -453,4 +457,36 @@ export async function checkImageStorageExists(clinicId: string, imageId: string)
   } catch {
     throw new ImagingStorageUnavailableError();
   }
+}
+
+/**
+ * getBridgeStudyIdsForPatient — F2-STAGE3-GAPC-001.
+ *
+ * Additive Imaging-owned query, separate from the F2-PREP-009 four-method
+ * `ImagingLifecyclePort` slice above. Exists solely to let
+ * patientActivityHistoryExport.ts (F2-IMG-AUDIT-003) resolve which
+ * `ImagingStudy` rows were bridge-ingested for a patient without holding its
+ * own direct Prisma dependency on the Imaging domain's `ImagingStudy` model.
+ *
+ * Returns ONLY study ids — never a raw `ImagingStudy` record, never
+ * metadata, storage paths, modality, or timestamps. The caller only ever
+ * needs the id list to join against `AuditLog.entityId`.
+ *
+ * Tenant predicate is `{ clinicId, patientId, source: 'bridge' }` together —
+ * never id-only, never patient-only. `clinicId` must already be
+ * authorization-validated by the caller (F2-PREP-009 §3); this facade
+ * applies it as a trusted predicate, it does not re-run authorization. A
+ * cross-tenant/wrong-clinic/wrong-patient/manual-upload combination all
+ * resolve to an empty array — never an error, never a partial/leaked result.
+ */
+export async function getBridgeStudyIdsForPatient(
+  clinicId: string,
+  patientId: string,
+): Promise<string[]> {
+  const studies = await prisma.imagingStudy.findMany({
+    where: { clinicId, patientId, source: 'bridge' },
+    select: { id: true },
+    orderBy: { id: 'asc' },
+  });
+  return studies.map((study) => study.id);
 }
