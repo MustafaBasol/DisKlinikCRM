@@ -20,7 +20,10 @@ import { closeRedis } from './utils/redis.js';
 
 dotenv.config();
 
-console.log('[worker] Background job worker starting...');
+console.log(
+  '[worker] Background job worker starting... ownsJobs=true (worker process always owns jobs; ' +
+    'RUN_BACKGROUND_JOBS does not apply here, only to the API process — see utils/backgroundJobsOwnership.ts)',
+);
 startBackgroundJobs();
 console.log('[worker] All background jobs scheduled.');
 
