@@ -1297,7 +1297,8 @@ await test('PATCH settings: admin-attributed console log is emitted on toggle (e
   } finally {
     console.log = originalLog;
   }
-  assert.ok(logSpy.some((line) => line.includes('admin@platform.test') && line.includes('true')), 'toggle must be logged with the acting admin identity and the new value');
+  assert.ok(logSpy.some((line) => line.includes('admin-1') && line.includes('true')), 'toggle must be logged with the acting admin id and the new value (PII-minimized: id, not email)');
+  assert.ok(!logSpy.some((line) => line.includes('admin@platform.test')), 'admin email must never appear in the console log (PII minimization)');
 
   // Restore to the real production default (absent) so this file leaves no
   // global PlatformSetting/PlatformAdminAuditEvent state behind for whatever

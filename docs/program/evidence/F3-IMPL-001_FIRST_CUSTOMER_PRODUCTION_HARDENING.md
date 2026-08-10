@@ -187,7 +187,7 @@ Configuration rollback (if the `DATABASE_URL` fail-hard needs to be bypassed in 
 - **Agent completed?** Yes — the five selected gaps are implemented, tested, and documented.
 - **Tests passed?** Yes, directly observed by this task (typecheck, all 4 new test files, full `server:test:non-disposable`, full `server:test:disposable-db` via the disposable-Postgres orchestrator) — not an externally-confirmed `TESTS_PASSED` state per `NORAMEDI_MASTER_TRACKER.md` §2.3's stricter definition, but the exact commands/counts above are reproducible by anyone.
 - **PR opened?** Yes — [PR #355](https://github.com/MustafaBasol/DisKlinikCRM/pull/355).
-- **PR CI passed?** Not yet known at authoring time — to be confirmed once CI runs on the opened PR.
+- **PR CI passed?** Not yet known at authoring time — to be confirmed once CI runs on the opened PR. **R1 update:** exact-head CI run `31394080617` did run and reported one deterministic Layer 5 failure (a test/R0-behavior mismatch, not a flake); see §25 for the fix and its validation. Post-R1-fix CI has not yet been independently re-confirmed by this task.
 - **Merged?** No.
 - **Deployed?** No.
 - **Production verified?** No.
@@ -226,3 +226,24 @@ Program-owner review/merge decision for this PR. Two concrete, independently-sco
 ## 24. What the program owner should do next
 
 Review and, if acceptable, merge this PR. Separately, and only when convenient, have someone with production access check the new `[jobs] API background-jobs ownership: ...` log line on the running production `noramedi-api` process to finally resolve the `LAUNCH_GATES.md`-flagged "unverified" status of `RUN_BACKGROUND_JOBS` in production — this task could not do so itself (no production access used, per instructions).
+
+## 25. R1 — PR #355 exact-head CI reconciliation (F3-IMPL-001-R1)
+
+**Trigger:** PR #355's exact-head CI run ([31394080617](https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/31394080617)) reported a deterministic failure in `ci-layers / Layer 5: full-suite/compatibility fail-safe` (backend, legacy `server:test` DB-required members), inside `server/src/tests/platformAdmin.test.ts`, test `"PATCH settings: admin-attributed console log is emitted on toggle (existing platform-admin observability convention), leaving the DB row as the final restored state"` — observed 59 passed / 1 failed.
+
+**Root cause (confirmed, not merely suspected):** the original R0 diff of this task (item H, §1/§2/§4/§5 above) intentionally removed the platform-admin's email from `routes/platformAdmin.ts`'s `console.log` call sites and replaced it with the admin id, for PII minimization (R-018). The pre-existing test at the time asserted the *old* logging contract (`logSpy.some(line => line.includes('admin@platform.test') && ...)`), so it necessarily failed once the production code it exercises stopped logging the email — a real test/behavior mismatch introduced by this task's own R0 change, not a flake and not new CI infrastructure drift.
+
+**Fix (test-only, zero production-code change):** `server/src/tests/platformAdmin.test.ts`'s final test now asserts the current, R0-accepted PII-minimized contract:
+- Positive: the log line contains the acting admin's non-PII identifier (`admin-1`, the mock's `platformAdmin.id`) and the new toggle value (`true`) — proves the privileged toggle is still logged and still attributable.
+- Negative (new): the log line never contains `admin@platform.test` (the mock's `platformAdmin.email`) — proves the email genuinely never re-enters the log, not just that the old positive assertion was silently dropped.
+
+`server/src/routes/platformAdmin.ts` was inspected (line 1147) and confirmed unchanged since R0: `console.log(...by admin ${req.platformAdmin?.id})` — id only, no email. No production code was modified by R1; this is a test-correctness fix reconciling the test with R0's already-accepted security decision.
+
+**Validation:**
+- `cd server && npm run typecheck` — exit `0`, zero errors.
+- Focused suite (`npm run test:auth`, the exact `sessionCookieCsrf.test.ts` + `platformAdmin.test.ts` pair containing the failing test) — verified as part of the full postgres-compat run below: `platformAdmin.test.ts` section now reports **`Toplam: 60  ✓ 60  ✗ 0`** (previously 59/60), with the target test passing and the runtime log line reading `[platform-privacy] Legacy consent correction runtime toggle set to true by admin admin-1` — id only, no email, for every toggle in the file.
+- `npm run test:runtime:postgres-compat -- --summary-file=postgres-compat-run-summary.json` (repo root) — disposable-PostgreSQL orchestrator running `server:test:legacy-db-required` (the same aggregate CI Layer 5 runs): migration `{ code: 0, step: "ok" }`, test `{ scriptName: "server:test:legacy-db-required", code: 0 }`, cleanup `{ success: true, errors: [] }`, outcome `{ exitCode: 0 }`. Full summary JSON on record in `postgres-compat-run-summary.json`.
+
+**Security/tenant/KVKK impact:** none — the accepted F3 security decision (admin email must not return to console logs; admin id is allowed; no secret/PII expansion) is unchanged and independently re-verified by this R1's new negative assertion. No tenant-scope, authorization, or query-path code was touched. No new migration; no schema change. Rollback is identical to R0 (`git revert`, additive/localized, no data migration) since R1 changes only test assertions.
+
+**Status:** `AGENT_COMPLETED` / `TESTS_PASSED` (typecheck clean; focused `test:auth` pair green as part of the full `postgres-compat` run, 60/60 in `platformAdmin.test.ts`; full `postgres-compat` orchestrator exit `0`) / `PR_UPDATED` (pushed to existing PR #355) / `PR_CI_PENDING` (re-run on the new commit not yet independently confirmed by this task — no `gh`/CI-dashboard access used) / `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`.
