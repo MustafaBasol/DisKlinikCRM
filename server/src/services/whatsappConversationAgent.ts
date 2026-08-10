@@ -309,7 +309,10 @@ export const resolveWhatsAppConversationAgentDecision = async (
       decision: aiDecision ?? fallbackDecision,
     };
   } catch (error) {
-    console.error('[whatsapp-agent] ai-error', error);
+    console.error(
+      '[whatsapp-agent] ai-error',
+      error instanceof Error ? redactSensitiveText(error.message) : 'unknown error',
+    );
     return {
       source: fallbackDecision ? 'rule_fallback' : 'ai_error',
       decision: fallbackDecision,

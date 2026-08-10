@@ -25,6 +25,15 @@ function buildKey(channel: string, connectionId: string, sender: string): string
 }
 
 /**
+ * Mask a sender identifier (phone or external id) for safe logging.
+ * Matches the `***` + last-4-chars convention used elsewhere (see
+ * utils/logRedaction.ts), but operates on the raw string so it works
+ * for both phone numbers and non-numeric external ids.
+ */
+const maskSender = (value: string): string =>
+  value.length <= 4 ? '***' : `***${value.slice(-4)}`;
+
+/**
  * Check whether the given sender is within the allowed rate.
  * Increments the counter for each call.
  *
@@ -42,7 +51,7 @@ export async function checkInboundRateLimit(
     console.warn('[rate-limiter] inbound AI message rate-limited', {
       channel,
       connectionId,
-      sender,
+      sender: maskSender(sender),
       count,
     });
     return false;

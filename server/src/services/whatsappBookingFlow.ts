@@ -417,7 +417,6 @@ export const handleAwaitingServiceStep = async ({
     phone: redactPhone(phone),
     handler: 'awaiting_service-selection',
     extractedServiceNumber,
-    matchedServiceName: selectedService?.name ?? null,
   });
 
   if (!extractedServiceNumber && matchedServices.length > 1) {
@@ -754,7 +753,6 @@ export const handleAwaitingTimeStep = async ({
     phone: redactPhone(phone),
     handler: 'awaiting_time-selection',
     extractedTime: slotMatch.extractedTime,
-    matchedPractitioner: selectedSlot?.practitionerName ?? (slotMatch.matches.length === 1 ? slotMatch.matches[0].slot.practitionerName : null),
     matchedSlotIndex: numericSlotSelection ?? (selectedSlotIndex >= 0 ? selectedSlotIndex + 1 : null),
     matchedAvailableSlotIndex: selectedSlotIndex >= 0 ? selectedSlotIndex + 1 : null,
   });
@@ -812,7 +810,6 @@ export const handleAwaitingTimeStep = async ({
       phone: redactPhone(phone),
       text: summarizeTextForLog(text),
       type: 'exact_time',
-      requestedTime: explicitRequestedTime,
       totalAvailableSlots: availableSlots.length,
       matchedCount: exactMatches.length,
     });
@@ -865,8 +862,6 @@ export const handleAwaitingTimeStep = async ({
       phone: redactPhone(phone),
       text: summarizeTextForLog(text),
       type: 'time_range',
-      requestedStartTime: minutesToTime(rangeStartMinutes),
-      requestedEndTime: minutesToTime(rangeEndMinutes),
       totalAvailableSlots: availableSlots.length,
       matchedCount: filteredSlots.length,
     });
@@ -897,7 +892,6 @@ export const handleAwaitingTimeStep = async ({
       phone: redactPhone(phone),
       text: summarizeTextForLog(text),
       type: 'after_time',
-      requestedTime: minutesToTime(explicitTimeThreshold),
       totalAvailableSlots: availableSlots.length,
       matchedCount: filteredSlots.length,
     });
@@ -928,7 +922,6 @@ export const handleAwaitingTimeStep = async ({
       phone: redactPhone(phone),
       text: summarizeTextForLog(text),
       type: 'preference',
-      requestedTime: preference,
       totalAvailableSlots: availableSlots.length,
       matchedCount: filteredSlots.length,
     });
@@ -1175,7 +1168,6 @@ export const handleAwaitingConfirmationStep = async ({
     date: state.selectedDate,
     time: pendingSlot.localStartTime,
     practitionerId: pendingSlot.practitionerId,
-    practitionerName: pendingSlot.practitionerName,
   });
 
   try {

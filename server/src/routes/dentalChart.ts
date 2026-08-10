@@ -2,6 +2,7 @@ import express, { Response } from 'express';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import prisma from '../db.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -101,7 +102,7 @@ router.put(
 
       res.json(record);
     } catch (err: any) {
-      console.error('[dental-chart] save error:', err?.message ?? err);
+      console.error('[dental-chart] save error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to save tooth record' });
     }
   },

@@ -122,7 +122,7 @@ async function main() {
           where: { id: org.id },
           data: { ownerId: adminUser.id },
         });
-        console.log(`  ✓ Organization owner set to: ${adminUser.email}`);
+        console.log(`  ✓ Organization owner set to: ${adminUser.id}`);
       }
     }
     console.log(`  ✓ Users migrated`);

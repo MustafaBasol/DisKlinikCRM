@@ -24,6 +24,8 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 // These unit tests exercise the middleware via Bearer tokens; the production
 // default is now cookie-only, so enable the fallback explicitly for the suite.
@@ -261,6 +263,40 @@ await test('valid format but not in backup dir → error', async () => {
       `Unexpected error: ${err.message}`,
     );
   }
+});
+
+// ── dropdb failure log privacy (F3-IMPL-004, static source scan) ──────────────
+//
+// runRestoreTest's `finally` block drops the temp DB via
+// `execFile('dropdb', [...pgArgs, tempDbName], { env: connEnv, ... })`. pgArgs
+// is built from DATABASE_URL (-h PGHOST -p PGPORT -U PGUSER). Node's
+// child_process failure message for execFile is
+// "Command failed: dropdb -h <PGHOST> -p <PGPORT> -U <PGUSER> <tempDbName>\n<stderr>",
+// so logging `dropErr?.message` unconditionally leaked the production DB
+// host/port/username on every dropdb failure. This path can't be exercised at
+// runtime here (no live Postgres / dropdb binary in this test environment,
+// and reaching the `finally` block requires `dbCreated === true`, i.e. a real
+// `createdb` success first) — so this is a static source-scan backstop
+// instead, per this repo's documented convention for non-unit-testable paths
+// (see whatsappBookingFlowLogRedaction.test.ts's "Static source scan" section).
+
+section('backupService — dropdb failure log privacy (static source scan)');
+
+const backupServiceSource = readFileSync(
+  fileURLToPath(new URL('../services/backupService.ts', import.meta.url)),
+  'utf8',
+);
+
+await test('dropdb catch block logs only dropErr?.code, never dropErr?.message (which embeds PGHOST/PGPORT/PGUSER)', () => {
+  const literal = "Failed to drop temp DB:";
+  const literalIndex = backupServiceSource.indexOf(literal);
+  assert.ok(literalIndex >= 0, 'expected to find the dropdb failure log literal in backupService.ts');
+  const callStart = backupServiceSource.lastIndexOf('console.error', literalIndex);
+  assert.ok(callStart >= 0, 'expected a console.error call before the dropdb failure literal');
+  const block = backupServiceSource.slice(callStart, callStart + 200);
+
+  assert.ok(/dropErr\?\.code/.test(block), `expected dropErr?.code in: ${block}`);
+  assert.ok(!/dropErr\?\.message/.test(block), `found raw dropErr?.message (leaks PGHOST/PGPORT/PGUSER) in: ${block}`);
 });
 
 // ── Constants exported ────────────────────────────────────────────────────────

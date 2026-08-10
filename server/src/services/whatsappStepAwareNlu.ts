@@ -535,7 +535,10 @@ export const resolveStepAwareWhatsAppIntent = async (
       ? { decision: aiDecision, source: 'nlu' }
       : { decision: fallbackDecision, source: 'rule_fallback' };
   } catch (error) {
-    console.error('[whatsapp-agent] step-aware-nlu-error', error);
+    console.error(
+      '[whatsapp-agent] step-aware-nlu-error',
+      error instanceof Error ? redactSensitiveText(error.message) : 'unknown error',
+    );
     return { decision: fallbackDecision, source: 'nlu_error' };
   }
 };
