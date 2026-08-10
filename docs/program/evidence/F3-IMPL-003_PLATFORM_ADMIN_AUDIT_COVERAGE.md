@@ -133,7 +133,7 @@ Pure additive code change to one route file plus its test file. Revert is a sing
 
 - Agent: `AGENT_COMPLETED`.
 - Tests: `TESTS_PASSED` — `cd server && npm run typecheck` exit `0`; `platformAdmin.test.ts` 82/82 (22 new); `test:runtime:postgres-compat` exit `0`; `test:runtime:postgres` exit `0`.
-- PR: see §11 for the exact PR link once opened.
+- PR: `PR_OPENED` — [PR #358](https://github.com/MustafaBasol/DisKlinikCRM/pull/358).
 - Merged: `NOT_MERGED`.
 - Deployed: `NOT_DEPLOYED`.
 - Production verified: `NOT_PRODUCTION_VERIFIED`.
