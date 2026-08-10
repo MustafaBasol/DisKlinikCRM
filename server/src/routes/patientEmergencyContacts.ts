@@ -33,24 +33,41 @@
  *     last-resort backstop.
  *   - Both POST and PUT accept an OPTIONAL `expectedCurrentPrimaryContactId`
  *     field (null, or an existing contact's id) whenever the request would
- *     set isPrimary=true. When present, it is enforced as a TRUE
- *     optimistic-concurrency precondition: the canonical current-primary
- *     read taken under the lock must match it exactly, or the request gets
- *     409 PRIMARY_CONTACT_CONFLICT before any demotion/insert. This is
- *     airtight against connection-pool/event-loop scheduling, unlike any
- *     purely server-side timing comparison — see resolvePrimaryPromotion's
- *     header comment in patientEmergencyContactsConcurrency.ts for the full
- *     proof (F1-004-P1-R2-R3, CI run 31020654709 attempt 1) that no
- *     server-only signal can distinguish two requests that genuinely
- *     overlapped at the HTTP layer from two that were genuinely sequential,
- *     once the losing request's entire transaction happens to execute after
- *     the winner's commit. When the field is OMITTED (an older client), the
- *     route falls back to F2-CT-32-R3's non-blocking advisory-lock-attempt
- *     comparison (see resolvePrimaryPromotion's header comment) — closes the
- *     natural-race gap PR #310/R2 had, but is knowingly not PROVABLY
- *     race-free against an artificially forced full-serialization
- *     interleaving (see patientEmergencyContactsCreateRaceForcedInterleaving.test.ts's
- *     scenario 2); never claim otherwise for that path.
+ *     set isPrimary=true. TWO DISTINCT CONTRACTS apply depending on whether
+ *     it is supplied (F2-CT-32-R3-R1 reconciliation):
+ *       - PRESENT — TOKEN-PROTECTED, the GUARANTEED contract: enforced as a
+ *         TRUE optimistic-concurrency precondition. The canonical
+ *         current-primary read taken under the lock must match it exactly,
+ *         or the request gets 409 PRIMARY_CONTACT_CONFLICT before any
+ *         demotion/insert. This is airtight against connection-pool/
+ *         event-loop scheduling, unlike any purely server-side timing
+ *         comparison — see resolvePrimaryPromotion's header comment in
+ *         patientEmergencyContactsConcurrency.ts for the full proof
+ *         (F1-004-P1-R2-R3, CI run 31020654709 attempt 1) that no
+ *         server-only signal can distinguish two requests that genuinely
+ *         overlapped at the HTTP layer from two that were genuinely
+ *         sequential, once the losing request's entire transaction happens
+ *         to execute after the winner's commit. Proven zero-dual-success
+ *         across 1000/1000 contested rounds — see
+ *         patientEmergencyContactsPrimaryConcurrency.test.ts. Every current
+ *         production caller (src/components/PatientEmergencyContactForm.tsx)
+ *         always supplies this field.
+ *       - OMITTED (an older/non-updated client) — LEGACY, a BEST-EFFORT-ONLY
+ *         compatibility contract, unreachable from any current production
+ *         caller: falls back to F2-CT-32-R3's non-blocking
+ *         advisory-lock-attempt comparison (see resolvePrimaryPromotion's
+ *         header comment) — closes the much larger natural-race gap PR
+ *         #310/R2 had, but is knowingly not PROVABLY race-free. That
+ *         residual can and does occur under natural (unforced) scheduling,
+ *         not only an artificially forced full-serialization interleaving —
+ *         reconfirmed on this exact PR head, CI run 31335917295: 2 of 251
+ *         unprotected contested rounds dual-succeeded. The database itself
+ *         never durably holds two primaries either way (the partial unique
+ *         index is the hard backstop); only the HTTP-layer "exactly one
+ *         success" guarantee is not provable in this mode. See
+ *         patientEmergencyContactsCreateRaceForcedInterleaving.test.ts's
+ *         scenario 2 for the deterministic characterization of the same
+ *         mechanism; never claim this path is race-free.
  *   - When two requests race to become primary for the same patient, the
  *     loser either fails the precondition/optimistic-concurrency check
  *     (PrimaryContactConflictError) or, in the rare case both reach the

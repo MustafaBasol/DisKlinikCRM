@@ -18,34 +18,50 @@
  * request A's whole transaction has committed — every run, not hoping timing
  * jitter lands on it.
  *
- * Proves two things, both against a REAL disposable Postgres (no mocked
- * Prisma, no in-memory simulation):
+ * Proves three things, all against a REAL disposable Postgres (no mocked
+ * Prisma, no in-memory simulation) — F2-CT-32-R3-R1 reconciliation:
  *
- *  1. Token-protected mode (client sends expectedCurrentPrimaryContactId) is
- *     airtight against EXACTLY this mechanism — the same forced interleaving
- *     that produces A=201/B=201 in legacy mode always yields exactly one 201
- *     + one 409 in token mode, because the comparison is against the
- *     client's own observed belief, never against a same-request timing
- *     signal that can be delayed by scheduling.
+ *  1. Token-protected mode (client sends expectedCurrentPrimaryContactId) —
+ *     the GUARANTEED contract — is airtight against EXACTLY this mechanism:
+ *     the same forced interleaving that produces A=201/B=201 in legacy mode
+ *     always yields exactly one 201 + one 409 in token mode, because the
+ *     comparison is against the client's own observed belief, never against
+ *     a same-request timing signal that can be delayed by scheduling.
  *
- *  2. Legacy mode (no precondition — an un-updated client), as of F2-CT-32-R3,
- *     no longer exhibits this race under NATURAL scheduling (see
- *     patientEmergencyContactsPrimaryConcurrency.test.ts's scenario 1/1b,
- *     500 real-Postgres rounds) — R3 replaced the "prior read vs current
- *     read" value comparison with a non-blocking advisory-lock attempt
- *     (tryAcquireEmergencyContactPrimaryLock), so contention is now decided
- *     by Postgres's own atomic lock arbitration, not by comparing two
- *     independently-timed reads. Under THIS file's artificial FULL
- *     serialization (B does not even attempt the lock until after A's
- *     transaction has already committed and released it), legacy mode still
- *     exhibits the race — this is retained deliberately as a
- *     characterization test, NOT a regression to fix: it documents that this
- *     one specific, non-naturally-occurring edge is knowingly not closeable
- *     (see resolvePrimaryPromotion's header comment for the proof that no
- *     purely server-side signal can close it), and it protects against
- *     silently losing the forced-interleaving mechanism itself (if this ever
- *     stopped reproducing, the gate/hook wiring would need re-verification
- *     before trusting test 1's guarantee).
+ *  2. Legacy mode (no precondition — an un-updated client) — a BEST-EFFORT
+ *     ONLY contract — under CASE 1, REAL LOCK OVERLAP (contender B's
+ *     pg_try_advisory_xact_lock attempt happens while contender A still
+ *     holds the same patient-scoped advisory lock): B's try-lock
+ *     deterministically returns false, B conflicts immediately with 409, and
+ *     the DB ends with exactly one primary. This is the class of gap
+ *     F2-CT-32-R3 actually closes.
+ *
+ *  3. Legacy mode under CASE 2, FULL DB-LEVEL NON-OVERLAP (B's very FIRST
+ *     database statement — the try-lock call itself — is forced to occur
+ *     only after A's entire transaction has committed and released its
+ *     lock): B's try-lock succeeds uncontended, B legitimately sees A's
+ *     committed row as current state and may replace it — both HTTP
+ *     operations can return success at their own commit time. This is
+ *     retained deliberately as a CHARACTERIZATION, NOT a regression to fix:
+ *     no purely server-side signal can distinguish this from a deliberate
+ *     sequential replacement without a client-supplied precondition (see
+ *     resolvePrimaryPromotion's header comment for the proof; SERIALIZABLE/
+ *     SSI cannot close it either — if B's whole transaction commits before
+ *     A's — or here A's before B's — first statement even begins, Postgres
+ *     correctly sees a valid serial order). It is exercised here under an
+ *     artificial full-serialization gate for determinism, but — contrary to
+ *     an earlier draft of this file's own claim — it is NOT confined to
+ *     forced interleaving: the same PR head reproduced it under genuinely
+ *     NATURAL Promise.all() scheduling too (CI run 31335917295: round
+ *     45/100 of the unprotected CREATE stress, round 140/150 of the
+ *     unprotected UPDATE stress — see
+ *     patientEmergencyContactsPrimaryConcurrency.test.ts's scenarios 1/1b/2/2b,
+ *     which assert the legacy contract's actual semantic invariants for
+ *     that reason instead of an unachievable "exactly one HTTP success").
+ *     This test still exists to deterministically pin the mechanism down
+ *     and to protect against silently losing the forced-interleaving
+ *     wiring itself (if this ever stopped reproducing, the gate/hook wiring
+ *     would need re-verification before trusting test 1's guarantee).
  *
  * Run: DATABASE_URL=... npx tsx src/tests/dbVerification/patientEmergencyContactsCreateRaceForcedInterleaving.test.ts
  */
@@ -198,6 +214,111 @@ async function runForcedRound(opts: {
   return { resA, resB, finalPrimaryCount, observations, httpDispatchedAtMs: Math.round((tHttpStart - t0) * 100) / 100 };
 }
 
+/**
+ * Builds hooks for CASE 1 — REAL LOCK OVERLAP (F2-CT-32-R3-R1): forces
+ * request B's pg_try_advisory_xact_lock attempt to happen while request A's
+ * real Postgres transaction is still open and still holding that same
+ * patient-scoped advisory lock. Sequencing:
+ *   1. B is held at beforeLock until A confirms (via afterLock) that it has
+ *      actually acquired the real lock — otherwise B might race ahead and
+ *      acquire it itself, which would not exercise overlap at all.
+ *   2. A is then held at afterLock — transaction still open, lock still
+ *      held — until B's onLockContention hook fires, proving B's try-lock
+ *      call has actually executed against Postgres and found the lock
+ *      genuinely contended.
+ *   3. Only then is A released to finish its critical section and commit.
+ * This is real overlap, not scheduled-to-look-like overlap: B's try-lock
+ * statement executes on its own connection while A's transaction (and thus
+ * A's advisory lock) is still open on a separate connection.
+ */
+function buildLockOverlapHooks(observations: Observation[], t0: number) {
+  let aLockAcquiredResolve: () => void;
+  const aLockAcquiredPromise = new Promise<void>((res) => { aLockAcquiredResolve = res; });
+  let bAttemptedResolve: () => void;
+  const bAttemptedPromise = new Promise<void>((res) => { bAttemptedResolve = res; });
+
+  const record = async (label: string, event: string, tx: any, detail?: Record<string, unknown>) => {
+    let pid: number | undefined;
+    if (tx) {
+      try {
+        const rows: any[] = await tx.$queryRaw`SELECT pg_backend_pid() as pid`;
+        pid = Number(rows[0]?.pid);
+      } catch {
+        // best-effort only — never fail the test over an observability query
+      }
+    }
+    observations.push({ label, event, tMs: Math.round((performance.now() - t0) * 100) / 100, detail: { ...detail, pid } });
+  };
+
+  const hooks: EmergencyContactRaceTestHooks = {
+    beforeLock: async (ctx) => {
+      const label = als.getStore()?.label ?? '?';
+      await record(label, 'beforeLock', ctx.tx);
+      if (label === 'B') {
+        await aLockAcquiredPromise;
+      }
+    },
+    afterLock: async (ctx) => {
+      const label = als.getStore()?.label ?? '?';
+      await record(label, 'afterLock (lock acquired)', ctx.tx);
+      if (label === 'A') {
+        aLockAcquiredResolve();
+        await bAttemptedPromise;
+      }
+    },
+    onLockContention: async (ctx) => {
+      const label = als.getStore()?.label ?? '?';
+      await record(label, 'onLockContention (legacy try-lock found it held)', ctx.tx);
+      if (label === 'B') {
+        bAttemptedResolve();
+      }
+    },
+    afterCurrentRead: async (ctx) => {
+      const label = als.getStore()?.label ?? '?';
+      await record(label, 'afterCurrentRead', ctx.tx, { currentPrimaryId: ctx.currentPrimaryId });
+    },
+    beforeInsert: async (ctx) => {
+      const label = als.getStore()?.label ?? '?';
+      await record(label, 'beforeInsert', ctx.tx);
+    },
+    afterCommit: async (ctx) => {
+      const label = als.getStore()?.label ?? '?';
+      await record(label, 'afterCommit', null);
+    },
+  };
+
+  return { hooks };
+}
+
+async function runLockOverlapRound() {
+  const observations: Observation[] = [];
+  const t0 = performance.now();
+  const { hooks } = buildLockOverlapHooks(observations, t0);
+  installEmergencyContactRaceTestHooks(hooks);
+
+  const fixtures = await createClinicFixtureSet('ec-create-race-lock-overlap');
+  const owner = await createStaffUser({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId, role: 'OWNER', canAccessAllClinics: true });
+  const user = authRequest({ id: owner.id, organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId, role: 'OWNER', canAccessAllClinics: true });
+  const patient = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+
+  const bodyA: Record<string, unknown> = { contactType: 'PARENT', fullName: 'A', phone: '+905550000001', isPrimary: true };
+  const bodyB: Record<string, unknown> = { contactType: 'PARENT', fullName: 'B', phone: '+905550000002', isPrimary: true };
+
+  const [resA, resB] = await Promise.all([
+    callCreate(patient.id, user, bodyA, 'A'),
+    callCreate(patient.id, user, bodyB, 'B'),
+  ]);
+  observations.push({ label: 'A', event: 'http-response', tMs: Math.round((performance.now() - t0) * 100) / 100, detail: { status: resA.statusCode } });
+  observations.push({ label: 'B', event: 'http-response', tMs: Math.round((performance.now() - t0) * 100) / 100, detail: { status: resB.statusCode } });
+
+  const finalPrimaryCount = await prisma.patientEmergencyContact.count({ where: { patientId: patient.id, isPrimary: true } });
+
+  installEmergencyContactRaceTestHooks(null);
+  await cleanupAllFixtures();
+
+  return { resA, resB, finalPrimaryCount, observations };
+}
+
 // ── 1. Token-protected mode is airtight against the exact CI mechanism ─────
 
 async function scenarioTokenProtectedForcedInterleaving() {
@@ -232,14 +353,64 @@ async function scenarioTokenProtectedForcedInterleaving() {
   }
 }
 
-// ── 2. Legacy (no precondition) mode: F2-CT-32-R3 closes the natural-race gap,
-//      documents the (unavoidable, non-naturally-reproducing) forced-full-
-//      serialization edge that still cannot be closed without a token ──────
+// ── 2. Legacy CASE 1 — REAL LOCK OVERLAP: the class of gap F2-CT-32-R3
+//      actually closes ──────────────────────────────────────────────────
 
-async function scenarioLegacyModeForcedInterleavingCharacterization() {
-  section('2. Legacy CREATE (no expectedCurrentPrimaryContactId): F2-CT-32-R3 closes the natural race; only forced FULL serialization (B never even attempts the lock until after A commits) can still produce it — documents why the token remains the only airtight option for that edge');
+async function scenarioLegacyModeRealLockOverlap() {
+  section(
+    '2. Legacy CREATE, CASE 1 — REAL LOCK OVERLAP: contender B\'s pg_try_advisory_xact_lock attempt is forced to occur while contender A still holds the same patient-scoped advisory lock — this is the class of gap F2-CT-32-R3 actually closes',
+  );
 
-  await test('legacy mode: forced full-serialization at beforeLock still reproduces A=201/B=201 deterministically (the one edge no server-side signal can close without a client precondition — see resolvePrimaryPromotion header comment)', async () => {
+  const ROUNDS = 10;
+  await test(
+    `${ROUNDS}/${ROUNDS} forced rounds: B's try-lock deterministically finds the lock held, B conflicts immediately with 409 (no primary read/write), A succeeds with 201, and exactly one primary is ever committed`,
+    async () => {
+      for (let i = 0; i < ROUNDS; i++) {
+        const { resA, resB, finalPrimaryCount, observations } = await runLockOverlapRound();
+
+        assert.equal(
+          resA.statusCode,
+          201,
+          `round ${i}: A (the real lock holder) must succeed — got ${resA.statusCode} ${JSON.stringify(resA.body)}. Observations: ${JSON.stringify(observations)}`,
+        );
+        assert.equal(
+          resB.statusCode,
+          409,
+          `round ${i}: B (genuinely contended while A holds the lock) must get 409 — got ${resB.statusCode} ${JSON.stringify(resB.body)}. Observations: ${JSON.stringify(observations)}`,
+        );
+        assert.equal(resB.body?.code, 'PRIMARY_CONTACT_CONFLICT', `round ${i}: B's 409 must carry the documented conflict code`);
+        assert.equal(finalPrimaryCount, 1, `round ${i}: exactly one primary must be committed — got ${finalPrimaryCount}`);
+
+        // B must never reach the read/write portion of the critical section
+        // — losing the try-lock must be its only DB interaction beyond the
+        // try-lock statement itself.
+        const bPerformedReadOrWrite = observations.some(
+          (o) => o.label === 'B' && (o.event === 'afterCurrentRead' || o.event === 'beforeInsert' || o.event === 'afterCommit'),
+        );
+        assert.ok(
+          !bPerformedReadOrWrite,
+          `round ${i}: B must not perform any primary read/write after losing the try-lock. Observations: ${JSON.stringify(observations)}`,
+        );
+
+        const bObservedContention = observations.some((o) => o.label === 'B' && o.event.startsWith('onLockContention'));
+        assert.ok(
+          bObservedContention,
+          `round ${i}: B's onLockContention hook must have fired, proving pg_try_advisory_xact_lock genuinely observed contention (not a coincidental 409 from another path). Observations: ${JSON.stringify(observations)}`,
+        );
+      }
+    },
+  );
+}
+
+// ── 3. Legacy CASE 2 — FULL DB-LEVEL NON-OVERLAP: a characterization of the
+//      BEST-EFFORT-ONLY legacy contract, not a regression ─────────────────
+
+async function scenarioLegacyModeFullNonOverlapCharacterization() {
+  section(
+    '3. Legacy CREATE, CASE 2 — FULL DB-LEVEL NON-OVERLAP: B\'s very first database statement is forced to occur only after A\'s entire transaction has committed and released its lock — a documented characterization of the LEGACY BEST-EFFORT contract, not a regression',
+  );
+
+  await test('legacy mode: forced full-serialization at beforeLock reproduces A=201/B=201 deterministically — B\'s try-lock succeeds uncontended and legitimately replaces A\'s committed row, exactly as PostgreSQL itself sees a valid serial order (see resolvePrimaryPromotion header comment)', async () => {
     // Gates at beforeLock: F2-CT-32-R3 removed the separate "prior" read
     // entirely (see patientEmergencyContactsConcurrency.ts's header comment)
     // — legacy mode's very FIRST database statement is now the non-blocking
@@ -248,32 +419,38 @@ async function scenarioLegacyModeForcedInterleavingCharacterization() {
     // which only fires after A's real transaction has already committed and
     // released the lock — so B's try-lock finds it free, acquires
     // uncontended, and legitimately proceeds as what Postgres itself sees as
-    // a fully sequential replacement. This is the one edge R3 does not (and,
-    // per the header comment's proof, cannot) close without a client
-    // precondition — it requires an entire competing transaction's round
-    // trip of delay, not just a lagging read, which is why it no longer
-    // reproduces under the NATURAL Promise.all() race in
-    // patientEmergencyContactsPrimaryConcurrency.test.ts's scenario 1/1b,
-    // only under this artificial full-serialization gate.
+    // a fully sequential replacement. F2-CT-32-R3-R1: this is not confined
+    // to this artificial gate — the same PR head reproduced the identical
+    // mechanism under genuinely NATURAL Promise.all() scheduling too (CI run
+    // 31335917295: round 45/100 of the unprotected CREATE stress, round
+    // 140/150 of the unprotected UPDATE stress in
+    // patientEmergencyContactsPrimaryConcurrency.test.ts). This gate exists
+    // to pin the mechanism down deterministically, not because it is the
+    // only way this outcome can occur.
     const { resA, resB, finalPrimaryCount, observations } = await runForcedRound({ gateAt: 'beforeLock', aToken: undefined, bToken: undefined });
     const bothSucceeded = resA.statusCode === 201 && resB.statusCode === 201;
     assert.ok(
       bothSucceeded,
-      `expected the legacy path's residual full-serialization edge to reproduce under forced full-serialization (proving the mechanism this file exists to characterize) — got A=${resA.statusCode} B=${resB.statusCode}. ` +
+      `expected the legacy path's characterized full-non-overlap edge to reproduce under forced full-serialization (proving the mechanism this file exists to characterize) — got A=${resA.statusCode} B=${resB.statusCode}. ` +
         `If this assertion starts failing, the forced-interleaving mechanism itself may be broken — re-verify before trusting scenario 1's guarantee. Observations: ${JSON.stringify(observations)}`,
     );
-    // Even in the known-bad legacy case, exactly one row ends up primary in
-    // the DATABASE (B's demote-then-insert is still a real, valid Postgres
-    // transaction) — the product bug is that BOTH callers were told 201, not
-    // that the database itself ends up inconsistent.
-    assert.equal(finalPrimaryCount, 1, 'even under the legacy race, the database itself must never end up with two committed primaries');
+    // This is a documented, expected outcome of the LEGACY BEST-EFFORT
+    // contract (F2-CT-32-R3-R1 architecture decision), not a bug: the
+    // database itself always ends up with exactly one primary (B's
+    // demote-then-insert is a single valid Postgres transaction) — both
+    // HTTP callers legitimately received success at their own commit time,
+    // because from PostgreSQL's point of view A and B were genuinely
+    // sequential (B -> A never overlapped), and no purely server-side
+    // signal is entitled to recover the client's request-formation-time
+    // belief after the fact without a supplied precondition.
+    assert.equal(finalPrimaryCount, 1, 'even under this characterized legacy case, the database itself must never end up with two committed primaries');
   });
 }
 
-// ── 3. Precondition-mismatch scenarios (no forcing needed — pure correctness) ─
+// ── 4. Precondition-mismatch scenarios (no forcing needed — pure correctness) ─
 
 async function scenarioPreconditionMismatches() {
-  section('3. Precondition mismatches: null-vs-UUID, UUID-vs-different-UUID, stale frontend state — all correctly rejected with 409, never silently accepted');
+  section('4. Precondition mismatches: null-vs-UUID, UUID-vs-different-UUID, stale frontend state — all correctly rejected with 409, never silently accepted');
 
   await test('client believes no primary exists (expected: null) but a primary already exists (UUID) -> 409, no demotion, no insert', async () => {
     const fixtures = await createClinicFixtureSet('ec-precondition-null-vs-uuid');
@@ -380,7 +557,8 @@ async function scenarioPreconditionMismatches() {
 
 async function main() {
   await scenarioTokenProtectedForcedInterleaving();
-  await scenarioLegacyModeForcedInterleavingCharacterization();
+  await scenarioLegacyModeRealLockOverlap();
+  await scenarioLegacyModeFullNonOverlapCharacterization();
   await scenarioPreconditionMismatches();
 
   installEmergencyContactRaceTestHooks(null);

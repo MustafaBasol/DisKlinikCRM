@@ -119,11 +119,11 @@
  *     request conflicts immediately (PrimaryContactConflictError) — no
  *     wait, no retry, no read.
  * This closes the gap for a delayed READ (the mechanism that reproduced in
- * CI): the earliest a legacy request now touches the database at all is the
- * try-lock attempt itself, so a competitor can no longer "silently agree"
- * via two reads that each separately lagged into the post-commit window.
- * The provably-unclosable edge this does NOT change (see
- * resolvePrimaryPromotion's header and
+ * CI run 31330815502): the earliest a legacy request now touches the
+ * database at all is the try-lock attempt itself, so a competitor can no
+ * longer "silently agree" via two reads that each separately lagged into
+ * the post-commit window. The provably-unclosable edge this does NOT change
+ * (see resolvePrimaryPromotion's header and
  * patientEmergencyContactsCreateRaceForcedInterleaving.test.ts's scenario 2)
  * is a request whose very FIRST database statement — the try-lock call
  * itself — does not begin until strictly after a competitor's entire
@@ -131,17 +131,46 @@
  * at that point the two are, from Postgres's own point of view, genuinely
  * sequential, not concurrent, and no server-side signal (this one included)
  * can or should distinguish that from a deliberate replacement without a
- * client-supplied precondition. That residual window is far smaller than
- * R2's (it now spans a competitor's whole commit round trip instead of the
- * gap between two of THIS request's own reads) and does not reproduce under
- * natural scheduling — only under the forced-interleaving suite's
- * artificial full-serialization gate.
+ * client-supplied precondition.
+ *
+ * F2-CT-32-R3-R1 (reconciliation): the paragraph above's residual window is
+ * real, and — contrary to this revision's own original PR description —
+ * it is NOT confined to the forced-interleaving suite's artificial gate.
+ * The exact same PR head (commit 8ce06ba3, CI run 31335917295, Layer 3
+ * disposable-Postgres job) reproduced it twice under genuinely NATURAL
+ * Promise.all() scheduling, no forcing involved: unprotected CREATE stress
+ * round 45/100 and unprotected UPDATE stress round 140/150 each returned
+ * A=201/B=201 (create) and A=200/B=200 (update). The database itself never
+ * ended up with two committed primaries in either case (this file's
+ * demote-then-write sequence is still a single valid transaction) — but
+ * both HTTP callers were told success, exactly the class of gap this
+ * whole file exists to narrow. R3's fix is real and correctly narrows the
+ * window (it eliminated the much larger, frequently-reproducing R2 gap
+ * proven by CI run 31330815502's round 0), but no purely server-side
+ * signal can shrink it to zero without a client-supplied precondition —
+ * see this file's own SERIALIZABLE/SSI rejection above: if a competitor's
+ * entire transaction commits before this request's first statement even
+ * begins, PostgreSQL correctly sees a valid serial order, and no isolation
+ * level is entitled to override that. This is why legacy (no-precondition)
+ * mode is a LEGACY BEST-EFFORT compatibility contract, never a GUARANTEED
+ * one — see resolvePrimaryPromotion's header comment below for the exact
+ * two-contract split, and patientEmergencyContactsPrimaryConcurrency.test.ts
+ * for the reconciled tests that assert the legacy path's actual semantic
+ * invariants (DB-consistent, no 500, no leaked internal errors) instead of
+ * an unachievable "exactly one HTTP success" guarantee.
  *
  * Token-protected mode is untouched by this revision: its comparison is
  * against the client's own request-formation-time belief, not a
  * same-request timing signal, so it was never subject to this class of gap
  * (proven by patientEmergencyContactsCreateRaceForcedInterleaving.test.ts's
- * scenario 1) and needs no change here.
+ * scenario 1, and by 1000/1000 zero-failure token-protected contested
+ * rounds in patientEmergencyContactsPrimaryConcurrency.test.ts) and needs
+ * no change here. This is the GUARANTEED concurrency contract: the sole
+ * production caller (src/components/PatientEmergencyContactForm.tsx, via
+ * its observedCurrentPrimaryContactId prop — reverified F2-CT-32-R3-R1)
+ * always supplies expectedCurrentPrimaryContactId on every isPrimary:true
+ * submission, so this is the contract every real primary-promotion request
+ * in this codebase actually runs under today.
  */
 
 import { createHash } from 'node:crypto';
@@ -298,22 +327,30 @@ export async function invokeEmergencyContactRaceHook<K extends keyof EmergencyCo
  * (create vs update, and update's WHERE additionally excludes the contact
  * being promoted).
  *
- * Two mutually exclusive comparison modes, selected by `precondition`:
+ * Two mutually exclusive comparison modes, selected by `precondition` — and
+ * two mutually exclusive CONTRACTS (F2-CT-32-R3-R1 reconciliation):
  *
- *  - precondition.provided === true (token-protected mode): the caller
- *    supplied `expectedCurrentPrimaryContactId`, capturing what IT observed
- *    as the current primary before forming this request. The canonical
- *    current-primary read (taken under the lock, therefore always a fully
- *    committed, unambiguous fact) is compared directly against that
- *    client-supplied belief. This is true optimistic-concurrency control: it
- *    is airtight regardless of how connection-pool or event-loop scheduling
- *    happens to interleave this transaction relative to a competing one,
- *    because it never depends on when THIS request's own reads execute
- *    relative to a competitor's commit — only on whether reality (now, under
- *    the lock) still matches what the client last saw.
+ *  - precondition.provided === true — TOKEN-PROTECTED mode, the GUARANTEED
+ *    contract: the caller supplied `expectedCurrentPrimaryContactId`,
+ *    capturing what IT observed as the current primary before forming this
+ *    request. The canonical current-primary read (taken under the lock,
+ *    therefore always a fully committed, unambiguous fact) is compared
+ *    directly against that client-supplied belief. This is true
+ *    optimistic-concurrency control: it is airtight regardless of how
+ *    connection-pool or event-loop scheduling happens to interleave this
+ *    transaction relative to a competing one, because it never depends on
+ *    when THIS request's own reads execute relative to a competitor's
+ *    commit — only on whether reality (now, under the lock) still matches
+ *    what the client last saw. Proven zero-dual-success across 1000/1000
+ *    contested rounds (patientEmergencyContactsPrimaryConcurrency.test.ts,
+ *    scenarios 1c + 2d) plus forced full-serialization
+ *    (patientEmergencyContactsCreateRaceForcedInterleaving.test.ts, scenario
+ *    1). Every real production caller uses this mode exclusively (see this
+ *    file's header comment) — it is the contract that matters in practice.
  *
- *  - precondition.provided === false (legacy best-effort mode, F2-CT-32-R3):
- *    no precondition was supplied (an older/non-updated client). Attempts a
+ *  - precondition.provided === false — LEGACY (no-precondition) mode, a
+ *    BEST-EFFORT-ONLY compatibility contract, kept for an older/non-updated
+ *    client and unreachable from any current production caller. Attempts a
  *    NON-BLOCKING advisory-lock acquire (tryAcquireEmergencyContactPrimaryLock);
  *    if another transaction holds this patient's lock at this exact instant,
  *    that is unambiguous, real-time proof of genuine concurrent contention
@@ -322,20 +359,28 @@ export async function invokeEmergencyContactRaceHook<K extends keyof EmergencyCo
  *    previous holder already committed and released — either way, the
  *    current primary is read once, under the lock, as the sole source of
  *    truth (no separate "prior" read/comparison is needed or taken). This
- *    closes the gap proven in F1-004-P1-R2-R3 (CI run 31020654709) for any
- *    request whose database engagement begins before a competitor's entire
+ *    closes the much larger gap proven in F1-004-P1-R2-R3 (CI run
+ *    31020654709) and again in R2 (CI run 31330815502) for any request
+ *    whose database engagement begins before a competitor's entire
  *    transaction has finished. The edge this mode still cannot close — a
  *    request whose very FIRST statement (the try-lock call itself) does not
  *    begin until strictly after a competitor's whole transaction has already
  *    committed — is, at that point, genuinely sequential from PostgreSQL's
  *    own point of view, not concurrent; no server-side signal can or should
  *    distinguish that from a deliberate replacement without a
- *    client-supplied precondition (see patientEmergencyContactsCreateRaceForcedInterleaving.test.ts's
- *    scenario 2). This mode is therefore knowingly not PROVABLY race-free in
- *    that absolute sense; it is retained only for backward compatibility
- *    with clients that have not yet been updated to send the precondition,
- *    and every caller of this function MUST NOT claim it closes the race the
- *    way token-protected mode does.
+ *    client-supplied precondition. That residual DOES still occur under
+ *    natural (unforced) scheduling, not only the forced-interleaving suite's
+ *    artificial gate — reconfirmed on this exact PR head, CI run 31335917295:
+ *    2 of 251 unprotected contested rounds (round 45/100 CREATE, round
+ *    140/150 UPDATE) — see
+ *    patientEmergencyContactsCreateRaceForcedInterleaving.test.ts's scenario
+ *    2 for the deterministic characterization of the same mechanism. This
+ *    mode is therefore knowingly NOT provably race-free, is NOT the
+ *    guaranteed contract, and every caller of this function MUST NOT claim
+ *    it closes the race the way token-protected mode does — only that the
+ *    database itself never durably holds two primaries (the partial unique
+ *    index remains the hard backstop) and that a genuine same-instant lock
+ *    conflict is always reported as 409, never silently absorbed.
  */
 export async function resolvePrimaryPromotion(
   tx: Prisma.TransactionClient,
