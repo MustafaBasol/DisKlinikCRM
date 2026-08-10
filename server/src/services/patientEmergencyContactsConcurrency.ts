@@ -84,6 +84,93 @@
  *   comment on the same point), and the lock is only ever acquired for
  *   isPrimary=true writes — concurrent isPrimary=false writes and unrelated
  *   field updates never touch it.
+ *
+ * F2-CT-32-R3 (this revision): R2's own "prior vs current" comparison is
+ * itself still a value-read comparison, and — as its own proof above and
+ * resolvePrimaryPromotion's header comment both already document — a
+ * DELAYED READ can still land after a competing transaction has fully
+ * committed, at which point "prior" (read late) and "current" (read a
+ * moment later, under the lock) observe the SAME already-settled winner and
+ * silently agree with each other. This reproduced live (main CI run
+ * 31330815502, Layer 3 disposable-Postgres job, round 0 of the CREATE race)
+ * as A=201/B=201 even under R2. The DB itself never ends up with two
+ * primaries (the loser's demote-then-insert is a real, valid, single-row
+ * transaction) — the bug is that BOTH callers were told 201, even though
+ * only one of them actually raced; the other's "win" silently overwrote the
+ * first without notice.
+ *
+ * Fix (R3), legacy (no-precondition) mode only: replace the entire
+ * "prior read (before lock) vs current read (after lock)" comparison with a
+ * single NON-BLOCKING advisory-lock attempt, pg_try_advisory_xact_lock
+ * (tryAcquireEmergencyContactPrimaryLock below). It atomically reports
+ * whether *this* call was the one that acquired the per-patient lock:
+ *   - Acquired (true): no other transaction holds this patient's lock at
+ *     this exact instant, in real time, as arbitrated by Postgres itself —
+ *     not by comparing two independently-timed reads. This request is
+ *     either the sole contender or the previous holder already committed
+ *     and released before this one even asked. Either way it proceeds
+ *     exactly as before: read the current primary once, under the lock (the
+ *     lock's own success already proves nothing else can be changing it),
+ *     demote it if present, and let the caller insert/update. No separate
+ *     "prior" read is taken or needed any more.
+ *   - Not acquired (false): another transaction is holding this patient's
+ *     primary-promotion lock RIGHT NOW — unambiguous, real-time proof of
+ *     genuine concurrent contention, not a timing-dependent inference. This
+ *     request conflicts immediately (PrimaryContactConflictError) — no
+ *     wait, no retry, no read.
+ * This closes the gap for a delayed READ (the mechanism that reproduced in
+ * CI run 31330815502): the earliest a legacy request now touches the
+ * database at all is the try-lock attempt itself, so a competitor can no
+ * longer "silently agree" via two reads that each separately lagged into
+ * the post-commit window. The provably-unclosable edge this does NOT change
+ * (see resolvePrimaryPromotion's header and
+ * patientEmergencyContactsCreateRaceForcedInterleaving.test.ts's scenario 2)
+ * is a request whose very FIRST database statement — the try-lock call
+ * itself — does not begin until strictly after a competitor's entire
+ * transaction (lock, read, demote, insert, COMMIT) has already finished:
+ * at that point the two are, from Postgres's own point of view, genuinely
+ * sequential, not concurrent, and no server-side signal (this one included)
+ * can or should distinguish that from a deliberate replacement without a
+ * client-supplied precondition.
+ *
+ * F2-CT-32-R3-R1 (reconciliation): the paragraph above's residual window is
+ * real, and — contrary to this revision's own original PR description —
+ * it is NOT confined to the forced-interleaving suite's artificial gate.
+ * The exact same PR head (commit 8ce06ba3, CI run 31335917295, Layer 3
+ * disposable-Postgres job) reproduced it twice under genuinely NATURAL
+ * Promise.all() scheduling, no forcing involved: unprotected CREATE stress
+ * round 45/100 and unprotected UPDATE stress round 140/150 each returned
+ * A=201/B=201 (create) and A=200/B=200 (update). The database itself never
+ * ended up with two committed primaries in either case (this file's
+ * demote-then-write sequence is still a single valid transaction) — but
+ * both HTTP callers were told success, exactly the class of gap this
+ * whole file exists to narrow. R3's fix is real and correctly narrows the
+ * window (it eliminated the much larger, frequently-reproducing R2 gap
+ * proven by CI run 31330815502's round 0), but no purely server-side
+ * signal can shrink it to zero without a client-supplied precondition —
+ * see this file's own SERIALIZABLE/SSI rejection above: if a competitor's
+ * entire transaction commits before this request's first statement even
+ * begins, PostgreSQL correctly sees a valid serial order, and no isolation
+ * level is entitled to override that. This is why legacy (no-precondition)
+ * mode is a LEGACY BEST-EFFORT compatibility contract, never a GUARANTEED
+ * one — see resolvePrimaryPromotion's header comment below for the exact
+ * two-contract split, and patientEmergencyContactsPrimaryConcurrency.test.ts
+ * for the reconciled tests that assert the legacy path's actual semantic
+ * invariants (DB-consistent, no 500, no leaked internal errors) instead of
+ * an unachievable "exactly one HTTP success" guarantee.
+ *
+ * Token-protected mode is untouched by this revision: its comparison is
+ * against the client's own request-formation-time belief, not a
+ * same-request timing signal, so it was never subject to this class of gap
+ * (proven by patientEmergencyContactsCreateRaceForcedInterleaving.test.ts's
+ * scenario 1, and by 1000/1000 zero-failure token-protected contested
+ * rounds in patientEmergencyContactsPrimaryConcurrency.test.ts) and needs
+ * no change here. This is the GUARANTEED concurrency contract: the sole
+ * production caller (src/components/PatientEmergencyContactForm.tsx, via
+ * its observedCurrentPrimaryContactId prop — reverified F2-CT-32-R3-R1)
+ * always supplies expectedCurrentPrimaryContactId on every isPrimary:true
+ * submission, so this is the contract every real primary-promotion request
+ * in this codebase actually runs under today.
  */
 
 import { createHash } from 'node:crypto';
@@ -125,20 +212,14 @@ export function computeEmergencyContactPrimaryLockKey(patientId: string): [numbe
 
 /**
  * Acquires a PostgreSQL advisory transaction lock scoped to a single
- * patient's emergency-contact primary-promotion critical section.
- *
- * MUST be called AFTER the promoting prisma.$transaction callback's "prior"
- * read of the current primary contact, and BEFORE the "current" re-check
- * read and the reset-then-set writes — all three (prior read, lock, current
- * read) on the same `tx`. Calling this before the "prior" read would
- * reintroduce a decoupled-query-shaped gap (see this file's header
- * comment): the whole point of doing the "prior" read first is that it and
- * the "current" read are separated by nothing except this lock's wait,
- * never an independently-scheduled database round trip. pg_advisory_xact_lock
- * blocks until the lock is available and releases it automatically when the
- * surrounding transaction ends (commit or rollback) — never held across a
- * network call or unrelated work. Different patientId values never block
- * each other.
+ * patient's emergency-contact primary-promotion critical section. Used by
+ * TOKEN-PROTECTED mode, whose subsequent comparison is against the client's
+ * own request-formation-time belief — the lock only needs to serialize
+ * writes, not detect contention itself, so blocking until available is
+ * correct here. pg_advisory_xact_lock blocks until the lock is available and
+ * releases it automatically when the surrounding transaction ends (commit or
+ * rollback) — never held across a network call or unrelated work. Different
+ * patientId values never block each other.
  */
 export async function acquireEmergencyContactPrimaryLock(
   tx: Prisma.TransactionClient,
@@ -148,6 +229,30 @@ export async function acquireEmergencyContactPrimaryLock(
   // pg_advisory_xact_lock(int4,int4): explicit casts required — Prisma binds JS
   // numbers as int8 by default, but PostgreSQL has no (bigint,bigint) overload.
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${key1}::int4, ${key2}::int4)`;
+}
+
+/**
+ * Non-blocking variant used by LEGACY (no-precondition) mode (F2-CT-32-R3 —
+ * see this file's header comment). Returns `true` iff THIS call was the one
+ * that acquired the per-patient lock, atomically and in real time, as
+ * arbitrated by Postgres itself — never blocks. `false` means another
+ * transaction holds this patient's primary-promotion lock at this exact
+ * instant: unambiguous, real-time proof of genuine concurrent contention,
+ * safe to treat as an immediate conflict without reading anything. Same key
+ * space as acquireEmergencyContactPrimaryLock (pg_try_advisory_xact_lock and
+ * pg_advisory_xact_lock share the same underlying lock table, so a
+ * try-acquire here and a blocking acquire from token-protected mode for the
+ * same patient are still mutually exclusive with each other).
+ */
+export async function tryAcquireEmergencyContactPrimaryLock(
+  tx: Prisma.TransactionClient,
+  patientId: string,
+): Promise<boolean> {
+  const [key1, key2] = computeEmergencyContactPrimaryLockKey(patientId);
+  const rows = await tx.$queryRaw<Array<{ acquired: boolean }>>`
+    SELECT pg_try_advisory_xact_lock(${key1}::int4, ${key2}::int4) AS acquired
+  `;
+  return rows[0]?.acquired === true;
 }
 
 /**
@@ -178,14 +283,19 @@ export async function acquireEmergencyContactPrimaryLock(
  * connection (e.g. `SELECT pg_backend_pid()`) without affecting the
  * transaction's outcome. afterCommit fires from the route AFTER
  * prisma.$transaction has already resolved, so no `tx` is available there.
+ *
+ * F2-CT-32-R3: legacy mode no longer performs a separate "prior" read (see
+ * this file's header comment) — beforeLock/afterLock now bracket the
+ * try-acquire itself, and onLockContention fires instead of afterLock when
+ * the try-acquire finds the lock already held by another transaction.
  */
 type HookCtxBase = { patientId: string; op: 'create' | 'update'; tx: Prisma.TransactionClient };
 
 export interface EmergencyContactRaceTestHooks {
-  beforePriorRead?: (ctx: HookCtxBase) => Promise<void> | void;
-  afterPriorRead?: (ctx: HookCtxBase & { priorPrimaryId: string | null }) => Promise<void> | void;
   beforeLock?: (ctx: HookCtxBase) => Promise<void> | void;
   afterLock?: (ctx: HookCtxBase) => Promise<void> | void;
+  /** Legacy mode only: fires instead of afterLock when pg_try_advisory_xact_lock finds the lock already held — this request conflicts immediately, no read taken. */
+  onLockContention?: (ctx: HookCtxBase) => Promise<void> | void;
   beforeCurrentRead?: (ctx: HookCtxBase) => Promise<void> | void;
   afterCurrentRead?: (ctx: HookCtxBase & { currentPrimaryId: string | null }) => Promise<void> | void;
   beforeInsert?: (ctx: HookCtxBase) => Promise<void> | void;
@@ -217,42 +327,60 @@ export async function invokeEmergencyContactRaceHook<K extends keyof EmergencyCo
  * (create vs update, and update's WHERE additionally excludes the contact
  * being promoted).
  *
- * Two mutually exclusive comparison modes, selected by `precondition`:
+ * Two mutually exclusive comparison modes, selected by `precondition` — and
+ * two mutually exclusive CONTRACTS (F2-CT-32-R3-R1 reconciliation):
  *
- *  - precondition.provided === true (token-protected mode): the caller
- *    supplied `expectedCurrentPrimaryContactId`, capturing what IT observed
- *    as the current primary before forming this request. The canonical
- *    current-primary read (taken under the lock, therefore always a fully
- *    committed, unambiguous fact) is compared directly against that
- *    client-supplied belief. This is true optimistic-concurrency control: it
- *    is airtight regardless of how connection-pool or event-loop scheduling
- *    happens to interleave this transaction relative to a competing one,
- *    because it never depends on when THIS request's own reads execute
- *    relative to a competitor's commit — only on whether reality (now, under
- *    the lock) still matches what the client last saw.
+ *  - precondition.provided === true — TOKEN-PROTECTED mode, the GUARANTEED
+ *    contract: the caller supplied `expectedCurrentPrimaryContactId`,
+ *    capturing what IT observed as the current primary before forming this
+ *    request. The canonical current-primary read (taken under the lock,
+ *    therefore always a fully committed, unambiguous fact) is compared
+ *    directly against that client-supplied belief. This is true
+ *    optimistic-concurrency control: it is airtight regardless of how
+ *    connection-pool or event-loop scheduling happens to interleave this
+ *    transaction relative to a competing one, because it never depends on
+ *    when THIS request's own reads execute relative to a competitor's
+ *    commit — only on whether reality (now, under the lock) still matches
+ *    what the client last saw. Proven zero-dual-success across 1000/1000
+ *    contested rounds (patientEmergencyContactsPrimaryConcurrency.test.ts,
+ *    scenarios 1c + 2d) plus forced full-serialization
+ *    (patientEmergencyContactsCreateRaceForcedInterleaving.test.ts, scenario
+ *    1). Every real production caller uses this mode exclusively (see this
+ *    file's header comment) — it is the contract that matters in practice.
  *
- *  - precondition.provided === false (legacy best-effort mode): no
- *    precondition was supplied (an older/non-updated client). Falls back to
- *    F1-004-P1-R2's design — a "prior" read taken before the lock is
- *    compared against the "current" read taken after it, both on the same
- *    transaction/connection so the only gap between them is the lock wait
- *    itself. This closes the specific gap PR #310 had (the prior read being
- *    a separate, independently-poolable query) but NOT the gap proven in
- *    F1-004-P1-R2-R3 (CI run 31020654709 attempt 1): if this transaction's
- *    own FIRST statement — the "prior" read — does not begin until AFTER a
- *    competing transaction has already committed, both reads observe
- *    identical, already-settled state and no conflict is detected, because
- *    at that point the two transactions are — from PostgreSQL's own point of
- *    view — genuinely, unambiguously sequential, not concurrent. No signal
- *    visible only from inside this transaction (however early it runs, in
- *    whatever order its statements are arranged) can distinguish that from a
- *    deliberate, temporally-separated replacement; only information the
- *    client captured at its own request-formation time — outside this
- *    transaction, outside the database entirely — can. This mode is
- *    therefore knowingly NOT race-free; it is retained only for backward
- *    compatibility with clients that have not yet been updated to send the
- *    precondition, and every caller of this function MUST NOT claim it
- *    closes the race the way token-protected mode does.
+ *  - precondition.provided === false — LEGACY (no-precondition) mode, a
+ *    BEST-EFFORT-ONLY compatibility contract, kept for an older/non-updated
+ *    client and unreachable from any current production caller. Attempts a
+ *    NON-BLOCKING advisory-lock acquire (tryAcquireEmergencyContactPrimaryLock);
+ *    if another transaction holds this patient's lock at this exact instant,
+ *    that is unambiguous, real-time proof of genuine concurrent contention
+ *    and this request conflicts immediately (no read, no wait). If acquired,
+ *    this request is either the sole contender or arrived strictly after the
+ *    previous holder already committed and released — either way, the
+ *    current primary is read once, under the lock, as the sole source of
+ *    truth (no separate "prior" read/comparison is needed or taken). This
+ *    closes the much larger gap proven in F1-004-P1-R2-R3 (CI run
+ *    31020654709) and again in R2 (CI run 31330815502) for any request
+ *    whose database engagement begins before a competitor's entire
+ *    transaction has finished. The edge this mode still cannot close — a
+ *    request whose very FIRST statement (the try-lock call itself) does not
+ *    begin until strictly after a competitor's whole transaction has already
+ *    committed — is, at that point, genuinely sequential from PostgreSQL's
+ *    own point of view, not concurrent; no server-side signal can or should
+ *    distinguish that from a deliberate replacement without a
+ *    client-supplied precondition. That residual DOES still occur under
+ *    natural (unforced) scheduling, not only the forced-interleaving suite's
+ *    artificial gate — reconfirmed on this exact PR head, CI run 31335917295:
+ *    2 of 251 unprotected contested rounds (round 45/100 CREATE, round
+ *    140/150 UPDATE) — see
+ *    patientEmergencyContactsCreateRaceForcedInterleaving.test.ts's scenario
+ *    2 for the deterministic characterization of the same mechanism. This
+ *    mode is therefore knowingly NOT provably race-free, is NOT the
+ *    guaranteed contract, and every caller of this function MUST NOT claim
+ *    it closes the race the way token-protected mode does — only that the
+ *    database itself never durably holds two primaries (the partial unique
+ *    index remains the hard backstop) and that a genuine same-instant lock
+ *    conflict is always reported as 409, never silently absorbed.
  */
 export async function resolvePrimaryPromotion(
   tx: Prisma.TransactionClient,
@@ -275,17 +403,33 @@ export async function resolvePrimaryPromotion(
     ...(excludeContactId ? { id: { not: excludeContactId } } : {}),
   };
 
-  let priorPrimaryId: string | null = null;
+  await invokeEmergencyContactRaceHook('beforeLock', { patientId, op, tx });
+
   if (!precondition.provided) {
-    // Legacy best-effort mode only — MUST run before the lock; see this
-    // function's header comment and acquireEmergencyContactPrimaryLock's.
-    await invokeEmergencyContactRaceHook('beforePriorRead', { patientId, op, tx });
-    const priorPrimary = await tx.patientEmergencyContact.findFirst({ where: primaryWhere, select: { id: true } });
-    await invokeEmergencyContactRaceHook('afterPriorRead', { patientId, op, tx, priorPrimaryId: priorPrimary?.id ?? null });
-    priorPrimaryId = priorPrimary?.id ?? null;
+    // Legacy best-effort mode (F2-CT-32-R3) — see this function's header
+    // comment. Contention is decided by the lock itself, in real time, never
+    // by comparing two independently-timed reads.
+    const acquired = await tryAcquireEmergencyContactPrimaryLock(tx, patientId);
+    if (!acquired) {
+      await invokeEmergencyContactRaceHook('onLockContention', { patientId, op, tx });
+      throw new PrimaryContactConflictError();
+    }
+    await invokeEmergencyContactRaceHook('afterLock', { patientId, op, tx });
+
+    await invokeEmergencyContactRaceHook('beforeCurrentRead', { patientId, op, tx });
+    const currentPrimary = await tx.patientEmergencyContact.findFirst({ where: primaryWhere, select: { id: true } });
+    await invokeEmergencyContactRaceHook('afterCurrentRead', { patientId, op, tx, currentPrimaryId: currentPrimary?.id ?? null });
+
+    if (currentPrimary) {
+      await tx.patientEmergencyContact.updateMany({ where: primaryWhere, data: { isPrimary: false } });
+    }
+    await invokeEmergencyContactRaceHook('beforeInsert', { patientId, op, tx });
+    return;
   }
 
-  await invokeEmergencyContactRaceHook('beforeLock', { patientId, op, tx });
+  // Token-protected mode — unchanged (F1-004-P1-R2-R3): blocking acquire,
+  // compare the canonical current-primary read against the client's own
+  // request-formation-time belief.
   await acquireEmergencyContactPrimaryLock(tx, patientId);
   await invokeEmergencyContactRaceHook('afterLock', { patientId, op, tx });
 
@@ -293,8 +437,7 @@ export async function resolvePrimaryPromotion(
   const currentPrimary = await tx.patientEmergencyContact.findFirst({ where: primaryWhere, select: { id: true } });
   await invokeEmergencyContactRaceHook('afterCurrentRead', { patientId, op, tx, currentPrimaryId: currentPrimary?.id ?? null });
 
-  const expectedPrimaryId = precondition.provided ? precondition.expectedCurrentPrimaryContactId : priorPrimaryId;
-  if ((currentPrimary?.id ?? null) !== expectedPrimaryId) {
+  if ((currentPrimary?.id ?? null) !== precondition.expectedCurrentPrimaryContactId) {
     throw new PrimaryContactConflictError();
   }
 
