@@ -43,6 +43,13 @@ import bcrypt from 'bcryptjs';
 // default is now cookie-only, so enable the fallback explicitly for the suite.
 process.env.PLATFORM_BEARER_FALLBACK_ENABLED = 'true';
 
+// F3-IMPL-003's MFA (TOTP) and SMS-provider audit-trail sections below exercise
+// route handlers that call encryptSecretTagged/decryptSecretTagged, which hard-fail
+// without a valid 64-char-hex ENCRYPTION_KEY (see utils/encryption.ts). Same
+// disposable-test-key convention as the other suites in this directory
+// (e.g. dataRetentionCleanupJob.test.ts) — synthetic, never a real secret.
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'f'.repeat(64);
+
 import {
   generatePlatformToken,
   authenticatePlatformAdmin,

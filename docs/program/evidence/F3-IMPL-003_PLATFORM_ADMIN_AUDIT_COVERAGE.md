@@ -1,5 +1,29 @@
 # F3-IMPL-003 — Platform-Admin Privileged Mutation Audit Coverage (R-019)
 
+## R2 — CI ENCRYPTION_KEY test-environment contract fix
+
+**This section is additive and does not alter anything below it; §6.2's account of the R1 local fix is left as originally written.**
+
+CI (`ci-layers` run `31412137506`, PR #358, exact head `264c470ec3bafe83749710e8d9ad3573cbb77de3`) failed deterministically on `Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)` — `platformAdmin.test.ts`: 74/82 pass, 8 failures, all `ENCRYPTION_KEY env var must be a 64-char hex string`. Migrations (72/72) and cleanup both succeeded; this was not a flake and a rerun of the unchanged head would not have fixed it.
+
+**Root cause:** §6.2 below describes the R1 fix as generating a disposable key and writing it into this worktree's local, gitignored `server/.env`. That satisfies `dotenv/config` when the test is run locally from this worktree, but CI runners provision their own environment per run and never see that file — so the same 8 MFA/SMS-provider-path tests that need `ENCRYPTION_KEY` (added by this task; see §3, §6) fail there exactly as they did before the R1 fix was ever applied. The R1 fix was real but not portable — a worktree-local workaround, not a repository-level contract.
+
+**Fix:** followed the existing repository convention already used by ~29 other test files under `server/src/tests/` (e.g. `dataRetentionCleanupJob.test.ts:61`, `whatsappProvider.test.ts:36`) — each sets its own disposable, synthetic, 64-hex-char `ENCRYPTION_KEY` directly in the test file, scoped to that process, before anything that needs it runs. Added one line to `server/src/tests/platformAdmin.test.ts`, right after the existing `PLATFORM_BEARER_FALLBACK_ENABLED` env setup near the top of the file:
+
+```ts
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'f'.repeat(64);
+```
+
+`'f'.repeat(64)` was chosen because it is not already used by any other test file in the directory (existing files use `'a'`–`'e'`), keeping each file's key visually distinct in stack traces/diffs. This is a synthetic, obviously-non-production value (a single repeated character), never logged, and has zero effect on any non-test process — `server/src/utils/encryption.ts`'s `getKey()` fail-hard validation (`ENCRYPTION_KEY env var must be a 64-char hex string`) is completely unchanged; production still refuses to boot without a real key. No `server/.env` file, CI workflow env, or test-runtime orchestrator env was touched — the fix is entirely local to the one test file that needed it, matching the smallest-diff, most-consistent-with-existing-convention option available.
+
+**Verification (R2), all on the R2 commit against a fresh disposable Postgres each time:**
+
+- `cd server && npm run typecheck` — clean, exit `0`.
+- Focused `platformAdmin.test.ts` (manually provisioned disposable Postgres 16-alpine, same digest-pinned image as `scripts/test-runtime/lib/postgres.ts`, all 34 migrations applied, container torn down after): **82/82 pass, 0 fail.**
+- `npm run test:runtime:postgres-compat -- --summary-file=postgres-compat-run-summary.json` (repo root) — migration `code: 0`/`step: "ok"`; `server:test:legacy-db-required` (includes `test:auth` → `platformAdmin.test.ts`, confirmed 82/82 within this run) `code: 0`; cleanup `success: true`; outcome `exitCode: 0`. Zero `ENCRYPTION_KEY` errors anywhere in the run log.
+- `npm run test:runtime:postgres -- --summary-file=postgres-run-summary.json` (repo root) — migration `code: 0`/`step: "ok"`; `server:test:disposable-db` `code: 0`; cleanup `success: true`; outcome `exitCode: 0`. Zero `ENCRYPTION_KEY` errors anywhere in the run log.
+- §6.1 below (written at R1) already documented these same two commands passing — that was true at the time because R1's local `.env` fix was in place for that developer's own worktree; the point of the R2 failure was that this same local pass never reproduced in CI's independently-provisioned environment. Re-run here confirms the portable fix reproduces the same 0-failure outcome without relying on any local file.
+
 Phase: F3 — Production Hardening. Third F3 implementation task; runs in parallel with F3-IMPL-002 (worker/process-role contract work, disjoint files).
 
 Branch: `feature/f3-impl-003-platform-admin-audit`
@@ -137,6 +161,8 @@ Pure additive code change to one route file plus its test file. Revert is a sing
 - Merged: `NOT_MERGED`.
 - Deployed: `NOT_DEPLOYED`.
 - Production verified: `NOT_PRODUCTION_VERIFIED`.
+
+**R2 update (see top-of-doc "R2 — CI ENCRYPTION_KEY test-environment contract fix" section for full detail):** exact-head CI (`31412137506`) on the R1 head failed `platformAdmin.test.ts` 74/82 for the reason described above. Fixed by moving the disposable test key from a worktree-local `server/.env` (R1, §6.2) into the test file itself, so the fix is portable to CI and any fresh checkout. R1's narrative above is left unmodified as the historical record of what was actually done at that point in time.
 
 ## 11. Remaining R-019 gap
 
