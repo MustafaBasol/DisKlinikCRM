@@ -33,6 +33,7 @@ import {
   redactForAnonymization,
   getImagesForLifecycleReview,
   checkImageStorageExists,
+  getBridgeStudyIdsForPatient,
   isRedactionReason,
   ImagingNotFoundError,
   ImagingLegalHoldViolationError,
@@ -78,6 +79,7 @@ async function createStudy(params: {
   clinicId: string;
   patientId: string | null;
   legalHold?: boolean;
+  source?: string;
 }) {
   return prisma.imagingStudy.create({
     data: {
@@ -85,6 +87,7 @@ async function createStudy(params: {
       patientId: params.patientId,
       modality: 'IO',
       legalHold: params.legalHold ?? false,
+      ...(params.source ? { source: params.source } : {}),
     },
   });
 }
@@ -130,6 +133,11 @@ async function main() {
         2,
         'checkImageStorageExists must be exactly (clinicId, imageId) — no optional trailing test parameter, no imageId-only overload',
       );
+    });
+
+    await test('exports the additive getBridgeStudyIdsForPatient query (F2-STAGE3-GAPC-001) as a 2-arg (clinicId, patientId) function', () => {
+      assert.equal(typeof getBridgeStudyIdsForPatient, 'function');
+      assert.equal(getBridgeStudyIdsForPatient.length, 2, 'getBridgeStudyIdsForPatient must be exactly (clinicId, patientId)');
     });
 
     await test('exports a closed RedactionReason validator and the typed-error classes', () => {
@@ -602,6 +610,62 @@ async function main() {
       }
     });
 
+    // ── 11b. getBridgeStudyIdsForPatient (F2-STAGE3-GAPC-001) ─────────────
+    section('11b. getBridgeStudyIdsForPatient');
+
+    const bridgeStudy = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id, source: 'bridge' });
+    const manualStudy = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id, source: 'manual_upload' });
+    const patientC = await createTestPatient({ organizationId: fixtures.orgId, clinicId: fixtures.defaultClinicId });
+
+    await test('correct patient+clinic returns only bridge study ids', async () => {
+      const ids = await getBridgeStudyIdsForPatient(fixtures.defaultClinicId, patientA.id);
+      assert.deepEqual(ids, [bridgeStudy.id]);
+    });
+
+    await test('manual/non-bridge studies are excluded', async () => {
+      const ids = await getBridgeStudyIdsForPatient(fixtures.defaultClinicId, patientA.id);
+      assert.ok(!ids.includes(manualStudy.id), 'manual_upload-sourced study must never be returned');
+    });
+
+    await test('wrong clinic returns nothing, even for a patient with a real bridge study elsewhere', async () => {
+      const ids = await getBridgeStudyIdsForPatient(fixtures.siblingClinicId, patientA.id);
+      assert.deepEqual(ids, []);
+    });
+
+    await test('wrong patient (same clinic, no bridge studies of their own) returns nothing', async () => {
+      const ids = await getBridgeStudyIdsForPatient(fixtures.defaultClinicId, patientC.id);
+      assert.deepEqual(ids, []);
+    });
+
+    await test('cross-org study cannot leak: crossOrgClinicId + patientA.id returns nothing', async () => {
+      const ids = await getBridgeStudyIdsForPatient(fixtures.crossOrgClinicId, patientA.id);
+      assert.deepEqual(ids, []);
+    });
+
+    await test('cross-clinic study cannot leak: defaultClinicId + patientB.id (a real patient in a different org/clinic) returns nothing', async () => {
+      const ids = await getBridgeStudyIdsForPatient(fixtures.defaultClinicId, patientB.id);
+      assert.deepEqual(ids, []);
+    });
+
+    await test('sanity control: patientB queried under their own real crossOrgClinicId sees zero results (no bridge study fixture created for them)', async () => {
+      const ids = await getBridgeStudyIdsForPatient(fixtures.crossOrgClinicId, patientB.id);
+      assert.deepEqual(ids, []);
+    });
+
+    await test('returned shape is ids only — an array of plain strings, never objects/DTOs', async () => {
+      const ids = await getBridgeStudyIdsForPatient(fixtures.defaultClinicId, patientA.id);
+      assert.ok(Array.isArray(ids));
+      for (const id of ids) {
+        assert.equal(typeof id, 'string');
+      }
+      assert.deepEqual(JSON.parse(JSON.stringify(ids)), ids, 'must serialize as a bare string array, no nested fields');
+    });
+
+    await test('unknown clinicId/patientId combination returns an empty array, never an error', async () => {
+      const ids = await getBridgeStudyIdsForPatient(randomUUID(), randomUUID());
+      assert.deepEqual(ids, []);
+    });
+
     // ── 12. No raw Prisma model exposure (source-scan) ────────────────────
     section('12. No raw Prisma model / audit-duplication source scan');
 
@@ -613,11 +677,33 @@ async function main() {
       assert.ok(!/from ['"]express['"]/.test(source), 'facade must have no HTTP/route dependency');
     });
 
-    // ── 13. Unused-facade proof (no production caller) ────────────────────
-    section('13. Unused-facade proof');
+    // ── 13. Facade caller allowlist proof ──────────────────────────────────
+    // Was "unused-facade proof" (zero production callers) at F2-IMPL-001-A
+    // merge time; that state didn't survive — patientAnonymization.ts,
+    // orphanFileInspection.ts, and deletionReviewInventory.ts were each
+    // migrated onto this facade by later, separate Stage 3 tasks
+    // (F2-STAGE3-IMPL-001, F2-GAPA-001, F2-GAPB-001). The prior version of
+    // this test's own detection regex required an absolute-style
+    // `services/imaging/public` path fragment, which none of those callers'
+    // real relative `../imaging/public.js` imports ever matched — so it kept
+    // vacuously passing without ever detecting the three real callers
+    // already present when this task (F2-STAGE3-GAPC-001) began. Fixed here
+    // alongside adding the fourth caller (patientActivityHistoryExport.ts,
+    // migrating off its former direct `prisma.imagingStudy.findMany`
+    // dependency): this test now guards that ONLY the below allowlisted
+    // callers import the facade, so an unrelated file cannot silently
+    // acquire a new cross-domain dependency without a corresponding,
+    // deliberate allowlist update.
+    section('13. Facade caller allowlist proof');
 
-    await test('no route, middleware, job, or service file imports services/imaging/public.ts', () => {
+    await test('only the allowlisted callers import services/imaging/public.ts', () => {
       const searchRoots = ['src/routes', 'src/middleware', 'src/jobs', 'src/services'];
+      const allowedCallers = [
+        path.resolve(process.cwd(), 'src/services/privacy/patientAnonymization.ts'),
+        path.resolve(process.cwd(), 'src/services/privacy/orphanFileInspection.ts'),
+        path.resolve(process.cwd(), 'src/services/privacy/deletionReviewInventory.ts'),
+        path.resolve(process.cwd(), 'src/services/privacy/patientActivityHistoryExport.ts'),
+      ];
       const offenders: string[] = [];
       const walk = (dir: string) => {
         if (!fs.existsSync(dir)) return;
@@ -629,8 +715,9 @@ async function main() {
           }
           if (!entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue;
           if (full === path.resolve(process.cwd(), 'src/services/imaging/public.ts')) continue;
+          if (allowedCallers.includes(full)) continue;
           const content = fs.readFileSync(full, 'utf8');
-          if (/services\/imaging\/public(\.js)?['"]/.test(content)) {
+          if (/\/imaging\/public(\.js)?['"]/.test(content)) {
             offenders.push(full);
           }
         }
@@ -638,7 +725,23 @@ async function main() {
       for (const root of searchRoots) {
         walk(path.resolve(process.cwd(), root));
       }
-      assert.deepEqual(offenders, [], `no production file may import the unused facade yet, found: ${offenders.join(', ')}`);
+      assert.deepEqual(offenders, [], `no unallowlisted production file may import the facade, found: ${offenders.join(', ')}`);
+    });
+
+    await test('every allowlisted caller genuinely imports the facade (allowlist is not vacuous)', () => {
+      const callerRelPaths = [
+        'src/services/privacy/patientAnonymization.ts',
+        'src/services/privacy/orphanFileInspection.ts',
+        'src/services/privacy/deletionReviewInventory.ts',
+        'src/services/privacy/patientActivityHistoryExport.ts',
+      ];
+      for (const rel of callerRelPaths) {
+        const content = fs.readFileSync(path.resolve(process.cwd(), rel), 'utf8');
+        assert.ok(
+          /\/imaging\/public(\.js)?['"]/.test(content),
+          `${rel} must actually import services/imaging/public.ts`,
+        );
+      }
     });
   } finally {
     await cleanupImagingFixtures();

@@ -29,9 +29,20 @@
  * `imagingRequestId` supplied by the bridge caller (see
  * imagingBridgePublic.ts's "no name/phone/filename matching" comment) —
  * never inferred from free text.
+ *
+ * The `ImagingStudy.patientId` lookup (F2-STAGE3-GAPC-001) goes through the
+ * Imaging domain's own `getBridgeStudyIdsForPatient` facade
+ * (server/src/services/imaging/public.ts) rather than a direct Prisma
+ * `imagingStudy.findMany` call — this module has no direct persistence
+ * dependency on the Imaging domain's `ImagingStudy` model. The facade
+ * returns only study ids (no metadata/storage/timestamps), scoped by the
+ * same `{ clinicId, patientId, source: 'bridge' }` predicate this module
+ * always used. `AuditLog` itself remains a direct Prisma dependency here —
+ * it is not an Imaging-owned model.
  */
 
 import prisma from '../../db.js';
+import { getBridgeStudyIdsForPatient } from '../imaging/public.js';
 
 const BRIDGE_IMAGING_AUDIT_ACTION = 'imaging_bridge_study_ingested';
 const BRIDGE_IMAGING_ENTITY_TYPE = 'imaging_study';
@@ -102,13 +113,8 @@ export async function collectBridgeImagingActivityForPatient(
   clinicId: string,
   organizationId: string,
 ): Promise<PatientActivityHistoryEntry[]> {
-  const bridgeStudies = await prisma.imagingStudy.findMany({
-    where: { patientId, clinicId, source: 'bridge' },
-    select: { id: true },
-  });
-  if (bridgeStudies.length === 0) return [];
-
-  const studyIds = bridgeStudies.map((s) => s.id);
+  const studyIds = await getBridgeStudyIdsForPatient(clinicId, patientId);
+  if (studyIds.length === 0) return [];
 
   const auditRows = await prisma.auditLog.findMany({
     where: {
