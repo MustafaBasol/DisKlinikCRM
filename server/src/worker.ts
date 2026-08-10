@@ -17,12 +17,20 @@ import dotenv from 'dotenv';
 import prisma from './db.js';
 import { startBackgroundJobs } from './jobs/startBackgroundJobs.js';
 import { closeRedis } from './utils/redis.js';
+import { resolveWorkerBackgroundJobsOwnership } from './utils/backgroundJobsOwnership.js';
+import { assertProcessRole } from './utils/processRole.js';
 
 dotenv.config();
 
+// F3-IMPL-002: fails closed (throws) if NORAMEDI_PROCESS_ROLE is explicitly
+// set to something other than "worker" — see utils/processRole.ts. Unset is
+// fine (pre-existing single-process/dev/test shape, unchanged).
+const processRole = assertProcessRole('worker');
+
+const jobsOwnership = resolveWorkerBackgroundJobsOwnership();
 console.log(
-  '[worker] Background job worker starting... ownsJobs=true (worker process always owns jobs; ' +
-    'RUN_BACKGROUND_JOBS does not apply here, only to the API process — see utils/backgroundJobsOwnership.ts)',
+  `[worker] Background job worker starting... role=worker (declared=${processRole.declared}) ` +
+    `ownsJobs=${jobsOwnership.ownsJobs} (${jobsOwnership.reason})`,
 );
 startBackgroundJobs();
 console.log('[worker] All background jobs scheduled.');

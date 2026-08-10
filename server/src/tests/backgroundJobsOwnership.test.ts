@@ -15,7 +15,10 @@
  */
 
 import assert from 'node:assert/strict';
-import { resolveApiBackgroundJobsOwnership } from '../utils/backgroundJobsOwnership.js';
+import {
+  resolveApiBackgroundJobsOwnership,
+  resolveWorkerBackgroundJobsOwnership,
+} from '../utils/backgroundJobsOwnership.js';
 
 let passed = 0;
 let failed = 0;
@@ -88,6 +91,37 @@ async function main() {
       assert.equal(off.ownsJobs, false, `expected false for NODE_ENV=${nodeEnv}`);
     }
   });
+
+  section('resolveWorkerBackgroundJobsOwnership — worker process (F3-IMPL-002)');
+
+  await test('worker always owns jobs, unconditionally', () => {
+    const decision = resolveWorkerBackgroundJobsOwnership();
+    assert.equal(decision.ownsJobs, true);
+  });
+
+  section('Intended production topology (F3-IMPL-002: ecosystem.config.cjs) — exactly one owner');
+
+  await test(
+    'ecosystem.config.cjs topology: RUN_BACKGROUND_JOBS=false on the API + worker unconditional ' +
+      '-> worker owns jobs, API does not (no duplicate registration, no zero-owner state)',
+    () => {
+      const api = resolveApiBackgroundJobsOwnership(
+        envWith({ NODE_ENV: 'production', RUN_BACKGROUND_JOBS: 'false' }),
+      );
+      const worker = resolveWorkerBackgroundJobsOwnership();
+      assert.equal(api.ownsJobs, false, 'API must not also register worker-owned jobs');
+      assert.equal(worker.ownsJobs, true, 'worker must register the jobs');
+    },
+  );
+
+  await test(
+    'pre-existing single-process shape (RUN_BACKGROUND_JOBS unset, no worker deployed): ' +
+      'API alone owns jobs — dev/test compatibility preserved',
+    () => {
+      const api = resolveApiBackgroundJobsOwnership(envWith({ NODE_ENV: 'development' }));
+      assert.equal(api.ownsJobs, true);
+    },
+  );
 
   section('Summary');
   console.log('\n─────────────────────────────────────────');
