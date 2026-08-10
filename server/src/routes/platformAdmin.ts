@@ -177,9 +177,22 @@ router.post('/auth/mfa/setup', async (req: PlatformAdminRequest, res: Response) 
     }
 
     const secret = generateTotpSecret();
-    await prisma.platformAdmin.update({
-      where: { id: admin.id },
-      data: { totpSecretEncrypted: encryptSecretTagged(secret) },
+    const hadPendingSecret = admin.totpSecretEncrypted != null;
+    // Mutation and its audit row commit atomically — see platformAdminAudit.ts.
+    // Never audit the secret itself, only that a (re-)enrollment happened.
+    await prisma.$transaction(async (tx) => {
+      await tx.platformAdmin.update({
+        where: { id: admin.id },
+        data: { totpSecretEncrypted: encryptSecretTagged(secret) },
+      });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_admin_mfa.setup_initiated',
+        resourceType: 'platform_admin',
+        resourceKey: admin.id,
+        outcome: 'success',
+        safeMetadata: { hadPendingSecret },
+      });
     });
 
     // Secret yalnızca bu cevapta düz döner (QR/manuel giriş için); DB'de şifreli.
@@ -203,9 +216,21 @@ router.post('/auth/mfa/verify', async (req: PlatformAdminRequest, res: Response)
       return res.status(400).json({ error: 'Invalid MFA code' });
     }
 
-    await prisma.platformAdmin.update({
-      where: { id: admin.id },
-      data: { totpEnabledAt: new Date() },
+    // Mutation and its audit row commit atomically — see platformAdminAudit.ts.
+    await prisma.$transaction(async (tx) => {
+      await tx.platformAdmin.update({
+        where: { id: admin.id },
+        data: { totpEnabledAt: new Date() },
+      });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_admin_mfa.enabled',
+        resourceType: 'platform_admin',
+        resourceKey: admin.id,
+        previousValue: 'false',
+        newValue: 'true',
+        outcome: 'success',
+      });
     });
     res.json({ success: true });
   } catch {
@@ -228,9 +253,23 @@ router.post('/auth/mfa/disable', async (req: PlatformAdminRequest, res: Response
       return res.status(401).json({ error: 'Invalid password or MFA code' });
     }
 
-    await prisma.platformAdmin.update({
-      where: { id: admin.id },
-      data: { totpSecretEncrypted: null, totpEnabledAt: null },
+    // Mutation and its audit row commit atomically — see platformAdminAudit.ts.
+    // This weakens the acting admin's own account security posture, so it is
+    // the single highest-risk MFA action to leave unaudited.
+    await prisma.$transaction(async (tx) => {
+      await tx.platformAdmin.update({
+        where: { id: admin.id },
+        data: { totpSecretEncrypted: null, totpEnabledAt: null },
+      });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_admin_mfa.disabled',
+        resourceType: 'platform_admin',
+        resourceKey: admin.id,
+        previousValue: 'true',
+        newValue: 'false',
+        outcome: 'success',
+      });
     });
     res.json({ success: true });
   } catch {
@@ -766,16 +805,25 @@ router.get('/sms-providers', async (_req, res: Response) => {
 });
 
 // PUT /api/platform/sms-providers — upsert by (region, providerCode)
-router.put('/sms-providers', async (req, res: Response) => {
+router.put('/sms-providers', async (req: PlatformAdminRequest, res: Response) => {
   const parsed = platformSmsProviderSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid provider payload' });
   }
   const { region, providerCode, displayName, isActive, isDefault, senderName, credentials } = parsed.data;
   const encrypted = encryptProviderCredentials(credentials ?? null);
+  const resourceKey = `${region}:${providerCode}`;
 
   try {
+    // Mutation and its audit row commit atomically — see platformAdminAudit.ts.
+    // previousValue/newValue only ever carry non-secret config fields —
+    // credentials (and whether they changed) are never included.
     const row = await prisma.$transaction(async (tx) => {
+      const existing = await tx.platformSmsProvider.findUnique({
+        where: { region_providerCode: { region, providerCode } },
+        select: { displayName: true, isActive: true, isDefault: true, senderName: true },
+      });
+
       // A region has at most one default provider.
       if (isDefault) {
         await tx.platformSmsProvider.updateMany({
@@ -783,7 +831,7 @@ router.put('/sms-providers', async (req, res: Response) => {
           data: { isDefault: false },
         });
       }
-      return tx.platformSmsProvider.upsert({
+      const updated = await tx.platformSmsProvider.upsert({
         where: { region_providerCode: { region, providerCode } },
         update: {
           displayName,
@@ -804,6 +852,24 @@ router.put('/sms-providers', async (req, res: Response) => {
           credentials: encrypted ?? undefined,
         },
       });
+
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_sms_provider.upserted',
+        resourceType: 'platform_sms_provider',
+        resourceKey,
+        previousValue: existing ? JSON.stringify(existing) : null,
+        newValue: JSON.stringify({
+          displayName: updated.displayName,
+          isActive: updated.isActive,
+          isDefault: updated.isDefault,
+          senderName: updated.senderName,
+        }),
+        outcome: 'success',
+        safeMetadata: { isNew: !existing, credentialsChanged: !!encrypted },
+      });
+
+      return updated;
     });
     res.json(sanitizePlatformSmsProvider(row));
   } catch {
@@ -829,9 +895,32 @@ router.post('/sms-providers/:id/test', async (req, res: Response) => {
 });
 
 // DELETE /api/platform/sms-providers/:id
-router.delete('/sms-providers/:id', async (req, res: Response) => {
+router.delete('/sms-providers/:id', async (req: PlatformAdminRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
-    await prisma.platformSmsProvider.delete({ where: { id: req.params.id } });
+    // Mutation and its audit row commit atomically — see platformAdminAudit.ts.
+    // A destructive credential-config removal must never appear to succeed
+    // without a durable trace of who removed which (region, providerCode).
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.platformSmsProvider.findUniqueOrThrow({
+        where: { id },
+        select: { region: true, providerCode: true, displayName: true, isActive: true, isDefault: true },
+      });
+      await tx.platformSmsProvider.delete({ where: { id } });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_sms_provider.deleted',
+        resourceType: 'platform_sms_provider',
+        resourceKey: `${existing.region}:${existing.providerCode}`,
+        previousValue: JSON.stringify({
+          displayName: existing.displayName,
+          isActive: existing.isActive,
+          isDefault: existing.isDefault,
+        }),
+        newValue: null,
+        outcome: 'success',
+      });
+    });
     res.json({ ok: true });
   } catch {
     res.status(404).json({ error: 'SMS provider not found' });
@@ -1070,13 +1159,37 @@ router.get('/privacy/data-retention/policy', async (_req, res: Response) => {
 
 // PATCH /api/platform/privacy/data-retention/settings
 // Update runtime toggle for automatic cleanup. Platform-admin only.
-router.patch('/privacy/data-retention/settings', async (req, res: Response) => {
+//
+// F3-IMPL-003: this KVKK-relevant kill switch had zero durable audit
+// evidence before — the sibling legacy-consent-correction runtime toggle
+// below already wrote a PlatformAdminAuditEvent; this one did not. Same
+// pattern applied here: durable, admin-attributed audit row written in the
+// SAME transaction as the setting mutation (see platformAdminAudit.ts), and
+// the previous value is read INSIDE the transaction under a
+// transaction-scoped advisory lock keyed to this setting, so concurrent
+// PATCH requests serialize and the audit row's previousValue always matches
+// the actual committed write order (mirrors the legacy-consent-correction
+// handler below).
+router.patch('/privacy/data-retention/settings', async (req: PlatformAdminRequest, res: Response) => {
   const { runtimeCleanupEnabled } = req.body ?? {};
   if (typeof runtimeCleanupEnabled !== 'boolean') {
     res.status(400).json({ error: 'runtimeCleanupEnabled must be a boolean' });
     return;
   }
-  await setPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY, String(runtimeCleanupEnabled));
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${DATA_RETENTION_RUNTIME_SETTING_KEY}))`;
+    const previousValue = await getPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY, tx);
+    await setPlatformSetting(DATA_RETENTION_RUNTIME_SETTING_KEY, String(runtimeCleanupEnabled), tx);
+    await writePlatformAdminAuditEventInTx(tx, {
+      actorPlatformAdminId: req.platformAdmin?.id ?? null,
+      action: 'platform_setting.updated',
+      resourceType: 'platform_setting',
+      resourceKey: DATA_RETENTION_RUNTIME_SETTING_KEY,
+      previousValue,
+      newValue: String(runtimeCleanupEnabled),
+      outcome: 'success',
+    });
+  });
   const config = loadDataRetentionConfig();
   res.json(buildPolicyResponse(config, runtimeCleanupEnabled));
 });
