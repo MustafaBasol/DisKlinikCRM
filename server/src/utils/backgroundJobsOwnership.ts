@@ -52,3 +52,19 @@ export function resolveApiBackgroundJobsOwnership(
     reason: `RUN_BACKGROUND_JOBS=${JSON.stringify(env.RUN_BACKGROUND_JOBS)} — API owns jobs (only the literal string "false" opts out)`,
   };
 }
+
+/**
+ * The worker process's (server/src/worker.ts) side of the same decision.
+ * Unlike the API, the worker is unconditional: it always owns jobs and does
+ * not read RUN_BACKGROUND_JOBS at all (see worker.ts's own docstring).
+ * Extracted as a named, tested function — mirroring
+ * resolveApiBackgroundJobsOwnership — so the intended production topology
+ * (API opted out via RUN_BACKGROUND_JOBS=false, worker unconditional) can be
+ * asserted in one place instead of relying on reading worker.ts by eye.
+ */
+export function resolveWorkerBackgroundJobsOwnership(): BackgroundJobsOwnershipDecision {
+  return {
+    ownsJobs: true,
+    reason: 'worker process always owns jobs — RUN_BACKGROUND_JOBS does not apply here, only to the API process',
+  };
+}
