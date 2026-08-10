@@ -4,12 +4,19 @@
 # chmod +x /usr/local/sbin/noramedi-deploy.sh
 #
 # Full production deploy sequence:
-#   1. git pull                       (skip: --skip-pull)
-#   2. npm ci                         (skip: --skip-build)
-#   3. prisma migrate deploy          (skip: --skip-migrate)
-#   4. prisma generate                (skip: --skip-generate)
-#   5. pm2 reload noramedi-api --update-env
-#   6. healthcheck with retry (401 = healthy)
+#   1. git pull                                        (skip: --skip-pull)
+#   2. npm ci                                           (skip: --skip-build)
+#   3. prisma migrate deploy                            (skip: --skip-migrate)
+#   4. prisma generate                                  (skip: --skip-generate)
+#   5. pm2 startOrReload ecosystem.config.cjs --only noramedi-api --update-env
+#   6. pm2 startOrReload ecosystem.config.cjs --only noramedi-worker --update-env
+#   7. API healthcheck with retry (401 = healthy)
+#   8. worker PM2-status verification with retry (F3-IMPL-002)
+#
+# Steps 5-8 use the repository-defined ecosystem.config.cjs (F3-IMPL-002) as
+# the single source of truth for both PM2 processes — see that file's
+# comments for the first-deploy-may-restart-not-reload caveat and for why
+# only the API app sets RUN_BACKGROUND_JOBS=false.
 #
 # Usage:
 #   noramedi-deploy.sh [OPTIONS]
@@ -24,7 +31,9 @@
 set -euo pipefail
 
 APP_DIR="${NORAMEDI_APP_DIR:-/var/www/noramedi}"
-PM2_NAME="noramedi-api"
+PM2_API_NAME="noramedi-api"
+PM2_WORKER_NAME="noramedi-worker"
+ECOSYSTEM_FILE="$APP_DIR/ecosystem.config.cjs"
 HEALTHCHECK="/usr/local/sbin/noramedi-healthcheck.sh"
 
 SKIP_PULL=false
@@ -81,15 +90,71 @@ fi
 
 popd >/dev/null
 
-# 5. Reload app (graceful — zero-downtime if cluster mode; instant otherwise)
-echo "[$(timestamp)] Reloading PM2 process: $PM2_NAME"
-pm2 reload "$PM2_NAME" --update-env
+# pm2_status_of NAME — prints the PM2 "status" field for app NAME (e.g.
+# "online", "stopped", "errored"), or "missing" if no app with that name is
+# registered. Never prints anything beyond the status word — no env/secrets.
+pm2_status_of() {
+  local name="$1"
+  pm2 jlist | node -e '
+    let raw = "";
+    process.stdin.on("data", chunk => { raw += chunk; });
+    process.stdin.on("end", () => {
+      let apps;
+      try { apps = JSON.parse(raw); } catch { process.stdout.write("unparseable"); return; }
+      const app = apps.find(a => a.name === process.argv[1]);
+      process.stdout.write(app && app.pm2_env ? String(app.pm2_env.status) : "missing");
+    });
+  ' "$name"
+}
 
-# Short grace period so PM2 marks the process online before healthcheck starts.
+# verify_pm2_online NAME MAX_ATTEMPTS INTERVAL — polls pm2_status_of until it
+# reports "online" or the attempt budget is exhausted. Returns non-zero on
+# failure/timeout; never prints secrets (status word only).
+verify_pm2_online() {
+  local name="$1" max_attempts="$2" interval="$3" attempt=0 status
+  while true; do
+    attempt=$(( attempt + 1 ))
+    status="$(pm2_status_of "$name" 2>/dev/null || echo error)"
+    if [[ "$status" == "online" ]]; then
+      echo "[$(timestamp)] OK — PM2 process '$name' is online after $attempt attempt(s)."
+      return 0
+    fi
+    if [[ $attempt -ge $max_attempts ]]; then
+      echo "[$(timestamp)] FAILED — PM2 process '$name' status is '$status' after $attempt attempt(s)." >&2
+      return 1
+    fi
+    echo "[$(timestamp)] Attempt $attempt/$max_attempts — '$name' status '$status', retrying in ${interval}s..."
+    sleep "$interval"
+  done
+}
+
+# 5. Reload/start API (graceful reload if config unchanged; otherwise a
+#    one-time restart — see ecosystem.config.cjs's operational note).
+echo "[$(timestamp)] Reloading PM2 process: $PM2_API_NAME"
+pm2 startOrReload "$ECOSYSTEM_FILE" --only "$PM2_API_NAME" --update-env
+
+# 6. Reload/start worker. F3-IMPL-002: previously this process's deploy
+#    lifecycle was entirely undefined in the repository (RISK_REGISTER.md
+#    R-033) — a failure here is NOT silently ignored; the script aborts.
+echo "[$(timestamp)] Reloading PM2 process: $PM2_WORKER_NAME"
+pm2 startOrReload "$ECOSYSTEM_FILE" --only "$PM2_WORKER_NAME" --update-env
+
+# Short grace period so PM2 marks both processes online before verification.
 sleep 2
 
-# 6. Healthcheck with retry
-echo "[$(timestamp)] Running healthcheck..."
+# 7. API healthcheck with retry
+echo "[$(timestamp)] Running API healthcheck..."
 "$HEALTHCHECK" --local --max-attempts 12 --interval 5
 
-echo "=== [$(timestamp)] Deploy complete ==="
+# 8. Worker verification. The worker has no HTTP surface (deliberately not
+#    added — see F3-IMPL-002 evidence doc); PM2's own process status is the
+#    non-invasive liveness signal, consistent with LAUNCH_GATES.md's
+#    "PM2 online status" acceptance for worker health.
+echo "[$(timestamp)] Verifying worker process state: $PM2_WORKER_NAME"
+if ! verify_pm2_online "$PM2_WORKER_NAME" 12 5; then
+  echo "[$(timestamp)] FATAL — $PM2_WORKER_NAME did not reach 'online' state." >&2
+  echo "[$(timestamp)] Background jobs (reminders, retries, cleanup, sync) may not be running. Deploy aborted." >&2
+  exit 1
+fi
+
+echo "=== [$(timestamp)] Deploy complete — $PM2_API_NAME and $PM2_WORKER_NAME both online ==="

@@ -77,10 +77,16 @@ import { getBearerFallbackWarnings } from './utils/authFallback.js';
 import { httpLogger, logUnhandledError } from './utils/logger.js';
 import { attachRequestIdHeader } from './middleware/requestId.js';
 import { resolveApiBackgroundJobsOwnership } from './utils/backgroundJobsOwnership.js';
+import { assertProcessRole } from './utils/processRole.js';
 
 dotenv.config();
 
 // ── Startup validation ────────────────────────────────────────────────────────
+// F3-IMPL-002: fails closed (throws) if NORAMEDI_PROCESS_ROLE is explicitly
+// set to something other than "api" — see utils/processRole.ts. Unset is
+// fine (pre-existing single-process/dev/test shape, unchanged).
+const processRole = assertProcessRole('api');
+
 if (!isEncryptionKeyConfigured()) {
   if (process.env.NODE_ENV === 'production') {
     console.error(
@@ -291,7 +297,10 @@ const server = app.listen(port, host, () => {
   // mode this process is in — see utils/backgroundJobsOwnership.ts for why
   // the underlying default is intentionally unchanged.
   const jobsOwnership = resolveApiBackgroundJobsOwnership();
-  console.log(`[jobs] API background-jobs ownership: ownsJobs=${jobsOwnership.ownsJobs} (${jobsOwnership.reason})`);
+  console.log(
+    `[jobs] API background-jobs ownership: role=api (declared=${processRole.declared}) ` +
+      `ownsJobs=${jobsOwnership.ownsJobs} (${jobsOwnership.reason})`,
+  );
   if (jobsOwnership.ownsJobs) {
     startBackgroundJobs();
   }
