@@ -1,0 +1,44 @@
+# F3-SEC-EXIT-001 — dependency update automation (dependency freshness).
+#
+# This file is Dependabot's *version-update* configuration only: it opens a
+# pull request on a weekly schedule when a newer dependency version is
+# published, for each ecosystem/directory below. It requires no new CI job,
+# no new secret, and cannot fail an existing workflow (it does not run inside
+# ci-layers.yml/ci-pr.yml/ci-main-and-nightly.yml).
+#
+# R1 correction (F3-SEC-EXIT-001-R1): this file's presence is NOT evidence
+# that Dependabot vulnerability *alerts*, Dependabot *security updates*, code
+# scanning (CodeQL or equivalent), `npm audit` in CI, or any third-party
+# SAST/dependency-scanning tool are enabled. Each of those is a separate
+# GitHub repository *setting* (Settings -> Code security and analysis) or a
+# separate CI control, none of which a committed file can turn on by itself.
+# See the external verification checklist in the F3-SEC-EXIT-001 evidence doc
+# (§5, item 1) for the one-time repository-settings step this file does not
+# — and cannot — automate. Prior to this file, the repository had no
+# dependency *update automation* of any kind (no Dependabot config, no
+# CodeQL, no `npm audit` CI step, no Snyk); that specific, narrower gap is
+# what this file closes.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "npm"
+    directory: "/server"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "npm"
+    directory: "/bridge-agent"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
