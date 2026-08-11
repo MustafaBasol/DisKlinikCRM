@@ -37,6 +37,7 @@ import { resolveSmsRouting, SMS_ROUTING_POLICIES } from '../services/sms/smsRout
 import { getSmsEntitlement } from '../services/sms/smsEntitlement.js';
 import { evaluateAuthLoginFailureSignal } from '../services/security/securityDetectionRules.js';
 import { writePlatformAdminAuditEventInTx, writePlatformAdminAuditEvent } from '../services/platformAdminAudit.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -1976,7 +1977,7 @@ router.post('/file-backups/run', async (req: PlatformAdminRequest, res: Response
       resourceKey: 'files',
       outcome: 'success',
     }).catch((auditErr) => {
-      console.error('[platform-file-backup] Failed to write audit event for completed manual backup run', auditErr);
+      console.error('[platform-file-backup] Failed to write audit event for completed manual backup run', safeErrorFields(auditErr));
     });
     res.json(result);
   } catch (err: any) {
@@ -1989,7 +1990,7 @@ router.post('/file-backups/run', async (req: PlatformAdminRequest, res: Response
       outcome: 'error',
       safeMetadata: { errorType: err?.name ?? 'Error' },
     }).catch((auditErr) => {
-      console.error('[platform-file-backup] Failed to write audit event for failed manual backup run', auditErr);
+      console.error('[platform-file-backup] Failed to write audit event for failed manual backup run', safeErrorFields(auditErr));
     });
     res.status(status).json({ error: `File backup run failed: ${err?.message ?? 'Unknown error'}` });
   }
@@ -2017,7 +2018,7 @@ router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest,
       outcome: 'success',
       safeMetadata: { sampleSize: sampleSize ?? null },
     }).catch((auditErr) => {
-      console.error('[platform-file-backup] Failed to write audit event for completed restore rehearsal', auditErr);
+      console.error('[platform-file-backup] Failed to write audit event for completed restore rehearsal', safeErrorFields(auditErr));
     });
     res.json(result);
   } catch (err: any) {
@@ -2029,7 +2030,7 @@ router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest,
       outcome: 'error',
       safeMetadata: { sampleSize: sampleSize ?? null, errorType: err?.name ?? 'Error' },
     }).catch((auditErr) => {
-      console.error('[platform-file-backup] Failed to write audit event for failed restore rehearsal', auditErr);
+      console.error('[platform-file-backup] Failed to write audit event for failed restore rehearsal', safeErrorFields(auditErr));
     });
     res.status(500).json({ error: err?.message ?? 'Restore rehearsal failed' });
   }

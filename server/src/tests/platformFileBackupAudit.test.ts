@@ -203,6 +203,99 @@ async function main() {
 
   await cleanAuditRows();
 
+  section('Audit-write failure path — no raw error content in logs (F3-IMPL-005-R1)');
+
+  // Sentinels chosen to be unmistakable if they ever leaked into a log line.
+  const SENTINEL_EMAIL = 'patient@example.test';
+  const SENTINEL_PHONE = '+905551234567';
+  const SENTINEL_TOKEN = 'SECRET_TEST_TOKEN_9f3ab1';
+
+  function withCapturedConsoleError<T>(fn: () => Promise<T>): Promise<{ result: T; calls: unknown[][] }> {
+    const calls: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => { calls.push(args); };
+    return fn()
+      .then((result) => { console.error = original; return { result, calls }; })
+      .catch((err) => { console.error = original; throw err; });
+  }
+
+  function withPoisonedAuditTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    const original = prisma.$transaction.bind(prisma);
+    const sensitiveError = new Error(
+      `simulated audit-write failure — connection string postgres://dbuser:${SENTINEL_TOKEN}@10.0.0.5:5432/db, ` +
+      `patient contact ${SENTINEL_EMAIL} / ${SENTINEL_PHONE}`,
+    );
+    sensitiveError.name = 'PrismaClientKnownRequestError';
+    (sensitiveError as unknown as { code: string }).code = 'P2010';
+    (prisma as unknown as { $transaction: unknown }).$transaction = () => Promise.reject(sensitiveError);
+    return fn().finally(() => {
+      (prisma as unknown as { $transaction: unknown }).$transaction = original;
+    });
+  }
+
+  await test('manual backup run: audit-write failure on the "failed" branch never logs raw error content', async () => {
+    delete process.env.FILE_BACKUP_ENABLED;
+    const req = mockReq({});
+    const res = mockRes();
+
+    const { calls } = await withCapturedConsoleError(() =>
+      withPoisonedAuditTransaction(() => runChain(runChainRoute, req, res)),
+    );
+
+    // The operation still responds — a failed best-effort audit write must
+    // never block or alter the caller-facing response.
+    assert.equal(res.statusCode, 409);
+
+    const relevant = calls.filter((args) =>
+      typeof args[0] === 'string' && args[0].includes('[platform-file-backup]') && args[0].includes('failed manual backup run'),
+    );
+    assert.equal(relevant.length, 1, 'expected exactly one log line for the poisoned audit write');
+
+    const serialized = JSON.stringify(relevant[0]);
+    assert.ok(!serialized.includes(SENTINEL_EMAIL), 'log must not contain the raw patient email');
+    assert.ok(!serialized.includes(SENTINEL_PHONE), 'log must not contain the raw phone number');
+    assert.ok(!serialized.includes(SENTINEL_TOKEN), 'log must not contain the raw secret token');
+    assert.ok(!serialized.includes('postgres://'), 'log must not contain the raw connection string');
+    assert.ok(!serialized.includes('10.0.0.5'), 'log must not contain the raw host detail');
+
+    const safeFieldsArg = relevant[0][1] as Record<string, unknown>;
+    assert.equal(safeFieldsArg.errorName, 'PrismaClientKnownRequestError');
+    assert.equal(safeFieldsArg.errorCode, 'P2010');
+    assert.deepEqual(Object.keys(safeFieldsArg).sort(), ['errorCode', 'errorName']);
+  });
+
+  await cleanAuditRows();
+
+  await test('restore rehearsal: audit-write failure on the "completed" branch never logs raw error content', async () => {
+    const req = mockReq({});
+    const res = mockRes();
+
+    const { calls } = await withCapturedConsoleError(() =>
+      withPoisonedAuditTransaction(() => runChain(rehearsalChain, req, res)),
+    );
+
+    assert.equal(res.statusCode, 200);
+
+    const relevant = calls.filter((args) =>
+      typeof args[0] === 'string' && args[0].includes('[platform-file-backup]') && args[0].includes('completed restore rehearsal'),
+    );
+    assert.equal(relevant.length, 1, 'expected exactly one log line for the poisoned audit write');
+
+    const serialized = JSON.stringify(relevant[0]);
+    assert.ok(!serialized.includes(SENTINEL_EMAIL), 'log must not contain the raw patient email');
+    assert.ok(!serialized.includes(SENTINEL_PHONE), 'log must not contain the raw phone number');
+    assert.ok(!serialized.includes(SENTINEL_TOKEN), 'log must not contain the raw secret token');
+    assert.ok(!serialized.includes('postgres://'), 'log must not contain the raw connection string');
+    assert.ok(!serialized.includes('10.0.0.5'), 'log must not contain the raw host detail');
+
+    const safeFieldsArg = relevant[0][1] as Record<string, unknown>;
+    assert.equal(safeFieldsArg.errorName, 'PrismaClientKnownRequestError');
+    assert.equal(safeFieldsArg.errorCode, 'P2010');
+    assert.deepEqual(Object.keys(safeFieldsArg).sort(), ['errorCode', 'errorName']);
+  });
+
+  await cleanAuditRows();
+
   section('Summary');
   console.log('\n─────────────────────────────────────────');
   console.log(`Results: ${passed} passed, ${failed} failed`);
