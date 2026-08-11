@@ -37,10 +37,18 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 
 // These unit tests exercise the middleware via Bearer tokens; the production
 // default is now cookie-only, so enable the fallback explicitly for the suite.
 process.env.PLATFORM_BEARER_FALLBACK_ENABLED = 'true';
+
+// F3-IMPL-003's MFA (TOTP) and SMS-provider audit-trail sections below exercise
+// route handlers that call encryptSecretTagged/decryptSecretTagged, which hard-fail
+// without a valid 64-char-hex ENCRYPTION_KEY (see utils/encryption.ts). Same
+// disposable-test-key convention as the other suites in this directory
+// (e.g. dataRetentionCleanupJob.test.ts) — synthetic, never a real secret.
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'f'.repeat(64);
 
 import {
   generatePlatformToken,
@@ -50,10 +58,13 @@ import {
   loadDataRetentionConfig,
   DATA_RETENTION_DEFAULTS,
   DATA_RETENTION_MIN_DAYS,
+  DATA_RETENTION_RUNTIME_SETTING_KEY,
 } from '../services/privacy/dataRetentionPolicy.js';
 import prisma from '../db.js';
 import platformAdminRouter from '../routes/platformAdmin.js';
 import { LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } from '../services/communicationConsent/legacyConsentCorrection.js';
+import { generateTotpSecret, generateTotp } from '../utils/totp.js';
+import { encryptSecretTagged } from '../utils/encryption.js';
 
 // ── Test yardımcısı ───────────────────────────────────────────────────────────
 
@@ -536,7 +547,7 @@ section('Privacy / Legacy Consent Correction Runtime Toggle (KVKK-HIGH-008-F1) �
 // covered above by the generic authenticatePlatformAdmin clinic-JWT-rejection
 // tests, which gate every route behind this router, including these two.
 type RouterLike = { stack: Array<any> };
-function getRouteMiddlewareChain(router: RouterLike, method: 'get' | 'patch' | 'delete', path: string) {
+function getRouteMiddlewareChain(router: RouterLike, method: 'get' | 'post' | 'put' | 'patch' | 'delete', path: string) {
   for (const layer of router.stack) {
     if (layer.route && layer.route.path === path && layer.route.methods?.[method]) {
       return layer.route.stack.map((s: any) => s.handle);
@@ -1306,6 +1317,551 @@ await test('PATCH settings: admin-attributed console log is emitted on toggle (e
   await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
   await cleanAuditRows();
 });
+
+section('F3-IMPL-003 — Platform-Admin Privileged Mutation Audit Coverage (R-019)');
+
+// Every route below is gated by the SAME router-level
+// `router.use(authenticatePlatformAdmin, csrfProtection('platform'))` already
+// proven (many times, above) to reject an invalid/missing platform token
+// before any handler runs — so an unauthorized caller can never reach any of
+// the mfa/*, sms-providers, or data-retention/settings handlers exercised
+// below. One direct proof here, rather than duplicating it six times.
+await test('F3-IMPL-003: unauthorized (invalid platform token) requests never reach the mfa/*, sms-providers, or data-retention/settings handlers', async () => {
+  const req = makeReq('Bearer not-a-real-platform-token');
+  const res = makeRes();
+  let nextCalled = false;
+  await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
+  assert.equal(nextCalled, false, 'authenticatePlatformAdmin must reject before any handler in this router runs');
+  assert.equal(res._status, 401);
+});
+
+// ── MFA (TOTP) — security/auth configuration (priority class 1) ─────────────
+//
+// mfa/setup and mfa/verify mutate PlatformAdmin.totpSecretEncrypted /
+// totpEnabledAt with zero prior audit trail; mfa/disable is the single
+// highest-risk gap of the three — it weakens the acting admin's own account
+// security posture. All three now write a PlatformAdminAuditEvent in the
+// SAME transaction as the mutation (see platformAdmin.ts).
+
+section('MFA (TOTP) — durable audit trail (F3-IMPL-003)');
+
+const MFA_ADMIN_ID = 'admin-mfa-audit-f3impl003';
+const MFA_ADMIN_PASSWORD = 'Str0ngTestPassword!MFA-F3';
+
+await prisma.platformAdmin.upsert({
+  where: { id: MFA_ADMIN_ID },
+  update: { passwordHash: await bcrypt.hash(MFA_ADMIN_PASSWORD, 10) },
+  create: {
+    id: MFA_ADMIN_ID,
+    email: `${MFA_ADMIN_ID}-fixture@platform.test`,
+    passwordHash: await bcrypt.hash(MFA_ADMIN_PASSWORD, 10),
+    name: 'Test Fixture Platform Admin (MFA Audit)',
+  },
+});
+
+function mfaReq(body: Record<string, unknown> = {}, id: string = MFA_ADMIN_ID) {
+  return { body, platformAdmin: { id, email: `${id}@platform.test` } } as any;
+}
+
+async function cleanMfaAuditRows() {
+  await prisma.platformAdminAuditEvent.deleteMany({
+    where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID },
+  });
+}
+
+async function resetMfaAdminState(overrides: { totpSecretEncrypted?: string | null; totpEnabledAt?: Date | null } = {}) {
+  await prisma.platformAdmin.update({
+    where: { id: MFA_ADMIN_ID },
+    data: { totpSecretEncrypted: null, totpEnabledAt: null, ...overrides },
+  });
+}
+
+// -- POST /auth/mfa/setup --
+
+await test('POST /auth/mfa/setup: success creates exactly one platform_admin_mfa.setup_initiated audit row, attributed by id, never the secret', async () => {
+  await cleanMfaAuditRows();
+  await resetMfaAdminState();
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/auth/mfa/setup');
+  const res = mockPlatformRes();
+  await runChain(chain, mfaReq({}), res);
+  assert.equal(res.statusCode, 200);
+  assert.ok(typeof res.body?.secret === 'string' && res.body.secret.length > 0);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID, action: 'platform_admin_mfa.setup_initiated' },
+  });
+  assert.equal(rows.length, 1, 'exactly one audit row for one successful setup call');
+  const row = rows[0]!;
+  assert.equal(row.actorPlatformAdminId, MFA_ADMIN_ID, 'must durably attribute the acting platform admin by id');
+  assert.equal(row.outcome, 'success');
+  assert.equal(row.previousValue, null);
+  assert.equal(row.newValue, null);
+  assert.equal((row.safeMetadata as any)?.hadPendingSecret, false);
+
+  const serialized = JSON.stringify(row);
+  assert.ok(!serialized.includes(res.body.secret), 'audit row must never contain the TOTP secret itself');
+  assert.ok(!serialized.includes('@'), 'audit row must contain no email-shaped value');
+});
+
+await test('POST /auth/mfa/setup: re-enrollment over an existing unverified secret records hadPendingSecret=true', async () => {
+  await cleanMfaAuditRows();
+  await resetMfaAdminState({ totpSecretEncrypted: encryptSecretTagged(generateTotpSecret()) });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/auth/mfa/setup');
+  const res = mockPlatformRes();
+  await runChain(chain, mfaReq({}), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID, action: 'platform_admin_mfa.setup_initiated' },
+  });
+  assert.equal(rows.length, 1);
+  assert.equal((rows[0]!.safeMetadata as any)?.hadPendingSecret, true);
+});
+
+await test('POST /auth/mfa/setup: rejected (MFA already enabled) creates no audit row', async () => {
+  await cleanMfaAuditRows();
+  await resetMfaAdminState({ totpEnabledAt: new Date() });
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/auth/mfa/setup');
+  const res = mockPlatformRes();
+  await runChain(chain, mfaReq({}), res);
+  assert.equal(res.statusCode, 400);
+
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID } });
+  assert.equal(after, before, 'a rejected setup attempt must never create any audit record');
+  await resetMfaAdminState();
+});
+
+await test('POST /auth/mfa/setup: a non-existent actor id (admin row does not exist) is rejected before any mutation is attempted — no audit row', async () => {
+  const ghostId = 'admin-mfa-ghost-setup';
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { actorPlatformAdminId: ghostId } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/auth/mfa/setup');
+  const res = mockPlatformRes();
+  await runChain(chain, mfaReq({}, ghostId), res);
+  assert.equal(res.statusCode, 404, 'the handler resolves the acting admin row before any mutation — a non-existent actor can never reach the transaction');
+
+  const count = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(count, 0);
+});
+
+// -- POST /auth/mfa/verify --
+
+async function primeMfaVerifyState(): Promise<string> {
+  const secret = generateTotpSecret();
+  await resetMfaAdminState({ totpSecretEncrypted: encryptSecretTagged(secret) });
+  return secret;
+}
+
+await test('POST /auth/mfa/verify: success creates exactly one platform_admin_mfa.enabled audit row with previousValue=false/newValue=true', async () => {
+  await cleanMfaAuditRows();
+  const secret = await primeMfaVerifyState();
+  const code = generateTotp(secret);
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/auth/mfa/verify');
+  const res = mockPlatformRes();
+  await runChain(chain, mfaReq({ code }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID, action: 'platform_admin_mfa.enabled' },
+  });
+  assert.equal(rows.length, 1);
+  const row = rows[0]!;
+  assert.equal(row.actorPlatformAdminId, MFA_ADMIN_ID);
+  assert.equal(row.previousValue, 'false');
+  assert.equal(row.newValue, 'true');
+  assert.equal(row.outcome, 'success');
+
+  const admin = await prisma.platformAdmin.findUnique({ where: { id: MFA_ADMIN_ID } });
+  assert.ok(admin?.totpEnabledAt, 'the underlying mutation must have actually taken effect');
+});
+
+await test('POST /auth/mfa/verify: rejected (wrong code) creates no audit row', async () => {
+  await cleanMfaAuditRows();
+  await primeMfaVerifyState();
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID, action: 'platform_admin_mfa.enabled' } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/auth/mfa/verify');
+  const res = mockPlatformRes();
+  await runChain(chain, mfaReq({ code: '000000' }), res);
+  assert.equal(res.statusCode, 400);
+
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID, action: 'platform_admin_mfa.enabled' } });
+  assert.equal(after, before, 'a rejected verify attempt must never create any audit record');
+});
+
+await test('POST /auth/mfa/verify: a non-existent actor id is rejected before any mutation is attempted — no audit row', async () => {
+  const ghostId = 'admin-mfa-ghost-verify';
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { actorPlatformAdminId: ghostId } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/auth/mfa/verify');
+  const res = mockPlatformRes();
+  await runChain(chain, mfaReq({ code: '123456' }, ghostId), res);
+  assert.equal(res.statusCode, 404);
+
+  const count = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(count, 0);
+});
+
+// -- POST /auth/mfa/disable --
+
+async function primeMfaDisableState(): Promise<string> {
+  const secret = generateTotpSecret();
+  await resetMfaAdminState({ totpSecretEncrypted: encryptSecretTagged(secret), totpEnabledAt: new Date() });
+  return secret;
+}
+
+await test('POST /auth/mfa/disable: success creates exactly one platform_admin_mfa.disabled audit row with previousValue=true/newValue=false, no password/PII', async () => {
+  await cleanMfaAuditRows();
+  const secret = await primeMfaDisableState();
+  const code = generateTotp(secret);
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/auth/mfa/disable');
+  const res = mockPlatformRes();
+  await runChain(chain, mfaReq({ code, password: MFA_ADMIN_PASSWORD }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID, action: 'platform_admin_mfa.disabled' },
+  });
+  assert.equal(rows.length, 1);
+  const row = rows[0]!;
+  assert.equal(row.previousValue, 'true');
+  assert.equal(row.newValue, 'false');
+  assert.equal(row.outcome, 'success');
+  const serialized = JSON.stringify(row);
+  assert.ok(!serialized.includes(MFA_ADMIN_PASSWORD), 'audit row must never contain the admin password');
+  assert.ok(!serialized.includes('@'), 'audit row must contain no email-shaped value');
+
+  const admin = await prisma.platformAdmin.findUnique({ where: { id: MFA_ADMIN_ID } });
+  assert.equal(admin?.totpEnabledAt, null);
+  assert.equal(admin?.totpSecretEncrypted, null);
+});
+
+await test('POST /auth/mfa/disable: rejected (wrong password) creates no audit row and leaves MFA enabled', async () => {
+  await cleanMfaAuditRows();
+  const secret = await primeMfaDisableState();
+  const code = generateTotp(secret);
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID, action: 'platform_admin_mfa.disabled' } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/auth/mfa/disable');
+  const res = mockPlatformRes();
+  await runChain(chain, mfaReq({ code, password: 'definitely-the-wrong-password' }), res);
+  assert.equal(res.statusCode, 401);
+
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'platform_admin', resourceKey: MFA_ADMIN_ID, action: 'platform_admin_mfa.disabled' } });
+  assert.equal(after, before, 'a rejected disable attempt must never create any audit record');
+
+  const admin = await prisma.platformAdmin.findUnique({ where: { id: MFA_ADMIN_ID } });
+  assert.ok(admin?.totpEnabledAt, 'MFA must remain enabled after a rejected disable attempt');
+});
+
+await test('POST /auth/mfa/disable: a non-existent actor id is rejected before any mutation is attempted — no audit row', async () => {
+  const ghostId = 'admin-mfa-ghost-disable';
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { actorPlatformAdminId: ghostId } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/auth/mfa/disable');
+  const res = mockPlatformRes();
+  await runChain(chain, mfaReq({ code: '123456', password: 'irrelevant' }, ghostId), res);
+  assert.equal(res.statusCode, 404);
+
+  const count = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(count, 0);
+});
+
+await cleanMfaAuditRows();
+
+// ── Platform SMS Providers — provider/credential configuration (priority 2) ─
+//
+// PUT upserts (and DELETE removes) global, cross-tenant SMS provider
+// credentials with zero prior audit trail. Both now write a
+// PlatformAdminAuditEvent in the SAME transaction as the mutation; neither
+// previousValue/newValue nor safeMetadata ever carries the encrypted
+// credentials payload — only non-secret config fields and a
+// credentialsChanged boolean.
+
+section('Platform SMS Providers — durable audit trail (F3-IMPL-003)');
+
+const SMS_ADMIN_ID = 'admin-sms-provider-audit-f3impl003';
+const SMS_REGION = 'tr';
+const SMS_PROVIDER_CODE = 'test_provider_f3impl003';
+const SMS_RESOURCE_KEY = `${SMS_REGION}:${SMS_PROVIDER_CODE}`;
+
+await prisma.platformAdmin.upsert({
+  where: { id: SMS_ADMIN_ID },
+  update: {},
+  create: {
+    id: SMS_ADMIN_ID,
+    email: `${SMS_ADMIN_ID}-fixture@platform.test`,
+    passwordHash: 'not-a-real-hash-test-fixture-only',
+    name: 'Test Fixture Platform Admin (SMS Provider Audit)',
+  },
+});
+
+function smsReq(body: Record<string, unknown> = {}, id: string = SMS_ADMIN_ID) {
+  return { body, params: {}, platformAdmin: { id, email: `${id}@platform.test` } } as any;
+}
+
+async function cleanSmsProviderFixture() {
+  await prisma.platformSmsProvider.deleteMany({ where: { region: SMS_REGION, providerCode: SMS_PROVIDER_CODE } });
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { resourceType: 'platform_sms_provider', resourceKey: SMS_RESOURCE_KEY } });
+}
+
+await cleanSmsProviderFixture();
+
+await test('PUT /sms-providers: creating a new provider creates exactly one platform_sms_provider.upserted audit row (previousValue=null), never the credentials', async () => {
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'put', '/sms-providers');
+  const res = mockPlatformRes();
+  await runChain(chain, smsReq({
+    region: SMS_REGION, providerCode: SMS_PROVIDER_CODE, displayName: 'Test Provider',
+    isActive: true, credentials: { apiKey: 'super-secret-value-f3impl003' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({ where: { resourceType: 'platform_sms_provider', resourceKey: SMS_RESOURCE_KEY } });
+  assert.equal(rows.length, 1);
+  const row = rows[0]!;
+  assert.equal(row.action, 'platform_sms_provider.upserted');
+  assert.equal(row.actorPlatformAdminId, SMS_ADMIN_ID);
+  assert.equal(row.previousValue, null);
+  assert.ok(row.newValue?.includes('Test Provider'));
+  assert.equal(row.outcome, 'success');
+  assert.equal((row.safeMetadata as any)?.isNew, true);
+  assert.equal((row.safeMetadata as any)?.credentialsChanged, true);
+
+  const serialized = JSON.stringify(row);
+  assert.ok(!serialized.includes('super-secret-value-f3impl003'), 'audit row must never contain provider credentials');
+});
+
+await test('PUT /sms-providers: updating an existing provider records accurate non-secret previous/new snapshots', async () => {
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'put', '/sms-providers');
+  const res = mockPlatformRes();
+  await runChain(chain, smsReq({ region: SMS_REGION, providerCode: SMS_PROVIDER_CODE, displayName: 'Renamed Provider', isActive: false }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { resourceType: 'platform_sms_provider', resourceKey: SMS_RESOURCE_KEY },
+    orderBy: { createdAt: 'asc' },
+  });
+  assert.equal(rows.length, 2, 'the earlier create and this update must each leave exactly one row');
+  const row = rows[1]!;
+  const previous = JSON.parse(row.previousValue!);
+  const next = JSON.parse(row.newValue!);
+  assert.equal(previous.displayName, 'Test Provider');
+  assert.equal(previous.isActive, true);
+  assert.equal(next.displayName, 'Renamed Provider');
+  assert.equal(next.isActive, false);
+  assert.equal((row.safeMetadata as any)?.isNew, false);
+  assert.equal((row.safeMetadata as any)?.credentialsChanged, false, 'credentials omitted from this payload must not be reported as changed');
+});
+
+await test('PUT /sms-providers: rejected (invalid payload) creates no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'platform_sms_provider', resourceKey: SMS_RESOURCE_KEY } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'put', '/sms-providers');
+  const res = mockPlatformRes();
+  await runChain(chain, smsReq({ region: 'not-a-real-region', providerCode: SMS_PROVIDER_CODE, displayName: 'x' }), res);
+  assert.equal(res.statusCode, 400);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'platform_sms_provider', resourceKey: SMS_RESOURCE_KEY } });
+  assert.equal(after, before);
+});
+
+await test('PUT /sms-providers: forced audit-insert failure (non-existent actor id) rolls back the provider write too — atomic, not best-effort', async () => {
+  const before = await prisma.platformSmsProvider.findUnique({ where: { region_providerCode: { region: SMS_REGION, providerCode: SMS_PROVIDER_CODE } } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'put', '/sms-providers');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-sms-ghost-put';
+  await runChain(chain, smsReq({ region: SMS_REGION, providerCode: SMS_PROVIDER_CODE, displayName: 'Should Not Persist' }, ghostId), res);
+  assert.equal(res.statusCode, 500, 'the FK-violating audit insert must fail the whole request rather than silently succeed');
+
+  const after = await prisma.platformSmsProvider.findUnique({ where: { region_providerCode: { region: SMS_REGION, providerCode: SMS_PROVIDER_CODE } } });
+  assert.equal(after?.displayName, before?.displayName, 'the provider row must remain unchanged when the audit insert fails inside the same transaction');
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+await test('DELETE /sms-providers/:id: success creates exactly one platform_sms_provider.deleted audit row and removes the row', async () => {
+  const provider = await prisma.platformSmsProvider.findUniqueOrThrow({ where: { region_providerCode: { region: SMS_REGION, providerCode: SMS_PROVIDER_CODE } } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'delete', '/sms-providers/:id');
+  const res = mockPlatformRes();
+  const req = smsReq({});
+  req.params = { id: provider.id };
+  await runChain(chain, req, res);
+  assert.equal(res.statusCode, 200);
+
+  const remaining = await prisma.platformSmsProvider.findUnique({ where: { id: provider.id } });
+  assert.equal(remaining, null);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { resourceType: 'platform_sms_provider', resourceKey: SMS_RESOURCE_KEY, action: 'platform_sms_provider.deleted' },
+  });
+  assert.equal(rows.length, 1);
+  const row = rows[0]!;
+  assert.equal(row.actorPlatformAdminId, SMS_ADMIN_ID);
+  assert.equal(row.newValue, null);
+  assert.ok(row.previousValue?.includes('Renamed Provider'));
+});
+
+await test('DELETE /sms-providers/:id: not-found id is rejected with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'platform_sms_provider' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'delete', '/sms-providers/:id');
+  const res = mockPlatformRes();
+  const req = smsReq({});
+  req.params = { id: 'does-not-exist-provider-id' };
+  await runChain(chain, req, res);
+  assert.equal(res.statusCode, 404);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'platform_sms_provider' } });
+  assert.equal(after, before);
+});
+
+await test('DELETE /sms-providers/:id: forced audit-insert failure (non-existent actor id) rolls back the deletion — provider row survives', async () => {
+  const recreated = await prisma.platformSmsProvider.create({
+    data: { region: SMS_REGION, providerCode: SMS_PROVIDER_CODE, displayName: 'Recreated For Forced-Failure Test' },
+  });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'delete', '/sms-providers/:id');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-sms-ghost-delete';
+  const req = smsReq({}, ghostId);
+  req.params = { id: recreated.id };
+  await runChain(chain, req, res);
+  assert.equal(res.statusCode, 404, "the route's existing catch-all maps any transaction failure to 404 — unchanged pre-existing behavior");
+
+  const stillThere = await prisma.platformSmsProvider.findUnique({ where: { id: recreated.id } });
+  assert.ok(stillThere, 'the provider row must survive when the audit insert fails inside the same transaction');
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+
+  await prisma.platformSmsProvider.delete({ where: { id: recreated.id } });
+});
+
+await cleanSmsProviderFixture();
+
+// ── Privacy / Data Retention Runtime Toggle — privacy/runtime control (priority 3) ─
+//
+// This KVKK-relevant kill switch had zero durable audit evidence before —
+// the sibling legacy-consent-correction runtime toggle above already wrote a
+// PlatformAdminAuditEvent; this one did not. Same transactional,
+// advisory-lock-serialized pattern applied here (see platformAdmin.ts).
+
+section('Privacy / Data Retention Runtime Toggle — durable audit trail (F3-IMPL-003)');
+
+const DR_ADMIN_ID = 'admin-data-retention-audit-f3impl003';
+
+await prisma.platformAdmin.upsert({
+  where: { id: DR_ADMIN_ID },
+  update: {},
+  create: {
+    id: DR_ADMIN_ID,
+    email: `${DR_ADMIN_ID}-fixture@platform.test`,
+    passwordHash: 'not-a-real-hash-test-fixture-only',
+    name: 'Test Fixture Platform Admin (Data Retention Audit)',
+  },
+});
+
+function drReq(body: Record<string, unknown> = {}, id: string = DR_ADMIN_ID) {
+  return { body, platformAdmin: { id, email: `${id}@platform.test` } } as any;
+}
+
+const DR_AUDIT_ACTION = 'platform_setting.updated';
+
+async function cleanDrAuditRows() {
+  await prisma.platformAdminAuditEvent.deleteMany({
+    where: { action: DR_AUDIT_ACTION, resourceKey: DATA_RETENTION_RUNTIME_SETTING_KEY, actorPlatformAdminId: DR_ADMIN_ID },
+  });
+}
+
+await test('PATCH /privacy/data-retention/settings: successful false→true toggle creates exactly one durable PlatformAdminAuditEvent row', async () => {
+  await cleanDrAuditRows();
+  await prisma.platformSetting.upsert({
+    where: { key: DATA_RETENTION_RUNTIME_SETTING_KEY },
+    update: { value: 'false' },
+    create: { key: DATA_RETENTION_RUNTIME_SETTING_KEY, value: 'false' },
+  });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/data-retention/settings');
+  const res = mockPlatformRes();
+  await runChain(chain, drReq({ runtimeCleanupEnabled: true }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.runtimeCleanupEnabled, true);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { action: DR_AUDIT_ACTION, resourceKey: DATA_RETENTION_RUNTIME_SETTING_KEY, actorPlatformAdminId: DR_ADMIN_ID },
+  });
+  assert.equal(rows.length, 1, 'exactly one durable audit row must be created for one successful toggle');
+  const row = rows[0]!;
+  assert.equal(row.resourceType, 'platform_setting');
+  assert.equal(row.previousValue, 'false');
+  assert.equal(row.newValue, 'true');
+  assert.equal(row.outcome, 'success');
+  const serialized = JSON.stringify(row);
+  assert.ok(!serialized.includes('@'), 'must never contain an email/identity string — only the opaque platformAdminId');
+});
+
+await test('PATCH /privacy/data-retention/settings: enabling from an absent baseline records previousValue=null, not the boolean-coerced string "false"', async () => {
+  await cleanDrAuditRows();
+  await prisma.platformSetting.deleteMany({ where: { key: DATA_RETENTION_RUNTIME_SETTING_KEY } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/data-retention/settings');
+  const res = mockPlatformRes();
+  await runChain(chain, drReq({ runtimeCleanupEnabled: true }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { action: DR_AUDIT_ACTION, resourceKey: DATA_RETENTION_RUNTIME_SETTING_KEY, actorPlatformAdminId: DR_ADMIN_ID },
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.previousValue, null, 'an absent PlatformSetting row is a distinct prior state from the string "false" and must not be collapsed into it');
+  assert.equal(rows[0]!.newValue, 'true');
+});
+
+await test('PATCH /privacy/data-retention/settings: rejected (non-boolean) payload creates no audit row', async () => {
+  await cleanDrAuditRows();
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/data-retention/settings');
+  for (const badBody of [{ runtimeCleanupEnabled: 'true' }, { runtimeCleanupEnabled: 1 }, { runtimeCleanupEnabled: null }, {}]) {
+    const res = mockPlatformRes();
+    await runChain(chain, drReq(badBody), res);
+    assert.equal(res.statusCode, 400, `expected 400 for payload ${JSON.stringify(badBody)}`);
+  }
+  const count = await prisma.platformAdminAuditEvent.count({
+    where: { action: DR_AUDIT_ACTION, resourceKey: DATA_RETENTION_RUNTIME_SETTING_KEY, actorPlatformAdminId: DR_ADMIN_ID },
+  });
+  assert.equal(count, 0, 'a rejected/invalid toggle attempt must never create any audit record');
+});
+
+await test('PATCH /privacy/data-retention/settings: setting update and audit insert are atomic — forced audit-insert failure leaves the setting unchanged', async () => {
+  await cleanDrAuditRows();
+  await prisma.platformSetting.upsert({
+    where: { key: DATA_RETENTION_RUNTIME_SETTING_KEY },
+    update: { value: 'false' },
+    create: { key: DATA_RETENTION_RUNTIME_SETTING_KEY, value: 'false' },
+  });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/privacy/data-retention/settings');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-dr-ghost-patch';
+  // Same real-FK-violation technique proven above for legacy-consent-correction:
+  // a non-existent actor id forces a genuine DB-level FK violation on the
+  // audit insert inside the transaction — no mocking required.
+  await assert.rejects(
+    () => runChain(chain, drReq({ runtimeCleanupEnabled: true }, ghostId), res),
+    'a failed audit insert must reject the whole request rather than silently succeed',
+  );
+
+  const row = await prisma.platformSetting.findUnique({ where: { key: DATA_RETENTION_RUNTIME_SETTING_KEY } });
+  assert.equal(row?.value, 'false', 'the setting must remain at its pre-toggle value when the audit insert fails — atomic, not best-effort');
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+await cleanDrAuditRows();
+await prisma.platformSetting.deleteMany({ where: { key: DATA_RETENTION_RUNTIME_SETTING_KEY } });
 
 // ── Sonuç ─────────────────────────────────────────────────────────────────────
 
