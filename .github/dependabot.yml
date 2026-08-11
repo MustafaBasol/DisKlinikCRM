@@ -1,15 +1,23 @@
-# F3-SEC-EXIT-001 — dependency-scan/update availability.
+# F3-SEC-EXIT-001 — dependency update automation (dependency freshness).
 #
-# Prior to this file, the repository had no dependency-scanning mechanism of
-# any kind: no Dependabot config, no CodeQL, no `npm audit` CI step, no Snyk.
-# This closes that gap the least invasive way available — Dependabot's
-# security-update alerts/PRs require no new CI job, no new secret, and cannot
-# fail an existing workflow (it opens PRs on its own schedule; it does not run
-# inside ci-layers.yml/ci-pr.yml/ci-main-and-nightly.yml). Vulnerability
-# *alerting* itself (Dependabot alerts on the Security tab) is a GitHub
-# repository setting, not something a committed file controls — see the
-# external verification checklist in the F3-SEC-EXIT-001 evidence doc for the
-# one-time repository-settings step this file does not (and cannot) automate.
+# This file is Dependabot's *version-update* configuration only: it opens a
+# pull request on a weekly schedule when a newer dependency version is
+# published, for each ecosystem/directory below. It requires no new CI job,
+# no new secret, and cannot fail an existing workflow (it does not run inside
+# ci-layers.yml/ci-pr.yml/ci-main-and-nightly.yml).
+#
+# R1 correction (F3-SEC-EXIT-001-R1): this file's presence is NOT evidence
+# that Dependabot vulnerability *alerts*, Dependabot *security updates*, code
+# scanning (CodeQL or equivalent), `npm audit` in CI, or any third-party
+# SAST/dependency-scanning tool are enabled. Each of those is a separate
+# GitHub repository *setting* (Settings -> Code security and analysis) or a
+# separate CI control, none of which a committed file can turn on by itself.
+# See the external verification checklist in the F3-SEC-EXIT-001 evidence doc
+# (§5, item 1) for the one-time repository-settings step this file does not
+# — and cannot — automate. Prior to this file, the repository had no
+# dependency *update automation* of any kind (no Dependabot config, no
+# CodeQL, no `npm audit` CI step, no Snyk); that specific, narrower gap is
+# what this file closes.
 version: 2
 updates:
   - package-ecosystem: "npm"
