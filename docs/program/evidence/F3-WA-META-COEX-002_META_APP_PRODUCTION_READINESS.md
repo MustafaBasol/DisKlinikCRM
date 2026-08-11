@@ -4,6 +4,8 @@ Task ID (ClickUp): `869egqrnk` · Parent Epic: F3-WA-META-COEX (`869egqrad`) · 
 
 **Outcome: STATE C — BLOCKED / UNVERIFIED**, with several items additionally requiring **STATE B — USER ACTION REQUIRED** (live Meta Business/Developer Dashboard access this environment does not have). No Meta production configuration was made or recommended for immediate action. No runtime code was modified.
 
+> **R1 correction (2026-08-11, F3-WA-META-COEX-002-R1, same branch/worktree/evidence file — no separate R1 evidence file):** this document's original §0 mischaracterized predecessor F3-WA-META-COEX-001's lack of a repository/GitHub trace as an unresolved program-history discrepancy. The program owner has since clarified COEX-001 was a deliberate `READ_ONLY`/`REPOSITORY_UNCHANGED`/`NO_PR` audit (ClickUp `869egqrff`), reviewed and accepted — its absence from Git/GitHub was expected, not evidence it did not happen. See the amendment at the end of §0. Separately, R1 corrected an internal inconsistency in the original §14 (it claimed `CURRENT_PHASE.md` was modified by the initial commit; it was not — see the amended §14), wrote the tracker/phase/evidence-index updates the original pass had skipped, and obtained direct primary-source confirmation of several Meta facts from `developers.facebook.com` (reachable this session, unlike the original) — see the §4–9 amendment below. The task's overall outcome (`STATE C — BLOCKED/UNVERIFIED`, `EXTERNAL_META_CONFIG_VERIFIED: NO`) is unchanged; F3-WA-META-COEX-003 remains **NOT authorized**.
+
 This document distinguishes three evidence classes throughout, per the task's Gate 0 requirement:
 
 - **[REPO]** — directly observed from repository source (`git`, `Read`/`Grep` against tracked files) in this session
@@ -27,6 +29,12 @@ The task brief states the predecessor **F3-WA-META-COEX-001 was "ACCEPTED by pro
 **Disposition:** per this task's own authority hierarchy (§ Program Control: "1. current repository origin/main" is authoritative over the task brief's prose, and "Do not overwrite newer repository evidence"), **the claim that COEX-001 was completed and accepted is not corroborated by repository or GitHub evidence.** This document does **not** write a COEX-001 status entry into `NORAMEDI_MASTER_TRACKER.md`, because doing so would assert a historical fact this session cannot verify — which the task's own rules forbid ("Do not rewrite historical entries," "No fabricated conclusions"). This is surfaced as **USER ACTION REQUIRED item #0** (§13 below) rather than resolved unilaterally.
 
 Independent of that discrepancy, this session **did** independently reproduce and confirm several of the technical findings attributed to COEX-001 (raw OAuth dialog usage, missing CSRF state validation, absent `subscribed_apps`/phone-registration provisioning) directly from current repository source — see §6/§11/§12. Those specific technical claims are corroborated by fresh, independent code inspection regardless of whether the COEX-001 task record itself exists.
+
+### §0 amendment (2026-08-11, F3-WA-META-COEX-002-R1) — program-owner correction, USER ACTION REQUIRED item #0 resolved
+
+The program owner has reviewed this section and clarified the discrepancy above: **F3-WA-META-COEX-001 was deliberately executed as `READ_ONLY`/`REPOSITORY_UNCHANGED`/`NO_PR`/`NOT_DEPLOYED`/`NOT_PRODUCTION_VERIFIED`.** ClickUp task `F3-WA-META-COEX-001` (ID `869egqrff`) records `AGENT_COMPLETED`/`READ_ONLY_AUDIT_COMPLETED`/`REPOSITORY_UNCHANGED`/`NO_PR`/`NOT_DEPLOYED`/`NOT_PRODUCTION_VERIFIED`, and its result was subsequently reviewed and accepted by the program-owner architecture review. **The correct interpretation is therefore the opposite of this section's original framing:** the absence of a Git commit/PR is not evidence the task may not have happened — it is the expected, intended result of a task explicitly scoped to leave no repository artifact. The Meta exact provider contract remained **partially unverified** at COEX-001's own close, which is exactly why COEX-002 was assigned as its follow-up.
+
+This is now recorded additively in `NORAMEDI_MASTER_TRACKER.md` §7 (a new row for F3-WA-META-COEX-001, alongside the F3-WA-META-COEX-002 row this task's own initial pass never added — see the §14 amendment below). **USER ACTION REQUIRED item #0 (§13) is resolved by this amendment** and is no longer an open blocker; items #1–#3 (live Meta Dashboard evidence) remain open. This amendment does not alter or retract any of the technical findings in §3/§6/§11/§12, which were independently derived from repository source and stand regardless of COEX-001's provenance.
 
 ---
 
@@ -130,6 +138,49 @@ Every item under task §§4, 5, 6, 7, 9, and 12 that depends on the current Meta
 
 No configuration or implementation recommendation is made on any of the above per Gate 0's explicit instruction to STOP.
 
+### §4–9 amendment (2026-08-11, F3-WA-META-COEX-002-R1) — primary Meta source re-attempted, partially successful
+
+This session (the R1 reconciliation pass) re-attempted primary-source access per the program owner's independent verification lead: Meta's official WhatsApp Business Platform Postman collection at `https://www.postman.com/meta/whatsapp-business-platform/documentation/du6gzjv/embedded-signup`.
+
+**Postman collection itself: not fetchable.** `WebFetch` against that URL returned only the single word "Postman" — the page is a JavaScript-rendered single-page app that does not serve its documentation content to a non-browser fetch. This is a tooling limitation, not a network egress block (contrast with the original COEX-002 session's `EGRESS_BLOCKED` proxy-403 on `developers.facebook.com`).
+
+**`developers.facebook.com` itself: reachable in this session.** Unlike the original COEX-002 session (egress-blocked, confirmed via proxy status endpoint, §4–9 above), this R1 session's `WebFetch` calls to `developers.facebook.com` succeeded and returned real page content, corroborated by `WebSearch` results independently pointing at the same official pages. Per Gate 0's own evidence hierarchy — primary Meta documentation, Meta's official Postman collection, **or** direct Meta Dashboard evidence — this counts as valid final evidence; it is not a substitute source invented for this task.
+
+**`PRIMARY_META_VERIFIED` facts, verified 2026-08-11, verbatim-quoted from direct page fetches unless noted:**
+
+| # | Fact | Source | Verification method |
+|---|---|---|---|
+| 1 | Embedded Signup is launched via the Facebook JavaScript SDK's `FB.login()`, with `config_id`, `response_type: 'code'`, `override_default_response_type: true`, and `extras: { setup: {} }` | `developers.facebook.com/docs/whatsapp/embedded-signup/embed-the-flow/` | Direct `WebFetch`, verbatim quoted parameters |
+| 2 | Advanced Access is required for permissions auto-selected in the flow (`whatsapp_business_management` named explicitly) before general release | `developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/version-4` | Direct `WebFetch`, verbatim quoted: *"You will need advanced access for all permissions automatically selected in the flow."* |
+| 3 | The app-to-WABA webhook subscription endpoint is `POST /{Version}/{WABA-ID}/subscribed_apps` | `developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-account/subscribed-apps-api` | Direct `WebFetch`, verbatim endpoint |
+| 4 | Coexistence = onboarding a business customer using their **existing** WhatsApp Business app account and phone number (not a new Cloud API-only account) | `developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users/` | Direct `WebFetch`, verbatim quoted |
+| 5 | **Phone-number registration is explicitly skipped for Coexistence** — the documentation states the number is already registered | same as #4 | Direct `WebFetch`, verbatim quoted: *"skip the phone number registration step, as the number is already registered"* — this directly answers the single most consequential open question §6/§7's original verdict table flagged and explicitly declined to assume |
+
+**Corroborated (not verbatim page-quoted — `WebSearch` snippets citing the same `developers.facebook.com` pages, one evidentiary notch below #1–5 above), still treated as `PRIMARY_META_VERIFIED` since the underlying source is the same official domain, not a third-party BSP:**
+
+| # | Fact | Source |
+|---|---|---|
+| 6 | WABA discovery uses `client_whatsapp_business_accounts` (WABAs shared with the partner's Business Manager) and `owned_whatsapp_business_accounts` (WABAs the business owns, called with the system-user token) | `developers.facebook.com/docs/whatsapp/embedded-signup/manage-accounts/` |
+| 7 | System-user assignment to a WABA uses `POST /{WABA-ID}/assigned_users` with a `tasks` parameter (`MANAGE`/`DEVELOP`) | same domain, `assigned_users` endpoint, per search-indexed official documentation |
+| 8 | Credit-line/billing: Tech Providers and Partners require the customer to add their own payment method independently; **Solution Partners** must share their own credit line during onboarding — this is a Meta-documented distinction by enrollment tier, not a universal requirement | `developers.facebook.com` Embedded Signup overview (search-corroborated) |
+
+**Still `UNVERIFIED` — not promoted by this amendment, per the task's explicit instruction not to over-claim Coexistence specifics:** exact Coexistence enablement requirements for an *existing* NoraMedi Meta App; current QR lifecycle; exact `FB.login` argument object *for Coexistence specifically* (the #1 fact above was confirmed for the general Embedded Signup v4 flow — the fetched pages did not surface a Coexistence-specific `extras.featureType`/`sessionInfoVersion` value, despite one targeted fetch attempt); country/account eligibility; whether NoraMedi's existing Meta App has Coexistence enabled; NoraMedi's Tech Provider/Solution Partner enrollment status; actual App Review/Advanced Access/Embedded Signup Config ID/Business Verification status for NoraMedi's own app (all four require live Dashboard access — §13 items #1–#3, still open).
+
+**Verdict-table update (§4–9 table above, rows changed by this amendment only):**
+
+| Item | Original verdict | R1 verdict |
+|---|---|---|
+| `subscribed_apps` requirement | `UNVERIFIED` | `PRIMARY_META_VERIFIED` — required capability (fact #3) |
+| WABA discovery capability | `UNVERIFIED` | `PRIMARY_META_VERIFIED` — required capability (fact #6) |
+| System-user/WABA assignment | `UNVERIFIED` | `PRIMARY_META_VERIFIED` in the official generic Embedded Signup partner workflow (fact #7) — **applicability to NoraMedi's eventual enrollment model still depends on the still-unverified Tech Provider/Solution Partner status (§13 #1)** |
+| Phone registration (generic Embedded Signup) | `UNVERIFIED` | `PRIMARY_META_VERIFIED` — required capability in the documented flow (fact #1/#2 context) |
+| Phone registration (Coexistence-existing-number specifically) | `UNVERIFIED` | `PRIMARY_META_VERIFIED` — **explicitly NOT required**, skipped per Meta's own Coexistence documentation (fact #5). This is a distinct, stronger finding than the generic row above — do not conflate the two. |
+| Advanced Access requirement | `UNVERIFIED` | `PRIMARY_META_VERIFIED` — required before general release (fact #2) |
+| Embedded Signup JS SDK contract (general, non-Coexistence) | `UNVERIFIED` | `PRIMARY_META_VERIFIED` for the base v4 flow (fact #1); Coexistence-specific `extras` fields remain `UNVERIFIED` |
+| Credit-line/billing ownership | was implicitly treated as a generic requirement | `ARCHITECTURE_DECISION_REQUIRED`/`CONDITIONAL` — Meta's own documentation splits this by enrollment tier (fact #8); NoraMedi has not decided to become a billing party, so this is **not** automatically a NoraMedi requirement |
+
+All other rows in the §4–9 table above (One-App/many-WABA architecture, Business Portfolio/verification/Tech-Provider/Solution-Partner enrollment requirements, exact Coexistence QR/eligibility behavior, and NoraMedi's own actual account/App-Review/Advanced-Access/Configuration status) remain `UNVERIFIED`, unchanged by this amendment — they require either Coexistence-specific primary documentation this session did not locate, or live Meta Dashboard access (§13 #1–#3).
+
 ---
 
 ## 8. NoraMedi Meta App environment-variable inventory (§8 of task)
@@ -203,13 +254,24 @@ Repo-observed facts only (Meta-requirement verdicts are `UNVERIFIED`, §4–7 ab
 
 This table is the authoritative input this task can hand to **F3-WA-META-COEX-003** for now: everything in the "repo-implementation fact" column is a real, confirmed gap; everything in the "Meta-requirement verdict" column must be independently re-verified by whoever next has primary-source Meta access before COEX-003 designs the provisioning flow.
 
+### §12 amendment (2026-08-11, F3-WA-META-COEX-002-R1)
+
+Per the §4–9 amendment above, four of this table's "Meta-requirement verdict" cells are no longer `UNVERIFIED`:
+
+- **`subscribed_apps`** → `PRIMARY_META_VERIFIED` required capability (`POST /{WABA-ID}/subscribed_apps`). Repo-implementation fact unchanged: **not implemented.**
+- **WABA discovery / phone number discovery** → `PRIMARY_META_VERIFIED` required capability (`client_whatsapp_business_accounts`/`owned_whatsapp_business_accounts`). Repo-implementation fact unchanged: **not implemented** — the callback still relies entirely on client-submitted `wabaId`/`phoneNumberId` (§11).
+- **System-user/BISU access** → `PRIMARY_META_VERIFIED` in the official generic Embedded Signup partner workflow (`POST /{WABA-ID}/assigned_users`), **but its applicability to NoraMedi specifically is conditional on NoraMedi's still-unverified Tech Provider/Solution Partner enrollment model (§13 #1)** — do not treat this row as settled for NoraMedi's actual architecture until that is known. Repo-implementation fact unchanged: **not implemented.**
+- **Phone registration / PIN** → split into two distinct verdicts, not one: `PRIMARY_META_VERIFIED` **required** for the generic (non-Coexistence) Embedded Signup Cloud API onboarding path; `PRIMARY_META_VERIFIED` **explicitly NOT required** for Coexistence onboarding of an existing WhatsApp Business App number (Meta's own Coexistence documentation states this step is skipped since the number is already registered). **NoraMedi's onboarding is a Coexistence scenario** (existing clinic WhatsApp Business App numbers), so the second verdict is the operative one for this program — COEX-003 should not design a phone-registration step into the Coexistence provisioning flow on the assumption it mirrors generic Cloud API onboarding. Repo-implementation fact unchanged: **not implemented** (moot for Coexistence per the above; would remain a real gap if NoraMedi ever onboards a net-new, non-Coexistence Cloud API number).
+
+Token exchange, long-lived credential model, webhook subscription (per-WABA), and app deauthorization/offboarding rows are **unchanged** by this amendment — still `UNVERIFIED` (Meta requirement) / not implemented (repo fact) as originally recorded, since no Coexistence-specific primary documentation for these was located in this session.
+
 ---
 
 ## 13. User action required
 
 Multiple items in this task cannot be closed without a human interacting with the Meta Business/Developer Dashboard, or clarifying program history. None of the following were guessed or fabricated.
 
-**#0 — COEX-001 program-history discrepancy (§0 above).** No dashboard action needed; needs the program owner to clarify: does `F3-WA-META-COEX-001` evidence exist somewhere outside this repository (e.g. not yet merged, or tracked in an external system), or was it not actually completed/accepted as the task brief states? This blocks recording any COEX-001 status entry in `NORAMEDI_MASTER_TRACKER.md` without fabricating one.
+**#0 — COEX-001 program-history discrepancy (§0 above). RESOLVED 2026-08-11 by F3-WA-META-COEX-002-R1** — the program owner clarified that COEX-001 was deliberately `READ_ONLY`/`REPOSITORY_UNCHANGED`/`NO_PR` (ClickUp `869egqrff`) and was reviewed and accepted. No further action needed on this item; see the §0 amendment above and `NORAMEDI_MASTER_TRACKER.md` §7.
 
 **#1 — Meta App / Business account model, verification, and enrollment status.** Needed to answer §4 verdicts (Business verification, Tech Provider/Solution Partner enrollment, App Review, Advanced Access).
 1. Open: Meta Business Suite → Business Settings → **Business Info**, and separately, developers.facebook.com → your App → **App Review** → **Permissions and Features**.
@@ -236,7 +298,14 @@ Until #1–#3 are answered (and #0 is clarified), **no further Meta-provider-con
 
 ## 14. Repository changes made by this task
 
-**None to runtime code.** This task did not modify, and did not need to modify, any of the files listed in the task's explicit prohibition (`organizationWhatsApp.ts`, `metaWhatsAppWebhook.ts`, `services/whatsapp/**`, `WhatsAppConnections.tsx`, `schema.prisma`, migrations). Only this evidence document and the minimal, additive changelog lines in `CURRENT_PHASE.md` / `phases/F3_PRODUCTION_HARDENING.md` described in the delivery report were added.
+**None to runtime code.** This task did not modify, and did not need to modify, any of the files listed in the task's explicit prohibition (`organizationWhatsApp.ts`, `metaWhatsAppWebhook.ts`, `services/whatsapp/**`, `WhatsAppConnections.tsx`, `schema.prisma`, migrations).
+
+**Corrected 2026-08-11 (F3-WA-META-COEX-002-R1) — the paragraph above originally claimed `CURRENT_PHASE.md` was modified by the initial COEX-002 commit. That was incorrect** — `git diff origin/main --name-only` on the initial commit shows only three files changed: this evidence document, `evidence/README.md`, and `phases/F3_PRODUCTION_HARDENING.md`. `NORAMEDI_MASTER_TRACKER.md` and `CURRENT_PHASE.md` were **not** touched by the initial commit, despite `NORAMEDI_MASTER_TRACKER.md` being this repository's mandatory authoritative program-status source (per its own §2.1) — an omission this R1 pass exists to correct, not merely re-describe. The honest sequence:
+
+- **Initial F3-WA-META-COEX-002 commit (2026-08-11):** added this evidence document (new file), one row in `evidence/README.md`, and one entry in `phases/F3_PRODUCTION_HARDENING.md`. Did **not** touch `NORAMEDI_MASTER_TRACKER.md` or `CURRENT_PHASE.md`.
+- **F3-WA-META-COEX-002-R1 (2026-08-11, this pass):** added the missing `NORAMEDI_MASTER_TRACKER.md` §7 entries (F3-WA-META-COEX-001 and -002, narrowly scoped, no earlier F3 row rewritten); added the missing `CURRENT_PHASE.md` entry (prepended, per that file's own newest-first convention, additive, no F3-IMPL-00x chronology reordered or rewritten); amended this evidence document's §0 (COEX-001 provenance), §4–9/§12 (primary-source corrections), and this §14 (the correction you are reading); amended `phases/F3_PRODUCTION_HARDENING.md` with a new F3-WA-META-COEX-002-R1 paragraph (the original F3-WA-META-COEX-002 paragraph preserved unedited below it); amended the `evidence/README.md` row to note the R1 correction inline (no new row, no new evidence file).
+
+No runtime, schema, or migration file was touched by either the initial commit or this R1 pass.
 
 ---
 
@@ -248,3 +317,7 @@ Until #1–#3 are answered (and #0 is clarified), **no further Meta-provider-con
 - Manual secret scan of the full diff for `META_APP_SECRET`, `access_token`, `Authorization:`, `Bearer`, `ENCRYPTION_KEY`, `client_secret`, `appsecret_proof`, `token=` — see delivery report for exact result
 
 No automated test suite was run — this is documentation/evidence-only work with no runtime code change, so `TESTS_PASSED` is `NOT_APPLICABLE` per task §19.
+
+### §15 amendment (2026-08-11, F3-WA-META-COEX-002-R1)
+
+Same validation set re-run for the R1 diff: `git diff --check` (clean, no whitespace-error markers); `git diff origin/main --name-only`/`--stat` (confirms `docs/program/**` only — `NORAMEDI_MASTER_TRACKER.md`, `CURRENT_PHASE.md`, `phases/F3_PRODUCTION_HARDENING.md`, `evidence/README.md`, this evidence file); a manual secret scan of the full R1 diff for `META_APP_SECRET`, `access_token`, `Authorization:`, `Bearer`, `ENCRYPTION_KEY=`, `client_secret=`, `appsecret_proof`, `token=` — exact result recorded in the delivery report. No automated test suite applicable (documentation-only, unchanged from the initial pass).
