@@ -86,3 +86,60 @@ Real-Postgres (`test:runtime:postgres`/`postgres-compat`) suites were not run fo
 ## 7. Status
 
 `AGENT_COMPLETED`: yes. `TESTS_PASSED`: yes (14/14 new + 32/32 pre-existing cited suites + typecheck clean). `PR_OPENED`: yes — [PR #360](https://github.com/MustafaBasol/DisKlinikCRM/pull/360). `MERGED`: no. `DEPLOYED`: no. `PRODUCTION_VERIFIED`: no (this task performed no production access). Per the assigning task brief: **not merged, not deployed, not marked complete** — stopped here for architecture review.
+
+**corrected 2026-08-11, F3-DIGIDENTIS-MAP-001-R1:** the section above described the read-path (dropdown listing) fix only. Architecture review of PR #360 found the read-path fix was directionally correct but incomplete on its own: the eligibility rule it introduced (§3 above) was enforced only on `GET .../local-options`, not on the mapping **write path**. Read §8 below before treating this task as closed — the practitioner-eligibility invariant is now enforced consistently on both paths as of R1, but §7's `TESTS_PASSED`/`AGENT_COMPLETED` tags above cover only the read-path scope they were written for, not the R1 write-path scope covered in §8/§9.
+
+## 8. R1 — Architecture-review finding: the write path did not enforce practitioner eligibility
+
+**Finding:** `upsertExternalCalendarMapping()` (`server/src/services/externalCalendar/externalCalendarMappingService.ts`) creates/updates a `mappingType='practitioner'` row after calling its private `verifyLocalEntityBelongsToClinic()`, which — before this R1 fix — only checked that the target `User` was active and belonged to the clinic (via `User.clinicId` or an active `UserClinic` row), with **no check on role at all**. The dropdown (§3's fix) now hides non-practitioners from the UI, but a direct, authenticated `PUT /api/platform/clinics/:clinicId/external-calendar/mappings` call could still map a receptionist, clinic manager, or billing user to a DigiDentiS doctor — the UI omission was cosmetic, not an enforced invariant. This is a real gap: Platform Admin API calls are not restricted to the admin UI's own request shapes.
+
+**Root cause class:** the eligibility rule (branch-scoped `UserClinic.role` OR legacy `User.clinicId`+`role`, value in `DENTIST`/`dentist`/`doctor`, `User.isActive` required) was written once, directly inline, inside the `local-options` route handler (§3's fix) — there was no shared, importable contract for "is this user an eligible practitioner for this clinic," so the write-path validator never got it and had no way to reuse it without either duplicating the query a third time (after `routes/whatsapp.ts`'s pre-existing copy) or reaching across into another domain's route file.
+
+**Fix:** extracted ONE shared contract into `server/src/utils/relationGuards.ts` — the existing, domain-neutral, already-multiply-imported home for clinic-scoped entity lookups (`findUserAssignedToClinic`, `findPatientInClinic`, `findAppointmentTypeInClinic`, etc.), not owned by either the external-calendar or user/staff domain:
+
+- `listClinicPractitioners(clinicId)` — the list variant (branch-scoped ∪ legacy, deduplicated, sorted), same shape as the query previously inlined in `local-options`.
+- `findClinicPractitioner(userId, clinicId)` — the single-user variant, same rule, returns the user's `{id, firstName, lastName}` or `null`.
+
+Both call sites now delegate to this one contract:
+- `platformExternalCalendar.ts`'s `local-options` route calls `listClinicPractitioners(clinicId)` (its previous ~30-line inline query block was deleted).
+- `externalCalendarMappingService.ts`'s `verifyLocalEntityBelongsToClinic()` practitioner branch now calls `findClinicPractitioner(localId, clinicId)` instead of its old loose `prisma.user.findFirst` clinic-membership-only check.
+
+No second practitioner source of truth was introduced, and `relationGuards.ts`'s existing exports (`findUserAssignedToClinic` and everything else) were **not modified** — only two new functions were added — so no other existing consumer of that file changes behavior. `routes/whatsapp.ts`'s own pre-existing, independently-shipped `getClinicPractitioners()`/`getActiveDoctorCountForClinic()` copy was left untouched (out of this task's scope — it predates F3-DIGIDENTIS-MAP-001 and isn't part of the blocking finding); it remains a third, functionally-identical but textually-duplicate copy of the same rule, noted here as residual, non-blocking duplication rather than silently left unmentioned.
+
+Tenant/clinic scoping is unchanged: both new functions filter by the exact `clinicId` argument, exactly as the code they replaced did; `findClinicPractitioner` additionally requires the target `userId` to match, so a user from a different clinic or organization simply doesn't resolve, regardless of role.
+
+## 9. R1 — Tests
+
+New file: `server/src/tests/externalCalendarMappingPractitionerEligibility.test.ts` — 18 cases, directly exercising both the shared contract and the actual write path (`upsertExternalCalendarMapping`), matching the architecture review's scenario letters:
+
+| Scenario | Case | Result |
+|---|---|---|
+| A | Branch-scoped eligible dentist (`UserClinic.role="dentist"`, org-wide role non-practitioner) — `findClinicPractitioner` accepts, dropdown lists, write path succeeds | ✓ |
+| B | Legacy eligible dentist (`User.clinicId` + `role="doctor"`, no `UserClinic` row) — accepted, listed, write succeeds | ✓ |
+| C | Receptionist in the same clinic — rejected by `findClinicPractitioner`, absent from dropdown, write path throws `ExternalCalendarMappingLocalEntityInvalidError` | ✓ |
+| D | Clinic manager in the same clinic — same three rejections | ✓ |
+| E | Billing (non-practitioner) user in the same clinic — same three rejections | ✓ |
+| F | Inactive dentist — same three rejections | ✓ |
+| G | Dentist in a different clinic, different organization — same three rejections | ✓ |
+| G | Dentist in a different clinic, same organization — same three rejections | ✓ |
+| I | Cross-check: the exact set of ids the write path accepts equals the exact set `listClinicPractitioners` lists, both directions | ✓ |
+
+`18 passed, 0 failed` (`npx tsx src/tests/externalCalendarMappingPractitionerEligibility.test.ts`).
+
+Scenario H (existing valid practitioner mappings still resolve) is covered by the pre-existing `externalCalendarMapping.test.ts` suite, re-run below — not duplicated in the new file.
+
+`externalCalendarMapping.test.ts` required updated in-memory `prisma` fakes (`role` field added to its two fixture users; a `prisma.userClinic` fake added, previously absent from that file) because `findClinicPractitioner` now always attempts a `UserClinic` lookup first — this is a test-fixture change only, no assertion was weakened, and the file's original 10 test cases and their assertions are unchanged:
+
+| Command | Result |
+|---|---|
+| `npx tsx src/tests/externalCalendarMappingPractitionerEligibility.test.ts` | 18 passed, 0 failed |
+| `npx tsx src/tests/platformExternalCalendarLocalOptions.test.ts` | 14 passed, 0 failed (unchanged from §4 — `listClinicPractitioners` emits the identical query shape the route's inline code previously did) |
+| `npx tsx src/tests/externalCalendarMapping.test.ts` | 10 passed, 0 failed (fixtures updated as above; assertions unchanged) |
+| `npx tsx src/tests/externalCalendarConnectionService.test.ts` | 22 passed, 0 failed (unaffected) |
+| `cd server && npm run typecheck` | `prisma generate` + `tsc --noEmit` clean, exit `0` |
+
+**On broader/DB-required suites:** `relationGuards.ts` is imported by other call sites outside external-calendar (e.g. task-relation validation), but only two new exports were added — its pre-existing exports were not touched, so no other consumer's behavior can change. On that basis, `test:runtime:postgres`/`postgres-compat` were judged not required and not run for R1, the same standard applied in §4; this is a recorded judgment call, not a silent skip, and is the one item architecture review should double-check if it disagrees with the additive-change reasoning above.
+
+## 10. R1 — Status
+
+`AGENT_COMPLETED`: yes (write-path gap closed). `TESTS_PASSED`: yes (18/18 new + 14/14 + 10/10 + 22/22 pre-existing = 64/64, typecheck clean). `PR_OPENED`: pending update to existing PR #360 (not a second PR). `MERGED`: no. `DEPLOYED`: no. `PRODUCTION_VERIFIED`: no. Per the R1 remediation brief: **not merged, not deployed** — updated PR #360 for a second architecture-review pass.

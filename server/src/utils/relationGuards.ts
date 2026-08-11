@@ -47,6 +47,89 @@ export async function findAppointmentInClinic(appointmentId: string, clinicId: s
   });
 }
 
+/**
+ * Practitioner role values accepted for clinic-practitioner eligibility.
+ * Canonical ('DENTIST') plus legacy-cased storage ('dentist' / 'doctor' —
+ * see roles.ts's documented normalization table). Single source of truth
+ * for "is this user an eligible practitioner for this clinic" — used by
+ * both the external-calendar mapping UI's dropdown (local-options) and the
+ * mapping write-path's server-side validation, so a direct API call can
+ * never map a non-practitioner (receptionist/manager/billing) user even
+ * though the UI no longer lists them. Mirrors the pre-existing
+ * getClinicPractitioners()/getActiveDoctorCountForClinic() pattern in
+ * routes/whatsapp.ts.
+ */
+const PRACTITIONER_ROLE_VALUES = ['DENTIST', 'dentist', 'doctor'] as const;
+
+type ClinicPractitioner = { id: string; firstName: string; lastName: string };
+
+/**
+ * Lists this clinic's eligible practitioners: users with an active
+ * branch-scoped UserClinic assignment carrying a practitioner role, plus
+ * users whose legacy primary User.clinicId assignment carries a
+ * practitioner role (deduplicated), both requiring User.isActive. Excludes
+ * other-clinic and other-org users purely via the clinicId filter.
+ */
+export async function listClinicPractitioners(clinicId: string): Promise<ClinicPractitioner[]> {
+  const assignments = await prisma.userClinic.findMany({
+    where: {
+      clinicId,
+      isActive: true,
+      user: { isActive: true },
+      role: { in: [...PRACTITIONER_ROLE_VALUES] },
+    },
+    select: { userId: true, user: { select: { id: true, firstName: true, lastName: true } } },
+  });
+  const assignedIds = new Set(assignments.map((a) => a.userId));
+  const assignedPractitioners = assignments.map((a) => a.user);
+  const legacyPractitioners = await prisma.user.findMany({
+    where: {
+      clinicId,
+      isActive: true,
+      role: { in: [...PRACTITIONER_ROLE_VALUES] },
+      id: { notIn: [...assignedIds] },
+    },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  return [...assignedPractitioners, ...legacyPractitioners].sort((a, b) =>
+    `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`),
+  );
+}
+
+/**
+ * Single-user eligibility check: is `userId` an eligible practitioner for
+ * `clinicId`? Same rule as listClinicPractitioners (branch-scoped
+ * UserClinic role, or legacy User.clinicId role, either with a
+ * practitioner role value and User.isActive) — used to validate a mapping
+ * write so it can't accept a non-practitioner or another clinic/org's user.
+ */
+export async function findClinicPractitioner(
+  userId: string,
+  clinicId: string,
+): Promise<ClinicPractitioner | null> {
+  const branchAssignment = await prisma.userClinic.findFirst({
+    where: {
+      userId,
+      clinicId,
+      isActive: true,
+      user: { isActive: true },
+      role: { in: [...PRACTITIONER_ROLE_VALUES] },
+    },
+    select: { user: { select: { id: true, firstName: true, lastName: true } } },
+  });
+  if (branchAssignment) return branchAssignment.user;
+
+  return prisma.user.findFirst({
+    where: {
+      id: userId,
+      clinicId,
+      isActive: true,
+      role: { in: [...PRACTITIONER_ROLE_VALUES] },
+    },
+    select: { id: true, firstName: true, lastName: true },
+  });
+}
+
 export async function findUserAssignedToClinic(
   userId: string,
   clinicId: string,

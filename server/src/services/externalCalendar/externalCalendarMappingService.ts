@@ -10,6 +10,7 @@
 
 import prisma from '../../db.js';
 import { writeAuditLog } from '../../utils/auditLog.js';
+import { findClinicPractitioner } from '../../utils/relationGuards.js';
 import { ExternalCalendarMappingMissingError } from './externalCalendarErrors.js';
 
 export type ExternalCalendarMappingType = 'practitioner' | 'service';
@@ -39,16 +40,14 @@ async function verifyLocalEntityBelongsToClinic(
   clinicId: string,
 ): Promise<string | null> {
   if (mappingType === 'practitioner') {
-    const user = await prisma.user.findFirst({
-      where: {
-        id: localId,
-        isActive: true,
-        OR: [{ clinicId }, { userClinics: { some: { clinicId, isActive: true } } }],
-      },
-      select: { firstName: true, lastName: true },
-    });
-    if (!user) return null;
-    return `${user.firstName} ${user.lastName}`.trim();
+    // Eligibility (active, clinic-scoped, practitioner role) is enforced here via
+    // findClinicPractitioner — the same contract platformExternalCalendar.ts's
+    // local-options route uses for the dropdown — so a direct API call can never
+    // map a non-practitioner (receptionist/manager/billing) user to an external
+    // doctor, even though the UI no longer lists them (F3-DIGIDENTIS-MAP-001-R1).
+    const practitioner = await findClinicPractitioner(localId, clinicId);
+    if (!practitioner) return null;
+    return `${practitioner.firstName} ${practitioner.lastName}`.trim();
   }
 
   const appointmentType = await prisma.appointmentType.findFirst({
