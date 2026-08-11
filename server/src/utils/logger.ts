@@ -100,7 +100,13 @@ function safeResponseLog(res: Response) {
  * (error.name) loglanır. Tanılama için error.name + reqId + route yeterli;
  * tam mesaj/stack yalnızca production dışında.
  */
-function safeErrorLog(err: unknown) {
+/**
+ * Exported (F3-OBS-001) so callers outside this file's own HTTP-error path —
+ * currently utils/fatalErrorHandlers.ts's process-level uncaughtException/
+ * unhandledRejection handlers — can log an error through the exact same
+ * production-safe redaction policy instead of re-implementing it.
+ */
+export function safeErrorLog(err: unknown) {
   const error = err instanceof Error ? err : new Error(String(err));
   const isProduction = process.env.NODE_ENV === 'production';
   return {

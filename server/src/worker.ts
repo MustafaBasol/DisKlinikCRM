@@ -19,6 +19,8 @@ import { startBackgroundJobs } from './jobs/startBackgroundJobs.js';
 import { closeRedis } from './utils/redis.js';
 import { resolveWorkerBackgroundJobsOwnership } from './utils/backgroundJobsOwnership.js';
 import { assertProcessRole } from './utils/processRole.js';
+import { logger } from './utils/logger.js';
+import { installFatalErrorHandlers } from './utils/fatalErrorHandlers.js';
 
 dotenv.config();
 
@@ -26,6 +28,14 @@ dotenv.config();
 // set to something other than "worker" — see utils/processRole.ts. Unset is
 // fine (pre-existing single-process/dev/test shape, unchanged).
 const processRole = assertProcessRole('worker');
+
+// F3-OBS-001: same rationale as index.ts's identical call — an uncaught
+// exception/unhandled rejection in a cron tick previously crashed this
+// process with no structured log line at all (see
+// utils/fatalErrorHandlers.ts). A crash here silently stops reminders/
+// retries/cleanup until PM2 restarts it, which is exactly the failure mode
+// this needs to be diagnosable from logs, not just from PM2 restart counts.
+installFatalErrorHandlers({ processLabel: 'worker', logger });
 
 const jobsOwnership = resolveWorkerBackgroundJobsOwnership();
 console.log(
