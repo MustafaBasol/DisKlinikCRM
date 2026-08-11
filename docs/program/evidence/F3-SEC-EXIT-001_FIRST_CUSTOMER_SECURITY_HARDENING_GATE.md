@@ -149,7 +149,7 @@ No auth/security-focused suite, secret/database-url test, or CSRF/rate-limit tes
 
 - **Agent completed?** Yes.
 - **Tests passed?** Yes for the one command run (baseline typecheck) — see §8 for exact command; no runtime test suite was in scope to re-run.
-- **PR opened?** See tracker for the PR link once opened by this task.
+- **PR opened?** Yes — [PR #362](https://github.com/MustafaBasol/DisKlinikCRM/pull/362).
 - **Merged?** No.
 - **Deployed?** No — this task explicitly stops at PR, per its own instructions.
 - **Production verified?** No — no production access was used at any point in this task; every production-dependent claim is marked `PASS_WITH_EXTERNAL_VERIFICATION` with an exact command in §5, never asserted as verified.
