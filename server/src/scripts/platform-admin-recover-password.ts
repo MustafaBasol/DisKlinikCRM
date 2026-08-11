@@ -192,6 +192,12 @@ function maskAdminId(id: string): string {
   return `${id.slice(0, 8)}...`;
 }
 
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return '***';
+  return `${local.slice(0, 1)}***@${domain}`;
+}
+
 export async function recoverPlatformAdminPassword(
   options: RecoverPlatformAdminPasswordOptions,
   deps: Partial<RecoverPlatformAdminPasswordDeps> = {},
@@ -318,7 +324,7 @@ export function printResult(result: RecoverPlatformAdminPasswordResult): void {
   if (result.dryRun) {
     console.log('\n=== PlatformAdmin Password Recovery — DRY RUN ===');
     console.log(`Account matched:          yes`);
-    console.log(`Email:                    ${result.email}`);
+    console.log(`Email:                    ${maskEmail(result.email)}`);
     console.log(`Account active:           ${result.accountActive ? 'yes' : 'no'}`);
     console.log(`MFA enabled (preserved):  ${result.mfaEnabled ? 'yes' : 'no'}`);
     console.log(`Account created at:       ${result.accountCreatedAt.toISOString()}`);

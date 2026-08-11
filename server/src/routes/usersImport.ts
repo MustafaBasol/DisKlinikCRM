@@ -379,7 +379,7 @@ router.post(
               console.warn(`[users/import-confirm] invitation email not sent for user ${newUser.id}: ${mailResult.reason}`);
             }
           } catch (mailErr: any) {
-            console.warn(`[users/import-confirm] invitation email failed for user ${newUser.id}: ${mailErr?.message}`);
+            console.warn(`[users/import-confirm] invitation email failed for user ${newUser.id}: ${mailErr instanceof Error ? mailErr.name : 'MailError'}`);
           }
 
           created.push(resultEntry);

@@ -29,6 +29,7 @@ import { openFileStream } from '../services/fileStorage.js';
 import { getParam, createRateLimiter } from '../utils/helpers.js';
 import { logActivity } from '../utils/activity.js';
 import { writeAuditLog } from '../utils/auditLog.js';
+import { safeErrorFields } from '../utils/safeError.js';
 import { validateAndGetClinicIdScope, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { findPatientInClinic, findAppointmentInClinic, findTreatmentCaseInClinic } from '../utils/relationGuards.js';
 import {
@@ -760,7 +761,7 @@ router.post('/imaging/studies', authorize([...IMAGING_CLINICAL_ROLES]), handleUp
     if (err instanceof ImagingIngestRequestCasConflictError || err?.statusCode === 409) {
       return res.status(409).json({ error: err.message });
     }
-    console.error('[imaging] upload error:', err?.message ?? err);
+    console.error('[imaging] upload error:', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to upload imaging study' });
   }
 });

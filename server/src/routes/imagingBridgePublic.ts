@@ -27,6 +27,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { createRateLimiter } from '../utils/helpers.js';
 import { writeAuditLog } from '../utils/auditLog.js';
+import { safeErrorFields } from '../utils/safeError.js';
 import { generateBridgeToken, hashBridgeToken } from '../services/imaging/bridgeTokens.js';
 import { getBridgeUpdateConfig } from '../services/imaging/bridgeUpdateConfig.js';
 import { hashPairingCode, normalizePairingCodeInput } from '../services/imaging/bridgePairing.js';
@@ -382,7 +383,7 @@ router.post('/imaging/bridge/studies', (req: Request, res: Response, next) => {
     if (err instanceof ImagingIngestRequestCasConflictError || err?.statusCode === 409) {
       return res.status(409).json({ error: err.message });
     }
-    console.error('[imaging-bridge] upload error:', err?.message ?? err);
+    console.error('[imaging-bridge] upload error:', safeErrorFields(err));
     if (!res.headersSent) res.status(500).json({ error: 'Failed to ingest imaging study' });
   } finally {
     if (tokenHashForSlot) releaseUploadSlot(tokenHashForSlot);

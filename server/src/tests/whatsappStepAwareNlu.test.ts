@@ -33,6 +33,34 @@ function section(title: string) {
   console.log(`\n${title}`);
 }
 
+// ─── Console spy (F3-IMPL-004: proves the raw Google AI Studio API key never
+// reaches console.* via the generic step-aware-nlu-error catch, which wraps
+// runGoogleStepAwareNlu — a function that embeds the raw key in its request
+// URL query string) ──────────────────────────────────────────────────────────
+
+type ConsoleMethod = 'log' | 'info' | 'error' | 'warn' | 'debug';
+const CONSOLE_METHODS: ConsoleMethod[] = ['log', 'info', 'error', 'warn', 'debug'];
+
+function captureConsole() {
+  const calls: unknown[][] = [];
+  const originals = CONSOLE_METHODS.map(method => [method, console[method]] as const);
+  for (const method of CONSOLE_METHODS) {
+    console[method] = ((...args: unknown[]) => { calls.push(args); }) as typeof console.log;
+  }
+  return {
+    calls,
+    restore: () => {
+      for (const [method, original] of originals) {
+        console[method] = original;
+      }
+    },
+  };
+}
+
+function serializeConsoleCalls(calls: unknown[][]): string {
+  return JSON.stringify(calls, (_key, value) => (typeof value === 'function' ? '[fn]' : value));
+}
+
 import {
   resolveStepAwareWhatsAppIntent,
   type ResolveStepAwareWhatsAppIntentArgs,
@@ -217,6 +245,36 @@ async function main() {
     });
     assert.ok(reply.includes('09:00') || reply.includes('sabah'), `expected morning slots in: ${reply}`);
     assert.ok(!reply.includes('15:00'), `afternoon slot should be filtered out: ${reply}`);
+  });
+
+  section('step-aware-nlu-error log privacy (F3-IMPL-004)');
+
+  await test('a raw network-level fetch error (echoing the request URL + API key) is never logged raw; only a safe, redacted message and the operation tag appear', async () => {
+    const REAL_API_KEY = 'AIzaSyD1234567890abcdefGHIJKLMNOPQRSTUv';
+    const originalFetch = globalThis.fetch;
+    const prevKey = process.env.GOOGLE_AI_STUDIO_API_KEY;
+    process.env.GOOGLE_AI_STUDIO_API_KEY = REAL_API_KEY;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      // Mirrors a real Node/undici network failure, whose message commonly
+      // echoes the full request URL (including the ?key=<apiKey> query param).
+      throw new Error(`fetch failed: request to ${String(input)} failed, reason: connect ETIMEDOUT`);
+    }) as typeof fetch;
+
+    const { calls, restore } = captureConsole();
+    let source: string;
+    try {
+      ({ source } = await resolveStepAwareWhatsAppIntent(baseArgs({ userText: 'merhaba' })));
+    } finally {
+      restore();
+      globalThis.fetch = originalFetch;
+      if (prevKey === undefined) delete process.env.GOOGLE_AI_STUDIO_API_KEY;
+      else process.env.GOOGLE_AI_STUDIO_API_KEY = prevKey;
+    }
+
+    assert.equal(source, 'nlu_error');
+    const serialized = serializeConsoleCalls(calls);
+    assert.equal(serialized.includes(REAL_API_KEY), false, `raw API key leaked into logs: ${serialized}`);
+    assert.ok(serialized.includes('step-aware-nlu-error'), 'expected the operation tag to still be logged');
   });
 
   section('Summary');

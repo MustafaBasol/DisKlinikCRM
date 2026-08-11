@@ -62,7 +62,7 @@ async function main() {
 
   if (targetEmail) {
     // ── Belirli kullanıcıyı onar ──────────────────────────────────────────
-    console.log(`Hedef kullanıcı: ${targetEmail}`);
+    console.log(`Hedef kullanıcı aranıyor...`);
 
     const user = await prisma.user.findFirst({
       where: { email: targetEmail, role: 'admin' },
@@ -70,18 +70,20 @@ async function main() {
     });
 
     if (!user) {
-      console.error(`Hata: '${targetEmail}' e-postasına sahip admin kullanıcı bulunamadı.`);
+      console.error(`Hata: belirtilen e-postaya sahip admin kullanıcı bulunamadı.`);
       process.exit(1);
     }
 
+    console.log(`Hedef kullanıcı: ${user.id}`);
+
     if (user.canAccessAllClinics) {
-      console.log(`✓ ${targetEmail} zaten canAccessAllClinics=true. İşlem gerekmez.`);
+      console.log(`✓ ${user.id} zaten canAccessAllClinics=true. İşlem gerekmez.`);
     } else {
       await prisma.user.update({
         where: { id: user.id },
         data: { canAccessAllClinics: true },
       });
-      console.log(`✓ ${targetEmail} — canAccessAllClinics true olarak güncellendi.`);
+      console.log(`✓ ${user.id} — canAccessAllClinics true olarak güncellendi.`);
     }
 
     // UserClinic kaydı yoksa ekle
@@ -159,10 +161,10 @@ async function main() {
       }
 
       if (repairs.length > 0) {
-        console.log(`  ✓ ${user.email}: ${repairs.join(', ')}`);
+        console.log(`  ✓ ${user.id}: ${repairs.join(', ')}`);
         repaired++;
       } else {
-        console.log(`  ○ ${user.email}: zaten doğru yapılandırılmış.`);
+        console.log(`  ○ ${user.id}: zaten doğru yapılandırılmış.`);
       }
     }
 

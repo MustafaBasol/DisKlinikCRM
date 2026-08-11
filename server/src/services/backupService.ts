@@ -269,7 +269,7 @@ export async function runRestoreTest(filename?: string): Promise<{
       try {
         await execFile('dropdb', [...pgArgs, tempDbName], { env: connEnv, timeout: 30_000 });
       } catch (dropErr: any) {
-        console.error('[backup] Failed to drop temp DB:', dropErr?.message);
+        console.error('[backup] Failed to drop temp DB:', { code: dropErr?.code });
       }
     }
     restoreTestRunning = false;

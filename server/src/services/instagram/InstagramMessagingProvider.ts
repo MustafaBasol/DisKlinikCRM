@@ -123,10 +123,6 @@ type ResolvedInstagramToken = {
   source: 'instagram_login' | 'facebook_page';
 };
 
-function tokenPrefix(token: string): string {
-  return token.slice(0, 8);
-}
-
 function safeEndpointForLog(url: URL): string {
   const safeUrl = new URL(url.toString());
   safeUrl.searchParams.delete('access_token');
@@ -170,8 +166,6 @@ async function fetchMetaJson(
   const diagnosticBase = {
     operation,
     endpoint,
-    tokenPrefix: tokenPrefix(token),
-    tokenLength: token.length,
   };
 
   console.info('[InstagramMeta] request', diagnosticBase);

@@ -455,7 +455,7 @@ router.post('/treatment-cases/:id/materials', authorize(['OWNER', 'ORG_ADMIN', '
 
     res.status(201).json(tx);
   } catch (err: any) {
-    console.error('Treatment material create error:', err?.message);
+    console.error('Treatment material create error:', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to add material' });
   }
 });

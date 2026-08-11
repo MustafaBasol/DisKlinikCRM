@@ -50,6 +50,7 @@ import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { writeAuditLog } from '../utils/auditLog.js';
 import { getParam } from '../utils/helpers.js';
+import { safeErrorFields } from '../utils/safeError.js';
 import { validateMedicalHistory, type NormalizedMedicalHistory } from '../services/medicalHistory.js';
 import {
   acquireMedicalHistoryVersionLock,
@@ -324,7 +325,7 @@ router.post(
 
       res.status(201).json(created);
     } catch (err: any) {
-      console.error('[patientMedicalHistory] create error:', err?.message ?? err);
+      console.error('[patientMedicalHistory] create error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to record medical history' });
     }
   },

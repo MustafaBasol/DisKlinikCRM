@@ -649,6 +649,7 @@ const logInstagramReplyFailure = async (args: {
     organizationId: args.organizationId,
     clinicId: args.clinic.id,
     ...metadata,
+    externalSenderId: senderSuffix(args.externalSenderId),
   });
 
   await recordOperationalEvent({
@@ -735,11 +736,7 @@ const createInstagramStaffRequest = async (args: {
     conversationId: summarizeIdentifier(args.externalConversationId),
     patientId: summarizeIdentifier(args.entry?.patientId),
     serviceId: summarizeIdentifier(args.appointmentTypeId),
-    serviceName: request.appointmentType?.name ?? null,
     practitionerId: summarizeIdentifier(args.practitionerId),
-    practitionerName: request.practitioner
-      ? `${request.practitioner.firstName} ${request.practitioner.lastName}`
-      : null,
     requestedDateTime: args.preferredStartTime?.toISOString() ?? null,
     requestId: summarizeIdentifier(request.id),
   });
@@ -840,11 +837,7 @@ const createInstagramAppointmentRequest = async (args: {
     conversationId: summarizeIdentifier(args.externalConversationId),
     patientId: summarizeIdentifier(args.entry?.patientId),
     serviceId: summarizeIdentifier(args.appointmentTypeId),
-    serviceName: request.appointmentType?.name ?? null,
     practitionerId: summarizeIdentifier(args.selectedSlot.practitionerId),
-    practitionerName: request.practitioner
-      ? `${request.practitioner.firstName} ${request.practitioner.lastName}`
-      : null,
     requestedDateTime: startTime.toISOString(),
     requestId: summarizeIdentifier(request.id),
   });
