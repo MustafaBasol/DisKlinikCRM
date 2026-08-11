@@ -38,7 +38,7 @@
     "cornerstone-core": "2.6.1",
     "cornerstone-wado-image-loader": "4.13.2",
     "dicom-parser": "1.8.21",
-    "i18next": "^23.15.1",
+    "i18next": "^26.3.6",
     "i18next-browser-languagedetector": "^8.0.0",
     "i18next-http-backend": "^3.0.5",
     "lucide-react": "^0.447.0",
