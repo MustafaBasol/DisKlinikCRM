@@ -24,6 +24,7 @@
  */
 
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -113,43 +114,41 @@ await test('rejects partial match (must be full string due to ^ and $)', () => {
 
 section('Platform Auth — backup route protection');
 
-await test('missing token → 401', () => {
+await test('missing token → 401', async () => {
   const req = makeReq();
   const res = makeRes();
   let nextCalled = false;
-  (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
+  await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
   assert.equal(res._status, 401);
   assert.ok(!nextCalled);
 });
 
-await test('valid platform token → sets platformAdmin on req', () => {
-  const token = generatePlatformToken({ id: 'admin-1', email: 'admin@test.com' });
+// F3-SEC-002: authenticatePlatformAdmin now does a persistent DB lookup for
+// the token's admin id. This file is a member of server:test:non-disposable
+// ("zero external infra" — see ci-layers.yml) and seeds no PlatformAdmin
+// fixture of its own, so this must stay deterministic whether or not a real
+// Postgres is reachable: a syntactically valid, correctly signed token for
+// an id that is not a real (or is not a *known-real*) admin row must be
+// rejected either way — "not found" and "DB unreachable" both fail closed
+// to the same 401 (see platformAuth.ts). A fresh random id (not the literal
+// 'admin-1' other suites use as a shared fixture id) guarantees this stays
+// true even when run against a real, already-populated database rather than
+// a throwaway one. The positive "a real admin's token is accepted" path is
+// covered against a real disposable Postgres by platformAdmin.test.ts and
+// platformAdminSessionRevocation.test.ts instead.
+await test('well-formed platform token for an unknown admin id → 401 (fails closed, no DB required to prove this)', async () => {
+  const token = generatePlatformToken({ id: crypto.randomUUID(), email: 'admin@test.com' });
   const req = makeReq(`Bearer ${token}`);
-  // Bearer fallback must be enabled or cookie used; test via cookie path
-  const cookieReq = {
-    headers: {},
-    cookies: {},
-    get: (h: string) => '',
-  } as any;
-  // Inject cookie manually
-  cookieReq.headers['cookie'] = `platform_session=${token}`;
-
   const res = makeRes();
   let nextCalled = false;
 
-  // Use bearer fallback via env
-  const prev = process.env.PLATFORM_BEARER_FALLBACK;
-  process.env.PLATFORM_BEARER_FALLBACK = 'true';
+  await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
 
-  (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
-
-  process.env.PLATFORM_BEARER_FALLBACK = prev ?? '';
-
-  // With PLATFORM_BEARER_FALLBACK=true this should pass
-  assert.ok(nextCalled || res._status === 401, 'Either passes or 401 — depends on env');
+  assert.equal(nextCalled, false);
+  assert.equal(res._status, 401);
 });
 
-await test('clinic-type token rejected with 403', () => {
+await test('clinic-type token rejected with 403', async () => {
   const clinicToken = jwt.sign(
     { type: 'clinic', sub: 'user-1', id: 'user-1', email: 'user@clinic.com', jti: 'sess-1' },
     'platform-admin-secret-change-this',
@@ -158,10 +157,7 @@ await test('clinic-type token rejected with 403', () => {
   const req = makeReq(`Bearer ${clinicToken}`);
   const res = makeRes();
   let nextCalled = false;
-  const prev = process.env.PLATFORM_BEARER_FALLBACK;
-  process.env.PLATFORM_BEARER_FALLBACK = 'true';
-  (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
-  process.env.PLATFORM_BEARER_FALLBACK = prev ?? '';
+  await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
   assert.ok(!nextCalled, 'clinic token should not pass platform auth');
   assert.equal(res._status, 403);
 });

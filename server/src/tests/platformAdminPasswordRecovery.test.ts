@@ -9,10 +9,17 @@
  */
 
 import 'dotenv/config';
+
+// F3-SEC-002 revocation-contract tests below exercise authenticatePlatformAdmin
+// via Bearer tokens; production defaults to cookie-only, so enable the
+// fallback explicitly for this suite (same convention as platformAdmin.test.ts).
+process.env.PLATFORM_BEARER_FALLBACK_ENABLED = 'true';
+
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import prisma from '../db.js';
+import { authenticatePlatformAdmin, generatePlatformToken } from '../middleware/platformAuth.js';
 import {
   recoverPlatformAdminPassword,
   parseCliArgs,
@@ -38,6 +45,16 @@ async function test(name: string, fn: () => void | Promise<void>) {
 
 function section(title: string) {
   console.log(`\n${title}`);
+}
+
+function mockRes() {
+  const res: any = {
+    statusCode: 200,
+    body: undefined,
+    status(code: number) { this.statusCode = code; return this; },
+    json(payload: unknown) { this.body = payload; return this; },
+  };
+  return res;
 }
 
 const VALID_PASSWORD = 'Str0ng!Passw0rd987';
@@ -254,12 +271,13 @@ await test('dry-run performs no writes: no hash change, no audit row, safe field
   assert.equal(result.mfaPreserved, true);
   assert.equal(result.passwordChanged, false);
   assert.equal(result.auditWritten, false);
-  assert.equal(result.sessionsInvalidated, 0);
+  assert.equal(result.credentialsInvalidatedAt, null, 'dry-run must never write an invalidation checkpoint');
 
   const after = await prisma.platformAdmin.findUnique({ where: { id: admin.id } });
   assert.equal(after?.passwordHash, before?.passwordHash, 'dry-run must never change passwordHash');
   assert.deepEqual(after?.totpEnabledAt, before?.totpEnabledAt, 'dry-run must never touch MFA fields');
   assert.equal(after?.updatedAt.getTime(), before?.updatedAt.getTime(), 'dry-run must never touch updatedAt');
+  assert.equal(after?.passwordChangedAt, null, 'dry-run must never write an invalidation checkpoint to the row');
 
   const auditCount = await prisma.platformAdminAuditEvent.count({
     where: { resourceType: 'PlatformAdmin', resourceKey: admin.id },
@@ -269,20 +287,26 @@ await test('dry-run performs no writes: no hash change, no audit row, safe field
 
 section('recoverPlatformAdminPassword — successful recovery');
 
-await test('successful recovery: updates only passwordHash/updatedAt, preserves MFA, writes exactly one audit event', async () => {
+await test('successful recovery: updates passwordHash/passwordChangedAt/updatedAt, preserves MFA, writes exactly one audit event', async () => {
   const admin = await trackedFixtureAdmin({ totpEnabledAt: new Date('2025-01-01T00:00:00Z') });
   const before = await prisma.platformAdmin.findUnique({ where: { id: admin.id } });
 
+  const beforeCall = new Date();
   const result = await recoverPlatformAdminPassword(
     { email: admin.email, confirmEmail: admin.email, dryRun: false, confirm: true },
     { getNewPasswordPair: fixedPasswordPair(VALID_PASSWORD) },
   );
+  const afterCall = new Date();
 
   assert.equal(result.passwordChanged, true);
   assert.equal(result.auditWritten, true);
   assert.equal(result.mfaPreserved, true);
   assert.equal(result.mfaEnabled, true);
-  assert.equal(result.sessionsInvalidated, 0);
+  assert.ok(result.credentialsInvalidatedAt instanceof Date, 'a real reset must return the invalidation timestamp');
+  assert.ok(
+    result.credentialsInvalidatedAt! >= beforeCall && result.credentialsInvalidatedAt! <= afterCall,
+    'the invalidation timestamp must be taken at reset time',
+  );
 
   const after = await prisma.platformAdmin.findUnique({ where: { id: admin.id } });
   assert.ok(after, 'admin row must still exist');
@@ -294,6 +318,7 @@ await test('successful recovery: updates only passwordHash/updatedAt, preserves 
   assert.deepEqual(after!.totpEnabledAt, before!.totpEnabledAt, 'totpEnabledAt must not change');
   assert.equal(after!.totpSecretEncrypted, before!.totpSecretEncrypted, 'totpSecretEncrypted must not change');
   assert.ok(after!.updatedAt.getTime() >= before!.updatedAt.getTime(), 'updatedAt must be bumped by the Prisma update');
+  assert.deepEqual(after!.passwordChangedAt, result.credentialsInvalidatedAt, 'passwordChangedAt must persist exactly the returned invalidation timestamp');
 
   const rows = await prisma.platformAdminAuditEvent.findMany({
     where: { resourceType: 'PlatformAdmin', resourceKey: admin.id },
@@ -307,11 +332,42 @@ await test('successful recovery: updates only passwordHash/updatedAt, preserves 
   assert.equal(row.previousValue, null);
   assert.equal(row.newValue, null);
   assert.equal(row.outcome, 'success');
-  assert.deepEqual(row.safeMetadata, { method: 'operator_cli', sessionsInvalidated: 0, mfaPreserved: true });
+  assert.deepEqual(row.safeMetadata, { method: 'operator_cli', mfaPreserved: true, credentialsInvalidated: true });
 
   const serializedRow = JSON.stringify(row);
   assert.ok(!serializedRow.includes(VALID_PASSWORD), 'audit row must never contain the plaintext password');
   assert.ok(!serializedRow.includes(after!.passwordHash), 'audit row must never contain the password hash');
+});
+
+section('recoverPlatformAdminPassword — F3-SEC-002 session revocation contract');
+
+await test('a token issued before recovery is rejected by authenticatePlatformAdmin after recovery; a token issued after it is accepted', async () => {
+  const admin = await trackedFixtureAdmin();
+
+  const staleToken = generatePlatformToken({ id: admin.id, email: admin.email });
+  // Ensure the stale token's `iat` (whole seconds) is strictly before the
+  // invalidation checkpoint set below — jwt.sign's `iat` has 1s resolution.
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+
+  await recoverPlatformAdminPassword(
+    { email: admin.email, confirmEmail: admin.email, dryRun: false, confirm: true },
+    { getNewPasswordPair: fixedPasswordPair(VALID_PASSWORD) },
+  );
+
+  const staleReq = { headers: { authorization: `Bearer ${staleToken}` } } as any;
+  const staleRes = mockRes();
+  let staleNextCalled = false;
+  await (authenticatePlatformAdmin as any)(staleReq, staleRes, () => { staleNextCalled = true; });
+  assert.equal(staleNextCalled, false, 'a token issued before the reset must be rejected');
+  assert.equal(staleRes.statusCode, 401);
+
+  const freshToken = generatePlatformToken({ id: admin.id, email: admin.email });
+  const freshReq = { headers: { authorization: `Bearer ${freshToken}` } } as any;
+  const freshRes = mockRes();
+  let freshNextCalled = false;
+  await (authenticatePlatformAdmin as any)(freshReq, freshRes, () => { freshNextCalled = true; });
+  assert.equal(freshNextCalled, true, 'a token issued after the reset must be accepted');
+  assert.equal(freshReq.platformAdmin?.id, admin.id);
 });
 
 section('recoverPlatformAdminPassword — transaction atomicity');

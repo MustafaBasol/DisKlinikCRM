@@ -148,6 +148,25 @@ async function withEnv(updates: Record<string, string | undefined>, fn: () => vo
   }
 }
 
+// F3-SEC-002: authenticatePlatformAdmin now performs a persistent, DB-backed
+// admin lookup (existence/active/passwordChangedAt), so every test below
+// that exercises the real middleware with a token for id 'admin-1' needs a
+// real row to exist first — moved up front (not just before the later
+// route-fixture-dependent sections at the bottom of this file) so the
+// "authenticatePlatformAdmin — Middleware doğrulama" section immediately
+// below can rely on it too. Idempotent upsert — safe to share with the
+// later route tests' own reference to this same fixture id.
+await prisma.platformAdmin.upsert({
+  where: { id: 'admin-1' },
+  update: {},
+  create: {
+    id: 'admin-1',
+    email: 'admin-1-fixture@platform.test',
+    passwordHash: 'not-a-real-hash-test-fixture-only',
+    name: 'Test Fixture Platform Admin',
+  },
+});
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 section('parsePagination — Sayfalama yardımcısı');
@@ -220,6 +239,10 @@ await test('Token type=platform_admin içerir', () => {
 section('authenticatePlatformAdmin — Middleware doğrulama');
 
 await test('Geçerli platform tokenıyla next() çağrılır', async () => {
+  // F3-SEC-002: the token's email claim is deliberately stale here — the
+  // middleware now reads identity from the DB row (the 'admin-1' fixture
+  // seeded near the top of this file), never from the token payload, so a
+  // renamed/updated email can never be spoofed via an old token.
   const token = generatePlatformToken({ id: 'admin-1', email: 'admin@platform.com' });
   const req = makeReq(`Bearer ${token}`);
   const res = makeRes();
@@ -231,7 +254,7 @@ await test('Geçerli platform tokenıyla next() çağrılır', async () => {
   assert.ok(nextCalled, 'next() çağrılmalıydı');
   assert.ok(req.platformAdmin, 'platformAdmin req üzerine set edilmeli');
   assert.equal(req.platformAdmin.id, 'admin-1');
-  assert.equal(req.platformAdmin.email, 'admin@platform.com');
+  assert.equal(req.platformAdmin.email, 'admin-1-fixture@platform.test', 'email must come from the DB row, not the token claim');
 });
 
 await test('Bearer fallback kapatilinca gecerli platform Bearer tokeni 401 doner', async () => {
@@ -577,19 +600,8 @@ function mockPlatformReq(body: Record<string, unknown> = {}) {
 
 // PlatformAdminAuditEvent.actorPlatformAdminId has a real FK to
 // PlatformAdmin(id) — every route test below attributes the mocked toggle to
-// id 'admin-1', so a real row must exist for the audit insert (and the
-// transaction it lives in) to succeed, exactly as it would in production
-// where the id always comes from an authenticated session.
-await prisma.platformAdmin.upsert({
-  where: { id: 'admin-1' },
-  update: {},
-  create: {
-    id: 'admin-1',
-    email: 'admin-1-fixture@platform.test',
-    passwordHash: 'not-a-real-hash-test-fixture-only',
-    name: 'Test Fixture Platform Admin',
-  },
-});
+// id 'admin-1'; that fixture row is created once, near the top of this file
+// (see F3-SEC-002 comment above), and reused here.
 
 await test('GET policy: no PlatformSetting row → runtimeEnabled=false (default-deny)', async () => {
   await prisma.platformSetting.deleteMany({ where: { key: LEGACY_CONSENT_CORRECTION_RUNTIME_SETTING_KEY } });
@@ -1540,6 +1552,13 @@ await test('POST /auth/mfa/disable: success creates exactly one platform_admin_m
   const admin = await prisma.platformAdmin.findUnique({ where: { id: MFA_ADMIN_ID } });
   assert.equal(admin?.totpEnabledAt, null);
   assert.equal(admin?.totpSecretEncrypted, null);
+  // F3-SEC-002: MFA disable is not a credential-invalidating event — it
+  // requires re-proof of both the current password AND a valid TOTP code
+  // (see the password/code check above this route calls), so it carries no
+  // more risk than an already-authenticated session performing any other
+  // self-service action, and the caller already holds a live session by
+  // definition. Session revocation stays scoped to password resets.
+  assert.equal(admin?.passwordChangedAt, null, 'MFA disable must never touch the session-revocation checkpoint');
 });
 
 await test('POST /auth/mfa/disable: rejected (wrong password) creates no audit row and leaves MFA enabled', async () => {
