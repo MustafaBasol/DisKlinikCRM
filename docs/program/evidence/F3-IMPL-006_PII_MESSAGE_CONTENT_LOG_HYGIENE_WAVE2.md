@@ -176,4 +176,4 @@ Each of the 49 source-file diffs is small (1-3 lines per site) and independent �
 
 ## 9. Task status
 
-`AGENT_COMPLETED` / `TESTS_PASSED` (64/65 named scripts green; the 1 remaining plus the 6 other DB-dependent regression suites fail only for the pre-existing no-local-Postgres environment reason in §5, independently confirmed, unrelated to this task's diff) / pending `PR_OPENED` — `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`. R-018 **reduced, not closed** — see §7 for the exact residual gap and why closure is not claimed.
+`AGENT_COMPLETED` / `TESTS_PASSED` (65/65 named scripts green after fixing the test-anchor defect; the 7 DB-dependent regression-suite failures on first run were the pre-existing no-local-Postgres environment reason in §5, independently confirmed, unrelated to this task's diff) / `PR_OPENED` ([PR #364](https://github.com/MustafaBasol/DisKlinikCRM/pull/364)) — `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`. R-018 **reduced, not closed** — see §7 for the exact residual gap and why closure is not claimed.
