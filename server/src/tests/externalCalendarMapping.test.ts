@@ -50,10 +50,10 @@ let seq = 0;
 const auditEvents: unknown[] = [];
 
 const users = [
-  { id: 'user-dentist-A', clinicId: 'clinic-A', isActive: true, firstName: 'Ada', lastName: 'Yilmaz' },
-  { id: 'user-dentist-B', clinicId: 'clinic-B', isActive: true, firstName: 'Berk', lastName: 'Demir' },
+  { id: 'user-dentist-A', clinicId: 'clinic-A', isActive: true, role: 'DENTIST', firstName: 'Ada', lastName: 'Yilmaz' },
+  { id: 'user-dentist-B', clinicId: 'clinic-B', isActive: true, role: 'DENTIST', firstName: 'Berk', lastName: 'Demir' },
 ];
-const userClinics: { userId: string; clinicId: string; isActive: boolean }[] = [];
+const userClinics: { userId: string; clinicId: string; isActive: boolean; role: string }[] = [];
 const appointmentTypes = [
   { id: 'svc-A-1', clinicId: 'clinic-A', name: 'Cleaning' },
   { id: 'svc-B-1', clinicId: 'clinic-B', name: 'Whitening' },
@@ -63,20 +63,35 @@ const appointmentTypes = [
   async findFirst({ where }: any) {
     return (
       users.find((u) => {
-        if (where.id !== u.id) return false;
+        if (where.id !== undefined && where.id !== u.id) return false;
+        if (where.clinicId !== undefined && where.clinicId !== u.clinicId) return false;
         if (where.isActive !== undefined && where.isActive !== u.isActive) return false;
-        const ors = where.OR as any[];
-        return ors.some((clause: any) => {
-          if (clause.clinicId) return clause.clinicId === u.clinicId;
-          if (clause.userClinics) {
-            return userClinics.some(
-              (uc) => uc.userId === u.id && uc.clinicId === clause.userClinics.some.clinicId && uc.isActive,
-            );
-          }
-          return false;
-        });
+        if (where.role?.in && !where.role.in.includes(u.role)) return false;
+        return true;
       }) ?? null
     );
+  },
+};
+
+(prisma as any).userClinic = {
+  async findFirst({ where }: any) {
+    return this._all(where)[0] ?? null;
+  },
+  async findMany({ where }: any) {
+    return this._all(where);
+  },
+  _all(where: any) {
+    return userClinics
+      .filter((uc) => {
+        if (where.userId !== undefined && where.userId !== uc.userId) return false;
+        if (where.clinicId !== undefined && where.clinicId !== uc.clinicId) return false;
+        if (where.isActive !== undefined && where.isActive !== uc.isActive) return false;
+        if (where.role?.in && !where.role.in.includes(uc.role)) return false;
+        const owner = users.find((u) => u.id === uc.userId);
+        if (where.user?.isActive !== undefined && owner?.isActive !== where.user.isActive) return false;
+        return true;
+      })
+      .map((uc) => ({ userId: uc.userId, user: users.find((u) => u.id === uc.userId) }));
   },
 };
 

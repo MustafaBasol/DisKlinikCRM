@@ -42,6 +42,7 @@ import {
   listSupportedExternalCalendarProviders,
 } from '../services/externalCalendar/externalCalendarProviderFactory.js';
 import { ExternalCalendarError } from '../services/externalCalendar/externalCalendarErrors.js';
+import { listClinicPractitioners } from '../utils/relationGuards.js';
 
 const router = express.Router();
 
@@ -223,21 +224,20 @@ router.delete(
 
 // GET /api/platform/clinics/:clinicId/external-calendar/local-options — practitioners/services
 // available in THIS clinic, for the mapping UI's local-side dropdowns.
+//
+// Practitioner eligibility is delegated to listClinicPractitioners()
+// (utils/relationGuards.ts) — the same contract externalCalendarMappingService.ts
+// uses to validate a mapping write, so the dropdown and the write-path can never
+// disagree about who counts as a practitioner (F3-DIGIDENTIS-MAP-001-R1). See
+// that helper's doc comment for the eligibility rule (branch-scoped UserClinic
+// role, or legacy User.clinicId role, either DENTIST/dentist/doctor, active only).
 router.get('/clinics/:clinicId/external-calendar/local-options', async (req: PlatformAdminRequest, res: Response) => {
   const clinicId = getClinicIdParam(req);
   const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true } });
   if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
   const [practitioners, services] = await Promise.all([
-    prisma.user.findMany({
-      where: {
-        isActive: true,
-        role: 'DENTIST',
-        OR: [{ clinicId }, { userClinics: { some: { clinicId, isActive: true } } }],
-      },
-      select: { id: true, firstName: true, lastName: true },
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-    }),
+    listClinicPractitioners(clinicId),
     prisma.appointmentType.findMany({
       where: { clinicId, isActive: true },
       select: { id: true, name: true },
