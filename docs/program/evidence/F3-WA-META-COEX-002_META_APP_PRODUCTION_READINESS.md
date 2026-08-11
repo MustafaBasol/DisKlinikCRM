@@ -292,7 +292,9 @@ Multiple items in this task cannot be closed without a human interacting with th
 4. Safe to share: a screenshot of the Configuration/Embedded Signup setup screen showing the flow-type selector and whether Coexistence is present/selectable; the Configuration ID itself (not secret, but mask it in shared program docs per the task's own preference for masking non-secret IDs too).
 5. Decision this unblocks: whether §6's "Classify existing NoraMedi frontend: READY / PARTIAL / NOT_READY" can be answered — it currently cannot, because it depends on knowing the actual current Configuration's flow type, which this session cannot see.
 
-Until #1–#3 are answered (and #0 is clarified), **no further Meta-provider-contract verdict in this document can move past `UNVERIFIED`**, and per Gate 0, no dependent configuration or implementation action should be taken.
+**Corrected 2026-08-11 (F3-WA-META-COEX-002-R2):** the sentence below originally read "Until #1–#3 are answered (and #0 is clarified)..." — #0 was resolved by the R1 amendment above (§0 amendment) and is no longer an open item. Only #1–#3 remain outstanding.
+
+Until #1–#3 are answered, **no further Meta-provider-contract verdict in this document can move past `UNVERIFIED`**, and per Gate 0, no dependent configuration or implementation action should be taken.
 
 ---
 
