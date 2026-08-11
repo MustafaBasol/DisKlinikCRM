@@ -1,5 +1,6 @@
 /**
- * errorTracking.ts — F3-OBS-001: optional, low-lock-in external error-tracking boundary.
+ * errorTracking.ts — F3-OBS-001 (R1): optional, low-lock-in external
+ * error-tracking boundary, with mandatory NoraMedi-side sanitization.
  *
  * No external error-tracking provider is configured anywhere in this
  * repository today (no Sentry/GlitchTip SDK in package.json, no DSN
@@ -18,16 +19,70 @@
  *     this can never itself crash the process or block the request/error
  *     path it's called from.
  *   - `SENTRY_DSN` set AND `@sentry/node` installed (a follow-up
- *     `npm install @sentry/node`, external to this task): events are sent
- *     with `sendDefaultPii: false`, no request/response body, no message
- *     body — only a fixed-shape context (request id, process role, safe
- *     route template — the same values already produced by
- *     utils/logger.ts's `safeRoute`/`logUnhandledError`, never patient
- *     data) plus environment/release tags.
+ *     `npm install @sentry/node`, external to this task): a *sanitized,
+ *     synthetic* event is sent — see "Privacy contract" below.
  *
  * This intentionally does NOT implement OTel tracing/metrics — see
  * F3-OBS-001's evidence doc for why that is deferred to a follow-up
  * (P1/F7) rather than built here.
+ *
+ * --- Privacy contract (F3-OBS-001-R1) -------------------------------------
+ *
+ * The caller (`server/src/index.ts`'s global Express error handler) passes
+ * whatever it caught — an application `throw`, a Prisma error, a third-party
+ * client error. That raw object routinely carries request-derived content
+ * in `err.message` (e.g. `` `Patient ${id} not found` ``), in `err.stack`,
+ * or in provider-specific fields, exactly like `utils/logger.ts`'s
+ * `safeErrorLog` already documents for the structured-log path. `Sentry.init`'s
+ * `sendDefaultPii: false` only stops the SDK from *auto-attaching* request/
+ * user context (IP, cookies, headers) that this module never gives it in
+ * the first place — it does NOT inspect or scrub the arguments an
+ * application explicitly hands to `captureException`/`captureMessage`. A
+ * naive `captureException(err, ...)` would therefore forward the raw
+ * message/stack/nested-cause chain verbatim to an external, third-party
+ * service — the exact exfiltration path F3-IMPL-004/F3-IMPL-006 closed for
+ * the log stream. This module must not reopen it via a second, external
+ * egress path. Concretely: never assume the SDK's defaults sanitize
+ * anything handed to it — this module does the sanitization itself, before
+ * the SDK ever sees the value.
+ *
+ * `captureFatalError` therefore never forwards `err` (or anything derived
+ * from it — `err.message`, `err.stack`, `err.cause`, custom properties)
+ * to the provider. It extracts only `err.name` (mirroring `safeErrorLog`'s
+ * already-accepted-as-safe `type` field — a fixed, small set of JS/Prisma
+ * built-in constructor names in practice, never free text) and discards
+ * everything else, then sends a synthetic, fixed-shape event built from:
+ *
+ *   - `errType`      — `err.name`, or `'UnknownError'` if `err` isn't an
+ *                       `Error` instance.
+ *   - a fixed, hardcoded message (`EXTERNAL_TRACKING_MESSAGE` below) — NOT
+ *     `err.message`, in every environment, unlike `safeErrorLog`'s
+ *     non-production behavior (which does log the real message/stack, but
+ *     only to this repository's own log stream, never to a third party).
+ *   - `requestId` / `role` / `route` from the caller-supplied
+ *     `ErrorTrackingContext` — `route` is already a safe template
+ *     (`utils/logger.ts`'s `safeRoute`), never a raw path with embedded
+ *     IDs; `requestId` is an opaque correlation id, not PII.
+ *   - `environment` (`NODE_ENV`) / `release` (`RELEASE_SHA`) — deployment
+ *     metadata, not request-derived.
+ *
+ * No request body, message/patient content, token, credential, or
+ * presigned URL is ever in scope of this function's inputs to begin with
+ * (the caller passes only `err` + `ErrorTrackingContext`), so there is no
+ * separate code path that could leak them here.
+ *
+ * API choice: `captureMessage`, not `captureException`. A prior version of
+ * this module called `Sentry.captureException(err, ...)`, which hands the
+ * SDK an actual `Error` object and relies on trusting how the SDK's own
+ * exception-frame/stack extraction treats it — exactly the "assume SDK
+ * defaults are sufficient" mistake this revision must not repeat. Sending a
+ * plain string message plus an explicit, fully-enumerated `context` object
+ * (`tags`/`extra` below) means there is no `Error`/stack object in the call
+ * at all for any SDK-internal extraction to act on — the sanitization
+ * boundary is total, not dependent on SDK behavior this repository doesn't
+ * control. `@sentry/node`'s `captureMessage` is part of the same minimal
+ * client surface as `captureException`/`init` already used here — no new
+ * package, no larger API surface.
  */
 
 import { logger } from './logger.js';
@@ -40,12 +95,43 @@ export interface ErrorTrackingContext {
 
 interface MinimalSentryModule {
   init(options: Record<string, unknown>): void;
-  captureException(err: unknown, context?: Record<string, unknown>): void;
+  captureMessage(message: string, context?: Record<string, unknown>): void;
+}
+
+/**
+ * Fixed, content-free message sent to the external provider for every
+ * captured error, regardless of the real `err.message` — see module
+ * docstring's "Privacy contract".
+ */
+const EXTERNAL_TRACKING_MESSAGE = 'internal error captured';
+
+/** `err.name` if `err` is an Error instance, else a fixed fallback — never `err.message`/`err.stack`. */
+function safeExternalErrorType(err: unknown): string {
+  if (err instanceof Error && typeof err.name === 'string' && err.name.trim() !== '') {
+    return err.name;
+  }
+  return 'UnknownError';
 }
 
 let initialized = false;
 let warnedMissingPackage = false;
 let sentryModulePromise: Promise<MinimalSentryModule | null> | null = null;
+
+/**
+ * Test-only injection seam (mirrors `utils/readiness.ts`'s injected
+ * `checkDatabase`/`checkRedis` pattern): lets tests supply a fake
+ * `MinimalSentryModule` to assert on the exact payload this module sends,
+ * without requiring `@sentry/node` to be installed. `null` (the default)
+ * means "use the real dynamic import".
+ */
+let sentryModuleLoaderOverrideForTests: (() => Promise<MinimalSentryModule | null>) | null = null;
+
+/** Test-only: injects a fake Sentry module loader. Call `resetErrorTrackingStateForTests()` after. */
+export function setSentryModuleLoaderForTests(
+  loader: (() => Promise<MinimalSentryModule | null>) | null,
+): void {
+  sentryModuleLoaderOverrideForTests = loader;
+}
 
 // A non-literal specifier so TypeScript treats this as an untyped dynamic
 // import (Promise<any>) instead of trying to resolve "@sentry/node" at
@@ -55,6 +141,7 @@ let sentryModulePromise: Promise<MinimalSentryModule | null> | null = null;
 const OPTIONAL_SENTRY_MODULE_SPECIFIER = '@sentry/node';
 
 async function loadSentry(): Promise<MinimalSentryModule | null> {
+  if (sentryModuleLoaderOverrideForTests) return sentryModuleLoaderOverrideForTests();
   if (sentryModulePromise) return sentryModulePromise;
   sentryModulePromise = import(OPTIONAL_SENTRY_MODULE_SPECIFIER)
     .then((mod) => mod as unknown as MinimalSentryModule)
@@ -76,6 +163,7 @@ export function resetErrorTrackingStateForTests(): void {
   initialized = false;
   warnedMissingPackage = false;
   sentryModulePromise = null;
+  sentryModuleLoaderOverrideForTests = null;
 }
 
 export async function captureFatalError(err: unknown, context: ErrorTrackingContext = {}): Promise<void> {
@@ -92,13 +180,25 @@ export async function captureFatalError(err: unknown, context: ErrorTrackingCont
       release: process.env.RELEASE_SHA || undefined,
       sendDefaultPii: false,
       // No request-body/breadcrumb integrations are configured — only the
-      // explicit, scrubbed `context` below is ever attached to an event.
+      // explicit, scrubbed payload below is ever sent, and it is built
+      // from `context`/`err.name` only, never from `err` itself.
     });
     initialized = true;
   }
 
-  Sentry.captureException(err, {
-    tags: { role: context.role, requestId: context.requestId },
-    extra: { route: context.route },
+  // See module docstring's "Privacy contract": every field below is either
+  // a fixed constant, a caller-supplied correlation id/role/safe-route
+  // template, or `err.name` — never `err.message`, `err.stack`, or any
+  // other property of `err`.
+  Sentry.captureMessage(EXTERNAL_TRACKING_MESSAGE, {
+    level: 'error',
+    tags: {
+      errType: safeExternalErrorType(err),
+      role: context.role,
+      requestId: context.requestId !== undefined ? String(context.requestId) : undefined,
+    },
+    extra: {
+      route: context.route,
+    },
   });
 }
