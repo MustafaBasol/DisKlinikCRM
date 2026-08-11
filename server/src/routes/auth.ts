@@ -412,7 +412,7 @@ router.post('/forgot-password', async (req, res) => {
       console.warn(`[forgot-password] Email not sent for user ${user.id}: ${result.reason}`);
     }
   } catch (err) {
-    console.error('[forgot-password] Error:', (err as Error).message);
+    console.error('[forgot-password] Error:', err instanceof Error ? err.name : 'UnknownError');
   }
 
   return res.json(GENERIC_RESET_RESPONSE);
@@ -601,7 +601,7 @@ router.post('/resend-verification', async (req, res) => {
       console.warn(`[resend-verification] Email not sent for user ${user.id}: ${result.reason}`);
     }
   } catch (err) {
-    console.error('[resend-verification] Error:', (err as Error).message);
+    console.error('[resend-verification] Error:', err instanceof Error ? err.name : 'UnknownError');
   }
 
   return res.json(GENERIC_RESEND_RESPONSE);

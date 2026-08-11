@@ -45,6 +45,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { z } from 'zod';
 import prisma from '../../db.js';
 import type { Prisma } from '@prisma/client';
+import { safeErrorFields } from '../../utils/safeError.js';
 
 const MIN_SECRET_LENGTH = 32;
 /** Clearly-labelled, non-production-only fallback — never used when NODE_ENV=production. */
@@ -413,7 +414,7 @@ export async function recordSecuritySignal(input: RecordSecuritySignalInput): Pr
     // Signal-recording failure must never break the primary request, and
     // must never be interpreted as permission to change an allow/deny
     // decision that already happened independently of this call.
-    console.error('[security-signal] Failed to record signal:', err instanceof Error ? err.message : String(err));
+    console.error('[security-signal] Failed to record signal:', safeErrorFields(err));
   }
 }
 
@@ -440,7 +441,7 @@ export async function countSignalsInWindow(params: {
       },
     });
   } catch (err) {
-    console.error('[security-signal] Failed to count signals in window:', err instanceof Error ? err.message : String(err));
+    console.error('[security-signal] Failed to count signals in window:', safeErrorFields(err));
     return 0;
   }
 }

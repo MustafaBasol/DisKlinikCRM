@@ -1075,7 +1075,7 @@ router.patch('/imaging/studies/:id/legal-hold', authorize(['OWNER', 'ORG_ADMIN']
 
     res.json(redactStudyLegalHoldReason(updated, canSeeLegalHoldReason(req)));
   } catch (err: any) {
-    console.error('[imaging] legal-hold error:', err?.message ?? err);
+    console.error('[imaging] legal-hold error:', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to update legal hold' });
   }
 });

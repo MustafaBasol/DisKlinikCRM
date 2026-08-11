@@ -12,6 +12,7 @@
 import cron from 'node-cron';
 import { cleanupExpiredNoticeEvidence } from '../services/publicBookingNoticeEvidence.js';
 import { withJobLock } from '../utils/jobLock.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 export function startPublicBookingNoticeEvidenceCleanupJob(): void {
   cron.schedule('0 * * * *', () => {
@@ -22,9 +23,7 @@ export function startPublicBookingNoticeEvidenceCleanupJob(): void {
         console.log(`[notice-evidence-cleanup] deleted=${deleted}`);
       }
     }).catch((err: unknown) => {
-      console.error(
-        `[notice-evidence-cleanup] Unhandled error: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      console.error('[notice-evidence-cleanup] Unhandled error:', safeErrorFields(err));
     });
   });
 

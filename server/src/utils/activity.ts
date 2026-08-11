@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
+import { safeErrorFields } from './safeError.js';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -48,6 +49,6 @@ export const logActivity = async (data: {
       },
     });
   } catch (error) {
-    console.error('Failed to log activity:', error);
+    console.error('Failed to log activity:', safeErrorFields(error));
   }
 };

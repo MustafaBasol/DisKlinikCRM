@@ -26,6 +26,7 @@ import {
   DEFAULT_MESSAGE_COMMUNICATION_PURPOSE,
 } from '../services/whatsapp/whatsappCommunicationPurposeMap.js';
 import type { MessageTemplatePurpose } from '../schemas/index.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 const LOW_SENSITIVITY_CHANNELS = new Set(['sms', 'whatsapp']);
@@ -410,7 +411,7 @@ router.post('/messages/prepare', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGE
 
     res.json(message);
   } catch (error: any) {
-    console.error('[messages] prepare error:', error?.message ?? error);
+    console.error('[messages] prepare error:', safeErrorFields(error));
     res.status(500).json({ error: 'Failed to prepare message' });
   }
 });

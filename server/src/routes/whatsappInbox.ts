@@ -30,6 +30,7 @@ import {
   backfillConversationMessagePatient,
   persistWhatsAppConversationMessage,
 } from '../services/whatsapp/conversationMessageStore.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -119,7 +120,7 @@ router.get(
 
       res.json({ unassigned: enriched, entries: enriched, total: enriched.length });
     } catch (error) {
-      console.error('[whatsapp-inbox] list-unassigned error', error);
+      console.error('[whatsapp-inbox] list-unassigned error', safeErrorFields(error));
       res.status(500).json({ error: 'Failed to fetch unassigned inbox' });
     }
   },
@@ -362,7 +363,7 @@ router.post(
           clinicId,
           phone: entry.phone,
           patientId: resolvedPatientId,
-        }).catch(error => console.error('[whatsapp-inbox] resolve backfill failed', error));
+        }).catch(error => console.error('[whatsapp-inbox] resolve backfill failed', safeErrorFields(error)));
       }
 
       res.json({ ok: true, entry: updated });
@@ -447,7 +448,7 @@ router.post(
         clinicId: entry.clinicId,
         phone: entry.phone,
         patientId: patient.id,
-      }).catch(error => console.error('[whatsapp-inbox] link-patient backfill failed', error));
+      }).catch(error => console.error('[whatsapp-inbox] link-patient backfill failed', safeErrorFields(error)));
 
       res.json({ ok: true, entry: updated });
     } catch (error) {
@@ -513,7 +514,7 @@ router.get(
 
       res.json({ messages, partial: false });
     } catch (error) {
-      console.error('[whatsapp-inbox] get-messages error', error);
+      console.error('[whatsapp-inbox] get-messages error', safeErrorFields(error));
       res.status(500).json({ error: 'Failed to fetch messages' });
     }
   },
@@ -570,7 +571,7 @@ router.post(
         providerMessageId: result.externalMessageId ?? null,
         direction: 'outgoing',
         text: message.trim(),
-      }).catch(error => console.error('[whatsapp-inbox] reply persistence failed', error));
+      }).catch(error => console.error('[whatsapp-inbox] reply persistence failed', safeErrorFields(error)));
 
       await prisma.whatsAppInboxEntry.update({
         where: { id: entryId },
@@ -591,7 +592,7 @@ router.post(
 
       res.json({ success: true, externalMessageId: result.externalMessageId });
     } catch (error) {
-      console.error('[whatsapp-inbox] reply error', error);
+      console.error('[whatsapp-inbox] reply error', safeErrorFields(error));
       res.status(500).json({ error: 'Failed to send reply' });
     }
   },
@@ -667,7 +668,7 @@ router.post(
 
       res.status(201).json({ appointmentRequest });
     } catch (error) {
-      console.error('[whatsapp-inbox] create-appointment-request error', error);
+      console.error('[whatsapp-inbox] create-appointment-request error', safeErrorFields(error));
       res.status(500).json({ error: 'Failed to create appointment request' });
     }
   },
@@ -798,7 +799,7 @@ router.post(
 
       res.status(201).json({ appointment });
     } catch (error) {
-      console.error('[whatsapp-inbox] create-appointment error', error);
+      console.error('[whatsapp-inbox] create-appointment error', safeErrorFields(error));
       res.status(500).json({ error: 'Failed to create appointment' });
     }
   },

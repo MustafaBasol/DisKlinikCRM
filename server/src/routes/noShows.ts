@@ -25,6 +25,7 @@ import { sendTaskAssignmentNotification } from '../services/taskAssignmentNotifi
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import type { ClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import { noShowFollowUpDateRange } from '../utils/noShowFollowUp.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -552,7 +553,7 @@ router.post(
 
       return res.json({ success: true, message: 'Recovery message sent successfully' });
     } catch (err) {
-      console.error('[NoShows] Send message error:', err);
+      console.error('[NoShows] Send message error:', safeErrorFields(err));
       return res.status(500).json({ error: 'Failed to send recovery message' });
     }
   },

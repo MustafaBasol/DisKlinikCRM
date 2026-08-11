@@ -185,6 +185,69 @@ async function main() {
     );
   });
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // F3-IMPL-006 (Wave 2) — 4 RAW_ERROR_REQUIRES_SAFE_ERROR_FIELDS sites where
+  // a raw caught `error` object was logged directly:
+  //   1. ai-extraction-error — the caught error from extractAssistantInputWithGoogleAi(),
+  //      an external Google AI Studio call carrying the raw patient message
+  //      text + customer name; a provider error could echo the request payload.
+  //   2. conversation message backfill failed — backfillConversationMessagePatient({phone, ...}),
+  //      a real patient phone number passed as a call argument.
+  //   3. appointment-create-error — createAppointmentRequestFromAssistant(), whose
+  //      Prisma create embeds patientName/phone/rawMessage (the raw inbound text).
+  //   4. webhook-error — the Evolution webhook handler's top-level catch, wrapping
+  //      the entire AI-assistant reply pipeline (phone/message text/AI I/O).
+  // All four already imported safeErrorFields is added once at module scope.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  section('Fix 4/4 (F3-IMPL-006) — no raw error object in ai-extraction-error / backfill / appointment-create-error / webhook-error logs');
+
+  await test('imports safeErrorFields', () => {
+    assert.ok(
+      /import\s*\{\s*safeErrorFields\s*\}\s*from\s*['"]\.\.\/utils\/safeError\.js['"]/.test(routeSource),
+      'expected safeErrorFields import',
+    );
+  });
+
+  await test('ai-extraction-error log uses safeErrorFields(error), not the raw caught error', () => {
+    const block = extractLogCallBlock('ai-extraction-error');
+    assert.ok(/safeErrorFields\(error\)/.test(block), 'expected safeErrorFields(error) call');
+    assert.ok(!/ai-extraction-error',\s*error\)/.test(block), 'found raw unqualified `error` passed directly to console.error');
+  });
+
+  await test('conversation message backfill failed log uses safeErrorFields(error), not the raw caught error', () => {
+    const block = extractLogCallBlock('conversation message backfill failed');
+    assert.ok(/safeErrorFields\(error\)/.test(block), 'expected safeErrorFields(error) call');
+    assert.ok(!/backfill failed',\s*error\)/.test(block), 'found raw unqualified `error` passed directly to console.error');
+  });
+
+  await test('appointment-create-error log uses safeErrorFields(error), not the raw caught error', () => {
+    const block = extractLogCallBlock('appointment-create-error');
+    assert.ok(/safeErrorFields\(error\)/.test(block), 'expected safeErrorFields(error) call');
+    assert.ok(!/appointment-create-error',\s*error\)/.test(block), 'found raw unqualified `error` passed directly to console.error');
+  });
+
+  await test('webhook-error log uses safeErrorFields(error), not the raw caught error', () => {
+    const block = extractLogCallBlock('webhook-error');
+    assert.ok(/safeErrorFields\(error\)/.test(block), 'expected safeErrorFields(error) call');
+    assert.ok(!/webhook-error',\s*error\)/.test(block), 'found raw unqualified `error` passed directly to console.error');
+  });
+
+  await test('F3-IMPL-006: safeErrorFields strips raw AI-prompt patient text + phone from a provider-shaped error', async () => {
+    const { safeErrorFields } = await import('../utils/safeError.js');
+    const patientTextFixture = 'Merhaba, adım Ayşe Yılmaz, yarın saat 14:00 için randevu almak istiyorum';
+    const phoneFixture = '905551234567';
+    const err = Object.assign(
+      new Error(`Google AI Studio request failed for input: "${patientTextFixture}" (phone=${phoneFixture})`),
+      { name: 'GoogleAiError', code: 'AI_REQUEST_FAILED' },
+    );
+    const fields = safeErrorFields(err);
+    const serialized = JSON.stringify(fields);
+    assert.deepEqual(fields, { errorName: 'GoogleAiError', errorCode: 'AI_REQUEST_FAILED' });
+    assert.ok(!serialized.includes(patientTextFixture), 'raw AI-prompt patient text leaked through safeErrorFields output');
+    assert.ok(!serialized.includes(phoneFixture), 'raw phone number leaked through safeErrorFields output');
+  });
+
   section('Summary');
   console.log('\n─────────────────────────────────────────');
   console.log(`Results: ${passed} passed, ${failed} failed`);

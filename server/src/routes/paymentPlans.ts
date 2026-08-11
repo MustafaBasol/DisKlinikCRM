@@ -6,6 +6,7 @@ import { getParam } from '../utils/helpers.js';
 import { validateAndGetClinicIdScope, clinicIdsFromScope, getAccessibleClinicIds, resolveEffectiveClinicId } from '../utils/clinicScope.js';
 import { getClinicOperatingPreferences } from '../services/clinicOperatingPreferences.js';
 import { overdueReceivablesAmount, overdueReceivablesList } from '../utils/overdueReceivables.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -185,7 +186,7 @@ router.post('/payment-plans', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER',
 
     res.status(201).json(plan);
   } catch (err) {
-    console.error('Create payment plan error:', err);
+    console.error('Create payment plan error:', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to create payment plan' });
   }
 });
@@ -257,7 +258,7 @@ router.post(
 
       res.json({ payment, unpaidCount });
     } catch (err) {
-      console.error('Pay installment error:', err);
+      console.error('Pay installment error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to mark installment as paid' });
     }
   }
