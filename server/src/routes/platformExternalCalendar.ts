@@ -223,21 +223,50 @@ router.delete(
 
 // GET /api/platform/clinics/:clinicId/external-calendar/local-options — practitioners/services
 // available in THIS clinic, for the mapping UI's local-side dropdowns.
+//
+// Dentist eligibility mirrors getClinicPractitioners() in routes/whatsapp.ts:
+// User.role is stored as either a canonical value ('DENTIST') or a legacy
+// lowercase value ('doctor' / 'dentist' — see utils/roles.ts's documented
+// normalization table), and a user's *effective* role for this clinic can
+// come from either their own User.role (legacy single-clinic assignment via
+// User.clinicId) or their UserClinic.role for this clinic (branch-scoped
+// assignment, which can differ from their org-wide User.role). Filtering on
+// `role: 'DENTIST'` alone silently drops every legacy-cased or
+// branch-assigned dentist — this is what produced an empty dropdown despite
+// active dentists existing for the clinic.
 router.get('/clinics/:clinicId/external-calendar/local-options', async (req: PlatformAdminRequest, res: Response) => {
   const clinicId = getClinicIdParam(req);
   const clinic = await prisma.clinic.findUnique({ where: { id: clinicId }, select: { id: true } });
   if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
+  const DENTIST_ROLE_VALUES = ['DENTIST', 'dentist', 'doctor'];
+
   const [practitioners, services] = await Promise.all([
-    prisma.user.findMany({
-      where: {
-        isActive: true,
-        role: 'DENTIST',
-        OR: [{ clinicId }, { userClinics: { some: { clinicId, isActive: true } } }],
-      },
-      select: { id: true, firstName: true, lastName: true },
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-    }),
+    (async () => {
+      const assignments = await prisma.userClinic.findMany({
+        where: {
+          clinicId,
+          isActive: true,
+          user: { isActive: true },
+          role: { in: DENTIST_ROLE_VALUES },
+        },
+        select: { userId: true, user: { select: { id: true, firstName: true, lastName: true } } },
+      });
+      const assignedIds = new Set(assignments.map((a) => a.userId));
+      const assignedDentists = assignments.map((a) => a.user);
+      const legacyDentists = await prisma.user.findMany({
+        where: {
+          clinicId,
+          isActive: true,
+          role: { in: DENTIST_ROLE_VALUES },
+          id: { notIn: [...assignedIds] },
+        },
+        select: { id: true, firstName: true, lastName: true },
+      });
+      return [...assignedDentists, ...legacyDentists].sort((a, b) =>
+        `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`),
+      );
+    })(),
     prisma.appointmentType.findMany({
       where: { clinicId, isActive: true },
       select: { id: true, name: true },
