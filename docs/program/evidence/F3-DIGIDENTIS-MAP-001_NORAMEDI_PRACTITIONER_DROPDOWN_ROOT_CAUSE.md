@@ -85,4 +85,4 @@ Real-Postgres (`test:runtime:postgres`/`postgres-compat`) suites were not run fo
 
 ## 7. Status
 
-`AGENT_COMPLETED`: yes. `TESTS_PASSED`: yes (14/14 new + 32/32 pre-existing cited suites + typecheck clean). `PR_OPENED`: see tracker update. `MERGED`: no. `DEPLOYED`: no. `PRODUCTION_VERIFIED`: no (this task performed no production access). Per the assigning task brief: **not merged, not deployed, not marked complete** — stopped here for architecture review.
+`AGENT_COMPLETED`: yes. `TESTS_PASSED`: yes (14/14 new + 32/32 pre-existing cited suites + typecheck clean). `PR_OPENED`: yes — [PR #360](https://github.com/MustafaBasol/DisKlinikCRM/pull/360). `MERGED`: no. `DEPLOYED`: no. `PRODUCTION_VERIFIED`: no (this task performed no production access). Per the assigning task brief: **not merged, not deployed, not marked complete** — stopped here for architecture review.
