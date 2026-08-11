@@ -216,7 +216,7 @@ router.post('/users', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER']), check
         console.warn(`[users.create] onboarding email not sent for user ${user.id}: ${mailResult.reason}`);
       }
     } catch (err: any) {
-      console.warn(`[users.create] onboarding email failed for user ${user.id}: ${err?.message}`);
+      console.warn(`[users.create] onboarding email failed for user ${user.id}: ${err instanceof Error ? err.name : 'MailError'}`);
     }
 
     res.status(201).json({ ...user, _emailSent: emailSent });

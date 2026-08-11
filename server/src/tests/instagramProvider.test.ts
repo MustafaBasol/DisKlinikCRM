@@ -113,6 +113,32 @@ function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   });
 }
 
+// ─── Console spy (F3-IMPL-004: proves the real access token never reaches
+// console.* on request/response/error diagnostic logs) ─────────────────────
+
+type ConsoleMethod = 'log' | 'info' | 'error' | 'warn' | 'debug';
+const CONSOLE_METHODS: ConsoleMethod[] = ['log', 'info', 'error', 'warn', 'debug'];
+
+function captureConsole() {
+  const calls: unknown[][] = [];
+  const originals = CONSOLE_METHODS.map(method => [method, console[method]] as const);
+  for (const method of CONSOLE_METHODS) {
+    console[method] = ((...args: unknown[]) => { calls.push(args); }) as typeof console.log;
+  }
+  return {
+    calls,
+    restore: () => {
+      for (const [method, original] of originals) {
+        console[method] = original;
+      }
+    },
+  };
+}
+
+function serializeConsoleCalls(calls: unknown[][]): string {
+  return JSON.stringify(calls, (_key, value) => (typeof value === 'function' ? '[fn]' : value));
+}
+
 type InstagramProcessingCounters = {
   inboundCalls: number;
   inboxMessageCount: number;
@@ -925,6 +951,76 @@ async function main() {
     const conn = makeConn({ instagramAccountId: null });
     const result = await sendMessage(conn, { recipientIgsid: 'igsid-123', text: 'Merhaba' });
     assert.equal(result.success, false);
+  });
+
+  // ── Diagnostic logging privacy (F3-IMPL-004) ───────────────────────────────
+  // fetchMetaJson's diagnosticBase used to include tokenPrefix (first 8 chars
+  // of the real, decrypted access token) and tokenLength on every request,
+  // response, and error log — contradicting this file's own header comment
+  // that tokens are NEVER logged. Confirms the raw token (and its former
+  // 8-char prefix) never reaches console.* while operational fields
+  // (operation, endpoint, status) still do.
+  section('InstagramMessagingProvider diagnostic logging privacy');
+
+  const REAL_TOKEN = 'EAABsbCS1supersecretrealaccesstoken1234567890';
+  const REAL_TOKEN_PREFIX = REAL_TOKEN.slice(0, 8);
+
+  await test('testConnection success: request/response logs never leak the access token or its prefix', async () => {
+    const conn = makeConn({ accessTokenEncrypted: encryptSecret(REAL_TOKEN) });
+    const { calls, restore } = captureConsole();
+    try {
+      await withMockFetch(() => jsonResponse({ id: '123456789', username: 'testclinic' }), async () => {
+        const result = await testConnection(conn);
+        assert.equal(result.success, true);
+      });
+    } finally {
+      restore();
+    }
+    const serialized = serializeConsoleCalls(calls);
+    assert.equal(serialized.includes(REAL_TOKEN), false, `raw token leaked into logs: ${serialized}`);
+    assert.equal(serialized.includes(REAL_TOKEN_PREFIX), false, `token prefix leaked into logs: ${serialized}`);
+    assert.equal(serialized.includes('tokenPrefix'), false, 'tokenPrefix field should no longer exist');
+    assert.equal(serialized.includes('tokenLength'), false, 'tokenLength field should no longer exist');
+    assert.ok(serialized.includes('instagram_login_validate'), 'expected operation name to still be logged');
+    assert.ok(serialized.includes('"status":200'), 'expected status metadata to still be logged');
+  });
+
+  await test('testConnection error: error diagnostic log never leaks the access token or its prefix', async () => {
+    const conn = makeConn({ accessTokenEncrypted: encryptSecret(REAL_TOKEN) });
+    const { calls, restore } = captureConsole();
+    try {
+      await withMockFetch(() => jsonResponse({
+        error: { message: 'Invalid OAuth access token', type: 'OAuthException', code: 190 },
+      }, 400), async () => {
+        const result = await testConnection(conn);
+        assert.equal(result.success, false);
+      });
+    } finally {
+      restore();
+    }
+    const serialized = serializeConsoleCalls(calls);
+    assert.equal(serialized.includes(REAL_TOKEN), false, `raw token leaked into logs: ${serialized}`);
+    assert.equal(serialized.includes(REAL_TOKEN_PREFIX), false, `token prefix leaked into logs: ${serialized}`);
+    assert.equal(serialized.includes('tokenPrefix'), false, 'tokenPrefix field should no longer exist');
+    assert.equal(serialized.includes('tokenLength'), false, 'tokenLength field should no longer exist');
+    assert.ok(serialized.includes('"status":400'), 'expected status metadata to still be logged');
+  });
+
+  await test('sendMessage: request/response logs never leak the access token or its prefix', async () => {
+    const conn = makeConn({ accessTokenEncrypted: encryptSecret(REAL_TOKEN) });
+    const { calls, restore } = captureConsole();
+    try {
+      await withMockFetch(() => jsonResponse({ message_id: 'ig-mid-privacy' }), async () => {
+        const result = await sendMessage(conn, { recipientIgsid: 'igsid-123', text: 'Merhaba' });
+        assert.equal(result.success, true);
+      });
+    } finally {
+      restore();
+    }
+    const serialized = serializeConsoleCalls(calls);
+    assert.equal(serialized.includes(REAL_TOKEN), false, `raw token leaked into logs: ${serialized}`);
+    assert.equal(serialized.includes(REAL_TOKEN_PREFIX), false, `token prefix leaked into logs: ${serialized}`);
+    assert.ok(serialized.includes('instagram_send_message'), 'expected operation name to still be logged');
   });
 
   // ── Permission helpers ─────────────────────────────────────────────────────
