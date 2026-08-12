@@ -13,6 +13,7 @@ name: ci-layers
 #                                   server-typecheck,
 #                                   tooling-typecheck-and-unit,
 #                                   architecture-guardrail-report-only,
+#                                   log-privacy-guard-scan,
 #                                   workflow-and-syntax-lint
 #   Layer 2 (non-disposable backend)      -> non-disposable-backend-tests
 #   Layer 3 (disposable PostgreSQL)       -> disposable-postgres-tests
@@ -56,17 +57,31 @@ name: ci-layers
 # job inspects the PR's changed-file paths with the deterministic,
 # repository-owned scripts/ci-classify/** classifier and each Layer 2-5 job
 # becomes conditional on the category it maps to; Layer 1 (frontend build,
-# server typecheck, tooling typecheck+unit, guardrail scan, workflow/syntax
-# lint) stays unconditional even in fastMode - those five jobs are cheap
-# (~15-55s each, fully parallel) and gating them individually would require
-# conditioning every Layer 2-5 job's `needs:` on a job that might itself be
-# skipped, a well-known GitHub Actions cascading-skip pitfall. Every Layer
-# 2-5 job's `if:` explicitly falls back to running whenever fastMode is
-# false, the classify job did not succeed, or any of that job's own `needs`
-# failed/were cancelled - classification failures and infrastructure
-# failures both fail closed (run everything), never open. See
-# docs/program/evidence/F3-CI-OPT-001_RISK_BASED_PATH_AWARE_PR_CI.md for the
-# full category -> gate mapping and the required-check safety argument.
+# server typecheck, tooling typecheck+unit, guardrail scan, log privacy
+# guard scan, workflow/syntax lint) stays unconditional even in fastMode -
+# those jobs are cheap (~15-55s each, fully parallel) and gating them
+# individually would require conditioning every Layer 2-5 job's `needs:` on
+# a job that might itself be skipped, a well-known GitHub Actions
+# cascading-skip pitfall. Every Layer 2-5 job's `if:` explicitly falls back
+# to running whenever fastMode is false, the classify job did not succeed,
+# or any of that job's own `needs` failed/were cancelled - classification
+# failures and infrastructure failures both fail closed (run everything),
+# never open. See docs/program/evidence/
+# F3-CI-OPT-001_RISK_BASED_PATH_AWARE_PR_CI.md for the full category -> gate
+# mapping and the required-check safety argument.
+#
+# F3-CI-OPT-001-R1-LITE: wires the already-merged F3-IMPL-007 sensitive-
+# runtime-logging regression guard (scripts/log-privacy-guard/**, merged to
+# main via PR #399) into this same stable Layer 1 safety path as a new
+# log-privacy-guard-scan job. Unlike architecture-guardrail-report-only
+# (deliberately advisory/non-blocking, see its own comment below), this scan
+# is a real gate: `--strict-baseline` fails the job on a new violation, a
+# stale baseline exception, or a scanner/config error (see scripts/
+# log-privacy-guard/cli.ts's documented exit-code contract), so it is also
+# added to every Layer 2-5 job's `needs:` list, exactly like the other
+# blocking Layer 1 jobs. No second required-check architecture is
+# introduced - a failure here fails this reusable workflow's own result,
+# which is what ci-pr.yml's single `PR Gate` job already keys off.
 
 on:
   workflow_call:
@@ -262,6 +277,36 @@ jobs:
           path: architecture-guardrail-report.json
           retention-days: 30
 
+  log-privacy-guard-scan:
+    name: 'Layer 1: log privacy guard (sensitive runtime logging regression scan)'
+    needs: [classify]
+    if: >-
+      inputs.fastMode == false ||
+      needs.classify.result != 'success' ||
+      needs.classify.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # F3-CI-OPT-001-R1-LITE — blocking gate for the F3-IMPL-007 scanner
+    # (scripts/log-privacy-guard/**). `--strict-baseline` makes the job fail
+    # on a new violation, a stale baseline exception, or a scanner/config
+    # error - never a silent pass. See the F3-CI-OPT-001-R1-LITE note atop
+    # this file for why this job (unlike architecture-guardrail-report-only)
+    # is also present in every Layer 2-5 job's `needs:` list below.
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Typecheck scripts/log-privacy-guard
+        run: npm run typecheck:log-privacy-guard
+      - name: Log privacy guard unit tests
+        run: npm run test:log-privacy-guard
+      - name: Log privacy guard scan (blocking - strict baseline)
+        run: npm run log-privacy-guard:scan -- --strict-baseline
+
   workflow-and-syntax-lint:
     name: 'Layer 1: workflow YAML, shell, PowerShell, and JSON validation'
     needs: [classify]
@@ -316,7 +361,7 @@ jobs:
 
   non-disposable-backend-tests:
     name: 'Layer 2: non-disposable backend tests'
-    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, log-privacy-guard-scan, workflow-and-syntax-lint]
     if: >-
       (inputs.fastMode == false ||
        needs.classify.result != 'success' ||
@@ -357,7 +402,7 @@ jobs:
 
   disposable-postgres-tests:
     name: 'Layer 3: disposable PostgreSQL tests'
-    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, log-privacy-guard-scan, workflow-and-syntax-lint]
     if: >-
       (inputs.fastMode == false ||
        needs.classify.result != 'success' ||
@@ -406,7 +451,7 @@ jobs:
 
   storage-integration-tests:
     name: 'Layer 4: disposable PostgreSQL + MinIO storage integration tests'
-    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, log-privacy-guard-scan, workflow-and-syntax-lint]
     if: >-
       (inputs.fastMode == false ||
        needs.classify.result != 'success' ||
@@ -491,7 +536,7 @@ jobs:
 
   full-suite-compatibility-failsafe-backend:
     name: 'Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)'
-    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, log-privacy-guard-scan, workflow-and-syntax-lint]
     if: >-
       (inputs.fastMode == false ||
        needs.classify.result != 'success' ||
