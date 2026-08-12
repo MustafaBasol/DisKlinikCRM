@@ -15,6 +15,7 @@
 import prisma from '../../db.js';
 import { writeAuditLog } from '../../utils/auditLog.js';
 import { logActivity } from '../../utils/activity.js';
+import { safeErrorFields } from '../../utils/safeError.js';
 import {
   getImagesForLifecycleReview,
   redactForAnonymization,
@@ -93,7 +94,7 @@ async function redactPatientAttachments(clinicId: string, patientId: string): Pr
       counters.redacted++;
     } catch (err) {
       counters.failed++;
-      console.error('[patientAnonymization] attachment redaction failed', attachment.id, err);
+      console.error('[patientAnonymization] attachment redaction failed', attachment.id, safeErrorFields(err));
     }
   }
   return counters;
@@ -153,7 +154,7 @@ async function redactPatientImagingImages(clinicId: string, patientId: string): 
         continue;
       }
       counters.failed++;
-      console.error('[patientAnonymization] imaging image redaction failed', image.id, err);
+      console.error('[patientAnonymization] imaging image redaction failed', image.id, safeErrorFields(err));
     }
   }
   return counters;

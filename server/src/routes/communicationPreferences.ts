@@ -52,6 +52,7 @@ import {
   LegacyConsentCorrectionError,
 } from '../services/communicationConsent/legacyConsentCorrection.js';
 import { legacySmsOptOutCorrectionSchema } from '../schemas/index.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -217,7 +218,7 @@ router.get(
 
       res.json({ patientId: patient.id, clinicId: patient.clinicId, matrix, legacyConsentCorrectionRuntimeEnabled });
     } catch (err: any) {
-      console.error('[communicationPreferences] matrix error:', err?.message ?? err);
+      console.error('[communicationPreferences] matrix error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to load communication preferences' });
     }
   },
@@ -262,7 +263,7 @@ router.get(
         pageInfo: { hasMore, nextCursor: hasMore ? page[page.length - 1]!.id : null, limit },
       });
     } catch (err: any) {
-      console.error('[communicationPreferences] history error:', err?.message ?? err);
+      console.error('[communicationPreferences] history error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to load communication consent history' });
     }
   },
@@ -325,7 +326,7 @@ router.get(
         events,
       });
     } catch (err: any) {
-      console.error('[communicationPreferences] export error:', err?.message ?? err);
+      console.error('[communicationPreferences] export error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to export communication consent evidence' });
     }
   },
@@ -405,7 +406,7 @@ router.put(
       if (err instanceof CommunicationConsentAdminError) {
         return res.status(ADMIN_ERROR_STATUS[err.code] ?? 400).json({ errorCode: err.code, error: err.message });
       }
-      console.error('[communicationPreferences] mutation error:', err?.message ?? err);
+      console.error('[communicationPreferences] mutation error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to update communication preference' });
     }
   },
@@ -475,7 +476,7 @@ router.post(
 
       res.json({ results });
     } catch (err: any) {
-      console.error('[communicationPreferences] bulk mutation error:', err?.message ?? err);
+      console.error('[communicationPreferences] bulk mutation error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to apply bulk communication preference update' });
     }
   },
@@ -617,7 +618,7 @@ router.post(
       if (err instanceof LegacyConsentCorrectionError) {
         return res.status(LEGACY_CORRECTION_ERROR_STATUS[err.code] ?? 400).json({ errorCode: err.code, error: err.message });
       }
-      console.error('[communicationPreferences] legacy correction error:', err?.message ?? err);
+      console.error('[communicationPreferences] legacy correction error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to record legacy consent correction' });
     }
   },
@@ -648,7 +649,7 @@ router.get(
 
       res.json({ patientId: patient.id, items, pageInfo: { hasMore, nextCursor } });
     } catch (err: any) {
-      console.error('[communicationPreferences] legacy correction history error:', err?.message ?? err);
+      console.error('[communicationPreferences] legacy correction history error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to load legacy consent correction history' });
     }
   },
@@ -677,7 +678,7 @@ router.get(
 
       res.json({ patientId: patient.id, correction: detail });
     } catch (err: any) {
-      console.error('[communicationPreferences] legacy correction detail error:', err?.message ?? err);
+      console.error('[communicationPreferences] legacy correction detail error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to load legacy consent correction detail' });
     }
   },

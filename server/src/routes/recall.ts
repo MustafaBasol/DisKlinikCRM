@@ -17,6 +17,7 @@ import {
   prepareRecallMessageForCandidate,
   recallCandidateInclude,
 } from '../services/recallCandidateService.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -198,7 +199,7 @@ router.get('/recall/candidates', authorize(recallReadRoles), async (req: AuthReq
 
     res.json({ candidates, summary: buildSummary(candidates) });
   } catch (error: any) {
-    console.error('[recall] candidates error:', error?.message ?? error);
+    console.error('[recall] candidates error:', safeErrorFields(error));
     res.status(500).json({ error: 'Failed to fetch recall candidates' });
   }
 });

@@ -24,6 +24,7 @@ import { sendClinicSms } from '../services/sms/smsService.js';
 import { getSmsEntitlement, getSmsMonthlyUsage, currentSmsPeriod, type SmsEntitlement } from '../services/sms/smsEntitlement.js';
 import { getSmsProvider } from '../services/sms/smsProviders.js';
 import { patientContactSelect, userNameSelect } from '../utils/prismaSelects.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -187,7 +188,7 @@ router.post('/sms/send', authorize(SEND_ROLES), async (req: AuthRequest, res: Re
 
     res.json({ id: result.messageId, status: 'sent', provider: result.provider, region: result.region });
   } catch (error: unknown) {
-    console.error('[sms] send error:', error instanceof Error ? error.message : error);
+    console.error('[sms] send error:', safeErrorFields(error));
     res.status(500).json({ error: 'Failed to send SMS' });
   }
 });

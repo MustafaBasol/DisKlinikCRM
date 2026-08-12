@@ -1,6 +1,7 @@
 import prisma from '../db.js';
 import { getNotificationPreferences } from './notificationPreferences.js';
 import { sendWhatsAppMessage } from './whatsapp/whatsappService.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 export async function sendTaskAssignmentNotification(
   clinicId: string,
@@ -35,6 +36,6 @@ export async function sendTaskAssignmentNotification(
       console.warn(`[task-assignment] WhatsApp notification failed: ${result.error ?? 'unknown error'}`);
     }
   } catch (error: any) {
-    console.warn(`[task-assignment] WhatsApp notification skipped: ${error.message}`);
+    console.warn('[task-assignment] WhatsApp notification skipped:', safeErrorFields(error));
   }
 }

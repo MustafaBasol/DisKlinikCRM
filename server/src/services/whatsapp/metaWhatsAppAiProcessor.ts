@@ -67,6 +67,7 @@ import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../appointmentRequestSafety.js';
 import { sanitizeAiMessageHistory } from '../privacy/redaction.js';
+import { safeErrorFields } from '../../utils/safeError.js';
 import { upsertContactRequest } from '../../routes/contactRequests.js';
 import {
   checkChannelConsent,
@@ -767,7 +768,7 @@ const ensureMetaWaContactPatient = async (
   });
 
   await backfillConversationMessagePatient({ clinicId: clinic.id, phone, patientId: patient.id })
-    .catch(error => console.error('[meta-wa-assistant] conversation message backfill failed', error));
+    .catch(error => console.error('[meta-wa-assistant] conversation message backfill failed', safeErrorFields(error)));
 
   const systemUserId = await getClinicSystemUserId(clinic.id);
   if (systemUserId) {
@@ -1084,9 +1085,7 @@ export const logMetaWaReplyFailure = async (args: {
       metadata,
     });
   } catch (err) {
-    console.error('[meta-wa-assistant] reply failure activity log failed', {
-      error: err instanceof Error ? err.message : String(err),
-    });
+    console.error('[meta-wa-assistant] reply failure activity log failed', safeErrorFields(err));
   }
 };
 
@@ -1570,7 +1569,7 @@ const buildReplyText = async (args: {
         await prisma.whatsAppInboxEntry.update({
           where: { id: args.inboxEntry.id },
           data: { patientId },
-        }).catch(error => console.error('[meta-wa-assistant] inbox patientId link failed', error));
+        }).catch(error => console.error('[meta-wa-assistant] inbox patientId link failed', safeErrorFields(error)));
       }
 
       logIdentityResolution({
@@ -2684,7 +2683,7 @@ export const processMetaWhatsAppIncomingMessage = async (
   } catch (error) {
     console.error('[meta-wa-assistant] failed to persist incoming conversation message', {
       clinicId: summarizeId(clinic.id),
-      error: error instanceof Error ? error.message : String(error),
+      ...safeErrorFields(error),
     });
   }
 
@@ -2733,7 +2732,7 @@ export const processMetaWhatsAppIncomingMessage = async (
   } catch (error) {
     console.error('[meta-wa-assistant] failed to persist outgoing conversation message', {
       clinicId: summarizeId(clinic.id),
-      error: error instanceof Error ? error.message : String(error),
+      ...safeErrorFields(error),
     });
   }
 

@@ -21,6 +21,7 @@ import {
 } from '../services/privacy/clinicBulkExportPackage.js';
 import { cleanupStaleClinicBulkExportPasswordAttempts } from '../services/privacy/clinicBulkExportPasswordAttempts.js';
 import { cleanupStaleLocalExportPartialFiles } from '../services/fileStorage.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 /**
  * Any local-mode `*.partial-*` export artifact surviving this long can only
@@ -55,7 +56,7 @@ export function startClinicBulkExportCleanupJob(): void {
         );
       }
     }).catch((err: unknown) => {
-      console.error(`[clinic-bulk-export-cleanup] Unhandled error: ${err instanceof Error ? err.message : String(err)}`);
+      console.error('[clinic-bulk-export-cleanup] Unhandled error:', safeErrorFields(err));
     });
   });
 

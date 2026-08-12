@@ -21,6 +21,7 @@ import { resolveConnectionForClinic } from '../services/whatsapp/whatsappService
 import { evaluateTemplateBinding } from '../services/whatsapp/templateBinding.js';
 import type { WhatsAppConnectionRecord } from '../services/whatsapp/WhatsAppProvider.js';
 import { withJobLock } from '../utils/jobLock.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -193,11 +194,10 @@ export async function syncPendingMetaTemplateStatuses(
         summary.unchanged++;
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
       console.error('[meta-template-sync] unexpected-error', {
         templateIdSuffix: template.id.slice(-4),
         clinicIdSuffix: template.clinicId.slice(-4),
-        error: msg.slice(0, 200),
+        ...safeErrorFields(err),
       });
       summary.failed++;
     }
@@ -223,9 +223,7 @@ export function startMetaTemplateSyncJob(): void {
         console.log('[meta-template-sync] run-complete', summary);
       }
     }).catch((err: unknown) => {
-      console.error('[meta-template-sync] unhandled-error', {
-        error: err instanceof Error ? err.message.slice(0, 200) : String(err),
-      });
+      console.error('[meta-template-sync] unhandled-error', safeErrorFields(err));
     });
   });
 

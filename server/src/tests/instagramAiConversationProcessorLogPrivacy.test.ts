@@ -12,7 +12,29 @@
  *   3. slot-based/AI booking path  — '[appointment-request] created'
  *      (PHI_MEDICAL: serviceName + practitionerName)
  *
- * All three call sites live inside module-private functions
+ * F3-IMPL-006 (Wave 2) adds coverage for five RAW_ERROR/MESSAGE_CONTENT sites
+ * where a raw caught `error`/`err` object (or its `.message`) was logged
+ * directly, rather than a raw PII field — the exposure mechanism is the same
+ * class of bug (an unredacted value reaching the logger), just via an
+ * exception's message instead of a request field:
+ *   4. logInstagramReplyFailure       — '[instagram-assistant] reply failure activity log failed'
+ *      (RAW_ERROR: raw error.message from a logActivity Prisma write)
+ *   5. awaiting_name branch           — '[instagram-assistant] appointment-create-error'
+ *      (MESSAGE_CONTENT: raw error from createInstagramAppointmentRequest, whose
+ *      write includes rawMessage: args.text, the raw inbound DM text)
+ *   6. awaiting_phone branch          — '[instagram-assistant] appointment-create-error'
+ *      (same MESSAGE_CONTENT risk as #5, second call site)
+ *   7. processInstagramIncomingMessage — '[instagram] inbound message save failed'
+ *      (MESSAGE_CONTENT: raw err from instagramConversationMessage.create({text}),
+ *      the raw inbound DM text — the previously-known Wave-1-deferred gap)
+ *   8. processInstagramIncomingMessage — '[instagram] outbound message save failed'
+ *      (MESSAGE_CONTENT: raw err from the outbound message create, the AI-generated
+ *      reply text — the previously-known Wave-1-deferred gap)
+ * All five are fixed by replacing the raw error argument with
+ * safeErrorFields(err) (server/src/utils/safeError.ts), which returns only
+ * {errorName, errorCode} — never the original .message.
+ *
+ * All three original call sites live inside module-private functions
  * (logInstagramReplyFailure, createInstagramStaffRequest) that perform real
  * `prisma`/`recordOperationalEvent`/`logActivity` calls against the shared,
  * non-injected `prisma` client imported at the top of the file — the same
@@ -66,6 +88,11 @@ const RAW_SENDER_ID = '17841400123456789';
 // shape used elsewhere in this codebase's Instagram/WhatsApp assistant tests.
 const RAW_SERVICE_NAME = 'Diş Beyazlatma';
 const RAW_PRACTITIONER_NAME = 'Dr. Ayşe Yılmaz';
+
+// F3-IMPL-006: a realistic raw inbound DM / error-message fixture that could
+// plausibly be echoed back by a Prisma validation error on a message-content
+// write (rawMessage / text columns), never expected to appear in the source.
+const RAW_MESSAGE_TEXT_FIXTURE = 'Merhaba, yarın saat 14:00 için randevu almak istiyorum, telefonum 905551234567';
 
 // ─── Source scan ────────────────────────────────────────────────────────────
 
@@ -150,6 +177,58 @@ async function main() {
     const first = processorSource.indexOf('[appointment-request] created');
     const second = processorSource.indexOf('[appointment-request] created', first + 1);
     assert.ok(first >= 0 && second > first, 'expected exactly two distinct call sites');
+  });
+
+  section('Static source scan — 4/8 (F3-IMPL-006): reply failure activity log failed (raw error.message)');
+
+  await test('reply-failure-activity-log-failed block uses safeErrorFields(error), not raw error.message', () => {
+    const block = extractLogCallBlock('reply failure activity log failed');
+    assert.ok(/safeErrorFields\(error\)/.test(block), 'expected safeErrorFields(error) call');
+    assert.ok(!/error\.message/.test(block), 'found raw error.message that should have been removed');
+    assert.ok(!block.includes(RAW_MESSAGE_TEXT_FIXTURE), 'fixture text unexpectedly present in log block source');
+  });
+
+  section('Static source scan — 5/8 & 6/8 (F3-IMPL-006): appointment-create-error (raw error, two call sites)');
+
+  await test('appointment-create-error block (awaiting_name branch, occurrence 1/2) uses safeErrorFields(error), not raw error', () => {
+    const block = extractLogCallBlock('appointment-create-error', 0);
+    assert.ok(/safeErrorFields\(error\)/.test(block), 'expected safeErrorFields(error) call');
+    assert.ok(!/appointment-create-error',\s*error\)/.test(block), 'found raw "error" argument, expected it replaced by safeErrorFields(error)');
+    assert.ok(!block.includes(RAW_MESSAGE_TEXT_FIXTURE), 'fixture text unexpectedly present in log block source');
+  });
+
+  await test('appointment-create-error block (awaiting_phone branch, occurrence 2/2) uses safeErrorFields(error), not raw error', () => {
+    const block = extractLogCallBlock('appointment-create-error', 1);
+    assert.ok(/safeErrorFields\(error\)/.test(block), 'expected safeErrorFields(error) call');
+    assert.ok(!/appointment-create-error',\s*error\)/.test(block), 'found raw "error" argument, expected it replaced by safeErrorFields(error)');
+    assert.ok(!block.includes(RAW_MESSAGE_TEXT_FIXTURE), 'fixture text unexpectedly present in log block source');
+  });
+
+  section('Static source scan — 7/8 & 8/8 (F3-IMPL-006): inbound/outbound message save failed (previously-known Wave-1-deferred gap, now fixed)');
+
+  await test('inbound-message-save-failed block uses safeErrorFields(err), not raw err', () => {
+    const block = extractLogCallBlock('[instagram] inbound message save failed');
+    assert.ok(/safeErrorFields\(err\)/.test(block), 'expected safeErrorFields(err) call');
+    assert.ok(!/message save failed',\s*err\)/.test(block), 'found raw "err" argument, expected it replaced by safeErrorFields(err)');
+    assert.ok(!block.includes(RAW_MESSAGE_TEXT_FIXTURE), 'fixture text unexpectedly present in log block source');
+  });
+
+  await test('outbound-message-save-failed block uses safeErrorFields(err), not raw err', () => {
+    const block = extractLogCallBlock('[instagram] outbound message save failed');
+    assert.ok(/safeErrorFields\(err\)/.test(block), 'expected safeErrorFields(err) call');
+    assert.ok(!/message save failed',\s*err\)/.test(block), 'found raw "err" argument, expected it replaced by safeErrorFields(err)');
+    assert.ok(!block.includes(RAW_MESSAGE_TEXT_FIXTURE), 'fixture text unexpectedly present in log block source');
+  });
+
+  section('Unit — safeErrorFields end-to-end: a Prisma-shaped error embedding the raw DM text never survives into {errorName, errorCode}');
+
+  await test('safeErrorFields(err) strips a raw DM-text-bearing Prisma-shaped error down to errorName/errorCode only', async () => {
+    const { safeErrorFields } = await import('../utils/safeError.js');
+    const err = Object.assign(new Error(`Prisma write failed for text: "${RAW_MESSAGE_TEXT_FIXTURE}"`), { code: 'P2000' });
+    const fields = safeErrorFields(err);
+    const serialized = JSON.stringify(fields);
+    assert.ok(!serialized.includes(RAW_MESSAGE_TEXT_FIXTURE), 'raw DM text leaked through safeErrorFields');
+    assert.deepEqual(fields, { errorName: 'Error', errorCode: 'P2000' }, 'expected only {errorName, errorCode} to survive');
   });
 
   section('Summary');

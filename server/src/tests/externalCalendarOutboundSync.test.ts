@@ -16,6 +16,7 @@
 
 import assert from 'node:assert/strict';
 import prisma from '../db.js';
+import { logger } from '../utils/logger.js';
 import {
   ExternalCalendarAuthError,
   ExternalCalendarConflictError,
@@ -23,6 +24,20 @@ import {
   ExternalCalendarTransientError,
   ExternalCalendarValidationError,
 } from '../services/externalCalendar/externalCalendarErrors.js';
+
+/** Captures logger.error(...) calls (pino instance, mutable method) for the
+ * duration of one test — mirrors the console-spy pattern used elsewhere
+ * (e.g. whatsappBookingFlowLogRedaction.test.ts), since `logger` is a shared
+ * singleton object whose methods can be swapped in place. */
+function captureLoggerErrors() {
+  const calls: any[][] = [];
+  const original = logger.error;
+  (logger as any).error = (...args: any[]) => { calls.push(args); };
+  return {
+    calls,
+    restore: () => { (logger as any).error = original; },
+  };
+}
 
 let passed = 0;
 let failed = 0;
@@ -835,6 +850,123 @@ async function main() {
       assert.equal(result.outcome, 'synced', 'once the integration is healthy again, the retry must actually call the provider and succeed');
       assert.equal(calls.listAvailableSlots, 1);
       assert.equal(calls.createAppointment, 1);
+    });
+  }
+
+  // ─── 16. Log privacy (F3-IMPL-006): raw `err` objects replaced with safeErrorFields ──
+  section('16. Log privacy — logger.error(...) never logs a raw error object');
+
+  const SENSITIVE_FIXTURE = 'client-1 secret sk_live_should_never_appear phone +905551234567';
+
+  resetFixtures();
+  {
+    const clinicId = 'clinic-degrade-log';
+    const conn = makeConnection(clinicId);
+    const appt = makeAppointment(clinicId);
+    mapPractitioner(conn.id, clinicId, appt.practitionerId);
+    mapService(conn.id, clinicId, appt.appointmentTypeId);
+    const link = await ensurePendingSyncLink({ connection: conn as any, appointmentId: appt.id, clinicId });
+
+    await test('a failure to degrade integration health after an auth failure logs only errorName/errorCode, never the raw error', async () => {
+      const { provider } = makeFakeProvider({
+        slots: [defaultAvailableSlot(appt)],
+        createError: new ExternalCalendarAuthError('DigiDentiS', 'bad token'),
+      });
+      const integrationUpdate = (prisma as any).externalCalendarIntegration.update;
+      (prisma as any).externalCalendarIntegration.update = async () => {
+        throw Object.assign(new Error(`degrade write failed: ${SENSITIVE_FIXTURE}`), { code: 'P2025' });
+      };
+      const { calls, restore } = captureLoggerErrors();
+      try {
+        const result = await attemptExternalCalendarSync(link.id, { getProvider: () => provider as any });
+        assert.equal(result.outcome, 'failed_terminal');
+      } finally {
+        restore();
+        (prisma as any).externalCalendarIntegration.update = integrationUpdate;
+      }
+      const degradeCall = calls.find((c) => typeof c[1] === 'string' && c[1].includes('failed to degrade integration health'));
+      assert.ok(degradeCall, 'expected a logger.error call for the degrade failure');
+      const serialized = JSON.stringify(degradeCall);
+      assert.ok(!serialized.includes(SENSITIVE_FIXTURE), `sensitive fixture leaked into logger.error: ${serialized}`);
+      assert.ok(serialized.includes('"errorName":"Error"'), 'expected errorName to be logged');
+      assert.ok(serialized.includes('"errorCode":"P2025"'), 'expected errorCode to be logged');
+    });
+  }
+
+  resetFixtures();
+  {
+    const clinicId = 'clinic-postsync-log';
+    const conn = makeConnection(clinicId);
+    const appt = makeAppointment(clinicId);
+    mapPractitioner(conn.id, clinicId, appt.practitionerId);
+    mapService(conn.id, clinicId, appt.appointmentTypeId);
+    makeSourceRequest(appt.id);
+    const link = await ensurePendingSyncLink({ connection: conn as any, appointmentId: appt.id, clinicId });
+    const { provider } = makeFakeProvider({
+      slots: [defaultAvailableSlot(appt)],
+      createResult: { externalAppointmentId: 'ext-appt-log-1', status: 'confirmed' },
+    });
+
+    await test('a failed post-sync confirmation notification logs only errorName/errorCode, never the raw error/message text', async () => {
+      const rejectingSendConfirmation = async () => {
+        throw new Error(`confirmation send failed for patient note: ${SENSITIVE_FIXTURE}`);
+      };
+      const { calls, restore } = captureLoggerErrors();
+      try {
+        const result = await attemptExternalCalendarSync(link.id, {
+          getProvider: () => provider as any,
+          sendConfirmation: rejectingSendConfirmation as any,
+        });
+        assert.equal(result.outcome, 'synced', 'the sync itself must still succeed even though the post-sync notification failed');
+      } finally {
+        restore();
+      }
+      const postSyncCall = calls.find((c) => typeof c[1] === 'string' && c[1].includes('post-sync confirmation notification failed'));
+      assert.ok(postSyncCall, 'expected a logger.error call for the post-sync confirmation failure');
+      const serialized = JSON.stringify(postSyncCall);
+      assert.ok(!serialized.includes(SENSITIVE_FIXTURE), `sensitive fixture leaked into logger.error: ${serialized}`);
+      assert.ok(serialized.includes('"errorName":"Error"'), 'expected errorName to be logged');
+      assert.ok(serialized.includes('"errorCode":"UNKNOWN"'), 'expected errorCode to be logged');
+    });
+  }
+
+  resetFixtures();
+  {
+    const clinicId = 'clinic-no-integration-log';
+    const appt = makeAppointment(clinicId);
+
+    await test('a failed confirmation notification (no integration enabled) logs only errorName/errorCode, never the raw error/message text', async () => {
+      const rejectingSendConfirmation = async () => {
+        throw new Error(`confirmation send failed for patient note: ${SENSITIVE_FIXTURE}`);
+      };
+      const { calls, restore } = captureLoggerErrors();
+      try {
+        await scheduleExternalCalendarSyncOrNotify(
+          {
+            appointmentId: appt.id,
+            clinicId,
+            notification: {
+              source: 'whatsapp',
+              phone: '+905550000000',
+              externalSenderId: null,
+              sourceConnectionId: null,
+              patientName: 'Test Patient',
+              organizationId: 'org-x',
+              patientId: appt.patientId,
+              appointment: { startTime: appt.startTime, appointmentType: { name: 'Checkup' }, practitioner: { firstName: 'Berk', lastName: 'Demir' } },
+            },
+          },
+          { sendConfirmation: rejectingSendConfirmation as any },
+        );
+      } finally {
+        restore();
+      }
+      const noIntegrationCall = calls.find((c) => typeof c[1] === 'string' && c[1].includes('appointment confirmation notification failed'));
+      assert.ok(noIntegrationCall, 'expected a logger.error call for the no-integration confirmation failure');
+      const serialized = JSON.stringify(noIntegrationCall);
+      assert.ok(!serialized.includes(SENSITIVE_FIXTURE), `sensitive fixture leaked into logger.error: ${serialized}`);
+      assert.ok(serialized.includes('"errorName":"Error"'), 'expected errorName to be logged');
+      assert.ok(serialized.includes('"errorCode":"UNKNOWN"'), 'expected errorCode to be logged');
     });
   }
 
