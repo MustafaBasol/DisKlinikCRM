@@ -6,6 +6,8 @@
 
 **Evidentiary class:** the production facts in §3 are **user/operator-supplied**. This task performed **no production access** — no SSH, no `pm2` command, no HTTP request to `api.noramedi.com`, no file read on `disklinik-prod-01`. It does not re-derive any supplied figure. This is the same evidentiary class as `F3-PROD-001_PRODUCTION_DEPLOYMENT_AND_VERIFICATION.md`, `KVKK-HIGH-006-PRODUCTION_DEPLOYMENT_AND_SMOKE_VERIFICATION.md`, and the R-061 residual entries in `RISK_REGISTER.md`.
 
+**Revision R1 (2026-08-12, same task, pre-merge, in place).** Revised while PR #402 was still open and unmerged, in response to a reviewer correction. A further set of operator-supplied production evidence — the post-deploy production `npm audit --omit=dev` result, the production Prisma install, and the Prisma engine hash — was supplied after the first draft. The first draft stated that no post-deploy production `npm audit` re-run had been supplied and left **R-075** unchanged on that basis; **that statement was false against the operator evidence and has been removed everywhere it appeared.** The new evidence is recorded in §3.5 and §4 checks 12–13, and it changes exactly **one** risk disposition: **R-075 → `CLOSED`** (§6.5). It changes nothing about R-033 / R-034 / R-040 (all still `OPEN`, §6.1–§6.3), nothing about R-076 / R-077, and nothing about the F3 exit gate, which remains **`NOT SATISFIED`** (§7). Revising in place rather than issuing a `+R1` successor document is correct here because nothing had been merged — the incorrect statement never entered the program record.
+
 **However**, §4 records a set of checks this task *did* run — entirely against the repository, with no production access — that **independently corroborate several supplied facts and identify the stale artifact exactly**. Those are labelled `REPOSITORY_VERIFIED` and are separated from the supplied facts throughout.
 
 ---
@@ -75,7 +77,23 @@ This task reconciles a **second, later set of operator-supplied production evide
 | Installed `--help` smoke | lists API `startOrReload`, worker `startOrReload`, API healthcheck, worker PM2-status verification |
 | Deploy executed during synchronization | **No.** API and worker remained online. |
 
-**No hash, PID, restart count, log line, health response, file mode, or `bash -n` result above was re-run or re-derived by this task.**
+### 3.5 Post-deploy production dependency verification (supplied 2026-08-12, R1)
+
+Supplied after the first draft of this document, in the reviewer correction that produced R1. This is precisely the evidence **R-075's own row named as its outstanding gap**.
+
+| Check | Result |
+|---|---|
+| Production host dependency fetch/install | `prisma@7.9.1` and `@prisma/client@7.9.1` — fetched and installed successfully |
+| Prisma engine hash | `e922089b7d7502aff4249d5da3420f6fa55fc6ad` |
+| **Post-deploy `npm audit --omit=dev` on production** | **`found 0 vulnerabilities`** |
+| Migration state | 73 migrations — `Database schema is up to date` |
+| API startup | generated `Prisma Client v7.9.1` |
+| Worker startup (after the manual reconciliation of §3.3) | generated `Prisma Client v7.9.1`; `role=worker (declared=true)`; `ownsJobs=true`; `All background jobs scheduled` |
+| Health endpoints | `/api/health` `200`, `/api/livez` `200`, `/api/readyz` `200` with `database=ok`, `redis=ok` |
+
+Disposition: **§6.5** (R-075 → `CLOSED`). The engine hash is corroborated against the repository in §4 check 12.
+
+**No hash, PID, restart count, log line, health response, file mode, `npm audit` count, engine hash, or `bash -n` result above was re-run or re-derived by this task.**
 
 ## 4. Repository-side corroboration performed by this task (`REPOSITORY_VERIFIED`, no production access)
 
@@ -94,6 +112,8 @@ These checks were run locally against the repository at the baseline SHA. They d
 | 9 | `--help` output provenance | `scripts/noramedi-deploy.sh:44-47` — `usage()` prints the file's own `#` header block | The supplied `--help` smoke output is exactly what the hash-verified file's header block contains. **Caveat: `--help` prints comments and exits; it executes no deploy step and therefore proves file identity, not runtime behaviour.** |
 | 10 | Worker role/env contract | `ecosystem.config.cjs` | `noramedi-worker` declares `NORAMEDI_PROCESS_ROLE: 'worker'` and **no** `RUN_BACKGROUND_JOBS` — consistent with the supplied startup log `role=worker (declared=true)`, `ownsJobs=true` |
 | 11 | Prisma version corroborates the worker now runs the deployed tree | `server/package.json:202,234` | `@prisma/client` and `prisma` both pinned `7.9.1` — the exact version F3-SEC-003 (`7.8.0` → `7.9.1`) introduced at `aa18b06`, and the exact version the replacement worker reports |
+| 12 | **[R1] Production Prisma engine hash matches the deployed lockfile pin exactly** | `@prisma/engines-version` in `server/package-lock.json` @ `aa18b06` (4 occurrences: lines 1042, 1048, 1049, 1072) | `7.9.0-1.e922089b7d7502aff4249d5da3420f6fa55fc6ad` — the supplied production engine hash `e922089b…` is **byte-identical** to the engine pinned in the deployed lockfile. This proves the production host's engine fetch resolved to *exactly* the repository-pinned engine, not merely to some 7.9.x build — satisfying R-075's named `binaries.prisma.sh` egress gap **precisely rather than by inference** |
+| 13 | **[R1] Scope the production `npm audit --omit=dev` actually covers** | `server/package.json` + `server/package-lock.json` @ `aa18b06` | The production audit runs against the same `server/` manifest/lockfile pair F3-SEC-003 reduced from 8 advisories to 0 locally; production reporting `found 0 vulnerabilities` reproduces that result **on the deployed host at the deployed SHA**. Scope caveat retained, not absorbed: `--omit=dev` measures the production dependency subtree only, and the frontend's two accepted `react-router` advisories lie outside it |
 
 **Line-ending note (for reproducibility):** check 3 hashes the **git-stored blob** (LF), which is what a Linux checkout of `/var/www/noramedi` materializes. The Windows working copy used by this session has CRLF line endings and therefore hashes differently (`917ee40a…`); that is a checkout artifact, not a content difference.
 
@@ -157,7 +177,31 @@ Each risk is assessed **only** against the closure criteria its own `RISK_REGIST
 
 - **R-037** (PM2 restart counts require operational review): the supplied worker `restart_count` of `10` → `11` is **lower** than the `13` recorded for the same process by F0-002 on 2026-07-19, which means PM2's counter for `noramedi-worker` was reset at some point between the two observations (process deleted and re-added, or the PM2 daemon's process table recreated). This is consistent with R-033's own thesis — the worker's lifecycle has been managed out-of-band — and is recorded here as an observation. **R-037's row is not edited**; no closure criterion of that row is met, and the reset's cause is not established.
 - **R-036** (PM2 processes run as `root`): the synced script was installed `root:root` `0755`, which neither improves nor worsens this row. **Not edited.**
-- **R-018, R-019, R-073, R-074, R-075:** untouched by this evidence. **Not edited.**
+- **R-018, R-019, R-073, R-074:** untouched by this evidence. **Not edited.**
+- **R-075:** **[Corrected in R1]** — *is* materially affected, and is dispositioned separately in **§6.5**. It is **not** in the untouched set. The first draft placed it here on the false premise that no post-deploy production audit had been supplied.
+
+### 6.5 R-075 — production dependency vulnerability posture → `CLOSED` **[R1]**
+
+**This is the only risk whose status token this task changes.** It is argued strictly from R-075's own row, and its closure is **not transitive**: R-033, R-034 and R-040 (§6.1–§6.3) remain `OPEN` on entirely separate criteria that this evidence does not touch, and R-076 / R-077 are unaffected.
+
+R-075's row named exactly three substantive requirements and one procedural condition. Each is assessed against its own verbatim wording:
+
+| R-075's own stated requirement (verbatim from its row) | Status | Evidence |
+|---|---|---|
+| *"Deploy the merged change"* | **SATISFIED** | Deployed SHA `aa18b064267ff5846ae60f73889c3322030bd4a8` **is** PR #401's squash-merge commit (§4 checks 1–2) |
+| *"then re-run `npm audit --omit=dev` in `$APP_DIR/server` and confirm 0"* | **SATISFIED** | Production `npm audit --omit=dev` → **`found 0 vulnerabilities`** (§3.5) |
+| *"Also unverified: `binaries.prisma.sh` egress from the production host, required for the changed Prisma engine hash"* | **SATISFIED** | `prisma@7.9.1` / `@prisma/client@7.9.1` fetched and installed on the production host; engine `e922089b…` is **byte-identical to the deployed lockfile pin** (§4 check 12); both processes independently generated `Prisma Client v7.9.1` |
+| *"not self-closed, per this program's R-019/R-071/R-072/R-073 precedent that a task cannot close the risk it just remediated"* | **SATISFIED** | The remaining condition was **external confirmation**, not further evidence. F3-SEC-003 could not close its own remediation; this is a different task, and the external reviewer of PR #402 has now explicitly provided that confirmation on the supplied production evidence (2026-08-12, recorded in the row) |
+
+Every element R-075's row named is met, and the only element that was ever procedural — external confirmation — has been supplied by the party entitled to supply it. Per the **`F1-002-R2` precedent** (this register's prior `CLOSED`-after-external-confirmation row), the correct token is **`CLOSED`**, with the earlier `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION` token **preserved in the row as history rather than deleted**.
+
+**Deliberately retained as residual scope — this closure is narrow and absorbs none of the following:**
+
+- The audit is a **point-in-time** `--omit=dev` measurement of the API host's `server/` tree. It is **not** continuous monitoring: no Dependabot alerting and no CI-side `npm audit` gate is confirmed, so a *future* advisory would not be caught by anything evidenced here.
+- The frontend's two accepted `react-router` advisories are **outside `--omit=dev` scope** and remain accepted-not-fixed (fix lands only at 7.18.0, a v6→v7 major; both structurally inapplicable to this client-only SPA).
+- **R-076** (the stored-XSS finding incidental to F3-SEC-003) is a separate row, **entirely unaffected**. R-075 closing says nothing about it; it remains `OPEN` and still needs its own task.
+- **R-077** (installed-vs-repository script drift, §8) is independent and remains `OPEN`.
+- Closing R-075 **does not advance the F3 exit gate** — the row was filed explicitly as `F3 (non-blocking — not named by F3's own 3-item exit gate)`. See §7.
 
 ## 7. F3 exit gate — re-assessment
 
@@ -166,10 +210,12 @@ Exit gate per `phases/F3_PRODUCTION_HARDENING.md` §"Exit gate (Çıkış kapıs
 | # | Criterion | Status before this task | What this task's evidence adds | Status after this task |
 |---|---|---|---|---|
 | 1 | Observability standard demonstrably working live | `OPEN` | Nothing. `/livez` / `/readyz` re-confirmed `200` with `database=ok` / `redis=ok`, which is endpoint correctness, not a prober/alert channel/dashboard. **Indirect, negative signal:** a worker ran stale for an unknown period and was discovered manually, not by any monitor — a concrete illustration of R-074's gap. | **`OPEN`, unchanged** |
-| 2 | Security hardening checklist closed | `PASS_WITH_EXTERNAL_VERIFICATION` | Mixed. **Positive:** the worker now demonstrably runs the deployed tree, including F3-SEC-003's remediated `7.9.1` Prisma family — the first production evidence that the dependency remediation is actually loaded in the job-executing process. **Negative:** §5 removes a claim the prior assessment relied on (deploy procedure == repository procedure), and adds a new open item (deploy-script drift, R-077 §8). | **`PASS_WITH_EXTERNAL_VERIFICATION`, unchanged** |
+| 2 | Security hardening checklist closed | `PASS_WITH_EXTERNAL_VERIFICATION` | Mixed. **Positive:** the worker now demonstrably runs the deployed tree, including F3-SEC-003's remediated `7.9.1` Prisma family — the first production evidence that the dependency remediation is actually loaded in the job-executing process. **[R1] Further positive:** the post-deploy production `npm audit --omit=dev` reports **0 vulnerabilities** and the production engine hash matches the deployed lockfile pin exactly, which closes **R-075** (§6.5). **This does not move criterion 2** — R-075 was filed explicitly non-blocking and is not named by the exit gate, and criterion 2's own requirement is *full external verification of the security-hardening checklist*, which is materially broader than dependency posture. **Negative:** §5 removes a claim the prior assessment relied on (deploy procedure == repository procedure), and adds a new open item (deploy-script drift, R-077 §8). | **`PASS_WITH_EXTERNAL_VERIFICATION`, unchanged** |
 | 3 | Incident-response procedure verified via drill | `OPEN` | Nothing directly. Worth noting for whoever decides criterion 3: F3-IR-001's tabletop **Scenario A was a worker-stop scenario**, and a real (silent, undetected) worker-staleness event has now occurred in production — relevant input to the "is a simulated drill sufficient?" decision, but not a drill and not a decision this task can make. | **`OPEN`, unchanged** |
 
 **F3 exit gate: `NOT SATISFIED` — unchanged.** No criterion's status changes. This task's evidence is production-topology verification, which none of the three criteria names.
+
+**[R1] R-075's closure does not change this, and must not be read as progress toward it.** R-075 was created by F3-PROD-001 and filed from the outset as `F3 (non-blocking — not named by F3's own 3-item exit gate)`. The gate's three criteria are live observability wiring, full external security-checklist verification, and an incident-drill sufficiency decision; a dependency-audit result satisfies none of them. Closing a non-blocking row leaves a `NOT SATISFIED` gate exactly as `NOT SATISFIED`.
 
 **F3 COMPLETE: `NO`. F4 transition authorized: `NO`.**
 
@@ -192,7 +238,7 @@ Per the task brief and `NORAMEDI_MASTER_TRACKER.md` §2.2/§2.3, these are track
 | Item | Agent completed | Tests passed | PR opened | Merged | Deployed | Production verified |
 |---|---|---|---|---|---|---|
 | **F3-IMPL-002** (worker contract implementation) | yes (2026-08-10) | yes (2026-08-10) | yes (PR #357) | **yes** | **yes** — code present in `aa18b06` | **PARTIAL** — worker app's `ecosystem.config.cjs` start confirmed (§6.3); worker deploy **automation** installed but **never executed** (§6.1); API app's ecosystem contract **not** verified (§6.3) |
-| **F3-SEC-003** (dependency remediation) | yes | yes | yes (PR #401) | **yes** — `aa18b064267ff5846ae60f73889c3322030bd4a8` | **yes** — deployed SHA *is* that merge commit | **PARTIAL** — worker confirmed loading remediated `Prisma Client v7.9.1`; no post-deploy production `npm audit` re-run supplied (R-075's own closure evidence remains outstanding) |
+| **F3-SEC-003** (dependency remediation) | yes | yes | yes (PR #401) | **yes** — `aa18b064267ff5846ae60f73889c3322030bd4a8` | **yes** — deployed SHA *is* that merge commit | **yes [corrected in R1]** — post-deploy production `npm audit --omit=dev` at the deployed SHA reports **0 vulnerabilities**; production engine hash `e922089b…` matches the deployed lockfile pin byte-for-byte; both API and worker generate `Prisma Client v7.9.1` (§3.5, §4 checks 12–13). **R-075 `CLOSED`** (§6.5). *The first draft recorded this cell as `PARTIAL` on the false premise that no post-deploy audit had been supplied; that premise is withdrawn.* Residual (not a verification gap in this task's scope): no continuous dependency monitoring, and the frontend `react-router` advisories remain accepted-not-fixed |
 | **F3-PROD-001** (deployment reconciliation) | yes | n/a (docs-only) | yes (PR #400) | **yes** | n/a | n/a — **one recorded fact corrected by §5** |
 | **F3-IMPL-002-PROD-RECON** (this task) | yes | n/a — no code changed; no test suite applies | yes (see §11) | **no** | n/a — docs-only | n/a |
 
@@ -214,7 +260,7 @@ Files changed — all under `docs/program/**`:
 4. `docs/program/NORAMEDI_MASTER_TRACKER.md` — top entry, §11 production-verification-history row, §13 exact-next-task entry
 5. `docs/program/CURRENT_PHASE.md` — top entry
 6. `docs/program/phases/F3_PRODUCTION_HARDENING.md` — top status line + entry, change-history row
-7. `docs/program/RISK_REGISTER.md` — new "Son güncelleme" entry; R-033 / R-034 / R-040 rows updated (evidence + status wording, **none closed**); new row R-077
+7. `docs/program/RISK_REGISTER.md` — new "Son güncelleme" entry; R-033 / R-034 / R-040 rows updated (evidence + status wording, **none closed**); **[R1] R-075 row updated → `CLOSED`** on external reviewer confirmation (§6.5), prior token preserved as history; new row R-077
 
 **Documentation-hygiene gap noted, not fixed** (consistent with F3-PROGRAM-RECON-001's precedent for such notes): the `phases/F3_PRODUCTION_HARDENING.md` change-history table and `evidence/README.md` index both stop at F3-PROGRAM-RECON-001 — they have no rows for F3-IMPL-005(+R1), F3-IMPL-007, F3-CI-OPT-001, F3-PROD-001, or F3-SEC-003, all of which are covered in prose elsewhere. This task adds only its own rows; back-filling the others is left to a dedicated documentation-hygiene pass.
 
@@ -222,7 +268,7 @@ Files changed — all under `docs/program/**`:
 
 `AGENT_COMPLETED` · `PR_OPENED` — see the pull-request reference recorded in `NORAMEDI_MASTER_TRACKER.md` §13 and `CURRENT_PHASE.md` · **`NOT_MERGED`** · `NOT_DEPLOYED` (documentation-only; nothing to deploy) · `NOT_PRODUCTION_VERIFIED` (this task performed no production access).
 
-No risk was self-closed. No merge decision is claimed. Per §2.3 of the tracker, `MERGED` / `DEPLOYED` / `PRODUCTION_VERIFIED` are external-confirmation states this task cannot assign.
+No risk was self-closed. **[R1] R-075 is now `CLOSED`, but not on this task's own authority** — it is closed on the explicit external confirmation of PR #402's reviewer, which was the single condition its row still named, and the underlying remediation being confirmed was F3-SEC-003's work, not this task's. **R-033, R-034, R-040, R-076 and R-077 all remain `OPEN`.** No merge decision is claimed. Per §2.3 of the tracker, `MERGED` / `DEPLOYED` / `PRODUCTION_VERIFIED` are external-confirmation states this task cannot assign.
 
 ## 12. Exact next task
 
