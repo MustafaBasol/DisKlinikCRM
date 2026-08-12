@@ -20,10 +20,6 @@ name: ci-layers
 #   Layer 5 (full-suite/compatibility fail-safe) -> full-suite-compatibility-failsafe-frontend,
 #                                                    full-suite-compatibility-failsafe-backend
 #
-# All jobs run on every call, on every trigger, with no path filters - the
-# layering itself is what must never silently narrow which canonical scripts
-# execute.
-#
 # F1-003-P3-R1: Layer 5 now has a backend half. The original P3 Layer 5 only
 # covered the frontend leaf scripts; legacy `server:test` silently chains 23
 # additional PostgreSQL-required/MinIO-free scripts (exact names in
@@ -51,9 +47,54 @@ name: ci-layers
 # guardrail-tool failure must never gate application tests. Architectural
 # findings always exit 0 (see scripts/architecture-guardrail/cli.ts); only a
 # genuine tool/configuration/execution failure turns this job red.
+#
+# F3-CI-OPT-001: adds risk-based path-aware job selection for pull_request
+# calls only (fastMode input, default false). Every job below keeps running
+# unconditionally, exactly as before, whenever fastMode is false - this is
+# the push-to-main/nightly/manual safety net and this task makes no change
+# to its behavior. When fastMode is true (ci-pr.yml only), a new `classify`
+# job inspects the PR's changed-file paths with the deterministic,
+# repository-owned scripts/ci-classify/** classifier and each Layer 2-5 job
+# becomes conditional on the category it maps to; Layer 1 (frontend build,
+# server typecheck, tooling typecheck+unit, guardrail scan, workflow/syntax
+# lint) stays unconditional even in fastMode - those five jobs are cheap
+# (~15-55s each, fully parallel) and gating them individually would require
+# conditioning every Layer 2-5 job's `needs:` on a job that might itself be
+# skipped, a well-known GitHub Actions cascading-skip pitfall. Every Layer
+# 2-5 job's `if:` explicitly falls back to running whenever fastMode is
+# false, the classify job did not succeed, or any of that job's own `needs`
+# failed/were cancelled - classification failures and infrastructure
+# failures both fail closed (run everything), never open. See
+# docs/program/evidence/F3-CI-OPT-001_RISK_BASED_PATH_AWARE_PR_CI.md for the
+# full category -> gate mapping and the required-check safety argument.
 
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      fastMode:
+        description: >-
+          When true (pull_request calls only), Layer 2-5 jobs become
+          conditional on scripts/ci-classify/** output. When false (the
+          default; push-to-main, nightly, and manual dispatch), every job
+          runs unconditionally - unchanged from the pre-F3-CI-OPT-001
+          behavior.
+        type: boolean
+        default: false
+    outputs:
+      docsOnly:
+        value: ${{ jobs.classify.outputs.docs_only }}
+      categoriesPresent:
+        value: ${{ jobs.classify.outputs.categories_present }}
+      runBackendGeneral:
+        value: ${{ jobs.classify.outputs.run_backend_general }}
+      runPostgres:
+        value: ${{ jobs.classify.outputs.run_postgres }}
+      runStorage:
+        value: ${{ jobs.classify.outputs.run_storage }}
+      runFrontendFullSuite:
+        value: ${{ jobs.classify.outputs.run_frontend_full_suite }}
+      runLegacyBackend:
+        value: ${{ jobs.classify.outputs.run_legacy_backend }}
 
 permissions:
   contents: read
@@ -62,8 +103,54 @@ env:
   NODE_VERSION: '20'
 
 jobs:
+  classify:
+    name: 'Changed-path classification (risk-based PR gate selection)'
+    if: inputs.fastMode == true && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.run-classifier.outputs.docs_only }}
+      categories_present: ${{ steps.run-classifier.outputs.categories_present }}
+      run_backend_general: ${{ steps.run-classifier.outputs.run_backend_general }}
+      run_postgres: ${{ steps.run-classifier.outputs.run_postgres }}
+      run_storage: ${{ steps.run-classifier.outputs.run_storage }}
+      run_frontend_full_suite: ${{ steps.run-classifier.outputs.run_frontend_full_suite }}
+      run_legacy_backend: ${{ steps.run-classifier.outputs.run_legacy_backend }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Fetch PR base and head commits for diffing
+        # actions/checkout's default pull_request checkout is the merge
+        # commit at depth 1 - neither the base nor head SHA's own commit
+        # object is guaranteed present yet, so both are fetched explicitly
+        # (same-repo PRs only; this repository does not accept fork PRs).
+        run: git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+      - name: List changed files (base...head)
+        run: git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed-files.txt
+      - name: git diff --check (structural whitespace/conflict-marker sanity, non-blocking)
+        # Informational only - this check did not exist before F3-CI-OPT-001
+        # and turning it into a hard merge blocker would be a new, unrequested
+        # behavior change. Findings are surfaced as a workflow annotation.
+        run: |
+          if ! git diff --check ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}; then
+            echo "::warning::git diff --check found whitespace or conflict-marker issues in this PR's diff (non-blocking, informational only)"
+          fi
+      - name: Run changed-path classifier
+        id: run-classifier
+        run: npx tsx scripts/ci-classify/cli.ts --files-from=changed-files.txt --github-output="$GITHUB_OUTPUT" --step-summary="$GITHUB_STEP_SUMMARY"
+
   frontend-typecheck-and-build:
     name: 'Layer 1: frontend typecheck + build'
+    needs: [classify]
+    if: >-
+      inputs.fastMode == false ||
+      needs.classify.result != 'success' ||
+      needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -79,6 +166,11 @@ jobs:
 
   server-typecheck:
     name: 'Layer 1: server typecheck'
+    needs: [classify]
+    if: >-
+      inputs.fastMode == false ||
+      needs.classify.result != 'success' ||
+      needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -97,6 +189,11 @@ jobs:
 
   tooling-typecheck-and-unit:
     name: 'Layer 1: test-runtime tooling typecheck + unit tests'
+    needs: [classify]
+    if: >-
+      inputs.fastMode == false ||
+      needs.classify.result != 'success' ||
+      needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -111,9 +208,18 @@ jobs:
         run: npm run typecheck:runtime
       - name: Docker-free orchestrator unit tests
         run: npm run test:runtime:unit
+      - name: Typecheck scripts/ci-classify
+        run: npm run typecheck:ci-classify
+      - name: Changed-path classifier unit tests
+        run: npm run test:ci-classify
 
   architecture-guardrail-report-only:
     name: 'Layer 1: architecture guardrail (advisory, report-only)'
+    needs: [classify]
+    if: >-
+      inputs.fastMode == false ||
+      needs.classify.result != 'success' ||
+      needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # F2-GUARDRAIL-IMPL-001 — repository-only, report-only, non-blocking
@@ -158,6 +264,11 @@ jobs:
 
   workflow-and-syntax-lint:
     name: 'Layer 1: workflow YAML, shell, PowerShell, and JSON validation'
+    needs: [classify]
+    if: >-
+      inputs.fastMode == false ||
+      needs.classify.result != 'success' ||
+      needs.classify.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -205,7 +316,12 @@ jobs:
 
   non-disposable-backend-tests:
     name: 'Layer 2: non-disposable backend tests'
-    needs: [frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    if: >-
+      (inputs.fastMode == false ||
+       needs.classify.result != 'success' ||
+       needs.classify.outputs.run_backend_general == 'true') &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -241,7 +357,12 @@ jobs:
 
   disposable-postgres-tests:
     name: 'Layer 3: disposable PostgreSQL tests'
-    needs: [frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    if: >-
+      (inputs.fastMode == false ||
+       needs.classify.result != 'success' ||
+       needs.classify.outputs.run_postgres == 'true') &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -285,7 +406,12 @@ jobs:
 
   storage-integration-tests:
     name: 'Layer 4: disposable PostgreSQL + MinIO storage integration tests'
-    needs: [frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    if: >-
+      (inputs.fastMode == false ||
+       needs.classify.result != 'success' ||
+       needs.classify.outputs.run_storage == 'true') &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -326,18 +452,23 @@ jobs:
 
   full-suite-compatibility-failsafe-frontend:
     name: 'Layer 5: full-suite/compatibility fail-safe (frontend)'
-    needs: [frontend-typecheck-and-build]
+    needs: [classify, frontend-typecheck-and-build]
+    if: >-
+      (inputs.fastMode == false ||
+       needs.classify.result != 'success' ||
+       needs.classify.outputs.run_frontend_full_suite == 'true') &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Runs the frontend leaf test scripts and root:test:vitest, none of which
     # were reachable from any CI workflow prior to F1-003-P3 (see
     # docs/program/evidence/F1-002-P1_TEST_SCRIPT_REACHABILITY_RECONCILIATION.md,
-    # "only 7 of 116 JS/TS test-related files reached by any workflow"). This
-    # job has no path filter and runs on every trigger (PR, main push,
-    # nightly, manual dispatch) unconditionally, so it cannot be silently
-    # narrowed by a future PR-only optimization. See the sibling
-    # `full-suite-compatibility-failsafe-backend` job for this layer's
-    # backend half.
+    # "only 7 of 116 JS/TS test-related files reached by any workflow"). On
+    # push-to-main/nightly/manual-dispatch (fastMode=false) this job has no
+    # path filter and runs on every trigger unconditionally, so it cannot be
+    # silently narrowed by this or any future PR-only optimization. See the
+    # sibling `full-suite-compatibility-failsafe-backend` job for this
+    # layer's backend half.
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -360,7 +491,12 @@ jobs:
 
   full-suite-compatibility-failsafe-backend:
     name: 'Layer 5: full-suite/compatibility fail-safe (backend, legacy server:test DB-required members)'
-    needs: [frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    needs: [classify, frontend-typecheck-and-build, server-typecheck, tooling-typecheck-and-unit, workflow-and-syntax-lint]
+    if: >-
+      (inputs.fastMode == false ||
+       needs.classify.result != 'success' ||
+       needs.classify.outputs.run_legacy_backend == 'true') &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # F1-003-P3-R1: closes the gap the original P3 Layer 5 left open. Legacy

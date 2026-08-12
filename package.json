@@ -27,7 +27,10 @@
     "typecheck:runtime": "tsc --noEmit -p scripts/test-runtime/tsconfig.json",
     "guardrail:scan": "tsx scripts/architecture-guardrail/cli.ts",
     "guardrail:test": "tsx scripts/architecture-guardrail/__tests__/index.test.ts",
-    "typecheck:guardrail": "tsc --noEmit -p scripts/architecture-guardrail/tsconfig.json"
+    "typecheck:guardrail": "tsc --noEmit -p scripts/architecture-guardrail/tsconfig.json",
+    "ci-classify": "tsx scripts/ci-classify/cli.ts",
+    "test:ci-classify": "tsx scripts/ci-classify/__tests__/classify.test.ts",
+    "typecheck:ci-classify": "tsc --noEmit -p scripts/ci-classify/tsconfig.json"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.21",
