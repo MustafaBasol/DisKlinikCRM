@@ -5,9 +5,16 @@ name: ci
 # truth, no duplication between this and ci-main-and-nightly.yml). See
 # docs/program/evidence/F1-003-P3_LAYERED_CI_WORKFLOWS_AND_FULL_SUITE_FAIL_SAFE.md.
 #
-# No path filter is applied deliberately: the whole point of Layer 5 (the
-# full-suite/compatibility fail-safe) is that no layer here can be silently
-# narrowed by a changed-paths condition.
+# No path filter is applied to the `on:` trigger itself, deliberately: the
+# whole point of Layer 5 (the full-suite/compatibility fail-safe) is that no
+# layer can be silently narrowed by a changed-paths condition on whether
+# this workflow runs at all. F3-CI-OPT-001 (see docs/program/evidence/
+# F3-CI-OPT-001_RISK_BASED_PATH_AWARE_PR_CI.md) instead makes individual
+# Layer 2-5 *jobs* inside ci-layers.yml conditional on a deterministic,
+# repository-owned classification of the PR's changed files
+# (scripts/ci-classify/**) — this workflow always runs, and always reports
+# through the single `PR Gate` job below regardless of which inner jobs a
+# given PR's paths selected.
 
 on:
   pull_request:
@@ -30,5 +37,36 @@ permissions:
 jobs:
   ci-layers:
     uses: ./.github/workflows/ci-layers.yml
+    with:
+      fastMode: true
     permissions:
       contents: read
+
+  pr-gate:
+    name: 'PR Gate'
+    # F3-CI-OPT-001 required-check safety (see docs/program/evidence/
+    # F3-CI-OPT-001_RISK_BASED_PATH_AWARE_PR_CI.md, "Required-check
+    # safety"): this is the ONE stable, always-present job this workflow
+    # exposes as a check — its name never disappears based on changed
+    # paths, regardless of which inner ci-layers.yml jobs a given PR's
+    # classification selected or skipped. Configure this exact job as the
+    # branch-protection required status check (see the evidence doc for the
+    # manual step; this repository currently has no branch protection
+    # configured on main, so nothing existing is being replaced).
+    needs: [ci-layers]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Verify the layered CI call succeeded
+        run: |
+          echo "ci-layers result: ${{ needs.ci-layers.result }}"
+          echo "docs-only: ${{ needs.ci-layers.outputs.docsOnly }}"
+          echo "categories present: ${{ needs.ci-layers.outputs.categoriesPresent }}"
+          if [ "${{ needs.ci-layers.result }}" != "success" ]; then
+            echo "::error::ci-layers reusable workflow did not succeed (result=${{ needs.ci-layers.result }}) - PR Gate failing closed."
+            exit 1
+          fi
+          echo "PR Gate: every job ci-layers.yml selected for this changeset succeeded (or was correctly skipped for its category)."
