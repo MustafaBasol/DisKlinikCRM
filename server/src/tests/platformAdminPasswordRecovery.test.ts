@@ -339,17 +339,19 @@ await test('successful recovery: updates passwordHash/passwordChangedAt/updatedA
   assert.ok(!serializedRow.includes(after!.passwordHash), 'audit row must never contain the password hash');
 });
 
-section('recoverPlatformAdminPassword — F3-SEC-002 session revocation contract');
+section('recoverPlatformAdminPassword — F3-SEC-002-R1 session revocation contract');
 
-await test('a token issued before recovery is rejected by authenticatePlatformAdmin after recovery; a token issued after it is accepted', async () => {
+await test('a token issued before recovery is rejected by authenticatePlatformAdmin immediately after recovery — even with no delay between issuance and reset; a token issued after it is accepted', async () => {
   const admin = await trackedFixtureAdmin();
 
+  // Issued while passwordChangedAt is still null (credentialVersion=null in
+  // the token). No sleep before the reset below — the exact
+  // credentialVersion contract (F3-SEC-002-R1) has no second-resolution
+  // ambiguity, unlike the superseded iat-based comparison, so this proves
+  // rejection is immediate even in the same wall-clock second as the reset.
   const staleToken = generatePlatformToken({ id: admin.id, email: admin.email });
-  // Ensure the stale token's `iat` (whole seconds) is strictly before the
-  // invalidation checkpoint set below — jwt.sign's `iat` has 1s resolution.
-  await new Promise((resolve) => setTimeout(resolve, 1100));
 
-  await recoverPlatformAdminPassword(
+  const result = await recoverPlatformAdminPassword(
     { email: admin.email, confirmEmail: admin.email, dryRun: false, confirm: true },
     { getNewPasswordPair: fixedPasswordPair(VALID_PASSWORD) },
   );
@@ -361,12 +363,19 @@ await test('a token issued before recovery is rejected by authenticatePlatformAd
   assert.equal(staleNextCalled, false, 'a token issued before the reset must be rejected');
   assert.equal(staleRes.statusCode, 401);
 
-  const freshToken = generatePlatformToken({ id: admin.id, email: admin.email });
+  // A real new login re-reads the admin row (now carrying the reset's
+  // passwordChangedAt) and passes it into generatePlatformToken, same as
+  // routes/platformAdmin.ts's login route — simulated here the same way.
+  const freshToken = generatePlatformToken({
+    id: admin.id,
+    email: admin.email,
+    passwordChangedAt: result.credentialsInvalidatedAt,
+  });
   const freshReq = { headers: { authorization: `Bearer ${freshToken}` } } as any;
   const freshRes = mockRes();
   let freshNextCalled = false;
   await (authenticatePlatformAdmin as any)(freshReq, freshRes, () => { freshNextCalled = true; });
-  assert.equal(freshNextCalled, true, 'a token issued after the reset must be accepted');
+  assert.equal(freshNextCalled, true, 'a token carrying the exact post-reset credentialVersion must be accepted immediately');
   assert.equal(freshReq.platformAdmin?.id, admin.id);
 });
 

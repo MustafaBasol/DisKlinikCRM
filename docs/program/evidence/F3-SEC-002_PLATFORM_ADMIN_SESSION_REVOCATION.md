@@ -154,3 +154,39 @@ R-073 may move to `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION` on the stren
 ## 13. Exact next task
 
 Program-owner review/merge decision for this PR. Independently: (1) an explicit human decision on whether a normal (self-service) Platform Admin password-change route should ever be added — today the emergency CLI is the only reset path, which this task treats as a given, not a gap to close; (2) if a Platform Admin deactivation *route* is ever added to the application (today `isActive` is DB/ops-only), it should be wired to nothing extra — the new `isActive` check in `authenticatePlatformAdmin` already covers it immediately, with no `passwordChangedAt` involvement needed.
+
+---
+
+## R1 addendum — F3-SEC-002-R1-LITE (exact credential-version revocation)
+
+**Confirmed defect in the R0 implementation above:** §4 point 4 compared the token's `iat` (whole seconds) against `Math.floor(admin.passwordChangedAt.getTime() / 1000)`. JWT `iat` has one-second resolution, so a token issued and a password reset landing in the *same* wall-clock second cannot be reliably ordered by that comparison — a token minted a few hundred milliseconds before a reset in the same second would still satisfy `iat < checkpoint` as false and be incorrectly accepted. R0's own test suite only proved correctness *around* this gap (it explicitly slept 1100ms past every second boundary before asserting); it never exercised the same-second case itself.
+
+**Fix — exact credential-version claim, no second migration, no new column:**
+
+- `generatePlatformToken()` (`server/src/middleware/platformAuth.ts`) now embeds a `credentialVersion` claim: the exact `passwordChangedAt.getTime()` (millisecond epoch) of the admin row read at issuance time, or the stable literal `null` for a row that has never had a credential reset (`passwordChangedAt === null`).
+- `authenticatePlatformAdmin()` no longer compares `iat` to `passwordChangedAt` at all. Instead: if the DB row's `passwordChangedAt` is `null`, no claim requirement is enforced (unchanged legacy-compatibility policy, §3 above). If it is non-null, the token's `credentialVersion` must be a `number` and must exactly equal `admin.passwordChangedAt.getTime()` — absent, non-numeric, or any other numeric value is rejected with the same generic `401`.
+- Reused `PlatformAdmin.passwordChangedAt` (no `credentialVersion` DB column, no new migration, no session store). The login route (`POST /api/platform/auth/login` in `routes/platformAdmin.ts`) now passes its own freshly-read `admin.passwordChangedAt` into `generatePlatformToken()`, so every new login carries the exact current checkpoint.
+- The `typeof decoded.iat !== 'number'` defense-in-depth check is retained unchanged (it never drove revocation decisions; it only rejects a token missing the standard claim entirely) — `iat` itself plays no role in the revocation decision anymore.
+
+**Why this closes the gap:** the claim is an exact value comparison, not an ordering comparison, so there is no resolution to lose and no second-boundary race — a token either carries the *current* persisted checkpoint or it does not, regardless of how close in time issuance and reset occurred.
+
+**Tests (`server/src/tests/platformAdminSessionRevocation.test.ts`, rewritten; `platformAdminPasswordRecovery.test.ts`'s revocation-contract test, updated):** all `sleepPastOneSecondBoundary()` calls were removed — every before/after ordering assertion now runs back-to-back with no delay, including one explicit "issued and reset in the same tick" case, which is the direct regression test for the confirmed defect. New cases: missing `credentialVersion` claim rejected (checkpoint non-null), malformed (non-numeric/stringified) `credentialVersion` rejected, stale/old `credentialVersion` rejected after a second reset, exact-match accepted immediately post-reset. Cross-admin isolation and no-sensitive-logging cases retained and adapted to the new claim. `iat`-malformation defense-in-depth cases (missing/non-numeric `iat`) retained for regression coverage of that still-present check.
+
+**Validation (targeted only, disposable PostgreSQL 16, `server/`):**
+
+| Suite | Command | Result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | exit `0`, no errors |
+| Session revocation suite | `npm run test:platform-admin-session-revocation` | `15/15` |
+| Recovery CLI | `npm run test:platform-admin-password-recovery` | `22/22` |
+| Auth + platform admin | `npm run test:auth` | `82/82` |
+| Platform backup (directly-coupled member) | `npm run test:platform-backup` | `25/25` |
+| Retention manual-run audit (directly-coupled member) | `npm run test:retention-manual-run-audit` | `29/29` |
+
+`prisma migrate deploy` re-run against a disposable Postgres to confirm no drift: all pre-existing migrations (including `20260811120000_add_platform_admin_password_changed_at`, unchanged) applied cleanly; **no new migration was added or is required** for this fix.
+
+**Backward compatibility:** unchanged from §3 — a row with `passwordChangedAt = null` keeps accepting its outstanding token regardless of `credentialVersion`, bounded by the token's own `exp`.
+
+**Scope:** `server/src/middleware/platformAuth.ts`, `server/src/routes/platformAdmin.ts` (login token issuance), `server/src/scripts/platform-admin-recover-password.ts` (comment only — the transactional `passwordHash`/`passwordChangedAt` write itself is unchanged), `server/src/tests/platformAdminSessionRevocation.test.ts`, `server/src/tests/platformAdminPasswordRecovery.test.ts`. No schema/migration file touched. No shared program-control document touched.
+
+**R-073 status:** remains `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION`, not self-closed by this addendum.

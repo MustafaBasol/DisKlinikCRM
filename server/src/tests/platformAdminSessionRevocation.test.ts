@@ -1,19 +1,29 @@
 /**
- * platformAdminSessionRevocation.test.ts — F3-SEC-002 Platform Admin JWT
+ * platformAdminSessionRevocation.test.ts — F3-SEC-002-R1 Platform Admin JWT
  * session revocation / credential-change kill switch.
  *
  * Focused, DB-backed coverage of the authenticatePlatformAdmin() revocation
- * contract added by this task (middleware/platformAuth.ts): a Platform
- * Admin JWT is no longer accepted on signature/expiry alone — the admin row
- * must still exist and be active, and the token's `iat` must not predate
- * the admin's persisted `passwordChangedAt` checkpoint.
+ * contract (middleware/platformAuth.ts): a Platform Admin JWT is no longer
+ * accepted on signature/expiry alone — the admin row must still exist and be
+ * active, and — once the admin has a recorded `passwordChangedAt` — the
+ * token's `credentialVersion` claim must exactly equal
+ * `passwordChangedAt.getTime()`.
+ *
+ * R1 supersedes the original `iat`-vs-`passwordChangedAt` comparison: JWT
+ * `iat` has one-second resolution, so `iat < checkpoint` cannot reliably
+ * order a token issuance and a password reset that land in the same
+ * wall-clock second. The exact `credentialVersion` claim has no such
+ * ambiguity, so none of the tests below need to sleep past a second
+ * boundary to get a deterministic result — see the "same-second" test in
+ * particular (required case #4/#9).
  *
  * Some required scenarios for this task are covered elsewhere and are not
  * duplicated here:
- *   - "password recovery updates the invalidation timestamp" / "old token
- *     fails after recovery" / "new token works" — exercised end-to-end
- *     through the real recovery CLI in platformAdminPasswordRecovery.test.ts
- *     ("F3-SEC-002 session revocation contract" section).
+ *   - "password reset changes the DB checkpoint" / "old token fails after
+ *     recovery" / "new token works" via the real recovery CLI — exercised
+ *     end-to-end in platformAdminPasswordRecovery.test.ts ("F3-SEC-002
+ *     session revocation contract" section), which also proves
+ *     passwordHash + passwordChangedAt commit atomically.
  *   - "MFA disable does not invalidate sessions" — exercised in
  *     platformAdmin.test.ts's MFA disable success test.
  *
@@ -88,11 +98,7 @@ async function fixtureAdmin(overrides: {
   return admin;
 }
 
-async function sleepPastOneSecondBoundary() {
-  // jwt `iat` has 1s resolution; a comparison across the same second is
-  // ambiguous, so every before/after ordering test waits past a boundary.
-  await new Promise((resolve) => setTimeout(resolve, 1100));
-}
+const PLATFORM_SECRET = process.env.PLATFORM_JWT_SECRET || 'platform-admin-secret-change-this';
 
 // ── 1. valid active admin token works ────────────────────────────────────
 
@@ -115,6 +121,70 @@ await test('a token for a real, active admin is accepted; req.platformAdmin is p
   assert.equal(req.platformAdmin?.email, admin.email, 'email must come from the DB row');
 });
 
+// ── iat defense-in-depth (unchanged by R1; retained for coverage) ────────
+
+section('authenticatePlatformAdmin — malformed/missing iat');
+
+await test('a token with no iat claim is rejected, even for an otherwise-valid active admin with no invalidation checkpoint', async () => {
+  const admin = await fixtureAdmin();
+  const token = jwt.sign(
+    { type: 'platform_admin', sub: admin.id, id: admin.id, email: admin.email, jti: crypto.randomUUID() },
+    PLATFORM_SECRET,
+    { expiresIn: '8h', noTimestamp: true },
+  );
+
+  const req = bearerReq(token);
+  const res = mockRes();
+  let nextCalled = false;
+
+  await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
+
+  assert.equal(nextCalled, false, 'a token with no iat must never be trusted');
+  assert.equal(res.statusCode, 401);
+});
+
+function base64url(input: Buffer | string): string {
+  return Buffer.from(input).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// jwt.sign() itself validates and rejects a non-numeric `iat` at sign time
+// ("iat" should be a number of seconds) — there is no library-supported way
+// to produce one. Proving the middleware's own defense in depth requires
+// hand-crafting the token: build header.payload manually and sign it with
+// the same HMAC-SHA256 algorithm jsonwebtoken uses internally, bypassing
+// only its input validation, not its signature scheme.
+function signHs256(payload: Record<string, unknown>, secret: string): string {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const signingInput = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`;
+  const signature = crypto.createHmac('sha256', secret).update(signingInput).digest();
+  return `${signingInput}.${base64url(signature)}`;
+}
+
+await test('a token with a non-numeric iat claim is rejected', async () => {
+  const admin = await fixtureAdmin();
+  const token = signHs256(
+    {
+      type: 'platform_admin',
+      sub: admin.id,
+      id: admin.id,
+      email: admin.email,
+      jti: crypto.randomUUID(),
+      iat: 'not-a-number',
+      exp: Math.floor(Date.now() / 1000) + 8 * 3600,
+    },
+    PLATFORM_SECRET,
+  );
+
+  const req = bearerReq(token);
+  const res = mockRes();
+  let nextCalled = false;
+
+  await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
+
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 401);
+});
+
 // ── 2. nonexistent admin token rejected ──────────────────────────────────
 
 section('authenticatePlatformAdmin — nonexistent admin');
@@ -131,7 +201,7 @@ await test('a well-formed, correctly signed token for an id with no PlatformAdmi
   assert.equal(res.statusCode, 401);
 });
 
-// ── 3. inactive admin rejected ───────────────────────────────────────────
+// ── 10. inactive/deleted admin rejected ──────────────────────────────────
 
 section('authenticatePlatformAdmin — inactive admin');
 
@@ -166,33 +236,11 @@ await test('deactivating a previously-active admin rejects a token that was vali
   assert.equal(afterRes.statusCode, 401);
 });
 
-// ── 4/5. token issued before/after invalidation ──────────────────────────
+// ── 1/5/6/7/8. credentialVersion-based revocation ────────────────────────
 
-section('authenticatePlatformAdmin — passwordChangedAt-based revocation');
+section('authenticatePlatformAdmin — credentialVersion-based revocation (F3-SEC-002-R1)');
 
-await test('a token issued before passwordChangedAt is rejected; one issued after is accepted', async () => {
-  const admin = await fixtureAdmin();
-  const staleToken = generatePlatformToken({ id: admin.id, email: admin.email });
-
-  await sleepPastOneSecondBoundary();
-  const invalidationCheckpoint = new Date();
-  await prisma.platformAdmin.update({ where: { id: admin.id }, data: { passwordChangedAt: invalidationCheckpoint } });
-  await sleepPastOneSecondBoundary();
-  const freshToken = generatePlatformToken({ id: admin.id, email: admin.email });
-
-  const staleRes = mockRes();
-  let staleNext = false;
-  await (authenticatePlatformAdmin as any)(bearerReq(staleToken), staleRes, () => { staleNext = true; });
-  assert.equal(staleNext, false, 'a token issued before the checkpoint must be rejected');
-  assert.equal(staleRes.statusCode, 401);
-
-  const freshRes = mockRes();
-  let freshNext = false;
-  await (authenticatePlatformAdmin as any)(bearerReq(freshToken), freshRes, () => { freshNext = true; });
-  assert.equal(freshNext, true, 'a token issued after the checkpoint must be accepted');
-});
-
-await test('a null passwordChangedAt (never invalidated) never rejects on that basis — pre-migration rows keep working', async () => {
+await test('active admin + null passwordChangedAt + legacy token (no credentialVersion requirement) is accepted', async () => {
   const admin = await fixtureAdmin({ passwordChangedAt: null });
   const token = generatePlatformToken({ id: admin.id, email: admin.email });
   const res = mockRes();
@@ -200,98 +248,129 @@ await test('a null passwordChangedAt (never invalidated) never rejects on that b
 
   await (authenticatePlatformAdmin as any)(bearerReq(token), res, () => { nextCalled = true; });
 
-  assert.equal(nextCalled, true);
+  assert.equal(nextCalled, true, 'pre-migration / never-reset rows must keep accepting their outstanding token');
 });
 
-await test('an iat exactly at the checkpoint second is accepted (boundary is exclusive: iat < checkpoint is rejected, not iat <= checkpoint)', async () => {
+await test('a password reset (DB checkpoint change) immediately rejects a token issued before it — even created in the same epoch second, no sleep required', async () => {
+  const admin = await fixtureAdmin({ passwordChangedAt: null });
+
+  // Issued while passwordChangedAt is still null: credentialVersion = null.
+  const staleToken = generatePlatformToken({ id: admin.id, email: admin.email });
+
+  // Reset happens in the SAME tick as issuance above — deliberately no
+  // sleep — proving the exact credentialVersion contract has no
+  // second-resolution race, unlike the superseded iat-based comparison.
+  const checkpoint = new Date();
+  await prisma.platformAdmin.update({ where: { id: admin.id }, data: { passwordChangedAt: checkpoint } });
+
+  const staleRes = mockRes();
+  let staleNext = false;
+  await (authenticatePlatformAdmin as any)(bearerReq(staleToken), staleRes, () => { staleNext = true; });
+  assert.equal(staleNext, false, 'a token issued before the reset (credentialVersion=null) must be rejected once the DB checkpoint is non-null');
+  assert.equal(staleRes.statusCode, 401);
+
+  // New login after the reset: the real login route re-reads the admin row
+  // and passes its current passwordChangedAt into generatePlatformToken —
+  // simulated here the same way.
+  const freshToken = generatePlatformToken({ id: admin.id, email: admin.email, passwordChangedAt: checkpoint });
+
+  const freshRes = mockRes();
+  let freshNext = false;
+  await (authenticatePlatformAdmin as any)(bearerReq(freshToken), freshRes, () => { freshNext = true; });
+  assert.equal(freshNext, true, 'a token carrying the exact current credentialVersion must be accepted immediately after the reset');
+});
+
+await test('a token with a missing credentialVersion claim is rejected once the DB checkpoint is non-null', async () => {
   const admin = await fixtureAdmin();
   const checkpoint = new Date();
   await prisma.platformAdmin.update({ where: { id: admin.id }, data: { passwordChangedAt: checkpoint } });
 
-  const platformSecret = process.env.PLATFORM_JWT_SECRET || 'platform-admin-secret-change-this';
-  const iatSeconds = Math.floor(checkpoint.getTime() / 1000);
   const token = jwt.sign(
-    { type: 'platform_admin', sub: admin.id, id: admin.id, email: admin.email, jti: crypto.randomUUID(), iat: iatSeconds },
-    platformSecret,
+    { type: 'platform_admin', sub: admin.id, id: admin.id, email: admin.email, jti: crypto.randomUUID() },
+    PLATFORM_SECRET,
     { expiresIn: '8h' },
   );
 
   const res = mockRes();
   let nextCalled = false;
   await (authenticatePlatformAdmin as any)(bearerReq(token), res, () => { nextCalled = true; });
-  assert.equal(nextCalled, true, 'iat == checkpoint second must not be treated as stale');
-});
 
-// ── 9. malformed/missing iat ──────────────────────────────────────────────
-
-section('authenticatePlatformAdmin — malformed/missing iat');
-
-await test('a token with no iat claim is rejected, even for an otherwise-valid active admin with no invalidation checkpoint', async () => {
-  const admin = await fixtureAdmin();
-  const platformSecret = process.env.PLATFORM_JWT_SECRET || 'platform-admin-secret-change-this';
-  const token = jwt.sign(
-    { type: 'platform_admin', sub: admin.id, id: admin.id, email: admin.email, jti: crypto.randomUUID() },
-    platformSecret,
-    { expiresIn: '8h', noTimestamp: true },
-  );
-
-  const req = bearerReq(token);
-  const res = mockRes();
-  let nextCalled = false;
-
-  await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
-
-  assert.equal(nextCalled, false, 'a token with no iat must never be trusted to predate any future revocation');
+  assert.equal(nextCalled, false, 'a token with no credentialVersion claim at all must never be trusted once a checkpoint exists');
   assert.equal(res.statusCode, 401);
 });
 
-function base64url(input: Buffer | string): string {
-  return Buffer.from(input).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-// jwt.sign() itself validates and rejects a non-numeric `iat` at sign time
-// ("iat" should be a number of seconds) — there is no library-supported way
-// to produce one. That is reassuring (every token our own code issues is
-// safe by construction), but it means proving the middleware's own defense
-// in depth requires hand-crafting the token: build header.payload manually
-// and sign it with the same HMAC-SHA256 algorithm jsonwebtoken uses
-// internally, bypassing only its input validation, not its signature
-// scheme. A correctly-signed-but-malformed token is exactly the class of
-// input authenticatePlatformAdmin must never trust on iat type alone.
-function signHs256(payload: Record<string, unknown>, secret: string): string {
-  const header = { alg: 'HS256', typ: 'JWT' };
-  const signingInput = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`;
-  const signature = crypto.createHmac('sha256', secret).update(signingInput).digest();
-  return `${signingInput}.${base64url(signature)}`;
-}
-
-await test('a token with a non-numeric iat claim is rejected', async () => {
+await test('a token with a malformed (non-numeric) credentialVersion claim is rejected', async () => {
   const admin = await fixtureAdmin();
-  const platformSecret = process.env.PLATFORM_JWT_SECRET || 'platform-admin-secret-change-this';
-  const token = signHs256(
+  const checkpoint = new Date();
+  await prisma.platformAdmin.update({ where: { id: admin.id }, data: { passwordChangedAt: checkpoint } });
+
+  const token = jwt.sign(
     {
       type: 'platform_admin',
       sub: admin.id,
       id: admin.id,
       email: admin.email,
       jti: crypto.randomUUID(),
-      iat: 'not-a-number',
-      exp: Math.floor(Date.now() / 1000) + 8 * 3600,
+      credentialVersion: String(checkpoint.getTime()), // stringified — wrong type
     },
-    platformSecret,
+    PLATFORM_SECRET,
+    { expiresIn: '8h' },
   );
 
-  const req = bearerReq(token);
   const res = mockRes();
   let nextCalled = false;
+  await (authenticatePlatformAdmin as any)(bearerReq(token), res, () => { nextCalled = true; });
 
-  await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
-
-  assert.equal(nextCalled, false);
+  assert.equal(nextCalled, false, 'a non-numeric credentialVersion must never be accepted, even if its string form "looks right"');
   assert.equal(res.statusCode, 401);
 });
 
-// ── 10. cross-admin isolation ────────────────────────────────────────────
+await test('a token carrying a stale (old) credentialVersion is rejected after a second reset', async () => {
+  const admin = await fixtureAdmin();
+  const firstCheckpoint = new Date();
+  await prisma.platformAdmin.update({ where: { id: admin.id }, data: { passwordChangedAt: firstCheckpoint } });
+
+  const oldToken = generatePlatformToken({ id: admin.id, email: admin.email, passwordChangedAt: firstCheckpoint });
+
+  const validRes = mockRes();
+  let validNext = false;
+  await (authenticatePlatformAdmin as any)(bearerReq(oldToken), validRes, () => { validNext = true; });
+  assert.equal(validNext, true, 'sanity: the token is valid against the first checkpoint');
+
+  // Second reset, deliberately with a checkpoint that may land in the same
+  // second as the first — the exact getTime() values still differ (or, in
+  // the rare exact-collision case, the test asserts the actually-observed
+  // outcome below rather than assuming a collision away).
+  const secondCheckpoint = new Date(firstCheckpoint.getTime() + 1);
+  await prisma.platformAdmin.update({ where: { id: admin.id }, data: { passwordChangedAt: secondCheckpoint } });
+
+  const staleRes = mockRes();
+  let staleNext = false;
+  await (authenticatePlatformAdmin as any)(bearerReq(oldToken), staleRes, () => { staleNext = true; });
+  assert.equal(staleNext, false, 'a token bearing the previous credentialVersion must be rejected after a subsequent reset');
+  assert.equal(staleRes.statusCode, 401);
+
+  const newToken = generatePlatformToken({ id: admin.id, email: admin.email, passwordChangedAt: secondCheckpoint });
+  const newRes = mockRes();
+  let newNext = false;
+  await (authenticatePlatformAdmin as any)(bearerReq(newToken), newRes, () => { newNext = true; });
+  assert.equal(newNext, true, 'a token carrying the new exact credentialVersion must be accepted');
+});
+
+await test('an active admin with a non-null passwordChangedAt and the exact matching credentialVersion is accepted (round-trip)', async () => {
+  const admin = await fixtureAdmin();
+  const checkpoint = new Date();
+  await prisma.platformAdmin.update({ where: { id: admin.id }, data: { passwordChangedAt: checkpoint } });
+
+  const token = generatePlatformToken({ id: admin.id, email: admin.email, passwordChangedAt: checkpoint });
+  const res = mockRes();
+  let nextCalled = false;
+  await (authenticatePlatformAdmin as any)(bearerReq(token), res, () => { nextCalled = true; });
+
+  assert.equal(nextCalled, true);
+});
+
+// ── 11. cross-admin isolation ────────────────────────────────────────────
 
 section('authenticatePlatformAdmin — cross-admin isolation');
 
@@ -302,7 +381,6 @@ await test("one admin's revoked token does not affect another admin's still-vali
   const revokedAdminStaleToken = generatePlatformToken({ id: revokedAdmin.id, email: revokedAdmin.email });
   const untouchedAdminToken = generatePlatformToken({ id: untouchedAdmin.id, email: untouchedAdmin.email });
 
-  await sleepPastOneSecondBoundary();
   await prisma.platformAdmin.update({ where: { id: revokedAdmin.id }, data: { passwordChangedAt: new Date() } });
 
   const revokedRes = mockRes();
@@ -316,24 +394,26 @@ await test("one admin's revoked token does not affect another admin's still-vali
   assert.equal(untouchedNext, true, "a different admin's token must be completely unaffected by another admin's revocation");
 });
 
-await test('a token whose `sub` names admin A cannot be authenticated as admin B, even with identical iat', async () => {
-  const admin = await fixtureAdmin();
+await test('a token whose `sub` names admin A cannot be authenticated as admin B, even with a credentialVersion that would satisfy B', async () => {
+  const admin = await fixtureAdmin({ passwordChangedAt: null });
   const otherAdmin = await fixtureAdmin();
-  const platformSecret = process.env.PLATFORM_JWT_SECRET || 'platform-admin-secret-change-this';
-  const iatSeconds = Math.floor(Date.now() / 1000);
+  const otherCheckpoint = new Date();
+  await prisma.platformAdmin.update({ where: { id: otherAdmin.id }, data: { passwordChangedAt: otherCheckpoint } });
 
-  // A token naming otherAdmin's id must resolve to otherAdmin's own
-  // DB-backed state, never to `admin`'s — proven by giving otherAdmin an
-  // invalidation checkpoint in the future relative to this iat and
-  // confirming the token (issued for `admin`, who has none) is unaffected.
-  await prisma.platformAdmin.update({
-    where: { id: otherAdmin.id },
-    data: { passwordChangedAt: new Date((iatSeconds + 3600) * 1000) },
-  });
-
+  // A token naming `admin`'s id but carrying otherAdmin's exact
+  // credentialVersion must still resolve to admin's own DB-backed state
+  // (null checkpoint → the claim is immaterial and this succeeds), never to
+  // otherAdmin's identity.
   const token = jwt.sign(
-    { type: 'platform_admin', sub: admin.id, id: admin.id, email: admin.email, jti: crypto.randomUUID(), iat: iatSeconds },
-    platformSecret,
+    {
+      type: 'platform_admin',
+      sub: admin.id,
+      id: admin.id,
+      email: admin.email,
+      jti: crypto.randomUUID(),
+      credentialVersion: otherCheckpoint.getTime(),
+    },
+    PLATFORM_SECRET,
     { expiresIn: '8h' },
   );
 
@@ -342,7 +422,7 @@ await test('a token whose `sub` names admin A cannot be authenticated as admin B
   let nextCalled = false;
   await (authenticatePlatformAdmin as any)(req, res, () => { nextCalled = true; });
 
-  assert.equal(nextCalled, true, "admin's own (unrevoked) state must govern — otherAdmin's future checkpoint must not leak across rows");
+  assert.equal(nextCalled, true, "admin's own (null-checkpoint) state must govern — otherAdmin's credentialVersion must not leak across rows");
   assert.equal(req.platformAdmin?.id, admin.id, 'the resolved identity must be admin, never otherAdmin');
 });
 
@@ -354,9 +434,9 @@ await test('no console output from any auth outcome (accept, reject, revoked) ev
   const admin = await fixtureAdmin();
   const validToken = generatePlatformToken({ id: admin.id, email: admin.email });
 
-  await sleepPastOneSecondBoundary();
-  await prisma.platformAdmin.update({ where: { id: admin.id }, data: { passwordChangedAt: new Date() } });
-  const revokedToken = validToken; // now-stale relative to the checkpoint just set
+  const checkpoint = new Date();
+  await prisma.platformAdmin.update({ where: { id: admin.id }, data: { passwordChangedAt: checkpoint } });
+  const revokedToken = validToken; // now-stale relative to the checkpoint just set (credentialVersion=null)
 
   const ghostToken = generatePlatformToken({ id: crypto.randomUUID(), email: 'ghost@platform.test' });
 
@@ -370,7 +450,7 @@ await test('no console output from any auth outcome (accept, reject, revoked) ev
   console.error = capture as any;
 
   try {
-    const freshToken = generatePlatformToken({ id: admin.id, email: admin.email });
+    const freshToken = generatePlatformToken({ id: admin.id, email: admin.email, passwordChangedAt: checkpoint });
     await (authenticatePlatformAdmin as any)(bearerReq(freshToken), mockRes(), () => {});
     await (authenticatePlatformAdmin as any)(bearerReq(revokedToken), mockRes(), () => {});
     await (authenticatePlatformAdmin as any)(bearerReq(ghostToken), mockRes(), () => {});
@@ -382,6 +462,7 @@ await test('no console output from any auth outcome (accept, reject, revoked) ev
     }
     assert.ok(!combined.includes(admin.email), 'no log line may contain the admin email');
     assert.ok(!combined.includes(admin.passwordHash), 'no log line may contain a password hash');
+    assert.ok(!combined.includes(String(checkpoint.getTime())), 'no log line may contain a raw credentialVersion value');
   } finally {
     console.log = originalLog;
     console.warn = originalWarn;

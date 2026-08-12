@@ -21,13 +21,23 @@ export interface PlatformAdminRequest extends Request {
 // Platform Admin JWT stayed usable after a credential reset until its
 // natural 8h expiry. This now performs the same persistent, per-request
 // revocation check as clinic auth: the admin must still exist and be
-// active, and the token's `iat` must not predate the admin's last recorded
-// credential change (`passwordChangedAt`, set by the emergency recovery
-// CLI — see scripts/platform-admin-recover-password.ts). Deliberately no
-// in-process cache (unlike clinic auth's 15s getAuthUser cache): Platform
-// Admin traffic is a handful of privileged operators, not hundreds of
-// concurrent clinics, so the extra per-request query is cheap and removes
-// any window where a just-revoked token would still be honored.
+// active. Deliberately no in-process cache (unlike clinic auth's 15s
+// getAuthUser cache): Platform Admin traffic is a handful of privileged
+// operators, not hundreds of concurrent clinics, so the extra per-request
+// query is cheap and removes any window where a just-revoked token would
+// still be honored.
+//
+// F3-SEC-002-R1: revocation itself is enforced via an exact `credentialVersion`
+// claim, not by comparing the token's `iat` against `passwordChangedAt`. JWT
+// `iat` has one-second resolution, so an `iat < checkpoint` (or `<=`)
+// comparison cannot reliably order a token issued and a password reset that
+// land in the same wall-clock second — the confirmed R1 defect. Instead,
+// `credentialVersion` carries the admin's `passwordChangedAt.getTime()`
+// value *exactly*, as recorded at token issuance (see generatePlatformToken
+// below); the middleware requires it to exactly equal the *current*
+// persisted value read fresh from the DB on this request. There is no
+// resolution loss and no ordering ambiguity — the claim either equals the
+// current checkpoint (this token was issued at-or-after it) or it does not.
 //
 // All rejection branches below return the SAME generic message so a caller
 // cannot distinguish "no such admin" / "inactive" / "credentials rotated
@@ -81,11 +91,23 @@ export const authenticatePlatformAdmin = async (
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
 
-    if (
-      admin.passwordChangedAt &&
-      decoded.iat < Math.floor(admin.passwordChangedAt.getTime() / 1000)
-    ) {
-      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    // F3-SEC-002-R1: exact credential-version check, replacing the
+    // second-resolution-limited `iat` comparison. A row with no recorded
+    // credential change (`passwordChangedAt === null`) has never been
+    // reset — every pre-migration/never-reset row keeps accepting whatever
+    // token it was issued, per the documented legacy-compatibility policy,
+    // with no claim requirement at all. Once a reset has happened, the
+    // claim must match the current checkpoint exactly: absent, non-numeric,
+    // or any other value than the current `passwordChangedAt.getTime()` is
+    // rejected.
+    if (admin.passwordChangedAt) {
+      const currentCredentialVersion = admin.passwordChangedAt.getTime();
+      if (
+        typeof decoded.credentialVersion !== 'number' ||
+        decoded.credentialVersion !== currentCredentialVersion
+      ) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+      }
     }
 
     if (authSource === 'bearer') {
@@ -104,17 +126,27 @@ export const authenticatePlatformAdmin = async (
   }
 };
 
+// F3-SEC-002-R1: `passwordChangedAt` (as read from the DB at issuance time,
+// e.g. the login route's own admin lookup) becomes the token's exact
+// credential-version checkpoint. A row that has never had a credential
+// reset (`passwordChangedAt` null/omitted) gets the stable legacy
+// representation `null` — authenticatePlatformAdmin never checks this claim
+// against a null DB checkpoint, so its exact value is immaterial for those
+// rows, but `null` (rather than e.g. omitting the claim) keeps the shape
+// deterministic for logging/inspection.
 export const generatePlatformToken = (admin: {
   id: string;
   email: string;
   sessionId?: string;
   sessionType?: 'platform' | 'platform_admin';
+  passwordChangedAt?: Date | null;
 }) => {
   const sessionId = admin.sessionId ?? createSessionId();
   const type = admin.sessionType ?? 'platform_admin';
+  const credentialVersion = admin.passwordChangedAt ? admin.passwordChangedAt.getTime() : null;
 
   return jwt.sign(
-    { type, sub: admin.id, id: admin.id, email: admin.email, jti: sessionId },
+    { type, sub: admin.id, id: admin.id, email: admin.email, jti: sessionId, credentialVersion },
     PLATFORM_JWT_SECRET,
     { expiresIn: '8h' },
   );

@@ -280,11 +280,14 @@ export async function recoverPlatformAdminPassword(
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST_FACTOR);
 
-  // F3-SEC-002: passwordChangedAt is the persistent kill switch —
-  // authenticatePlatformAdmin() rejects any JWT whose `iat` predates this
-  // instant, so this reset now revokes every session issued before it, not
-  // just future logins. Written in the same transaction as the hash update
-  // so a reset can never commit without also invalidating prior tokens.
+  // F3-SEC-002 / F3-SEC-002-R1: passwordChangedAt is the persistent kill
+  // switch — authenticatePlatformAdmin() requires a JWT's `credentialVersion`
+  // claim to exactly equal this instant's getTime(), so any token issued
+  // before this reset (whose claim necessarily carries an older or absent
+  // value) is rejected immediately, with no second-resolution ambiguity even
+  // if the token was issued in the same wall-clock second as this reset.
+  // Written in the same transaction as the hash update so a reset can never
+  // commit without also invalidating prior tokens.
   const credentialsInvalidatedAt = new Date();
 
   await prismaClient.$transaction(async (tx) => {
