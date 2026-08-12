@@ -16,7 +16,7 @@
 | Baseline vs production SHA | **Not equal, and this is expected and harmless.** `git diff --name-only aa18b06… 0d1b4ae… \| grep -v '^docs/'` returns **0 files** — PR #402 was documentation-only |
 | Contract files at both SHAs | **Byte-identical**, verified blob-by-blob (§15). `ecosystem.config.cjs`, `scripts/noramedi-deploy.sh`, `scripts/noramedi-healthcheck.sh`, `server/package.json`, `server/src/index.ts`, `server/src/worker.ts`, `server/src/utils/processRole.ts`, `server/src/utils/backgroundJobsOwnership.ts` |
 
-The last row is what makes this reconciliation sound: the repository contract this task compares production against is the *same bytes* production is running, even though the documentation baseline has moved two commits ahead.
+The last row is what makes this reconciliation sound: the repository contract this task compares production against is the *same bytes* production is running, even though `origin/main` is ahead of production — the complete delta is docs-only and the 8 runtime-contract files are byte-identical.
 
 **Superseded branch note.** `docs/f3-impl-002-prod-recon-v2` @ `06ff0b0` — carried into this session as an in-progress branch — is the head of **closed, unmerged PR #403** (`mergedAt: null`, `state: CLOSED`). It is a *sibling* of `origin/main`, not an ancestor: both branched from `aa18b06` and solved the F3-IMPL-002 reconciliation independently, and `origin/main` won, additionally carrying the R1/R2 corrections that branch lacks. It was **not** built on. Its untracked 236-line draft evidence file was preserved (moved to a scratch location, not deleted) before this branch was created; the merged 347-line file at the same path is a strict superset of it.
 
@@ -367,7 +367,21 @@ F3-IMPL-002-PROD-RECON §5.2 **[R2]**, and this session's own pre-execution anal
 
 ### 11.3 Rollback exposure of this specific deploy
 
-Effectively nil. `--skip-pull` left production HEAD unchanged at `aa18b06`; no dependency, schema, or client change occurred. The only mutation was PM2 process state, whose recovery is `pm2 restart`. **There is no code to roll back.**
+Low, but not "PM2 state only" — the precise classification, restated from §6:
+
+| Action | Occurred |
+|---|---|
+| `git pull` | **NO** |
+| `npm ci` / build | **NO** |
+| Migration | **NO** |
+| Explicit deploy generate phase (step 4) | **SKIPPED** |
+| Prisma Client generation at process startup | **YES** — both processes, proven by production logs (§6) |
+| Source / schema / lockfile changes | **NO** — HEAD unchanged at `aa18b06` |
+| PM2 lifecycle (reload/restart, `restart_time` counters) | **mutated as intended** |
+
+`--skip-pull` left production HEAD unchanged and no source, schema, or lockfile file changed. But both `npm run start` and `npm run start:worker` run `npx prisma generate` unconditionally, and production logs prove this executed at both startups — the on-disk generated Prisma Client artifacts were refreshed by this deploy. **The byte-level before/after delta of those generated artifacts was not measured**, and this document does not claim they are unchanged — only that no *source* of them (schema, lockfile) changed. **It is not accurate to say "no client change occurred" without that measurement.**
+
+Rollback exposure is therefore: the PM2 lifecycle mutation (recovered via `pm2 restart`/`startOrReload` back to the prior process state) plus a regenerated — not byte-verified — Prisma Client, which regenerates deterministically from the same unchanged schema/lockfile on any subsequent start. **There is no source code to roll back.**
 
 ---
 
@@ -387,14 +401,17 @@ Exit gate per `phases/F3_PRODUCTION_HARDENING.md` §"Exit gate (Çıkış kapıs
 
 **F3 COMPLETE: `NO`. F4 transition authorized: `NO`.**
 
-**Remaining F3 exit-gate blockers, independently recalculated:**
+**(A) Formal exit-gate criterion blockers** — items the authoritative three-criterion gate (`phases/F3_PRODUCTION_HARDENING.md` §"Exit gate", reproduced in the table above) actually names, independently recalculated:
 
 1. External observability wiring against the now-live `/livez` / `/readyz` — criterion 1 / **R-074**, `OPEN`.
 2. External verification of GitHub Code-security settings, TLS, Redis/replica topology, platform-admin MFA coverage — criterion 2.
-3. A program-owner decision on whether F3-IR-001's simulated tabletop satisfies criterion 3.
-4. Decision-owner acceptance records for **R-073** and **R-019** (both `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION`).
-5. **R-076** (stored XSS, `ClinicLegalProfile.website`) — `OPEN`, unaffected by this task.
-6. **R-077**(b) — drift-prevention mechanism — `OPEN`.
+3. Decision-owner acceptance records for **R-073** and **R-019** (both `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION`) — criterion 2, per this program's own precedent (`phases/F3_PRODUCTION_HARDENING.md`'s F3-PROD-001 entry) of treating their acceptance as part of the security-hardening checklist.
+4. A program-owner decision on whether F3-IR-001's simulated tabletop satisfies criterion 3.
+
+**(B) Additional open F3 risks / phase-closure considerations** — open items that are **not** named by any of the gate's three criteria, and therefore do not block the formal gate on current repository evidence, but remain outstanding before F3 as a whole is closed out:
+
+5. **R-076** (stored XSS, `ClinicLegalProfile.website`) — `OPEN`, unaffected by this task; F3-SEC-003's own record already classifies it as untouched by the three named criteria.
+6. **R-077**(b) — drift-prevention mechanism — `OPEN`; an operational/deployment risk, not named by any of the three criteria.
 
 None of these is a coding task started here.
 
@@ -483,8 +500,13 @@ git status --porcelain | grep -v ' docs/program/'     → 0 lines (scope contain
 | V6 | No document asserts F3 complete or F4 authorized | `grep -rn 'F4 transition authorized: \`YES\`\|F3 COMPLETE: \`YES\`\|F4_TRANSITION_AUTHORIZED: YES' docs/program/` | **PASS** — `0` matches |
 | V7 | Exit-gate wording is consistently `NOT SATISFIED` | `grep -rno` over the gate phrasings across `docs/program/*.md`, the F3 phase doc and this file | **PASS** — 18 occurrences, all `NOT SATISFIED`; `0` contradicting |
 | V8 | No stale "R-033/R-040 remain OPEN" claim survives as a *current* statement | `grep -rn` over `docs/program/` | **PASS** — 1 match, and it is inside `RISK_REGISTER.md`'s **`Prior update:`** (F3-IMPL-002-PROD-RECON) entry, i.e. dated history preserved by the additive-correction convention. No current-status text contradicts the closures |
+| V9 | Zero "two commits ahead" claims survive (R1) | `grep -rniE 'two commits ahead\|two docs-only commits ahead\|moved two commits' docs/program/` | **PASS** — `0` matches. `aa18b06…0d1b4ae` is actually **4** commits (`git rev-list --count`); §1 and `evidence/README.md` now say `origin/main` is ahead of production without asserting a count |
+| V10 | Zero misleading "PM2 state only / no client change" *current* claims survive (R1) | `grep -rn 'no dependency, schema, or client change occurred\|only mutation was PM2 process state\|nothing beyond PM2' docs/program/` | **PASS** — `0` matches. §11.3 now states the precise classification (pull/build/migrate NO, explicit generate SKIPPED, startup Prisma generation YES, source/schema/lockfile NO, generated-artifact byte-delta not measured, PM2 lifecycle mutated as intended) and does not claim "no client change" |
+| V11 | R-076/R-077 not classified as both non-gate and formal exit-gate blocker (R1) | `grep -rn 'R-076.*exit-gate blocker\|exit-gate blocker.*R-076\|R-077.*formal exit-gate\|formal exit-gate.*R-077'` over this file and `NORAMEDI_MASTER_TRACKER.md` | **PASS** — `0` contradictory matches. §12 and the tracker's top entry now separate **(A) formal exit-gate criterion blockers** (the four items actually named by the three-criterion gate) from **(B) additional open F3 risks** (R-076, R-077(b) — neither named by any of the three criteria) |
 
-**Pass/fail count: 8 checks executed, 8 passed, 0 failed.**
+**Pass/fail count: 11 checks executed, 11 passed, 0 failed.**
+
+**R1 correction (2026-08-12), edited in place on this same PR/branch, per this program's `+R1` same-task-revision convention** — not a new dated layer, since this task's own PR has not yet merged: (1) corrected the "two commits ahead" claims in §1 and `evidence/README.md` to a count-independent statement, since the actual delta `aa18b06…0d1b4ae` is 4 commits, not 2; (2) corrected §11.3's rollback-exposure claim, which understated the deploy's effect by asserting "no client change occurred" and "the only mutation was PM2 process state" — §6's own table already correctly showed startup-time Prisma Client generation occurred, and §11.3 now matches it, disclosing that the generated-artifact byte-delta was not measured rather than asserting no change; (3) split §12's single six-item "exit-gate blockers" list, and the equivalent list in `NORAMEDI_MASTER_TRACKER.md`'s top entry, into formal exit-gate criterion blockers (named by the three-criterion gate) versus additional open F3 risks (R-076, R-077(b), named by neither).
 
 **Documentation-hygiene gap noted, deliberately not fixed** (consistent with F3-PROGRAM-RECON-001's precedent for such notes): the **R-063** row in `RISK_REGISTER.md` has **12 columns where the table header declares 11** — it carries an extra `Not a KVKK-HIGH-008 blocker` cell. This is **pre-existing**, present identically at `HEAD` before this task's edits (verified: 14 awk-fields both before and after), and was not introduced here. Correcting it means deciding which cell to merge, which is a judgement call outside a production-verification task's scope.
 
@@ -516,7 +538,7 @@ Files changed — all under `docs/program/**`:
 
 ## 19. Exact next task
 
-**None assigned by this task.** F3-PROD-002 is the last item the prior §13 entry named, and its execution gap is now closed. The remaining F3 work is the six-item exit-gate blocker list in §12, none of which is a coding task and none of which this task starts.
+**None assigned by this task.** F3-PROD-002 is the last item the prior §13 entry named, and its execution gap is now closed. The remaining F3 work is the four-item formal exit-gate blocker list plus the two-item additional-open-risk list in §12, none of which is a coding task and none of which this task starts.
 
 Two follow-ups are **recommended, not opened**, and neither is folded into this PR:
 
