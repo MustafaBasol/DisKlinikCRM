@@ -20,6 +20,7 @@ import {
   markExternalCalendarEventProcessed,
 } from '../services/externalCalendar/externalCalendarIdempotency.js';
 import { withJobLock } from '../utils/jobLock.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const STUCK_PROCESSING_MS = 60 * 60 * 1000; // 1 hour
 const BATCH_SIZE = 100;
@@ -47,7 +48,7 @@ export async function runExternalCalendarInboundRetryJob(): Promise<void> {
         );
       }
     } catch (error) {
-      console.error('[external-calendar-retry] Failed to recover event', { eventId: event.id, error });
+      console.error('[external-calendar-retry] Failed to recover event', { eventId: event.id, ...safeErrorFields(error) });
     }
   }
 }
@@ -62,7 +63,7 @@ export function startExternalCalendarInboundRetryJob(): void {
     }
     retryJobRunning = true;
     withJobLock('external-calendar-inbound-retry', 10 * 60 * 1000, runExternalCalendarInboundRetryJob)
-      .catch((error) => console.error('[external-calendar-retry] Job run failed:', error))
+      .catch((error) => console.error('[external-calendar-retry] Job run failed:', safeErrorFields(error)))
       .finally(() => {
         retryJobRunning = false;
       });

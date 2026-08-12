@@ -35,6 +35,7 @@ import {
   markInboundEventFailed,
   markInboundEventProcessed,
 } from '../services/messagingInboundIdempotency.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -282,7 +283,7 @@ router.post('/whatsapp/meta/webhook', express.raw({ type: 'application/json' }),
     }
   } catch (err) {
     // Log but do not re-throw — we already sent 200 to Meta
-    console.error('[meta-webhook] global handler error:', err);
+    console.error('[meta-webhook] global handler error:', safeErrorFields(err));
   }
 });
 
@@ -424,7 +425,7 @@ router.post(
       }
       // status_update events are logged but not yet persisted (future sprint)
     } catch (err) {
-      console.error('[meta-webhook] connectionId handler error:', err);
+      console.error('[meta-webhook] connectionId handler error:', safeErrorFields(err));
     }
   },
 );

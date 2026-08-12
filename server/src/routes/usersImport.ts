@@ -26,6 +26,7 @@ import {
 import { sendMail } from '../services/emailService.js';
 import { buildStaffOnboardingEmail } from '../services/emailTemplates.js';
 import { createPasswordResetToken, RESET_TOKEN_EXPIRY_MINUTES } from '../utils/passwordResetToken.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -258,7 +259,7 @@ router.post(
         rows: results,
       });
     } catch (err: any) {
-      console.error('[users/import-preview]', err?.message);
+      console.error('[users/import-preview]', safeErrorFields(err));
       res.status(500).json({ error: 'Dosya işlenemedi' });
     }
   }
@@ -407,7 +408,7 @@ router.post(
           : undefined,
       });
     } catch (err: any) {
-      console.error('[users/import-confirm]', err?.message);
+      console.error('[users/import-confirm]', safeErrorFields(err));
       res.status(500).json({ error: 'İçe aktarma başarısız' });
     }
   }

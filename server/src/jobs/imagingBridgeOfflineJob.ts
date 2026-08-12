@@ -14,6 +14,7 @@
 import cron from 'node-cron';
 import prisma from '../db.js';
 import { withJobLock } from '../utils/jobLock.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const OFFLINE_THRESHOLD_MINUTES = Math.max(1, Number(process.env.IMAGING_BRIDGE_OFFLINE_MINUTES) || 5);
 export const OFFLINE_THRESHOLD_MS = OFFLINE_THRESHOLD_MINUTES * 60 * 1000;
@@ -44,7 +45,7 @@ export function startImagingBridgeOfflineJob(): void {
     }
     offlineJobRunning = true;
     withJobLock('imaging-bridge-offline', 2 * 60 * 1000, runImagingBridgeOfflineJob)
-      .catch(error => console.error('[imaging-bridge-offline] Job run failed:', error))
+      .catch(error => console.error('[imaging-bridge-offline] Job run failed:', safeErrorFields(error)))
       .finally(() => {
         offlineJobRunning = false;
       });

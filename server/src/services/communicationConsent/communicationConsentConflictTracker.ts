@@ -15,6 +15,7 @@
  */
 
 import prisma from '../../db.js';
+import { safeErrorFields } from '../../utils/safeError.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -70,6 +71,6 @@ export async function recordCommunicationConsentConflict(
       },
     });
   } catch (err) {
-    console.error('[communicationConsentConflictTracker] Failed to record conflict:', err);
+    console.error('[communicationConsentConflictTracker] Failed to record conflict:', safeErrorFields(err));
   }
 }

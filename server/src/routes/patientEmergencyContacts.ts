@@ -104,6 +104,7 @@ import {
   resolvePrimaryPromotion,
   invokeEmergencyContactRaceHook,
 } from '../services/patientEmergencyContactsConcurrency.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -240,7 +241,7 @@ router.post(
 
       res.status(201).json(contact);
     } catch (err: any) {
-      console.error('[patientEmergencyContacts] create error:', err?.message ?? err);
+      console.error('[patientEmergencyContacts] create error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to create emergency contact' });
     }
   },
@@ -322,7 +323,7 @@ router.put(
 
       res.json(contact);
     } catch (err: any) {
-      console.error('[patientEmergencyContacts] update error:', err?.message ?? err);
+      console.error('[patientEmergencyContacts] update error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to update emergency contact' });
     }
   },

@@ -6,6 +6,7 @@ import { isAllowedFileSignature } from '../utils/fileSignature.js';
 import { isInlinePreviewable } from '../utils/filePreview.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
+import { safeErrorFields } from '../utils/safeError.js';
 import {
   buildStorageKey,
   deleteFile,
@@ -173,7 +174,7 @@ router.post(
     } catch (err: any) {
       // Depoya yazıldıktan sonra DB kaydı başarısız olduysa dosyayı geri sil.
       if (storageKey) await deleteFile(storageKey).catch(() => {});
-      console.error('[attachments] upload error:', err?.message ?? err);
+      console.error('[attachments] upload error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to upload attachment' });
     }
   },
@@ -349,7 +350,7 @@ router.patch(
 
       res.json(redactLegalHoldReason(updated, canSeeLegalHoldReason(req)));
     } catch (err: any) {
-      console.error('[attachments] legal-hold error:', err?.message ?? err);
+      console.error('[attachments] legal-hold error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to update legal hold' });
     }
   },
@@ -454,7 +455,7 @@ router.delete(
 
       res.json({ success: true });
     } catch (err: any) {
-      console.error('[attachments] delete error:', err?.message ?? err);
+      console.error('[attachments] delete error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to delete attachment' });
     }
   },

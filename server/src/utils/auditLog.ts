@@ -11,6 +11,7 @@
 
 import prisma from '../db.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { safeErrorFields } from './safeError.js';
 
 export interface AuditLogInput {
   organizationId: string;
@@ -53,7 +54,7 @@ export async function writeAuditLog(input: AuditLogInput): Promise<void> {
     });
   } catch (err) {
     // Logging must never crash the main operation
-    console.error('[AuditLog] Failed to write audit log:', err);
+    console.error('[AuditLog] Failed to write audit log:', safeErrorFields(err));
   }
 }
 

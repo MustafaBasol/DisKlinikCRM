@@ -8,6 +8,7 @@ import { checkPatientLimit } from '../middleware/planLimits.js';
 import { validateAndGetScope } from '../utils/clinicScope.js';
 import { patientListSelect, userNameRoleSelect, userNameSelect } from '../utils/prismaSelects.js';
 import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -40,7 +41,7 @@ router.get('/patients/check-phone-duplicate', authorize(['OWNER', 'ORG_ADMIN', '
 
     res.json({ duplicates });
   } catch (err: any) {
-    console.error('[patients] check-phone-duplicate error:', err?.message ?? err);
+    console.error('[patients] check-phone-duplicate error:', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to check phone duplicate' });
   }
 });
@@ -112,7 +113,7 @@ router.get('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENT
     });
     res.json(patients);
   } catch (err: any) {
-    console.error('[patients] list error:', err?.message ?? err);
+    console.error('[patients] list error:', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to fetch patients' });
   }
 });
@@ -294,7 +295,7 @@ router.post('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'REC
 
     res.json(patient);
   } catch (err: any) {
-    console.error('[patients] create error:', err?.message ?? err);
+    console.error('[patients] create error:', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to create patient' });
   }
 });
@@ -336,7 +337,7 @@ router.put('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
 
     res.json(patient);
   } catch (err: any) {
-    console.error('[patients] update error:', err?.message ?? err);
+    console.error('[patients] update error:', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to update patient' });
   }
 });

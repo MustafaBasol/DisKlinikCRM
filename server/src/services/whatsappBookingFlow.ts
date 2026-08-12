@@ -18,6 +18,7 @@ import {
   WHATSAPP_ASSISTANT_TIME_ZONE,
 } from '../utils/whatsappDate.js';
 import { redactPhone, summarizeTextForLog } from '../utils/logRedaction.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 export type BookingServiceOption = {
   id: string;
@@ -707,7 +708,7 @@ const handleAwaitingDateStepWithDate = async ({
 
     return formatAvailabilityMessage(resolvedDate, lastShownSlots);
   } catch (error) {
-    console.error('[whatsapp-assistant] availability-error', error);
+    console.error('[whatsapp-assistant] availability-error', safeErrorFields(error));
     return 'Şu anda randevu takvimine erişirken teknik bir sorun oluştu. Lütfen biraz sonra tekrar deneyin veya klinik ekibine iletilmek üzere talebinizi not edebilirim.';
   }
 };
@@ -1029,7 +1030,7 @@ export const handleAwaitingTimeStep = async ({
       logAvailabilitySave(availability.allSlots.length, availability.shownSlots.length);
       return formatAvailabilityMessage(normalizedDifferentDate, availability.shownSlots);
     } catch (error) {
-      console.error('[whatsapp-assistant] availability-error', error);
+      console.error('[whatsapp-assistant] availability-error', safeErrorFields(error));
       return 'Şu anda randevu takvimine erişirken teknik bir sorun oluştu. Lütfen biraz sonra tekrar deneyin.';
     }
   }
@@ -1219,10 +1220,7 @@ export const handleAwaitingConfirmationStep = async ({
       return 'Seçtiğiniz saat artık uygun görünmüyor. İsterseniz başka bir gün veya saat kontrol edebilirim.';
     }
 
-    console.error('[whatsapp-assistant] appointment-create-error', {
-      errorName: error instanceof Error ? error.name : typeof error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
+    console.error('[whatsapp-assistant] appointment-create-error', safeErrorFields(error));
     return 'Randevu talebinizi oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
   }
 };

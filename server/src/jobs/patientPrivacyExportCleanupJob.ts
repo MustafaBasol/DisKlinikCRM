@@ -26,6 +26,7 @@
 import cron from 'node-cron';
 import { cleanupExpiredExportArchives } from '../services/privacy/patientPrivacyExportPackage.js';
 import { withJobLock } from '../utils/jobLock.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 export function isPatientPrivacyExportCleanupEnabled(): boolean {
   return process.env.PATIENT_PRIVACY_EXPORT_CLEANUP_ENABLED !== 'false';
@@ -44,9 +45,7 @@ export function startPatientPrivacyExportCleanupJob(): void {
         console.log(`[privacy-export-cleanup] deleted=${deleted}`);
       }
     }).catch((err: unknown) => {
-      console.error(
-        `[privacy-export-cleanup] Unhandled error: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      console.error('[privacy-export-cleanup] Unhandled error:', safeErrorFields(err));
     });
   });
 

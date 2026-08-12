@@ -303,6 +303,50 @@ async function main() {
     assert.equal(summary.approved, 1);
   });
 
+  // F3-IMPL-006 (Wave 2): the 'unexpected-error' catch around syncStatus used to
+  // log `error: err.message.slice(0, 200)` — a truncated but still-raw fragment
+  // of whatever syncStatus threw. A real Meta Graph API error can embed the
+  // request URL/body (which includes the phone number being messaged) or an
+  // access-token fragment. This proves the fix (safeErrorFields(err)) drops that
+  // content and keeps only errorName/errorCode.
+  await test('syncStatus throws a provider-payload-bearing error → unexpected-error log uses safeErrorFields, never the raw message', async () => {
+    const PROVIDER_PAYLOAD_FIXTURE =
+      'Meta Graph API 400: {"error":{"message":"Invalid parameter","type":"OAuthException"}} ' +
+      'for POST https://graph.facebook.com/v20.0/waba-123/message_templates?access_token=EAABsecretTokenFragment123 ' +
+      '(recipient=905551234567)';
+    const templates = [makeTemplate({ id: 'tpl-throw-002', clinicId: 'clinic-0009' })];
+    const deps: SyncDeps = {
+      getTemplates: async () => templates,
+      getConnection: async () => metaConn,
+      syncStatus: async () => {
+        throw Object.assign(new Error(PROVIDER_PAYLOAD_FIXTURE), {
+          name: 'MetaGraphApiError',
+          code: 'META_HTTP_400',
+        });
+      },
+    };
+
+    const loggedMessages: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => { loggedMessages.push(JSON.stringify(args)); };
+
+    let summary: MetaTemplateSyncSummary;
+    try {
+      summary = await syncPendingMetaTemplateStatuses(deps);
+    } finally {
+      console.error = originalError;
+    }
+
+    assert.equal(summary.failed, 1);
+    const allLogs = loggedMessages.join('\n');
+    assert.ok(!allLogs.includes(PROVIDER_PAYLOAD_FIXTURE), 'raw provider error message leaked into logs');
+    assert.ok(!allLogs.includes('EAABsecretTokenFragment123'), 'access-token fragment leaked into logs');
+    assert.ok(!allLogs.includes('905551234567'), 'recipient phone number leaked into logs');
+    assert.ok(allLogs.includes('MetaGraphApiError'), 'expected errorName (MetaGraphApiError) in logs');
+    assert.ok(allLogs.includes('META_HTTP_400'), 'expected errorCode (META_HTTP_400) in logs');
+    assert.ok(allLogs.includes('unexpected-error'), 'expected the unexpected-error log label');
+  });
+
   await test('syncStatus returns API failure → counted as failed, not updated', async () => {
     const deps: SyncDeps = {
       getTemplates: async () => [makeTemplate()],

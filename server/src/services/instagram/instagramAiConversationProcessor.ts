@@ -33,6 +33,7 @@ import { sanitizeInboundMessageText } from '../../utils/messageSanitizer.js';
 import { checkInboundRateLimit } from '../../utils/inboundRateLimiter.js';
 import { assertSlotAvailable, acquireAppointmentSlotLock, SlotConflictError } from '../appointmentRequestSafety.js';
 import { upsertContactRequest } from '../../routes/contactRequests.js';
+import { safeErrorFields } from '../../utils/safeError.js';
 import {
   checkChannelConsent,
   parseConsentReply,
@@ -680,7 +681,7 @@ const logInstagramReplyFailure = async (args: {
   } catch (error) {
     console.error('[instagram-assistant] reply failure activity log failed', {
       clinicId: args.clinic.id,
-      error: error instanceof Error ? error.message : String(error),
+      ...safeErrorFields(error),
     });
   }
 };
@@ -2149,7 +2150,7 @@ const buildReplyText = async (args: {
         return 'Seçtiğiniz saat artık uygun görünmüyor. İsterseniz başka bir gün veya saat kontrol edebilirim.';
       }
 
-      console.error('[instagram-assistant] appointment-create-error', error);
+      console.error('[instagram-assistant] appointment-create-error', safeErrorFields(error));
       return 'Randevu talebinizi oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
     }
   }
@@ -2292,7 +2293,7 @@ const buildReplyText = async (args: {
         return 'Seçtiğiniz saat artık uygun görünmüyor. İsterseniz başka bir gün veya saat kontrol edebilirim.';
       }
 
-      console.error('[instagram-assistant] appointment-create-error', error);
+      console.error('[instagram-assistant] appointment-create-error', safeErrorFields(error));
       return 'Randevu talebinizi oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
     }
   }
@@ -2570,7 +2571,7 @@ export const processInstagramIncomingMessage = async (
     },
   }).catch(err => {
     if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) {
-      console.error('[instagram] inbound message save failed', err);
+      console.error('[instagram] inbound message save failed', safeErrorFields(err));
     }
   });
 
@@ -2639,7 +2640,7 @@ export const processInstagramIncomingMessage = async (
       text: replyText,
     },
   }).catch(err => {
-    console.error('[instagram] outbound message save failed', err);
+    console.error('[instagram] outbound message save failed', safeErrorFields(err));
   });
 
   if (linkedPatientId) {

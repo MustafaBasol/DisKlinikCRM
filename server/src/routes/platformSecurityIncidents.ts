@@ -33,6 +33,7 @@ import {
   addIncidentNote,
   type LifecycleResult,
 } from '../services/security/securityIncidentService.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -225,7 +226,7 @@ router.post('/security/incidents/:id/acknowledge', async (req: PlatformAdminRequ
     const result = await acknowledgeIncident({ incidentId: getIdParam(req), actorPlatformAdminId: req.platformAdmin!.id, note: parsed.data.note });
     respondLifecycle(res, result);
   } catch (err) {
-    console.error('[platform-security-incidents] acknowledge failed', err instanceof Error ? err.message : String(err));
+    console.error('[platform-security-incidents] acknowledge failed', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to acknowledge incident' });
   }
 });
@@ -238,7 +239,7 @@ router.post('/security/incidents/:id/investigate', async (req: PlatformAdminRequ
     const result = await startInvestigation({ incidentId: getIdParam(req), actorPlatformAdminId: req.platformAdmin!.id, note: parsed.data.note });
     respondLifecycle(res, result);
   } catch (err) {
-    console.error('[platform-security-incidents] investigate failed', err instanceof Error ? err.message : String(err));
+    console.error('[platform-security-incidents] investigate failed', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to start investigation' });
   }
 });
@@ -273,7 +274,7 @@ router.post('/security/incidents/:id/contain', async (req: PlatformAdminRequest,
     });
     respondLifecycle(res, result);
   } catch (err) {
-    console.error('[platform-security-incidents] contain failed', err instanceof Error ? err.message : String(err));
+    console.error('[platform-security-incidents] contain failed', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to mark incident contained' });
   }
 });
@@ -290,7 +291,7 @@ router.post('/security/incidents/:id/resolve', async (req: PlatformAdminRequest,
     });
     respondLifecycle(res, result);
   } catch (err) {
-    console.error('[platform-security-incidents] resolve failed', err instanceof Error ? err.message : String(err));
+    console.error('[platform-security-incidents] resolve failed', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to resolve incident' });
   }
 });
@@ -303,7 +304,7 @@ router.post('/security/incidents/:id/close', async (req: PlatformAdminRequest, r
     const result = await closeIncident({ incidentId: getIdParam(req), actorPlatformAdminId: req.platformAdmin!.id, note: parsed.data.note });
     respondLifecycle(res, result);
   } catch (err) {
-    console.error('[platform-security-incidents] close failed', err instanceof Error ? err.message : String(err));
+    console.error('[platform-security-incidents] close failed', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to close incident' });
   }
 });
@@ -316,7 +317,7 @@ router.post('/security/incidents/:id/false-positive', async (req: PlatformAdminR
     const result = await markFalsePositive({ incidentId: getIdParam(req), actorPlatformAdminId: req.platformAdmin!.id, note: parsed.data.note });
     respondLifecycle(res, result);
   } catch (err) {
-    console.error('[platform-security-incidents] false-positive failed', err instanceof Error ? err.message : String(err));
+    console.error('[platform-security-incidents] false-positive failed', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to mark incident as false positive' });
   }
 });
@@ -329,7 +330,7 @@ router.post('/security/incidents/:id/reopen', async (req: PlatformAdminRequest, 
     const result = await reopenIncident({ incidentId: getIdParam(req), actorPlatformAdminId: req.platformAdmin!.id, note: parsed.data.note });
     respondLifecycle(res, result);
   } catch (err) {
-    console.error('[platform-security-incidents] reopen failed', err instanceof Error ? err.message : String(err));
+    console.error('[platform-security-incidents] reopen failed', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to reopen incident' });
   }
 });
@@ -346,7 +347,7 @@ router.post('/security/incidents/:id/notes', async (req: PlatformAdminRequest, r
     }
     res.json(toIncidentDTO(result.incident));
   } catch (err) {
-    console.error('[platform-security-incidents] add note failed', err instanceof Error ? err.message : String(err));
+    console.error('[platform-security-incidents] add note failed', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to add note' });
   }
 });
