@@ -37,6 +37,7 @@ import { resolveSmsRouting, SMS_ROUTING_POLICIES } from '../services/sms/smsRout
 import { getSmsEntitlement } from '../services/sms/smsEntitlement.js';
 import { evaluateAuthLoginFailureSignal } from '../services/security/securityDetectionRules.js';
 import { writePlatformAdminAuditEventInTx, writePlatformAdminAuditEvent } from '../services/platformAdminAudit.js';
+import { safeErrorFields, boundedErrorType } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -444,8 +445,16 @@ router.get('/organizations/:id', async (req, res: Response) => {
 });
 
 // PATCH /api/platform/organizations/:id/status
-router.patch('/organizations/:id/status', async (req, res: Response) => {
-  const { id } = req.params;
+//
+// F3-IMPL-005: organization/clinic/plan/user lifecycle mutations were the
+// last unaudited class of platform-admin mutations (R-019, deferred by
+// F3-IMPL-003). Same pattern as the sms-providers/data-retention routes:
+// the target row is looked up first (structurally guards a not-found id
+// before any transaction opens, same accepted precedent as the MFA routes),
+// then the mutation and its audit row commit atomically in the same
+// prisma.$transaction — see platformAdminAudit.ts.
+router.patch('/organizations/:id/status', async (req: PlatformAdminRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { status } = req.body;
 
   const allowed = ['trial', 'active', 'suspended', 'cancelled'];
@@ -457,7 +466,19 @@ router.patch('/organizations/:id/status', async (req, res: Response) => {
     const org = await prisma.organization.findUnique({ where: { id } });
     if (!org) return res.status(404).json({ error: 'Organization not found' });
 
-    const updated = await prisma.organization.update({ where: { id }, data: { status } });
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.organization.update({ where: { id }, data: { status } });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_organization.status_updated',
+        resourceType: 'organization',
+        resourceKey: org.id,
+        previousValue: org.status,
+        newValue: result.status,
+        outcome: 'success',
+      });
+      return result;
+    });
     res.json({ id: updated.id, status: updated.status });
   } catch {
     res.status(500).json({ error: 'Failed to update organization status' });
@@ -465,8 +486,8 @@ router.patch('/organizations/:id/status', async (req, res: Response) => {
 });
 
 // PATCH /api/platform/organizations/:id/plan
-router.patch('/organizations/:id/plan', async (req, res: Response) => {
-  const { id } = req.params;
+router.patch('/organizations/:id/plan', async (req: PlatformAdminRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { planId } = req.body;
 
   if (!planId) {
@@ -480,7 +501,19 @@ router.patch('/organizations/:id/plan', async (req, res: Response) => {
     const plan = await prisma.plan.findUnique({ where: { id: planId } });
     if (!plan) return res.status(404).json({ error: 'Plan not found' });
 
-    const updated = await prisma.organization.update({ where: { id }, data: { planId } });
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.organization.update({ where: { id }, data: { planId } });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_organization.plan_updated',
+        resourceType: 'organization',
+        resourceKey: org.id,
+        previousValue: org.planId,
+        newValue: result.planId,
+        outcome: 'success',
+      });
+      return result;
+    });
     res.json({ id: updated.id, planId: updated.planId });
   } catch {
     res.status(500).json({ error: 'Failed to update organization plan' });
@@ -488,8 +521,8 @@ router.patch('/organizations/:id/plan', async (req, res: Response) => {
 });
 
 // PATCH /api/platform/organizations/:id/trial
-router.patch('/organizations/:id/trial', async (req, res: Response) => {
-  const { id } = req.params;
+router.patch('/organizations/:id/trial', async (req: PlatformAdminRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { trialEndsAt } = req.body;
 
   if (!trialEndsAt) {
@@ -505,9 +538,21 @@ router.patch('/organizations/:id/trial', async (req, res: Response) => {
     const org = await prisma.organization.findUnique({ where: { id } });
     if (!org) return res.status(404).json({ error: 'Organization not found' });
 
-    const updated = await prisma.organization.update({
-      where: { id },
-      data: { trialEndsAt: date, status: 'trial' },
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.organization.update({
+        where: { id },
+        data: { trialEndsAt: date, status: 'trial' },
+      });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_organization.trial_updated',
+        resourceType: 'organization',
+        resourceKey: org.id,
+        previousValue: JSON.stringify({ trialEndsAt: org.trialEndsAt, status: org.status }),
+        newValue: JSON.stringify({ trialEndsAt: result.trialEndsAt, status: result.status }),
+        outcome: 'success',
+      });
+      return result;
     });
     res.json({ id: updated.id, trialEndsAt: updated.trialEndsAt, status: updated.status });
   } catch {
@@ -608,7 +653,7 @@ router.post('/clinics', async (req: PlatformAdminRequest, res: Response) => {
         data: { name, slug: slugClean, status: 'active', planId: planId ?? null },
       });
 
-      return tx.clinic.create({
+      const created = await tx.clinic.create({
         data: {
           organizationId: org.id,
           name,
@@ -625,6 +670,23 @@ router.post('/clinics', async (req: PlatformAdminRequest, res: Response) => {
           maxPatients: maxPatients ?? 500,
         },
       });
+
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_clinic.created',
+        resourceType: 'clinic',
+        resourceKey: created.id,
+        previousValue: null,
+        newValue: JSON.stringify({
+          name: created.name,
+          slug: created.slug,
+          organizationId: created.organizationId,
+          planId: created.planId,
+        }),
+        outcome: 'success',
+      });
+
+      return created;
     });
 
     res.status(201).json(clinic);
@@ -634,8 +696,8 @@ router.post('/clinics', async (req: PlatformAdminRequest, res: Response) => {
 });
 
 // PATCH /api/platform/clinics/:id/status
-router.patch('/clinics/:id/status', async (req, res: Response) => {
-  const { id } = req.params;
+router.patch('/clinics/:id/status', async (req: PlatformAdminRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { status } = req.body;
 
   const allowed = ['trial', 'active', 'suspended', 'cancelled'];
@@ -647,7 +709,19 @@ router.patch('/clinics/:id/status', async (req, res: Response) => {
     const clinic = await prisma.clinic.findUnique({ where: { id } });
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
-    const updated = await prisma.clinic.update({ where: { id }, data: { status } });
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.clinic.update({ where: { id }, data: { status } });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_clinic.status_updated',
+        resourceType: 'clinic',
+        resourceKey: clinic.id,
+        previousValue: clinic.status,
+        newValue: result.status,
+        outcome: 'success',
+      });
+      return result;
+    });
     res.json({ id: updated.id, status: updated.status });
   } catch {
     res.status(500).json({ error: 'Failed to update clinic status' });
@@ -655,8 +729,8 @@ router.patch('/clinics/:id/status', async (req, res: Response) => {
 });
 
 // PATCH /api/platform/clinics/:id/plan
-router.patch('/clinics/:id/plan', async (req, res: Response) => {
-  const { id } = req.params;
+router.patch('/clinics/:id/plan', async (req: PlatformAdminRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { planId, maxUsers, maxPatients } = req.body;
 
   try {
@@ -668,7 +742,19 @@ router.patch('/clinics/:id/plan', async (req, res: Response) => {
     if (maxUsers !== undefined) data.maxUsers = maxUsers;
     if (maxPatients !== undefined) data.maxPatients = maxPatients;
 
-    const updated = await prisma.clinic.update({ where: { id }, data });
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.clinic.update({ where: { id }, data });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_clinic.plan_updated',
+        resourceType: 'clinic',
+        resourceKey: clinic.id,
+        previousValue: JSON.stringify({ planId: clinic.planId, maxUsers: clinic.maxUsers, maxPatients: clinic.maxPatients }),
+        newValue: JSON.stringify({ planId: result.planId, maxUsers: result.maxUsers, maxPatients: result.maxPatients }),
+        outcome: 'success',
+      });
+      return result;
+    });
     res.json(updated);
   } catch {
     res.status(500).json({ error: 'Failed to update clinic plan' });
@@ -678,8 +764,8 @@ router.patch('/clinics/:id/plan', async (req, res: Response) => {
 // PATCH /api/platform/clinics/:id/sms-addon — sell/enable the SMS add-on,
 // set monthly quota, allowed destination regions, and routing policy.
 // Clinics cannot edit any of this — it is sold/configured by platform admin.
-router.patch('/clinics/:id/sms-addon', async (req, res: Response) => {
-  const { id } = req.params;
+router.patch('/clinics/:id/sms-addon', async (req: PlatformAdminRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { addonEnabled, monthlyQuota, turkeyAllowed, europeAllowed, routingPolicy } = req.body;
 
   if (addonEnabled !== undefined && typeof addonEnabled !== 'boolean') {
@@ -702,28 +788,57 @@ router.patch('/clinics/:id/sms-addon', async (req, res: Response) => {
     const clinic = await prisma.clinic.findUnique({ where: { id }, select: { id: true, organizationId: true } });
     if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
 
-    const settings = await prisma.clinicSmsSettings.upsert({
-      where: { clinicId: id },
-      update: {
-        ...(addonEnabled !== undefined ? { addonEnabled } : {}),
-        ...(monthlyQuota !== undefined ? { monthlyQuota } : {}),
-        ...(turkeyAllowed !== undefined ? { turkeyAllowed } : {}),
-        ...(europeAllowed !== undefined ? { europeAllowed } : {}),
-        ...(routingPolicy !== undefined ? { routingPolicy } : {}),
-      },
-      create: {
-        clinicId: id,
-        organizationId: clinic.organizationId,
-        addonEnabled: addonEnabled ?? false,
-        monthlyQuota: monthlyQuota ?? 0,
-        turkeyAllowed: turkeyAllowed ?? false,
-        europeAllowed: europeAllowed ?? false,
-        routingPolicy: routingPolicy ?? 'automatic_by_recipient_phone_region',
-      },
-      select: {
-        clinicId: true, addonEnabled: true, monthlyQuota: true,
-        turkeyAllowed: true, europeAllowed: true, routingPolicy: true,
-      },
+    const settings = await prisma.$transaction(async (tx) => {
+      const existing = await tx.clinicSmsSettings.findUnique({
+        where: { clinicId: id },
+        select: {
+          addonEnabled: true, monthlyQuota: true,
+          turkeyAllowed: true, europeAllowed: true, routingPolicy: true,
+        },
+      });
+
+      const updated = await tx.clinicSmsSettings.upsert({
+        where: { clinicId: id },
+        update: {
+          ...(addonEnabled !== undefined ? { addonEnabled } : {}),
+          ...(monthlyQuota !== undefined ? { monthlyQuota } : {}),
+          ...(turkeyAllowed !== undefined ? { turkeyAllowed } : {}),
+          ...(europeAllowed !== undefined ? { europeAllowed } : {}),
+          ...(routingPolicy !== undefined ? { routingPolicy } : {}),
+        },
+        create: {
+          clinicId: id,
+          organizationId: clinic.organizationId,
+          addonEnabled: addonEnabled ?? false,
+          monthlyQuota: monthlyQuota ?? 0,
+          turkeyAllowed: turkeyAllowed ?? false,
+          europeAllowed: europeAllowed ?? false,
+          routingPolicy: routingPolicy ?? 'automatic_by_recipient_phone_region',
+        },
+        select: {
+          clinicId: true, addonEnabled: true, monthlyQuota: true,
+          turkeyAllowed: true, europeAllowed: true, routingPolicy: true,
+        },
+      });
+
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_clinic.sms_addon_updated',
+        resourceType: 'clinic',
+        resourceKey: clinic.id,
+        previousValue: existing ? JSON.stringify(existing) : null,
+        newValue: JSON.stringify({
+          addonEnabled: updated.addonEnabled,
+          monthlyQuota: updated.monthlyQuota,
+          turkeyAllowed: updated.turkeyAllowed,
+          europeAllowed: updated.europeAllowed,
+          routingPolicy: updated.routingPolicy,
+        }),
+        outcome: 'success',
+        safeMetadata: { isNew: !existing },
+      });
+
+      return updated;
     });
     res.json(settings);
   } catch {
@@ -992,8 +1107,8 @@ router.get('/users', async (req, res: Response) => {
 });
 
 // PATCH /api/platform/users/:id/status
-router.patch('/users/:id/status', async (req, res: Response) => {
-  const { id } = req.params;
+router.patch('/users/:id/status', async (req: PlatformAdminRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { isActive } = req.body;
 
   if (typeof isActive !== 'boolean') {
@@ -1004,7 +1119,21 @@ router.patch('/users/:id/status', async (req, res: Response) => {
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const updated = await prisma.user.update({ where: { id }, data: { isActive } });
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.user.update({ where: { id }, data: { isActive } });
+      // resourceKey is the user's id — never their email — per this task's
+      // PII-minimization contract.
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_user.status_updated',
+        resourceType: 'user',
+        resourceKey: user.id,
+        previousValue: String(user.isActive),
+        newValue: String(result.isActive),
+        outcome: 'success',
+      });
+      return result;
+    });
     res.json({ id: updated.id, isActive: updated.isActive });
   } catch {
     res.status(500).json({ error: 'Failed to update user status' });
@@ -1027,7 +1156,7 @@ router.get('/plans', async (_req, res: Response) => {
 });
 
 // POST /api/platform/plans
-router.post('/plans', async (req, res: Response) => {
+router.post('/plans', async (req: PlatformAdminRequest, res: Response) => {
   const { name, displayName, maxUsers, maxPatients, features, monthlyPrice, isActive } = req.body;
 
   if (!name || !displayName || maxUsers == null || maxPatients == null) {
@@ -1035,16 +1164,32 @@ router.post('/plans', async (req, res: Response) => {
   }
 
   try {
-    const plan = await prisma.plan.create({
-      data: {
-        name: name.toLowerCase(),
-        displayName,
-        maxUsers,
-        maxPatients,
-        features: features ?? {},
-        monthlyPrice: monthlyPrice ?? 0,
-        isActive: isActive ?? true,
-      },
+    const plan = await prisma.$transaction(async (tx) => {
+      const created = await tx.plan.create({
+        data: {
+          name: name.toLowerCase(),
+          displayName,
+          maxUsers,
+          maxPatients,
+          features: features ?? {},
+          monthlyPrice: monthlyPrice ?? 0,
+          isActive: isActive ?? true,
+        },
+      });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_plan.created',
+        resourceType: 'plan',
+        resourceKey: created.id,
+        previousValue: null,
+        newValue: JSON.stringify({
+          name: created.name, displayName: created.displayName,
+          maxUsers: created.maxUsers, maxPatients: created.maxPatients,
+          monthlyPrice: created.monthlyPrice, isActive: created.isActive,
+        }),
+        outcome: 'success',
+      });
+      return created;
     });
     res.status(201).json(plan);
   } catch {
@@ -1053,8 +1198,8 @@ router.post('/plans', async (req, res: Response) => {
 });
 
 // PUT /api/platform/plans/:id
-router.put('/plans/:id', async (req, res: Response) => {
-  const { id } = req.params;
+router.put('/plans/:id', async (req: PlatformAdminRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { displayName, maxUsers, maxPatients, features, monthlyPrice, isActive } = req.body;
 
   try {
@@ -1069,7 +1214,25 @@ router.put('/plans/:id', async (req, res: Response) => {
     if (monthlyPrice !== undefined) data.monthlyPrice = monthlyPrice;
     if (isActive !== undefined) data.isActive = isActive;
 
-    const updated = await prisma.plan.update({ where: { id }, data });
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.plan.update({ where: { id }, data });
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_plan.updated',
+        resourceType: 'plan',
+        resourceKey: existing.id,
+        previousValue: JSON.stringify({
+          displayName: existing.displayName, maxUsers: existing.maxUsers,
+          maxPatients: existing.maxPatients, monthlyPrice: existing.monthlyPrice, isActive: existing.isActive,
+        }),
+        newValue: JSON.stringify({
+          displayName: result.displayName, maxUsers: result.maxUsers,
+          maxPatients: result.maxPatients, monthlyPrice: result.monthlyPrice, isActive: result.isActive,
+        }),
+        outcome: 'success',
+      });
+      return result;
+    });
     res.json(updated);
   } catch {
     res.status(500).json({ error: 'Failed to update plan' });
@@ -1792,17 +1955,43 @@ router.get('/file-backups/status', async (_req, res: Response) => {
 });
 
 // POST /api/platform/file-backups/run
+//
+// F3-IMPL-005: the file-backup counterpart of /backups/run (F3-IMPL-001,
+// R-019) never got the same durable-audit treatment. Same best-effort
+// pattern: the underlying operation already succeeded/failed on its own
+// merits by the time the audit write runs, so a failed audit write is
+// logged but never blocks the response.
 router.post('/file-backups/run', async (req: PlatformAdminRequest, res: Response) => {
+  const actorPlatformAdminId = req.platformAdmin?.id ?? null;
   try {
     const { runFileBackup, isFileBackupRunning } = await import('../services/fileBackupService.js');
     if (isFileBackupRunning()) {
       return res.status(409).json({ error: 'A file backup run is already in progress' });
     }
-    console.log(`[platform-file-backup] Manual backup run triggered by admin ${req.platformAdmin?.id}`);
+    console.log(`[platform-file-backup] Manual backup run triggered by admin ${actorPlatformAdminId}`);
     const result = await runFileBackup({ trigger: 'manual' });
+    await writePlatformAdminAuditEvent({
+      actorPlatformAdminId,
+      action: 'file_backup.manual_run.completed',
+      resourceType: 'file_backup',
+      resourceKey: 'files',
+      outcome: 'success',
+    }).catch((auditErr) => {
+      console.error('[platform-file-backup] Failed to write audit event for completed manual backup run', safeErrorFields(auditErr));
+    });
     res.json(result);
   } catch (err: any) {
     const status = err?.message?.includes('disabled') || err?.message?.includes('No file backup destination') ? 409 : 500;
+    await writePlatformAdminAuditEvent({
+      actorPlatformAdminId,
+      action: 'file_backup.manual_run.failed',
+      resourceType: 'file_backup',
+      resourceKey: 'files',
+      outcome: 'error',
+      safeMetadata: { errorType: boundedErrorType(err) },
+    }).catch((auditErr) => {
+      console.error('[platform-file-backup] Failed to write audit event for failed manual backup run', safeErrorFields(auditErr));
+    });
     res.status(status).json({ error: `File backup run failed: ${err?.message ?? 'Unknown error'}` });
   }
 });
@@ -1813,15 +2002,36 @@ router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest,
   if (sampleSize !== undefined && (typeof sampleSize !== 'number' || !Number.isFinite(sampleSize) || sampleSize <= 0)) {
     return res.status(400).json({ error: 'sampleSize must be a positive number' });
   }
+  const actorPlatformAdminId = req.platformAdmin?.id ?? null;
   try {
     const { runFileBackupRestoreRehearsal, isFileBackupRestoreRehearsalRunning } = await import('../services/fileBackupService.js');
     if (isFileBackupRestoreRehearsalRunning()) {
       return res.status(409).json({ error: 'A restore rehearsal is already running' });
     }
-    console.log(`[platform-file-backup] Restore rehearsal triggered by admin ${req.platformAdmin?.id}`);
+    console.log(`[platform-file-backup] Restore rehearsal triggered by admin ${actorPlatformAdminId}`);
     const result = await runFileBackupRestoreRehearsal(sampleSize);
+    await writePlatformAdminAuditEvent({
+      actorPlatformAdminId,
+      action: 'file_backup.restore_rehearsal.completed',
+      resourceType: 'file_backup',
+      resourceKey: 'restore_rehearsal',
+      outcome: 'success',
+      safeMetadata: { sampleSize: sampleSize ?? null },
+    }).catch((auditErr) => {
+      console.error('[platform-file-backup] Failed to write audit event for completed restore rehearsal', safeErrorFields(auditErr));
+    });
     res.json(result);
   } catch (err: any) {
+    await writePlatformAdminAuditEvent({
+      actorPlatformAdminId,
+      action: 'file_backup.restore_rehearsal.failed',
+      resourceType: 'file_backup',
+      resourceKey: 'restore_rehearsal',
+      outcome: 'error',
+      safeMetadata: { sampleSize: sampleSize ?? null, errorType: boundedErrorType(err) },
+    }).catch((auditErr) => {
+      console.error('[platform-file-backup] Failed to write audit event for failed restore rehearsal', safeErrorFields(auditErr));
+    });
     res.status(500).json({ error: err?.message ?? 'Restore rehearsal failed' });
   }
 });

@@ -36,6 +36,7 @@
 // first removes the ordering dependency entirely.
 import 'dotenv/config';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
@@ -1862,6 +1863,605 @@ await test('PATCH /privacy/data-retention/settings: setting update and audit ins
 
 await cleanDrAuditRows();
 await prisma.platformSetting.deleteMany({ where: { key: DATA_RETENTION_RUNTIME_SETTING_KEY } });
+
+// ── Organization / Clinic / Plan / User Lifecycle — class 4 (F3-IMPL-005) ────
+//
+// The last unaudited class of platform-admin mutations (R-019), deferred by
+// F3-IMPL-003 (see its evidence file §4/§12 — the exact same 10 routes).
+// Same pattern proven above for sms-providers/data-retention: the target row
+// is looked up first (structurally guards a not-found id before any
+// transaction opens — the same accepted precedent already used by the MFA
+// routes above), then the mutation and its audit row commit atomically in
+// the same prisma.$transaction — see platformAdminAudit.ts.
+
+section('Organization / Clinic / Plan / User Lifecycle — durable audit trail (F3-IMPL-005)');
+
+const F5_ADMIN_ID = 'admin-lifecycle-audit-f3impl005';
+await prisma.platformAdmin.upsert({
+  where: { id: F5_ADMIN_ID },
+  update: {},
+  create: {
+    id: F5_ADMIN_ID,
+    email: `${F5_ADMIN_ID}-fixture@platform.test`,
+    passwordHash: 'not-a-real-hash-test-fixture-only',
+    name: 'Test Fixture Platform Admin (Lifecycle Audit)',
+  },
+});
+
+function f5Req(body: Record<string, unknown> = {}, params: Record<string, string> = {}, id: string = F5_ADMIN_ID) {
+  return { body, params, platformAdmin: { id, email: `${id}@platform.test` } } as any;
+}
+
+async function auditRowsFor(resourceType: string, resourceKey: string) {
+  return prisma.platformAdminAuditEvent.findMany({
+    where: { resourceType, resourceKey },
+    orderBy: { createdAt: 'asc' },
+  });
+}
+
+// One org + one clinic + one user, reused (and mutated in place) across this
+// section's PATCH tests; two distinct plans so PATCH .../plan has something
+// real to switch between.
+const f5Suffix = randomUUID().slice(0, 8);
+const f5PlanA = await prisma.plan.create({
+  data: { name: `f3impl005-plan-a-${f5Suffix}`, displayName: 'F3-IMPL-005 Plan A', maxUsers: 5, maxPatients: 100, features: {}, monthlyPrice: 0, isActive: true },
+});
+const f5PlanB = await prisma.plan.create({
+  data: { name: `f3impl005-plan-b-${f5Suffix}`, displayName: 'F3-IMPL-005 Plan B', maxUsers: 10, maxPatients: 200, features: {}, monthlyPrice: 10, isActive: true },
+});
+const f5Org = await prisma.organization.create({
+  data: { name: 'F3-IMPL-005 Test Org', slug: `f3impl005-org-${f5Suffix}`, status: 'trial', planId: f5PlanA.id },
+});
+const f5Clinic = await prisma.clinic.create({
+  data: { name: 'F3-IMPL-005 Test Clinic', slug: `f3impl005-clinic-${f5Suffix}`, organizationId: f5Org.id, status: 'trial', planId: f5PlanA.id },
+});
+const f5User = await prisma.user.create({
+  data: {
+    firstName: 'F5', lastName: 'Fixture', email: `f3impl005-user-${f5Suffix}@example.test`,
+    passwordHash: 'not-a-real-hash-test-fixture-only', role: 'RECEPTIONIST',
+    clinicId: f5Clinic.id, organizationId: f5Org.id, isActive: true,
+  },
+});
+
+// ── PATCH /organizations/:id/status ──
+
+await test('PATCH /organizations/:id/status: success updates status and creates exactly one platform_organization.status_updated audit row', async () => {
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { resourceType: 'organization', resourceKey: f5Org.id } });
+  await prisma.organization.update({ where: { id: f5Org.id }, data: { status: 'trial' } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/status');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ status: 'active' }, { id: f5Org.id }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.status, 'active');
+
+  const rows = await auditRowsFor('organization', f5Org.id);
+  assert.equal(rows.length, 1);
+  const row = rows[0]!;
+  assert.equal(row.action, 'platform_organization.status_updated');
+  assert.equal(row.actorPlatformAdminId, F5_ADMIN_ID);
+  assert.equal(row.previousValue, 'trial');
+  assert.equal(row.newValue, 'active');
+  assert.equal(row.outcome, 'success');
+  assert.ok(!JSON.stringify(row).includes('@'), 'must never contain an email/identity string — only the opaque platformAdminId');
+});
+
+await test('PATCH /organizations/:id/status: invalid status value is rejected (400) with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'organization', resourceKey: f5Org.id } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/status');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ status: 'not-a-real-status' }, { id: f5Org.id }), res);
+  assert.equal(res.statusCode, 400);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'organization', resourceKey: f5Org.id } });
+  assert.equal(after, before);
+});
+
+await test('PATCH /organizations/:id/status: non-existent organization id is rejected (404) with no audit row', async () => {
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/status');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ status: 'active' }, { id: 'does-not-exist-org-id' }), res);
+  assert.equal(res.statusCode, 404);
+  const count = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'organization', resourceKey: 'does-not-exist-org-id' } });
+  assert.equal(count, 0);
+});
+
+await test('PATCH /organizations/:id/status: forced audit-insert failure (non-existent actor id) rolls back the status change too — atomic, not best-effort', async () => {
+  await prisma.organization.update({ where: { id: f5Org.id }, data: { status: 'active' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/status');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-org-status-ghost';
+  await runChain(chain, f5Req({ status: 'suspended' }, { id: f5Org.id }, ghostId), res);
+  assert.equal(res.statusCode, 500, 'the FK-violating audit insert must fail the whole request rather than silently succeed');
+
+  const after = await prisma.organization.findUnique({ where: { id: f5Org.id } });
+  assert.equal(after?.status, 'active', 'organization status must remain unchanged when the audit insert fails inside the same transaction');
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+// ── PATCH /organizations/:id/plan ──
+
+await test('PATCH /organizations/:id/plan: success updates planId and creates exactly one platform_organization.plan_updated audit row', async () => {
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { resourceType: 'organization', resourceKey: f5Org.id, action: 'platform_organization.plan_updated' } });
+  await prisma.organization.update({ where: { id: f5Org.id }, data: { planId: f5PlanA.id } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/plan');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ planId: f5PlanB.id }, { id: f5Org.id }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({ where: { resourceType: 'organization', resourceKey: f5Org.id, action: 'platform_organization.plan_updated' } });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.previousValue, f5PlanA.id);
+  assert.equal(rows[0]!.newValue, f5PlanB.id);
+  assert.equal(rows[0]!.outcome, 'success');
+});
+
+await test('PATCH /organizations/:id/plan: missing planId is rejected (400) with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'organization', resourceKey: f5Org.id, action: 'platform_organization.plan_updated' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/plan');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({}, { id: f5Org.id }), res);
+  assert.equal(res.statusCode, 400);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'organization', resourceKey: f5Org.id, action: 'platform_organization.plan_updated' } });
+  assert.equal(after, before);
+});
+
+await test('PATCH /organizations/:id/plan: non-existent plan id is rejected (404) with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'organization', resourceKey: f5Org.id, action: 'platform_organization.plan_updated' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/plan');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ planId: 'does-not-exist-plan-id' }, { id: f5Org.id }), res);
+  assert.equal(res.statusCode, 404);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'organization', resourceKey: f5Org.id, action: 'platform_organization.plan_updated' } });
+  assert.equal(after, before);
+});
+
+await test('PATCH /organizations/:id/plan: forced audit-insert failure (non-existent actor id) rolls back the plan change too', async () => {
+  await prisma.organization.update({ where: { id: f5Org.id }, data: { planId: f5PlanB.id } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/plan');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-org-plan-ghost';
+  await runChain(chain, f5Req({ planId: f5PlanA.id }, { id: f5Org.id }, ghostId), res);
+  assert.equal(res.statusCode, 500);
+
+  const after = await prisma.organization.findUnique({ where: { id: f5Org.id } });
+  assert.equal(after?.planId, f5PlanB.id, 'organization planId must remain unchanged when the audit insert fails inside the same transaction');
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+// ── PATCH /organizations/:id/trial ──
+
+await test('PATCH /organizations/:id/trial: success updates trialEndsAt+status and creates exactly one platform_organization.trial_updated audit row', async () => {
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { resourceType: 'organization', resourceKey: f5Org.id, action: 'platform_organization.trial_updated' } });
+  await prisma.organization.update({ where: { id: f5Org.id }, data: { status: 'active', trialEndsAt: null } });
+
+  const newTrialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/trial');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ trialEndsAt: newTrialEnd }, { id: f5Org.id }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.status, 'trial');
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({ where: { resourceType: 'organization', resourceKey: f5Org.id, action: 'platform_organization.trial_updated' } });
+  assert.equal(rows.length, 1);
+  const previous = JSON.parse(rows[0]!.previousValue!);
+  const next = JSON.parse(rows[0]!.newValue!);
+  assert.equal(previous.trialEndsAt, null);
+  assert.equal(previous.status, 'active');
+  assert.equal(next.status, 'trial');
+  assert.ok(next.trialEndsAt);
+});
+
+await test('PATCH /organizations/:id/trial: missing/invalid trialEndsAt is rejected (400) with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'organization', resourceKey: f5Org.id, action: 'platform_organization.trial_updated' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/trial');
+  for (const badBody of [{}, { trialEndsAt: 'not-a-date' }]) {
+    const res = mockPlatformRes();
+    await runChain(chain, f5Req(badBody, { id: f5Org.id }), res);
+    assert.equal(res.statusCode, 400, `expected 400 for payload ${JSON.stringify(badBody)}`);
+  }
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'organization', resourceKey: f5Org.id, action: 'platform_organization.trial_updated' } });
+  assert.equal(after, before);
+});
+
+await test('PATCH /organizations/:id/trial: forced audit-insert failure (non-existent actor id) rolls back the trial change too', async () => {
+  const before = await prisma.organization.findUniqueOrThrow({ where: { id: f5Org.id } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/organizations/:id/trial');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-org-trial-ghost';
+  await runChain(chain, f5Req({ trialEndsAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() }, { id: f5Org.id }, ghostId), res);
+  assert.equal(res.statusCode, 500);
+
+  const after = await prisma.organization.findUnique({ where: { id: f5Org.id } });
+  assert.equal(after?.trialEndsAt?.getTime(), before.trialEndsAt?.getTime(), 'trialEndsAt must remain unchanged when the audit insert fails inside the same transaction');
+  assert.equal(after?.status, before.status);
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+// ── POST /clinics ──
+
+await test('POST /clinics: success creates org+clinic and exactly one platform_clinic.created audit row (previousValue=null)', async () => {
+  const slug = `f3impl005-post-clinic-${randomUUID().slice(0, 8)}`;
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/clinics');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ name: 'F3-IMPL-005 New Clinic', slug }, {}), res);
+  assert.equal(res.statusCode, 201);
+  const clinicId = res.body.id;
+
+  const rows = await auditRowsFor('clinic', clinicId);
+  assert.equal(rows.length, 1);
+  const row = rows[0]!;
+  assert.equal(row.action, 'platform_clinic.created');
+  assert.equal(row.actorPlatformAdminId, F5_ADMIN_ID);
+  assert.equal(row.previousValue, null);
+  const newValue = JSON.parse(row.newValue!);
+  assert.equal(newValue.slug, slug);
+  assert.ok(newValue.organizationId);
+
+  await prisma.clinic.delete({ where: { id: clinicId } });
+  await prisma.organization.delete({ where: { id: newValue.organizationId } });
+});
+
+await test('POST /clinics: missing required fields is rejected (400) with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { action: 'platform_clinic.created' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/clinics');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({}, {}), res);
+  assert.equal(res.statusCode, 400);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { action: 'platform_clinic.created' } });
+  assert.equal(after, before);
+});
+
+await test('POST /clinics: duplicate slug is rejected (409) with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { action: 'platform_clinic.created' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/clinics');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ name: 'Duplicate', slug: f5Clinic.slug }, {}), res);
+  assert.equal(res.statusCode, 409);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { action: 'platform_clinic.created' } });
+  assert.equal(after, before);
+});
+
+await test('POST /clinics: forced audit-insert failure (non-existent actor id) rolls back BOTH the new organization and the new clinic', async () => {
+  const slug = `f3impl005-ghost-clinic-${randomUUID().slice(0, 8)}`;
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/clinics');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-clinic-create-ghost';
+  await runChain(chain, f5Req({ name: 'Should Not Persist', slug }, {}, ghostId), res);
+  assert.equal(res.statusCode, 500, 'the FK-violating audit insert must fail the whole request rather than silently succeed');
+
+  const clinic = await prisma.clinic.findFirst({ where: { slug } });
+  assert.equal(clinic, null, 'no clinic row may survive when the audit insert fails inside the same transaction');
+  const org = await prisma.organization.findFirst({ where: { slug } });
+  assert.equal(org, null, 'no organization row may survive either — both were created in the same transaction');
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+// ── PATCH /clinics/:id/status ──
+
+await test('PATCH /clinics/:id/status: success updates status and creates exactly one platform_clinic.status_updated audit row', async () => {
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.status_updated' } });
+  await prisma.clinic.update({ where: { id: f5Clinic.id }, data: { status: 'trial' } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/status');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ status: 'active' }, { id: f5Clinic.id }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({ where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.status_updated' } });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.previousValue, 'trial');
+  assert.equal(rows[0]!.newValue, 'active');
+});
+
+await test('PATCH /clinics/:id/status: invalid status is rejected (400) with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.status_updated' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/status');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ status: 'bogus' }, { id: f5Clinic.id }), res);
+  assert.equal(res.statusCode, 400);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.status_updated' } });
+  assert.equal(after, before);
+});
+
+await test('PATCH /clinics/:id/status: non-existent clinic id is rejected (404) with no audit row', async () => {
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/status');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ status: 'active' }, { id: 'does-not-exist-clinic-id' }), res);
+  assert.equal(res.statusCode, 404);
+  const count = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'clinic', resourceKey: 'does-not-exist-clinic-id' } });
+  assert.equal(count, 0);
+});
+
+await test('PATCH /clinics/:id/status: forced audit-insert failure (non-existent actor id) rolls back the status change too', async () => {
+  await prisma.clinic.update({ where: { id: f5Clinic.id }, data: { status: 'active' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/status');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-clinic-status-ghost';
+  await runChain(chain, f5Req({ status: 'suspended' }, { id: f5Clinic.id }, ghostId), res);
+  assert.equal(res.statusCode, 500);
+
+  const after = await prisma.clinic.findUnique({ where: { id: f5Clinic.id } });
+  assert.equal(after?.status, 'active', 'clinic status must remain unchanged when the audit insert fails inside the same transaction');
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+// ── PATCH /clinics/:id/plan ──
+
+await test('PATCH /clinics/:id/plan: success updates plan/limits and creates exactly one platform_clinic.plan_updated audit row', async () => {
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.plan_updated' } });
+  await prisma.clinic.update({ where: { id: f5Clinic.id }, data: { planId: f5PlanA.id, maxUsers: 5, maxPatients: 100 } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/plan');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ planId: f5PlanB.id, maxUsers: 10, maxPatients: 200 }, { id: f5Clinic.id }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({ where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.plan_updated' } });
+  assert.equal(rows.length, 1);
+  const previous = JSON.parse(rows[0]!.previousValue!);
+  const next = JSON.parse(rows[0]!.newValue!);
+  assert.equal(previous.planId, f5PlanA.id);
+  assert.equal(previous.maxUsers, 5);
+  assert.equal(next.planId, f5PlanB.id);
+  assert.equal(next.maxUsers, 10);
+});
+
+await test('PATCH /clinics/:id/plan: non-existent clinic id is rejected (404) with no audit row', async () => {
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/plan');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ planId: f5PlanA.id }, { id: 'does-not-exist-clinic-id' }), res);
+  assert.equal(res.statusCode, 404);
+  const count = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'clinic', resourceKey: 'does-not-exist-clinic-id', action: 'platform_clinic.plan_updated' } });
+  assert.equal(count, 0);
+});
+
+await test('PATCH /clinics/:id/plan: forced audit-insert failure (non-existent actor id) rolls back the plan/limit change too', async () => {
+  const before = await prisma.clinic.findUniqueOrThrow({ where: { id: f5Clinic.id } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/plan');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-clinic-plan-ghost';
+  await runChain(chain, f5Req({ planId: f5PlanA.id, maxUsers: 999 }, { id: f5Clinic.id }, ghostId), res);
+  assert.equal(res.statusCode, 500);
+
+  const after = await prisma.clinic.findUnique({ where: { id: f5Clinic.id } });
+  assert.equal(after?.planId, before.planId, 'clinic planId must remain unchanged when the audit insert fails inside the same transaction');
+  assert.equal(after?.maxUsers, before.maxUsers);
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+// ── PATCH /clinics/:id/sms-addon ──
+
+await test('PATCH /clinics/:id/sms-addon: first call creates settings with previousValue=null and safeMetadata.isNew=true', async () => {
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.sms_addon_updated' } });
+  await prisma.clinicSmsSettings.deleteMany({ where: { clinicId: f5Clinic.id } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/sms-addon');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ addonEnabled: true, monthlyQuota: 100 }, { id: f5Clinic.id }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({ where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.sms_addon_updated' } });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.previousValue, null);
+  assert.equal((rows[0]!.safeMetadata as any)?.isNew, true);
+  assert.ok(JSON.parse(rows[0]!.newValue!).addonEnabled === true);
+});
+
+await test('PATCH /clinics/:id/sms-addon: second call updates existing settings with accurate previous/new snapshots', async () => {
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/sms-addon');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ addonEnabled: false, monthlyQuota: 50 }, { id: f5Clinic.id }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({
+    where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.sms_addon_updated' },
+    orderBy: { createdAt: 'asc' },
+  });
+  assert.equal(rows.length, 2);
+  const row = rows[1]!;
+  const previous = JSON.parse(row.previousValue!);
+  const next = JSON.parse(row.newValue!);
+  assert.equal(previous.addonEnabled, true);
+  assert.equal(previous.monthlyQuota, 100);
+  assert.equal(next.addonEnabled, false);
+  assert.equal(next.monthlyQuota, 50);
+  assert.equal((row.safeMetadata as any)?.isNew, false);
+});
+
+await test('PATCH /clinics/:id/sms-addon: invalid payload is rejected (400) with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.sms_addon_updated' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/sms-addon');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ addonEnabled: 'yes' }, { id: f5Clinic.id }), res);
+  assert.equal(res.statusCode, 400);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'clinic', resourceKey: f5Clinic.id, action: 'platform_clinic.sms_addon_updated' } });
+  assert.equal(after, before);
+});
+
+await test('PATCH /clinics/:id/sms-addon: forced audit-insert failure (non-existent actor id) rolls back the settings write too', async () => {
+  const before = await prisma.clinicSmsSettings.findUniqueOrThrow({ where: { clinicId: f5Clinic.id } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/clinics/:id/sms-addon');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-sms-addon-ghost';
+  await runChain(chain, f5Req({ addonEnabled: true, monthlyQuota: 9999 }, { id: f5Clinic.id }, ghostId), res);
+  assert.equal(res.statusCode, 500);
+
+  const after = await prisma.clinicSmsSettings.findUniqueOrThrow({ where: { clinicId: f5Clinic.id } });
+  assert.equal(after.addonEnabled, before.addonEnabled, 'settings must remain unchanged when the audit insert fails inside the same transaction');
+  assert.equal(after.monthlyQuota, before.monthlyQuota);
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+// ── PATCH /users/:id/status ──
+
+await test('PATCH /users/:id/status: success flips isActive and creates exactly one platform_user.status_updated audit row, id-attributed only', async () => {
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { resourceType: 'user', resourceKey: f5User.id } });
+  await prisma.user.update({ where: { id: f5User.id }, data: { isActive: true } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/users/:id/status');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ isActive: false }, { id: f5User.id }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await auditRowsFor('user', f5User.id);
+  assert.equal(rows.length, 1);
+  const row = rows[0]!;
+  assert.equal(row.action, 'platform_user.status_updated');
+  assert.equal(row.previousValue, 'true');
+  assert.equal(row.newValue, 'false');
+  assert.ok(!JSON.stringify(row).includes('@'), 'audit row must never contain the target user\'s email');
+  assert.ok(!JSON.stringify(row).includes(f5User.firstName), 'audit row must never contain the target user\'s name');
+});
+
+await test('PATCH /users/:id/status: non-boolean isActive is rejected (400) with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'user', resourceKey: f5User.id } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/users/:id/status');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ isActive: 'nope' }, { id: f5User.id }), res);
+  assert.equal(res.statusCode, 400);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'user', resourceKey: f5User.id } });
+  assert.equal(after, before);
+});
+
+await test('PATCH /users/:id/status: non-existent user id is rejected (404) with no audit row', async () => {
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/users/:id/status');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ isActive: false }, { id: 'does-not-exist-user-id' }), res);
+  assert.equal(res.statusCode, 404);
+  const count = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'user', resourceKey: 'does-not-exist-user-id' } });
+  assert.equal(count, 0);
+});
+
+await test('PATCH /users/:id/status: forced audit-insert failure (non-existent actor id) rolls back the status change too', async () => {
+  await prisma.user.update({ where: { id: f5User.id }, data: { isActive: false } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'patch', '/users/:id/status');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-user-status-ghost';
+  await runChain(chain, f5Req({ isActive: true }, { id: f5User.id }, ghostId), res);
+  assert.equal(res.statusCode, 500);
+
+  const after = await prisma.user.findUnique({ where: { id: f5User.id } });
+  assert.equal(after?.isActive, false, 'user isActive must remain unchanged when the audit insert fails inside the same transaction');
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+// ── POST /plans ──
+
+await test('POST /plans: success creates a plan and exactly one platform_plan.created audit row (previousValue=null)', async () => {
+  const name = `f3impl005-post-plan-${randomUUID().slice(0, 8)}`;
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/plans');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ name, displayName: 'F3-IMPL-005 Posted Plan', maxUsers: 3, maxPatients: 50 }, {}), res);
+  assert.equal(res.statusCode, 201);
+  const planId = res.body.id;
+
+  const rows = await auditRowsFor('plan', planId);
+  assert.equal(rows.length, 1);
+  const row = rows[0]!;
+  assert.equal(row.action, 'platform_plan.created');
+  assert.equal(row.previousValue, null);
+  const newValue = JSON.parse(row.newValue!);
+  assert.equal(newValue.name, name.toLowerCase());
+  assert.equal(newValue.maxUsers, 3);
+
+  await prisma.plan.delete({ where: { id: planId } });
+});
+
+await test('POST /plans: missing required fields is rejected (400) with no audit row', async () => {
+  const before = await prisma.platformAdminAuditEvent.count({ where: { action: 'platform_plan.created' } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/plans');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ name: 'incomplete' }, {}), res);
+  assert.equal(res.statusCode, 400);
+  const after = await prisma.platformAdminAuditEvent.count({ where: { action: 'platform_plan.created' } });
+  assert.equal(after, before);
+});
+
+await test('POST /plans: forced audit-insert failure (non-existent actor id) rolls back the plan creation too', async () => {
+  const name = `f3impl005-ghost-plan-${randomUUID().slice(0, 8)}`;
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'post', '/plans');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-plan-create-ghost';
+  await runChain(chain, f5Req({ name, displayName: 'Should Not Persist', maxUsers: 1, maxPatients: 1 }, {}, ghostId), res);
+  assert.equal(res.statusCode, 500);
+
+  const plan = await prisma.plan.findUnique({ where: { name: name.toLowerCase() } });
+  assert.equal(plan, null, 'no plan row may survive when the audit insert fails inside the same transaction');
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+// ── PUT /plans/:id ──
+
+await test('PUT /plans/:id: success updates fields and creates exactly one platform_plan.updated audit row with accurate previous/new snapshots', async () => {
+  await prisma.platformAdminAuditEvent.deleteMany({ where: { resourceType: 'plan', resourceKey: f5PlanB.id, action: 'platform_plan.updated' } });
+  await prisma.plan.update({ where: { id: f5PlanB.id }, data: { displayName: 'F3-IMPL-005 Plan B', maxUsers: 10 } });
+
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'put', '/plans/:id');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ displayName: 'F3-IMPL-005 Plan B Renamed', maxUsers: 20 }, { id: f5PlanB.id }), res);
+  assert.equal(res.statusCode, 200);
+
+  const rows = await prisma.platformAdminAuditEvent.findMany({ where: { resourceType: 'plan', resourceKey: f5PlanB.id, action: 'platform_plan.updated' } });
+  assert.equal(rows.length, 1);
+  const previous = JSON.parse(rows[0]!.previousValue!);
+  const next = JSON.parse(rows[0]!.newValue!);
+  assert.equal(previous.displayName, 'F3-IMPL-005 Plan B');
+  assert.equal(previous.maxUsers, 10);
+  assert.equal(next.displayName, 'F3-IMPL-005 Plan B Renamed');
+  assert.equal(next.maxUsers, 20);
+});
+
+await test('PUT /plans/:id: non-existent plan id is rejected (404) with no audit row', async () => {
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'put', '/plans/:id');
+  const res = mockPlatformRes();
+  await runChain(chain, f5Req({ displayName: 'X' }, { id: 'does-not-exist-plan-id' }), res);
+  assert.equal(res.statusCode, 404);
+  const count = await prisma.platformAdminAuditEvent.count({ where: { resourceType: 'plan', resourceKey: 'does-not-exist-plan-id' } });
+  assert.equal(count, 0);
+});
+
+await test('PUT /plans/:id: forced audit-insert failure (non-existent actor id) rolls back the field update too', async () => {
+  const before = await prisma.plan.findUniqueOrThrow({ where: { id: f5PlanB.id } });
+  const chain = getRouteMiddlewareChain(platformAdminRouter as any, 'put', '/plans/:id');
+  const res = mockPlatformRes();
+  const ghostId = 'admin-plan-update-ghost';
+  await runChain(chain, f5Req({ displayName: 'Should Not Persist' }, { id: f5PlanB.id }, ghostId), res);
+  assert.equal(res.statusCode, 500);
+
+  const after = await prisma.plan.findUniqueOrThrow({ where: { id: f5PlanB.id } });
+  assert.equal(after.displayName, before.displayName, 'plan fields must remain unchanged when the audit insert fails inside the same transaction');
+
+  const ghostCount = await prisma.platformAdminAuditEvent.count({ where: { actorPlatformAdminId: ghostId } });
+  assert.equal(ghostCount, 0);
+});
+
+// ── Cleanup ──
+
+await prisma.platformAdminAuditEvent.deleteMany({ where: { resourceKey: { in: [f5Org.id, f5Clinic.id, f5User.id, f5PlanA.id, f5PlanB.id] } } });
+await prisma.clinicSmsSettings.deleteMany({ where: { clinicId: f5Clinic.id } });
+await prisma.user.deleteMany({ where: { id: f5User.id } });
+await prisma.clinic.deleteMany({ where: { id: f5Clinic.id } });
+await prisma.organization.deleteMany({ where: { id: f5Org.id } });
+await prisma.plan.deleteMany({ where: { id: { in: [f5PlanA.id, f5PlanB.id] } } });
 
 // ── Sonuç ─────────────────────────────────────────────────────────────────────
 
