@@ -1,0 +1,929 @@
+[
+  {
+    "file": "server/src/routes/attachments.ts",
+    "line": 87,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "c8e5abb3f300b888",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/attachments.ts",
+    "line": 97,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "da6e58f337938560",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/attachments.ts",
+    "line": 97,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "cfa1cdd020401d2c",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/attachments.ts",
+    "line": 202,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "a29681b5ccd59bb2",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/attachments.ts",
+    "line": 202,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "570ed066b96e0380",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/attachments.ts",
+    "line": 237,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "7417144daa829132",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/attachments.ts",
+    "line": 237,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "b626eddaaf815b6d",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/attachments.ts",
+    "line": 276,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "bf7f8332c0e6f99e",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/attachments.ts",
+    "line": 276,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "9f52debed7bc9c41",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/communicationPreferences.ts",
+    "line": 517,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "a0dcb2efbfd5bb22",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/communicationPreferences.ts",
+    "line": 517,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "9e6246151df4ea53",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/communicationPreferences.ts",
+    "line": 549,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "45b13577c3a9624f",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/communicationPreferences.ts",
+    "line": 549,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "b254af58676074ff",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/contactRequests.ts",
+    "line": 142,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "166c17ce3f99c402",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/contactRequests.ts",
+    "line": 165,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "13ab5f390ba1f591",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/contactRequests.ts",
+    "line": 199,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "51c66934550fdadf",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/contactRequests.ts",
+    "line": 222,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "27812a6d86fcd8f5",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/dashboard.ts",
+    "line": 275,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "e9b2342a743656e0",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/dashboard.ts",
+    "line": 275,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "bb471c6611e01326",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/dentalChart.ts",
+    "line": 41,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "78ead8514bd13b1c",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/dentalChart.ts",
+    "line": 41,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "3322d322fd08dd0f",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/dentalChart.ts",
+    "line": 148,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "4076288cbaf4fe35",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/dentalChart.ts",
+    "line": 148,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "dd7fce9c3ce26c0d",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/financeDashboard.ts",
+    "line": 308,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "06f805dcb087cc41",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/imaging.ts",
+    "line": 126,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "58536b4732912440",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/imaging.ts",
+    "line": 126,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "e97384852f83d75a",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/imagingBridgePublic.ts",
+    "line": 214,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "00903d640dde0995",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/imagingBridgePublic.ts",
+    "line": 214,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "d865ba914f0e7f83",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/imagingBridgePublic.ts",
+    "line": 550,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "6916f2a8b5369ff3",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/imagingBridgePublic.ts",
+    "line": 550,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "9d2ad6ee9fddcc53",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/inventory.ts",
+    "line": 78,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "c94f9e5d8800eac2",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/inventory.ts",
+    "line": 103,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "e7c3c23af39e830f",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/inventory.ts",
+    "line": 136,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "27536aeb659a1c03",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/inventory.ts",
+    "line": 220,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "71598baf8f21a1ab",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/inventory.ts",
+    "line": 369,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "45ef4ca5356ec3c5",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/inventory.ts",
+    "line": 513,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "f07a9abb14e882f9",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/inventory.ts",
+    "line": 543,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "20f11c4e4e419351",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/inventoryUnits.ts",
+    "line": 37,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "cb6ec4d76d51b21f",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/inventoryUnits.ts",
+    "line": 76,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "1a0354a55b93b283",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/inventoryUnits.ts",
+    "line": 120,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "a0bf3dc5fd077709",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/metaWhatsAppWebhook.ts",
+    "line": 333,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "6fbc9593649cbde8",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/noShows.ts",
+    "line": 424,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "34998621a475c0ea",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/operationalMonitoring.ts",
+    "line": 99,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "0823ef1b71f4052d",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/operationalMonitoring.ts",
+    "line": 165,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "1d42ac3cad90917f",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/operationalMonitoring.ts",
+    "line": 211,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "38dd60c8de136993",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/operationalMonitoring.ts",
+    "line": 311,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "439ed114bde0412c",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/organizationDashboard.ts",
+    "line": 194,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "ecb7753c63c6907b",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/organizationDashboard.ts",
+    "line": 194,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "f017ae93200d55cb",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientEmergencyContacts.ts",
+    "line": 172,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "85b10315f3b681c3",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientEmergencyContacts.ts",
+    "line": 172,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "2eaddae467778a16",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientEmergencyContacts.ts",
+    "line": 364,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "4826f80bd4c53ae9",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientEmergencyContacts.ts",
+    "line": 364,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "a105c686dc8ba5af",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientMedicalHistory.ts",
+    "line": 154,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "a075de3c42ec4784",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientMedicalHistory.ts",
+    "line": 154,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "8bb04b0737841387",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientMedicalHistory.ts",
+    "line": 181,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "1f32d8f6ea365051",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientMedicalHistory.ts",
+    "line": 181,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "dd5d9199b70fb063",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientMedicalHistory.ts",
+    "line": 208,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "54821a6472a6efd1",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientMedicalHistory.ts",
+    "line": 208,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "5827cdb08f63acbd",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientPrivacy.ts",
+    "line": 739,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "0d2b102267d38680",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientPrivacy.ts",
+    "line": 739,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "f0f0619112db51d2",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientPrivacy.ts",
+    "line": 770,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "4abcd4e5a60db331",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientPrivacy.ts",
+    "line": 770,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "7876ec730d0b0c93",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientPrivacy.ts",
+    "line": 795,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "5c1d1c8b43e8ce46",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientPrivacy.ts",
+    "line": 795,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "ff78f71d0e01df16",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 275,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "9ee608429c0177c2",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 275,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "8d3f40a0ed95b89f",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 375,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "47d1affe850faa54",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 375,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "9a28d063a695234f",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 409,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "cccca4a69ac24924",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 409,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "e6dc549c6c224663",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patientsImport.ts",
+    "line": 81,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "7dfc907a770d45bc",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/paymentPlans.ts",
+    "line": 96,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "87cce7199cc850ac",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/platformAdmin.ts",
+    "line": 2081,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "eb30fe1d082c53e5",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/platformExternalCalendar.ts",
+    "line": 147,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "eaf2688703f18e36",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/platformExternalCalendar.ts",
+    "line": 206,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "5a68911b2c349ce6",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 122,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "20c5e9bcf31f4156",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 155,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "ba73b59803a93729",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 168,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "cc57e431d34b06bd",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 193,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "64c87b3fb6c0b011",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 260,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "fffc91d0877981b8",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/recall.ts",
+    "line": 153,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "e57287d91d8b9392",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/recall.ts",
+    "line": 153,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "a239214aff39cfed",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/reportExport.ts",
+    "line": 105,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "f3a9039303fc6268",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/reportExport.ts",
+    "line": 166,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "2324b71a55214d9f",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/reports.ts",
+    "line": 149,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "72b222a8a14c252f",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/reports.ts",
+    "line": 215,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "3db43634b447de2c",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/reports.ts",
+    "line": 317,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "5e70fb8f8e610c96",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/reports.ts",
+    "line": 317,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "93628c5356bc6cc8",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/reports.ts",
+    "line": 388,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "ec35e53b753ed1c2",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/reports.ts",
+    "line": 500,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "45b3558524cd05ba",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/usersImport.ts",
+    "line": 90,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "64f477e6361104a6",
+    "reason": "Pre-existing error.message/stack/cause exposure on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/whatsappInbox.ts",
+    "line": 279,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "9a14884a13e52984",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/whatsappInbox.ts",
+    "line": 385,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "2f209f062c962f5c",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/whatsappInbox.ts",
+    "line": 455,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "f1162ef86ab1fcaa",
+    "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 212,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "1f487a921596bf57",
+    "reason": "Pre-existing waErr?.message exposure, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's catch-clause-binding fix (catch bindings are now tracked regardless of variable name, not just err/error) - not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-catch-binding-fix"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 231,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "e6902acf4d50375a",
+    "reason": "Pre-existing igErr?.message exposure, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's catch-clause-binding fix (catch bindings are now tracked regardless of variable name, not just err/error) - not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-catch-binding-fix"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 242,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "c2b338f41e62156d",
+    "reason": "Pre-existing trErr?.message exposure, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's catch-clause-binding fix (catch bindings are now tracked regardless of variable name, not just err/error) - not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-catch-binding-fix"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 258,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "20198191646bcd2d",
+    "reason": "Pre-existing tcErr?.message exposure, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's catch-clause-binding fix (catch bindings are now tracked regardless of variable name, not just err/error) - not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-catch-binding-fix"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 122,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "90c7e0ae503ee523",
+    "reason": "Pre-existing String(err) fallback branch of `err instanceof Error ? err.message : String(err)`, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's safe-wrapper-allowlist fix: call expressions not on the exact allowlist are no longer treated as opaque, so String(err) is now correctly inspected and its raw error argument flagged. Not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-safe-wrapper-fix"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 155,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "47c56d8ba47eeb44",
+    "reason": "Pre-existing String(err) fallback branch of `err instanceof Error ? err.message : String(err)`, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's safe-wrapper-allowlist fix: call expressions not on the exact allowlist are no longer treated as opaque, so String(err) is now correctly inspected and its raw error argument flagged. Not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-safe-wrapper-fix"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 168,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "013fa5f13d274034",
+    "reason": "Pre-existing String(err) fallback branch of `err instanceof Error ? err.message : String(err)`, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's safe-wrapper-allowlist fix: call expressions not on the exact allowlist are no longer treated as opaque, so String(err) is now correctly inspected and its raw error argument flagged. Not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-safe-wrapper-fix"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 193,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "6698f21b23fb9691",
+    "reason": "Pre-existing String(err) fallback branch of `err instanceof Error ? err.message : String(err)`, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's safe-wrapper-allowlist fix: call expressions not on the exact allowlist are no longer treated as opaque, so String(err) is now correctly inspected and its raw error argument flagged. Not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-safe-wrapper-fix"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 260,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "b7b05226fc86db1d",
+    "reason": "Pre-existing String(err) fallback branch of `err instanceof Error ? err.message : String(err)`, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's safe-wrapper-allowlist fix: call expressions not on the exact allowlist are no longer treated as opaque, so String(err) is now correctly inspected and its raw error argument flagged. Not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-safe-wrapper-fix"
+  }
+]
