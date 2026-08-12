@@ -6,7 +6,15 @@
 
 **Evidentiary class:** the production facts in §3 are **user/operator-supplied**. This task performed **no production access** — no SSH, no `pm2` command, no HTTP request to `api.noramedi.com`, no file read on `disklinik-prod-01`. It does not re-derive any supplied figure. This is the same evidentiary class as `F3-PROD-001_PRODUCTION_DEPLOYMENT_AND_VERIFICATION.md`, `KVKK-HIGH-006-PRODUCTION_DEPLOYMENT_AND_SMOKE_VERIFICATION.md`, and the R-061 residual entries in `RISK_REGISTER.md`.
 
-**Revision R1 (2026-08-12, same task, pre-merge, in place).** Revised while PR #402 was still open and unmerged, in response to a reviewer correction. A further set of operator-supplied production evidence — the post-deploy production `npm audit --omit=dev` result, the production Prisma install, and the Prisma engine hash — was supplied after the first draft. The first draft stated that no post-deploy production `npm audit` re-run had been supplied and left **R-075** unchanged on that basis; **that statement was false against the operator evidence and has been removed everywhere it appeared.** The new evidence is recorded in §3.5 and §4 checks 12–13, and it changes exactly **one** risk disposition: **R-075 → `CLOSED`** (§6.5). It changes nothing about R-033 / R-034 / R-040 (all still `OPEN`, §6.1–§6.3), nothing about R-076 / R-077, and nothing about the F3 exit gate, which remains **`NOT SATISFIED`** (§7). Revising in place rather than issuing a `+R1` successor document is correct here because nothing had been merged — the incorrect statement never entered the program record.
+**Revision R2 (2026-08-12, same task, pre-merge, in place).** A second reviewer pass, comparing this document against a competing draft of the same task, produced two ported findings and one deliberate refusal:
+
+1. **`R-034` → `CLOSED`** (§6.2). R1's `OPEN` argument is **withdrawn as over-strict** — it imported R-040's config-*provenance* criterion into a row whose own named missing control is the flag's *value*, which the production `ownsJobs=false` observation verifies directly against `backgroundJobsOwnership.ts`. Registration-level only; execution is not claimed.
+2. **`F3-PROD-001`'s rollback anchor `b21cae91…` is not resolvable** in this repository *or on `origin`* (§5.2) — independently re-verified six ways, including a server-side `not our ref`. Recorded as an evidence correction and an operational follow-up; **no new risk ID minted, no replacement SHA invented, and no claim that rollback was operationally impossible.**
+3. **Refused:** the competing draft's claim that the stale worker was observed running Prisma `7.8.0` is **not ported**. It is not in the supplied evidence; it is labelled `INFERENCE` in §5 and supports no conclusion here.
+
+**Unchanged by R2:** `R-075` `CLOSED`, `R-033` `OPEN`, `R-040` `OPEN`, `R-077` `OPEN`, and **`F3_EXIT_GATE = NOT_SATISFIED`** / `F3_COMPLETE = NO` / `F4_TRANSITION_AUTHORIZED = NO`.
+
+**Revision R1 (2026-08-12, same task, pre-merge, in place).** Revised while PR #402 was still open and unmerged, in response to a reviewer correction. A further set of operator-supplied production evidence — the post-deploy production `npm audit --omit=dev` result, the production Prisma install, and the Prisma engine hash — was supplied after the first draft. The first draft stated that no post-deploy production `npm audit` re-run had been supplied and left **R-075** unchanged on that basis; **that statement was false against the operator evidence and has been removed everywhere it appeared.** The new evidence is recorded in §3.5 and §4 checks 12–13, and it changes exactly **one** risk disposition: **R-075 → `CLOSED`** (§6.5). It changes nothing about R-033 / R-034 / R-040 (all still `OPEN` *as of R1*), nothing about R-076 / R-077, and nothing about the F3 exit gate, which remains **`NOT SATISFIED`** (§7). Revising in place rather than issuing a `+R1` successor document is correct here because nothing had been merged — the incorrect statement never entered the program record.
 
 **However**, §4 records a set of checks this task *did* run — entirely against the repository, with no production access — that **independently corroborate several supplied facts and identify the stale artifact exactly**. Those are labelled `REPOSITORY_VERIFIED` and are separated from the supplied facts throughout.
 
@@ -141,6 +149,35 @@ Per this program's convention, `F3-PROD-001`'s body is **not rewritten in place*
 
 **What is *not* invalidated by this correction:** the deployed SHA, the pre-deploy backup, the migration state (73 migrations, schema up to date), the API health/livez/readyz results, the Platform Admin login check, and the `npm audit` counts behind R-075 are all independent of which deploy script ran, and stand unchanged.
 
+**[R2] Deliberately *not* asserted — the stale worker's Prisma version.** A competing draft of this reconciliation recorded, as *runtime startup evidence*, that the stale worker "still showed Prisma Client v7.8.0". **No such observation exists in the evidence supplied to this task**, which reports a Prisma version only for the **replacement** worker (`7.9.1`). It is a **reasonable `INFERENCE`** — the stale process started before the deploy, when the tree pinned Prisma `7.8.0`, and `npm ci` replaced `node_modules` beneath a process that had already loaded its modules into memory — but an inference is not an observation. It is labelled as such here, is **not** promoted into any table of supplied evidence, and **supports no conclusion in this document**. Every finding in §5 and §6 stands without it.
+
+### 5.2 Second correction **[R2]** — `F3-PROD-001`'s documented rollback anchor is not resolvable in this repository
+
+`F3-PROD-001` records the pre-deploy production revision — and therefore the release-rollback anchor — as `b21cae911a0aa3444ebcd6e714a92c4f0802608a`.
+
+**That SHA exists neither in this repository nor on `origin`.** Independently re-verified by this task at the deployed baseline, six ways, all negative:
+
+| Check | Command | Result |
+|---|---|---|
+| Object type | `git cat-file -t b21cae91…` | `fatal: could not get object info` |
+| Commit resolution | `git rev-parse --verify b21cae91…^{commit}` | `fatal: Needed a single revision` |
+| Containing branches | `git branch -a --contains b21cae91…` | `error: no such commit` |
+| Containing tags | `git tag --contains b21cae91…` | `error: no such commit` |
+| Whole object database | `git cat-file --batch-all-objects --batch-check` filtered on prefix `b21cae91` | **0 objects** |
+| **Remote fetch by SHA** | `git fetch origin b21cae91…` | `fatal: remote error: upload-pack: **not our ref**` |
+
+The last check is decisive: the **server itself** denies the object, so this is not a shallow-clone, partial-fetch, or local-GC artifact.
+
+**Stated precisely — what this does and does not mean:**
+
+- It **does** mean the documented repository rollback anchor is **not currently inspectable, diffable, or checkout-able** from this repository or its remote. No reviewer can examine what would be rolled back to, or diff it against the deployed tree.
+- It does **not** mean rollback was or is operationally impossible. The production host may hold that revision in its own checkout, and `F3-PROD-001`'s separately verified pre-deploy database dump (SHA-256 `de8bf398…`) is entirely unaffected. **No claim is made here that a rollback could not be performed.**
+- **No replacement SHA is proposed or invented.** The correct value is not derivable from anything available to this task.
+
+**Exact remediation required before that rollback procedure is relied upon:** replace the unresolvable anchor with a **resolvable repository commit, tag, or release reference**; or, if the revision genuinely exists only on the production host, push or tag it on `origin` so it becomes inspectable, then record the resulting resolvable reference in `F3-PROD-001`. Until that is done, the rollback anchor must be treated as **documented but unverifiable**.
+
+**No new risk ID is minted for this**, per the program-control preference for correcting evidence over proliferating rows: it is a **record defect**, not a newly discovered control gap, and the underlying deployment-hygiene exposure is already carried by **R-077**. It is recorded here as an evidence correction plus an open operational follow-up (§12).
+
 ## 6. Risk disposition — R-033, R-034, R-040
 
 Each risk is assessed **only** against the closure criteria its own `RISK_REGISTER.md` row states. None is closed.
@@ -159,10 +196,32 @@ Each risk is assessed **only** against the closure criteria its own `RISK_REGIST
 - **Row's missing control:** verification of `RUN_BACKGROUND_JOBS`'s real production value, or explicit standardization of the flag to `false` on the API side (the standardization half was completed at repository level by F3-IMPL-002).
 - **Row's status before this task:** `OPEN — repository-level mitigation implemented, production not yet verified`.
 - **New evidence:** the worker side is now firmly verified — the replacement instance logs `role=worker (declared=true)`, `ownsJobs=true`, `All background jobs scheduled.`, matching `resolveWorkerBackgroundJobsOwnership()` and the `ecosystem.config.cjs` worker app exactly (§4 check 10). Combined with `F3-PROD-001` §3's API-side `ownsJobs=false` observation, the **currently observed** ownership matrix is the intended one: exactly one owner, no duplicate registration, no zero-owner state.
-- **New evidence against closure:** §5 shows the API-side guarantee is **weaker than `F3-PROD-001` implied**. The API's `RUN_BACKGROUND_JOBS=false` is supplied by PM2's out-of-band stored environment, not by the repository-defined `ecosystem.config.cjs` — nothing repository-managed currently enforces it, and a `pm2 delete` / process-table loss / box rebuild would drop it. The row's criterion is about the flag's *production* value being under a verified, durable control, not about a single point-in-time reading. In addition, the API's value has not been re-read since this task's evidence window; only the worker was re-observed.
 - **A newly surfaced, related failure mode worth recording (not a duplicate-registration event):** during the stale-worker window the *worker* ran pre-deploy code while the *API* ran post-deploy code. Job ownership stayed single-owner throughout, so R-034's specific risk did not materialize — but the window is a concrete instance of the deploy topology diverging from the repository contract without any signal.
-- **Disposition: `OPEN` — not closed, evidence updated on both sides** (worker strengthened, API-side sourcing qualified).
-- **Exact remaining evidence to close:** the API process observed with `role=api (declared=true)` **after** an `ecosystem.config.cjs`-driven `startOrReload`, together with `ownsJobs=false` — i.e. the flag proven to be delivered *by the repository-defined config source*, not by PM2's cached environment. This is satisfied by the same single deploy run named in §6.1.
+
+#### Disposition: **`CLOSED`** — corrected in **R2** (2026-08-12)
+
+**R1 recorded this row as `OPEN`, arguing that the API's `RUN_BACKGROUND_JOBS=false` came from PM2's stored environment rather than from `ecosystem.config.cjs`. That argument is withdrawn as over-strict**: it imported **R-040's** config-*provenance* criterion into a row whose own named missing control is the flag's *value*. The two rows are deliberately separate, and R-040 remains `OPEN` precisely to carry the provenance question.
+
+Assessed against R-034's own wording:
+
+| R-034's own named missing control | Status | Evidence |
+|---|---|---|
+| *"`RUN_BACKGROUND_JOBS` gerçek değerinin production'da doğrulanması"* (verification of the real production value) | **SATISFIED** | Production API observed `ownsJobs=false`. Per `server/src/utils/backgroundJobsOwnership.ts:38`, re-read at the deployed SHA by this task, `ownsJobs: false` is returned **only** on `env.RUN_BACKGROUND_JOBS === 'false'` — every other value, including unset, returns `ownsJobs: true`. The observation is therefore a **direct read-back of the real production value**, not an inference |
+| *"veya API tarafında bayrağın açıkça `false` olarak standardize edilmesi"* (or explicit standardization of the flag) | **SATISFIED** at repository level by F3-IMPL-002 (`ecosystem.config.cjs`) | §4 check 10 |
+
+**Production ownership matrix, verified:** API does **not** own jobs (flag-derived, as above); worker **does** (`role=worker (declared=true)`, `ownsJobs=true`, `All background jobs scheduled`). **Exactly one job owner** — neither the duplicate-registration state this row describes nor a zero-owner state was present.
+
+*Precision note:* the worker's `ownsJobs=true` is **unconditional by design** — `resolveWorkerBackgroundJobsOwnership()` does not read `RUN_BACKGROUND_JOBS` at all (see `worker.ts`'s docstring). It therefore confirms *that the worker owns jobs*, but carries no information about the flag. The flag verification rests entirely on the API-side observation, which is sufficient because the API is the only flag-sensitive process.
+
+**External confirmation:** supplied by this independent program-controller review (2026-08-12) on the accepted operator-supplied evidence. The `R-019/R-071/R-072/R-073` no-self-closure precedent is honoured — the confirming party is neither the implementing task (F3-IMPL-002) nor this reconciliation acting on its own authority.
+
+**Caveats explicitly retained, not absorbed by this closure:**
+
+- Verification is **registration/ownership-level, not execution-level**. No completed job tick and no `JobLock` lease acquisition was observed, and none is claimed.
+- The observation is **point-in-time**.
+- **PM2 reboot persistence** of the reconciled worker definition is unknown, and the config **provenance** question is live — both belong to **R-040** and **R-077**, which stay `OPEN`.
+- `LAUNCH_GATES.md` §2.C's `JobLock` duplicate-run sub-criterion remains a separate G1 item.
+- **This closure does not close R-033, R-040, R-074, R-076 or R-077, and does not satisfy the F3 exit gate** (§7), which remains `NOT SATISFIED`.
 
 ### 6.3 R-040 — configuration-source ambiguity; no repository-defined PM2 config source
 
@@ -217,6 +276,8 @@ Exit gate per `phases/F3_PRODUCTION_HARDENING.md` §"Exit gate (Çıkış kapıs
 
 **[R1] R-075's closure does not change this, and must not be read as progress toward it.** R-075 was created by F3-PROD-001 and filed from the outset as `F3 (non-blocking — not named by F3's own 3-item exit gate)`. The gate's three criteria are live observability wiring, full external security-checklist verification, and an incident-drill sufficiency decision; a dependency-audit result satisfies none of them. Closing a non-blocking row leaves a `NOT SATISFIED` gate exactly as `NOT SATISFIED`.
 
+**[R2] R-034's closure does not change it either.** R-034 is a job-ownership correctness row (F0-006/F3); it is named by none of the three criteria. Nor does §5.2's rollback-anchor finding move the gate — it is a **record defect in `F3-PROD-001`'s evidence**, and if anything it counts marginally *against* criterion 2, not for it. **`F3_EXIT_GATE = NOT_SATISFIED` · `F3_COMPLETE = NO` · `F4_TRANSITION_AUTHORIZED = NO`.**
+
 **F3 COMPLETE: `NO`. F4 transition authorized: `NO`.**
 
 ## 8. New risk proposed — R-077 (installed-vs-repository operational script drift)
@@ -260,7 +321,9 @@ Files changed — all under `docs/program/**`:
 4. `docs/program/NORAMEDI_MASTER_TRACKER.md` — top entry, §11 production-verification-history row, §13 exact-next-task entry
 5. `docs/program/CURRENT_PHASE.md` — top entry
 6. `docs/program/phases/F3_PRODUCTION_HARDENING.md` — top status line + entry, change-history row
-7. `docs/program/RISK_REGISTER.md` — new "Son güncelleme" entry; R-033 / R-034 / R-040 rows updated (evidence + status wording, **none closed**); **[R1] R-075 row updated → `CLOSED`** on external reviewer confirmation (§6.5), prior token preserved as history; new row R-077
+7. `docs/program/RISK_REGISTER.md` — new "Son güncelleme" entry; R-033 / R-040 rows updated (evidence + status wording, **not closed**); **[R1] R-075 → `CLOSED`** (§6.5) and **[R2] R-034 → `CLOSED`** (§6.2), both on external confirmation with prior tokens preserved as history; new row R-077
+
+**[R2] Additional validation performed for §5.2:** the six independent resolvability checks on `b21cae911a0aa3444ebcd6e714a92c4f0802608a` tabulated in §5.2, including `git fetch origin <sha>` against the real remote (`upload-pack: not our ref`). And for §6.2: `server/src/utils/backgroundJobsOwnership.ts` was re-read at the deployed SHA to confirm that `ownsJobs: false` is reachable **only** via `env.RUN_BACKGROUND_JOBS === 'false'`.
 
 **Documentation-hygiene gap noted, not fixed** (consistent with F3-PROGRAM-RECON-001's precedent for such notes): the `phases/F3_PRODUCTION_HARDENING.md` change-history table and `evidence/README.md` index both stop at F3-PROGRAM-RECON-001 — they have no rows for F3-IMPL-005(+R1), F3-IMPL-007, F3-CI-OPT-001, F3-PROD-001, or F3-SEC-003, all of which are covered in prose elsewhere. This task adds only its own rows; back-filling the others is left to a dedicated documentation-hygiene pass.
 
@@ -268,15 +331,17 @@ Files changed — all under `docs/program/**`:
 
 `AGENT_COMPLETED` · `PR_OPENED` — see the pull-request reference recorded in `NORAMEDI_MASTER_TRACKER.md` §13 and `CURRENT_PHASE.md` · **`NOT_MERGED`** · `NOT_DEPLOYED` (documentation-only; nothing to deploy) · `NOT_PRODUCTION_VERIFIED` (this task performed no production access).
 
-No risk was self-closed. **[R1] R-075 is now `CLOSED`, but not on this task's own authority** — it is closed on the explicit external confirmation of PR #402's reviewer, which was the single condition its row still named, and the underlying remediation being confirmed was F3-SEC-003's work, not this task's. **R-033, R-034, R-040, R-076 and R-077 all remain `OPEN`.** No merge decision is claimed. Per §2.3 of the tracker, `MERGED` / `DEPLOYED` / `PRODUCTION_VERIFIED` are external-confirmation states this task cannot assign.
+No risk was self-closed. **[R1] R-075 is now `CLOSED`, but not on this task's own authority** — it is closed on the explicit external confirmation of PR #402's reviewer, which was the single condition its row still named, and the underlying remediation being confirmed was F3-SEC-003's work, not this task's. **[R2] R-034 is also now `CLOSED`**, on the same external-confirmation basis (§6.2) — again not on this task's own authority, and registration-level only. **R-033, R-040, R-074, R-076 and R-077 all remain `OPEN`.** No merge decision is claimed. Per §2.3 of the tracker, `MERGED` / `DEPLOYED` / `PRODUCTION_VERIFIED` are external-confirmation states this task cannot assign.
 
 ## 12. Exact next task
 
 **F3-PROD-002 — Deploy-Script Execution Verification and API Ecosystem-Contract Confirmation.** A single operator-executed production action, followed by a small reconciliation: run the now-synced `/usr/local/sbin/noramedi-deploy.sh` (the minimal sufficient form being `--skip-pull --skip-build --skip-migrate --skip-generate`, which exercises exactly steps 5–8, in a maintenance window because the first ecosystem-driven API `startOrReload` may be a full restart), and capture:
 
-1. step 5 — API `startOrReload` from `/var/www/noramedi/ecosystem.config.cjs`, and the API's resulting startup log line showing `role=api (declared=true)`, `ownsJobs=false` → **closes R-034's remaining half and R-040's API half**;
+1. step 5 — API `startOrReload` from `/var/www/noramedi/ecosystem.config.cjs`, and the API's resulting startup log line showing `role=api (declared=true)`, `ownsJobs=false` → **closes R-040's API half**. *(**[R2]** this no longer bears on R-034, which is `CLOSED` per §6.2; what remains here is purely the config-**provenance** question R-040 owns.)*
 2. `pm2 describe noramedi-api` showing `cwd` = `/var/www/noramedi/server` and `script`/`args` matching the file → **completes R-040's stated `cwd` criterion**;
 3. steps 6 and 8 — worker `startOrReload` and `verify_pm2_online noramedi-worker` reaching `online`, with the script exiting `0` → **closes R-033's execution gap**;
 4. `sha256sum /usr/local/sbin/noramedi-healthcheck.sh` compared against the repository copy → resolves the second half of R-077's exposure.
+
+**[R2] Additional open operational follow-up, carried by no risk row (per §5.2) — the rollback anchor.** Separate from F3-PROD-002 and not blocking it: establish a **resolvable** repository rollback anchor to replace `F3-PROD-001`'s `b21cae911a0aa3444ebcd6e714a92c4f0802608a`, which resolves neither locally nor on `origin`. Either (a) identify the actual pre-deploy revision and confirm it is reachable on `origin`, (b) if it exists only in the production checkout, push or tag it so it becomes inspectable, or (c) adopt release tags for deploys so every future rollback anchor is resolvable by construction. Then record the resolvable reference in `F3-PROD-001` via an additive correction. **Until then, treat that rollback anchor as documented but unverifiable** — and note this is a *record* remediation, not evidence that a rollback would fail.
 
 Not blocking, and separate: R-077 itself needs a decision on which of the three sync mechanisms in §8 to adopt; and the F3 exit gate's three criteria remain exactly as `F3-PROD-001` §13 listed them — external observability wiring, external security-checklist verification, and a program-owner decision on incident-drill sufficiency. None of those is a coding task, and none is started by this task.
