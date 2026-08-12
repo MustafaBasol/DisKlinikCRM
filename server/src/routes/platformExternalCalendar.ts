@@ -43,6 +43,7 @@ import {
 } from '../services/externalCalendar/externalCalendarProviderFactory.js';
 import { ExternalCalendarError } from '../services/externalCalendar/externalCalendarErrors.js';
 import { listClinicPractitioners } from '../utils/relationGuards.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -104,7 +105,7 @@ router.put('/clinics/:clinicId/external-calendar', async (req: PlatformAdminRequ
   } catch (err) {
     if (err instanceof ExternalCalendarClinicNotFoundError) return res.status(404).json({ error: err.message });
     if (err instanceof ExternalCalendarUnsupportedProviderError) return res.status(400).json({ error: err.message });
-    console.error('[platform-external-calendar] upsert config failed:', err);
+    console.error('[platform-external-calendar] upsert config failed:', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to update external calendar integration' });
   }
 });
@@ -267,7 +268,7 @@ router.get('/clinics/:clinicId/external-calendar/remote-options', async (req: Pl
     res.json({ doctors, treatmentTypes });
   } catch (err) {
     if (err instanceof ExternalCalendarError) return res.status(502).json({ error: err.message });
-    console.error('[platform-external-calendar] remote-options failed:', err);
+    console.error('[platform-external-calendar] remote-options failed:', safeErrorFields(err));
     res.status(500).json({ error: 'Failed to fetch provider doctors/treatment types' });
   }
 });

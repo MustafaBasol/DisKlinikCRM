@@ -20,6 +20,7 @@
 import { hostname } from 'os';
 import { randomUUID } from 'crypto';
 import prisma from '../db.js';
+import { safeErrorFields } from './safeError.js';
 
 // Süreç kimliği: kilidin kim tarafından tutulduğu loglarda görünsün ve
 // release yalnızca kendi kilidimizi bıraksın diye.
@@ -75,7 +76,7 @@ export async function releaseJobLock(name: string): Promise<void> {
       data: { lockedUntil: new Date() },
     })
     .catch((error: unknown) => {
-      console.error(`[job-lock] Failed to release lock '${name}' (will remain held until its TTL expires):`, error);
+      console.error(`[job-lock] Failed to release lock '${name}' (will remain held until its TTL expires):`, safeErrorFields(error));
     });
 }
 
@@ -94,7 +95,7 @@ export async function withJobLock(
     acquired = await acquireJobLock(name, ttlMs);
   } catch (error) {
     // DB'ye ulaşılamıyorsa job'u koşturmayı deneme — bir sonraki tick dener.
-    console.error(`[job-lock] Failed to acquire lock '${name}':`, error);
+    console.error(`[job-lock] Failed to acquire lock '${name}':`, safeErrorFields(error));
     return false;
   }
   if (!acquired) {

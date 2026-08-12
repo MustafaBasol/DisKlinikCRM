@@ -4,6 +4,7 @@ import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { getParam } from '../utils/helpers.js';
 import { validateAndGetClinicIdScope } from '../utils/clinicScope.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -122,7 +123,7 @@ router.get('/contact-requests', authorize([...CONTACT_REQUEST_ROLES]), async (re
 
     res.json({ items, total, page: pageNum, limit: limitNum });
   } catch (err) {
-    console.error('[contact-requests] list error', err);
+    console.error('[contact-requests] list error', safeErrorFields(err));
     res.status(500).json({ error: 'Internal server error' });
   }
 });

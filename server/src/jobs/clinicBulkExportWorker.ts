@@ -42,6 +42,7 @@ import {
   sweepStaleClinicBulkExportTempFiles,
   failActiveGenerationForWorkerShutdown,
 } from '../services/privacy/clinicBulkExportPackage.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 function getWorkerConcurrency(): number {
   const raw = Number(process.env.CLINIC_BULK_EXPORT_WORKER_CONCURRENCY);
@@ -78,7 +79,7 @@ async function runStaleTempSweep(): Promise<void> {
       console.log(`[clinic-bulk-export-worker] stale-temp sweep deleted ${deleted} orphaned temp file(s) on this host.`);
     }
   } catch (err) {
-    console.error('[clinic-bulk-export-worker] stale-temp sweep failed', err instanceof Error ? err.message : String(err));
+    console.error('[clinic-bulk-export-worker] stale-temp sweep failed', safeErrorFields(err));
   }
 }
 
@@ -126,7 +127,7 @@ async function runTick(): Promise<void> {
       ),
     );
   } catch (err) {
-    console.error('[clinic-bulk-export-worker] tick failed', err instanceof Error ? err.message : String(err));
+    console.error('[clinic-bulk-export-worker] tick failed', safeErrorFields(err));
   } finally {
     isTickRunning = false;
   }

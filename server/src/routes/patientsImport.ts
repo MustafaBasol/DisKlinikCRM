@@ -21,6 +21,7 @@ import {
   MAX_IMPORT_ROWS,
   MAX_FILE_SIZE_BYTES,
 } from '../utils/excelImport.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -265,7 +266,7 @@ router.post(
         rows: results,
       });
     } catch (err: any) {
-      console.error('[patients/import-preview]', err?.message);
+      console.error('[patients/import-preview]', safeErrorFields(err));
       res.status(500).json({ error: 'Dosya işlenemedi' });
     }
   }
@@ -389,7 +390,7 @@ router.post(
         skippedRows: skipped,
       });
     } catch (err: any) {
-      console.error('[patients/import-confirm]', err?.message);
+      console.error('[patients/import-confirm]', safeErrorFields(err));
       res.status(500).json({ error: 'İçe aktarma başarısız' });
     }
   }

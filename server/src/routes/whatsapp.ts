@@ -72,6 +72,7 @@ import {
   CONSENT_ACCEPTED_TEXT,
   CONSENT_REPROMPT_TEXT,
 } from '../services/channelConsentGate.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -970,7 +971,7 @@ const resolveAssistantExtraction = async (text: string, services: AssistantServi
     });
     return merged.extraction;
   } catch (error) {
-    console.error('[whatsapp-assistant] ai-extraction-error', error);
+    console.error('[whatsapp-assistant] ai-extraction-error', safeErrorFields(error));
     return ruleBased;
   }
 };
@@ -1373,7 +1374,7 @@ const createPatientFromWhatsAppName = async (clinicId: string, phone: string, fu
   // Link conversation messages saved before the patient existed (patientId null)
   // to the newly created patient so the patient detail Messages tab is complete.
   await backfillConversationMessagePatient({ clinicId, phone, patientId: patient.id })
-    .catch(error => console.error('[whatsapp-assistant] conversation message backfill failed', error));
+    .catch(error => console.error('[whatsapp-assistant] conversation message backfill failed', safeErrorFields(error)));
   const systemUserId = await getClinicSystemUserId(clinicId);
   if (systemUserId) {
     await logActivity({
@@ -3630,7 +3631,7 @@ const handleIncomingWhatsAppMessage = async (input: NormalizedWhatsAppMessage, c
             });
             return 'Seçtiğiniz saat artık uygun görünmüyor. İsterseniz başka bir gün veya saat kontrol edebilirim.';
           }
-          console.error('[whatsapp-assistant] appointment-create-error', error);
+          console.error('[whatsapp-assistant] appointment-create-error', safeErrorFields(error));
           return 'Randevu talebinizi oluştururken teknik bir sorun oluştu. Birkaç dakika sonra tekrar deneyebiliriz.';
         }
       }
@@ -3999,7 +4000,7 @@ router.post('/evolution-webhook', authorizeWhatsappWebhook, async (req, res) => 
       return res.status(200).json({ ignored: true, reason: 'duplicate_message' });
     }
     await markInboundEventFailed(inboundEventId, error).catch(() => {});
-    console.error('[whatsapp-assistant] webhook-error', error);
+    console.error('[whatsapp-assistant] webhook-error', safeErrorFields(error));
     res.status(500).json({ error: 'Failed to process Evolution webhook' });
   }
 });

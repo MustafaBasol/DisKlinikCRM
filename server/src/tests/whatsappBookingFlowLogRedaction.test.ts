@@ -63,6 +63,7 @@ function section(title: string) {
 import {
   handleAwaitingServiceStep,
   handleAwaitingTimeStep,
+  handleAwaitingDateStep,
   handleAwaitingConfirmationStep,
   type BookingServiceOption,
 } from '../services/whatsappBookingFlow.js';
@@ -149,13 +150,19 @@ const bookingFlowSource = readFileSync(
   'utf8',
 );
 
-/** Extracts the source text of a console.log(...) call by its distinguishing
- * literal (e.g. a handler/type string), from the console.log( token through
- * the matching closing paren of the object literal. Deliberately generous
- * (400 chars) so it comfortably spans every field in these small log calls. */
-function extractLogCallBlock(distinguishingLiteral: string): string {
-  const literalIndex = bookingFlowSource.indexOf(distinguishingLiteral);
-  assert.ok(literalIndex >= 0, `expected to find "${distinguishingLiteral}" in whatsappBookingFlow.ts`);
+/** Extracts the source text of the Nth (0-indexed) console.*(...) call by its
+ * distinguishing literal (e.g. a handler/type string), from the console.*(
+ * token through the matching closing paren of the object literal. Deliberately
+ * generous (400 chars) so it comfortably spans every field in these small log
+ * calls. */
+function extractLogCallBlock(distinguishingLiteral: string, occurrence = 0): string {
+  let searchFrom = 0;
+  let literalIndex = -1;
+  for (let i = 0; i <= occurrence; i++) {
+    literalIndex = bookingFlowSource.indexOf(distinguishingLiteral, searchFrom);
+    assert.ok(literalIndex >= 0, `expected to find occurrence ${i} of "${distinguishingLiteral}" in whatsappBookingFlow.ts`);
+    searchFrom = literalIndex + distinguishingLiteral.length;
+  }
   const callStart = bookingFlowSource.lastIndexOf('console.', literalIndex);
   assert.ok(callStart >= 0, `expected a console.* call before "${distinguishingLiteral}"`);
   return bookingFlowSource.slice(callStart, callStart + 400);
@@ -529,6 +536,89 @@ async function main() {
     assert.ok(serialized.includes('"practitionerId":"pr-42"'), 'expected practitionerId to remain in appointment-request-create logs');
   });
 
+  section('Runtime logger-spy — NEW location 14/16 (F3-IMPL-006): handleAwaitingDateStep availability-error (raw error → safeErrorFields)');
+
+  const RAW_DB_ERROR_DETAIL = `connection refused for phone ${RAW_PHONE}, patient Ayşe Yılmaz`;
+
+  await test('availability-error log (handleAwaitingDateStep) never logs the raw error message, logs errorName/errorCode instead', async () => {
+    const throwingBuildAvailableSlots = async (): Promise<never> => {
+      const err = new Error(RAW_DB_ERROR_DETAIL) as Error & { code?: string };
+      err.code = 'P2025';
+      throw err;
+    };
+    const { calls, restore } = captureConsole();
+    try {
+      await handleAwaitingDateStep({
+        prisma: {} as any,
+        clinicId: 'clinic-1',
+        text: '2026-07-04',
+        customerName: 'Test Hasta',
+        state: {
+          selectedAppointmentTypeId: 'svc-1',
+          selectedAppointmentTypeName: 'Diş Beyazlatma',
+          selectedPractitionerId: null,
+          selectedDate: null,
+        },
+        stateJson: {},
+        buildAvailableSlots: throwingBuildAvailableSlots as any,
+        formatAvailabilityMessage: () => '',
+        logAvailabilitySave: () => {},
+        minutesToTime: (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`,
+        upsertState: async () => {},
+      });
+    } finally {
+      restore();
+    }
+    assertNoRawLeak(calls, [RAW_DB_ERROR_DETAIL, RAW_PHONE]);
+    const serialized = serialize(calls);
+    assert.ok(serialized.includes('"errorName":"Error"'), 'expected errorName to be logged');
+    assert.ok(serialized.includes('"errorCode":"P2025"'), 'expected errorCode to be logged');
+  });
+
+  section('Runtime logger-spy — NEW location 16/16 (F3-IMPL-006): handleAwaitingConfirmationStep appointment-create-error (raw error → safeErrorFields)');
+
+  const RAW_CREATE_ERROR_DETAIL = `duplicate appointment for phone ${RAW_PHONE}, name Fatma Kaya`;
+
+  await test('appointment-create-error log never logs the raw error message, logs errorName/errorCode instead', async () => {
+    const pendingSlot: SavedAvailableSlot = {
+      practitionerId: 'pr-42',
+      practitionerName: 'Dr. Ayşe Yılmaz',
+      startTime: '2026-07-04T14:00:00.000Z',
+      endTime: '2026-07-04T14:30:00.000Z',
+      localStartTime: '14:00',
+      localEndTime: '14:30',
+    };
+    const { calls, restore } = captureConsole();
+    try {
+      await handleAwaitingConfirmationStep({
+        clinicId: 'clinic-1',
+        phone: RAW_PHONE,
+        text: 'evet',
+        customerName: 'Test Hasta',
+        state: {
+          selectedAppointmentTypeId: 'svc-1',
+          selectedAppointmentTypeName: 'Diş Beyazlatma',
+          selectedPractitionerId: 'pr-42',
+          selectedDate: '2026-07-04',
+        },
+        stateJson: {
+          availableSlots: [pendingSlot],
+          lastShownSlots: [pendingSlot],
+          pendingConfirmationSlot: pendingSlot,
+        },
+        resetState: async () => {},
+        upsertState: async () => {},
+        createAppointment: async () => { throw new Error(RAW_CREATE_ERROR_DETAIL); },
+      });
+    } finally {
+      restore();
+    }
+    assertNoRawLeak(calls, [RAW_CREATE_ERROR_DETAIL, RAW_PHONE]);
+    const serialized = serialize(calls);
+    assert.ok(serialized.includes('"errorName":"Error"'), 'expected errorName to be logged');
+    assert.ok(serialized.includes('"errorCode":"UNKNOWN"'), 'expected errorCode to be logged');
+  });
+
   section('Static source scan — backstop against non-console.* regressions');
 
   await test('awaiting_service-selection log block redacts phone (source scan)', () => {
@@ -595,6 +685,26 @@ async function main() {
     const block = extractLogCallBlock('appointment-request-create');
     assertBlockOmitsField(block, 'practitionerName', 'appointment-request-create');
     assert.ok(/practitionerId\s*:\s*pendingSlot\.practitionerId/.test(block), 'appointment-request-create: expected practitionerId to remain');
+  });
+
+  section('Static source scan — NEW (F3-IMPL-006): raw error objects replaced with safeErrorFields');
+
+  await test('availability-error log block (handleAwaitingDateStep, occurrence 1/2) uses safeErrorFields(error), not raw error', () => {
+    const block = extractLogCallBlock('availability-error', 0);
+    assert.ok(/safeErrorFields\(error\)/.test(block), 'expected safeErrorFields(error) call');
+    assert.ok(!/availability-error',\s*error\)/.test(block), 'found raw "error" argument, expected it replaced by safeErrorFields(error)');
+  });
+
+  await test('availability-error log block (handleAwaitingTimeStep different-date branch, occurrence 2/2) uses safeErrorFields(error), not raw error', () => {
+    const block = extractLogCallBlock('availability-error', 1);
+    assert.ok(/safeErrorFields\(error\)/.test(block), 'expected safeErrorFields(error) call');
+    assert.ok(!/availability-error',\s*error\)/.test(block), 'found raw "error" argument, expected it replaced by safeErrorFields(error)');
+  });
+
+  await test('appointment-create-error log block (source scan) uses safeErrorFields(error), never raw error.message', () => {
+    const block = extractLogCallBlock('appointment-create-error');
+    assert.ok(/safeErrorFields\(error\)/.test(block), 'expected safeErrorFields(error) call');
+    assert.ok(!/errorMessage\s*:\s*error\.message/.test(block), 'found raw "errorMessage: error.message" field that should have been removed');
   });
 
   section('Summary');

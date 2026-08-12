@@ -11,6 +11,7 @@
  */
 
 import { Redis } from 'ioredis';
+import { safeErrorFields } from './safeError.js';
 
 let client: Redis | null | undefined;
 let lastErrorLogAt = 0;
@@ -34,7 +35,7 @@ export function getRedis(): Redis | null {
     const now = Date.now();
     if (now - lastErrorLogAt > 60_000) {
       lastErrorLogAt = now;
-      console.error('[redis] connection error (in-memory fallback active):', err?.message ?? err);
+      console.error('[redis] connection error (in-memory fallback active):', safeErrorFields(err));
     }
   });
   console.log('[redis] Shared store enabled via REDIS_URL.');

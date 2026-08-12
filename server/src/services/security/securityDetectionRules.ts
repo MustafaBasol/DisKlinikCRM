@@ -35,6 +35,7 @@ import {
 } from './securitySignalService.js';
 import { upsertIncidentFromSignal } from './securityIncidentService.js';
 import prisma from '../../db.js';
+import { safeErrorFields } from '../../utils/safeError.js';
 
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -53,7 +54,7 @@ const pendingDetectionWork = new Set<Promise<void>>();
 
 async function safely(fn: () => Promise<void>): Promise<void> {
   const work = fn().catch((err) => {
-    console.error('[security-detection] rule evaluation failed:', err instanceof Error ? err.message : String(err));
+    console.error('[security-detection] rule evaluation failed:', safeErrorFields(err));
   });
   pendingDetectionWork.add(work);
   try {

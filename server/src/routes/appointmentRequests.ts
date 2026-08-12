@@ -19,6 +19,7 @@ import {
   ensurePendingSyncLinkInConversionTransaction,
 } from '../services/externalCalendar/externalCalendarOutboundSync.js';
 import { logger } from '../utils/logger.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -476,7 +477,7 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
           },
         },
       },
-    }).catch(err => logger.error({ appointmentId: appointment.id, clinicId, err }, 'appointment-requests: post-conversion sync/notify failed'));
+    }).catch(err => logger.error({ appointmentId: appointment.id, clinicId, ...safeErrorFields(err) }, 'appointment-requests: post-conversion sync/notify failed'));
   } catch {
     res.status(500).json({ error: 'Failed to convert appointment request' });
   }
