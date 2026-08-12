@@ -32,6 +32,7 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import prisma from '../db.js';
 import platformAdminRouter from '../routes/platformAdmin.js';
+import { boundedErrorType } from '../utils/safeError.js';
 
 let passed = 0;
 let failed = 0;
@@ -295,6 +296,62 @@ async function main() {
   });
 
   await cleanAuditRows();
+
+  section('Bounded errorType classification — no raw Error.name persisted (F3-IMPL-005-R2)');
+
+  // Error.name is mutable, attacker/library-controllable free text — nothing
+  // stops a thrower from setting it to a string embedding PII or secrets.
+  // safeMetadata.errorType must collapse to a fixed, bounded label instead
+  // of persisting it verbatim.
+  const POISONED_NAME =
+    'patient=Mustafa Secret email=patient@example.test phone=+905551234567 token=SECRET_TEST_TOKEN_9f3ab1';
+
+  function assertNoSentinels(serialized: string, label: string) {
+    for (const sentinel of [
+      'Mustafa Secret',
+      'patient@example.test',
+      '+905551234567',
+      'SECRET_TEST_TOKEN_9f3ab1',
+      'patient=',
+      'email=',
+      'phone=',
+      'token=',
+    ]) {
+      assert.ok(!serialized.includes(sentinel), `${label} must not contain "${sentinel}"`);
+    }
+  }
+
+  await test('manual file backup failure: poisoned Error.name never reaches safeMetadata.errorType', () => {
+    const err = new Error('safe');
+    err.name = POISONED_NAME;
+
+    // Mirrors the exact safeMetadata literal built on the
+    // file_backup.manual_run.failed path in routes/platformAdmin.ts.
+    const safeMetadata = { errorType: boundedErrorType(err) };
+
+    assert.equal(safeMetadata.errorType, 'Error');
+    assert.deepEqual(Object.keys(safeMetadata), ['errorType']);
+    assertNoSentinels(JSON.stringify(safeMetadata), 'manual file backup failure safeMetadata');
+  });
+
+  await test('restore rehearsal failure: poisoned Error.name never reaches safeMetadata.errorType', () => {
+    const err = new Error('safe');
+    err.name = POISONED_NAME;
+
+    // Mirrors the exact safeMetadata literal built on the
+    // file_backup.restore_rehearsal.failed path in routes/platformAdmin.ts.
+    const safeMetadata = { sampleSize: 5, errorType: boundedErrorType(err) };
+
+    assert.equal(safeMetadata.errorType, 'Error');
+    assert.deepEqual(Object.keys(safeMetadata).sort(), ['errorType', 'sampleSize']);
+    assertNoSentinels(JSON.stringify(safeMetadata), 'restore rehearsal failure safeMetadata');
+  });
+
+  await test('non-Error throw classifies as UnknownError rather than passing through an arbitrary "name" property', () => {
+    const nonError = { name: POISONED_NAME, message: 'not a real Error instance' };
+    assert.equal(boundedErrorType(nonError), 'UnknownError');
+    assertNoSentinels(JSON.stringify({ errorType: boundedErrorType(nonError) }), 'non-Error safeMetadata');
+  });
 
   section('Summary');
   console.log('\n─────────────────────────────────────────');

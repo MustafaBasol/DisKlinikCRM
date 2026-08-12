@@ -37,7 +37,7 @@ import { resolveSmsRouting, SMS_ROUTING_POLICIES } from '../services/sms/smsRout
 import { getSmsEntitlement } from '../services/sms/smsEntitlement.js';
 import { evaluateAuthLoginFailureSignal } from '../services/security/securityDetectionRules.js';
 import { writePlatformAdminAuditEventInTx, writePlatformAdminAuditEvent } from '../services/platformAdminAudit.js';
-import { safeErrorFields } from '../utils/safeError.js';
+import { safeErrorFields, boundedErrorType } from '../utils/safeError.js';
 
 const router = express.Router();
 
@@ -1988,7 +1988,7 @@ router.post('/file-backups/run', async (req: PlatformAdminRequest, res: Response
       resourceType: 'file_backup',
       resourceKey: 'files',
       outcome: 'error',
-      safeMetadata: { errorType: err?.name ?? 'Error' },
+      safeMetadata: { errorType: boundedErrorType(err) },
     }).catch((auditErr) => {
       console.error('[platform-file-backup] Failed to write audit event for failed manual backup run', safeErrorFields(auditErr));
     });
@@ -2028,7 +2028,7 @@ router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest,
       resourceType: 'file_backup',
       resourceKey: 'restore_rehearsal',
       outcome: 'error',
-      safeMetadata: { sampleSize: sampleSize ?? null, errorType: err?.name ?? 'Error' },
+      safeMetadata: { sampleSize: sampleSize ?? null, errorType: boundedErrorType(err) },
     }).catch((auditErr) => {
       console.error('[platform-file-backup] Failed to write audit event for failed restore rehearsal', safeErrorFields(auditErr));
     });

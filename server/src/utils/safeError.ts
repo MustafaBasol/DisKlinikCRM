@@ -13,3 +13,14 @@ export function safeErrorFields(err: unknown): { errorName: string; errorCode: s
   const errorCode = typeof e?.code === 'string' && e.code ? e.code : 'UNKNOWN';
   return { errorName, errorCode };
 }
+
+/**
+ * boundedErrorType — for values that get durably persisted (e.g.
+ * PlatformAdminAuditEvent.safeMetadata), even `err.name` is unsafe: it is
+ * mutable, arbitrary text that a thrower can set to anything, including PII
+ * or secrets. Collapse to a fixed two-value label instead of passing it
+ * through.
+ */
+export function boundedErrorType(err: unknown): 'Error' | 'UnknownError' {
+  return err instanceof Error ? 'Error' : 'UnknownError';
+}
