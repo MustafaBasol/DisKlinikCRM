@@ -14,11 +14,22 @@ import { computeFingerprint } from './fingerprint.js';
  * general dataflow analysis and does not attempt to be one.
  */
 
-// Exact identifier names this codebase's catch clauses and .catch()/reject
-// handlers universally use for the caught value (confirmed by repo grep
-// before writing this rule; see evidence doc §2). Deliberately exact-match,
-// not a prefix/suffix regex, so `errorName`/`errorCode`/`safeErr`/`lastError`
-// never match.
+// Exact identifier names this codebase's `.catch()`/reject-handler function
+// *parameters* universally use for the rejection value (confirmed by repo
+// grep before writing this rule; see evidence doc §2). Deliberately
+// exact-match, not a prefix/suffix regex, so `errorName`/`errorCode`/
+// `safeErr`/`lastError` never match. Used ONLY for function/arrow-function
+// parameter tracking in `visit()` below — a function parameter needs a
+// name-based signal to tell a `.catch(err => ...)` handler apart from an
+// unrelated callback (F3-IMPL-007-R1: kept conservative per review — no
+// deterministic evidence a same-shaped arrow/function param not named
+// `err`/`error` is actually an error handler).
+//
+// `catch (...) {}` clause bindings are a DIFFERENT, unconditional case (see
+// `visit()`'s `ts.isCatchClause` branch): syntax alone guarantees a catch
+// binding is the caught value regardless of its name, so `catch (e)`,
+// `catch (ex)`, `catch (caught)`, `catch (failure)` etc. are all tracked by
+// their actual identifier — this set is not consulted there.
 const ERROR_PARAM_NAMES = new Set(['err', 'error']);
 
 // error.<x> access considered a leak (F3-IMPL-004/006's exact remediated
@@ -32,22 +43,59 @@ const SAFE_ERROR_PROPS = new Set(['name', 'code']);
 
 // Safe-wrapper call allowlist: an expression tree rooted at one of these
 // calls is treated as opaque (not descended into) — the call itself is the
-// accepted redaction/summarization boundary. Combines the exact helper names
-// documented in F3-IMPL-006's evidence (§2) with the two naming conventions
-// (`redact*`, `summarize*`) that codebase already uses for every other
-// per-file helper of this kind (instagramAiConversationProcessor.ts,
-// whatsapp.ts, instagramClinicResolver.ts, metaWhatsAppWebhook.ts,
-// instagramWebhook.ts, instagramInbox.ts — see evidence doc §2). This is the
-// task's "narrow, explicit, reviewable" escape hatch for helper functions:
-// naming a new function `redactX`/`summarizeX` is itself a reviewable signal
-// in the PR diff, not a silent bypass.
+// accepted redaction/summarization boundary. R1 review finding: a
+// `/^(redact|summarize)[A-Z]/` *prefix* match was previously accepted here
+// as an alternative to this exact list — that trusted any function whose
+// name merely started with "redact"/"summarize" without the name itself
+// ever having been reviewed (e.g. `redactPatientAttachments`/
+// `redactPatientImagingImages`/`redactPatientMedicalHistory`/
+// `redactActivityDescription` in server/src/services/privacy/
+// patientAnonymization.ts are unrelated DB-anonymization functions — none
+// returns a log-safe string, and the prefix match would have silently
+// trusted a call to any of them as if it were a log-redaction boundary).
+// This is now an exact-name-only allowlist: the four helper names
+// documented in F3-IMPL-006's evidence (§2), plus every `redact*`/
+// `summarize*`-named helper actually confirmed — by instrumenting a real
+// scan run against this baseline (main @
+// 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711) and recording every callee name
+// that previously matched only the now-removed prefix regex while its call
+// site was reached from a logger/console sink's arguments — to be a
+// currently-relied-upon log-argument wrapper: `redactPhone`
+// (server/src/jobs/reminders.ts, server/src/routes/whatsapp.ts,
+// server/src/services/whatsapp/metaWhatsAppAiProcessor.ts,
+// server/src/services/whatsappBookingFlow.ts), `redactSensitiveText`
+// (server/src/services/googleAiStudio.ts, server/src/services/privacy/
+// redaction.ts, server/src/services/whatsappAgentPrompt.ts,
+// server/src/services/whatsappConversationAgent.ts,
+// server/src/services/whatsappStepAwareNlu.ts), `redactMetaBody`
+// (server/src/services/instagram/InstagramMessagingProvider.ts),
+// `summarizeTextForLog` (server/src/routes/whatsapp.ts,
+// server/src/services/whatsappBookingFlow.ts), `summarizeIdentifier`
+// (server/src/routes/whatsapp.ts, server/src/routes/instagramInbox.ts,
+// server/src/services/instagram/instagramClinicResolver.ts,
+// server/src/services/instagram/instagramAiConversationProcessor.ts),
+// `summarizeProviderId` (server/src/routes/instagramWebhook.ts,
+// server/src/routes/metaWhatsAppWebhook.ts), `summarizeConnectionIdentifiers`
+// (server/src/routes/instagramWebhook.ts), `summarizeId`
+// (server/src/services/whatsapp/metaWhatsAppAiProcessor.ts). Naming a new
+// function `redactX`/`summarizeX` no longer grants automatic trust — it
+// must be added to this list by name, in a reviewable diff, exactly like
+// any other entry. A callee NOT in this exact set is no longer opaque (see
+// `inspectValue`'s `ts.isCallExpression` branch below).
 const SAFE_WRAPPER_EXACT_NAMES = new Set([
   'safeErrorFields',
   'safeErrorLog',
   'boundedErrorType',
   'senderSuffix',
+  'redactPhone',
+  'redactSensitiveText',
+  'redactMetaBody',
+  'summarizeTextForLog',
+  'summarizeIdentifier',
+  'summarizeProviderId',
+  'summarizeConnectionIdentifiers',
+  'summarizeId',
 ]);
-const SAFE_WRAPPER_PREFIX = /^(redact|summarize)[A-Z]/;
 
 // Closed vocabulary for message-content variables, taken directly from the
 // F3-IMPL-006 evidence doc's named MESSAGE_CONTENT_REQUIRES_REMOVAL sites
@@ -123,7 +171,7 @@ function isSafeWrapperCall(node: ts.CallExpression): boolean {
   if (ts.isIdentifier(callee)) name = callee.text;
   else if (ts.isPropertyAccessExpression(callee)) name = callee.name.text;
   if (!name) return false;
-  return SAFE_WRAPPER_EXACT_NAMES.has(name) || SAFE_WRAPPER_PREFIX.test(name);
+  return SAFE_WRAPPER_EXACT_NAMES.has(name);
 }
 
 function unwrap(node: ts.Expression): ts.Expression {
@@ -235,8 +283,18 @@ export function scanFile(absPath: string, relPosixPath: string, sourceText: stri
     }
 
     if (ts.isCallExpression(n)) {
-      if (isSafeWrapperCall(n)) return; // opaque safe boundary — do not descend into its arguments
-      return; // other calls: opaque by design (see module doc) — no descent
+      if (isSafeWrapperCall(n)) return; // allowlisted safe boundary — do not descend into its arguments
+      // F3-IMPL-007-R1: a call NOT on the exact safe-wrapper allowlist is no
+      // longer trusted by omission — its own arguments are inspected the
+      // same as any other value position, so `unknownHelper(err)` /
+      // `redactWhatever(err)` / `summarizeWhatever(err)` still surfaces the
+      // raw error-like/PII value passed into it. Prior behavior treated
+      // every call expression as an opaque leaf regardless of allowlist
+      // membership, which made the allowlist a no-op — this closes that gap
+      // (review finding: "a deliberately unsafe pass-through helper name
+      // cannot bypass detection merely via naming").
+      for (const arg of n.arguments) inspectValue(arg);
+      return;
     }
 
     if (ts.isObjectLiteralExpression(n)) {
@@ -293,12 +351,18 @@ export function scanFile(absPath: string, relPosixPath: string, sourceText: stri
 
   function visit(node: ts.Node) {
     if (ts.isCatchClause(node)) {
+      // A catch-clause binding is, by syntax alone, always the caught
+      // value — unlike a function parameter, no name-based allowlist is
+      // needed (or correct) here. `catch (e)`, `catch (ex)`, `catch
+      // (caught)` etc. must all be tracked, not just `catch (err)`/`catch
+      // (error)`. Only a destructured/omitted binding (`catch ({ code })`,
+      // `catch {}`) has no identifier to track, which is fine — there is no
+      // single caught-value variable to leak in that shape.
       const decl = node.variableDeclaration;
       const name = decl && ts.isIdentifier(decl.name) ? decl.name.text : null;
-      const tracked = name && ERROR_PARAM_NAMES.has(name);
-      if (tracked) enterErrorScope(name as string);
+      if (name) enterErrorScope(name);
       ts.forEachChild(node, visit);
-      if (tracked) exitErrorScope(name as string);
+      if (name) exitErrorScope(name);
       return;
     }
 

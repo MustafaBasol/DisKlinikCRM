@@ -844,5 +844,41 @@
     "reason": "Pre-existing site on baseline origin/main (F3-IMPL-007 baseline SHA 6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711), predates and is outside F3-IMPL-004/006 wave scope. Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
     "addedDate": "2026-08-12",
     "addedBy": "F3-IMPL-007-baseline-import"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 212,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "1f487a921596bf57",
+    "reason": "Pre-existing waErr?.message exposure, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's catch-clause-binding fix (catch bindings are now tracked regardless of variable name, not just err/error) - not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-catch-binding-fix"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 231,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "e6902acf4d50375a",
+    "reason": "Pre-existing igErr?.message exposure, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's catch-clause-binding fix (catch bindings are now tracked regardless of variable name, not just err/error) - not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-catch-binding-fix"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 242,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "c2b338f41e62156d",
+    "reason": "Pre-existing trErr?.message exposure, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's catch-clause-binding fix (catch bindings are now tracked regardless of variable name, not just err/error) - not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-catch-binding-fix"
+  },
+  {
+    "file": "server/src/routes/patients.ts",
+    "line": 258,
+    "ruleId": "ERROR_DANGEROUS_PROPERTY",
+    "fingerprint": "20198191646bcd2d",
+    "reason": "Pre-existing tcErr?.message exposure, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's catch-clause-binding fix (catch bindings are now tracked regardless of variable name, not just err/error) - not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-catch-binding-fix"
   }
 ]

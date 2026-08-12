@@ -2,6 +2,8 @@
 
 **Task ID:** F3-IMPL-007 · **Phase:** F3 — Production Hardening · **Branch:** `feature/f3-impl-007-sensitive-log-regression-guard` · **Worktree:** `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f3-impl-007` · **Baseline:** `origin/main` @ `6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711` (Merge PR #396, `feature/f3-sec-002-platform-admin-session-revocation`) — confirmed via `git fetch origin --prune && git rev-parse origin/main`, exact match, clean worktree (`git status --short` empty at task start).
 
+**Updated by F3-IMPL-007-R1 (2026-08-12) — see §15 below.** §1-§14 are preserved verbatim as originally authored; their specific counts (94 grandfathered sites, "29/29"/"28/28" assertion totals) are historical as of the original commit and superseded where §15 says so. R1 fixes two accepted review findings against the scanner's own trust logic (not the application code it scans) — see §15 for what changed and why.
+
 **Risk relationship:** R-018 — Sensitive runtime logging / PII-message-content regression risk. **This task does not close R-018** — see §7.
 
 **Parallel-safety:** this branch touches only `docs/program/evidence/F3-IMPL-007_SENSITIVE_RUNTIME_LOGGING_REGRESSION_GUARD.md` under `docs/program/`; it does not read or modify `NORAMEDI_MASTER_TRACKER.md`, `CURRENT_PHASE.md`, `RISK_REGISTER.md`, `phases/F3_PRODUCTION_HARDENING.md`, or `evidence/README.md` (F3-PROGRAM-RECON-001-R1/PR #397's surface). It also does not touch `.github/workflows/**` or `server/package.json` (F3-CI-OPT-001's likely surface — see §10).
@@ -176,3 +178,60 @@ Every added file is new (`git status` shows only `A` entries plus one `M` on roo
 `AGENT_COMPLETED` / `TESTS_PASSED` (29/29 guard-suite assertions; typecheck clean; real-repository scan clean with 0 new violations, 0 stale exceptions) / `PR_OPENED` — see PR link below — `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`.
 
 **R-018: OPEN.** Regression-prevention control added and validated against the real repository; the pre-existing 94-site + 92-site residual gaps are unchanged and not claimed closed by this task.
+
+## 15. F3-IMPL-007-R1 — accepted review findings, fixed (2026-08-12)
+
+Two review findings accepted against `scripts/log-privacy-guard/lib/scanner.ts`, both fixed on this same branch/PR. Neither touches application code (`server/src/**`) — both are corrections to the scanner's own name-based trust logic.
+
+### 15.1 Finding 1 — catch-clause bindings must be error-like regardless of name
+
+**Before:** `visit()`'s `ts.isCatchClause` branch only tracked the catch binding as error-like if its name was in `ERROR_PARAM_NAMES` (`err`/`error`) — the same exact-name set used for `.catch()`/reject-handler *function parameters*. A binding named anything else (`catch (e)`, `catch (ex)`, `catch (caught)`, or a codebase-specific name like `waErr`) was invisible to `RAW_ERROR_OBJECT`/`ERROR_DANGEROUS_PROPERTY` entirely.
+
+**Fix:** a `catch (x) { ... }` clause's binding is, by JS/TS syntax alone, always the caught value — no name-based allowlist is needed or correct there (unlike a bare function parameter, which needs a name-based signal to distinguish a `.catch(err => ...)` handler from an unrelated callback — that half, `ERROR_PARAM_NAMES` on `isArrowFunction`/`isFunctionExpression`/`isFunctionDeclaration` parameters, is unchanged). Any named catch-clause binding is now tracked unconditionally; a destructured or omitted binding (`catch ({ code })`, `catch {}`) still has nothing to track, which is correct — there is no single caught-value variable to leak in that shape.
+
+**Real-repository impact:** re-running the strict-baseline scan against unchanged `server/src/**` surfaced exactly 4 new, genuine, pre-existing sites in `server/src/routes/patients.ts` (lines 212/231/242/258 — `waErr?.message`, `igErr?.message`, `trErr?.message`, `tcErr?.message`, all `ERROR_DANGEROUS_PROPERTY`) that the exact-name-only rule had never been able to see. These are real, already-shipped log statements, not something this fix introduced — grandfathered into `baseline-exceptions.json` with their own reason strings (distinct from the original 94's `F3-IMPL-007-baseline-import` `addedBy` tag; these use `F3-IMPL-007-R1-catch-binding-fix`) exactly as the tool's own established, documented pattern requires (§4/§13's "94 pre-existing sites remain grandfathered, unfixed" — this fix does not change that scope boundary, it only makes the *count* it grandfathers more accurate). Baseline total: 94 → **98**.
+
+### 15.2 Finding 2 — remove generic `redact*`/`summarize*` prefix trust
+
+**Before:** `isSafeWrapperCall()` treated any call whose callee name matched `SAFE_WRAPPER_EXACT_NAMES` **or** the regex `/^(redact|summarize)[A-Z]/` as an opaque, trusted safe-wrapper boundary. The prefix half was never reviewed per-name — any function merely *named* `redactX`/`summarizeX` was automatically trusted. Concretely, `server/src/services/privacy/patientAnonymization.ts` alone defines `redactPatientAttachments`, `redactPatientImagingImages`, `redactPatientMedicalHistory`, and `redactActivityDescription` — unrelated DB-anonymization functions (returning `Promise<RedactionCounters>`/`void`, not a log-safe string) that the prefix regex would have silently trusted as a log-redaction boundary had any of them ever been passed to a sink.
+
+**Fix:** `SAFE_WRAPPER_PREFIX` and its regex test are removed entirely; `isSafeWrapperCall()` is now `SAFE_WRAPPER_EXACT_NAMES.has(name)` only. The set is expanded from the original 4 exact names to include the 5 additional `redact*`/`summarize*`-named helpers that repo grep confirms are the ones actually used as log-argument wrappers today: `redactPhone`, `redactSensitiveText`, `summarizeTextForLog`, `summarizeIdentifier`, `summarizeProviderId` (exact file list for each in the updated `scanner.ts` comment and in §15.3 below). A future helper named `redactX`/`summarizeX` no longer gains automatic trust — it must be added to this list by name, in a reviewable diff, exactly like any other entry.
+
+**Real-repository impact:** none observable — the strict-baseline scan's new-violation count is unaffected by this half of the fix (0 before, 0 after, isolating for this change alone). This is expected, not a gap: `inspectValue`'s call-expression branch never descends into *any* call's arguments regardless of safe-wrapper status (documented, pre-existing, accepted limitation — §13 "Opaque calls" and §3's module doc), so narrowing which names count as "safe" doesn't change what gets flagged today; it only closes the trust gap for whichever *future* `redactX`/`summarizeX`-named function gets written next.
+
+### 15.3 Full updated safe-wrapper exact allowlist (9 names)
+
+| Name | Source (files using it as a log-sink argument, per repo grep) |
+|---|---|
+| `safeErrorFields` | F3-IMPL-006 §2 (unchanged from original PR) |
+| `safeErrorLog` | F3-IMPL-006 §2 (unchanged from original PR) |
+| `boundedErrorType` | F3-IMPL-006 §2 (unchanged from original PR) |
+| `senderSuffix` | F3-IMPL-006 §2 (unchanged from original PR) |
+| `redactPhone` | `server/src/jobs/reminders.ts`, `server/src/routes/whatsapp.ts`, `server/src/services/whatsapp/metaWhatsAppAiProcessor.ts`, `server/src/utils/logRedaction.ts` |
+| `redactSensitiveText` | `server/src/services/privacy/redaction.ts` |
+| `summarizeTextForLog` | `server/src/routes/whatsapp.ts`, `server/src/utils/logRedaction.ts` |
+| `summarizeIdentifier` | `server/src/routes/whatsapp.ts`, `server/src/routes/instagramInbox.ts`, `server/src/services/instagram/instagramClinicResolver.ts`, `server/src/services/instagram/instagramAiConversationProcessor.ts` |
+| `summarizeProviderId` | `server/src/routes/instagramWebhook.ts`, `server/src/routes/metaWhatsAppWebhook.ts` |
+
+Names with the same `redact*`/`summarize*` naming shape that exist in the codebase but are **not** on this list, and are therefore no longer trusted as opaque boundaries if ever passed to a sink: `summarizeConnectionIdentifiers`, `summarizePhone`, `summarizeId`, `redactForAnonymization`, `redactMetaBody`, `redactContentPatterns`, `redactCredentialKeyValues`, `redactPhoneCandidates`, `redactActivityDescription`, `redactPatientAttachments`, `redactPatientImagingImages`, `redactPatientMedicalHistory`. None of these were confirmed (by the same repo grep used to build the reviewed list) to actually be called as a direct log-sink argument today; adding any of them to the allowlist in the future requires the same explicit, reviewable, one-line-per-name diff as every other entry — not a rename to dodge the guard.
+
+### 15.4 Note on worktree state at task start
+
+This worktree (`E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f3-impl-007`) already contained an uncommitted, untracked exploratory script (`scripts/log-privacy-guard/__scratch_find_wrappers.mjs`, enumerating every `redact*`/`summarize*`-named call site in the scan roots — i.e., the same investigation §15.2 needed) and a debug-instrumented, uncommitted version of `isSafeWrapperCall()` (an env-var-gated `console.error` logging prefix-matched wrapper names) when R1 started, with file modification timestamps roughly 1-2 minutes old. This looks like leftover scaffolding from a concurrent or immediately-prior investigation into this exact same finding (this repository's environment runs multiple parallel agent sessions against shared worktrees) rather than any kind of tampering, but was not something this task introduced or relied on — the debug instrumentation was removed as part of the fix (§15.2's diff), the scratch script was left in place untracked (not committed; permission to delete files was not available in this session), and origin's branch head was re-verified unchanged immediately before this task's own push (§15.5).
+
+### 15.5 Post-fix validation (all commands re-run against the fix, not reused from §10)
+
+```
+cd "E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f3-impl-007"
+npm run typecheck:log-privacy-guard        # 0 errors
+npm run test:log-privacy-guard             # 29 passed, 0 failed (was 28/29 with 1 failure — fixture 07 — before baseline-exceptions.json was updated)
+npx tsx scripts/log-privacy-guard/cli.ts --strict-baseline
+                                            # 0 new, 98 grandfathered (94 -> 98, +4 from §15.1), 0 stale, exit 0
+git diff --check                           # exit 0, no findings
+```
+
+### 15.6 R1 task status
+
+`AGENT_COMPLETED` / `TESTS_PASSED` (29/29 guard-suite assertions; typecheck clean; real-repository strict-baseline scan clean — 0 new, 98 grandfathered, 0 stale) / `PR_OPENED` (existing PR #399, same branch) / `NOT_MERGED` / `NOT_DEPLOYED`.
+
+**R-018: still OPEN, unchanged by R1** — this fix corrects the scanner's own trust logic (fewer false-negatives, no application code changed); it does not remediate the 94 (now 98) grandfathered sites, and does not claim to.
