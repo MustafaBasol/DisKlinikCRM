@@ -181,3 +181,13 @@ Regression (files touched or logically adjacent): `test:background-jobs-ownershi
 ## 13. Rollback
 
 Every change is additive (new files, new mounted routes, new `process.on()` handlers, one export visibility change, one env-example addition, four new independent test scripts). No existing route, script, PM2 app name, or schema changed. Rollback is a plain `git revert` of this PR's merge commit — no migration to reverse, no PM2/ecosystem config change to undo, no external provider state was ever created (§7 items are all still-pending external actions, nothing to unwind). If `SENTRY_DSN` is ever set in production before this PR is reverted, unsetting it (or leaving it set, since `captureFatalError` is deleted along with the rest of the module on revert) fully restores the pre-existing no-error-tracking state.
+
+## 14. R2 — external telemetry error classification privacy fix (F3-OBS-001-R2-LITE)
+
+**Blocker:** `§5`'s `captureFatalError` derived the external `errType` tag from `err.name` directly. `Error.prototype.name` is a plain writable string (`err.name = '<anything>'` is valid JS), so it was not an intrinsically safe telemetry field despite the R1 review treating it as equivalent to `safeErrorLog`'s fixed `type` enum.
+
+**Fix:** `safeExternalErrorType()` (`server/src/utils/errorTracking.ts`) now returns exactly one of two fixed literals — `'Error'` (err is an `Error` instance) or `'UnknownError'` (anything else) — never `err.name`. No other field in the outbound payload changed (still: fixed message, `errType`, `requestId`, `role`, `route`, `environment`, `release` — never raw `err`/`message`/`stack`/`cause`).
+
+**Test:** added a dedicated poisoned-`Error.name` case to `errorTracking.test.ts` (`err.name` set to an embedded patient/email/phone/token sentinel string) asserting none of that text reaches `captureMessage`'s message/tags/extra or `init()`'s options, and that `errType` resolves to the bounded `'Error'` literal regardless. `test:error-tracking` is now 8/8 (was 7/7 pre-R2; the R1-era "4 assertions" count in §10/§11 above predates the 3 privacy-boundary tests R1 itself added and was already stale before this R2 note).
+
+No route/readiness/schema code touched by R2; `test:fatal-error-handlers` (5/5) and `test:http-log-privacy` (44/44) re-run clean as directly-coupled regressions.

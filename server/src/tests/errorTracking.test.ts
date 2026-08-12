@@ -13,8 +13,14 @@
  * (`setSentryModuleLoaderForTests`), a deliberately sensitive raw error
  * (patient name/email/phone/token, including a nested `cause`) must never
  * appear anywhere in what actually reaches the "external provider" —
- * only a fixed generic message plus `err.name`/requestId/role/route may
- * be sent. See utils/errorTracking.ts's module docstring, "Privacy contract".
+ * only a fixed generic message plus a bounded errType ('Error'/'UnknownError')
+ * and requestId/role/route may be sent. See utils/errorTracking.ts's module
+ * docstring, "Privacy contract".
+ *
+ * R2 adds the poisoned-`Error.name` case: `Error.prototype.name` is a plain
+ * writable string, so `err.name = '<sensitive text>'` is valid JS and must
+ * not pass through to the outbound payload either — see
+ * `safeExternalErrorType()` in utils/errorTracking.ts.
  *
  * Run with: tsx src/tests/errorTracking.test.ts
  */
@@ -225,6 +231,36 @@ async function main() {
       assertNoSecretsAnywhereIn(call.message);
       assertNoSecretsAnywhereIn(call.context);
       assert.equal((call.context?.tags as Record<string, unknown>).errType, 'UnknownError');
+    } finally {
+      if (previous === undefined) delete process.env.SENTRY_DSN; else process.env.SENTRY_DSN = previous;
+      resetErrorTrackingStateForTests();
+    }
+  });
+
+  await test('poisoned Error.name (attacker/app-set free text) never reaches the outbound payload or errType', async () => {
+    resetErrorTrackingStateForTests();
+    const fake = makeCapturingFakeSentry();
+    setSentryModuleLoaderForTests(async () => fake.module);
+    const previous = process.env.SENTRY_DSN;
+    process.env.SENTRY_DSN = 'https://example@o0.ingest.sentry.io/0';
+    try {
+      const err = new Error('safe');
+      err.name =
+        'patient=Mustafa Secret email=patient@example.test phone=+905551112233 token=VERY_SECRET_TOKEN';
+      await captureFatalError(err, { requestId: 'req-45', role: 'api', route: '/api/patients/:id' });
+
+      assert.equal(fake.captureMessageCalls.length, 1);
+      const [call] = fake.captureMessageCalls;
+
+      assert.equal(call.message, 'internal error captured');
+      assertNoSecretsAnywhereIn(call.message);
+      assertNoSecretsAnywhereIn(call.context);
+
+      // errType must be the bounded classification, never the poisoned err.name.
+      assert.equal((call.context?.tags as Record<string, unknown>).errType, 'Error');
+
+      assert.equal(fake.initCalls.length, 1);
+      assertNoSecretsAnywhereIn(fake.initCalls[0]);
     } finally {
       if (previous === undefined) delete process.env.SENTRY_DSN; else process.env.SENTRY_DSN = previous;
       resetErrorTrackingStateForTests();

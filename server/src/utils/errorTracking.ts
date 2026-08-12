@@ -47,14 +47,17 @@
  * the SDK ever sees the value.
  *
  * `captureFatalError` therefore never forwards `err` (or anything derived
- * from it — `err.message`, `err.stack`, `err.cause`, custom properties)
- * to the provider. It extracts only `err.name` (mirroring `safeErrorLog`'s
- * already-accepted-as-safe `type` field — a fixed, small set of JS/Prisma
- * built-in constructor names in practice, never free text) and discards
+ * from it — `err.message`, `err.stack`, `err.cause`, `err.name`, custom
+ * properties) to the provider. `err.name` is a plain writable string
+ * (`Error.prototype.name`, reassignable to arbitrary text by any caller —
+ * `err.name = 'patient=... token=...'` is valid JS), so unlike
+ * `safeErrorLog`'s `type` field it is NOT an intrinsically safe telemetry
+ * value and must not pass through verbatim (F3-OBS-001-R2). Instead this
+ * module reduces every error to one of two fixed literals and discards
  * everything else, then sends a synthetic, fixed-shape event built from:
  *
- *   - `errType`      — `err.name`, or `'UnknownError'` if `err` isn't an
- *                       `Error` instance.
+ *   - `errType`      — `'Error'` if `err` is an `Error` instance, else
+ *                       `'UnknownError'`. Never `err.name` itself.
  *   - a fixed, hardcoded message (`EXTERNAL_TRACKING_MESSAGE` below) — NOT
  *     `err.message`, in every environment, unlike `safeErrorLog`'s
  *     non-production behavior (which does log the real message/stack, but
@@ -105,12 +108,16 @@ interface MinimalSentryModule {
  */
 const EXTERNAL_TRACKING_MESSAGE = 'internal error captured';
 
-/** `err.name` if `err` is an Error instance, else a fixed fallback — never `err.message`/`err.stack`. */
-function safeExternalErrorType(err: unknown): string {
-  if (err instanceof Error && typeof err.name === 'string' && err.name.trim() !== '') {
-    return err.name;
-  }
-  return 'UnknownError';
+/**
+ * Bounded error classification — NOT `err.name`. `Error.prototype.name` is a
+ * plain writable string property (`err.name = anything`), so it is
+ * attacker/application-controlled free text, not an intrinsically safe
+ * telemetry field, despite looking like a fixed enum in the common case.
+ * This returns one of exactly two fixed literals, regardless of what `err`
+ * or `err.name` actually contain.
+ */
+function safeExternalErrorType(err: unknown): 'Error' | 'UnknownError' {
+  return err instanceof Error ? 'Error' : 'UnknownError';
 }
 
 let initialized = false;
@@ -188,8 +195,8 @@ export async function captureFatalError(err: unknown, context: ErrorTrackingCont
 
   // See module docstring's "Privacy contract": every field below is either
   // a fixed constant, a caller-supplied correlation id/role/safe-route
-  // template, or `err.name` — never `err.message`, `err.stack`, or any
-  // other property of `err`.
+  // template, or the bounded `safeExternalErrorType()` classification —
+  // never `err.name`, `err.message`, `err.stack`, or any other property of `err`.
   Sentry.captureMessage(EXTERNAL_TRACKING_MESSAGE, {
     level: 'error',
     tags: {
