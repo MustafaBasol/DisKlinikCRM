@@ -52,6 +52,7 @@ import { sendAppointmentRequestConfirmationNotification } from '../appointmentRe
 import { recordOperationalEvent } from '../operationalEventService.js';
 import { logger } from '../../utils/logger.js';
 import { getZonedDateTimeParts } from '../../utils/helpers.js';
+import { safeErrorFields } from '../../utils/safeError.js';
 import type { ExternalCalendarConnectionRecord } from './ExternalCalendarProvider.js';
 
 /** vendor-agnostic timezone convention already baked into ExternalSlotQuery /
@@ -362,7 +363,7 @@ async function finalizeFailure(
   // to a non-error status — see externalCalendarConnectionService.ts.
   if (classification.errorCode === 'AUTH_ERROR') {
     await recordExternalCalendarConnectionCheck(link.clinicId, { success: false, message: classification.message }).catch((err) => {
-      logger.error({ clinicId: link.clinicId, err }, 'external-calendar-outbound-sync: failed to degrade integration health after auth failure');
+      logger.error({ clinicId: link.clinicId, ...safeErrorFields(err) }, 'external-calendar-outbound-sync: failed to degrade integration health after auth failure');
     });
   }
 
@@ -567,7 +568,7 @@ export async function attemptExternalCalendarSync(
     });
 
     await sendConfirmationForConvertedAppointment(appointment.id, sendConfirmation).catch((err) => {
-      logger.error({ appointmentId: appointment.id, clinicId: link.clinicId, err }, 'external-calendar-outbound-sync: post-sync confirmation notification failed');
+      logger.error({ appointmentId: appointment.id, clinicId: link.clinicId, ...safeErrorFields(err) }, 'external-calendar-outbound-sync: post-sync confirmation notification failed');
     });
 
     return { outcome: 'synced', externalAppointmentId: result.externalAppointmentId };
@@ -614,7 +615,7 @@ export async function scheduleExternalCalendarSyncOrNotify(
     await sendConfirmation({
       clinicId: input.clinicId,
       ...input.notification,
-    }).catch((err) => logger.error({ clinicId: input.clinicId, appointmentId: input.appointmentId, err }, 'external-calendar-outbound-sync: appointment confirmation notification failed'));
+    }).catch((err) => logger.error({ clinicId: input.clinicId, appointmentId: input.appointmentId, ...safeErrorFields(err) }, 'external-calendar-outbound-sync: appointment confirmation notification failed'));
     return;
   }
 

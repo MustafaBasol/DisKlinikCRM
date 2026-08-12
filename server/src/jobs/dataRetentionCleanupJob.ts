@@ -27,6 +27,7 @@ import {
 } from '../services/privacy/dataRetentionPolicy.js';
 import { getPlatformSetting } from '../services/platformSettings.js';
 import { withJobLock } from '../utils/jobLock.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -309,7 +310,7 @@ async function runCategory(
     const msg = err instanceof Error ? err.message : String(err);
     summary.errors.push(`${label}: ${msg}`);
     summary.skippedCategories.push(label);
-    console.error(`[data-retention] category=${label} error=${msg}`);
+    console.error(`[data-retention] category=${label}`, safeErrorFields(err));
     return 0;
   }
 }
@@ -470,8 +471,7 @@ export function startDataRetentionCleanupJob(overrides?: DataRetentionJobOverrid
         await runDataRetentionCleanup({ config });
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[data-retention] Unhandled error in cleanup job: ${msg}`);
+      console.error('[data-retention] Unhandled error in cleanup job:', safeErrorFields(err));
     }
   });
 

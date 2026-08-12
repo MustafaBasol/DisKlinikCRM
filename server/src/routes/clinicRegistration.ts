@@ -168,7 +168,7 @@ router.post('/clinic', async (req: Request, res: Response) => {
         console.warn(`[clinic-register] Verification email not sent for user ${result.adminUser.id}: ${mailResult.reason}`);
       }
     } catch (emailErr) {
-      console.warn('[clinic-register] Failed to send verification email:', (emailErr as Error).message);
+      console.warn('[clinic-register] Failed to send verification email:', emailErr instanceof Error ? emailErr.name : 'MailError');
     }
 
     res.status(201).json({

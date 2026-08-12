@@ -26,6 +26,7 @@
 import cron from 'node-cron';
 import { isFileBackupEnabled, runFileBackup } from '../services/fileBackupService.js';
 import { isFileBackupDestinationConfigured } from '../services/fileBackupDestination.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 function getCronSchedule(): string {
   return process.env.FILE_BACKUP_CRON?.trim() || '0 3 * * *'; // daily, 03:00 local
@@ -58,7 +59,7 @@ export function startFileBackupJob(): void {
         // Includes the expected, benign case where another replica (or a
         // manual trigger) already holds the lock — logged, not thrown,
         // since a missed tick here just means tomorrow's tick tries again.
-        console.error(`[file-backup] Run skipped or failed: ${err instanceof Error ? err.message : String(err)}`);
+        console.error('[file-backup] Run skipped or failed:', safeErrorFields(err));
       });
   });
 

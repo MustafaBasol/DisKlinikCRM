@@ -591,6 +591,61 @@ await test('console.log output does not include raw phone numbers or message tex
   assert.ok(!combined.includes('lastMessage'), 'must not log lastMessage text');
 });
 
+// F3-IMPL-006 (Wave 2): runCategory's catch block used to log
+// `error=${msg}` where msg = err.message — a raw Prisma error from a
+// delete/anonymize batch over contactRequests/inboxEntries (phone/name/
+// lastMessage/rawPayload fields). A PrismaClientValidationError or
+// constraint-violation error can echo the exact field value being
+// redacted straight back through err.message. This proves the fix
+// (safeErrorFields(err)) keeps the console.error(`category=...`) call
+// PII-free while errors still land in the (non-console) summary.errors
+// array unchanged for operator diagnostics.
+await test('Wave 2: category error log uses safeErrorFields, never the raw PHI-bearing err.message', async () => {
+  const PHONE_FIXTURE = '905551234567';
+  const NAME_FIXTURE = 'Fatma Şahin';
+  const phiFixtureErr = Object.assign(
+    new Error(
+      `Unique constraint failed on the fields: (phone). Attempted data: { phone: "${PHONE_FIXTURE}", name: "${NAME_FIXTURE}" }`,
+    ),
+    { name: 'PrismaClientKnownRequestError', code: 'P2002' },
+  );
+
+  const logLines: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => logLines.push(JSON.stringify(args));
+
+  let summary: DataRetentionSummary;
+  try {
+    summary = await runDataRetentionCleanup(
+      { dryRun: false, config: DEFAULT_TEST_CONFIG },
+      {
+        conversationMessages: zeroDeps(),
+        conversationStates: zeroDeps(),
+        operationalEvents: zeroDeps(),
+        inboundEvents: zeroDeps(),
+        contactRequests: {
+          countEligible: async () => 1,
+          executeCleanupBatch: async () => { throw phiFixtureErr; },
+        },
+        inboxEntries: zeroDeps(),
+      },
+    );
+  } finally {
+    console.error = originalError;
+  }
+
+  // The category is still recorded as skipped/errored — behavior unchanged.
+  assert.ok(summary.skippedCategories.includes('contactRequests'), 'category should be marked skipped');
+  assert.ok(summary.errors.some(e => e.startsWith('contactRequests:')), 'summary.errors should record the failure');
+
+  const combined = logLines.join('\n');
+  assert.ok(!combined.includes(PHONE_FIXTURE), 'raw phone number leaked into console.error output');
+  assert.ok(!combined.includes(NAME_FIXTURE), 'raw patient name leaked into console.error output');
+  assert.ok(combined.includes('PrismaClientKnownRequestError'), 'expected errorName in console.error output');
+  assert.ok(combined.includes('P2002'), 'expected errorCode in console.error output');
+  assert.ok(combined.includes('category=contactRequests'), 'expected the category label in console.error output');
+});
+
 // ── Section M: Protected models never targeted ────────────────────────────────
 
 section('M. Protected models — Patient/Appointment/Payment not targeted');

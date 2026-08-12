@@ -41,6 +41,7 @@
 import prisma from '../../db.js';
 import { fileExists } from '../fileStorage.js';
 import { getImagesForLifecycleReview, checkImageStorageExists, markStorageMissing } from '../imaging/public.js';
+import { safeErrorFields } from '../../utils/safeError.js';
 
 export interface OrphanCheckEntry {
   id: string;
@@ -158,7 +159,7 @@ export async function markConfirmedMissing(
       }
       marked++;
     } catch (err) {
-      console.error('[orphan-file-inspection] failed to mark missing', entry, err);
+      console.error('[orphan-file-inspection] failed to mark missing', entry, safeErrorFields(err));
     }
   }
   return { marked };

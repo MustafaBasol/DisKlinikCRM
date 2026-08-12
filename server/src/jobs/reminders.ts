@@ -14,6 +14,7 @@ import { sendWhatsAppMessage } from '../services/whatsapp/whatsappService.js';
 import { sendProactiveWhatsAppMessage, OUTBOUND_ERRORS } from '../services/whatsapp/whatsappOutboundMessaging.js';
 import { logActivity } from '../utils/activity.js';
 import { logger } from '../utils/logger.js';
+import { safeErrorFields } from '../utils/safeError.js';
 import { patientContactSelect, userPublicSelect } from '../utils/prismaSelects.js';
 import { processScheduledPostTreatmentMessages } from '../services/postTreatmentMessaging.js';
 import { withJobLock } from '../utils/jobLock.js';
@@ -332,7 +333,7 @@ async function runPatientAppointmentRemindersForClinic(
         where: { id: sentMessage.id },
         data: { status: 'failed' },
       });
-      console.error(`[reminders] Failed to send appointment reminder to ${redactPhone(patient.phone)}: ${sendErr.message}`);
+      console.error(`[reminders] Failed to send appointment reminder to ${redactPhone(patient.phone)}`, safeErrorFields(sendErr));
     }
   }
 }
@@ -417,7 +418,7 @@ async function runPractitionerDailyScheduleForClinic(
         },
       });
     } catch (sendErr: any) {
-      console.error(`[reminders] Failed to send practitioner schedule to ${practitioner.id}: ${sendErr.message}`);
+      console.error(`[reminders] Failed to send practitioner schedule to ${practitioner.id}`, safeErrorFields(sendErr));
     }
   }
 }
@@ -552,7 +553,7 @@ async function runPaymentRemindersForClinic(
         where: { id: sentMessage.id },
         data: { status: 'failed' },
       });
-      console.error(`[reminders] Failed to send payment reminder to ${redactPhone(patient.phone)}: ${sendErr.message}`);
+      console.error(`[reminders] Failed to send payment reminder to ${redactPhone(patient.phone)}`, safeErrorFields(sendErr));
     }
   }
 }
@@ -614,7 +615,7 @@ async function runDailyReminderJob(): Promise<void> {
         );
       }
     } catch (clinicErr: any) {
-      console.error(`[reminders] Error processing clinic ${clinic.id}: ${clinicErr.message}`);
+      console.error(`[reminders] Error processing clinic ${clinic.id}`, safeErrorFields(clinicErr));
     }
   });
 
@@ -640,7 +641,7 @@ export function startReminderJobs(): void {
       reminderJobRunning = true;
       withJobLock('reminders:notification', REMINDER_LOCK_TTL_MS, runDailyReminderJob)
         .catch((err) =>
-          console.error('[reminders] Unhandled error in notification reminder job:', err),
+          console.error('[reminders] Unhandled error in notification reminder job:', safeErrorFields(err)),
         )
         .finally(() => {
           reminderJobRunning = false;
@@ -653,7 +654,7 @@ export function startReminderJobs(): void {
       postTreatmentJobRunning = true;
       withJobLock('reminders:post-treatment', REMINDER_LOCK_TTL_MS, processScheduledPostTreatmentMessages)
         .catch((err) =>
-          console.error('[reminders] Unhandled error in post-treatment messaging job:', err),
+          console.error('[reminders] Unhandled error in post-treatment messaging job:', safeErrorFields(err)),
         )
         .finally(() => {
           postTreatmentJobRunning = false;

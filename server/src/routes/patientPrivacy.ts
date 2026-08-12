@@ -435,7 +435,7 @@ router.post(
       res.setHeader('Content-Type', 'application/json');
       return res.json(exportData);
     } catch (err: any) {
-      console.error('[patientPrivacy/export]', err?.message ?? err);
+      console.error('[patientPrivacy/export]', safeErrorFields(err));
       return res.status(500).json({ error: 'Export failed. Please try again.' });
     }
   },
@@ -499,7 +499,7 @@ router.post(
       });
     } catch (err: any) {
       if (err?.status === 404) return res.status(404).json({ error: err.message });
-      console.error('[patientPrivacy/anonymize]', err?.message ?? err);
+      console.error('[patientPrivacy/anonymize]', safeErrorFields(err));
       return res.status(500).json({ error: 'Anonymization failed. Please try again.' });
     }
   },
@@ -853,7 +853,7 @@ router.post(
 
       return res.status(201).json({ request: created });
     } catch (err: any) {
-      console.error('[patientPrivacy/requests/create]', err?.message ?? err);
+      console.error('[patientPrivacy/requests/create]', safeErrorFields(err));
       return res.status(500).json({ error: 'Failed to create privacy request.' });
     }
   },
@@ -921,7 +921,7 @@ router.patch(
 
       return res.json({ request: updated });
     } catch (err: any) {
-      console.error('[patientPrivacy/requests/status]', err?.message ?? err);
+      console.error('[patientPrivacy/requests/status]', safeErrorFields(err));
       return res.status(500).json({ error: 'Failed to update privacy request.' });
     }
   },

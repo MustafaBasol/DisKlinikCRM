@@ -9,6 +9,7 @@
 
 import prisma from '../db.js';
 import { Prisma } from '@prisma/client';
+import { safeErrorFields } from '../utils/safeError.js';
 
 export type EventSeverity = 'info' | 'warning' | 'error' | 'critical';
 export type EventSource = 'whatsapp' | 'meta_whatsapp' | 'instagram' | 'sms' | 'appointment' | 'finance' | 'auth' | 'system' | 'communication_consent' | 'external_calendar';
@@ -42,6 +43,6 @@ export async function recordOperationalEvent(input: OperationalEventInput): Prom
       },
     });
   } catch (err) {
-    console.error('[OperationalEvent] Failed to record event:', err);
+    console.error('[OperationalEvent] Failed to record event:', safeErrorFields(err));
   }
 }

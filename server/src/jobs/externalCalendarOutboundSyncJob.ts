@@ -24,6 +24,7 @@ import prisma from '../db.js';
 import { attemptExternalCalendarSync, MAX_SYNC_ATTEMPTS } from '../services/externalCalendar/externalCalendarOutboundSync.js';
 import { withJobLock } from '../utils/jobLock.js';
 import { logger } from '../utils/logger.js';
+import { safeErrorFields } from '../utils/safeError.js';
 
 /** A provider HTTP call is expected to resolve in seconds, not minutes — 30
  *  minutes stuck in 'syncing' can only mean the process crashed mid-attempt. */
@@ -98,7 +99,7 @@ export async function runExternalCalendarOutboundSyncJob(): Promise<void> {
       // attemptExternalCalendarSync already classifies and persists failures
       // internally; this catch only guards against a truly unexpected throw
       // (e.g. a DB outage mid-attempt) so one bad row can't abort the batch.
-      logger.error({ linkId: row.id, error }, 'external-calendar-outbound-sync: unexpected error retrying sync record');
+      logger.error({ linkId: row.id, ...safeErrorFields(error) }, 'external-calendar-outbound-sync: unexpected error retrying sync record');
     }
   }
 }
@@ -113,7 +114,7 @@ export function startExternalCalendarOutboundSyncJob(): void {
     }
     retryJobRunning = true;
     withJobLock('external-calendar-outbound-sync', 10 * 60 * 1000, runExternalCalendarOutboundSyncJob)
-      .catch((error) => logger.error({ error }, 'external-calendar-outbound-sync: job run failed'))
+      .catch((error) => logger.error(safeErrorFields(error), 'external-calendar-outbound-sync: job run failed'))
       .finally(() => {
         retryJobRunning = false;
       });
