@@ -74,10 +74,14 @@ import { closeRedis } from './utils/redis.js';
 import { isEncryptionKeyConfigured } from './utils/encryption.js';
 import { getSessionCookieDeploymentWarnings } from './utils/sessionCookies.js';
 import { getBearerFallbackWarnings } from './utils/authFallback.js';
-import { httpLogger, logUnhandledError } from './utils/logger.js';
+import { httpLogger, logUnhandledError, logger, safeRoute } from './utils/logger.js';
 import { attachRequestIdHeader } from './middleware/requestId.js';
 import { resolveApiBackgroundJobsOwnership } from './utils/backgroundJobsOwnership.js';
 import { assertProcessRole } from './utils/processRole.js';
+import { buildHealthRouter } from './routes/health.js';
+import { getRedis } from './utils/redis.js';
+import { installFatalErrorHandlers } from './utils/fatalErrorHandlers.js';
+import { captureFatalError } from './utils/errorTracking.js';
 
 dotenv.config();
 
@@ -86,6 +90,12 @@ dotenv.config();
 // set to something other than "api" — see utils/processRole.ts. Unset is
 // fine (pre-existing single-process/dev/test shape, unchanged).
 const processRole = assertProcessRole('api');
+
+// F3-OBS-001: an uncaught exception or unhandled rejection previously crashed
+// this process with Node's default (unstructured, uncorrelated) handler —
+// see utils/fatalErrorHandlers.ts for why this always exits(1) rather than
+// trying to keep serving requests.
+installFatalErrorHandlers({ processLabel: 'api', logger });
 
 if (!isEncryptionKeyConfigured()) {
   if (process.env.NODE_ENV === 'production') {
@@ -187,6 +197,19 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
+// F3-OBS-001: minimum production health-signal surface (GET /api/livez,
+// GET /api/readyz) alongside the /api/health block above, which stays
+// byte-for-byte unchanged — see routes/health.ts for why these are
+// separate endpoints rather than a change to /api/health itself.
+app.use(
+  '/api',
+  buildHealthRouter({
+    processRole: processRole.role,
+    checkDatabase: () => prisma.$queryRaw`SELECT 1`,
+    checkRedis: getRedis() ? () => getRedis()!.ping() : null,
+  }),
+);
+
 // Unprotected routes
 app.use('/api/auth', authRoutes);
 app.use('/api/public/whatsapp', whatsappRoutes);
@@ -281,7 +304,13 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   if (res.headersSent) return next(err);
   // Body-parser errors (malformed JSON, payload too large) carry a client status.
   const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 500 ? err.status : 500;
-  if (status >= 500) logUnhandledError(req, status, err);
+  if (status >= 500) {
+    logUnhandledError(req, status, err);
+    // Fire-and-forget: never let error-tracking delivery delay or fail the
+    // client response — see utils/errorTracking.ts (no-op unless SENTRY_DSN
+    // is set, never throws).
+    void captureFatalError(err, { requestId: req.id !== undefined ? String(req.id) : undefined, role: 'api', route: safeRoute(req) });
+  }
   res.status(status).json({ error: status >= 500 ? 'Internal server error' : 'Invalid request' });
 });
 
