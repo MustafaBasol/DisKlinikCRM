@@ -2,7 +2,7 @@
 
 **Task ID:** F3-IMPL-007 · **Phase:** F3 — Production Hardening · **Branch:** `feature/f3-impl-007-sensitive-log-regression-guard` · **Worktree:** `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f3-impl-007` · **Baseline:** `origin/main` @ `6f7e580d1bab2a0f87baed1cfe5ec0a944a6b711` (Merge PR #396, `feature/f3-sec-002-platform-admin-session-revocation`) — confirmed via `git fetch origin --prune && git rev-parse origin/main`, exact match, clean worktree (`git status --short` empty at task start).
 
-**Updated by F3-IMPL-007-R1 (2026-08-12) — see §15 below.** §1-§14 are preserved verbatim as originally authored; their specific counts (94 grandfathered sites, "29/29"/"28/28" assertion totals) are historical as of the original commit and superseded where §15 says so. R1 fixes two accepted review findings against the scanner's own trust logic (not the application code it scans) — see §15 for what changed and why.
+**Updated by F3-IMPL-007-R1 (2026-08-12) — see §16 for the authoritative final state (§15 is preserved as the historical intermediate record; §16.1/§16.2 explicitly supersede §15.2/§15.3).** §1-§14 are preserved verbatim as originally authored; their specific counts (94 grandfathered sites, "29/29"/"28/28" assertion totals) are historical as of the original commit and superseded by §16. R1 fixes two accepted review findings against the scanner's own trust logic (not the application code it scans) and adds the task-brief-required regression tests for both — see §16 for what changed and why.
 
 **Risk relationship:** R-018 — Sensitive runtime logging / PII-message-content regression risk. **This task does not close R-018** — see §7.
 
@@ -230,8 +230,106 @@ npx tsx scripts/log-privacy-guard/cli.ts --strict-baseline
 git diff --check                           # exit 0, no findings
 ```
 
-### 15.6 R1 task status
+### 15.6 R1 task status (superseded — see §16)
 
 `AGENT_COMPLETED` / `TESTS_PASSED` (29/29 guard-suite assertions; typecheck clean; real-repository strict-baseline scan clean — 0 new, 98 grandfathered, 0 stale) / `PR_OPENED` (existing PR #399, same branch) / `NOT_MERGED` / `NOT_DEPLOYED`.
 
 **R-018: still OPEN, unchanged by R1** — this fix corrects the scanner's own trust logic (fewer false-negatives, no application code changed); it does not remediate the 94 (now 98) grandfathered sites, and does not claim to.
+
+## 16. F3-IMPL-007-R1 completion — required tests added, safe-wrapper trust boundary closed, evidence corrected (2026-08-12, same day)
+
+§15 above was authored against an intermediate state of this same branch/PR (this worktree runs multiple parallel agent sessions against shared state per §15.4 — the file on disk kept changing between §15's own investigation and its commit). Two things in §15 need correction, and the task brief's explicit test requirements (both findings' negative/positive test lists) were not yet added when §15 was committed as `e34377f`. This section is the authoritative, final state; §15.2's "none observable" claim and §15.3's exclusion table are superseded by §16.1-§16.2 below, not by an edit to §15 itself (preserving §15 as the historical record of what that commit's message says versus what its diff actually contains).
+
+### 16.1 Correction to §15.2 — the safe-wrapper distinction was dead code until this fix
+
+`inspectValue`'s `ts.isCallExpression` branch, as it stood before this task, returned unconditionally in **both** branches of `if (isSafeWrapperCall(n)) return; return;` — i.e. every call expression reached as a sink argument (or nested value position) was already an opaque leaf regardless of `isSafeWrapperCall`'s result. This means `isSafeWrapperCall()` — prefix-based or exact-name-based, either way — never actually gated anything: `unknownHelper(err)`, `redactWhatever(err)`, and `safeErrorFields(err)` were all equally invisible to the scanner. §15.2 correctly diagnosed the *naming* problem (prefix trust) but its "Real-repository impact: none observable" line reflects this pre-existing dead-code state, not the code actually committed in `e34377f` — that commit's diff (verified via `git show e34377f -- scripts/log-privacy-guard/lib/scanner.ts`) already contains the fix below, landed on shared disk state before the commit was made.
+
+**Fix (now the shipped behavior):** a call expression NOT on `SAFE_WRAPPER_EXACT_NAMES` is no longer opaque — its own arguments are now inspected via `inspectValue` exactly like any other value position:
+
+```ts
+if (ts.isCallExpression(n)) {
+  if (isSafeWrapperCall(n)) return; // allowlisted safe boundary — do not descend into its arguments
+  for (const arg of n.arguments) inspectValue(arg);
+  return;
+}
+```
+
+This is what makes the review finding's required test 2/3/4 (below, §16.3) meaningful: without this change, `redactWhatever(err)`/`summarizeWhatever(err)`/`totallyLegitHelper(err)` would ALL have continued to pass silently (opaque by the old universal-return behavior), regardless of whether the naming-based allowlist was prefix-based or exact-name-based. The fix is scoped narrowly — it changes only what happens when a call is NOT on the reviewed allowlist; allowlisted calls are unaffected.
+
+**Real-repository impact (corrected):** re-running the strict-baseline scan surfaced exactly 5 new, genuine, pre-existing sites in `server/src/routes/platformSecurityIncidents.ts` (lines 122/155/168/193/260 — the `String(err)` fallback branch of `err instanceof Error ? err.message : String(err)`, all `RAW_ERROR_OBJECT`). `String` is a global built-in, not a redaction helper — it stringifies the full `Error` (message and, depending on engine, more) — so it is correctly NOT added to the safe-wrapper allowlist. These are real, already-shipped log statements predating this task; grandfathered into `baseline-exceptions.json` with `addedBy: "F3-IMPL-007-R1-safe-wrapper-fix"`. Baseline total: 98 (§15.1's count) → **103**.
+
+### 16.2 Correction to §15.3 — 3 additional names actually relied upon
+
+Re-deriving the allowlist by instrumenting a real scan run (temporarily logging every callee name that matched only the now-removed prefix regex while reached from a sink's arguments, across the 5 scan roots) found 3 more currently-relied-upon names that §15.3 had listed as "not on this list": `redactMetaBody` (`server/src/services/instagram/InstagramMessagingProvider.ts`), `summarizeConnectionIdentifiers` (`server/src/routes/instagramWebhook.ts`), `summarizeId` (`server/src/services/whatsapp/metaWhatsAppAiProcessor.ts`). All three are genuine log-argument wrapper calls that were relying on the old prefix rule to stay opaque; omitting them from the exact allowlist would have caused §16.1's call-expression-descent fix to flag them as new violations. They are added to `SAFE_WRAPPER_EXACT_NAMES` (now **12** names total, not 9), reviewed the same way as the other 8.
+
+The remaining names §15.3 listed as excluded — `summarizePhone`, `redactForAnonymization`, `redactContentPatterns`, `redactCredentialKeyValues`, `redactPhoneCandidates`, `redactActivityDescription`, `redactPatientAttachments`, `redactPatientImagingImages`, `redactPatientMedicalHistory`, `redactStudyLegalHoldReason`, `redactLegalHoldReason` — remain excluded: none of them were found reached from a logger/console sink's arguments in the instrumented scan, so none needed adding, and none should be added speculatively.
+
+### 16.3 Required tests added (task brief's explicit list, both findings)
+
+`scripts/log-privacy-guard/__tests__/index.test.ts` gained two new sections, 8 new assertions (29 → **37**):
+
+**"Catch-clause binding tracking" (finding 1, all 4 task-required cases):**
+1. `catch (e)` — raw object (`{ e }`) to `console.error` → `RAW_ERROR_OBJECT`
+2. `catch (ex)` — `ex.message` to `console.error` → `ERROR_DANGEROUS_PROPERTY`
+3. nested `catch (e) { try { ... } catch (ex) { ... } }` — both bindings tracked independently, 2 distinct `RAW_ERROR_OBJECT` findings
+4. shadowing — an unrelated `const e = ...` declared *after* the catch block closes, then logged, produces zero additional findings (only the 1 finding from inside the catch scope) — proves `exitErrorScope` correctly un-tracks the name
+
+**"Safe-wrapper exact allowlist" (finding 2, all 4 task-required cases):**
+1. a known exact allowlisted helper (`safeErrorFields`) wrapping `err` → zero findings
+2. an unknown `redactWhatever(err)` (not on the allowlist) → `RAW_ERROR_OBJECT` (not silently trusted)
+3. an unknown `summarizeWhatever(err)` (not on the allowlist) → `RAW_ERROR_OBJECT` (not silently trusted)
+4. a deliberately unsafe pass-through helper with an unrelated name (`totallyLegitHelper(err)`) → `RAW_ERROR_OBJECT`, proving naming alone (matching or not matching `redact*`/`summarize*`) cannot bypass detection
+
+### 16.4 Full updated safe-wrapper exact allowlist (12 names, final)
+
+| Name | Source |
+|---|---|
+| `safeErrorFields` | F3-IMPL-006 §2 |
+| `safeErrorLog` | F3-IMPL-006 §2 |
+| `boundedErrorType` | F3-IMPL-006 §2 |
+| `senderSuffix` | F3-IMPL-006 §2 |
+| `redactPhone` | `server/src/jobs/reminders.ts`, `server/src/routes/whatsapp.ts`, `server/src/services/whatsapp/metaWhatsAppAiProcessor.ts`, `server/src/services/whatsappBookingFlow.ts` |
+| `redactSensitiveText` | `server/src/services/googleAiStudio.ts`, `server/src/services/privacy/redaction.ts`, `server/src/services/whatsappAgentPrompt.ts`, `server/src/services/whatsappConversationAgent.ts`, `server/src/services/whatsappStepAwareNlu.ts` |
+| `redactMetaBody` | `server/src/services/instagram/InstagramMessagingProvider.ts` |
+| `summarizeTextForLog` | `server/src/routes/whatsapp.ts`, `server/src/services/whatsappBookingFlow.ts` |
+| `summarizeIdentifier` | `server/src/routes/whatsapp.ts`, `server/src/routes/instagramInbox.ts`, `server/src/services/instagram/instagramClinicResolver.ts`, `server/src/services/instagram/instagramAiConversationProcessor.ts` |
+| `summarizeProviderId` | `server/src/routes/instagramWebhook.ts`, `server/src/routes/metaWhatsAppWebhook.ts` |
+| `summarizeConnectionIdentifiers` | `server/src/routes/instagramWebhook.ts` |
+| `summarizeId` | `server/src/services/whatsapp/metaWhatsAppAiProcessor.ts` |
+
+### 16.5 Baseline delta, full accounting
+
+| Stage | Count | Delta |
+|---|---|---|
+| Original F3-IMPL-007 (§4) | 94 | — |
+| §15.1 catch-binding fix (`patients.ts` waErr/igErr/trErr/tcErr) | 98 | +4 |
+| §16.1 call-expression-descent fix (`platformSecurityIncidents.ts` `String(err)` ×5) | **103** | +5 |
+
+All 9 newly-grandfathered entries (4 + 5) are exact-fingerprinted, single-file/single-line, non-wildcard, with `reason` ≥15 chars and a distinct `addedBy` tag identifying which R1 sub-fix surfaced them — no path-level or wildcard ignores were added, per the task brief's explicit prohibition.
+
+### 16.6 Final validation run (supersedes §10 and §15.5)
+
+```
+cd "E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f3-impl-007"
+npx tsc --noEmit -p scripts/log-privacy-guard/tsconfig.json     # 0 errors
+npm run test:log-privacy-guard                                  # 37 passed, 0 failed
+npx tsx scripts/log-privacy-guard/cli.ts --strict-baseline
+  # Files scanned: 262 · 0 new violations · 103 grandfathered · 0 stale · 0 duplicate · 0 errors
+git diff --check                                                 # exit 0 (CRLF-normalization notices only)
+```
+
+**Performance:** 3 consecutive scanner-logic-only runs after the fix: 852ms, 736ms, 725ms (was 678-887ms pre-fix, §8) — the added call-expression descent is a bounded per-argument traversal, not a complexity-class change, and stays well within the existing performance envelope.
+
+**No `server/` runtime code, Prisma schema, route, or middleware was changed.** This correction's diff is entirely: `scripts/log-privacy-guard/lib/scanner.ts` (rule-engine logic), `scripts/log-privacy-guard/config/baseline-exceptions.json` (+9 exact, fingerprinted, documented entries), `scripts/log-privacy-guard/__tests__/index.test.ts` (+8 assertions), and this evidence doc. No migration/schema change. No secrets introduced.
+
+### 16.7 R1 final task status
+
+`AGENT_COMPLETED` / `TESTS_PASSED` (37/37 guard-suite assertions, including all 8 task-brief-required negative/positive cases for both findings; typecheck clean; real-repository strict-baseline scan clean — 0 new, 103 grandfathered, 0 stale, 0 duplicate, 0 errors) / `PR_UPDATED` (existing PR #399, same branch — not a new PR) / `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`.
+
+**R-018: still OPEN.** This correction fixes the scanner's own trust logic (catch-clause name-independence; a genuine, exact-name-only, non-opaque-by-default safe-wrapper boundary) and adds the task-required regression tests for both. It does not remediate any of the 103 grandfathered sites and does not claim to — R-018 closure remains a separate, future, explicitly-scoped remediation task.
+
+**Merge safe:** NO — awaiting human review of this correction (catch-clause scoping change, safe-wrapper trust-boundary change, and the resulting 9 new baseline grandfather entries all warrant review before merge, consistent with this task's explicit "Do NOT merge" instruction).
+
+**Deployment safe:** NO — this branch is not deployed; the tool is not wired into any CI gate yet (§9), unchanged by this correction.
+
+**Exact next task:** F3-IMPL-007-R1 review / merge decision.

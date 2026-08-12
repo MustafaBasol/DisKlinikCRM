@@ -207,6 +207,144 @@ async function main() {
     assert.equal(violations.length, 0);
   });
 
+  section('Catch-clause binding tracking (F3-IMPL-007-R1, review finding 1)');
+
+  await test('catch (e) — raw object to logger -> RAW_ERROR_OBJECT (not just err/error)', () => {
+    const src = [
+      'declare function doSomething(): void;',
+      'export function fn() {',
+      '  try { doSomething(); } catch (e) {',
+      "    console.error('failed', { e });",
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const { violations } = scanFile('/virtual/catch-e.ts', 'virtual/catch-e.ts', src);
+    assert.deepEqual(ruleIdsOf(violations), ['RAW_ERROR_OBJECT']);
+  });
+
+  await test('catch (ex) — ex.message to logger -> ERROR_DANGEROUS_PROPERTY (not just err/error)', () => {
+    const src = [
+      'declare function doSomething(): void;',
+      'export function fn() {',
+      '  try { doSomething(); } catch (ex) {',
+      "    console.error('failed', ex.message);",
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const { violations } = scanFile('/virtual/catch-ex.ts', 'virtual/catch-ex.ts', src);
+    assert.deepEqual(ruleIdsOf(violations), ['ERROR_DANGEROUS_PROPERTY']);
+  });
+
+  await test('nested catch scopes with different binding names are each tracked independently', () => {
+    const src = [
+      'declare function doSomething(): void;',
+      'declare function doSomethingElse(): void;',
+      'export function fn() {',
+      '  try {',
+      '    doSomething();',
+      '  } catch (e) {',
+      '    try {',
+      '      doSomethingElse();',
+      '    } catch (ex) {',
+      "      console.error('inner failure', ex);",
+      '    }',
+      "    console.error('outer failure', e);",
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const { violations } = scanFile('/virtual/nested-catch.ts', 'virtual/nested-catch.ts', src);
+    assert.deepEqual(ruleIdsOf(violations), ['RAW_ERROR_OBJECT', 'RAW_ERROR_OBJECT']);
+  });
+
+  await test('shadowing: an unrelated same-named identifier outside the catch scope is not flagged', () => {
+    const src = [
+      'declare function doSomething(): void;',
+      'declare function computeSomethingUnrelated(): string;',
+      'export function fn() {',
+      '  try {',
+      '    doSomething();',
+      '  } catch (e) {',
+      "    console.error('handled', e);",
+      '  }',
+      '  const e = computeSomethingUnrelated();',
+      "  console.error('unrelated', e);",
+      '}',
+      '',
+    ].join('\n');
+    const { violations } = scanFile('/virtual/catch-shadow.ts', 'virtual/catch-shadow.ts', src);
+    assert.deepEqual(ruleIdsOf(violations), ['RAW_ERROR_OBJECT']);
+    assert.equal(violations.length, 1, 'the post-catch-scope `e` must not be flagged');
+  });
+
+  section('Safe-wrapper exact allowlist (F3-IMPL-007-R1, review finding 2)');
+
+  await test('a known exact safe helper (safeErrorFields) is still allowed', () => {
+    const src = [
+      'declare function doSomething(): void;',
+      'function safeErrorFields(e: unknown) { return { type: "Error" }; }',
+      'export function fn() {',
+      '  try { doSomething(); } catch (err) {',
+      "    console.error('failed', safeErrorFields(err));",
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const { violations } = scanFile('/virtual/known-safe-wrapper.ts', 'virtual/known-safe-wrapper.ts', src);
+    assert.equal(violations.length, 0);
+  });
+
+  await test('an unknown redactWhatever(err) wrapper is NOT automatically trusted', () => {
+    const src = [
+      'declare function doSomething(): void;',
+      'function redactWhatever(e: unknown) { return String(e); }',
+      'export function fn() {',
+      '  try { doSomething(); } catch (err) {',
+      "    console.error('failed', redactWhatever(err));",
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const { violations } = scanFile('/virtual/unknown-redact-wrapper.ts', 'virtual/unknown-redact-wrapper.ts', src);
+    assert.deepEqual(ruleIdsOf(violations), ['RAW_ERROR_OBJECT']);
+  });
+
+  await test('an unknown summarizeWhatever(err) wrapper is NOT automatically trusted', () => {
+    const src = [
+      'declare function doSomething(): void;',
+      'function summarizeWhatever(e: unknown) { return String(e); }',
+      'export function fn() {',
+      '  try { doSomething(); } catch (err) {',
+      "    console.error('failed', summarizeWhatever(err));",
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const { violations } = scanFile(
+      '/virtual/unknown-summarize-wrapper.ts',
+      'virtual/unknown-summarize-wrapper.ts',
+      src,
+    );
+    assert.deepEqual(ruleIdsOf(violations), ['RAW_ERROR_OBJECT']);
+  });
+
+  await test('a deliberately unsafe pass-through helper cannot bypass detection merely via naming', () => {
+    const src = [
+      'declare function doSomething(): void;',
+      'function totallyLegitHelper(e: unknown) { return e; }',
+      'export function fn() {',
+      '  try { doSomething(); } catch (err) {',
+      "    console.error('failed', totallyLegitHelper(err));",
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const { violations } = scanFile('/virtual/unsafe-passthrough.ts', 'virtual/unsafe-passthrough.ts', src);
+    assert.deepEqual(ruleIdsOf(violations), ['RAW_ERROR_OBJECT']);
+  });
+
   section('Fingerprint (baseline-drift protection, Step 8)');
 
   await test('identical (file, rule, line text) always hashes identically', () => {

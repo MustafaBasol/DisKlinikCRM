@@ -880,5 +880,50 @@
     "reason": "Pre-existing tcErr?.message exposure, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's catch-clause-binding fix (catch bindings are now tracked regardless of variable name, not just err/error) - not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
     "addedDate": "2026-08-12",
     "addedBy": "F3-IMPL-007-R1-catch-binding-fix"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 122,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "90c7e0ae503ee523",
+    "reason": "Pre-existing String(err) fallback branch of `err instanceof Error ? err.message : String(err)`, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's safe-wrapper-allowlist fix: call expressions not on the exact allowlist are no longer treated as opaque, so String(err) is now correctly inspected and its raw error argument flagged. Not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-safe-wrapper-fix"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 155,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "47c56d8ba47eeb44",
+    "reason": "Pre-existing String(err) fallback branch of `err instanceof Error ? err.message : String(err)`, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's safe-wrapper-allowlist fix: call expressions not on the exact allowlist are no longer treated as opaque, so String(err) is now correctly inspected and its raw error argument flagged. Not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-safe-wrapper-fix"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 168,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "013fa5f13d274034",
+    "reason": "Pre-existing String(err) fallback branch of `err instanceof Error ? err.message : String(err)`, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's safe-wrapper-allowlist fix: call expressions not on the exact allowlist are no longer treated as opaque, so String(err) is now correctly inspected and its raw error argument flagged. Not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-safe-wrapper-fix"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 193,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "6698f21b23fb9691",
+    "reason": "Pre-existing String(err) fallback branch of `err instanceof Error ? err.message : String(err)`, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's safe-wrapper-allowlist fix: call expressions not on the exact allowlist are no longer treated as opaque, so String(err) is now correctly inspected and its raw error argument flagged. Not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-safe-wrapper-fix"
+  },
+  {
+    "file": "server/src/routes/platformSecurityIncidents.ts",
+    "line": 260,
+    "ruleId": "RAW_ERROR_OBJECT",
+    "fingerprint": "b7b05226fc86db1d",
+    "reason": "Pre-existing String(err) fallback branch of `err instanceof Error ? err.message : String(err)`, on baseline origin/main since before this PR. Newly detected by F3-IMPL-007-R1's safe-wrapper-allowlist fix: call expressions not on the exact allowlist are no longer treated as opaque, so String(err) is now correctly inspected and its raw error argument flagged. Not a regression introduced by R1, and outside R1's scope (fixing the classifier's trust logic, not remediating already-shipped call sites). Grandfathered per F3-IMPL-007 regression-prevention-only scope (R-018 remains OPEN, not remediated here).",
+    "addedDate": "2026-08-12",
+    "addedBy": "F3-IMPL-007-R1-safe-wrapper-fix"
   }
 ]
