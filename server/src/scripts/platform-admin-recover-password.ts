@@ -180,7 +180,10 @@ export interface RecoverPlatformAdminPasswordResult {
   accountActive: boolean;
   mfaPreserved: true;
   mfaEnabled: boolean;
-  sessionsInvalidated: number;
+  /** Set only on a real (non-dry-run) reset — the passwordChangedAt value now
+   * persisted, so JWTs issued before this instant are rejected by
+   * authenticatePlatformAdmin() (F3-SEC-002). Null on dry runs (no write). */
+  credentialsInvalidatedAt: Date | null;
   auditWritten: boolean;
   passwordChanged: boolean;
   maskedAdminId: string;
@@ -252,7 +255,7 @@ export async function recoverPlatformAdminPassword(
       accountActive: admin.isActive,
       mfaPreserved: true,
       mfaEnabled,
-      sessionsInvalidated: 0,
+      credentialsInvalidatedAt: null,
       auditWritten: false,
       passwordChanged: false,
       maskedAdminId,
@@ -277,14 +280,20 @@ export async function recoverPlatformAdminPassword(
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST_FACTOR);
 
-  // No persistent PlatformAdmin session model exists to invalidate — see
-  // the module doc comment and the runbook. Always 0; not invented here.
-  const sessionsInvalidated = 0;
+  // F3-SEC-002 / F3-SEC-002-R1: passwordChangedAt is the persistent kill
+  // switch — authenticatePlatformAdmin() requires a JWT's `credentialVersion`
+  // claim to exactly equal this instant's getTime(), so any token issued
+  // before this reset (whose claim necessarily carries an older or absent
+  // value) is rejected immediately, with no second-resolution ambiguity even
+  // if the token was issued in the same wall-clock second as this reset.
+  // Written in the same transaction as the hash update so a reset can never
+  // commit without also invalidating prior tokens.
+  const credentialsInvalidatedAt = new Date();
 
   await prismaClient.$transaction(async (tx) => {
     await tx.platformAdmin.update({
       where: { id: admin.id },
-      data: { passwordHash },
+      data: { passwordHash, passwordChangedAt: credentialsInvalidatedAt },
     });
 
     await writeAuditEvent(tx, {
@@ -297,8 +306,8 @@ export async function recoverPlatformAdminPassword(
       outcome: 'success',
       safeMetadata: {
         method: 'operator_cli',
-        sessionsInvalidated,
         mfaPreserved: true,
+        credentialsInvalidated: true,
       },
     });
   });
@@ -309,7 +318,7 @@ export async function recoverPlatformAdminPassword(
     accountActive: admin.isActive,
     mfaPreserved: true,
     mfaEnabled,
-    sessionsInvalidated,
+    credentialsInvalidatedAt,
     auditWritten: true,
     passwordChanged: true,
     maskedAdminId,
@@ -338,13 +347,9 @@ export function printResult(result: RecoverPlatformAdminPasswordResult): void {
   console.log(`Account matched:          yes`);
   console.log(`Account active:           ${result.accountActive ? 'yes' : 'no'}`);
   console.log(`MFA preserved:            yes`);
-  console.log(`Sessions invalidated:     ${result.sessionsInvalidated} (see note below)`);
+  console.log(`Prior sessions revoked:   yes (all JWTs issued before this reset are now rejected)`);
   console.log(`Audit event written:      ${result.auditWritten ? 'yes' : 'no'}`);
   console.log(`Password changed:        ${result.passwordChanged ? 'yes' : 'no'}`);
-  console.log('\nNOTE: PlatformAdmin sessions are stateless JWTs with no persistent session');
-  console.log('store; this CLI cannot revoke tokens already issued to this account. See the');
-  console.log('runbook for the proposed follow-up (passwordChangedAt-based invalidation,');
-  console.log('mirroring the clinic User model).');
   console.log('\nIMPORTANT: This CLI does NOT test login. Perform exactly ONE normal');
   console.log('platform-admin login now, through the real login route, to confirm the new');
   console.log('password works.\n');

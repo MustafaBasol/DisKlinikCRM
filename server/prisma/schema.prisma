@@ -1534,6 +1534,11 @@ model PlatformAdmin {
   id                  String    @id @default(uuid())
   email               String    @unique
   passwordHash        String
+  /// JWTs issued before this moment are rejected — set on every credential
+  /// reset (currently: the emergency recovery CLI). Null = never explicitly
+  /// invalidated; existing pre-migration tokens keep working until natural
+  /// expiry (F3-SEC-002).
+  passwordChangedAt   DateTime?
   name                String
   isActive            Boolean   @default(true)
   /// AES-256-GCM şifreli TOTP secret'ı (`enc:v1:` önekli, utils/encryption.ts)

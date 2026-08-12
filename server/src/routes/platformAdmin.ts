@@ -114,6 +114,7 @@ router.post('/auth/login', async (req, res) => {
       email: admin.email,
       sessionId,
       sessionType: 'platform',
+      passwordChangedAt: admin.passwordChangedAt,
     });
     const csrfToken = issueSessionCookies(res, 'platform', token, sessionId);
 
