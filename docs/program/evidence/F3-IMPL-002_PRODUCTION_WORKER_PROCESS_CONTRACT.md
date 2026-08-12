@@ -1,5 +1,19 @@
 # F3-IMPL-002 — Production Worker Process Contract, Deploy Lifecycle & Job Ownership Hardening
 
+> **✅ PRODUCTION-VERIFICATION STATUS UPDATE (added 2026-08-12 by `F3-PROD-002`, additive — nothing below is rewritten).**
+> This task's status when written was `AGENT_COMPLETED`/`TESTS_PASSED`/`PR_OPENED` with `NOT_PRODUCTION_VERIFIED`. Its production status was subsequently tracked in two halves, and **both are now resolved:**
+>
+> | Half | Prior classification | Now |
+> |---|---|---|
+> | Role / job-ownership contract | `VERIFIED_PRODUCTION_OBSERVED` (point-in-time, partial) | **`PRODUCTION_VERIFIED`** |
+> | Deploy lifecycle (`ecosystem.config.cjs` + `noramedi-deploy.sh` steps 5–8) | `INSTALLED_NOT_YET_EXERCISED` | **`PRODUCTION_VERIFIED`** |
+>
+> **F3-IMPL-002 final status: `PRODUCTION_VERIFIED` (2026-08-12).** On 2026-08-12 an operator ran the repository-synchronized `/usr/local/sbin/noramedi-deploy.sh --skip-pull --skip-build --skip-migrate --skip-generate` on production. It performed the full API + worker lifecycle end-to-end and exited `0`: `noramedi-api` reloaded from `ecosystem.config.cjs` (PID `607545`, `restart_time` `11`→`12`, `cwd` `/var/www/noramedi/server`, `npm run start`, `role=api (declared=true) ownsJobs=false`); `noramedi-worker` reloaded (PID `607578`, `11`→`12`, `npm run start:worker`, `role=worker (declared=true) ownsJobs=true`, `All background jobs scheduled.`); step 8 reported `OK — PM2 process 'noramedi-worker' is online after 1 attempt(s).` A 14-point reconciliation of the observed lifecycle against this task's intended `startOrReload` contract found **zero mismatches**. **Risks `R-033` and `R-040` are both `CLOSED` as a result**, each on its own row's stated criteria.
+>
+> **Explicitly not claimed by this status:** background-job *execution* (`All background jobs scheduled.` is registration; no completed tick and no `JobLock` lease is observed), PM2 reboot persistence, protection against future installed-script drift (**R-077**, still `OPEN`), and zero-downtime reload — the first ecosystem-driven API `startOrReload` produced an ≈19 s startup window exactly as `ecosystem.config.cjs`'s own operational note predicted (**R-063**, still `OPEN`).
+>
+> Full evidence: [F3-PROD-002_DEPLOY_SCRIPT_EXECUTION_VERIFICATION.md](F3-PROD-002_DEPLOY_SCRIPT_EXECUTION_VERIFICATION.md). Intermediate drift finding: [F3-IMPL-002-PROD-RECON_PRODUCTION_WORKER_CONTRACT_VERIFICATION.md](F3-IMPL-002-PROD-RECON_PRODUCTION_WORKER_CONTRACT_VERIFICATION.md).
+
 Task ID: F3-IMPL-002 · Phase: F3 — Production Hardening · Date: 2026-08-10
 
 ## 1. Baseline
