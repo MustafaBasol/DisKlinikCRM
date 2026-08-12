@@ -30,7 +30,10 @@
     "typecheck:guardrail": "tsc --noEmit -p scripts/architecture-guardrail/tsconfig.json",
     "ci-classify": "tsx scripts/ci-classify/cli.ts",
     "test:ci-classify": "tsx scripts/ci-classify/__tests__/classify.test.ts",
-    "typecheck:ci-classify": "tsc --noEmit -p scripts/ci-classify/tsconfig.json"
+    "typecheck:ci-classify": "tsc --noEmit -p scripts/ci-classify/tsconfig.json",
+    "log-privacy-guard:scan": "tsx scripts/log-privacy-guard/cli.ts",
+    "test:log-privacy-guard": "tsx scripts/log-privacy-guard/__tests__/index.test.ts",
+    "typecheck:log-privacy-guard": "tsc --noEmit -p scripts/log-privacy-guard/tsconfig.json"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.21",
