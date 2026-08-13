@@ -570,3 +570,179 @@ No application/runtime test suite was run — no runtime, schema, or dependency 
 **Documentation:** `git revert` the merge commit that lands this section.
 
 **GitHub control plane:** technically, `DELETE repos/MustafaBasol/DisKlinikCRM/vulnerability-alerts` and a corresponding disable call would restore the pre-change toggle state. **This rollback must not be executed** without explicit separate instruction — enabled vulnerability monitoring is the desired production-security target for a public repository processing health data, and disabling it would restore a strictly worse security posture. Reverting the documentation commit does **not** revert the GitHub settings, and vice versa — these are two independent rollback planes, exactly as this document's own §13 already notes for its original scope.
+
+---
+
+## 16. F3-SEC-EXIT-001-R3 — Platform Admin MFA Enrollment Coverage & Login-Gate Verification (2026-08-13)
+
+**Task ID:** `F3-SEC-EXIT-001-R3`. **Type:** verification-first, read-only. **Branch:** `docs/f3-sec-exit-001-r3-platform-admin-mfa-coverage`. **Baseline:** `origin/main` @ `231b959f056e2fccd8b6019e04943cce8b6946f2` (PR #412's merge commit, F3-SEC-EXIT-001-R2), clean fast-forward from this document's §15 baseline. Isolated worktree: `.claude/worktrees/docs+f3-sec-exit-001-r3-platform-admin-mfa-coverage`. Orchestrated as Lane 0 (program context) + Lanes A–C (parallel: architecture, test inventory, production-evidence prep) + Lane D (independent re-verification) + Lane E (adversarial falsification attempt), plus direct test execution by the orchestrating session.
+
+### 16.1 Scope
+
+This task answers exactly the two questions §9.1/§15.6 of this document left open for Platform Admin MFA: (1) has the enrollment-coverage SQL ever been run against production, and (2) does the login-time MFA gate have negative test coverage. **No production data was mutated, no admin enrolled/unenrolled, no MFA secret reset, no session revoked, no auth route edited.**
+
+### 16.2 Architecture — login-gate fail-closed behavior (Lane A, independently reconfirmed by Lane D and Lane E)
+
+Login endpoint: `POST /auth/login`, `server/src/routes/platformAdmin.ts:62-128`. MFA gate, `:95-107`:
+
+```js
+if (admin.totpEnabledAt) {
+  const totpCode = String(req.body.totpCode ?? '').trim();
+  if (!totpCode) {
+    return res.status(401).json({ error: 'MFA code required', code: 'MFA_REQUIRED' });
+  }
+  const totpSecret = decryptSecretTagged(admin.totpSecretEncrypted);
+  if (!totpSecret || !verifyTotp(totpSecret, totpCode)) {
+    return res.status(401).json({ error: 'Invalid MFA code', code: 'MFA_INVALID' });
+  }
+}
+```
+
+Both branches `return` strictly before session/token issuance (`createSessionId`/`generatePlatformToken`/`issueSessionCookies`, `:111-124`) — **no code path issues a session to an enrolled admin (`totpEnabledAt` non-null) without a valid TOTP code.** Three independent lanes (A, D, E) read this code fresh and reached the identical conclusion; Lane E specifically searched for a bypass (env-gated skip, debug/impersonation route, alternate login path) and found none — `server/src/routes/auth.ts` (clinic-user login) is a wholly separate model/route with zero `PlatformAdmin` references.
+
+**Enrollment remains optional by design, confirmed at the schema level** (`server/prisma/schema.prisma:1533-1561`): `PlatformAdmin.totpEnabledAt DateTime?` is nullable with no constraint forcing it non-null; `totpSecretEncrypted String?` likewise; no `mfaEnabled` boolean column exists (`mfaEnabled` is a *derived* response field, `!!admin.totpEnabledAt`). No recovery/backup-code mechanism exists anywhere in the codebase (repo-wide grep for `recoveryCode`/`backupCode`: zero matches). For a non-enrolled admin, the entire block above is skipped and a session issues on password alone — this is the accepted, by-design behavior this document's §4 already recorded, not a new gap. `verifyTotp` (`server/src/utils/totp.ts:78-102`) was separately checked by Lane E for logic bugs (off-by-one window, type coercion, timing side-channel) — none found; it regex-validates a 6-digit code, checks a ±1 step window with `crypto.timingSafeEqual` and no early exit (a documented anti-timing-leak design choice), and does not distinguish "expired" from "wrong" codes (both collapse to `MFA_INVALID`). **No TOTP replay-protection mechanism exists — confirmed unimplemented, not merely untested** (no nonce/used-code ledger anywhere near the TOTP or PlatformAdmin code paths).
+
+### 16.3 Test coverage — the login-gate has zero route/DB-integration coverage (Lane B, independently reconfirmed by Lane D and Lane E)
+
+Grepped all of `server/src/tests/` for `auth/login`, `totpCode`, `MFA_REQUIRED`, `MFA_INVALID` — **zero matches in any test file.** No test in this repository ever calls `POST /auth/login` with a request body, enrolled or not. This means none of the following are integration-tested at the route level: enrolled admin + missing OTP, enrolled admin + invalid OTP, enrolled admin + valid OTP, non-enrolled admin login, or an inconsistent MFA state (`totpEnabledAt` set but `totpSecretEncrypted` null, or vice versa) at login time.
+
+What **is** genuinely covered, and must not be conflated with the above:
+
+- `server/src/tests/totp.test.ts` (19/19 passing) — a **pure crypto-primitive suite** for `verifyTotp()`/`generateTotp()`/`base32Encode`/`buildOtpAuthUri`. No HTTP layer, no `PlatformAdmin` DB row. Proves the algorithm is correct; proves nothing about whether the login route enforces it.
+- `server/src/tests/platformAdmin.test.ts` (118/118 passing) — solid, genuinely DB-backed, route-level audit-trail coverage of the **enrollment/disable flow** (`POST /auth/mfa/setup`, `/auth/mfa/verify`, `/auth/mfa/disable`), invoked via the extracted route middleware chain directly. This is a different set of endpoints from `/auth/login` and does not exercise the login-time gate.
+- `server/src/tests/platformAdminSessionRevocation.test.ts` (15/15 passing) — DB-backed, but tests the `authenticatePlatformAdmin` middleware (validating an already-issued token on *subsequent* requests, e.g. after deactivation or password reset), not the login route's initial MFA branch.
+- `server/src/tests/platformAdminPasswordRecovery.test.ts` (22/22 passing) — DB-backed CLI/route tests; confirms password recovery preserves MFA state (`mfaPreserved: true`) and revokes prior sessions via `passwordChangedAt`, but the "post-recovery token" used to prove revocation is minted directly in the test (`generatePlatformToken()`), explicitly documented in-file as simulating, not calling, `/auth/login`.
+
+**`MFA_NEGATIVE_TEST_COVERAGE = FAIL`** — this document's §4 already flagged "zero negative tests for the login-time MFA gate"; this task confirms the gap is unchanged and narrows it precisely: the gap is specifically the `/auth/login` route's own OTP branch, not MFA testing in general (enrollment/disable and post-login revocation are both well tested).
+
+### 16.4 Test execution (this session, against a disposable local test database — not production, not the repository's ordinary dev DB)
+
+The worktree's `server/.env` (copied in by the operator for local dev use) pointed at an unreachable `127.0.0.1:5544` (`P1001`, no Postgres process running on this machine). Per explicit operator instruction, a disposable, throwaway `postgres:16-alpine` Docker container (`noramedi-mfa-test-db`, database `noramedi_test`, user/password `postgres`/`postgres`) was started on `127.0.0.1:5544`, the repository's real Prisma migrations were applied via `prisma migrate deploy` (no `db push`), and `DATABASE_URL` was overridden **only as a per-process environment variable** for each test invocation — `server/.env` itself was never modified. The container was removed at the end of this task.
+
+```
+Command: npm run test:auth      (sessionCookieCsrf.test.ts + platformAdmin.test.ts)
+Result:  15/15 + 118/118 = 133/133 passed, 0 failed, exit 0
+
+Command: npm run test:totp
+Result:  19/19 passed, 0 failed, exit 0
+
+Command: npm run test:platform-admin-session-revocation
+Result:  15/15 passed, 0 failed, exit 0
+
+Command: npm run test:platform-admin-password-recovery
+Result:  22/22 passed, 0 failed, exit 0
+
+Total: 189/189 passed, 0 failed, 0 skipped, across 4 npm scripts / 5 test files.
+```
+
+All suites pass. Consistent with §16.3: passing suites confirm existing behavior (enrollment audit trail, session revocation, password recovery, TOTP math) is correct, but — because none of them call `/auth/login` — a 100% pass rate here does **not** constitute login-gate assurance and must not be read as such.
+
+### 16.5 Production enrollment coverage — still not established (Lane C)
+
+**No direct production database access exists for this or any prior Claude Code session in this program.** Confirmed by searching `docs/program/runbooks/` and `docs/program/PRODUCTION_TOPOLOGY.md`, plus a repository-wide grep for any documented agent-initiated production DB access — none found. `PRODUCTION_TOPOLOGY.md` places production Postgres on `disklinik-prod-01`, reachable only through the deploy/ops path; every prior production-evidence task in this program (F3-PROD-001, F3-PROD-002, F3-IMPL-002-PROD-RECON, this document's own §15) followed the same pattern — the operator runs a prepared read-only command and reports back redacted aggregate results. This task's `server/.env` was independently confirmed to be local/dev configuration (a `DATABASE_URL` variable exists; no part of its value was printed, connected to as if it were production, or represented as production evidence).
+
+The confirmed schema (`server/prisma/schema.prisma:1533-1561`) matches §9.1's original SQL exactly (`"PlatformAdmin"`, `"totpEnabledAt"`, `"isActive"`) — **the SQL from §9.1 is confirmed correct and still valid as written.** This task extends it with an inactive-admin count and a structural-inconsistency check, both additive and still redaction-safe (aggregate-only, no row output):
+
+```sql
+-- Extends §9.1 (unchanged, still the primary criterion query)
+SELECT
+  COUNT(*) FILTER (WHERE "isActive" = true)                                  AS total_active_platform_admins,
+  COUNT(*) FILTER (WHERE "isActive" = true AND "totpEnabledAt" IS NOT NULL)  AS mfa_enrolled_active,
+  COUNT(*) FILTER (WHERE "isActive" = true AND "totpEnabledAt" IS NULL)      AS mfa_not_enrolled_active,
+  COUNT(*) FILTER (WHERE "isActive" = false)                                 AS inactive_disabled_count
+FROM "PlatformAdmin";
+
+-- New: structural MFA-state inconsistency check (also aggregate-only)
+SELECT
+  COUNT(*) FILTER (WHERE "totpEnabledAt" IS NOT NULL AND "totpSecretEncrypted" IS NULL) AS enabled_without_secret,
+  COUNT(*) FILTER (WHERE "totpEnabledAt" IS NULL AND "totpSecretEncrypted" IS NOT NULL)  AS secret_without_enabled
+FROM "PlatformAdmin";
+```
+
+```
+Command: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f <file containing the two SELECTs above>
+Purpose: Confirm Platform Admin MFA coverage and detect inconsistent TOTP enrollment state, in aggregate only.
+Environment: production (disklinik-prod-01)
+Read-only: YES
+Sensitive values returned: NO — four/two integers only, no row-level data
+```
+
+Use an existing `.pgpass`/env-based credential mechanism for `$DATABASE_URL` — do not type or paste the connection string, and do not paste back anything other than the resulting integers. **`MFA_ENROLLMENT_COVERAGE = BLOCKED_PENDING_OPERATOR_EVIDENCE`** — unchanged from §9.1/§15.6; this remains the sole outstanding action for this specific lane.
+
+### 16.6 Independent re-verification and adversarial review (Lanes D and E)
+
+Lane D re-read every cited file independently (not trusting Lane A/B's line numbers) and reconfirmed all ten claims with no disagreement, producing the same three verdicts. Lane E attempted to falsify seven claims (production enrollment, fail-closed behavior, invalid-OTP rejection, "tests cover the login gate," no sensitive-data exposure, R-073 bearing, Criterion-2 classification) and could not falsify any of them — all seven `SURVIVE`, with one nuance carried forward: `platformAdmin.test.ts` does test MFA *enrollment* endpoints thoroughly; only the login-gate's own OTP branch remains untested, a narrower and more precise framing than "zero MFA tests."
+
+### 16.7 Sensitive-data / redaction review (required disclosure, not silently omitted)
+
+While reviewing this task's own handling of `server/.env` for the redaction-review sub-task, the Lane E subagent printed a partial connection string (username and password) for the **local, disposable "smoke" test database** configured in this worktree's `server/.env` — this is a local development credential, not a production credential, was not committed to any file in this repository, and is not reproduced in this document. It is disclosed here because it appeared in an internal agent transcript, which this program's own convention treats as an exposure event worth recording even at low severity; **the operator has been notified out-of-band and may wish to rotate that local smoke-test credential.** No production credential, admin email, password hash, TOTP secret, or JWT was printed, logged, or transmitted by any lane in this task.
+
+### 16.8 Classification (governing decision matrix applied)
+
+```
+MFA_ENROLLED_LOGIN_FAILS_CLOSED = PASS
+MFA_ENROLLMENT_COVERAGE         = BLOCKED_PENDING_OPERATOR_EVIDENCE
+MFA_NEGATIVE_TEST_COVERAGE      = FAIL
+PLATFORM_ADMIN_MFA_LANE         = BLOCKED   (Case C governs: enrollment coverage blocked overrides an otherwise-correct code path; Case D's NOT_READY framing does not apply because enrollment coverage is not PASS)
+```
+
+A correct, fail-closed login gate does **not** by itself satisfy this lane — production coverage has still never been measured, and the negative-test gap is a second, independent deficiency that would remain even if the SQL above came back `mfa_enrolled = total`. **Recommended minimal follow-up task** (implementation, explicitly out of scope for this verification-only task and requiring its own PR): add a route/DB-integration test suite exercising `POST /auth/login` directly for missing-OTP (expect `401 MFA_REQUIRED`), invalid-OTP (expect `401 MFA_INVALID`), valid-OTP (expect `200` + session, DB-seeded enrolled admin with a real TOTP secret), and non-enrolled-admin login (expect `200` + session, no OTP required) — mirroring the existing DB-backed fixture patterns already used in `platformAdminSessionRevocation.test.ts`.
+
+### 16.9 Criterion / risk impact
+
+```
+GITHUB_SECURITY_SETTINGS_LANE = PASS          (unchanged, §15)
+PLATFORM_ADMIN_MFA_LANE       = BLOCKED       (this task; previously an unqualified narrative note in §4, now a formal three-axis verdict)
+F3_EXIT_CRITERION_2           = NOT_SATISFIED (unchanged — reasons 3–7 of §11 remain open regardless of this task's findings)
+F3_EXIT_GATE                  = NOT_SATISFIED
+F3_COMPLETE                   = NO
+F4_TRANSITION_AUTHORIZED      = NO
+```
+
+**R-073 and R-019 are NOT closed and NOT touched by this task.** Lane E confirmed both directly: R-073 (`RISK_REGISTER.md:98`, Platform Admin JWT/session revocation) concerns `authenticatePlatformAdmin`'s DB-backed revocation check, orthogonal to the login-time MFA gate; R-019 (`RISK_REGISTER.md:117`, platform-admin privilege overreach/audit coverage) concerns audit-trail completeness, likewise unrelated. Both remain `CLOSURE_PROPOSED_AWAITING_EXTERNAL_CONFIRMATION` with no named decision owner — this task does not name one and does not propose closing either.
+
+### 16.10 Migration / runtime / tenant / KVKK impact
+
+```
+Migration:                          NO (disposable local test DB only; server/.env untouched)
+Schema:                             NO
+Runtime code:                       NO
+Production data mutation:           NO
+Tenant query behavior:              NO
+KVKK data-flow behavior:            NO
+Auth behavior change:               NO
+Read-only production security evidence: YES (operator command package prepared, not yet executed)
+```
+
+### 16.11 Test commands / counts (repeated for the required-format section)
+
+```
+npm run test:auth                                    → 133/133 passed, 0 failed
+npm run test:totp                                    → 19/19 passed, 0 failed
+npm run test:platform-admin-session-revocation       → 15/15 passed, 0 failed
+npm run test:platform-admin-password-recovery        → 22/22 passed, 0 failed
+git diff --check                                     → clean (verified before PR open)
+```
+
+### 16.12 Rollback
+
+**Documentation:** `git revert` the merge commit that lands this section. No production rollback is applicable — this task performed no production mutation. The disposable local test database container was removed at the end of this task; no lasting local-environment change remains.
+
+### 16.13 Architecture-review closure block
+
+```
+Accepted findings:
+  - MFA_ENROLLED_LOGIN_FAILS_CLOSED = PASS, converged across 3 independent lanes (A/D/E), file:line cited.
+  - MFA_NEGATIVE_TEST_COVERAGE = FAIL, converged across 3 independent lanes (A/D/E), zero login-route test matches confirmed by direct grep.
+  - MFA_ENROLLMENT_COVERAGE = BLOCKED_PENDING_OPERATOR_EVIDENCE — no production access exists in this program's Claude Code sessions; operator command package prepared (§16.5), extends but does not replace §9.1's original SQL.
+Rejected/unverified claims:
+  - None of Lane E's 7 falsification attempts succeeded; all findings SURVIVE as stated.
+Current task status:
+  PLATFORM_ADMIN_MFA_LANE = BLOCKED. F3_EXIT_CRITERION_2 = NOT_SATISFIED (unchanged). F3_EXIT_GATE = NOT_SATISFIED (unchanged).
+Merge safe:
+  YES — documentation-only diff, no runtime/schema/production file touched, git diff --check clean.
+Deployment safe:
+  N/A — nothing to deploy; no application code changed.
+Exact next task:
+  Either (a) operator executes §16.5's SQL against production and reports back the four/two integers, or (b) a minimal implementation task adds POST /auth/login route/DB-integration tests per §16.8's recommendation — both are independent, either can proceed first. Redis/PM2 replica-topology verification (§9.2) remains the next planned blocker after MFA if MFA is not prioritized first.
+```
