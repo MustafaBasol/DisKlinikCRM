@@ -988,7 +988,7 @@ Exact next task:
 
 §7.1 and §11 reason 7 of this document record that **§5 item 4 of the governing checklist (webhook secrets configured per connection) had never been assessed**. This task assessed it — and found that the check itself could never have succeeded, because the command the checklist mandated does not run against this repository's schema. This section is the historical record of that defect; the *corrected* command now lives in the governing checklist itself (`F3-SEC-EXIT-001_FIRST_CUSTOMER_SECURITY_HARDENING_GATE.md` §5 item 4), per this program's convention that the checklist carries the current command and the evidence document carries the history.
 
-This section does **not** claim the item now passes. The corrected query has still never been executed against production.
+This section does **not** claim the item now passes. The corrected query has been executed only against a disposable, empty local database to prove it runs (§18.3); it has **never** been executed against production, so no production coverage is measured.
 
 ### 18.2 Defect record
 
@@ -997,7 +997,8 @@ OLD_CHECK         = SUPERSEDED
 REASON            = schema-invalid query (undefined column + undefined relation), plus row-id exposure
 DATE_DISCOVERED   = 2026-08-13 (F3-SEC-EXIT-001-R4-MASTER, Lane F)
 DATE_INTRODUCED   = 2026-08-11 (F3-SEC-EXIT-001, original authoring of §5 item 4)
-ERRORS_OBSERVED   = NOT_EXECUTED — see §18.3
+ERRORS_OBSERVED   = OBSERVED_ON_DISPOSABLE_LOCAL_MIGRATED_DB — see §18.3
+PRODUCTION_EXECUTION = NO
 REPLACEMENT_CHECK = F3-SEC-EXIT-001_FIRST_CUSTOMER_SECURITY_HARDENING_GATE.md §5 item 4 (corrected 2026-08-13)
 ```
 
@@ -1019,21 +1020,54 @@ It shipped with the parenthetical *"(Adjust table/column names to the exact curr
 | 3 | `InstagramConnection` — a third model that genuinely carries a per-connection `webhookSecret` and is genuinely reachable by an inbound signed webhook — was **omitted entirely**. | `server/prisma/schema.prisma:1902`; consumed at `server/src/routes/instagramWebhook.ts:184, 305-313` |
 | 4 | Both statements `SELECT id`, returning row identifiers. This program's own redaction rule (§9, §16.5, §17.4 of this document) requires production evidence to be aggregate-only. The mandated command therefore conflicted with the mandated redaction policy. | this document §9 preamble: *"Do not paste back any raw output containing a credential"*; §16.5: *"aggregate-only, no row output"* |
 
-### 18.3 Errors that the superseded command would produce — DERIVED, NOT OBSERVED
-
-**Stated plainly: this query was never executed against production, or against any database, by this task or any prior one.** No repository document records a failed run, and this program grants its Claude Code sessions no production database access (§16.5). The defect was found by **static comparison against `server/prisma/schema.prisma`**, not by running anything.
-
-The following are therefore the errors PostgreSQL *would* return, derived from the schema and PostgreSQL's documented SQLSTATE classes — **they are a prediction, and must not be cited by any future document as an observed production result:**
+### 18.3 Errors OBSERVED — disposable local migrated database, NOT production
 
 ```
-Statement 1:  ERROR: 42703  undefined_column  — column "webhookSecretEncrypted" does not exist
-                                                on relation "WhatsAppConnection"
-Statement 2:  ERROR: 42P01  undefined_table   — relation "ExternalCalendarConnection" does not exist
+ERRORS_OBSERVED      = OBSERVED_ON_DISPOSABLE_LOCAL_MIGRATED_DB
+PRODUCTION_EXECUTION = NO
 ```
 
-Statement 2 fails at parse/planning time regardless of statement 1's outcome; under `psql -v ON_ERROR_STOP=1` the script aborts on statement 1 and statement 2 never executes at all.
+**These are real observed errors, not predictions — and they were observed on a throwaway local database, never on production.** Both statements of the superseded command were executed on 2026-08-13 against a disposable PostgreSQL 16 container holding this repository's full migrated schema. Verbatim output:
 
-`ERRORS_OBSERVED = NOT_EXECUTED` is recorded rather than left blank precisely so that nobody later reads a populated-looking field as evidence of a real production run.
+```
+=== ORIGINAL §5 item 4, query 1 ===
+ERROR:  column "webhookSecretEncrypted" does not exist
+LINE 1: SELECT id, "webhookSecretEncrypted" IS NOT NULL AS has_secre...
+                   ^
+=== ORIGINAL §5 item 4, query 2 ===
+ERROR:  relation "ExternalCalendarConnection" does not exist
+LINE 1: ...okSecretEncrypted" IS NOT NULL AS has_secret FROM "ExternalC...
+                                                             ^
+```
+
+**Execution context, for reproducibility:**
+
+| Field | Value |
+|---|---|
+| Database | disposable container `noramedi-r4-lanea-db`, image `postgres:16-alpine`, DB `noramedi_r4_lanea`, bound `127.0.0.1:5546` (loopback only) |
+| Created | 2026-08-13T17:28:38Z |
+| Schema state | `npx prisma migrate deploy` → *"All migrations have been successfully applied."* (2026-08-13T17:28:56Z), applied from the Lane A worktree at `origin/main` @ `8000c276915e5c3aa7b460acce4ec4455e1b8ec8` |
+| Command | `docker exec -i noramedi-r4-lanea-db psql -U postgres -d noramedi_r4_lanea -v ON_ERROR_STOP=1 < orig1.sql` / `< orig2.sql` (each statement run separately, so both errors surface) |
+| Executed | 2026-08-13T19:09:02Z; output captured 19:09:06Z |
+| Data content | **empty database** — schema only, zero connection rows. No secret, ciphertext or row identifier existed to be exposed. |
+| Container lifetime | already removed; `docker ps -a --filter name=noramedi-r4-lanea-db` returns nothing as of this writing |
+
+The SQLSTATE classes are `42703` (undefined_column) for statement 1 and `42P01` (undefined_table) for statement 2. Those class codes are a **derived mapping** of the observed messages — `psql` printed the messages above without the SQLSTATE, so the codes remain an inference while the messages themselves are observed.
+
+Two further facts that keep this evidence in proportion:
+
+1. **Production has never run this query, corrected or superseded.** This program grants its Claude Code sessions no production database access (§16.5). Nothing here measures production configuration.
+2. **The corrected replacement was executed on the same disposable database and returned `SQL_EXIT=0`** with four scope rows, all `total = 0, with_secret = 0` — because the database was empty. That proves the corrected command *parses and runs against the real migrated schema*. It proves **nothing** about webhook-secret coverage, since a trivially-empty result satisfies `with_secret = total` vacuously.
+
+### 18.3a Provenance correction — how the record went wrong
+
+An earlier revision of this section asserted `ERRORS_OBSERVED = NOT_EXECUTED` and stated that the query *"was never executed against production, or against any database, by this task or any prior one."* **That statement was incorrect and is withdrawn.**
+
+How it arose: the assessing session verified execution status only against **its own** session record — where the query genuinely had not been run — and then generalised that scope-limited negative into a claim about all prior work, without inspecting the preceding session's transcript. A conservative-sounding claim was therefore made outside the evidence that supported it. The error was caught by the program owner, who noticed the contradiction against the preceding delivery report, and resolved from the preceding session's primary tool-call record (transcript `fe276944-8cc2-4746-b964-001d808359d6`, tool_use `toolu_01XojxHy8HG5LLP8rQynFi4r`).
+
+The general rule this records: a negative existence claim (*"never happened"*) requires evidence covering **every** place it could have happened. Where that coverage is absent, the correct value is `UNVERIFIED`, not `NOT_EXECUTED`.
+
+Nothing about the underlying schema defect changes. Defects 1–4 in §18.2 stand exactly as written; they are now supported by executed evidence in addition to the static schema comparison.
 
 ### 18.4 Independently confirmed models and secret columns
 
@@ -1078,8 +1112,9 @@ A read-only SQL check cannot prove a stored ciphertext decrypts — that needs `
 ```
 WEBHOOK_SECRET_CHECKLIST_QUERY   = CORRECTED
 OLD_CHECK                        = SUPERSEDED (preserved verbatim, §18.2)
-WEBHOOK_SECRET_PRODUCTION_STATUS = NOT_MEASURED — corrected query never executed
-F3_SEC_EXIT_001_S5_ITEM_4        = STILL_OPEN (the check is now runnable; it has not been run)
+WEBHOOK_SECRET_PRODUCTION_STATUS = NOT_MEASURED — corrected query never executed against production
+CORRECTED_QUERY_EXECUTABILITY    = PROVEN (SQL_EXIT=0 on disposable migrated schema, empty DB)
+F3_SEC_EXIT_001_S5_ITEM_4        = STILL_OPEN (the check is now runnable; it has not been run on production)
 ```
 
 **This lane does not move `F3_EXIT_CRITERION_2`.** §11 reason 7 named the webhook-secret item as unassessed; it remains unassessed. What changed is that the mandated command would have failed on contact with production, and now would not.
@@ -1131,7 +1166,8 @@ No application test suite was run: no runtime, schema, test or dependency file i
 Accepted findings:
   - The checklist's mandated webhook-secret query was schema-invalid and could never have run: undefined column
     "webhookSecretEncrypted" on "WhatsAppConnection", undefined relation "ExternalCalendarConnection".
-    Confirmed by direct read of server/prisma/schema.prisma at the baseline SHA.
+    Confirmed twice over: by direct read of server/prisma/schema.prisma at the baseline SHA, and by OBSERVED
+    execution failure on a disposable local migrated database (§18.3). Not observed on production.
   - InstagramConnection.webhookSecret was omitted from the original check entirely.
   - Evolution-API WhatsApp connections were omitted from item O's scope sentence; they consume a per-connection
     webhookSecret as the tenant-identifying inbound credential (routes/whatsapp.ts:1107-1113).
@@ -1139,8 +1175,14 @@ Accepted findings:
     non-exploitable (production fail-closed still applies), and used to justify the corrected query's PASS scope.
   - with_secret proves NOT NULL only; decryptability is unverifiable by SQL and is recorded as a standing residual.
 Rejected or unverified claims:
-  - ERRORS_OBSERVED is NOT populated with production errors. The predicted SQLSTATEs (42703 / 42P01) are DERIVED
-    from the schema, explicitly NOT observed. The query was never executed anywhere.
+  - ERRORS_OBSERVED is NOT populated with production errors. The failures were observed on a disposable, empty,
+    loopback-bound local database (§18.3). PRODUCTION_EXECUTION = NO. No future document may cite them as a
+    production result.
+  - The SQLSTATE codes 42703 / 42P01 remain DERIVED: psql printed the messages without SQLSTATEs.
+  - An earlier revision of this section claimed the query "was never executed anywhere". That claim was WRONG and
+    is withdrawn — see §18.3a for the correction and its cause.
+  - The corrected query's clean run proves executability only; the database was empty, so with_secret = total held
+    vacuously. It is NOT evidence of webhook-secret coverage.
   - No claim is made that webhook secrets are configured in production. WEBHOOK_SECRET_PRODUCTION_STATUS = NOT_MEASURED.
 Current task status:
   Lane F complete as a documentation correction. F3_SEC_EXIT_001_S5_ITEM_4 = STILL_OPEN.
