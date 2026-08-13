@@ -59,6 +59,13 @@
         "baseSha": "06f832c229b9f5398c7f52def16e0d37b18c6417",
         "note": "Executes ADR-F2-ORG-DASH-OWNERSHIP §9 follow-up 1 (Option D). Adds 4 new files, each a purpose-built public read contract owned by the domain that owns the underlying Prisma model, closing the 4 direct cross-domain Prisma reads recorded as open debt in ADR-F2-ORG-DASH-OWNERSHIP §5.1: server/src/services/appointments/organizationAppointmentMetrics.ts -> clinical-appointments-availability (Appointment), server/src/services/patientOrganizationMetrics.ts -> clinical-patients (Patient), server/src/services/treatmentCaseOrganizationMetrics.ts -> clinical-treatment-cases (TreatmentCase), server/src/services/paymentOrganizationMetrics.ts -> clinical-basic-payments (Payment). organizationDashboard.ts's own domain-map entry (core-org-clinic-membership) is unchanged. These 4 files are new source, not present in the F0-003 inventory this map otherwise mechanically derives from, so they are added by explicit correction here rather than by re-running generateDomainMap.ts, matching this map's own documented maintenance convention (see the provenance note above). fileCount updated 249 -> 253.",
         "newDomainsIntroduced": []
+      },
+      {
+        "task": "F2-STAGE3-GUARDRAIL-HYGIENE-001",
+        "date": "2026-08-13",
+        "baseSha": "021c43d5fbeae3c9b03c904ac30b0bb4708c80ad",
+        "note": "Adds 2 previously-unmapped files identified by the accepted Stage-3 sweep as UNRESOLVED purely because they postdate this map's last regeneration; no reclassification, only completeness. server/src/services/imaging/ops.ts -> imaging-server-viewer: an Imaging-owned narrow read contract over ImagingImage (see the file's own header, F2-STAGE3-GAPD-001/F2-STAGE3-EXIT-DECIDE-001), the platform/ops counterpart to the tenant-scoped public.ts contract already mapped to imaging-server-viewer; its sole caller (fileBackupService.ts, core-storage-abstraction) consumes it as a cross-domain import, which this entry now lets the guardrail attribute correctly instead of leaving both ownerDomain and callerDomain UNRESOLVED. server/src/services/privacy/patientActivityHistoryExport.ts -> core-privacy-consent-retention-dsr: a KVKK per-patient export-completeness composition module (F2-IMG-AUDIT-003) alongside its existing core-privacy-consent-retention-dsr-mapped neighbors in server/src/services/privacy/; it consumes the Imaging domain's public.ts read contract (getBridgeStudyIdsForPatient) but is not itself Imaging-owned — it owns no Imaging model and its purpose is Privacy/KVKK export projection, not imaging data access. fileCount updated 253 -> 255.",
+        "newDomainsIntroduced": []
       }
     ]
   },
@@ -69,7 +76,7 @@
     "server/src/middleware/",
     "server/src/utils/"
   ],
-  "fileCount": 253,
+  "fileCount": 255,
   "files": {
     "server/src/jobs/clinicBulkExportCleanupJob.ts": "core-privacy-consent-retention-dsr",
     "server/src/jobs/clinicBulkExportWorker.ts": "core-privacy-consent-retention-dsr",
@@ -161,6 +168,7 @@
     "server/src/services/imaging/imagingIngestCore.ts": "imaging-server-viewer",
     "server/src/services/imaging/imagingRequestTransitions.ts": "imaging-server-viewer",
     "server/src/services/imaging/imagingUploadValidation.ts": "imaging-server-viewer",
+    "server/src/services/imaging/ops.ts": "imaging-server-viewer",
     "server/src/services/imaging/releaseMetadataValidation.ts": "imaging-device-bridge",
     "server/src/services/instagram/InstagramMessagingProvider.ts": "messaging-instagram",
     "server/src/services/instagram/instagramAiConversationProcessor.ts": "messaging-instagram",
@@ -178,6 +186,7 @@
     "server/src/services/privacy/clinicBulkExportFieldAllowlists.ts": "core-privacy-consent-retention-dsr",
     "server/src/services/privacy/clinicBulkExportPackage.ts": "core-privacy-consent-retention-dsr",
     "server/src/services/privacy/clinicBulkExportPasswordAttempts.ts": "core-privacy-consent-retention-dsr",
+    "server/src/services/privacy/patientActivityHistoryExport.ts": "core-privacy-consent-retention-dsr",
     "server/src/services/privacy/dataRetentionPolicy.ts": "core-privacy-consent-retention-dsr",
     "server/src/services/privacy/deletionReviewInventory.ts": "core-privacy-consent-retention-dsr",
     "server/src/services/privacy/orphanFileInspection.ts": "core-privacy-consent-retention-dsr",
