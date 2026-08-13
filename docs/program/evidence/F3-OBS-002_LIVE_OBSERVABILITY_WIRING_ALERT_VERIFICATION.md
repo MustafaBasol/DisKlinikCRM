@@ -3,9 +3,11 @@
 **Task ID:** F3-OBS-002 · **Phase:** F3 — Production Hardening · **Priority:** CRITICAL / F3 exit-gate criterion 1 · **Risk:** R-074
 **Branch:** `feature/f3-obs-002-live-observability-alert-verification` · **Worktree:** `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f3-obs-002-v2`
 **Baseline:** `origin/main` @ `87e9353ac9557a3896dc2ef7f71217ac453132fa` (PR #404/F3-PROD-002 merge commit), fresh `git fetch`/`git worktree add`, no drift at task start.
-**Status:** `IMPLEMENTED_REPOSITORY_SIDE / NOT_PRODUCTION_INSTALLED / NOT_PRODUCTION_VERIFIED` — repository-side artifacts implemented, self-reviewed, and tested (42/42, post-R1); production/external activation NOT performed. This is a skeleton evidence file for the implementation phase only. **Does not close R-074. Does not satisfy the F3 exit gate.** See §12.
+**Status:** `PRODUCTION_INSTALLED / PRODUCTION_VERIFIED / LIVE_ALERT_VERIFIED` — repository-side artifacts implemented, self-reviewed and tested (42/42, post-R1); production installation, external-provider activation, both controlled alert-delivery drills, and a credential-rotation remediation are all complete and evidenced. **Closes R-074. Satisfies F3 exit-gate criterion 1 only — the overall F3 exit gate remains `NOT SATISFIED`.** See §17–§20.
 
-This document intentionally stops short of a completion claim: per this task's own governing instructions, no external provider was configured, no systemd unit was installed on any host, and no controlled drill was executed. Those steps require explicit human/operator approval and are proposed, not performed (§10–§11). This file will be revised (not replaced) once that evidence exists.
+**Revision history of this file.** §1–§16 below are the original implementation-phase text (Phases A/B of this task), preserved unedited as dated historical record except for two factual corrections marked inline in §10 and §14. §17–§20 are the production-activation, drill, remediation and closure layers added afterwards. Per this program's convention the earlier text is **revised by addition, not rewritten** — where the original said an activation was "proposed, not performed," that was true at its own point in time and §17 is what changed it.
+
+**Original implementation-phase framing (2026-08-12, superseded by §17):** this document intentionally stops short of a completion claim: per this task's own governing instructions, no external provider was configured, no systemd unit was installed on any host, and no controlled drill was executed. Those steps require explicit human/operator approval and are proposed, not performed (§10–§11). This file will be revised (not replaced) once that evidence exists.
 
 ---
 
@@ -111,6 +113,10 @@ The interim inventory correctly found `fatalErrorHandlers.ts`'s `handleFatalErro
 install -o root -g root -m 0755 scripts/noramedi-opscheck.sh /usr/local/sbin/noramedi-opscheck.sh
 install -o root -g root -m 0644 ops/systemd/noramedi-opscheck.service /etc/systemd/system/noramedi-opscheck.service
 install -o root -g root -m 0644 ops/systemd/noramedi-opscheck.timer /etc/systemd/system/noramedi-opscheck.timer
+# CORRECTED (§19 defect 1, found during live installation): the parent directory must be
+# created first — install(1) does NOT create parent directories, so the next line fails with
+# "No such file or directory" on a host where /etc/noramedi does not already exist.
+install -d -o root -g root -m 0750 /etc/noramedi
 install -o root -g root -m 0600 /dev/null /etc/noramedi/opscheck.env
 # then: fill in the three *_PING_URL values in /etc/noramedi/opscheck.env manually — never via this repository
 systemctl daemon-reload
@@ -212,7 +218,7 @@ No CI workflow file was modified — `scripts/noramedi-healthcheck.sh` and `scri
 
 Runbook edit validated with `git diff --check` (no whitespace errors) and a manual read for internal consistency with the R-074/exit-gate wording used elsewhere in this program (§12).
 
-## 12. Program status (unchanged by this task)
+## 12. Program status (as of the implementation phase — superseded by §20)
 
 ```
 R-074 = OPEN
@@ -222,6 +228,8 @@ F4_TRANSITION_AUTHORIZED = NO
 ```
 
 No `docs/program/RISK_REGISTER.md`, `CURRENT_PHASE.md`, or `NORAMEDI_MASTER_TRACKER.md` row was edited by this task. This file itself is the only new evidence artifact; it is deliberately not indexed as a closure record.
+
+> **Superseded by §20 (F3-OBS-002-CLOSE).** The block above is the implementation phase's own accurate point-in-time state and is preserved unedited. Current program state, after production activation (§17), both drills (§18) and the R3 credential remediation (§19): **`R-074 = CLOSED`**, **F3 exit-gate criterion 1 = `SATISFIED`** — while **`F3_EXIT_GATE` remains `NOT SATISFIED`**, `F3_COMPLETE = NO` and `F4_TRANSITION_AUTHORIZED = NO`, because criteria 2 and 3 are untouched by this task.
 
 ## 13. What remains before R-074 can close
 
@@ -236,7 +244,9 @@ No `docs/program/RISK_REGISTER.md`, `CURRENT_PHASE.md`, or `NORAMEDI_MASTER_TRAC
 
 **DRILL A — external HTTP/API monitor.** Temporarily edit only the `/api/readyz` monitor's assertion (e.g. change the expected Redis-check keyword to a string the real, unchanged, healthy response does not contain) so the monitor evaluates the live, healthy endpoint as failed — the running application is never touched. Capture: trigger timestamp, monitor detection timestamp, alert-rule timestamp, delivery timestamp, channel, recipient, acknowledgement if available, revert timestamp, recovery/green timestamp, and the two calculated latencies (detection, recovery).
 
-**DRILL B — dead-man's-switch check.** Do not stop `noramedi-api`/`noramedi-worker`. Set `NORAMEDI_OPSCHECK_SUPPRESS_PING=disk` (or another single check name) in `/etc/noramedi/opscheck.env`, restart the timer/service so it takes effect, and leave it in place past the configured grace period so only that one check's provider-side alert fires — the local check itself keeps running and keeps reporting its true (healthy) result the whole time, confirmed by this task's own test coverage (§11, "Suppressed ping"). Then remove the env-file line and restart again. Capture the same timestamp/latency set as Drill A.
+**DRILL B — dead-man's-switch check.** Do not stop `noramedi-api`/`noramedi-worker`. Set `NORAMEDI_OPSCHECK_SUPPRESS_PING=disk` (or another single check name) in `/etc/noramedi/opscheck.env` and leave it in place past the configured grace period so only that one check's provider-side alert fires — the local check itself keeps running and keeps reporting its true (healthy) result the whole time, confirmed by this task's own test coverage (§11, "Suppressed ping"). Then remove the env-file line. Capture the same timestamp/latency set as Drill A.
+
+> **CORRECTED (§19 defect 2, proven in the live drill).** This paragraph originally instructed the operator to "restart the timer/service so it takes effect" after each env edit, and again after removing the line. **That is wrong and was never necessary.** `noramedi-opscheck.service` is `Type=oneshot` and loads `EnvironmentFile=-/etc/noramedi/opscheck.env`, which systemd re-reads on **every** `ExecStart` — so an env change takes effect on the next scheduled tick with **no `systemctl daemon-reload`, no service restart, and no timer restart**. Proven in both directions during the live drill (§18): suppression was applied at `11:26:44Z` and took effect at the `11:26:59Z` tick; it was removed at `11:44:20Z` and normal pinging resumed at the `11:48:13Z` tick — the timer was never touched, and `systemctl is-enabled`/`is-active` read `enabled`/`active` continuously throughout. The original wording was also actively hazardous: restarting the timer would reset its monotonic interval mid-drill and corrupt the very detection-latency measurement the drill exists to capture.
 
 Both drills are config-only, reversible in one step, touch no tenant data, and were designed specifically to avoid the "deliberately cause a real API outage" fallback this task's instructions treat as a last resort requiring separate explicit approval.
 
@@ -272,3 +282,144 @@ A subsequent review of PR #405 found three defects in the implementation this §
 **Re-run after all three fixes:** `bash -n scripts/noramedi-opscheck.sh` clean, `bash -n scripts/noramedi-opscheck.test.sh` clean, `bash scripts/noramedi-opscheck.test.sh` → **42 passed, 0 failed**, `git diff --check` → clean (no whitespace errors). Full transcript in §11 (current block).
 
 **Files touched by this R1 correction:** `scripts/noramedi-opscheck.sh`, `scripts/noramedi-opscheck.test.sh`, this evidence file. No other file documents the exit-code contract (confirmed by grep across `docs/program/` and `ops/systemd/` before starting), so no other file required a change. No application code, schema, migration, or CI workflow touched. Program status is unchanged (§12): **R-074 remains `OPEN`, the F3 exit gate remains `NOT SATISFIED`, F3 is not complete, F4 is not authorized** — this correction fixes defects in already-not-production-installed repository-side artifacts; it does not newly close, or newly block, anything the gate itself tracks.
+
+---
+
+# Production activation and live verification (added by F3-OBS-002-CLOSE)
+
+Everything from §17 onward is production evidence. All host facts are operator-executed; the timestamps and journal lines below were captured during the sequenced drill session and are recorded to the precision at which each source actually exposes them — never rounded up to a precision the source does not have.
+
+**All times in §17–§19 are UTC.** Two timezone conversions are load-bearing and are stated once here rather than repeated: the production host renders journal timestamps at **UTC+03:00**, and the Healthchecks.io account UI renders at **UTC+02:00** (see §19, defect 4). Provider-UI times quoted below are given as displayed, with the UTC conversion alongside.
+
+## 17. Production installation and external-provider wiring
+
+**Implementation baseline.** [PR #405](https://github.com/MustafaBasol/DisKlinikCRM/pull/405) (`feature/f3-obs-002-live-observability-alert-verification`) is **`MERGED`**, merge commit **`0478c86bf97b74b2aa9f465130d2a4daaa3579ec`**, which is also the SHA deployed to production and the baseline this closure task branched from. Targeted tests **42/42 passing** (§11, current block); **PR CI 13/13 green** (operator-supplied); **no migration** — 73 migrations, unchanged, no schema/data/tenant change at any point in this task.
+
+**Host-side installation.** `scripts/noramedi-opscheck.sh` is installed at `/usr/local/sbin/noramedi-opscheck.sh` (`root:root`, `0755`), with the service and timer units installed from `ops/systemd/`. `/etc/noramedi/opscheck.env` exists, `root:root`, mode **`0600`**, and is **not** git-tracked. `systemctl show noramedi-opscheck.service -p EnvironmentFiles` reports `/etc/noramedi/opscheck.env (ignore_errors=yes)`, matching the unit template. The timer is **`enabled`** and **`active`** on a 5-minute cadence (`OnUnitActiveSec=5min`, `AccuracySec=30s`), production-verified across the entire session.
+
+**External monitors — UptimeRobot (5-minute interval, email alerting assigned to a real human operator on all three):**
+
+| Monitor | Target | Assertion |
+|---|---|---|
+| `noramedi-api-livez` | `GET https://api.noramedi.com/api/livez` | HTTP/plain status |
+| `noramedi-api-readyz` | `GET https://api.noramedi.com/api/readyz` | general readiness |
+| `noramedi-api-readyz-redis` | `GET https://api.noramedi.com/api/readyz` | **body-keyword assertion on `"name":"redis","status":"ok"`** — §2's Form C fallback, alert condition "start incident when keyword does not exist" |
+
+The Redis monitor uses the body-keyword form, not JSONPath, because the account tier does not offer JSONPath. This is §2's own documented universal fallback and is **`KNOWN_BRITTLE`** by construction: it asserts a substring of a serialized object literal, so any future reordering of the `{ name, status }` keys in `readiness.ts` would break the monitor without breaking the application. That coupling is recorded here deliberately rather than left implicit — it is the one part of this wiring that a routine, well-intentioned refactor could silently disarm.
+
+**Dead-man's-switch checks — Healthchecks.io:** `noramedi-pm2`, `noramedi-disk`, `noramedi-backup`, each **Period = 5 minutes, Grace = 15 minutes**, email integration assigned on all three, DOWN and UP/recovery notifications enabled. Per §6's design the three ping URLs are credentials: they live only in `/etc/noramedi/opscheck.env` and appear nowhere in this repository, this document, or any transcript.
+
+**Execution verified in production.** Both a manual (`systemctl start noramedi-opscheck.service`) and scheduled (timer-driven) invocation were confirmed, each emitting the full `pm2` / `disk` / `backup` sequence with `summary: checks=[pm2 disk backup] exit=0` and `Result=success` / `ExecMainStatus=0`. All three Healthchecks checks and all three UptimeRobot monitors were confirmed `UP` before drilling began.
+
+## 18. Controlled alert-delivery and recovery drills
+
+Both drills were run against live production with **no application failure induced**: §14's design was followed exactly — Drill A falsifies an external *assertion* about a healthy system, Drill B withholds *telemetry* from a healthy system. At no point were the API, worker, PostgreSQL, Redis, the backup process, or the systemd timer stopped, restarted or reloaded, and no application code ran differently.
+
+### 18.1 Drill A — external HTTP monitor (UptimeRobot, Redis assertion) — **PASS**
+
+| Event | UTC | Note |
+|---|---|---|
+| Trigger | `10:56:28Z` | expected keyword changed to a string the healthy response does not contain |
+| Monitor **DOWN** | `10:57:29Z` | provider root cause `Keyword Does Not Exist` |
+| Human DOWN email | *received, header time not captured* | see measurement limitation below |
+| Assertion restored | `11:01:15Z` | restored to the exact `"name":"redis","status":"ok"` baseline |
+| Monitor **UP** | `11:01:27Z` | incident duration 3 m 58 s |
+| Human recovery email | `11:01:32Z` | Gmail header `Thu, 13 Aug 2026 04:01:32 -0700` |
+
+**Detection latency 61 s. Recovery latency 12 s** (restore → UP), recovery email delivered 5 s after UP / 17 s after restore.
+
+**Negative control — the application never degraded.** An independent witness polled `GET /api/readyz` every 60 s throughout, capturing **15/15 samples with `database ok` and `redis ok`** from `10:57:02Z` to `11:11:08Z` — fully bracketing the `10:57:29Z`–`11:01:27Z` incident on both sides. The DOWN state therefore originated entirely in the injected assertion, which is exactly what makes this a valid negative control rather than a real outage. Only the one monitor's keyword field was mutated; its URL, alert condition, interval and email assignment, and both other monitors, were untouched.
+
+**Measurement limitation, recorded rather than estimated:** the DOWN email was definitely received by the human operator (subject `noramedi-api-readyz-redis is down.`), but its `Date:` header was not captured before the evidence window closed and is unrecoverable. **`A_HUMAN_ALERT_LATENCY` is therefore `NOT PRECISELY MEASURED`** and is deliberately left unquantified. Delivery is proven; only the figure is missing. Drill A passes on delivery grounds, and this gap is disclosed rather than back-filled with a plausible number.
+
+### 18.2 Drill B — dead-man's-switch (Healthchecks, disk) — **PASS**
+
+| Event | UTC | Note |
+|---|---|---|
+| Last successful `disk` ping | `11:21:55Z` | journal-proven |
+| Suppression applied | `11:26:44Z` | `NORAMEDI_OPSCHECK_SUPPRESS_PING=disk` appended |
+| Provider **DOWN** | `11:41Z` | UI `13:41` (+02:00); minute precision only |
+| Human DOWN email | `11:41:57Z` | Gmail header `Thu, 13 Aug 2026 04:41:57 -0700` |
+| Suppression removed | `11:44:20Z` | env restored byte-identically |
+| First restored `disk` ping | `11:48:13Z` | journal |
+| Provider **UP** | `11:48Z` | UI `13:48` (+02:00) |
+| Human recovery email | `11:48:15Z` | Gmail header `Thu, 13 Aug 2026 04:48:15 -0700` |
+
+**The disk was healthy for the entire drill.** Every suppressed run still logged `disk check: OK — 12% used at '/' (threshold 90%)` immediately before `ping suppressed for 'disk' (NORAMEDI_OPSCHECK_SUPPRESS_PING) — local result only`. This drill tests the **absence of telemetry**, not a disk failure — precisely §14's intent.
+
+**Suppression was selective, and that is the load-bearing claim.** Four runs fell inside the suppression window (`11:26:59Z`, `11:32:24Z`, `11:37:54Z`, `11:43:00Z`) and **every one** shows `ping ok for 'pm2'` **+** `ping suppressed for 'disk'` **+** `ping ok for 'backup'` **+** `exit=0`. Exactly one of three channels went dark; `noramedi-pm2` and `noramedi-backup` stayed `UP` throughout and never alerted.
+
+**Latencies:**
+- **Human-alert latency: `20 m 02 s` — exact**, both endpoints at second precision (`11:21:55Z` last ping → `11:41:57Z` email).
+- **Detection latency: bounded to `[19 m 05 s, 20 m 02 s]`**, *not* claimed to second precision. The provider UI exposes the DOWN event to the minute only; the interval is the minute `11:41Z` tightened by the email header, and it straddles the theoretical `20 m 00 s` (Period 5 m + Grace 15 m from `11:21:55Z`). Quoting a second-precision figure from a minute-precision display would be a fabricated precision, so the bound is reported instead.
+- **Recovery latency: `3 m 53 s – 3 m 55 s`** (restore → UP), dominated by waiting for the next 5-minute tick rather than by provider latency; first restored ping → UP was **≤ 2 s**.
+
+**Zero collateral impact.** A sentinel sampled PM2 and `/api/livez` nine times from `11:27:52Z` to `11:52:11Z`, spanning both the DOWN and the recovery: `noramedi-api` and `noramedi-worker` `online` at every sample, restart counts **12/12** and PIDs **607545 / 607578** unchanged — identical to the pre-drill baseline, so this task caused no process restart of any kind.
+
+## 19. R3 — monitoring-credential exposure and remediation
+
+**The finding, preserved as a rejected claim rather than quietly corrected.** The Phase C drill report asserted **`Secrets exposed = no`**. Architecture review **REJECTED** that claim: the full UUID-bearing Healthchecks ping URL for `noramedi-disk` was visible in an operator-provided screenshot captured during evidence collection. **That rejection stands as historical record.** The credential was treated as compromised and rotated before R-074 was allowed to close — the closure below rests on the remediation, not on the original claim.
+
+**Blast radius, stated accurately in both directions.** A `hc-ping.com` URL is a write-only signal endpoint. A holder could send `success` (masking a genuine failure of that one check) or `/fail` (raising a false alarm on it) — a real integrity problem for the alerting chain, and simultaneously **no path whatsoever** to the host, the API, the database, or any patient/tenant data. The exposure is bounded to the trustworthiness of one monitoring signal.
+
+**Remediation, minimum blast radius.** A replacement check was created (`noramedi-disk-v2`, later renamed) with semantics **identical** to the retired one: Period 5 m, Grace 15 m, email integration assigned, DOWN and UP/recovery notifications enabled. Only `NORAMEDI_OPSCHECK_DISK_PING_URL` was changed, edited directly on the host by the operator in their own session; the new credential never entered any transcript, log, screenshot, or this document, and was never hashed or value-grepped. `noramedi-pm2`, `noramedi-backup`, UptimeRobot, application code, schema, PM2 and the systemd unit/timer definitions were all untouched.
+
+**Rotation proven by one-to-one correspondence, not by assertion.** Every host execution after the env edit appears as a provider ping on the replacement, while the old check stayed frozen at its last pre-edit run:
+
+| Host run (journal, UTC) | Trigger | Replacement check | Old check |
+|---|---|---|---|
+| `12:03:55Z` | scheduled, pre-edit | — | `14:03` ← **frozen here** |
+| `12:09:23Z` | scheduled, post-edit | `14:09` ✔ | no advance |
+| `12:10:00Z` | manual | `14:10` ✔ | no advance |
+| `12:15:20Z` | scheduled | `14:15` ✔ | no advance |
+| `12:20:24Z` | scheduled, post-rename | `14:20` ✔ | (deleted) |
+
+Two independent facts make this conclusive. First, the script pings via `curl -fsS`, which fails on any HTTP ≥ 400, and Healthchecks returns **404 for an unknown UUID** — so `ping ok for 'disk'` could not have been emitted against an invalid credential. Second, the old check's Last Ping never moved again. All runs reported `exit=0` with `pm2` and `backup` unaffected throughout.
+
+**Retirement.** The old check was **paused first**, verified to be receiving nothing, then **deleted**; Healthchecks does not reissue deleted UUIDs, so the compromised credential is permanently unusable and was never reused. The replacement was then **renamed to `noramedi-disk`**, and a post-rename scheduled ping (`12:20:24Z` → `14:20`) confirms the rename preserved the UUID and did not disturb ingest. Pausing before the old check's own dead-man expiry (`12:23:55Z`) also meant **no spurious DOWN alert was ever generated** — the production alert record contains no phantom incident from this remediation.
+
+Incidentally, the retirement re-verified the dead-man arithmetic for free: the old check stopped being fed at `12:03:55Z` and was on track to go DOWN at exactly `12:23:55Z` — Period + Grace to the second — which is why the drill in §18.2 was **not** re-run. Its four re-run triggers (differing semantics, differing email integration, differing schedule, or evidence of drift) were each checked and none fired.
+
+**Exposure scope: `disk-only`.** Operator review of the shared evidence confirms the `noramedi-pm2` and `noramedi-backup` URLs were redacted and only the disk URL was visible; there is no evidence supporting rotation of the other two, and none was performed. A host audit independently confirmed no second on-disk copy of any ping URL existed: `/etc/noramedi/opscheck.env.bak.TEMPORARY_VALIDATION_STATE` contains a single `NORAMEDI_OPSCHECK_SUPPRESS_PING` line and **no credential of any kind**.
+
+**Final verified state.** Timer `enabled`/`active` on its normal 5-minute cadence; suppression **absent**; env `root:root 0600`; last run `Result=success`, `ExecMainStatus=0`; all three Healthchecks checks `UP`; all three UptimeRobot monitors `UP`; `/api/livez` ok; `/api/readyz` `database ok` + `redis ok`; PM2 `noramedi-api` and `noramedi-worker` both `online`, restart counts **12/12**, PIDs **607545 / 607578** — unchanged across the entire task.
+
+### 19.1 Documentation defects found by live validation, corrected in this PR
+
+Four of the five corrections below exist **because** the design was exercised against a real host. They are the concrete return on running the drills rather than reasoning about them.
+
+1. **Missing parent-directory creation in the install procedure.** §10's `install -o root -g root -m 0600 /dev/null /etc/noramedi/opscheck.env` fails on a host where `/etc/noramedi` does not yet exist — `install(1)` does not create parent directories. **Corrected** in §10, `ops/systemd/noramedi-opscheck.env.example` and `ops/systemd/noramedi-opscheck.service` (comment blocks only) by prepending `install -d -o root -g root -m 0750 /etc/noramedi`.
+2. **Incorrect restart requirement in the Drill B procedure.** §14 instructed a service/timer restart after each env edit. `EnvironmentFile` is re-read on every `ExecStart` of the oneshot, so **no restart, no `daemon-reload`, and no timer restart is required** — and restarting the timer would reset its monotonic interval and corrupt the drill's own detection-latency measurement. **Corrected** inline in §14 and proven in both directions in §18.2.
+3. **Dead-man detection semantics misread as a 15-minute SLA.** Period 5 m + Grace 15 m means DOWN at **approximately 20 minutes** of silence from the last successful ping — not 15. The 15-minute figure is the grace component alone. **Corrected** in `ops/systemd/noramedi-opscheck.timer`'s comment block and in the runbook's §4.11 detection column; §18.2's measured `[19 m 05 s, 20 m 02 s]` is the empirical confirmation.
+4. **Provider-UI timezone reading hazard.** The Healthchecks account UI rendered timestamps at **UTC+02:00**, while the host journal renders at UTC+03:00 and the drill protocol records UTC. This was caught only because a baseline reading of `13:21` was cross-checked against a journal ping at `11:21:55Z` — taken at face value it would have corrupted every Drill B latency by two hours. **Recorded** here and in §4.11; the standing recommendation is to set the provider account to UTC, and failing that to normalize every provider timestamp explicitly at capture time rather than at analysis time.
+5. **Obsolete production artifact.** `/etc/noramedi/opscheck.env.bak.TEMPORARY_VALIDATION_STATE` remains on the host from an earlier validation step. It is verified credential-free (one `NORAMEDI_OPSCHECK_SUPPRESS_PING` line) and inert, but serves no purpose. **Marked obsolete**, with the cleanup command recorded in §20 as a post-merge operational action. **Not executed by this task** — this PR performs no production mutation.
+
+## 20. Closure, program state, and residual items
+
+**R-074 → `CLOSED`.** The row required live dashboard/alert-channel/uptime-probe evidence. Delivered: an external prober chain and an independent dead-man chain, both wired to a real human email channel, both **proven end-to-end by controlled drill** — detection, human delivery, and recovery — and the one monitoring credential exposed during evidence capture was rotated and permanently retired before closure. This is not self-closure by the remediating task: the implementation was PR #405, the provider/host actions were the operator's, and the Phase C and R3 reports were both accepted by architecture review, which is also what rejected the original `Secrets exposed = no` claim.
+
+**F3 exit-gate criterion 1 ("Gözlemlenebilirlik standardı canlıda kanıtla çalışıyor — log/metrik/trace/alarm") → `SATISFIED`.**
+
+**The overall F3 exit gate remains `NOT SATISFIED`**, and this task asserts nothing about why. Criterion 2 (security-hardening checklist) and criterion 3 (incident-response drill sufficiency) were **out of scope and unassessed here** — no evidence about either was gathered, and their state is unchanged by this closure.
+
+```
+R-074                      = CLOSED
+F3_EXIT_CRITERION_1        = SATISFIED
+F3_EXIT_CRITERION_2        = UNCHANGED (not assessed by this task)
+F3_EXIT_CRITERION_3        = UNCHANGED (not assessed by this task)
+F3_EXIT_GATE               = NOT SATISFIED
+F3_COMPLETE                = NO
+F4_TRANSITION_AUTHORIZED   = NO
+```
+
+**Not claimed by this closure.** Sentry/error-tracking adoption (§9 remains deliberately deferred, unimplemented); log aggregation; OTel metrics/tracing; elevated-5xx-rate and TLS-expiry alerting (§4.11's own "what this does NOT cover"); any on-call rotation. R-074's closure rests on the uptime-prober + dead-man + human-email chain actually being proven live, which is what its row named — not on the full observability roadmap being complete.
+
+**Residual operational items, none blocking this PR:**
+
+1. **Post-merge host cleanup** of the obsolete artifact (§19.1 item 5). Operator action, deliberately not executed by this documentation task:
+   ```bash
+   sudo rm -f /etc/noramedi/opscheck.env.bak.TEMPORARY_VALIDATION_STATE
+   ```
+2. **Set the Healthchecks account timezone to UTC** to remove the +02:00 reading hazard (§19.1 item 4).
+3. **The Redis keyword assertion is `KNOWN_BRITTLE`** (§17): a key reorder in `readiness.ts`'s `{ name, status }` literal would silently disarm the `noramedi-api-readyz-redis` monitor without any application-level symptom. Worth a regression guard in a future task; not opened here.
+4. **The screenshot containing the retired disk URL** may still exist wherever it was shared. Deletion of the check is what neutralized the credential, not redaction of the image — so this is hygiene, not an open exposure.
