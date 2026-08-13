@@ -986,7 +986,7 @@ Exact next task:
 
 ### 18.1 What this section closes
 
-§7.1 and §11 reason 7 of this document record that **§5 item 4 of the governing checklist (webhook secrets configured per connection) had never been assessed**. This task assessed it — and found that the check itself could never have succeeded, because the command the checklist mandated does not run against this repository's schema. This section is the historical record of that defect; the *corrected* command now lives in the governing checklist itself (`F3-SEC-EXIT-001_FIRST_CUSTOMER_SECURITY_HARDENING_GATE.md` §5 item 4), per this program's convention that the checklist carries the current command and the evidence document carries the history.
+§7.1 and §11 reason 7 of this document record that **§5 item 4 of the governing checklist (webhook secrets configured per connection) had never been assessed**. This task assessed it — and found that the check itself could never have completed successfully, because the command the checklist mandated is schema-invalid and fails when executed against this repository's schema (proven, §18.3). This section is the historical record of that defect; the *corrected* command now lives in the governing checklist itself (`F3-SEC-EXIT-001_FIRST_CUSTOMER_SECURITY_HARDENING_GATE.md` §5 item 4), per this program's convention that the checklist carries the current command and the evidence document carries the history.
 
 This section does **not** claim the item now passes. The corrected query has been executed only against a disposable, empty local database to prove it runs (§18.3); it has **never** been executed against production, so no production coverage is measured.
 
@@ -1114,10 +1114,12 @@ WEBHOOK_SECRET_CHECKLIST_QUERY   = CORRECTED
 OLD_CHECK                        = SUPERSEDED (preserved verbatim, §18.2)
 WEBHOOK_SECRET_PRODUCTION_STATUS = NOT_MEASURED — corrected query never executed against production
 CORRECTED_QUERY_EXECUTABILITY    = PROVEN (SQL_EXIT=0 on disposable migrated schema, empty DB)
-F3_SEC_EXIT_001_S5_ITEM_4        = STILL_OPEN (the check is now runnable; it has not been run on production)
+F3_SEC_EXIT_001_S5_ITEM_4        = STILL_OPEN (the check can now complete successfully; it has not been
+                                   run against production)
+PRODUCTION_COVERAGE              = NOT_MEASURED
 ```
 
-**This lane does not move `F3_EXIT_CRITERION_2`.** §11 reason 7 named the webhook-secret item as unassessed; it remains unassessed. What changed is that the mandated command would have failed on contact with production, and now would not.
+**This lane does not move `F3_EXIT_CRITERION_2`.** §11 reason 7 named the webhook-secret item as unassessed; it remains unassessed. What changed is that the mandated command would have errored out on contact with production — as it demonstrably does against this schema (§18.3) — and its replacement does not.
 
 ### 18.9 Migration / runtime / tenant / KVKK impact
 
@@ -1164,8 +1166,9 @@ No application test suite was run: no runtime, schema, test or dependency file i
 
 ```
 Accepted findings:
-  - The checklist's mandated webhook-secret query was schema-invalid and could never have run: undefined column
-    "webhookSecretEncrypted" on "WhatsAppConnection", undefined relation "ExternalCalendarConnection".
+  - The checklist's mandated webhook-secret query is schema-invalid and cannot execute successfully against the
+    current schema: undefined column "webhookSecretEncrypted" on "WhatsAppConnection", undefined relation
+    "ExternalCalendarConnection". It runs; it fails.
     Confirmed twice over: by direct read of server/prisma/schema.prisma at the baseline SHA, and by OBSERVED
     execution failure on a disposable local migrated database (§18.3). Not observed on production.
   - InstagramConnection.webhookSecret was omitted from the original check entirely.
