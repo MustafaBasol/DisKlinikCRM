@@ -22,10 +22,13 @@
 # It never touches patient data, tenant data, or any database/Redis
 # connection.
 #
-# Installation (proposed, not yet executed — see the evidence doc):
+# Installation (executed and production-verified 2026-08-13 — see the evidence doc §17):
 #   install -o root -g root -m 0755 scripts/noramedi-opscheck.sh /usr/local/sbin/noramedi-opscheck.sh
 #   install -o root -g root -m 0644 ops/systemd/noramedi-opscheck.service /etc/systemd/system/noramedi-opscheck.service
 #   install -o root -g root -m 0644 ops/systemd/noramedi-opscheck.timer /etc/systemd/system/noramedi-opscheck.timer
+#   install -d -o root -g root -m 0750 /etc/noramedi   # REQUIRED FIRST: install(1) does not
+#                                                      # create parent directories, so the next
+#                                                      # line fails on a host without this dir
 #   install -o root -g root -m 0600 /dev/null /etc/noramedi/opscheck.env   # then fill in real ping URLs, see .env.example in this directory
 #   systemctl daemon-reload
 #   systemctl enable --now noramedi-opscheck.timer
