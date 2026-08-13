@@ -974,3 +974,228 @@ Deployment safe:
 Exact next task:
   Implement the minimal POST /api/platform/auth/login MFA route/DB integration test suite (§17.9) — the sole remaining item standing between PLATFORM_ADMIN_MFA_LANE and PASS.
 ```
+
+---
+
+## 18. F3-EXIT-C2-LANE-F — Webhook-Secret Verification Query: Defect Record and Correction (2026-08-13)
+
+**Task ID:** `F3-EXIT-C2-LANE-F` (Lane F of `F3-SEC-EXIT-001-R4-MASTER`).
+**Type:** Documentation / evidence only. **No runtime, schema, migration, dependency, CI or configuration file is changed by this task. No production access was performed. No external control-plane setting was mutated.**
+**Branch:** `docs/f3-exit-c2-lane-f-webhook-secret-checklist-fix`.
+**Baseline:** `origin/main` @ `0ad59802bc5f9dcd567ef1d2fd72ec3797bb3f8b` (PR #414's merge commit, F3-SEC-EXIT-001-R4 Lane A), fetched fresh, clean worktree, no drift.
+
+### 18.1 What this section closes
+
+§7.1 and §11 reason 7 of this document record that **§5 item 4 of the governing checklist (webhook secrets configured per connection) had never been assessed**. This task assessed it — and found that the check itself could never have completed successfully, because the command the checklist mandated is schema-invalid and fails when executed against this repository's schema (proven, §18.3). This section is the historical record of that defect; the *corrected* command now lives in the governing checklist itself (`F3-SEC-EXIT-001_FIRST_CUSTOMER_SECURITY_HARDENING_GATE.md` §5 item 4), per this program's convention that the checklist carries the current command and the evidence document carries the history.
+
+This section does **not** claim the item now passes. The corrected query has been executed only against a disposable, empty local database to prove it runs (§18.3); it has **never** been executed against production, so no production coverage is measured.
+
+### 18.2 Defect record
+
+```
+OLD_CHECK         = SUPERSEDED
+REASON            = schema-invalid query (undefined column + undefined relation), plus row-id exposure
+DATE_DISCOVERED   = 2026-08-13 (F3-SEC-EXIT-001-R4-MASTER, Lane F)
+DATE_INTRODUCED   = 2026-08-11 (F3-SEC-EXIT-001, original authoring of §5 item 4)
+ERRORS_OBSERVED   = OBSERVED_ON_DISPOSABLE_LOCAL_MIGRATED_DB — see §18.3
+PRODUCTION_EXECUTION = NO
+REPLACEMENT_CHECK = F3-SEC-EXIT-001_FIRST_CUSTOMER_SECURITY_HARDENING_GATE.md §5 item 4 (corrected 2026-08-13)
+```
+
+**The superseded command, reproduced verbatim so it is not lost:**
+
+```sql
+SELECT id, "webhookSecretEncrypted" IS NOT NULL AS has_secret FROM "WhatsAppConnection";
+SELECT id, "webhookSecretEncrypted" IS NOT NULL AS has_secret FROM "ExternalCalendarConnection";
+```
+
+It shipped with the parenthetical *"(Adjust table/column names to the exact current schema; confirm no row has `has_secret = false` in production.)"* — i.e. its own author flagged that the names were unverified. That caveat is the reason this is recorded as an **authoring defect**, not as a regression caused by later schema drift: the names were never correct for any commit in this repository's history.
+
+**Four independent defects, each sufficient on its own to invalidate the check:**
+
+| # | Defect | Evidence |
+|---|---|---|
+| 1 | `WhatsAppConnection` has **no** `webhookSecretEncrypted` column. Its real secret columns are `metaWebhookSecret` and `webhookSecret`. | `server/prisma/schema.prisma:1695`, `:1703` |
+| 2 | There is **no** `ExternalCalendarConnection` model anywhere in the schema. The real model is `ExternalCalendarIntegration`. | `server/prisma/schema.prisma:3428`; no `ExternalCalendarConnection` exists — only a *function* name, `getExternalCalendarConnectionRecordByReceiverKey`, which is the likely source of the mistaken table name |
+| 3 | `InstagramConnection` — a third model that genuinely carries a per-connection `webhookSecret` and is genuinely reachable by an inbound signed webhook — was **omitted entirely**. | `server/prisma/schema.prisma:1902`; consumed at `server/src/routes/instagramWebhook.ts:184, 305-313` |
+| 4 | Both statements `SELECT id`, returning row identifiers. This program's own redaction rule (§9, §16.5, §17.4 of this document) requires production evidence to be aggregate-only. The mandated command therefore conflicted with the mandated redaction policy. | this document §9 preamble: *"Do not paste back any raw output containing a credential"*; §16.5: *"aggregate-only, no row output"* |
+
+### 18.3 Errors OBSERVED — disposable local migrated database, NOT production
+
+```
+ERRORS_OBSERVED      = OBSERVED_ON_DISPOSABLE_LOCAL_MIGRATED_DB
+PRODUCTION_EXECUTION = NO
+```
+
+**These are real observed errors, not predictions — and they were observed on a throwaway local database, never on production.** Both statements of the superseded command were executed on 2026-08-13 against a disposable PostgreSQL 16 container holding this repository's full migrated schema. Verbatim output:
+
+```
+=== ORIGINAL §5 item 4, query 1 ===
+ERROR:  column "webhookSecretEncrypted" does not exist
+LINE 1: SELECT id, "webhookSecretEncrypted" IS NOT NULL AS has_secre...
+                   ^
+=== ORIGINAL §5 item 4, query 2 ===
+ERROR:  relation "ExternalCalendarConnection" does not exist
+LINE 1: ...okSecretEncrypted" IS NOT NULL AS has_secret FROM "ExternalC...
+                                                             ^
+```
+
+**Execution context, for reproducibility:**
+
+| Field | Value |
+|---|---|
+| Database | disposable container `noramedi-r4-lanea-db`, image `postgres:16-alpine`, DB `noramedi_r4_lanea`, bound `127.0.0.1:5546` (loopback only) |
+| Created | 2026-08-13T17:28:38Z |
+| Schema state | `npx prisma migrate deploy` → *"All migrations have been successfully applied."* (2026-08-13T17:28:56Z), applied from the Lane A worktree at `origin/main` @ `8000c276915e5c3aa7b460acce4ec4455e1b8ec8` |
+| Command | `docker exec -i noramedi-r4-lanea-db psql -U postgres -d noramedi_r4_lanea -v ON_ERROR_STOP=1 < orig1.sql` / `< orig2.sql` (each statement run separately, so both errors surface) |
+| Executed | 2026-08-13T19:09:02Z; output captured 19:09:06Z |
+| Data content | **empty database** — schema only, zero connection rows. No secret, ciphertext or row identifier existed to be exposed. |
+| Container lifetime | already removed; `docker ps -a --filter name=noramedi-r4-lanea-db` returns nothing as of this writing |
+
+The SQLSTATE classes are `42703` (undefined_column) for statement 1 and `42P01` (undefined_table) for statement 2. Those class codes are a **derived mapping** of the observed messages — `psql` printed the messages above without the SQLSTATE, so the codes remain an inference while the messages themselves are observed.
+
+Two further facts that keep this evidence in proportion:
+
+1. **Production has never run this query, corrected or superseded.** This program grants its Claude Code sessions no production database access (§16.5). Nothing here measures production configuration.
+2. **The corrected replacement was executed on the same disposable database and returned `SQL_EXIT=0`** with four scope rows, all `total = 0, with_secret = 0` — because the database was empty. That proves the corrected command *parses and runs against the real migrated schema*. It proves **nothing** about webhook-secret coverage, since a trivially-empty result satisfies `with_secret = total` vacuously.
+
+### 18.3a Provenance correction — how the record went wrong
+
+An earlier revision of this section asserted `ERRORS_OBSERVED = NOT_EXECUTED` and stated that the query *"was never executed against production, or against any database, by this task or any prior one."* **That statement was incorrect and is withdrawn.**
+
+How it arose: the assessing session verified execution status only against **its own** session record — where the query genuinely had not been run — and then generalised that scope-limited negative into a claim about all prior work, without inspecting the preceding session's transcript. A conservative-sounding claim was therefore made outside the evidence that supported it. The error was caught by the program owner, who noticed the contradiction against the preceding delivery report, and resolved from the preceding session's primary tool-call record (transcript `fe276944-8cc2-4746-b964-001d808359d6`, tool_use `toolu_01XojxHy8HG5LLP8rQynFi4r`).
+
+The general rule this records: a negative existence claim (*"never happened"*) requires evidence covering **every** place it could have happened. Where that coverage is absent, the correct value is `UNVERIFIED`, not `NOT_EXECUTED`.
+
+Nothing about the underlying schema defect changes. Defects 1–4 in §18.2 stand exactly as written; they are now supported by executed evidence in addition to the static schema comparison.
+
+### 18.4 Independently confirmed models and secret columns
+
+Confirmed directly against `server/prisma/schema.prisma` at the baseline SHA, not assumed from the prior delivery's summary. The prior delivery's finding is **confirmed correct**, with one addition it did not state (the runtime consumer of each column, and the scope filter each consumer applies):
+
+| Model | Secret column(s) | Runtime consumer | Scope filter used at runtime |
+|---|---|---|---|
+| `WhatsAppConnection` (`:1667`) | `metaWebhookSecret` (`:1695`), `webhookSecret` (`:1703`) | Meta Cloud webhook HMAC — `routes/metaWhatsAppWebhook.ts:232, 375`; effective secret = `decrypt(metaWebhookSecret)` OR-else `decrypt(webhookSecret)` | `provider = 'meta_cloud_api' AND isActive = true` (`:218`, `:302`, `:363`) |
+| `WhatsAppConnection` (same model, second path) | `webhookSecret` (`:1703`) only | Evolution-API public-API tenant credential — `routes/whatsapp.ts:1166-1186`, constant-time compare of the decrypted per-connection value | `provider = 'evolution_api' AND isActive = true` (`:1170`) |
+| `InstagramConnection` (`:1883`) | `webhookSecret` (`:1902`) | Instagram webhook HMAC — `routes/instagramWebhook.ts:305-313` | `isActive = true` (`:170`) |
+| `ExternalCalendarIntegration` (`:3428`) | `webhookSecretEncrypted` (`:3448`) | DigiDentiS webhook HMAC — `routes/externalCalendarWebhook.ts:83-96` | resolved by `webhookReceiverKey` only — **see §18.5(b)** |
+
+### 18.5 Two findings surfaced by this correction, neither previously recorded
+
+**(a) Evolution-API WhatsApp connections were missing from item O's own scope sentence.** Item O in §2 of the checklist names only *"Instagram, Meta WhatsApp, each DigiDentiS external-calendar connection"*. But `routes/whatsapp.ts:1107-1113` establishes that an Evolution-API connection's `webhookSecret` is the **tenant-identifying inbound credential** for the public WhatsApp API — the authorization-order comment is explicit: *"Verify it against each active Evolution connection's own `webhookSecret` … this IS the tenant signal."* A missing per-connection secret there does not merely disable signature checking; it pushes the request onto the `LEGACY_SINGLE_CONNECTION_COMPATIBILITY` path, which is only ever accepted under a strict single-active-connection topology and fails closed the moment a second connection exists. That is a live multi-tenant authorization property, so those rows belong in the required scope. Item O's Notes cell has been corrected in place with a dated marker; its original wording is preserved in the same cell.
+
+**(b) `ExternalCalendarIntegration` webhook lookup does not filter on `enabled`.** `getExternalCalendarConnectionRecordByReceiverKey` (`services/externalCalendar/externalCalendarConnectionService.ts:169-174`) is a bare `findUnique` on `webhookReceiverKey`, and `routes/externalCalendarWebhook.ts` contains **zero** references to `enabled` (verified by grep). A disabled integration row is therefore still reachable by anyone holding its receiver key. This is **not** classified as an exploitable hole: `requireWebhookSecretInProduction` (`utils/secrets.ts:13-15`) makes a secretless row reject in production, and a row *with* a secret still requires a valid HMAC signature. It is recorded because the corrected query's PASS scope deliberately requires only `enabled = true` rows, and that narrowing must be justified explicitly rather than assumed — `enabled = false` rows are reported as a separate, clearly non-gating row rather than dropped from the result.
+
+### 18.6 Corrected check — requirements traceability
+
+The corrected command now in `F3-SEC-EXIT-001` §5 item 4 satisfies each stated requirement:
+
+| Requirement | How it is met |
+|---|---|
+| returns only aggregate counts | every branch is `COUNT(*)` / `COUNT(*) FILTER (...)`; no non-aggregate column is projected |
+| exposes no IDs | no `id` column appears anywhere; `scope` is a literal string authored in the query, not row data |
+| exposes no secret / ciphertext / plaintext | the secret columns appear only inside `IS NOT NULL` predicates, never in a select list |
+| distinguishes provider/state where required | separate `scope` rows for `meta_cloud_api`, `evolution_api`, unrecognized providers, Instagram, calendar-enabled, calendar-disabled, and both inactive sets |
+| covers every active/enabled relevant connection model | all three secret-bearing models, both WhatsApp provider paths |
+| explicit PASS condition | `PASS iff (a) with_secret = total for every required = true row AND (b) whatsapp_unrecognized_provider__active.total = 0` |
+| unsupported/legacy providers not silently PASS | clause (b) — an unrecognized active provider fails the check even if those rows happen to carry secrets |
+| explicit limitation for non-null-but-undecryptable legacy values | recorded in the checklist itself: `with_secret` proves `NOT NULL` only; `tryDecryptConnectionSecret` (`routes/whatsapp.ts:1145-1154`) turns a corrupted value into `null` at runtime, so `with_secret = total` is **necessary but not sufficient** |
+
+**Note on the result shape.** A fourth column, `required`, was added to the requested `scope | total | with_secret` shape. Without it the PASS condition would depend on a reader correctly remembering which scope names gate and which are informational — exactly the class of ambiguity that produced the original defect. The extension is called out here rather than made silently.
+
+### 18.7 Residual gap this correction does NOT close
+
+A read-only SQL check cannot prove a stored ciphertext decrypts — that needs `ENCRYPTION_KEY` and an application-side oracle. Until such an oracle exists, `WEBHOOK_SECRET_DECRYPTABILITY = UNVERIFIABLE_BY_SQL` stands as a permanent qualifier on any PASS this item ever records. A follow-up (a read-only script that loads the application's own decrypt helper and emits per-scope `decryptable`/`undecryptable` counts and nothing else) is **noted, not opened, and not implemented by this task** — it would be executable code, which is outside this docs-only PR's boundary.
+
+### 18.8 Lane-F classification
+
+```
+WEBHOOK_SECRET_CHECKLIST_QUERY   = CORRECTED
+OLD_CHECK                        = SUPERSEDED (preserved verbatim, §18.2)
+WEBHOOK_SECRET_PRODUCTION_STATUS = NOT_MEASURED — corrected query never executed against production
+CORRECTED_QUERY_EXECUTABILITY    = PROVEN (SQL_EXIT=0 on disposable migrated schema, empty DB)
+F3_SEC_EXIT_001_S5_ITEM_4        = STILL_OPEN (the check can now complete successfully; it has not been
+                                   run against production)
+PRODUCTION_COVERAGE              = NOT_MEASURED
+```
+
+**This lane does not move `F3_EXIT_CRITERION_2`.** §11 reason 7 named the webhook-secret item as unassessed; it remains unassessed. What changed is that the mandated command would have errored out on contact with production — as it demonstrably does against this schema (§18.3) — and its replacement does not.
+
+### 18.9 Migration / runtime / tenant / KVKK impact
+
+```
+Migration required:                      NO
+Migration created:                       NO
+Migration applied:                       NO
+Schema changed:                          NO
+Runtime/application code changed:        NO
+Test code changed:                       NO
+CI/workflow changed:                     NO
+Production deployment:                   NO
+Production data mutation:                NO
+External control-plane settings changed: NO
+Tenant query behavior changed:           NO
+Authentication behavior changed:         NO
+Secrets changed or exposed:              NO — no secret, ciphertext, connection string or row id appears in this diff
+KVKK data-flow changed:                  NO
+```
+
+### 18.10 Validation commands run
+
+```
+Command: git diff --check
+Purpose: whitespace / conflict-marker defects in the documentation diff
+Result:  clean, exit 0
+
+Command: git diff --name-only origin/main
+Purpose: confirm the diff touches only docs/program/evidence/**
+Result:  2 files, both under docs/program/evidence/
+
+Command: git rev-parse origin/main
+Purpose: baseline confirmation
+Result:  0ad59802bc5f9dcd567ef1d2fd72ec3797bb3f8b
+```
+
+No application test suite was run: no runtime, schema, test or dependency file is touched by this task. No documentation-link or evidence-consistency validation script exists in this repository — re-confirmed against the current root `package.json` (only a frontend `lint` script exists; no docs/evidence validator), so none is claimed. `ci-pr.yml` applies no path filter to its `on:` trigger, so the standard PR Gate applies to this docs-only PR.
+
+### 18.11 Rollback
+
+`git revert` the merge commit that lands this section. Reverting restores the superseded, schema-invalid command as the governing check — which would be a **regression**, not a recovery, and should only be done if this correction is itself found wrong. No production, schema, or control-plane state is touched by this PR, so there is no second rollback plane.
+
+### 18.12 Closure block
+
+```
+Accepted findings:
+  - The checklist's mandated webhook-secret query is schema-invalid and cannot execute successfully against the
+    current schema: undefined column "webhookSecretEncrypted" on "WhatsAppConnection", undefined relation
+    "ExternalCalendarConnection". It runs; it fails.
+    Confirmed twice over: by direct read of server/prisma/schema.prisma at the baseline SHA, and by OBSERVED
+    execution failure on a disposable local migrated database (§18.3). Not observed on production.
+  - InstagramConnection.webhookSecret was omitted from the original check entirely.
+  - Evolution-API WhatsApp connections were omitted from item O's scope sentence; they consume a per-connection
+    webhookSecret as the tenant-identifying inbound credential (routes/whatsapp.ts:1107-1113).
+  - ExternalCalendarIntegration webhook resolution does not filter on `enabled`; recorded, classified as
+    non-exploitable (production fail-closed still applies), and used to justify the corrected query's PASS scope.
+  - with_secret proves NOT NULL only; decryptability is unverifiable by SQL and is recorded as a standing residual.
+Rejected or unverified claims:
+  - ERRORS_OBSERVED is NOT populated with production errors. The failures were observed on a disposable, empty,
+    loopback-bound local database (§18.3). PRODUCTION_EXECUTION = NO. No future document may cite them as a
+    production result.
+  - The SQLSTATE codes 42703 / 42P01 remain DERIVED: psql printed the messages without SQLSTATEs.
+  - An earlier revision of this section claimed the query "was never executed anywhere". That claim was WRONG and
+    is withdrawn — see §18.3a for the correction and its cause.
+  - The corrected query's clean run proves executability only; the database was empty, so with_secret = total held
+    vacuously. It is NOT evidence of webhook-secret coverage.
+  - No claim is made that webhook secrets are configured in production. WEBHOOK_SECRET_PRODUCTION_STATUS = NOT_MEASURED.
+Current task status:
+  Lane F complete as a documentation correction. F3_SEC_EXIT_001_S5_ITEM_4 = STILL_OPEN.
+  F3_EXIT_CRITERION_2 = NOT_SATISFIED (unchanged by this lane).
+Merge safe:
+  Docs-only diff under docs/program/evidence/**; git diff --check clean; no secret in the diff.
+  Merge decision belongs to the program owner — this task does not merge.
+Deployment safe:
+  N/A — nothing to deploy.
+Exact next task:
+  Operator executes the corrected §5 item 4 query against production (read-only, aggregate-only, safe to paste in
+  full) and reports the scope / total / with_secret / required rows.
+```

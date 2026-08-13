@@ -36,7 +36,7 @@ This is the authoritative **first-customer production security-hardening sign-of
 | L | Redis dependence/fallback behavior | **PASS_WITH_EXTERNAL_VERIFICATION** | `server/src/utils/redis.ts:18-39`, `server/src/utils/counterStore.ts:69-83` — `REDIS_URL` fully optional; unset → silent (no log at all) in-process `Map` fallback; a runtime Redis error also falls back silently (rate-limited warning, once/60s). Explicitly fail-open by design (own comment, `counterStore.ts:5-8`): rate-limit counters become **per-process**, not global, without Redis. | External verification required: confirm `REDIS_URL` is actually configured in production, **and** confirm the current API process topology (single instance vs. PM2-cluster/multiple replicas) — the fallback's correctness impact depends entirely on replica count. See §5 for the exact command. |
 | M | Security headers | **PARTIAL / DEFERRED_POST_FIRST_CUSTOMER** | `server/src/index.ts:155-163` sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and (production-only) `Strict-Transport-Security: max-age=15552000; includeSubDomains`. `helmet` is **not** a dependency (`Grep helmet server/package.json` — no match). Missing: `Content-Security-Policy`, `Permissions-Policy`, `Cross-Origin-*` (COOP/COEP/CORP). | Already flagged as a P1 item by F3-IMPL-001 and deliberately not touched then, for the same reason it isn't touched now: a correct CSP requires an allowlist built and tested against the actual frontend's script/style/connect origins — not safely boundable without live testing in this task. Recommended follow-up. |
 | N | CORS policy | **PASS** | `server/src/index.ts:114-136` — allowed-origin list built from `CORS_ORIGIN`/`CORS_ORIGINS`, env-driven; `*` is explicitly filtered out of the allow-list (line 121) before being used, so it is never reflected as `Access-Control-Allow-Origin: *` even though `credentials: true` is always set (line 135) — the dangerous wildcard+credentials combination is structurally impossible here. Production with no origins configured defaults to deny-all (line 130-132), not allow-all. | A `*` entry still only produces a `console.warn` (line 123-125), never a startup failure — see item S. |
-| O | Webhook signature verification | **PASS_WITH_EXTERNAL_VERIFICATION** | Instagram (`routes/instagramWebhook.ts:299-325`), Meta WhatsApp (`routes/metaWhatsAppWebhook.ts:232,375`), external-calendar/DigiDentiS (`routes/externalCalendarWebhook.ts:83-96`) all verify an HMAC signature via `timingSafeEqual`, gated by `utils/secrets.ts:13-15` (`requireWebhookSecretInProduction`) — **fail-closed in production** (missing secret → request rejected) and **fail-open outside production** (missing secret → request processed unauthenticated; a deliberate dev convenience, not a production code path). | No code-level check forces every production webhook *connection row* to actually have a secret configured — that is admin/config data, not code. External verification required: confirm every active production webhook connection (Instagram, Meta WhatsApp, each DigiDentiS external-calendar connection) has a non-empty secret. See §5. |
+| O | Webhook signature verification | **PASS_WITH_EXTERNAL_VERIFICATION** | Instagram (`routes/instagramWebhook.ts:299-325`), Meta WhatsApp (`routes/metaWhatsAppWebhook.ts:232,375`), external-calendar/DigiDentiS (`routes/externalCalendarWebhook.ts:83-96`) all verify an HMAC signature via `timingSafeEqual`, gated by `utils/secrets.ts:13-15` (`requireWebhookSecretInProduction`) — **fail-closed in production** (missing secret → request rejected) and **fail-open outside production** (missing secret → request processed unauthenticated; a deliberate dev convenience, not a production code path). | No code-level check forces every production webhook *connection row* to actually have a secret configured — that is admin/config data, not code. External verification required: confirm every active production webhook connection (Instagram, Meta WhatsApp, each DigiDentiS external-calendar connection) has a non-empty secret. See §5. **[Scope corrected 2026-08-13, F3-EXIT-C2-LANE-F:** this list omitted **Evolution-API WhatsApp connections**, which also consume a per-connection `webhookSecret` — as the tenant-identifying inbound credential for the public WhatsApp API (`routes/whatsapp.ts:1107-1113, 1166-1186`), not as an HMAC signature key. They are in scope for the §5 item 4 check and are covered by its corrected query.**]** |
 | P | Log secret/PII exposure status | **PARTIAL — Wave 2 owned by F3-IMPL-006 (open, unmerged); not touched here** | F3-IMPL-004 (merged, PR #356) fixed all 43 `SECRET_TOKEN`/`CONFIRMED_PII`/`PHI_MEDICAL`-classified call sites found in its own full-repo inventory (~541 call sites reviewed). `~116` `POTENTIAL_PII` + 2 `MESSAGE_CONTENT` sites remain, explicitly deferred by that task as "Wave 2." | Per this task's explicit instructions, broad logging call-sites are **owned by F3-IMPL-006** (worktree `f3-impl-006`, branch `feature/f3-impl-006-runtime-log-hygiene-wave2`, currently open/unmerged) — left gated, not touched. |
 | Q | Production error responses | **PASS** | `server/src/index.ts:280-286` — the global error handler always returns one of exactly two fixed generic strings (`'Internal server error'` for 5xx, `'Invalid request'` for 4xx); `err.stack`/`err.message`/the raw error object are never serialized into the HTTP response, in any `NODE_ENV`. Verbose detail is server-log-only, via `logUnhandledError`. | No development-vs-production branch exists because the response is *already* generic unconditionally — stricter than a typical "verbose in dev" pattern, and correct for a codebase with no separate dev/staging deployment gap to worry about. |
 | R | Default/dev credential fallbacks | **PASS, with one documented-not-fixed residual** | `JWT_SECRET`, `PLATFORM_JWT_SECRET`, `IMAGING_BRIDGE_PAIRING_PEPPER` all route through `getSecret()` (item A) — their literal dev fallbacks are provably unreachable in production. `prisma/seed.ts:24-29` gates its `password123` demo password behind `NODE_ENV==='production' && ALLOW_PROD_SEED!=='true' → throw`. **Residual, not fixed:** `sessionCookies.ts:106-113` (`getCsrfSecret`) falls back `CSRF_SECRET → JWT_SECRET → PLATFORM_JWT_SECRET → 'csrf-development-secret-change-this-value'` — this bypasses `getSecret()`'s own fail-hard check entirely; the only production safeguard is a `console.warn` (`getSessionCookieDeploymentWarnings`, line 120-126), not a throw. | **Why this is not exploitable today, and why it was not "fixed" as code:** `auth.ts`/`platformAuth.ts` both call `getSecret()` for `JWT_SECRET`/`PLATFORM_JWT_SECRET` at module-load time, before `app.listen()` — so by the time any HTTP request reaches `getCsrfSecret()`, both of those are *already* guaranteed non-empty, strong, production-validated strings (or the process would already have crashed at startup). The literal fallback is therefore provably unreachable in a running production process. The real, lower-severity residual is **cryptographic key reuse**: if `CSRF_SECRET` is left unset, the CSRF HMAC key silently becomes the JWT signing secret — a key-separation hygiene concern, not a demonstrated exploit path. Making `getCsrfSecret()` throw outright when `CSRF_SECRET` is unset was considered and **rejected** for this task: with no production access to confirm `CSRF_SECRET` is actually set today, that change risks crashing a currently-working production deployment that relies on the cascade — the opposite of "backward compatible." Recommended as a follow-up (§4), not attempted here. |
@@ -101,11 +101,76 @@ None of the items below can be, or were, verified from repository evidence alone
    Confirm `mfa_enrolled = total` for every active account, or explicitly accept the gap per admin.
 3. **REDIS_URL configured + API replica count** (item L): on the production host, `pm2 jlist | grep -A2 '"name":"noramedi-api"' ` to confirm instance count, and confirm `REDIS_URL` is present in that process's actual environment (`pm2 env <id>`), not merely in `.env.example`.
 4. **Webhook secrets configured per connection** (item O):
+
+   > **[CORRECTED 2026-08-13, F3-EXIT-C2-LANE-F.]** The original two-statement query printed here is **schema-invalid and fails when executed** — it names a column that does not exist on `WhatsAppConnection` and a table that does not exist at all, so it cannot execute successfully against the current schema — and it also returned row `id`s, which this program's own redaction rule forbids pasting back from production. It is **superseded**, not deleted: the exact original text, the reason, and the verbatim errors it produced when executed against a disposable local migrated database (never against production) are preserved as dated historical record in [`F3-EXIT-C2_EXTERNAL_SECURITY_SETTINGS_VERIFICATION.md` §18](F3-EXIT-C2_EXTERNAL_SECURITY_SETTINGS_VERIFICATION.md). **The command below is the current governing check.** Do not re-run the superseded one.
+
+   Read-only. Aggregate counts only — no `id`, no secret, no ciphertext, no plaintext is selected or returned. Safe to paste back in full.
+
    ```sql
-   SELECT id, "webhookSecretEncrypted" IS NOT NULL AS has_secret FROM "WhatsAppConnection";
-   SELECT id, "webhookSecretEncrypted" IS NOT NULL AS has_secret FROM "ExternalCalendarConnection";
+   SELECT 'whatsapp_meta_cloud_api__active' AS scope,
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE COALESCE("metaWebhookSecret", "webhookSecret") IS NOT NULL) AS with_secret,
+          true AS required
+     FROM "WhatsAppConnection" WHERE "isActive" = true AND "provider" = 'meta_cloud_api'
+   UNION ALL
+   SELECT 'whatsapp_evolution_api__active',
+          COUNT(*),
+          COUNT(*) FILTER (WHERE "webhookSecret" IS NOT NULL),
+          true
+     FROM "WhatsAppConnection" WHERE "isActive" = true AND "provider" = 'evolution_api'
+   UNION ALL
+   SELECT 'whatsapp_unrecognized_provider__active',
+          COUNT(*),
+          COUNT(*) FILTER (WHERE COALESCE("metaWebhookSecret", "webhookSecret") IS NOT NULL),
+          true
+     FROM "WhatsAppConnection"
+    WHERE "isActive" = true AND "provider" NOT IN ('meta_cloud_api', 'evolution_api')
+   UNION ALL
+   SELECT 'instagram__active',
+          COUNT(*),
+          COUNT(*) FILTER (WHERE "webhookSecret" IS NOT NULL),
+          true
+     FROM "InstagramConnection" WHERE "isActive" = true
+   UNION ALL
+   SELECT 'external_calendar__enabled',
+          COUNT(*),
+          COUNT(*) FILTER (WHERE "webhookSecretEncrypted" IS NOT NULL),
+          true
+     FROM "ExternalCalendarIntegration" WHERE "enabled" = true
+   UNION ALL
+   SELECT 'external_calendar__disabled',
+          COUNT(*),
+          COUNT(*) FILTER (WHERE "webhookSecretEncrypted" IS NOT NULL),
+          false
+     FROM "ExternalCalendarIntegration" WHERE "enabled" = false
+   UNION ALL
+   SELECT 'whatsapp__inactive',
+          COUNT(*),
+          COUNT(*) FILTER (WHERE COALESCE("metaWebhookSecret", "webhookSecret") IS NOT NULL),
+          false
+     FROM "WhatsAppConnection" WHERE "isActive" = false
+   UNION ALL
+   SELECT 'instagram__inactive',
+          COUNT(*),
+          COUNT(*) FILTER (WHERE "webhookSecret" IS NOT NULL),
+          false
+     FROM "InstagramConnection" WHERE "isActive" = false
+    ORDER BY 1;
    ```
-   (Adjust table/column names to the exact current schema; confirm no row has `has_secret = false` in production.)
+
+   **PASS condition (both clauses required):**
+
+   ```
+   PASS iff (a) with_secret = total for EVERY row where required = true
+        AND (b) whatsapp_unrecognized_provider__active.total = 0
+   Anything else = NOT_PASS.
+   ```
+
+   Clause (b) exists because no webhook receiver in this codebase verifies a signature for any `provider` value other than `meta_cloud_api` / `evolution_api`. A non-zero count there must **not** be waved through as PASS merely because those rows happen to carry a secret — it means an unrecognized/legacy provider is active and needs explicit review. Rows with `required = false` (inactive connections, disabled calendar integrations) are reported deliberately so they are visible rather than silently dropped; they do not gate PASS.
+
+   **Explicit limitation — `with_secret` proves NOT NULL, not decryptable.** These columns store `enc:v1:`-tagged ciphertext, with legacy plaintext rows still readable until re-saved (`schema.prisma:1693-1695, 1702-1703, 1901-1902`). A row holding a corrupted or un-decryptable value counts as `with_secret` here but behaves at runtime exactly like a missing secret: `tryDecryptConnectionSecret` (`server/src/routes/whatsapp.ts:1145-1154`) swallows the decrypt failure and returns `null`. `with_secret = total` is therefore **necessary but not sufficient**. Proving decryptability requires the application's `ENCRYPTION_KEY` and an application-side oracle, which no read-only SQL check can provide — that gap must be recorded as a residual, never assumed away.
+
+   **Column-name provenance** (verified against `server/prisma/schema.prisma` on `origin/main` @ `0ad59802bc5f9dcd567ef1d2fd72ec3797bb3f8b`): `WhatsAppConnection.metaWebhookSecret` (`:1695`) and `.webhookSecret` (`:1703`); `InstagramConnection.webhookSecret` (`:1902`); `ExternalCalendarIntegration.webhookSecretEncrypted` (`:3448`). There is no `ExternalCalendarConnection` model and no `WhatsAppConnection.webhookSecretEncrypted` column.
 5. **CSRF_SECRET actually set** (item R, prerequisite for the recommended follow-up): confirm `CSRF_SECRET` is present and ≥32 chars in the production `noramedi-api`/`noramedi-worker` environment before ever making `getCsrfSecret()` fail-hard.
 6. **TLS certificate/protocol/cipher** (item X): `openssl s_client -connect app.noramedi.com:443 -servername app.noramedi.com </dev/null 2>/dev/null | openssl x509 -noout -dates -issuer`, or an external scanner (e.g. SSL Labs) against `app.noramedi.com`/`api.noramedi.com`. Confirm expiry is not imminent (repo evidence records `2026-09-26` as of a prior task; re-verify, do not trust that date as current).
 7. **Host Nginx config matches repo's stated SPA-only intent** (item X): diff the live `/etc/nginx/sites-enabled/*` against the assumption in `nginx.conf`'s own header comment (TLS/HSTS/redirect handled entirely outside this repo's `nginx.conf`).
