@@ -3,7 +3,7 @@
 **Task ID:** F3-OBS-002 · **Phase:** F3 — Production Hardening · **Priority:** CRITICAL / F3 exit-gate criterion 1 · **Risk:** R-074
 **Branch:** `feature/f3-obs-002-live-observability-alert-verification` · **Worktree:** `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f3-obs-002-v2`
 **Baseline:** `origin/main` @ `87e9353ac9557a3896dc2ef7f71217ac453132fa` (PR #404/F3-PROD-002 merge commit), fresh `git fetch`/`git worktree add`, no drift at task start.
-**Status:** `IMPLEMENTED_REPOSITORY_SIDE / NOT_PRODUCTION_INSTALLED / NOT_PRODUCTION_VERIFIED` — repository-side artifacts implemented, self-reviewed, and tested (32/32); production/external activation NOT performed. This is a skeleton evidence file for the implementation phase only. **Does not close R-074. Does not satisfy the F3 exit gate.** See §12.
+**Status:** `IMPLEMENTED_REPOSITORY_SIDE / NOT_PRODUCTION_INSTALLED / NOT_PRODUCTION_VERIFIED` — repository-side artifacts implemented, self-reviewed, and tested (42/42, post-R1); production/external activation NOT performed. This is a skeleton evidence file for the implementation phase only. **Does not close R-074. Does not satisfy the F3 exit gate.** See §12.
 
 This document intentionally stops short of a completion claim: per this task's own governing instructions, no external provider was configured, no systemd unit was installed on any host, and no controlled drill was executed. Those steps require explicit human/operator approval and are proposed, not performed (§10–§11). This file will be revised (not replaced) once that evidence exists.
 
@@ -58,7 +58,7 @@ Read directly from [`backupService.ts`](../../../server/src/services/backupServi
 | File | Type | Purpose |
 |---|---|---|
 | `scripts/noramedi-opscheck.sh` | New | The three independent local checks (pm2, disk, backup) + dead-man's-switch pings. Not yet installed on any host. |
-| `scripts/noramedi-opscheck.test.sh` | New | Bash test harness, PATH-injected fake `pm2`/`df`/`curl`. 23/23 passing (§11). |
+| `scripts/noramedi-opscheck.test.sh` | New/Modified (R1) | Bash test harness, PATH-injected fake `pm2`/`df`/`curl`. 42/42 passing (§11). |
 | `ops/systemd/noramedi-opscheck.service` | New | Reviewed template; root oneshot unit; not installed. |
 | `ops/systemd/noramedi-opscheck.timer` | New | Reviewed template; 5-minute interval; not installed. |
 | `ops/systemd/noramedi-opscheck.env.example` | New | Variable **names** only (no values) for the production-only, not-git-tracked `/etc/noramedi/opscheck.env`. |
@@ -133,6 +133,8 @@ External-provider steps (still to be selected/approved — see the interim repor
 
 ## 11. Tests and validation performed (in this worktree, no production access)
 
+**Historical — pre-R1 implementation-phase self-review (§15), superseded by the R1 count below; kept for the record, not current.**
+
 ```
 $ bash -n scripts/noramedi-opscheck.sh
 (no output — syntax OK)
@@ -164,7 +166,45 @@ No secret leakage — 1/1 assertions ok
 Results: 32 passed, 0 failed
 ```
 
-Coverage matches this task's required scenario list exactly: api offline, worker offline, disk over threshold, backup stale (plus: backup dir missing, backup dir with no matching file — two additional fail-closed edge cases), curl/ping failure, no-secret-leakage — plus dry-run, the drill-suppression mechanism (§14), exact threshold-boundary behavior for both disk and backup, and fail-closed rejection of malformed threshold config (added during the final self-review, §15).
+**Current — R1 full re-run, after the three corrections in §16.** This is the CURRENT test count; the 32/32 transcript above is historical only.
+
+```
+$ bash -n scripts/noramedi-opscheck.sh
+(no output — syntax OK)
+
+$ bash -n scripts/noramedi-opscheck.test.sh
+(no output — syntax OK)
+
+$ bash scripts/noramedi-opscheck.test.sh
+Syntax
+  ok - noramedi-opscheck.sh parses (bash -n)
+Fully healthy — 4/4 assertions ok
+API process offline — 3/3 assertions ok (incl. /fail-suffixed ping on local failure)
+Worker process offline — 1/1 assertions ok
+Disk over threshold — 1/1 assertions ok
+Disk under threshold — 1/1 assertions ok
+Disk exactly at threshold boundary — 2/2 assertions ok
+Invalid disk threshold config fails closed — 3/3 assertions ok (incl. exit code 16, R1)
+Exit-code contract: config/CLI errors use 16, never collide with bitmask bits 0-3 — 3/3 assertions ok (R1)
+Backup stale — 1/1 assertions ok
+Backup exactly at max-age boundary — 1/1 assertions ok
+Backup mtime in the future (clock skew fails closed, not silently healthy) — 4/4 assertions ok (R1)
+Invalid backup max-age config fails closed — 3/3 assertions ok (incl. exit code 16, R1)
+Backup directory missing — 1/1 assertions ok
+Backup directory has no matching file — 1/1 assertions ok
+Ping transport failure (local checks otherwise healthy) — 2/2 assertions ok
+Ping URL not configured — 2/2 assertions ok
+Dry-run mode — 2/2 assertions ok
+Suppressed ping (drill mechanism) — 3/3 assertions ok
+No secret leakage — 1/1 assertions ok
+
+Results: 42 passed, 0 failed
+
+$ git diff --check
+(no output — clean)
+```
+
+Coverage matches this task's required scenario list exactly: api offline, worker offline, disk over threshold, backup stale (plus: backup dir missing, backup dir with no matching file — two additional fail-closed edge cases), curl/ping failure, no-secret-leakage — plus dry-run, the drill-suppression mechanism (§14), exact threshold-boundary behavior for both disk and backup, and fail-closed rejection of malformed threshold config (added during the final self-review, §15). **R1 adds:** a future-mtime backup scenario (bit 4 set, FAIL diagnostic naming the future-timestamp condition, `/fail`-suffixed ping fired, no secret-token leakage on that path) and an explicit exit-code-contract scenario proving config/CLI errors (invalid threshold, invalid max-age, unknown flag, unknown `--check` value) all exit `16` while a genuine check failure still exits within the `0-15` bitmask range (§16).
 
 `shellcheck` was **not** introduced — it is not already present in this repository/CI (confirmed by grep before starting), and the task instructions say not to add a new dependency solely for this. `bash -n` plus the fake-command unit harness above is the validation performed, consistent with the syntax-check-only precedent already used for `scripts/test-runtime/*.sh` in `.github/workflows/ci-layers.yml`.
 
@@ -217,4 +257,18 @@ A targeted line-by-line review against 10 specific gates (secret handling, syste
 
 **Confirmed already correct, no change needed:** PM2 check matches both process names exactly (not by array position), fails on absent/malformed/empty `pm2 jlist` output, never calls a mutating pm2 subcommand; backup check's directory/regex/mtime-newest-file semantics were already verified byte-for-byte against `backupService.ts` (§3); the local-check bit and the ping-transport bit (bit 3) were already independently tested as never conflating the two; `NORAMEDI_OPSCHECK_SUPPRESS_PING=disk` was already proven scoped to exactly one check via the existing curl-invocation-count assertion; no ping URL, environment value containing one, or secret token appears in script stdout/stderr on any path (curl's own stderr, which could echo the URL on failure, is explicitly redirected to `/dev/null` rather than surfaced); Redis assertion design (§2) already used a structured JSONPath-preferred / keyword-fallback design tied to the confirmed exact JSON shape, never the root `status` field.
 
-Full re-validation after these fixes: `bash -n` clean on both scripts, `bash scripts/noramedi-opscheck.test.sh` → **32 passed, 0 failed**, `git diff --check` clean (§11).
+Full re-validation after these fixes (pre-R1): `bash -n` clean on both scripts, `bash scripts/noramedi-opscheck.test.sh` → **32 passed, 0 failed**, `git diff --check` clean (§11 — historical block). **Superseded by the R1 count: 42 passed, 0 failed (§11 — current block, §16).**
+
+## 16. R1 correction (post-review) — three defects fixed, edited in place on this same PR
+
+A subsequent review of PR #405 found three defects in the implementation this §15 self-review did not catch. Per this program's `+R1` same-task-revision convention, all three are corrected in place on this branch (not a new dated layer), since PR #405 has not yet merged.
+
+**1. Backup future-timestamp / clock-skew fail-open (real bug, `check_backup()`).** The freshness computation `age_hours=$(( (now - newest_epoch) / 3600 ))` was never guarded against `newest_epoch > now`. A backup file with a future mtime (clock skew, a bad `touch`, a restored/replayed file) produced a **negative** `age_hours`, which fails the `age_hours -gt BACKUP_MAX_AGE_HOURS` comparison and was therefore reported **OK** — the opposite of fail-closed, the same class of defect §15 already fixed once for malformed threshold config but which survived here in a different form. **Fixed:** `check_backup()` now explicitly rejects `newest_epoch > now` before computing age, with a fixed diagnostic (`"backup check: FAIL — newest backup timestamp is in the future"`, no filename in the message, and no filename ever reaches the ping payload — pings remain label+outcome-only, unchanged from §5's design) and sets the same backup bit (4) as every other backup failure. A bounded clock-skew tolerance was considered and rejected in favor of the simpler fail-closed rule the task instructions preferred — any future timestamp on the file that is supposed to be the *most recent* backup is itself evidence of a problem (misconfigured clock or corrupted metadata), not a condition worth tolerating within a margin. Covered by a new 4-assertion scenario (`scripts/noramedi-opscheck.sh`:283-325, `scripts/noramedi-opscheck.test.sh`, "Backup mtime in the future"): bit 4 set, the FAIL diagnostic is present, the local failure still pings the `/fail`-suffixed URL, and no ping-URL secret token leaks into script output on this path.
+
+**2. Exit-code bitmask/exit-1 collision (`check_disk()`/`check_backup()` startup validation, CLI parsing).** The script's own header comment documented exit code as a bitmask where bit 0 (value 1) means "pm2 check failed," but startup validation of `NORAMEDI_OPSCHECK_DISK_THRESHOLD_PERCENT`/`NORAMEDI_OPSCHECK_BACKUP_MAX_AGE_HOURS`, and CLI parsing errors (unknown flag, unrecognized `--check` value) all `exit 1` directly — semantically colliding with "pm2 check failed" and making a bare `exit 1` ambiguous between "a real check failed" and "the script never ran any check because it was misconfigured." **Fixed via option A** (explicit configuration-error code outside the bitmask range): added `CONFIG_ERROR_EXIT_CODE=16` and changed all four config/CLI-error exit points (invalid disk threshold, invalid backup max-age, unknown CLI flag, unrecognized `--check` value) to exit `16` instead of `1`. `16` is outside `0-15`, the full range the four-bit `pm2|disk|backup|ping` mask can produce, so it can never be misread as any combination of check failures; the header comment (`scripts/noramedi-opscheck.sh`:31-47) now states explicitly that the bitmask applies only once startup configuration validation has passed. Backward-compatible: any caller already treating "nonzero = not fully healthy" is unaffected; only a caller specifically testing for `exit code == 1` to mean "pm2 failed" would need to know the semantics were previously ambiguous (no such caller exists in this repository — the opscheck script is not yet installed anywhere, §10). Covered by 5 new/extended test assertions across three scenarios: the existing "Invalid disk threshold" and "Invalid backup max-age" scenarios now additionally assert `CODE -eq 16`, and a new "Exit-code contract" scenario proves an unknown flag exits 16, an unrecognized `--check` value exits 16, and a genuine pm2-check failure still exits `1` (bit 0 only) — the two families are distinguishable, not merely both nonzero.
+
+**3. Stale test count in this evidence document.** §4's files-changed table said `scripts/noramedi-opscheck.test.sh` was "23/23 passing," which never matched this file's own §11/§15 transcripts (32/32, from the moment those sections were first written) or the PR body/implementation report. This was a transcription error in the table row only, not a re-run discrepancy. **Fixed:** §4 now says 42/42 (the current, post-R1 count), matching §11 and §12/§15 below.
+
+**Re-run after all three fixes:** `bash -n scripts/noramedi-opscheck.sh` clean, `bash -n scripts/noramedi-opscheck.test.sh` clean, `bash scripts/noramedi-opscheck.test.sh` → **42 passed, 0 failed**, `git diff --check` → clean (no whitespace errors). Full transcript in §11 (current block).
+
+**Files touched by this R1 correction:** `scripts/noramedi-opscheck.sh`, `scripts/noramedi-opscheck.test.sh`, this evidence file. No other file documents the exit-code contract (confirmed by grep across `docs/program/` and `ops/systemd/` before starting), so no other file required a change. No application code, schema, migration, or CI workflow touched. Program status is unchanged (§12): **R-074 remains `OPEN`, the F3 exit gate remains `NOT SATISFIED`, F3 is not complete, F4 is not authorized** — this correction fixes defects in already-not-production-installed repository-side artifacts; it does not newly close, or newly block, anything the gate itself tracks.

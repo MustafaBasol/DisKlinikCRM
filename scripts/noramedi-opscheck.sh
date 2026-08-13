@@ -28,13 +28,23 @@
 #     for the variable names this script reads — values only ever exist on
 #     the production host, never in this repository).
 #
-# Exit code is a bitmask (0 = fully healthy):
+# Exit code, once startup configuration validation has passed, is a bitmask
+# (0 = fully healthy):
 #   bit 0 (1): pm2 check failed (either process not "online")
 #   bit 1 (2): disk check failed (usage >= threshold, or df unreadable)
-#   bit 2 (4): backup check failed (missing dir, no matching file, or stale)
+#   bit 2 (4): backup check failed (missing dir, no matching file, stale, or
+#              a future-dated newest backup — clock skew fails closed, not
+#              silently "healthy")
 #   bit 3 (8): a ping transport failed, OR a check ran without its ping URL
 #              configured (local check result is still computed/reported;
 #              only the *ping* is affected)
+#
+# This bitmask applies ONLY once the script has started running checks.
+# Startup/CLI configuration errors (an invalid *_THRESHOLD_PERCENT or
+# *_MAX_AGE_HOURS value, an unknown flag, an unrecognized --check name) exit
+# 16 instead — a fixed value outside the 0-15 bitmask range, so a nonzero
+# exit is never ambiguous between "a check failed" and "the script never
+# ran any check because it was misconfigured".
 #
 # Restart-count / crash-loop signal: pm2_env.restart_time is read and its
 # delta since the previous run is logged as an informational line — it does
@@ -92,6 +102,15 @@ export LC_ALL=C
 
 timestamp() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
 
+# Configuration/CLI errors (invalid threshold values, unknown flags, an
+# unrecognized --check name) exit with this fixed code, deliberately OUTSIDE
+# the 0-15 range the check bitmask occupies (bits 0-3, see header comment).
+# These failures happen before any check runs, so they are not expressible
+# as "which checks failed" — reusing exit 1 for them would collide with the
+# pm2-check-failed bit and make a bare nonzero exit ambiguous between "pm2
+# is down" and "the script was misconfigured and never ran any check".
+CONFIG_ERROR_EXIT_CODE=16
+
 # ── config ───────────────────────────────────────────────────────────────
 DISK_PATH="${NORAMEDI_OPSCHECK_DISK_PATH:-/}"
 BACKUP_DIR="${NORAMEDI_OPSCHECK_BACKUP_DIR:-/root/noramedi-backups}"
@@ -110,11 +129,11 @@ PM2_TIMEOUT_SECONDS=10
 # backup check report OK regardless of actual usage/age).
 if ! [[ "$DISK_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$DISK_THRESHOLD" -lt 1 ]] || [[ "$DISK_THRESHOLD" -gt 100 ]]; then
   echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_DISK_THRESHOLD_PERCENT='$DISK_THRESHOLD' is not an integer in 1-100" >&2
-  exit 1
+  exit "$CONFIG_ERROR_EXIT_CODE"
 fi
 if ! [[ "$BACKUP_MAX_AGE_HOURS" =~ ^[0-9]+$ ]] || [[ "$BACKUP_MAX_AGE_HOURS" -lt 1 ]]; then
   echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_BACKUP_MAX_AGE_HOURS='$BACKUP_MAX_AGE_HOURS' is not a positive integer" >&2
-  exit 1
+  exit "$CONFIG_ERROR_EXIT_CODE"
 fi
 # Mirrors server/src/services/backupService.ts BACKUP_FILENAME_RE exactly —
 # intentionally NOT importing/duplicating business logic, just the one
@@ -139,7 +158,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help) usage ;;
-    *) echo "Unknown option: $1" >&2; echo "Run with --help for usage." >&2; exit 1 ;;
+    *) echo "Unknown option: $1" >&2; echo "Run with --help for usage." >&2; exit "$CONFIG_ERROR_EXIT_CODE" ;;
   esac
 done
 
@@ -303,8 +322,20 @@ check_backup() {
     return 1
   fi
 
-  local now age_hours
+  local now
   now="$(date +%s)"
+
+  # A future mtime (clock skew, a bad `touch`, a restored/replayed file) must
+  # never be treated as "fresh" — the naive `(now - newest_epoch) / 3600`
+  # computation goes negative in that case, which compares as "not > max"
+  # and would fail OPEN (report healthy) instead of failing closed. Reject
+  # it outright rather than picking a clock-skew tolerance.
+  if [[ "$newest_epoch" -gt "$now" ]]; then
+    echo "[opscheck] $(timestamp) backup check: FAIL — newest backup timestamp is in the future" >&2
+    return 1
+  fi
+
+  local age_hours
   age_hours=$(( (now - newest_epoch) / 3600 ))
 
   if [[ "$age_hours" -gt "$BACKUP_MAX_AGE_HOURS" ]]; then
@@ -343,7 +374,7 @@ for c in "${CHECKS_TO_RUN[@]}"; do
     pm2)    run_check "pm2"    check_pm2    "$PM2_LABEL"    NORAMEDI_OPSCHECK_PM2_PING_URL    1 ;;
     disk)   run_check "disk"   check_disk   "$DISK_LABEL"   NORAMEDI_OPSCHECK_DISK_PING_URL   2 ;;
     backup) run_check "backup" check_backup "$BACKUP_LABEL" NORAMEDI_OPSCHECK_BACKUP_PING_URL 4 ;;
-    *) echo "Unknown --check value: $c (expected pm2|disk|backup)" >&2; exit 1 ;;
+    *) echo "Unknown --check value: $c (expected pm2|disk|backup)" >&2; exit "$CONFIG_ERROR_EXIT_CODE" ;;
   esac
 done
 

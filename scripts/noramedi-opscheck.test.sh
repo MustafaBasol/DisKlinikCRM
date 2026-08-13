@@ -133,6 +133,17 @@ touch_backup_file() {
   touch -d "@$epoch" "$f"
 }
 
+# touch_backup_file_future FILENAME HOURS_AHEAD — same as touch_backup_file
+# but sets an mtime in the FUTURE (clock skew / bad `touch` / a replayed
+# file), to exercise check_backup()'s future-timestamp guard.
+touch_backup_file_future() {
+  local f="$BACKUP_DIR/$1"
+  touch "$f"
+  local epoch
+  epoch="$(date -u -d "+$2 hours" +%s 2>/dev/null || date -u -v+"$2"H +%s)"
+  touch -d "@$epoch" "$f"
+}
+
 # ── bash -n syntax check ────────────────────────────────────────────────
 section "Syntax"
 if bash -n "$OPSCHECK"; then pass "noramedi-opscheck.sh parses (bash -n)"; else fail "noramedi-opscheck.sh has a syntax error"; fi
@@ -214,12 +225,32 @@ EXTRA_ENV=(NORAMEDI_OPSCHECK_DISK_PING_URL=http://x/s NORAMEDI_OPSCHECK_DISK_THR
 run_opscheck --check disk
 [[ "$CODE" -ne 0 ]] && pass "non-numeric DISK_THRESHOLD_PERCENT is rejected (nonzero exit), not silently treated as healthy" || fail "expected nonzero exit for invalid threshold, got $CODE ($OUT)"
 [[ "$OUT" == *"FATAL"* ]] && pass "invalid threshold reports FATAL, not a false pass" || fail "missing FATAL message for invalid threshold ($OUT)"
+[[ "$CODE" -eq 16 ]] && pass "invalid threshold exits with the dedicated config-error code 16, not the pm2-bit-colliding 1" || fail "expected exit 16 for invalid threshold, got $CODE ($OUT)"
 
 new_scenario_dirs
 write_fake_df 10
 EXTRA_ENV=(NORAMEDI_OPSCHECK_DISK_PING_URL=http://x/s NORAMEDI_OPSCHECK_DISK_THRESHOLD_PERCENT=150)
 run_opscheck --check disk
 [[ "$CODE" -ne 0 ]] && pass "out-of-range DISK_THRESHOLD_PERCENT (150) is rejected" || fail "expected nonzero exit for out-of-range threshold, got $CODE ($OUT)"
+[[ "$CODE" -eq 16 ]] && pass "out-of-range threshold also exits 16, not the pm2-bit-colliding 1" || fail "expected exit 16 for out-of-range threshold, got $CODE ($OUT)"
+
+# ── scenario: exit-code contract — config/CLI errors vs. the check bitmask ─
+section "Exit-code contract: config/CLI errors use 16, never collide with bitmask bits 0-3"
+new_scenario_dirs
+EXTRA_ENV=()
+run_opscheck --bogus-flag
+[[ "$CODE" -eq 16 ]] && pass "unknown CLI flag exits 16" || fail "expected exit 16 for unknown flag, got $CODE ($OUT)"
+
+new_scenario_dirs
+EXTRA_ENV=()
+run_opscheck --check bogus-check-name
+[[ "$CODE" -eq 16 ]] && pass "unrecognized --check value exits 16" || fail "expected exit 16 for unrecognized --check value, got $CODE ($OUT)"
+
+new_scenario_dirs
+write_fake_pm2 "$(pm2_jlist_json stopped online 1 1)"
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PM2_PING_URL=http://x/s)
+run_opscheck --check pm2
+[[ "$CODE" -eq 1 ]] && pass "a genuine pm2-check failure still exits with bit 0 (1), distinct from the 16 config-error code" || fail "expected exit 1 (pm2 bit only) for a real pm2 failure, got $CODE ($OUT)"
 
 # ── scenario: backup stale ──────────────────────────────────────────────
 section "Backup stale"
@@ -236,6 +267,20 @@ EXTRA_ENV=(NORAMEDI_OPSCHECK_BACKUP_PING_URL=http://x/s NORAMEDI_OPSCHECK_BACKUP
 run_opscheck --check backup
 [[ "$((CODE & 4))" -eq 0 ]] && pass "backup bit clear at exactly 30h old with max 30h (age > max, not >=)" || fail "expected bit 4 clear at boundary, got $CODE ($OUT)"
 
+section "Backup mtime in the future (clock skew fails closed, not silently healthy)"
+new_scenario_dirs
+touch_backup_file_future "noramedi_crm-20260101-030000.dump" 5
+: > "$WORK/curl.log"
+write_fake_curl 0 "$WORK/curl.log"
+SECRET="hcuuid-future-mtime-do-not-print-this-token"
+EXTRA_ENV=(NORAMEDI_OPSCHECK_BACKUP_PING_URL="http://hc-ping.example/$SECRET" NORAMEDI_OPSCHECK_BACKUP_MAX_AGE_HOURS=30)
+run_opscheck --check backup
+
+[[ "$((CODE & 4))" -eq 4 ]] && pass "backup bit (4) set when newest backup mtime is in the future" || fail "expected bit 4 set for future mtime, got $CODE ($OUT)"
+[[ "$OUT" == *"backup check: FAIL"*"future"* ]] && pass "reports a FAIL diagnostic naming the future-timestamp condition" || fail "missing future-timestamp FAIL diagnostic ($OUT)"
+grep -q '/hc-ping.example/'"$SECRET"'/fail$' "$WORK/curl.log" && pass "future-mtime local failure pings the '/fail' suffixed URL" || fail "expected curl to be called with the /fail URL on future-mtime failure ($(cat "$WORK/curl.log"))"
+[[ "$OUT" != *"$SECRET"* ]] && pass "future-mtime failure path never echoes the ping-URL secret token" || fail "SECRET LEAK: ping URL token appeared in script output on future-mtime failure"
+
 section "Invalid backup max-age config fails closed"
 new_scenario_dirs
 touch_backup_file "noramedi_crm-20260101-030000.dump" 1
@@ -243,6 +288,7 @@ EXTRA_ENV=(NORAMEDI_OPSCHECK_BACKUP_PING_URL=http://x/s NORAMEDI_OPSCHECK_BACKUP
 run_opscheck --check backup
 [[ "$CODE" -ne 0 ]] && pass "non-numeric BACKUP_MAX_AGE_HOURS is rejected (nonzero exit), not silently treated as healthy" || fail "expected nonzero exit for invalid max-age, got $CODE ($OUT)"
 [[ "$OUT" == *"FATAL"* ]] && pass "invalid max-age reports FATAL, not a false pass" || fail "missing FATAL message for invalid max-age ($OUT)"
+[[ "$CODE" -eq 16 ]] && pass "invalid max-age also exits 16, not the pm2-bit-colliding 1" || fail "expected exit 16 for invalid max-age, got $CODE ($OUT)"
 
 # ── scenario: backup dir missing entirely ───────────────────────────────
 section "Backup directory missing"
