@@ -63,7 +63,7 @@ No older document was found claiming criterion 2 is already complete. Every refe
 
 | Lane | Repo evidence | External/control-plane evidence | Production evidence | Decision-owner evidence | Verdict |
 |---|---|---|---|---|---|
-| GitHub security settings | `.github/dependabot.yml` present (version updates only) | **Observed live via `gh api`** — Dependabot alerts **disabled**, Dependabot security updates **disabled**, secret scanning + push protection **enabled** | N/A | N/A | **FAIL** |
+| GitHub security settings | `.github/dependabot.yml` present (version updates only) | **Observed live via `gh api`** — Dependabot alerts **disabled**, Dependabot security updates **disabled**, secret scanning + push protection **enabled** | N/A | N/A | **FAIL** — **remediated 2026-08-13, see §15: now `PASS`** |
 | TLS certificate/protocol | `nginx.conf` correctly disclaims TLS; F0-006 records host Nginx 1.24.0 | **Observed live** — valid Let's Encrypt cert, 4/4 SAN coverage, TLS 1.2/1.3 only, TLS 1.0/1.1 rejected at the wire | Endpoints serving 200/301/302 | N/A | **PASS** (cipher enumeration / OCSP / CT = `NOT VERIFIED`) |
 | Redis / API-replica topology | `ecosystem.config.cjs` — `exec_mode: 'fork'`, no `instances` key → single instance by contract | N/A | `REDIS_URL` **proven set** (`redis.ts:41` startup log) + `/api/readyz` `redis=ok` | N/A | **PARTIAL / BLOCKED** — replica count not confirmed by the checklist's own `pm2 jlist` command; Redis bind/auth/exposure unverified |
 | Platform Admin MFA coverage | MFA implemented and fails closed *when enrolled* (`platformAdmin.ts:95-107`); enrollment **optional** (`schema.prisma:1547`) | N/A | Login confirmed working; **silent on whether MFA was exercised** | N/A | **BLOCKED** — the §5 enrollment-coverage SQL has never been run |
@@ -88,8 +88,8 @@ Repository `MustafaBasol/DisKlinikCRM`, observed 2026-08-13 via authenticated `g
 | Conversation resolution | required | `required_review_thread_resolution: true` | PASS |
 | Required PR approvals | ≥1 | **`required_approving_review_count: 0`** | **FAIL** (out of criterion-2 scope — see §7.2) |
 | Required status checks | ≥1 | **no `required_status_checks` rule exists** | **FAIL** (out of criterion-2 scope — see §7.2) |
-| **Dependabot alerts** | **`Enabled`** | **HTTP 404 — `"Vulnerability alerts are disabled."`** | **FAIL** |
-| **Dependabot security updates** | **`Enabled`** | **`{"enabled":false,"paused":false}`; `security_and_analysis.dependabot_security_updates.status = "disabled"`** | **FAIL** |
+| **Dependabot alerts** | **`Enabled`** | **HTTP 404 — `"Vulnerability alerts are disabled."`** | **FAIL** — **remediated 2026-08-13, see §15: now `Enabled` (HTTP 204)** |
+| **Dependabot security updates** | **`Enabled`** | **`{"enabled":false,"paused":false}`; `security_and_analysis.dependabot_security_updates.status = "disabled"`** | **FAIL** — **remediated 2026-08-13, see §15: now `{"enabled":true,"paused":false}`, `status:"enabled"`** |
 | Secret scanning | enabled | `status: "enabled"`; functionally confirmed — alerts endpoint returned data | PASS |
 | Secret scanning push protection | enabled | `status: "enabled"` | PASS |
 | Secret scanning non-provider patterns | — | `status: "disabled"` | Informational |
@@ -346,7 +346,7 @@ F3_EXIT_CRITERION_2 = NOT_SATISFIED
 
 **Blocking reasons, in order of severity:**
 
-1. **FAIL — GitHub Code security and analysis settings.** Dependabot alerts and Dependabot security updates are both observed **disabled**, directly contradicting F3-SEC-EXIT-001 §5 item 1's literal requirement that both be `Enabled`. This is an observed failure, not missing evidence.
+1. ~~**FAIL — GitHub Code security and analysis settings.** Dependabot alerts and Dependabot security updates are both observed **disabled**, directly contradicting F3-SEC-EXIT-001 §5 item 1's literal requirement that both be `Enabled`. This is an observed failure, not missing evidence.~~ **[Remediated 2026-08-13, F3-SEC-EXIT-001-R2 — see §15.]** Both settings are now independently re-verified `Enabled`. **This specific reason is resolved: `GITHUB_SECURITY_SETTINGS_LANE = PASS`.** It no longer blocks criterion 2 on its own, but criterion 2 as a whole remains `NOT_SATISFIED` on reasons 2–7 below, none of which this remediation touched.
 2. **BLOCKED — Platform Admin MFA enrollment coverage.** MFA is implemented and fails closed *when enrolled*, but enrollment is optional by design, and the mandated coverage SQL has never been run against production. There are additionally **zero** negative tests for the login-time MFA gate.
 3. **PARTIAL/BLOCKED — Redis / API-replica topology.** `REDIS_URL` is proven configured and working; the API replica count is strongly indicated as 1 but not confirmed by the checklist's own command, and Redis bind/auth/exposure are entirely unverified.
 4. **EXTERNAL_ACCEPTANCE_PENDING — R-073 and R-019.** Both await a signed decision-owner record. No decision owner is named anywhere. Neither may be self-closed.
@@ -364,12 +364,14 @@ Only the TLS lane passes.
 
 ```
 F3_EXIT_CRITERION_1     = SATISFIED       (unchanged; R-074 CLOSED)
-F3_EXIT_CRITERION_2     = NOT_SATISFIED   (this task)
+F3_EXIT_CRITERION_2     = NOT_SATISFIED   (this task; GitHub sub-lane since remediated 2026-08-13 — see §15)
 F3_EXIT_CRITERION_3     = NOT_SATISFIED   (unchanged; unassessed by this task)
 F3_EXIT_GATE            = NOT_SATISFIED
 F3_COMPLETE             = NO
 F4_TRANSITION_AUTHORIZED = NO
 ```
+
+**[Updated 2026-08-13, F3-SEC-EXIT-001-R2]:** `GITHUB_SECURITY_SETTINGS_LANE = PASS` (Dependabot alerts + Dependabot security updates + secret scanning + push protection all independently verified `enabled`). `F3_EXIT_CRITERION_2` remains `NOT_SATISFIED` — reasons 2–7 above are untouched by this remediation. See §15.
 
 Criterion 3 is **not** assessed by this task and is **not** inferred. It remains dependent on a program-owner sufficiency decision regarding F3-IR-001's explicitly `SIMULATED` / `NOT_PRODUCTION_VERIFIED` tabletop drill.
 
@@ -435,3 +437,136 @@ exit:    0
 **Not run, and not claimed:** `test:auth`'s platform-admin portion, `test:platform-admin-password-recovery`, `test:platform-admin-session-revocation`, `test:security-incidents`. All four require PostgreSQL; the observed fact is that `127.0.0.1:5544` refused connection (`P1001`) and no disposable-runtime instance was provisioned for this documentation-only task. Their state is **unverified by this task**, not assumed passing. (Adversarial review correctly objected to an earlier, looser phrasing that asserted Docker itself was unavailable — the precise observed fact is the refused connection.)
 
 No documentation-link or tracker-consistency validation script exists in this repository (`package.json` was inspected); none is therefore claimed. This is a `docs/program/**`-only change; `ci-pr.yml` applies no path filter to the workflow trigger, so the standard PR Gate applies.
+
+---
+
+## 15. F3-SEC-EXIT-001-R2 — Dependabot Remediation and Independent Re-Verification (2026-08-13)
+
+**Task ID:** `F3-SEC-EXIT-001-R2`. **Type:** targeted remediation, scoped to exactly the two GitHub Dependabot settings this document's §4/§11 named as the decisive `FAIL`. **Branch:** `docs/f3-sec-exit-001-r2-dependabot-remediation`. **Baseline:** `origin/main` @ `0d85748d1192609bbc391e71c43b3fed4822066d` (PR #408's merge commit), fetched fresh; confirmed a simple fast-forward from this document's own `021c43d5…` baseline (`git merge-base --is-ancestor 021c43d… 0d85748… ` → exit `0`), no semantic conflict. Isolated worktree: `E:\Ek Gelir\Siteler\DisKlinikCRM-worktrees\f3-sec-exit-001-r2-dependabot-remediation`.
+
+### 15.1 Scope
+
+**Authorized and performed — exactly two settings, nothing else:**
+
+1. Dependabot vulnerability alerts: disabled → **enabled**.
+2. Dependabot security updates (automated security fixes): disabled → **enabled**.
+
+**Explicitly not touched** (verified unchanged, §15.4): CodeQL/code scanning, branch protection/rulesets, required reviews, required status checks, private vulnerability reporting, Actions permissions, SHA-pinning policy, secret scanning, push protection, repository visibility, collaborator permissions, workflow configuration, and no production/application/runtime file.
+
+### 15.2 Pre-change state (independently observed, read-only, before mutation)
+
+```
+gh api repos/MustafaBasol/DisKlinikCRM/vulnerability-alerts -i
+  → HTTP/2.0 404 Not Found — "Vulnerability alerts are disabled."
+
+gh api repos/MustafaBasol/DisKlinikCRM/automated-security-fixes
+  → {"enabled":false,"paused":false}
+
+gh api repos/MustafaBasol/DisKlinikCRM --jq '.security_and_analysis'
+  → {"dependabot_security_updates":{"status":"disabled"},
+     "secret_scanning":{"status":"enabled"},
+     "secret_scanning_non_provider_patterns":{"status":"disabled"},
+     "secret_scanning_push_protection":{"status":"enabled"},
+     "secret_scanning_validity_checks":{"status":"disabled"}}
+
+gh api repos/MustafaBasol/DisKlinikCRM --jq '{full_name,private,permissions,default_branch}'
+  → {"default_branch":"main","full_name":"MustafaBasol/DisKlinikCRM",
+     "permissions":{"admin":true,...},"private":false}
+
+gh auth status → MustafaBasol, scopes: gist, read:org, repo, user, workflow
+```
+
+Consistent in every particular with §4's original observation — same two settings disabled, same repository (`full_name` exact match), secret scanning/push protection already `enabled`, authenticated account has `admin:true` on this exact repo (sufficient permission, no ambiguity).
+
+### 15.3 Mutation (control-plane change, timestamp UTC)
+
+```
+PUT repos/MustafaBasol/DisKlinikCRM/vulnerability-alerts        → HTTP/2.0 204 No Content   (2026-08-13T14:22:54Z)
+PUT repos/MustafaBasol/DisKlinikCRM/automated-security-fixes    → HTTP/2.0 204 No Content   (2026-08-13T14:22:55Z)
+```
+
+No request body on either call — these are the minimal, smallest-supported mutations for each endpoint (GitHub's documented "enable" calls). No other endpoint was called with a mutating verb (`PUT`/`POST`/`PATCH`/`DELETE`) at any point in this task.
+
+### 15.4 Post-change independent verification (not inferred from the 204 responses above)
+
+```
+gh api repos/MustafaBasol/DisKlinikCRM/vulnerability-alerts -i
+  → HTTP/2.0 204 No Content   (per GitHub API semantics: 204 = enabled, 404 = disabled)
+
+gh api repos/MustafaBasol/DisKlinikCRM/automated-security-fixes
+  → {"enabled":true,"paused":false}
+
+gh api repos/MustafaBasol/DisKlinikCRM --jq '{full_name,private,security_and_analysis}'
+  → {"full_name":"MustafaBasol/DisKlinikCRM","private":false,
+     "security_and_analysis":{
+       "dependabot_security_updates":{"status":"enabled"},
+       "secret_scanning":{"status":"enabled"},
+       "secret_scanning_non_provider_patterns":{"status":"disabled"},
+       "secret_scanning_push_protection":{"status":"enabled"},
+       "secret_scanning_validity_checks":{"status":"disabled"}}}
+
+gh api repos/MustafaBasol/DisKlinikCRM --jq '.id' → 1237628641
+```
+
+**Before → after:**
+
+| Control | Before | After |
+|---|---|---|
+| Dependabot alerts | `disabled` (404) | **`enabled`** (204) |
+| Dependabot security updates | `disabled` (`enabled:false`) | **`enabled`** (`enabled:true, paused:false`) |
+| Secret scanning | `enabled` | `enabled` — **unchanged** |
+| Secret scanning push protection | `enabled` | `enabled` — **unchanged** |
+
+### 15.5 Adversarial review (independent subagent, own `gh api` calls, instructed to falsify)
+
+An independent reviewer re-ran every check above from scratch (not trusting this document's own claims) plus additionally queried `branches/main/protection`, `/rulesets`, and `/actions/permissions` to hunt for any unrelated drift. Findings, each `SURVIVES` (none `FALSIFIED`, no `CRITICAL` finding):
+
+1. **Dependabot alerts really enabled** — `SURVIVES` (204, reproduced independently).
+2. **Dependabot security updates really enabled** — `SURVIVES` (`enabled:true`, `status:"enabled"`, reproduced independently).
+3. **No unrelated setting changed** — `SURVIVES`. `secret_scanning`/`secret_scanning_push_protection` identical before/after. `main`'s ruleset (`id 17553831`) has `created_at`/`updated_at` both `2026-06-11T14:01:14` — unchanged since months before this task, proving it was not touched by this mutation. `branches/main/protection` still 404 (governed by the ruleset, not classic protection — same as before). Actions permissions (`allowed_actions:"all"`, `sha_pinning_required:false`) match this document's own §4 table exactly, unaltered. Repository visibility still `private:false`.
+4. **GitHub security-settings lane now `PASS`** — `SURVIVES`. All four sub-controls (Dependabot alerts, Dependabot security updates, secret scanning, push protection) independently read `enabled`.
+5. **F3 Exit Criterion 2 overall still `NOT_SATISFIED`** — `SURVIVES`. The reviewer re-read this document's own §11 (7 blocking reasons) and `CURRENT_PHASE.md`'s F3-EXIT-C2 entry and confirmed reasons 2–7 (Platform Admin MFA enrollment coverage, Redis/API-replica topology, R-073/R-019 decision-owner acceptance, external error tracking, R-018 ambiguity, the five other unassessed §5 checklist items) are unchanged and still open — nothing in this remediation's live `gh api` state or in either document shows any of them closed.
+
+### 15.6 Criterion impact (explicit, not left implicit)
+
+```
+GITHUB_SECURITY_SETTINGS_LANE = PASS   (as of 2026-08-13, this task)
+F3_EXIT_CRITERION_2            = NOT_SATISFIED   (unchanged — reasons 2–7 of §11 remain open)
+F3_EXIT_GATE                   = NOT_SATISFIED
+F3_COMPLETE                    = NO
+F4_TRANSITION_AUTHORIZED       = NO
+```
+
+This task does **not** close R-073, R-019, R-018, or the R-075 residual-monitoring note beyond the narrow fact that continuous Dependabot alerting now exists (see `RISK_REGISTER.md` R-075, updated same-day). It does **not** assess criterion 3 (unaffected, untouched). **Likely next task** (not decided or invented here): Platform Admin MFA enrollment-coverage verification (§9.1's SQL has still never been run) or Redis/PM2 replica-topology verification (§9.2) — both are read-only operator-evidence tasks named in §9 above, neither requiring an agent decision on which comes first.
+
+### 15.7 Migration / runtime / impact
+
+```
+Migration required:                      NO
+Schema changed:                          NO
+Runtime/application code changed:        NO
+Production deployment:                   NO
+External control-plane settings changed: YES — exactly the two authorized Dependabot settings
+Tenant/KVKK data flow changed:           NO
+Secrets changed/exposed:                 NO — no token, credential, or raw header value reproduced in this section
+```
+
+### 15.8 Validation commands run (this R2 pass)
+
+```
+Command: git diff --check
+Purpose: verify no whitespace-conflict markers in the documentation diff
+Result:  N/A at time of writing this section (run once all doc edits complete — see final PR body for actual result)
+
+Command: git merge-base --is-ancestor 021c43d5fbeae3c9b03c904ac30b0bb4708c80ad 0d85748d1192609bbc391e71c43b3fed4822066d
+Purpose: confirm this document's original baseline is a clean ancestor of this task's baseline (simple fast-forward, no semantic conflict)
+Result:  PASS (exit 0)
+```
+
+No application/runtime test suite was run — no runtime, schema, or dependency file was touched by this task, per its own explicit scope.
+
+### 15.9 Rollback
+
+**Documentation:** `git revert` the merge commit that lands this section.
+
+**GitHub control plane:** technically, `DELETE repos/MustafaBasol/DisKlinikCRM/vulnerability-alerts` and a corresponding disable call would restore the pre-change toggle state. **This rollback must not be executed** without explicit separate instruction — enabled vulnerability monitoring is the desired production-security target for a public repository processing health data, and disabling it would restore a strictly worse security posture. Reverting the documentation commit does **not** revert the GitHub settings, and vice versa — these are two independent rollback planes, exactly as this document's own §13 already notes for its original scope.
