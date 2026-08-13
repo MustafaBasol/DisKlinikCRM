@@ -133,7 +133,7 @@ Every runbook below follows the same nine-part structure: **Detection → Immedi
 
 ### 4.1 API outage
 
-**Detection.** `GET /api/health` returns anything other than `200`/`204`/`401`/`403` on repeated probes (both the public and local URL), or a user/clinic report of total unreachability. No automated alerting exists yet (ADR-012 `DEFERRED`) — this is a manual polling / user-report detection until that gap closes.
+**Detection.** `GET /api/health` returns anything other than `200`/`204`/`401`/`403` on repeated probes (both the public and local URL), or a user/clinic report of total unreachability. No automated alerting exists yet (ADR-012 `DEFERRED`) — this is a manual polling / user-report detection until that gap closes. **F3-OBS-002 status:** repository-side external-monitor design exists (§4.11) — an external uptime prober against `/api/livez`/`/api/readyz` is proposed but **not yet activated in production**; this remains manual detection until that activation happens and is evidenced.
 
 **Immediate containment.** There is no distinct "contain" step for a full outage beyond starting recovery — the priority is restoring service. If any incident-communication channel exists for clinics, note the outage start time there (this repository defines no such channel — record its absence as a gap in the post-incident review, don't invent one mid-incident).
 
@@ -160,7 +160,7 @@ pm2 restart noramedi-api                                # [MUTATING] simple proc
 
 ### 4.2 Worker offline / background jobs stopped
 
-**Detection.** `pm2 jlist`'s `noramedi-worker` entry reports a status other than `online`; or a downstream symptom is noticed first — reminders not arriving, data-retention/file-backup/external-calendar-sync jobs not progressing, a climbing PM2 restart count for `noramedi-worker` specifically (`pm2 describe noramedi-worker`).
+**Detection.** `pm2 jlist`'s `noramedi-worker` entry reports a status other than `online`; or a downstream symptom is noticed first — reminders not arriving, data-retention/file-backup/external-calendar-sync jobs not progressing, a climbing PM2 restart count for `noramedi-worker` specifically (`pm2 describe noramedi-worker`). **F3-OBS-002 status:** `scripts/noramedi-opscheck.sh`'s `pm2` check covers exactly this condition for both `noramedi-api` and `noramedi-worker` via a dead-man's-switch ping (§4.11) — reviewed and tested, **not yet installed on the production host**.
 
 **Immediate containment.** Confirm the API process has **not** silently taken over job ownership — `RUN_BACKGROUND_JOBS=false` is set explicitly for `noramedi-api` in [`ecosystem.config.cjs`](../../../ecosystem.config.cjs) (per [F3-IMPL-002](../evidence/F3-IMPL-002_PRODUCTION_WORKER_PROCESS_CONTRACT.md)), so the API does **not** pick up jobs on its own — check `pm2 logs noramedi-api --lines 50 --nostream | grep '\[jobs\]'` for the startup line confirming `ownsJobs=false`, so nobody assumes reminders are still being sent from a second source while diagnosing.
 
@@ -290,7 +290,7 @@ If the leaked value was a *provider* credential (WhatsApp/Instagram/SMS token st
 
 ### 4.7 Backup failure / restore requirement
 
-**Detection.** `GET /api/platform/backups/status` shows `latestBackup` older than the expected cadence (cron-scheduled; the currently-observed production interval is ~11 hours per [PRODUCTION_TOPOLOGY.md](../PRODUCTION_TOPOLOGY.md)), or `cronExists`/`scriptExists`/`scriptExecutable` reporting `false`; separately, `GET /api/platform/file-backups/status` for the off-host file/attachment backup job — **first confirm `FILE_BACKUP_ENABLED`'s actual production value** before treating a file-backup "failure" as an emergency, since this capability is `IMPLEMENTED_NOT_PRODUCTION_VERIFIED` and defaults to disabled ([FILE_BACKUP_COVERAGE_001.md](../evidence/FILE_BACKUP_COVERAGE_001.md)) — a "failure" report for a feature that is not even enabled is a false alarm, not an incident.
+**Detection.** `GET /api/platform/backups/status` shows `latestBackup` older than the expected cadence (cron-scheduled; the currently-observed production interval is ~11 hours per [PRODUCTION_TOPOLOGY.md](../PRODUCTION_TOPOLOGY.md)), or `cronExists`/`scriptExists`/`scriptExecutable` reporting `false`; separately, `GET /api/platform/file-backups/status` for the off-host file/attachment backup job — **first confirm `FILE_BACKUP_ENABLED`'s actual production value** before treating a file-backup "failure" as an emergency, since this capability is `IMPLEMENTED_NOT_PRODUCTION_VERIFIED` and defaults to disabled ([FILE_BACKUP_COVERAGE_001.md](../evidence/FILE_BACKUP_COVERAGE_001.md)) — a "failure" report for a feature that is not even enabled is a false alarm, not an incident. **F3-OBS-002 status:** `scripts/noramedi-opscheck.sh`'s `backup` check computes freshness directly from `/root/noramedi-backups` (same source `backupService.ts` reads) and pings a dead-man's-switch on staleness (§4.11) — reviewed and tested, **not yet installed on the production host**.
 
 **Immediate containment.** If backups are failing but the database itself is healthy, this is a degraded-*recovery-capability* risk, not an active data-loss emergency — respond with urgency proportional to how long the gap has existed, not with panic.
 
@@ -342,7 +342,7 @@ This confirms the backup file is actually restorable and produces row counts/che
 
 ### 4.9 High 5xx/error spike
 
-**Detection.** Elevated 5xx responses observed via `logUnhandledError`'s structured logs (`pm2 logs noramedi-api --lines 200 --nostream`, filter for the `"unhandled error"` message / `status >= 500` entries — no dedicated metrics/alerting stack exists yet, ADR-012 `DEFERRED`, so this is manual log inspection until that gap closes), or repeated user/clinic-reported failures.
+**Detection.** Elevated 5xx responses observed via `logUnhandledError`'s structured logs (`pm2 logs noramedi-api --lines 200 --nostream`, filter for the `"unhandled error"` message / `status >= 500` entries — no dedicated metrics/alerting stack exists yet, ADR-012 `DEFERRED`, so this is manual log inspection until that gap closes), or repeated user/clinic-reported failures. **F3-OBS-002 status:** out of this task's scope — no aggregation/rate computation is proposed here (see the F3-OBS-002 evidence doc's explicit scope boundary); this stays manual-only for now.
 
 **Immediate containment.** Identify whether the spike is scoped to one route (the `route` field in the structured error log — a safe, allowlisted route template, never a raw path with embedded ids, per [`logger.ts`](../../../server/src/utils/logger.ts)'s own design) or system-wide. A system-wide spike escalates directly to runbook 4.1 or 4.3 instead of this one.
 
@@ -379,6 +379,25 @@ This confirms the backup file is actually restorable and produces row counts/che
 **Escalation.** SEV-1 always for a confirmed privileged-account compromise; SEV-2 for a suspicious-but-unconfirmed signal pending investigation — matches the incident's own `open` → `acknowledged` → `investigating` lifecycle; do not pre-declare a final severity before acknowledgment, but do not leave an `open` incident past the SEV-2 response window either.
 
 **Post-incident review.** `POST .../resolve` **[MUTATING]** with a `resolutionSummary`, then `POST .../close` **[MUTATING]**. If the incident involved patient data, the KVKK breach path (§5) applies in parallel, exactly as in runbook 4.4.
+
+### 4.11 Automated monitoring / alerting (F3-OBS-002)
+
+**Added by F3-OBS-002, not F3-IR-001** — this subsection documents the automated-monitoring design proposed and repository-side-implemented by [F3-OBS-002](../evidence/F3-OBS-002_LIVE_OBSERVABILITY_WIRING_ALERT_VERIFICATION.md); it does not change this runbook's own F3-IR-001 status header above. **Nothing in this subsection is active in production yet** — every "Detection" line above that references it (4.1, 4.2, 4.7) still describes manual/human detection as the current reality until the external activation steps below are executed and evidenced; see the F3-OBS-002 evidence doc for the exact pending steps and the required approval gate before that activation happens.
+
+**Design (once activated):**
+
+| Check | Mechanism | Ping/alert on |
+|---|---|---|
+| API unreachable | External uptime monitor → `GET /api/livez` | Non-2xx / no response |
+| DB readiness | External uptime monitor → `GET /api/readyz`, root `status` field | `"status":"degraded"` / HTTP 503 |
+| Redis readiness | External uptime monitor → `GET /api/readyz`, **body assertion specifically on the `redis` check entry** (`"name":"redis","status":"ok"`) — the root `status`/HTTP code alone does **not** reflect Redis, because `evaluateReadiness()` ([`readiness.ts`](../../../server/src/utils/readiness.ts)) deliberately never fails readiness on a Redis-only outage (fail-open policy, documented in that file's own module docstring) | Body no longer contains `"name":"redis","status":"ok"` |
+| `noramedi-api` / `noramedi-worker` PM2 status | Host-local: `scripts/noramedi-opscheck.sh` `pm2` check (systemd timer, independent of the two monitored processes) → dead-man's-switch ping | Either process not `online`, or no ping arrives within the provider's configured grace period |
+| Disk usage | Host-local: `noramedi-opscheck.sh` `disk` check (`df -P`) → dead-man's-switch ping | Usage ≥ `NORAMEDI_OPSCHECK_DISK_THRESHOLD_PERCENT` (default 90) |
+| Backup freshness | Host-local: `noramedi-opscheck.sh` `backup` check (reads `/root/noramedi-backups` directly — the same directory `backupService.ts` reads, not the authenticated HTTP admin route) → dead-man's-switch ping | No file younger than `NORAMEDI_OPSCHECK_BACKUP_MAX_AGE_HOURS` (default 30) matching the backup filename pattern |
+
+**Owner and escalation.** No dedicated on-call rotation exists for NoraMedi today (consistent with §0/§4.1's existing statement that this repository defines no such channel). Once activated, the human alert channel (minimum: email) delivers to the production operator identified at activation time — that recipient address is configured directly in the external provider's console, is operational contact information, and is therefore **never committed to this repository**. Until an on-call rotation is formally defined elsewhere in this program, that operator is this runbook's own "decision owner" (§0).
+
+**What this does NOT cover.** Elevated 5xx rate (4.9) and TLS/certificate expiry remain explicitly out of this task's scope (see the F3-OBS-002 evidence doc's scope boundary) — both stay manual/log-inspection-only for now.
 
 ## 5. KVKK personal/health-data breach path
 

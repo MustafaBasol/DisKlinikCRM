@@ -1,0 +1,35 @@
+# noramedi-opscheck.timer — F3-OBS-002
+#
+# NOT YET INSTALLED ON PRODUCTION. See noramedi-opscheck.service in this same
+# directory for installation commands and required approval step.
+#
+# Runs noramedi-opscheck.sh every 5 minutes. When configuring the
+# corresponding dead-man's-switch checks on the external monitoring
+# provider, set each check's grace period to at least 3x this interval
+# (~15 minutes) so a single delayed/overlapping run does not by itself
+# produce a false alert — see the F3-OBS-002 evidence doc's controlled-drill
+# section for how this grace period is exercised and measured.
+#
+# OnUnitActiveSec is relative to this service's last *deactivation*, not a
+# fixed wall-clock offset — a slow run pushes the next run later by the same
+# amount, not a fixed 5-minute grid. With TimeoutStartSec=60 in the .service
+# file bounding worst-case run length, this drift is small relative to the
+# ~15-minute grace period above. Persistent=false is intentional: a host
+# reboot already means noramedi-api/noramedi-worker were briefly down, so
+# there is no value in a burst of catch-up runs on restart — OnBootSec=2min
+# alone covers the immediate post-boot case. Because this is a plain
+# (non-templated) unit, systemd will not start a second concurrent run if
+# one is still executing when the timer next fires.
+
+[Unit]
+Description=Run noramedi-opscheck.sh every 5 minutes (F3-OBS-002)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=false
+Unit=noramedi-opscheck.service
+
+[Install]
+WantedBy=timers.target

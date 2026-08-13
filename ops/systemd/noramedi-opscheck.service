@@ -1,0 +1,91 @@
+# noramedi-opscheck.service — F3-OBS-002
+#
+# NOT YET INSTALLED ON PRODUCTION. This is a reviewed template only — see
+# docs/program/evidence/F3-OBS-002_LIVE_OBSERVABILITY_WIRING_ALERT_VERIFICATION.md
+# for the exact proposed installation commands and the required operator
+# approval step before any of this is deployed.
+#
+# Deliberately a standalone systemd unit, NOT an application node-cron job
+# inside noramedi-api/noramedi-worker: the whole point of this check is to
+# detect those two processes (and the host they run on) being unavailable,
+# which a monitor running inside one of them structurally cannot do.
+#
+# Runs as root because:
+#   - noramedi-api / noramedi-worker are PM2-managed processes owned by root
+#     (docs/program/PRODUCTION_TOPOLOGY.md §2) — `pm2 jlist` as an
+#     unprivileged user would not see them.
+#   - the backup directory (/root/noramedi-backups) is under /root and not
+#     world-readable.
+# This service intentionally does NOT start/stop/reload anything — it only
+# reads process status, disk usage, and backup-directory file metadata, and
+# makes outbound HTTPS calls to pre-configured dead-man's-switch ping URLs.
+# It never touches patient data, tenant data, or any database/Redis
+# connection.
+#
+# Installation (proposed, not yet executed — see the evidence doc):
+#   install -o root -g root -m 0755 scripts/noramedi-opscheck.sh /usr/local/sbin/noramedi-opscheck.sh
+#   install -o root -g root -m 0644 ops/systemd/noramedi-opscheck.service /etc/systemd/system/noramedi-opscheck.service
+#   install -o root -g root -m 0644 ops/systemd/noramedi-opscheck.timer /etc/systemd/system/noramedi-opscheck.timer
+#   install -o root -g root -m 0600 /dev/null /etc/noramedi/opscheck.env   # then fill in real ping URLs, see .env.example in this directory
+#   systemctl daemon-reload
+#   systemctl enable --now noramedi-opscheck.timer
+#
+# The env file is NOT part of this repository and is never git-tracked —
+# see ops/systemd/noramedi-opscheck.env.example for the variable names it
+# must contain (names only; real ping-URL values exist only on the host).
+#
+# Residual risk to verify on first real install (cannot be tested in this
+# repository — no production host access): `pm2 jlist` talks to the local
+# pm2 daemon over ~/.pm2/pub.sock and may touch small state/log files under
+# root's home directory. ProtectHome=read-only makes /root read-only to this
+# service; if the first `systemctl start noramedi-opscheck.service` +
+# `journalctl -u noramedi-opscheck.service` shows a pm2-related failure
+# rather than a clean pass/fail check result, add a narrow exception
+# (e.g. `ReadWritePaths=/root/.pm2`) rather than relaxing ProtectHome
+# wholesale. Not pre-added here since it cannot be confirmed necessary
+# without a real host.
+#
+# Only one instance of a non-templated unit like this can be active at a
+# time — if a run is still executing when the timer next fires, systemd
+# does not start a second concurrent instance, so no explicit locking is
+# needed in the script itself for overlap safety.
+#
+# MemoryDenyWriteExecute is deliberately NOT set: check_pm2() in the script
+# shells out to `node -e '...'`, and Node's V8 engine requires W^X-style
+# writable+executable memory mappings for JIT compilation. Enabling this
+# hardening option is a known way to break any Node.js process outright —
+# verified against the script's actual dependency, not assumed safe.
+
+[Unit]
+Description=NoraMedi ops health check (F3-OBS-002) — PM2 status, disk, backup freshness
+Documentation=file:///var/www/noramedi/docs/program/evidence/F3-OBS-002_LIVE_OBSERVABILITY_WIRING_ALERT_VERIFICATION.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=-/etc/noramedi/opscheck.env
+ExecStart=/usr/local/sbin/noramedi-opscheck.sh
+TimeoutStartSec=60
+
+# Hardening. ProtectHome is deliberately "read-only", not "yes" — "yes"
+# would hide /root entirely, and the backup-freshness check must read
+# /root/noramedi-backups. Nothing this service does requires write access
+# outside its own state directory.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+StateDirectory=noramedi-opscheck
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# MemoryDenyWriteExecute intentionally omitted — see note above (breaks
+# the script's `node -e` dependency in check_pm2()).
+
+[Install]
+WantedBy=multi-user.target
