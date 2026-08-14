@@ -211,7 +211,7 @@ Never drop a database whose name does not match `noramedi_restore_test_<digits>_
 | opscheck script | Reinstall the previous `/usr/local/sbin/noramedi-opscheck.sh`. Exit-code bits 1/2/4 are unchanged, so the three pre-existing Healthchecks checks keep working either way. |
 | New Healthchecks checks | Pause or delete `noramedi-filebackup` / `noramedi-drill`. |
 | Status file | `sudo rm -f /var/lib/noramedi/recovery-status.json` (regenerated on the next tick). |
-| Env flags | All new flags default OFF/fail-closed; unsetting them restores pre-task behavior exactly. |
+| Env flags | All new *feature* flags default OFF/fail-closed. Note the exceptions, which are unconditional and are **not** reverted by unsetting a flag: the recovery-status writer runs whenever `/var/lib/noramedi` exists; the crash reapers run on that same tick; `runRestoreTest` always opens a `RecoveryDrillRun` row; `getBackupLogs` always redacts; and `runRestoreTest` now returns the real temp-DB name on the cleanup-failure path where it was previously always `[redacted-test-db]`. Reverting the code is the way to undo those. |
 
 No production data is mutated by any part of this task.
 

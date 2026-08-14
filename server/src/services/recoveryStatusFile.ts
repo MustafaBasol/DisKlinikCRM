@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+import prisma from '../db.js';
 import { getFileBackupStatus } from './fileBackupService.js';
-import { getRecoveryDrillStatus } from './recoveryDrillService.js';
 import { safeErrorFields } from '../utils/safeError.js';
 
 /**
@@ -54,6 +54,15 @@ export interface RecoveryStatusDocument {
   generatedAt: string;
   fileBackup: {
     enabled: boolean;
+    /**
+     * Whether the configured destination is in a DIFFERENT failure domain.
+     * Carried into the status file so the host monitor can alarm on a
+     * same-disk "backup" — without it, a local-directory destination on the
+     * single-disk production VPS completes cleanly, reports
+     * `status: "completed"`, and the dead-man's switch says healthy while the
+     * only copy of every patient file shares a disk with the primary.
+     */
+    destinationOffHost: boolean;
     status?: string;
     lastRunAt?: string;
     filesFailed?: number;
@@ -76,7 +85,22 @@ export interface RecoveryStatusDocument {
  */
 export interface RecoveryStatusFileBackupInput {
   enabled: boolean;
-  lastRun: {
+  destinationOffHost: boolean;
+  /**
+   * The most recent run that reached a TERMINAL state (`completed`/`failed`) —
+   * NOT simply the most recent run.
+   *
+   * This distinction is load-bearing. The host monitor treats any status other
+   * than `completed` as a failure and pings the dead-man's switch's `/fail`
+   * endpoint, which emails the operator immediately. If the latest run were
+   * reported verbatim, every nightly sweep that happened to be in flight when
+   * the status file was refreshed would report `status: "running"` and page
+   * the operator — training them to ignore the exact alarm this task exists to
+   * add. Reporting the last terminal run instead means an in-flight sweep is
+   * simply invisible to the monitor, while a sweep that HANGS still alarms,
+   * because the last terminal run keeps aging.
+   */
+  lastTerminalRun: {
     status: string;
     startedAt: Date | string;
     finishedAt: Date | string | null;
@@ -86,7 +110,8 @@ export interface RecoveryStatusFileBackupInput {
 }
 
 export interface RecoveryStatusDrillInput {
-  lastFileRestoreRehearsal: {
+  /** Last rehearsal in a terminal state (`passed`/`failed`) — see above. */
+  lastTerminalRehearsal: {
     status: string;
     kind: string;
     startedAt: Date | string;
@@ -106,18 +131,19 @@ export function mapRecoveryStatusDocument(
   drills: RecoveryStatusDrillInput,
   now: Date = new Date(),
 ): RecoveryStatusDocument {
-  const lastRun = fileBackup.lastRun;
-  // A run still in flight has no finishedAt yet; fall back to startedAt so a
-  // long-running sweep does not read as "never ran".
+  const lastRun = fileBackup.lastTerminalRun;
+  // A terminal run always has finishedAt; startedAt is only a defensive
+  // fallback for a row written before this field existed.
   const lastRunAt = lastRun ? (lastRun.finishedAt ?? lastRun.startedAt) : null;
 
-  const rehearsal = drills.lastFileRestoreRehearsal;
+  const rehearsal = drills.lastTerminalRehearsal;
 
   return {
     schemaVersion: RECOVERY_STATUS_SCHEMA_VERSION,
     generatedAt: now.toISOString(),
     fileBackup: {
       enabled: fileBackup.enabled,
+      destinationOffHost: fileBackup.destinationOffHost,
       ...(lastRun ? { status: lastRun.status } : {}),
       ...(lastRunAt ? { lastRunAt: new Date(lastRunAt).toISOString() } : {}),
       ...(lastRun ? { filesFailed: lastRun.filesFailed, filesMissing: lastRun.filesMissing } : {}),
@@ -134,10 +160,37 @@ export function serializeRecoveryStatusDocument(doc: RecoveryStatusDocument): st
   return `${JSON.stringify(doc, null, 2)}\n`;
 }
 
+/** Terminal states — the only ones the host monitor should ever judge. */
+const TERMINAL_FILE_BACKUP_STATUSES = ['completed', 'failed'];
+const TERMINAL_DRILL_STATUSES = ['passed', 'failed'];
+
 /** Builds the document from live ledger state. */
 export async function buildRecoveryStatusDocument(): Promise<RecoveryStatusDocument> {
-  const [fileBackup, drills] = await Promise.all([getFileBackupStatus(), getRecoveryDrillStatus()]);
-  return mapRecoveryStatusDocument(fileBackup, drills);
+  // `getFileBackupStatus()` is used only for configuration (enabled /
+  // destination), never for the run outcome: its `lastRun` is the newest row
+  // regardless of state, which is exactly what must NOT be reported here.
+  const [config, lastTerminalRun, lastTerminalRehearsal] = await Promise.all([
+    getFileBackupStatus(),
+    prisma.fileBackupRun.findFirst({
+      where: { status: { in: TERMINAL_FILE_BACKUP_STATUSES } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: { status: true, startedAt: true, finishedAt: true, filesFailed: true, filesMissing: true },
+    }),
+    prisma.recoveryDrillRun.findFirst({
+      where: { kind: 'file_restore_rehearsal', status: { in: TERMINAL_DRILL_STATUSES } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: { status: true, kind: true, startedAt: true },
+    }),
+  ]);
+
+  return mapRecoveryStatusDocument(
+    {
+      enabled: config.enabled,
+      destinationOffHost: config.destinationOffHost,
+      lastTerminalRun,
+    },
+    { lastTerminalRehearsal },
+  );
 }
 
 /**

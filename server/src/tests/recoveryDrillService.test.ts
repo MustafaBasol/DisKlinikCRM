@@ -200,13 +200,52 @@ async function main() {
     assert.equal(svc.computeAgeMinutes(new Date('2026-08-14T11:58:59.000Z'), now), 1);
   });
 
-  await test('computeAgeMinutes returns null for missing/invalid input, 0 for a future timestamp', () => {
+  await test('computeAgeMinutes returns null for missing/invalid input', () => {
     const now = new Date('2026-08-14T12:00:00.000Z');
     assert.equal(svc.computeAgeMinutes(null, now), null);
     assert.equal(svc.computeAgeMinutes(undefined, now), null);
     assert.equal(svc.computeAgeMinutes(new Date('not-a-date'), now), null);
-    // Clock skew must never produce a negative age.
-    assert.equal(svc.computeAgeMinutes(new Date('2026-08-14T13:00:00.000Z'), now), 0);
+  });
+
+  // ── Regression: clock skew must fail CLOSED (F4 review, M2) ───────────────
+  //
+  // Clamping a negative delta to 0 fails OPEN: a row (or source artifact)
+  // stamped in the future by NTP stepping the clock backwards would report age
+  // 0 and therefore "fresh", hiding a drill schedule that has not run in
+  // weeks. Null is the honest answer, and isRecoveryDrillStale() treats null as
+  // stale — matching what scripts/noramedi-opscheck.sh already does.
+
+  await test('computeAgeMinutes returns null (NOT 0) for a future timestamp', () => {
+    const now = new Date('2026-08-14T12:00:00.000Z');
+    assert.equal(svc.computeAgeMinutes(new Date('2026-08-14T13:00:00.000Z'), now), null);
+    assert.equal(svc.computeAgeMinutes(new Date('2030-01-01T00:00:00.000Z'), now), null);
+    // One millisecond ahead is already skew; the boundary is strict.
+    assert.equal(svc.computeAgeMinutes(new Date(now.getTime() + 1), now), null);
+    // Exactly `now` is a real, knowable zero.
+    assert.equal(svc.computeAgeMinutes(new Date(now.getTime()), now), 0);
+  });
+
+  await test('a future-dated drill row reads as STALE, never as a fresh drill', () => {
+    const now = new Date('2026-08-14T12:00:00.000Z');
+    const futureRow = svc.toRecoveryDrillSummary(
+      baseRow({ startedAt: new Date(now.getTime() + 3 * HOUR) }),
+      now,
+    );
+    assert.equal(futureRow.ageMinutes, null, 'a future startedAt must not report age 0');
+    assert.equal(svc.isRecoveryDrillStale(futureRow, 168), true);
+  });
+
+  await test('a future-dated source artifact records a null RPO age, not a flattering 0', async () => {
+    resetStore();
+    const id = await svc.startRecoveryDrill({
+      kind: 'db_restore_test',
+      trigger: 'manual',
+      sourceArtifactAt: new Date(Date.now() + 4 * HOUR),
+    });
+    const row = rows.find((r) => r.id === id)!;
+    assert.ok(row.sourceArtifactAt instanceof Date, 'the raw timestamp is still preserved as evidence');
+    assert.equal(row.sourceArtifactAgeMinutes, null, 'a future artifact must not claim a 0-minute RPO');
+    resetStore();
   });
 
   await test('computeDurationMs is exact milliseconds and never negative', () => {

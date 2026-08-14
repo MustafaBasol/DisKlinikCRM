@@ -99,15 +99,22 @@ export interface RecoveryDrillRunRow {
 // flaking on a slow CI runner.
 
 /**
- * Whole minutes elapsed from `from` to `now`, floored, never negative. Returns
- * null for a missing or unusable timestamp so "we do not know" stays
- * distinguishable from "zero minutes old".
+ * Whole minutes elapsed from `from` to `now`, floored. Returns null for a
+ * missing or unusable timestamp so "we do not know" stays distinguishable from
+ * "zero minutes old".
+ *
+ * A FUTURE `from` also returns null rather than clamping to 0. Clamping fails
+ * OPEN: a drill row (or a source artifact) stamped in the future by clock skew
+ * would report age 0 and therefore "fresh", hiding a drill schedule that has
+ * not run in weeks. `isRecoveryDrillStale()` treats null as stale, so skew
+ * fails CLOSED here, matching scripts/noramedi-opscheck.sh.
  */
 export function computeAgeMinutes(from: Date | null | undefined, now: Date = new Date()): number | null {
   if (!(from instanceof Date) || Number.isNaN(from.getTime())) return null;
   const deltaMs = now.getTime() - from.getTime();
   if (!Number.isFinite(deltaMs)) return null;
-  return Math.max(0, Math.floor(deltaMs / 60_000));
+  if (deltaMs < 0) return null; // clock skew fails closed, not silently healthy
+  return Math.floor(deltaMs / 60_000);
 }
 
 /** Elapsed milliseconds from `from` to `now`, floored at 0. Null if unusable. */
@@ -125,10 +132,11 @@ export function getRecoveryDrillMaxAgeHours(): number {
 }
 
 /**
- * A drill is stale when it has never run at all, or when its age has passed
- * the threshold. Deliberately strict (`>`): a drill sitting EXACTLY at the
- * threshold is still considered fresh, so a weekly drill measured a hair over
- * a nominal week does not flap the alert on and off.
+ * A drill is stale when it has never run at all, when its age is unknowable
+ * (unusable or future-dated `startedAt` — clock skew fails closed), or when
+ * its age has passed the threshold. Deliberately strict (`>`): a drill sitting
+ * EXACTLY at the threshold is still considered fresh, so a weekly drill
+ * measured a hair over a nominal week does not flap the alert on and off.
  */
 export function isRecoveryDrillStale(summary: RecoveryDrillSummary | null, thresholdHours: number): boolean {
   if (!summary) return true;

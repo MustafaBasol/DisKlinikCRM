@@ -114,6 +114,121 @@ async function main() {
     assert.ok(line.includes(`secretAccessKey=${REDACTED_TOKEN}`), `secretAccessKey key was not preserved: ${line}`);
   });
 
+  // ── Regression: the `\b`-anchored rule that shipped first (F4 review, H2) ──
+  //
+  // Every line below was VERIFIED to pass through UNREDACTED and to be served
+  // to an HTTP client by GET /api/platform/backups/logs. Two independent
+  // defects caused it: `\b` cannot precede a key that is itself preceded by
+  // `_` (an underscore IS a word character, so `\bPASSWORD` never matches
+  // `DB_PASSWORD`), and the separator had to touch the key, so a JSON
+  // `"password": "x"` never matched either. These are the exact shapes an
+  // unreviewed shell script emits — `export PGPASSWORD=...` above all.
+  //
+  // Each case asserts the SECRET VALUE is absent from the output, not merely
+  // that the line changed.
+
+  const bypassCases: Array<{ label: string; line: string; secret: string; keptKey?: string }> = [
+    {
+      label: 'DB_PASSWORD= (underscore prefix defeated the old \\b anchor)',
+      line: '2026-08-14 03:15:00 [backup] env: DB_PASSWORD=hunter2',
+      secret: 'hunter2',
+      keptKey: 'DB_PASSWORD',
+    },
+    {
+      label: 'POSTGRES_PASSWORD= (underscore prefix)',
+      line: 'POSTGRES_PASSWORD=s3cr3t',
+      secret: 's3cr3t',
+      keptKey: 'POSTGRES_PASSWORD',
+    },
+    {
+      label: 'export BACKUP_PGPASSWORD= (the shape the unreviewed script most likely emits)',
+      line: 'export BACKUP_PGPASSWORD=topsecret',
+      secret: 'topsecret',
+      keptKey: 'BACKUP_PGPASSWORD',
+    },
+    {
+      label: 'JSON {"password":"..."} (quote between key and separator)',
+      line: '{"password":"s3cr3t"}',
+      secret: 's3cr3t',
+      keptKey: 'password',
+    },
+    {
+      label: 'JSON {"SecretAccessKey": "..."} (quote plus space before the value)',
+      line: '{"SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}',
+      secret: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+      keptKey: 'SecretAccessKey',
+    },
+    {
+      label: 'AWS_SESSION_TOKEN= (key name absent from the old alternation entirely)',
+      line: 'AWS_SESSION_TOKEN=FQoGZXIvYXdzEBYaDF',
+      secret: 'FQoGZXIvYXdzEBYaDF',
+      keptKey: 'AWS_SESSION_TOKEN',
+    },
+    {
+      label: 'Authorization: Bearer <jwt> (scheme + token must go together)',
+      line: 'Authorization: Bearer eyJhbGciOi.abc.def',
+      secret: 'eyJhbGciOi.abc.def',
+      keptKey: 'Authorization',
+    },
+  ];
+
+  for (const testCase of bypassCases) {
+    await test(`BYPASS REGRESSION — ${testCase.label}`, () => {
+      const redacted = redactBackupLogLine(testCase.line);
+      assert.ok(
+        !redacted.includes(testCase.secret),
+        `secret VALUE survived redaction: ${redacted}`,
+      );
+      assert.ok(redacted.includes(REDACTED_TOKEN), `no redaction token present: ${redacted}`);
+      if (testCase.keptKey) {
+        assert.ok(
+          redacted.includes(testCase.keptKey),
+          `the key must survive so the operator knows WHICH credential appeared: ${redacted}`,
+        );
+      }
+    });
+  }
+
+  await test('a bare Bearer token with no key in front of it is redacted', () => {
+    const redacted = redactBackupLogLine("curl -H 'Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig' https://offsite");
+    assert.ok(!redacted.includes('eyJhbGciOiJIUzI1NiJ9.payload.sig'), `bearer token survived: ${redacted}`);
+    assert.ok(redacted.includes('Bearer'), `scheme word was destroyed: ${redacted}`);
+  });
+
+  await test('api_key / apiKey / api-key spellings are all redacted', () => {
+    for (const line of ['api_key=abc123def456', 'apiKey: abc123def456', 'X_API_KEY=abc123def456']) {
+      const redacted = redactBackupLogLine(line);
+      assert.ok(!redacted.includes('abc123def456'), `api key survived in "${line}": ${redacted}`);
+    }
+  });
+
+  await test('the per-line length bound still applies after the widened redaction', () => {
+    const redacted = redactBackupLogLine(`DB_PASSWORD=hunter2 ${'y'.repeat(5000)}`);
+    assert.ok(!redacted.includes('hunter2'), `secret survived on an over-long line: ${redacted.slice(0, 80)}`);
+    assert.ok(redacted.length < 1100, `line was not bounded, length=${redacted.length}`);
+    assert.ok(redacted.endsWith('...[truncated]'), `no truncation marker: ...${redacted.slice(-30)}`);
+  });
+
+  // ── Negative cases: ordinary operator-facing lines must NOT be mangled ─────
+  //
+  // Over-redaction is its own failure. An operator debugging a failed backup
+  // needs these lines verbatim, and a redactor that eats them is a redactor
+  // people route around.
+
+  const untouchedLines = [
+    'pg_dump: dumping contents of table "Patient"',
+    'completed successfully in 4.2s',
+    '2026-08-14 03:15:03 [backup] auth mode: passwordless (peer) on the local socket',
+    'pg_dump: last built-in OID is 16383',
+    '2026-08-14 03:15:41 [backup] wrote noramedi_crm-20260814-031501.dump (128.4 MB)',
+  ];
+
+  for (const original of untouchedLines) {
+    await test(`ordinary line passes through byte-for-byte unchanged — "${original.slice(0, 48)}"`, () => {
+      assert.equal(redactBackupLogLine(original), original);
+    });
+  }
+
   await test('an ordinary operational log line passes through completely unchanged', () => {
     const original = '2026-08-14 03:15:41 [backup] completed noramedi_crm-20260814-031501.dump (128.4 MB) in 40s';
     assert.equal(redactBackupLogLine(original), original);
@@ -178,9 +293,37 @@ async function main() {
     assert.equal(isBackupStale(age, thresholdHours), false);
   });
 
-  await test('a future timestamp (clock skew) floors at 0 rather than going negative', () => {
+  // ── Regression: clock skew must fail CLOSED (F4 review, M2) ───────────────
+  //
+  // The first implementation clamped a negative delta to 0, which made a
+  // future-dated dump report age 0 and therefore "fresh". listBackupFiles()
+  // sorts by mtime descending, so ONE file with a 2030 mtime (NTP stepping the
+  // clock backwards, a restored or `touch`ed artifact) becomes `latest` and
+  // paints a green badge over a cron that died weeks ago. The shell side
+  // (scripts/noramedi-opscheck.sh) already fails closed here; these assertions
+  // pin the TypeScript side to the same behaviour.
+
+  await test('a future-dated artifact (clock skew) -> age null, NOT 0', () => {
+    const oneHourAhead = new Date(now.getTime() + 60 * 60_000);
+    assert.equal(computeArtifactAgeMinutes(oneHourAhead, now), null);
+    const yearsAhead = new Date('2030-01-01T00:00:00.000Z');
+    assert.equal(computeArtifactAgeMinutes(yearsAhead, now), null);
+  });
+
+  await test('a future-dated artifact reads as STALE, never as a fresh backup', () => {
     const future = new Date(now.getTime() + 60 * 60_000);
-    assert.equal(computeArtifactAgeMinutes(future, now), 0);
+    const age = computeArtifactAgeMinutes(future, now);
+    assert.equal(isBackupStale(age, thresholdHours), true);
+  });
+
+  await test('a one-millisecond future skew is still stale (the boundary is strict)', () => {
+    const barelyAhead = new Date(now.getTime() + 1);
+    assert.equal(computeArtifactAgeMinutes(barelyAhead, now), null);
+    assert.equal(isBackupStale(computeArtifactAgeMinutes(barelyAhead, now), thresholdHours), true);
+  });
+
+  await test('an artifact timestamped exactly `now` is age 0 and fresh (no off-by-one)', () => {
+    assert.equal(computeArtifactAgeMinutes(new Date(now.getTime()), now), 0);
     assert.equal(isBackupStale(0, thresholdHours), false);
   });
 

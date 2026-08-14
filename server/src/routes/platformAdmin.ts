@@ -2000,6 +2000,14 @@ router.post('/file-backups/run', async (req: PlatformAdminRequest, res: Response
 });
 
 // POST /api/platform/file-backups/restore-rehearsal
+//
+// F4-FCR-001-R1 (M1a): this route MUST go through
+// runRestoreRehearsalTick(), not runFileBackupRestoreRehearsal() directly.
+// The direct call bypassed the RESTORE_REHEARSAL_REQUIRE_SYNTHETIC gate (so
+// one click could restore real patient bytes into /tmp on the production host
+// with the flag on), the cluster job lock (so a manual run could race the
+// scheduled one), and the recovery drill ledger (so the run left no evidence
+// row at all). The tick applies all three.
 router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest, res: Response) => {
   const { sampleSize } = req.body ?? {};
   if (sampleSize !== undefined && (typeof sampleSize !== 'number' || !Number.isFinite(sampleSize) || sampleSize <= 0)) {
@@ -2007,18 +2015,49 @@ router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest,
   }
   const actorPlatformAdminId = req.platformAdmin?.id ?? null;
   try {
-    const { runFileBackupRestoreRehearsal, isFileBackupRestoreRehearsalRunning } = await import('../services/fileBackupService.js');
+    const [{ isFileBackupRestoreRehearsalRunning }, { runRestoreRehearsalTick }] = await Promise.all([
+      import('../services/fileBackupService.js'),
+      import('../jobs/restoreRehearsalJob.js'),
+    ]);
     if (isFileBackupRestoreRehearsalRunning()) {
       return res.status(409).json({ error: 'A restore rehearsal is already running' });
     }
     console.log(`[platform-file-backup] Restore rehearsal triggered by admin ${actorPlatformAdminId}`);
-    const result = await runFileBackupRestoreRehearsal(sampleSize);
+    const outcome = await runRestoreRehearsalTick({ trigger: 'manual', sampleSize });
+
+    if (outcome.skipReason !== null || outcome.result === null) {
+      // Refused, not failed. 409 keeps "the guard stopped this" distinct from
+      // "the rehearsal ran and broke", and the message names the flag so the
+      // operator knows which knob produced the refusal.
+      const message =
+        outcome.skipReason === 'synthetic_guard'
+          ? 'Restore rehearsal blocked: RESTORE_REHEARSAL_REQUIRE_SYNTHETIC=true and the sampled backup entries are not all in RESTORE_REHEARSAL_SYNTHETIC_CLINIC_IDS'
+          : outcome.skipReason === 'lock_held'
+            ? 'A restore rehearsal is already running'
+            : 'No verified backup entries available to rehearse';
+      await writePlatformAdminAuditEvent({
+        actorPlatformAdminId,
+        action: 'file_backup.restore_rehearsal.blocked',
+        resourceType: 'file_backup',
+        resourceKey: 'restore_rehearsal',
+        outcome: 'error',
+        safeMetadata: { sampleSize: sampleSize ?? null, reason: outcome.skipReason ?? 'no_result' },
+      }).catch((auditErr) => {
+        console.error('[platform-file-backup] Failed to write audit event for blocked restore rehearsal', safeErrorFields(auditErr));
+      });
+      return res.status(409).json({ error: message });
+    }
+
+    const result = { ...outcome.result, drillRunId: outcome.drillId };
     await writePlatformAdminAuditEvent({
       actorPlatformAdminId,
       action: 'file_backup.restore_rehearsal.completed',
       resourceType: 'file_backup',
       resourceKey: 'restore_rehearsal',
       outcome: 'success',
+      // Metadata shape is pinned by platformFileBackupAudit.test.ts — keep it
+      // to exactly `sampleSize`. The drill ledger row is the durable
+      // cross-reference and it is returned in the response body below.
       safeMetadata: { sampleSize: sampleSize ?? null },
     }).catch((auditErr) => {
       console.error('[platform-file-backup] Failed to write audit event for completed restore rehearsal', safeErrorFields(auditErr));
@@ -2070,11 +2109,17 @@ router.get('/recovery/status', async (_req, res: Response) => {
     ]);
 
     // fileBackupService owns its status shape but not its staleness policy, so
-    // the age/stale fields are derived here from its `lastRun`. finishedAt is
-    // preferred over startedAt: a run that started but never finished has not
-    // produced a usable artifact, so it must not refresh the freshness clock.
+    // the age/stale fields are derived here from its `lastRun`.
+    //
+    // ONLY finishedAt counts (F4-FCR-001-R1 / M6). A run that started but
+    // never finished produced no usable artifact, so it must not refresh the
+    // freshness clock — and there is deliberately no startedAt fallback: with
+    // one, a nightly sweep that crashes on start every single night would keep
+    // `stale: false` forever, because startedAt is always fresh. A lastRun
+    // with a null finishedAt therefore yields age null ⇒ stale: true, the same
+    // as never having run at all.
     const fileBackupThresholdHours = resolveMaxAgeHours(process.env.FILE_BACKUP_MAX_AGE_HOURS);
-    const fileBackupLastRunAt = fileBackupStatus.lastRun?.finishedAt ?? fileBackupStatus.lastRun?.startedAt ?? null;
+    const fileBackupLastRunAt = fileBackupStatus.lastRun?.finishedAt ?? null;
     const fileBackupAgeMinutes = computeArtifactAgeMinutes(fileBackupLastRunAt);
 
     res.json({

@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import PlatformBackups from '../PlatformBackups';
 
@@ -347,5 +347,182 @@ describe('PlatformBackups — residual restore artifacts', () => {
     mountWithRecovery({ dbBackup: dbBackup(), fileBackup: fileBackup(), drills: drills() });
     await screen.findByText(K('fileTitle'));
     expect(screen.queryByText(K('residualTitle'))).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * F4-FCR-001-R1 (H1-UI): a run that is legitimately IN FLIGHT is neither a
+ * success nor a failure. Rendering `status: 'running'` as a red failure card —
+ * and its not-yet-reached cleanup step as a cleanup alarm — painted the page
+ * red during every normal nightly sweep, which is how operators learn to
+ * ignore red.
+ */
+describe('PlatformBackups — in-flight runs are not failures', () => {
+  const runningDrill = (over: Record<string, unknown> = {}) =>
+    drill({
+      status: 'running',
+      finishedAt: null,
+      durationMs: null,
+      samplesAttempted: 0,
+      samplesPassed: 0,
+      samplesFailed: 0,
+      // A row that has not finished cannot have verified its own cleanup yet;
+      // the server default for an open ledger row is false.
+      cleanupVerified: false,
+      residualArtifact: null,
+      ageMinutes: 3,
+      ...over,
+    });
+
+  it('renders a drill still running as in-progress, not as a red failure', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills({ lastFileRestoreRehearsal: runningDrill(), runningDrills: 1 }),
+    });
+    await screen.findByText(K('drillsTitle'));
+
+    const card = screen.getByTestId('drill-card-file_restore_rehearsal');
+    expect(card.dataset.state).toBe('in-progress');
+    expect(card.className).not.toContain('red');
+    expect(within(card).getByText(K('statusRunning'))).toBeInTheDocument();
+    // The finished, healthy drill next to it must still read as OK.
+    expect(screen.getByTestId('drill-card-db_restore_test').dataset.state).toBe('ok');
+  });
+
+  it('suppresses the cleanup alarm for a drill that has not finished', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills({ lastFileRestoreRehearsal: runningDrill(), runningDrills: 1 }),
+    });
+    await screen.findByText(K('drillsTitle'));
+
+    const card = screen.getByTestId('drill-card-file_restore_rehearsal');
+    expect(within(card).queryByText(K('cleanupNotVerified'))).not.toBeInTheDocument();
+    expect(within(card).queryByText(K('cleanupVerified'))).not.toBeInTheDocument();
+  });
+
+  it('still alarms on cleanupVerified:false once the drill HAS finished', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills({
+        lastFileRestoreRehearsal: drill({ status: 'failed', cleanupVerified: false }),
+      }),
+    });
+    await screen.findByText(K('drillsTitle'));
+
+    const card = screen.getByTestId('drill-card-file_restore_rehearsal');
+    expect(card.dataset.state).toBe('bad');
+    expect(within(card).getByText(K('cleanupNotVerified'))).toBeInTheDocument();
+  });
+
+  it('still alarms on a residual artifact even while the drill is running', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills({
+        lastFileRestoreRehearsal: runningDrill({ residualArtifact: 'noramedi_restore_test_leak' }),
+      }),
+    });
+    await screen.findByText(K('drillsTitle'));
+    expect(screen.getByTestId('drill-card-file_restore_rehearsal').dataset.state).toBe('bad');
+  });
+
+  it('renders an in-flight file backup run as in-progress and holds back the stale warning', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup({
+        lastRun: { ...fileBackup().lastRun, status: 'running', finishedAt: null },
+        // The server derives freshness from finishedAt only, so an unfinished
+        // run reports stale: true for the duration of the sweep.
+        lastRunAgeMinutes: null,
+        stale: true,
+      }),
+      drills: drills(),
+    });
+    await screen.findByText(K('fileTitle'));
+
+    expect(screen.getByTestId('file-run-status').dataset.state).toBe('in-progress');
+    expect(screen.getByText(K('statusRunning'))).toBeInTheDocument();
+    expect(screen.queryByText(K('fileStaleTitle'))).not.toBeInTheDocument();
+  });
+
+  it('keeps painting a FINISHED failed file backup run red', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup({ lastRun: { ...fileBackup().lastRun, status: 'failed' }, stale: true }),
+      drills: drills(),
+    });
+    await screen.findByText(K('fileTitle'));
+
+    expect(screen.getByTestId('file-run-status').dataset.state).toBe('bad');
+    expect(screen.getByText(K('fileStaleTitle'))).toBeInTheDocument();
+  });
+});
+
+/**
+ * F4-FCR-001-R1 (L3): the operator who triggers a restore test must see, in
+ * the immediate result panel, that the drill failed to drop its scratch
+ * database — a full plaintext copy of the patient database left on the
+ * production cluster — together with the exact name they need for DROP
+ * DATABASE.
+ */
+describe('PlatformBackups — restore test result panel', () => {
+  const restoreTestResult = (over: Record<string, unknown> = {}) => ({
+    backupFilename: 'noramedi_2026-08-14.sql.gz',
+    tempDbName: '[redacted-test-db]',
+    success: true,
+    tableCount: 84,
+    platformAdminCount: 2,
+    planCount: 4,
+    migrationsCount: 61,
+    durationMs: 12345,
+    cleanupVerified: true,
+    drillRunId: 'drill-db',
+    ...over,
+  });
+
+  const clickRestoreTest = async (payload: unknown) => {
+    apiPost.mockResolvedValue({ data: payload });
+    mountWithRecovery({ dbBackup: dbBackup(), fileBackup: fileBackup(), drills: drills() });
+    await screen.findByText(K('fileTitle'));
+    // act() wraps the click AND the promise flush it triggers: the handler
+    // sets state twice (result, then the follow-up status refetch), and both
+    // land after the click returns.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: K('restoreTestBtn') }));
+    });
+  };
+
+  it('alarms with the leaked database name verbatim when cleanup was not verified', async () => {
+    const leaked = 'noramedi_restore_test_20260814_031500_a9f3c1';
+    await clickRestoreTest(restoreTestResult({ cleanupVerified: false, tempDbName: leaked }));
+
+    const banner = await screen.findByText(K('residualTitle'));
+    expect(banner.closest('[role="alert"]')).not.toBeNull();
+    expect(screen.getByText(K('residualDetail'))).toBeInTheDocument();
+    // Character-for-character: this string is what the operator has to drop.
+    expect(screen.getByText(leaked)).toBeInTheDocument();
+  });
+
+  it('shows no cleanup alarm when the scratch database was dropped', async () => {
+    await clickRestoreTest(restoreTestResult());
+
+    expect(await screen.findByText(K('restoreTestSuccess'))).toBeInTheDocument();
+    expect(screen.queryByText(K('residualTitle'))).not.toBeInTheDocument();
+    expect(screen.queryByText(K('residualDetail'))).not.toBeInTheDocument();
+  });
+
+  it('alarms on a failed restore test that also leaked its scratch database', async () => {
+    const leaked = 'noramedi_restore_test_20260814_040000_bb12ef';
+    await clickRestoreTest(
+      restoreTestResult({ success: false, cleanupVerified: false, tempDbName: leaked, errorSummary: 'pg_restore_failed' }),
+    );
+
+    expect(await screen.findByText(K('restoreTestFailed'))).toBeInTheDocument();
+    expect(screen.getByText(leaked)).toBeInTheDocument();
+    expect(screen.getByText('pg_restore_failed')).toBeInTheDocument();
   });
 });

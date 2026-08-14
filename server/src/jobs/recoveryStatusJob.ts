@@ -6,6 +6,8 @@ import {
   resolveRecoveryStatusFilePath,
   writeRecoveryStatusFile,
 } from '../services/recoveryStatusFile.js';
+import { reapStaleFileBackupRuns } from '../services/fileBackupService.js';
+import { reapStaleRecoveryDrills } from '../services/recoveryDrillService.js';
 import { safeErrorFields } from '../utils/safeError.js';
 
 /**
@@ -31,9 +33,47 @@ import { safeErrorFields } from '../utils/safeError.js';
  * idempotent, so two processes racing produce the same document and the
  * loser's temp file is discarded — a lock would add a database round trip to
  * protect against a harmless outcome.
+ *
+ * THIS TICK ALSO OWNS THE CRASH REAPERS (F4-FCR-001-R1 / H4). Before, the only
+ * production call sites of reapStaleFileBackupRuns() and
+ * reapStaleRecoveryDrills() were inside the restore-rehearsal tick, which is
+ * scheduled only when RESTORE_REHEARSAL_ENABLED === 'true' — and that ships
+ * false, as does FILE_BACKUP_ENABLED. So in the shipped default configuration
+ * NOTHING ever swept an abandoned row: a worker OOM mid-sweep left a
+ * FileBackupRun `running` with `finishedAt: null` forever, and a crashed
+ * db_restore_test drill (which the DB backup path opens regardless of any file
+ * backup flag) left `runningDrills` climbing monotonically with a phantom
+ * in-flight drill on the admin page. This job is scheduled unconditionally
+ * whenever the status directory exists, so hanging the reapers here makes the
+ * runbook's "reaped to failed / run_abandoned" promise true by default.
+ *
+ * Both reapers are idempotent `updateMany`s and already swallow their own
+ * errors; the extra guard below makes doubly sure a reaper problem can never
+ * prevent the status write, which is the more important half of this tick.
  */
 
 const DEFAULT_RECOVERY_STATUS_CRON = '*/10 * * * *';
+
+/**
+ * Sweeps rows abandoned by a crashed process. Never rejects: the status write
+ * that follows must happen even if the database is unreachable.
+ */
+async function reapAbandonedRecoveryRows(): Promise<void> {
+  try {
+    await Promise.all([reapStaleFileBackupRuns(), reapStaleRecoveryDrills()]);
+  } catch (err) {
+    console.error('[recovery-status] Reaper sweep failed; continuing to the status write:', safeErrorFields(err));
+  }
+}
+
+/**
+ * One full tick: reap abandoned rows, then publish the status document (so the
+ * document reflects the post-sweep state rather than a stale `running` row).
+ */
+export async function runRecoveryStatusTick(): Promise<void> {
+  await reapAbandonedRecoveryRows();
+  await writeRecoveryStatusFile();
+}
 
 export function startRecoveryStatusJob(): void {
   const schedule = process.env.RECOVERY_STATUS_CRON?.trim() || DEFAULT_RECOVERY_STATUS_CRON;
@@ -55,14 +95,16 @@ export function startRecoveryStatusJob(): void {
       }
 
       cron.schedule(schedule, () => {
-        void writeRecoveryStatusFile().catch((err) => {
+        void runRecoveryStatusTick().catch((err) => {
           console.error('[recovery-status] Refresh tick failed:', safeErrorFields(err));
         });
       });
 
       // Write once at startup so a freshly deployed worker does not leave the
-      // monitor looking at a stale document for a whole cron interval.
-      void writeRecoveryStatusFile().catch((err) => {
+      // monitor looking at a stale document for a whole cron interval. This
+      // also sweeps rows abandoned by the process that just died/restarted,
+      // instead of waiting a full interval to do it.
+      void runRecoveryStatusTick().catch((err) => {
         console.error('[recovery-status] Initial write failed:', safeErrorFields(err));
       });
 

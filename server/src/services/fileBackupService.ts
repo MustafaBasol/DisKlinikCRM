@@ -605,6 +605,20 @@ export type RestoreRehearsalStrategy = 'newest' | 'oldest' | 'mixed';
 export interface RestoreRehearsalOptions {
   sampleSize?: number;
   strategy?: RestoreRehearsalStrategy;
+  /**
+   * Restore EXACTLY these entry ids instead of re-running the sampling query.
+   *
+   * F4-FCR-001-R1 (M1b): a caller that vets a sample before restoring (the
+   * rehearsal job's synthetic-clinic gate) must restore the rows it vetted,
+   * not whatever a second identical query happens to return. Two reads of a
+   * live ledger are not one snapshot, so passing the ids closes the window
+   * between "this sample is safe" and "these bytes were restored".
+   *
+   * Ids are still re-checked against `status: 'verified'`, so a stale id can
+   * only ever shrink the sample, never widen it. An empty/omitted list falls
+   * back to the ordinary sampling query.
+   */
+  entryIds?: string[];
 }
 
 /**
@@ -628,11 +642,16 @@ export function isFileBackupRestoreRehearsalRunning(): boolean {
 }
 
 /** Normalizes the backward-compatible `number | options | undefined` argument. */
-function normalizeRehearsalOptions(input?: number | RestoreRehearsalOptions): Required<RestoreRehearsalOptions> {
+function normalizeRehearsalOptions(
+  input?: number | RestoreRehearsalOptions,
+): { sampleSize: number; strategy: RestoreRehearsalStrategy; entryIds: string[] } {
   const options: RestoreRehearsalOptions = typeof input === 'number' ? { sampleSize: input } : (input ?? {});
   const rawSize = options.sampleSize;
   const sampleSize = typeof rawSize === 'number' && Number.isFinite(rawSize) && rawSize > 0 ? Math.floor(rawSize) : getRestoreRehearsalSampleSize();
-  return { sampleSize, strategy: options.strategy ?? 'mixed' };
+  const entryIds = Array.isArray(options.entryIds)
+    ? Array.from(new Set(options.entryIds.filter((id): id is string => typeof id === 'string' && id.length > 0)))
+    : [];
+  return { sampleSize, strategy: options.strategy ?? 'mixed', entryIds };
 }
 
 /**
@@ -641,21 +660,39 @@ function normalizeRehearsalOptions(input?: number | RestoreRehearsalOptions): Re
  * pre-flight policy check (see restoreRehearsalJob.ts's synthetic-clinic
  * guard) against exactly the same selection the rehearsal will use.
  *
- * Note the selection is a read of live ledger state, so a pre-flight call and
- * the rehearsal's own call are not one atomic snapshot — an entry created in
- * between could differ. That is acceptable for a periodic safety gate (it can
- * only ever be one tick late, and the next tick re-checks), and the
- * alternative — threading a policy predicate through the restore path — would
- * put tenant-policy logic inside the byte-copy code this task must not touch.
+ * F4-FCR-001-R1 (M1b) — TWO properties make the pre-flight gate meaningful:
+ *
+ *   1. TOTAL ORDER. `createdAt` alone is NOT a total order: a single backup
+ *      sweep writes many entries inside the same millisecond, so two
+ *      `ORDER BY createdAt` reads may legitimately return different rows for
+ *      the same LIMIT. `{ id: 'asc' }` is therefore appended everywhere as a
+ *      tiebreaker, making the selection deterministic and repeatable.
+ *   2. PASS-THROUGH. Even a deterministic query is a second read of live
+ *      state. A caller that vets a sample should hand the vetted ids back via
+ *      `entryIds` so the rehearsal exercises exactly those rows.
+ *
+ * Without both, a gate can pass on sample A while sample B — possibly holding
+ * a real-tenant entry — is what actually gets restored.
  */
 export async function selectRestoreRehearsalSample(input?: number | RestoreRehearsalOptions): Promise<RestoreRehearsalSampleEntry[]> {
-  const { sampleSize, strategy } = normalizeRehearsalOptions(input);
+  const { sampleSize, strategy, entryIds } = normalizeRehearsalOptions(input);
   const select = { id: true, sourceModel: true, sourceRecordId: true, clinicId: true, createdAt: true, copiedAt: true } as const;
+
+  // Explicit id list: restore exactly what the caller vetted, in the order it
+  // vetted them. Still constrained to `verified`, so an id that changed state
+  // since the caller looked drops out instead of being restored anyway.
+  if (entryIds.length > 0) {
+    const rows = await prisma.fileBackupEntry.findMany({ where: { id: { in: entryIds }, status: 'verified' }, select });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return entryIds
+      .map((id) => byId.get(id))
+      .filter((row): row is RestoreRehearsalSampleEntry => row !== undefined);
+  }
 
   if (strategy === 'newest' || strategy === 'oldest') {
     return prisma.fileBackupEntry.findMany({
       where: { status: 'verified' },
-      orderBy: { createdAt: strategy === 'newest' ? 'desc' : 'asc' },
+      orderBy: [{ createdAt: strategy === 'newest' ? 'desc' : 'asc' }, { id: 'asc' }],
       take: sampleSize,
       select,
     });
@@ -666,8 +703,8 @@ export async function selectRestoreRehearsalSample(input?: number | RestoreRehea
   // the result back at N.
   const half = Math.max(1, Math.ceil(sampleSize / 2));
   const [newest, oldest] = await Promise.all([
-    prisma.fileBackupEntry.findMany({ where: { status: 'verified' }, orderBy: { createdAt: 'desc' }, take: half, select }),
-    prisma.fileBackupEntry.findMany({ where: { status: 'verified' }, orderBy: { createdAt: 'asc' }, take: half, select }),
+    prisma.fileBackupEntry.findMany({ where: { status: 'verified' }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: half, select }),
+    prisma.fileBackupEntry.findMany({ where: { status: 'verified' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: half, select }),
   ]);
 
   const seen = new Set<string>();
@@ -705,7 +742,15 @@ export async function getLatestVerifiedBackupArtifactAt(): Promise<Date | null> 
  * works," not just that "a backup copy exists somewhere."
  *
  * Accepts either a bare sample-size number (the original signature, still used
- * by the platform-admin route and the operator CLI) or an options object.
+ * by the operator CLI) or an options object. Prefer the options object with
+ * `entryIds` when the caller has already vetted a sample — see
+ * selectRestoreRehearsalSample.
+ *
+ * NOTE: this function has no tenant-safety policy of its own. The
+ * synthetic-clinic gate, the cluster lock and the drill-ledger row all live in
+ * `jobs/restoreRehearsalJob.ts#runRestoreRehearsalTick`, which is the ONLY
+ * entry point production callers (scheduled job and platform-admin route)
+ * should use. Calling this directly skips all three.
  */
 export async function runFileBackupRestoreRehearsal(input?: number | RestoreRehearsalOptions): Promise<RestoreRehearsalResult> {
   if (restoreRehearsalRunning) {
@@ -715,8 +760,8 @@ export async function runFileBackupRestoreRehearsal(input?: number | RestoreRehe
   const startedAtMs = Date.now();
 
   try {
-    const { sampleSize, strategy } = normalizeRehearsalOptions(input);
-    const entries = await selectRestoreRehearsalSample({ sampleSize, strategy });
+    const { sampleSize, strategy, entryIds } = normalizeRehearsalOptions(input);
+    const entries = await selectRestoreRehearsalSample({ sampleSize, strategy, entryIds });
     if (entries.length === 0) {
       return {
         success: false,

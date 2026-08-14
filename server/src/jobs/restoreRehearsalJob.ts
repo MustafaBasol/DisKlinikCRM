@@ -21,8 +21,15 @@
  * tick refuses to rehearse unless EVERY sampled entry belongs to a clinic
  * listed in RESTORE_REHEARSAL_SYNTHETIC_CLINIC_IDS. That lets an operator run
  * this continuously against seeded synthetic tenants without ever restoring a
- * real patient's bytes. It defaults to false, which preserves exactly today's
- * behavior for anyone already relying on the manual rehearsal path.
+ * real patient's bytes. It defaults to false, so with no configuration the
+ * behavior is unchanged.
+ *
+ * The gate applies to the MANUAL platform-admin trigger too
+ * (F4-FCR-001-R1 / M1a): runRestoreRehearsalTick() is the single entry point
+ * for both, so a flag whose entire purpose is "never restore real bytes here"
+ * cannot be defeated by clicking a button. Scheduling remains opt-in via
+ * RESTORE_REHEARSAL_ENABLED; the manual trigger does not require it, exactly
+ * as before.
  */
 
 import cron from 'node-cron';
@@ -32,15 +39,35 @@ import {
   runFileBackupRestoreRehearsal,
   selectRestoreRehearsalSample,
   getLatestVerifiedBackupArtifactAt,
+  type RestoreRehearsalResult,
   type RestoreRehearsalStrategy,
 } from '../services/fileBackupService.js';
 import { isFileBackupDestinationConfigured } from '../services/fileBackupDestination.js';
-import { startRecoveryDrill, finishRecoveryDrill, reapStaleRecoveryDrills } from '../services/recoveryDrillService.js';
+import {
+  startRecoveryDrill,
+  finishRecoveryDrill,
+  reapStaleRecoveryDrills,
+  DEFAULT_RECOVERY_DRILL_MAX_RUNNING_MINUTES,
+} from '../services/recoveryDrillService.js';
 import { withJobLock } from '../utils/jobLock.js';
 import { safeErrorFields } from '../utils/safeError.js';
 
 export const RESTORE_REHEARSAL_JOB_LOCK_NAME = 'restore-rehearsal';
-export const RESTORE_REHEARSAL_JOB_LOCK_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Lease TTL for the rehearsal lock. F4-FCR-001-R1 (L4): this MUST comfortably
+ * exceed the drill reaper's cutoff
+ * (DEFAULT_RECOVERY_DRILL_MAX_RUNNING_MINUTES, 180 min) — jobLock.ts requires
+ * a TTL larger than the longest expected run, and the reaper cutoff is this
+ * system's declared upper bound on "a rehearsal that is still legitimately
+ * running". Inverting the two (TTL < cutoff) means a long-but-healthy
+ * rehearsal loses its lease while the reaper still considers it alive, and a
+ * second replica starts a concurrent tick against the same ledger. 4 hours
+ * keeps a comfortable margin above the 3-hour cutoff; if either constant
+ * moves, move the other so the ordering `TTL > cutoff` still holds.
+ */
+const DRILL_REAPER_CUTOFF_MS = DEFAULT_RECOVERY_DRILL_MAX_RUNNING_MINUTES * 60_000;
+export const RESTORE_REHEARSAL_JOB_LOCK_TTL_MS = Math.max(4 * 60 * 60 * 1000, DRILL_REAPER_CUTOFF_MS + 60 * 60 * 1000);
 
 export function isRestoreRehearsalEnabled(): boolean {
   return process.env.RESTORE_REHEARSAL_ENABLED === 'true';
@@ -80,29 +107,61 @@ export function countNonSyntheticSamples(sampleClinicIds: string[], allowedClini
   return sampleClinicIds.filter((clinicId) => !allowedClinicIds.has(clinicId)).length;
 }
 
+/** Why a tick did not rehearse. Null when the rehearsal actually ran. */
+export type RestoreRehearsalSkipReason = 'lock_held' | 'synthetic_guard' | 'no_verified_entries';
+
+export interface RestoreRehearsalTickOutcome {
+  /** True once a drill ledger row was opened and the rehearsal was attempted. */
+  ran: boolean;
+  drillId: string | null;
+  result: RestoreRehearsalResult | null;
+  skipReason: RestoreRehearsalSkipReason | null;
+}
+
 /**
- * One rehearsal tick, lock-guarded so a manual trigger on one replica can
- * never run concurrently with the scheduled job on another.
+ * THE ONLY production entry point for a file restore rehearsal — scheduled and
+ * manual alike. F4-FCR-001-R1 (M1a): the platform-admin route used to call
+ * runFileBackupRestoreRehearsal() directly, which skipped all three of the
+ * protections that live here — the synthetic-clinic gate, the cluster lock,
+ * and the drill-ledger row. A manual click could therefore restore real
+ * patient bytes into /tmp on production while
+ * RESTORE_REHEARSAL_REQUIRE_SYNTHETIC=true, and leave no evidence row behind.
+ * Route every new caller through this function.
+ *
+ * Lock-guarded so a manual trigger on one replica can never run concurrently
+ * with the scheduled job on another.
  *
  * Order matters: both reapers run FIRST, so a row abandoned by a previous
  * crashed tick is already in a terminal state before this tick opens its own
  * drill row (otherwise `runningDrills` would keep climbing and the status
- * endpoint would report phantom in-flight drills forever).
+ * endpoint would report phantom in-flight drills forever). The reapers also
+ * run from recoveryStatusJob's unconditional tick — see the note there.
+ *
+ * Throws only if the rehearsal itself throws, and only AFTER the drill row has
+ * been closed as failed; callers that need the error (the manual route) get
+ * it, and the scheduled caller logs it.
  */
 export async function runRestoreRehearsalTick(
-  options: { trigger?: 'scheduled' | 'manual' } = {},
-): Promise<{ ran: boolean; drillId: string | null }> {
-  let outcome: { ran: boolean; drillId: string | null } = { ran: false, drillId: null };
+  options: { trigger?: 'scheduled' | 'manual'; sampleSize?: number } = {},
+): Promise<RestoreRehearsalTickOutcome> {
+  const outcome: RestoreRehearsalTickOutcome = { ran: false, drillId: null, result: null, skipReason: null };
 
   const acquired = await withJobLock(RESTORE_REHEARSAL_JOB_LOCK_NAME, RESTORE_REHEARSAL_JOB_LOCK_TTL_MS, async () => {
     await reapStaleFileBackupRuns();
     await reapStaleRecoveryDrills();
 
     const strategy = getStrategy();
+    const sampleSize = options.sampleSize;
+
+    // Select ONCE, up front, whether or not the synthetic gate is on, and hand
+    // the chosen ids to the rehearsal below (F4-FCR-001-R1 / M1b). Re-running
+    // the sampling query inside the rehearsal would give the gate one row set
+    // and the restore another.
+    const sample = await selectRestoreRehearsalSample({ strategy, sampleSize });
+    const entryIds = sample.map((entry) => entry.id);
 
     if (requiresSyntheticClinics()) {
       const allowed = getSyntheticClinicIds();
-      const sample = await selectRestoreRehearsalSample({ strategy });
       const violations = countNonSyntheticSamples(
         sample.map((entry) => entry.clinicId),
         allowed,
@@ -112,10 +171,12 @@ export async function runRestoreRehearsalTick(
           `[restore-rehearsal] Refusing to run: RESTORE_REHEARSAL_REQUIRE_SYNTHETIC=true and ` +
             `${violations} of ${sample.length} sampled entries are outside the synthetic clinic allowlist.`,
         );
+        outcome.skipReason = 'synthetic_guard';
         return;
       }
       if (sample.length === 0) {
         console.warn('[restore-rehearsal] No verified backup entries available to rehearse; skipping this tick.');
+        outcome.skipReason = 'no_verified_entries';
         return;
       }
     }
@@ -126,10 +187,12 @@ export async function runRestoreRehearsalTick(
       trigger: options.trigger ?? 'scheduled',
       sourceArtifactAt,
     });
-    outcome = { ran: true, drillId };
+    outcome.ran = true;
+    outcome.drillId = drillId;
 
     try {
-      const result = await runFileBackupRestoreRehearsal({ strategy });
+      const result = await runFileBackupRestoreRehearsal({ strategy, sampleSize, entryIds });
+      outcome.result = result;
       await finishRecoveryDrill({
         id: drillId,
         status: result.success ? 'passed' : 'failed',
@@ -151,11 +214,15 @@ export async function runRestoreRehearsalTick(
       const { errorCode } = safeErrorFields(err);
       await finishRecoveryDrill({ id: drillId, status: 'failed', cleanupVerified: true, errorCode });
       console.error(`[restore-rehearsal] drill=${drillId} failed:`, safeErrorFields(err));
+      // Rethrow only after the ledger row is terminal: the manual route needs
+      // the failure to answer with a non-200, and the scheduled caller logs it.
+      throw err;
     }
   });
 
   if (!acquired) {
     console.warn('[restore-rehearsal] Another process/replica holds the rehearsal lock; skipping this tick.');
+    outcome.skipReason = 'lock_held';
   }
   return outcome;
 }

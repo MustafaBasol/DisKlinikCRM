@@ -181,6 +181,7 @@ reset_recovery_status_fields() {
   RS_FB_FAILED=0
   RS_FB_MISSING=0
   RS_FB_ENABLED=true
+  RS_FB_OFFHOST=true
   RS_DRILL_AGE_H=48
   RS_DRILL_STATUS=passed
 }
@@ -191,7 +192,7 @@ write_recovery_status() {
 {
   "schemaVersion": $RS_SCHEMA_VERSION,
   "generatedAt": "$(iso_age "$RS_GENERATED_AGE_H")",
-  "fileBackup": { "lastRunAt": "$(iso_age "$RS_FB_AGE_H")", "status": "$RS_FB_STATUS", "filesFailed": $RS_FB_FAILED, "filesMissing": $RS_FB_MISSING, "enabled": $RS_FB_ENABLED },
+  "fileBackup": { "lastRunAt": "$(iso_age "$RS_FB_AGE_H")", "status": "$RS_FB_STATUS", "filesFailed": $RS_FB_FAILED, "filesMissing": $RS_FB_MISSING, "enabled": $RS_FB_ENABLED, "destinationOffHost": $RS_FB_OFFHOST },
   "drill":      { "lastRunAt": "$(iso_age "$RS_DRILL_AGE_H")", "kind": "file_restore_rehearsal", "status": "$RS_DRILL_STATUS" }
 }
 EOF
@@ -520,6 +521,32 @@ run_filebackup
 [[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when lastRunAt is in the future (clock skew fails closed, never 'fresh')" || fail "expected bit 8 set for future lastRunAt, got $CODE ($OUT)"
 [[ "$OUT" == *"future"* ]] && pass "names the future-timestamp condition" || fail "missing future-timestamp diagnostic ($OUT)"
 
+section "File backup: destination is not in an independent failure domain (F4-FCR-001-R1)"
+new_scenario_dirs
+RS_FB_OFFHOST=false     # e.g. FILE_BACKUP_LOCAL_DIR on the single-disk VPS
+write_recovery_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/FILEBACKUPSECRET)
+run_opscheck --check filebackup
+[[ "$CODE" -eq 8 ]] && pass "same-host destination FAILS by default — a copy on the same disk does not survive the disk loss it exists to protect against" || fail "expected exit 8 for destinationOffHost=false, got $CODE ($OUT)"
+[[ "$OUT" == *"independent failure domain"* ]] && pass "diagnoses the same-host destination explicitly" || fail "missing failure-domain diagnostic ($OUT)"
+
+new_scenario_dirs
+RS_FB_OFFHOST=false
+write_recovery_status
+EXTRA_ENV=(
+  NORAMEDI_OPSCHECK_FILEBACKUP_REQUIRE_OFFHOST=false
+  NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/FILEBACKUPSECRET
+)
+run_opscheck --check filebackup
+[[ "$CODE" -eq 0 ]] && pass "an explicit opt-out lets a knowingly-accepted same-host copy pass" || fail "expected exit 0 with REQUIRE_OFFHOST=false, got $CODE ($OUT)"
+[[ "$OUT" == *"WARNING"* ]] && pass "the opt-out still warns rather than going silent" || fail "missing WARNING on opt-out ($OUT)"
+
+new_scenario_dirs
+write_raw_recovery_status "{ \"schemaVersion\": 1, \"generatedAt\": \"$(iso_age 1)\", \"fileBackup\": { \"lastRunAt\": \"$(iso_age 2)\", \"status\": \"completed\", \"filesFailed\": 0, \"filesMissing\": 0, \"enabled\": true }, \"drill\": { \"lastRunAt\": \"$(iso_age 48)\", \"kind\": \"file_restore_rehearsal\", \"status\": \"passed\" } }"
+EXTRA_ENV=(NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/FILEBACKUPSECRET)
+run_opscheck --check filebackup
+[[ "$CODE" -eq 8 ]] && pass "a missing destinationOffHost field fails closed rather than being assumed off-host" || fail "expected exit 8 for a missing destinationOffHost, got $CODE ($OUT)"
+
 section "File backup: status file itself stopped being refreshed"
 new_scenario_dirs
 RS_GENERATED_AGE_H=40   # writer died 40h ago; the fields inside still look healthy
@@ -531,7 +558,16 @@ EXTRA_ENV=(
 run_opscheck --check filebackup --check drill
 [[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when generatedAt is 40h old (max 30h) even though every field inside still reads healthy" || fail "expected bit 8 set for a stale generatedAt, got $CODE ($OUT)"
 [[ "$OUT" == *"writer is not running"* ]] && pass "diagnoses the stale status file as a dead writer, not a backup problem" || fail "missing dead-writer diagnostic ($OUT)"
-[[ "$CODE" -eq 8 ]] && pass "generatedAt staleness is scoped to the filebackup check — the drill check is not double-alerted by it" || fail "expected exit exactly 8 (filebackup only), got $CODE ($OUT)"
+# F4-FCR-001-R1: a stale status file must fail BOTH checks (8|16 = 24), not
+# just filebackup. The earlier "scoped to filebackup, no double alert"
+# expectation was itself the defect: `--check drill` read drill.status and
+# drill.lastRunAt straight out of a document that had not been refreshed for
+# weeks, so a worker dead for 20 days kept the drill dead-man's switch GREEN.
+# Two checks going DOWN is the honest outcome — when the writer is dead, both
+# signals are equally untrustworthy, and a false green is far worse than a
+# second email.
+[[ "$CODE" -eq 24 ]] && pass "a stale status file fails BOTH checks (24) — neither signal is trustworthy once the writer is dead" || fail "expected exit exactly 24 (filebackup|drill), got $CODE ($OUT)"
+[[ "$OUT" == *"drill check: FAIL"* ]] && pass "the drill check explicitly reports the dead writer rather than trusting stale contents" || fail "drill check did not fail on a stale status file ($OUT)"
 
 new_scenario_dirs
 RS_GENERATED_AGE_H=40
@@ -563,7 +599,7 @@ run_drill
 
 section "Drill: no drill object recorded"
 new_scenario_dirs
-write_raw_recovery_status '{ "schemaVersion": 1, "generatedAt": "2026-08-14T03:05:00Z", "fileBackup": { "lastRunAt": "2026-08-14T03:00:12Z", "status": "completed", "filesFailed": 0, "filesMissing": 0, "enabled": true } }'
+write_raw_recovery_status '{ "schemaVersion": 1, "generatedAt": "2026-08-14T03:05:00Z", "fileBackup": { "lastRunAt": "2026-08-14T03:00:12Z", "status": "completed", "filesFailed": 0, "filesMissing": 0, "enabled": true, "destinationOffHost": true } }'
 run_drill
 [[ "$((CODE & 16))" -eq 16 ]] && pass "drill bit (16) set when no rehearsal has ever been recorded" || fail "expected bit 16 set for a missing drill object, got $CODE ($OUT)"
 

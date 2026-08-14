@@ -143,6 +143,36 @@ export function externalFailureCode(err: unknown): string {
 }
 
 /**
+ * Matches a credential-bearing assignment in one log line, in three parts:
+ *
+ *   1. THE KEY — an optional `[A-Za-z0-9_]*` prefix followed by a known
+ *      credential name. The prefix exists because `\b` is NOT a usable anchor
+ *      here: `_` is a word character, so `\bPASSWORD` never matches
+ *      `DB_PASSWORD`, `POSTGRES_PASSWORD` or `BACKUP_PGPASSWORD` — precisely
+ *      the shapes an unreviewed shell script produces (`export
+ *      PGPASSWORD=...`). Because the prefix is part of the captured key, the
+ *      operator still sees the FULL variable name in the redacted output.
+ *   2. THE SEPARATOR — an OPTIONAL closing double quote, then `=` or `:` with
+ *      optional surrounding whitespace. The quote is what makes JSON
+ *      (`{"password": "x"}`) match; without it the key and the separator can
+ *      never touch.
+ *   3. THE VALUE — quoted, or an `Authorization: Bearer <jwt>` style scheme +
+ *      token pair (otherwise `\S+` would stop at "Bearer" and hand back the
+ *      token), or a bare non-space run. Only this part is replaced.
+ *
+ * Case-insensitive: shell uses SCREAMING_SNAKE, JSON payloads use camelCase.
+ */
+const SECRET_ASSIGNMENT_RE =
+  /([A-Za-z0-9_]*(?:secret[_-]?access[_-]?key|access[_-]?key[_-]?id|session[_-]?token|api[_-]?key|pgpassword|pgpass|password|passwd|pwd|authorization|bearer|secret|token|credentials?))("?\s*[=:]\s*)((?:bearer|basic|token)\s+\S+|"[^"]*"|'[^']*'|\S+)/gi;
+
+/**
+ * Bare `Bearer <token>` with no key in front of it (e.g. a curl header echoed
+ * by the script). The scheme word is kept, the token is not. The 8-character
+ * floor keeps ordinary prose ("bearer token missing") intact.
+ */
+const BEARER_TOKEN_RE = /\b(bearer)(\s+)[A-Za-z0-9._~+/=-]{8,}/gi;
+
+/**
  * Redacts secret-looking spans from ONE line of the external backup script's
  * log before it is returned over HTTP.
  *
@@ -168,9 +198,12 @@ export function redactBackupLogLine(line: string): string {
   //    key is preserved (it tells the operator WHICH credential appeared);
   //    only the value is replaced.
   out = out.replace(
-    /\b(PGPASSWORD|PGPASS|password|passwd|pwd|secretAccessKey|secret_access_key|accessKeyId|access_key_id|aws_secret_access_key|aws_access_key_id)(\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi,
+    SECRET_ASSIGNMENT_RE,
     (_match, key: string, separator: string) => `${key}${separator}${REDACTED_TOKEN}`,
   );
+
+  // 4. A bearer token with no key in front of it.
+  out = out.replace(BEARER_TOKEN_RE, (_match, scheme: string, gap: string) => `${scheme}${gap}${REDACTED_TOKEN}`);
 
   if (out.length > MAX_LOG_LINE_LENGTH) {
     out = `${out.slice(0, MAX_LOG_LINE_LENGTH)}...[truncated]`;
@@ -193,9 +226,17 @@ export function getDbBackupMaxAgeHours(env: NodeJS.ProcessEnv = process.env): nu
 }
 
 /**
- * Whole minutes elapsed since `at`, floored, never negative. Returns null for
- * a missing/unparseable timestamp so "we do not know" stays distinguishable
- * from "zero minutes old". `now` is injectable so tests never race the clock.
+ * Whole minutes elapsed since `at`, floored. Returns null for a
+ * missing/unparseable timestamp so "we do not know" stays distinguishable from
+ * "zero minutes old". `now` is injectable so tests never race the clock.
+ *
+ * A FUTURE timestamp also returns null — it does NOT clamp to 0. Clamping
+ * would fail OPEN: `listBackupFiles()` sorts by mtime descending, so one dump
+ * carrying a future mtime (NTP stepping the clock backwards, a restored or
+ * `touch`ed file) becomes `latest`, reports age 0, and paints a green "fresh
+ * backup" badge over a cron that has been dead for weeks. Null is treated as
+ * stale by `isBackupStale()`, so clock skew fails CLOSED here exactly as it
+ * does in scripts/noramedi-opscheck.sh.
  */
 export function computeArtifactAgeMinutes(
   at: Date | string | null | undefined,
@@ -206,13 +247,15 @@ export function computeArtifactAgeMinutes(
   if (Number.isNaN(at_.getTime())) return null;
   const deltaMs = now.getTime() - at_.getTime();
   if (!Number.isFinite(deltaMs)) return null;
-  return Math.max(0, Math.floor(deltaMs / 60_000));
+  if (deltaMs < 0) return null; // clock skew fails closed, not silently healthy
+  return Math.floor(deltaMs / 60_000);
 }
 
 /**
  * "No backup has ever been taken" MUST read as stale, never as healthy —
  * silence is the single most dangerous way for a backup system to fail. Hence
- * a null age is stale.
+ * a null age is stale. A null also arrives from a future-dated artifact
+ * (clock skew), which is likewise reported stale rather than fresh.
  *
  * The comparison is strict (`>`), matching noramedi-opscheck.sh's backup
  * check: an artifact sitting EXACTLY at the threshold is still fresh, so a
@@ -546,6 +589,11 @@ export async function runRestoreTest(
   // Defensive check — safeTempDbName() only uses [a-z0-9_] but guard anyway
   if (!/^[a-z0-9_]+$/.test(tempDbName)) throw new Error('Generated temp DB name is invalid');
 
+  // Claimed BEFORE the first await below (nothing between here and the `try`
+  // suspends), so two concurrent callers cannot both pass the check above; and
+  // everything that CAN suspend now lives inside the `try` whose `finally`
+  // releases it, so no failure path can latch the flag on and make
+  // /backups/restore-test answer 409 until the process restarts.
   restoreTestRunning = true;
   const start = Date.now();
   let dbCreated = false;
@@ -560,11 +608,6 @@ export async function runRestoreTest(
 
   const pgArgs = ['-h', pgEnv.PGHOST, '-p', pgEnv.PGPORT, '-U', pgEnv.PGUSER];
 
-  // Drill evidence, opened before any work so a crash mid-restore still leaves
-  // a `running` row for reapStaleRecoveryDrills() to find. sourceArtifactAt is
-  // the chosen dump's mtime — the RPO window this exercise actually proves.
-  const drillRunId = await startRestoreDrillSafely(trigger, new Date(targetFile.createdAt));
-
   type RestoreOutcome = {
     success: boolean;
     tableCount?: number;
@@ -577,6 +620,14 @@ export async function runRestoreTest(
   let outcome: RestoreOutcome;
 
   try {
+    // Drill evidence, opened before any work so a crash mid-restore still
+    // leaves a `running` row for reapStaleRecoveryDrills() to find.
+    // sourceArtifactAt is the chosen dump's mtime — the RPO window this
+    // exercise actually proves. It lives INSIDE this `try` (F4 review, L1) so
+    // that the `finally` below always releases restoreTestRunning, even if a
+    // future refactor lets this helper throw instead of swallowing.
+    const drillRunId = await startRestoreDrillSafely(trigger, new Date(targetFile.createdAt));
+
     try {
       await execFile('createdb', [...pgArgs, tempDbName], { env: connEnv, timeout: 30_000 });
       dbCreated = true;

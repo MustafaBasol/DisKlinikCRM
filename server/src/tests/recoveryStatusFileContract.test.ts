@@ -106,7 +106,8 @@ function minutesAgo(minutes: number): Date {
 function healthyFileBackup(): RecoveryStatusFileBackupInput {
   return {
     enabled: true,
-    lastRun: {
+    destinationOffHost: true,
+    lastTerminalRun: {
       status: 'completed',
       startedAt: minutesAgo(70),
       finishedAt: minutesAgo(60),
@@ -118,7 +119,7 @@ function healthyFileBackup(): RecoveryStatusFileBackupInput {
 
 function healthyDrill(): RecoveryStatusDrillInput {
   return {
-    lastFileRestoreRehearsal: {
+    lastTerminalRehearsal: {
       status: 'passed',
       kind: 'file_restore_rehearsal',
       startedAt: minutesAgo(60 * 24),
@@ -182,13 +183,15 @@ async function main() {
 
   const resolved = resolveBash();
   if (!resolved) {
-    // Deliberately loud. CI (ubuntu-latest) always has a usable bash, so this
-    // can only trigger on a developer machine without one — never silently in
-    // the gate.
-    console.warn('\n!! SKIPPED: no bash able to read this repository was found.');
-    console.warn('!! This contract test is a REQUIRED gate in CI (ubuntu-latest) and will run there.');
-    console.warn('!! Install Git Bash, or set NORAMEDI_TEST_BASH, to run it locally.\n');
-    return;
+    // FAIL, do not skip. An earlier version returned here and exited 0, so a
+    // CI image whose bash could not see the checkout would have turned this
+    // whole gate green while executing zero end-to-end assertions — the exact
+    // false-confidence failure this test exists to prevent elsewhere.
+    console.error('\n!! FAIL: no bash able to read this repository was found.');
+    console.error('!! This contract test cannot be skipped — it is the only thing pinning the');
+    console.error('!! recoveryStatusFile.ts <-> noramedi-opscheck.sh contract.');
+    console.error('!! Install Git Bash, or set NORAMEDI_TEST_BASH to a usable bash.\n');
+    process.exit(1);
   }
   BASH = resolved;
 
@@ -229,80 +232,154 @@ async function main() {
 
   await test('absent history OMITS lastRunAt rather than inventing a placeholder', () => {
     const doc = mapRecoveryStatusDocument(
-      { enabled: true, lastRun: null },
-      { lastFileRestoreRehearsal: null },
+      { enabled: true, destinationOffHost: true, lastTerminalRun: null },
+      { lastTerminalRehearsal: null },
     );
     assert.equal('lastRunAt' in doc.fileBackup, false);
     assert.equal('lastRunAt' in doc.drill, false);
   });
 
-  await test('a run still in flight falls back to startedAt (does not read as "never ran")', () => {
+  await test('a terminal row missing finishedAt falls back to startedAt (defensive)', () => {
     const started = minutesAgo(30);
     const doc = mapRecoveryStatusDocument(
-      { enabled: true, lastRun: { status: 'running', startedAt: started, finishedAt: null, filesFailed: 0, filesMissing: 0 } },
+      { enabled: true, destinationOffHost: true, lastTerminalRun: { status: 'completed', startedAt: started, finishedAt: null, filesFailed: 0, filesMissing: 0 } },
       healthyDrill(),
     );
     assert.equal(doc.fileBackup.lastRunAt, started.toISOString());
   });
 
+  await test('destinationOffHost is carried into the document (the monitor cannot see it otherwise)', () => {
+    const doc = mapRecoveryStatusDocument(
+      { enabled: true, destinationOffHost: false, lastTerminalRun: null },
+      healthyDrill(),
+    );
+    assert.equal(doc.fileBackup.destinationOffHost, false);
+  });
+
   section('End-to-end — real writer output through the real shell consumer');
+
+  await test('REGRESSION (H1): an in-flight sweep does not page the operator', () => {
+    // The document reports the last TERMINAL run, so a sweep running right now
+    // is simply invisible to the monitor. Reporting the newest row verbatim
+    // would emit status:"running", which both checks treat as failure — every
+    // nightly sweep would have /fail-pinged the dead-man's switch.
+    assert.equal(runOpscheck(healthyFileBackup(), healthyDrill()), 0);
+  });
+
+  await test('REGRESSION (H5): same-host destination fails the filebackup check (exit 8)', () => {
+    const fb = healthyFileBackup();
+    fb.destinationOffHost = false;
+    assert.equal(runOpscheck(fb, healthyDrill()), BIT_FILEBACKUP);
+  });
+
+  await test('REGRESSION (H5): same-host destination passes only with an explicit opt-out', () => {
+    const fb = healthyFileBackup();
+    fb.destinationOffHost = false;
+    const doc = mapRecoveryStatusDocument(fb, healthyDrill());
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'noramedi-recovery-contract-'));
+    const statusFile = path.join(dir, 'recovery-status.json');
+    try {
+      fs.writeFileSync(statusFile, serializeRecoveryStatusDocument(doc), { mode: 0o600 });
+      const result = spawnSync(
+        BASH,
+        [toPosixPath(OPSCHECK), '--dry-run', '--check', 'filebackup'],
+        {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            NORAMEDI_OPSCHECK_RECOVERY_STATUS_FILE: toPosixPath(statusFile),
+            NORAMEDI_OPSCHECK_FILEBACKUP_REQUIRE_OFFHOST: 'false',
+          },
+        },
+      );
+      assert.equal(result.status, 0, 'explicit opt-out should pass');
+      assert.match(`${result.stdout ?? ''}${result.stderr ?? ''}`, /WARNING/, 'opt-out must still warn');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  await test('REGRESSION (H3): a stale writer fails the DRILL check too, not just filebackup', () => {
+    // generatedAt is validated in the shared loader. Before the fix it lived
+    // only in check_filebackup, so `--check drill` reported OK off a status
+    // file that had not been refreshed for weeks — a dead worker keeping a
+    // dead-man's switch green.
+    const staleWriterNow = minutesAgo(60 * 24 * 20); // 20 days ago
+    const doc = mapRecoveryStatusDocument(healthyFileBackup(), healthyDrill(), staleWriterNow);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'noramedi-recovery-contract-'));
+    const statusFile = path.join(dir, 'recovery-status.json');
+    try {
+      fs.writeFileSync(statusFile, serializeRecoveryStatusDocument(doc), { mode: 0o600 });
+      const result = spawnSync(
+        BASH,
+        [toPosixPath(OPSCHECK), '--dry-run', '--check', 'drill'],
+        {
+          encoding: 'utf8',
+          env: { ...process.env, NORAMEDI_OPSCHECK_RECOVERY_STATUS_FILE: toPosixPath(statusFile) },
+        },
+      );
+      assert.equal(result.status, BIT_DRILL, 'a stale status file must fail the drill check');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   await test('healthy document passes both checks (exit 0)', () => {
     assert.equal(runOpscheck(healthyFileBackup(), healthyDrill()), 0);
   });
 
   await test('file backup disabled -> filebackup bit only (exit 8)', () => {
-    assert.equal(runOpscheck({ enabled: false, lastRun: null }, healthyDrill()), BIT_FILEBACKUP);
+    assert.equal(runOpscheck({ enabled: false, destinationOffHost: true, lastTerminalRun: null }, healthyDrill()), BIT_FILEBACKUP);
   });
 
   await test('file backup status "failed" -> filebackup bit (exit 8)', () => {
     const fb = healthyFileBackup();
-    fb.lastRun!.status = 'failed';
+    fb.lastTerminalRun!.status = 'failed';
     assert.equal(runOpscheck(fb, healthyDrill()), BIT_FILEBACKUP);
   });
 
   await test('filesFailed > 0 on an otherwise completed run -> filebackup bit (exit 8)', () => {
     const fb = healthyFileBackup();
-    fb.lastRun!.filesFailed = 3;
+    fb.lastTerminalRun!.filesFailed = 3;
     assert.equal(runOpscheck(fb, healthyDrill()), BIT_FILEBACKUP);
   });
 
   await test('filesMissing > 0 -> filebackup bit (exit 8)', () => {
     const fb = healthyFileBackup();
-    fb.lastRun!.filesMissing = 1;
+    fb.lastTerminalRun!.filesMissing = 1;
     assert.equal(runOpscheck(fb, healthyDrill()), BIT_FILEBACKUP);
   });
 
   await test('stale file backup (older than default 30h) -> filebackup bit (exit 8)', () => {
     const fb = healthyFileBackup();
-    fb.lastRun!.finishedAt = minutesAgo(60 * 31);
-    fb.lastRun!.startedAt = minutesAgo(60 * 31);
+    fb.lastTerminalRun!.finishedAt = minutesAgo(60 * 31);
+    fb.lastTerminalRun!.startedAt = minutesAgo(60 * 31);
     assert.equal(runOpscheck(fb, healthyDrill()), BIT_FILEBACKUP);
   });
 
   await test('never-run file backup (no lastRun) -> filebackup bit (exit 8)', () => {
-    assert.equal(runOpscheck({ enabled: true, lastRun: null }, healthyDrill()), BIT_FILEBACKUP);
+    assert.equal(runOpscheck({ enabled: true, destinationOffHost: true, lastTerminalRun: null }, healthyDrill()), BIT_FILEBACKUP);
   });
 
   await test('drill status not "passed" -> drill bit only (exit 16)', () => {
     const d = healthyDrill();
-    d.lastFileRestoreRehearsal!.status = 'failed';
+    d.lastTerminalRehearsal!.status = 'failed';
     assert.equal(runOpscheck(healthyFileBackup(), d), BIT_DRILL);
   });
 
   await test('stale drill (older than default 192h) -> drill bit (exit 16)', () => {
     const d = healthyDrill();
-    d.lastFileRestoreRehearsal!.startedAt = minutesAgo(60 * 200);
+    d.lastTerminalRehearsal!.startedAt = minutesAgo(60 * 200);
     assert.equal(runOpscheck(healthyFileBackup(), d), BIT_DRILL);
   });
 
   await test('never-run drill -> drill bit (exit 16)', () => {
-    assert.equal(runOpscheck(healthyFileBackup(), { lastFileRestoreRehearsal: null }), BIT_DRILL);
+    assert.equal(runOpscheck(healthyFileBackup(), { lastTerminalRehearsal: null }), BIT_DRILL);
   });
 
   await test('both unhealthy -> both bits set (exit 24)', () => {
     assert.equal(
-      runOpscheck({ enabled: false, lastRun: null }, { lastFileRestoreRehearsal: null }),
+      runOpscheck({ enabled: false, destinationOffHost: true, lastTerminalRun: null }, { lastTerminalRehearsal: null }),
       BIT_FILEBACKUP | BIT_DRILL,
     );
   });
@@ -365,6 +442,16 @@ async function main() {
   console.log('\n─────────────────────────────────────────');
   console.log(`Results: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
+
+  // Floor assertion: without it, a future refactor that skipped or silently
+  // dropped cases would still print "0 passed, 0 failed" and exit 0. The gate
+  // must be able to tell "everything passed" from "nothing ran".
+  const MIN_EXPECTED = 25;
+  if (passed < MIN_EXPECTED) {
+    console.error(`\nFAIL: only ${passed} assertions ran, expected at least ${MIN_EXPECTED}.`);
+    console.error('Cases were skipped or dropped — this gate cannot report green on a partial run.');
+    process.exit(1);
+  }
 }
 
 main().catch(err => {

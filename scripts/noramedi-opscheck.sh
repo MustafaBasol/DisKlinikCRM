@@ -136,6 +136,13 @@
 #   NORAMEDI_OPSCHECK_FILEBACKUP_MAX_AGE_HOURS  default: 30 (positive
 #     integer) — max age of fileBackup.lastRunAt. Sized like the DB-dump
 #     equivalent: a daily sweep plus 6h of margin.
+#   NORAMEDI_OPSCHECK_FILEBACKUP_REQUIRE_OFFHOST  default: true — when true,
+#     a file-backup destination that is not in an independent failure domain
+#     (fileBackup.destinationOffHost=false) FAILS the check. A copy on the
+#     same disk as the primary does not survive the disk loss it exists to
+#     protect against, so reporting it healthy is the more dangerous default.
+#     Set to exactly "false" to accept a same-host copy knowingly; the check
+#     then emits a WARNING line and passes.
 #   NORAMEDI_OPSCHECK_DRILL_MAX_AGE_HOURS      default: 192 (positive
 #     integer) — max age of drill.lastRunAt. 192h = 8 days: one weekly
 #     restore rehearsal plus a day of margin, so a single skipped or
@@ -219,6 +226,10 @@ BACKUP_MAX_AGE_HOURS="${NORAMEDI_OPSCHECK_BACKUP_MAX_AGE_HOURS:-30}"
 RECOVERY_STATUS_FILE="${NORAMEDI_OPSCHECK_RECOVERY_STATUS_FILE:-/var/lib/noramedi/recovery-status.json}"
 RECOVERY_STATUS_MAX_AGE_HOURS="${NORAMEDI_OPSCHECK_RECOVERY_STATUS_MAX_AGE_HOURS:-30}"
 FILEBACKUP_MAX_AGE_HOURS="${NORAMEDI_OPSCHECK_FILEBACKUP_MAX_AGE_HOURS:-30}"
+# Whether a file-backup destination that is NOT in an independent failure
+# domain fails the check. Defaults to true (fail closed): a same-host copy is
+# not a backup. Set to exactly "false" to accept a same-host copy knowingly.
+FILEBACKUP_REQUIRE_OFFHOST="${NORAMEDI_OPSCHECK_FILEBACKUP_REQUIRE_OFFHOST:-true}"
 DRILL_MAX_AGE_HOURS="${NORAMEDI_OPSCHECK_DRILL_MAX_AGE_HOURS:-192}"
 SUPPRESS_PING="${NORAMEDI_OPSCHECK_SUPPRESS_PING:-}"
 CURL_MAX_TIME=5
@@ -467,10 +478,15 @@ check_backup() {
     return 1
   fi
 
-  local age_hours
-  age_hours=$(( (now - newest_epoch) / 3600 ))
+  # Compared in MINUTES, not truncated hours. Truncating to hours made an age
+  # of 30h30m compare as "30" and pass a 30h threshold, while the application
+  # (which compares minutes) called the same backup stale — so the admin UI
+  # and this monitor disagreed for a whole hour on every threshold boundary.
+  local age_min age_hours
+  age_min=$(( (now - newest_epoch) / 60 ))
+  age_hours=$(( age_min / 60 ))
 
-  if [[ "$age_hours" -gt "$BACKUP_MAX_AGE_HOURS" ]]; then
+  if [[ "$age_min" -gt $(( BACKUP_MAX_AGE_HOURS * 60 )) ]]; then
     echo "[opscheck] $(timestamp) backup check: FAIL — newest backup is ${age_hours}h old (max ${BACKUP_MAX_AGE_HOURS}h)" >&2
     return 1
   fi
@@ -568,6 +584,7 @@ iso_to_epoch() {
 # rather than stdout specifically so that there is no code path on which the
 # file's contents could be printed.
 RECOVERY_STATUS_BLOB=""
+RECOVERY_STATUS_GENERATED_AGE_MIN=0
 
 load_recovery_status() {
   local label="$1" raw blob occurrences schema_version
@@ -618,24 +635,15 @@ load_recovery_status() {
     return 1
   fi
 
-  RECOVERY_STATUS_BLOB="$blob"
-  return 0
-}
-
-# ── check: file backup (patient attachment off-host copies) ──────────────
-check_filebackup() {
-  local label="filebackup"
-  load_recovery_status "$label" || return 1
-
-  local now
+  # The status file's OWN freshness, validated HERE rather than inside a
+  # single check, because its contents are last-known-good values that keep
+  # looking healthy forever once the writer dies. This gate previously lived
+  # only in check_filebackup, which left `--check drill` reporting OK off a
+  # status file that had not been refreshed for weeks — a dead worker reading
+  # as a healthy dead-man's switch. Every consumer of the blob must clear it.
+  local generated_at generated_epoch now
   now="$(date +%s)"
-
-  # The status file's OWN freshness first. Its contents are last-known-good
-  # values that keep looking healthy forever once the writer dies, so a file
-  # that stopped being refreshed must fail before any field inside it is
-  # believed.
-  local generated_at generated_epoch generated_age
-  if ! generated_at="$(json_string "$RECOVERY_STATUS_BLOB" generatedAt)"; then
+  if ! generated_at="$(json_string "$blob" generatedAt)"; then
     echo "[opscheck] $(timestamp) $label check: FAIL — 'generatedAt' is missing or is not a string" >&2
     return 1
   fi
@@ -647,11 +655,26 @@ check_filebackup() {
     echo "[opscheck] $(timestamp) $label check: FAIL — 'generatedAt' is in the future (clock skew fails closed)" >&2
     return 1
   fi
-  generated_age=$(( (now - generated_epoch) / 3600 ))
-  if [[ "$generated_age" -gt "$RECOVERY_STATUS_MAX_AGE_HOURS" ]]; then
-    echo "[opscheck] $(timestamp) $label check: FAIL — recovery status file was last refreshed ${generated_age}h ago (max ${RECOVERY_STATUS_MAX_AGE_HOURS}h) — the writer is not running" >&2
+  RECOVERY_STATUS_GENERATED_AGE_MIN=$(( (now - generated_epoch) / 60 ))
+  if [[ "$RECOVERY_STATUS_GENERATED_AGE_MIN" -gt $(( RECOVERY_STATUS_MAX_AGE_HOURS * 60 )) ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — recovery status file was last refreshed $(( RECOVERY_STATUS_GENERATED_AGE_MIN / 60 ))h ago (max ${RECOVERY_STATUS_MAX_AGE_HOURS}h) — the writer is not running" >&2
     return 1
   fi
+
+  RECOVERY_STATUS_BLOB="$blob"
+  return 0
+}
+
+# ── check: file backup (patient attachment off-host copies) ──────────────
+check_filebackup() {
+  local label="filebackup"
+  load_recovery_status "$label" || return 1
+
+  local now generated_age
+  now="$(date +%s)"
+  # Freshness of the status file itself is enforced by load_recovery_status()
+  # for every consumer; this is only for the human-readable OK line.
+  generated_age=$(( RECOVERY_STATUS_GENERATED_AGE_MIN / 60 ))
 
   local body
   if ! body="$(json_object_body "$RECOVERY_STATUS_BLOB" fileBackup)"; then
@@ -670,6 +693,26 @@ check_filebackup() {
   if [[ "$enabled" != "true" ]]; then
     echo "[opscheck] $(timestamp) $label check: FAIL — file backup is DISABLED (fileBackup.enabled=false); patient attachments have no second copy" >&2
     return 1
+  fi
+
+  # A destination on the SAME failure domain is not a backup. Without this,
+  # a local-directory destination on the documented single-disk production VPS
+  # completes cleanly, reports status=completed, and this dead-man's switch
+  # pings healthy every 5 minutes while the "second copy" shares a disk with
+  # the primary — a disk loss destroys both. Alarming on `enabled=false` alone
+  # is strictly weaker than alarming on the condition that actually matters.
+  # An operator who has deliberately accepted a same-host copy can opt out.
+  local off_host
+  if ! off_host="$(json_bool "$body" destinationOffHost)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — 'fileBackup.destinationOffHost' is missing or is not a boolean" >&2
+    return 1
+  fi
+  if [[ "$off_host" != "true" ]] && [[ "$FILEBACKUP_REQUIRE_OFFHOST" == "true" ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — file backup destination is NOT in an independent failure domain (fileBackup.destinationOffHost=false); a same-host copy does not survive host or disk loss. Set NORAMEDI_OPSCHECK_FILEBACKUP_REQUIRE_OFFHOST=false to accept this deliberately." >&2
+    return 1
+  fi
+  if [[ "$off_host" != "true" ]]; then
+    echo "[opscheck] $(timestamp) $label check: WARNING — file backup destination is NOT off-host; this is an accepted risk (NORAMEDI_OPSCHECK_FILEBACKUP_REQUIRE_OFFHOST=false)" >&2
   fi
 
   local status
@@ -712,8 +755,11 @@ check_filebackup() {
     echo "[opscheck] $(timestamp) $label check: FAIL — 'fileBackup.lastRunAt' is in the future (clock skew fails closed)" >&2
     return 1
   fi
-  age_hours=$(( (now - last_run_epoch) / 3600 ))
-  if [[ "$age_hours" -gt "$FILEBACKUP_MAX_AGE_HOURS" ]]; then
+  # Minutes, not truncated hours — see check_backup for why.
+  local age_min
+  age_min=$(( (now - last_run_epoch) / 60 ))
+  age_hours=$(( age_min / 60 ))
+  if [[ "$age_min" -gt $(( FILEBACKUP_MAX_AGE_HOURS * 60 )) ]]; then
     echo "[opscheck] $(timestamp) $label check: FAIL — last successful file backup was ${age_hours}h ago (max ${FILEBACKUP_MAX_AGE_HOURS}h)" >&2
     return 1
   fi
@@ -750,8 +796,11 @@ check_drill() {
     echo "[opscheck] $(timestamp) $label check: FAIL — 'drill.lastRunAt' is in the future (clock skew fails closed)" >&2
     return 1
   fi
-  age_hours=$(( (now - last_run_epoch) / 3600 ))
-  if [[ "$age_hours" -gt "$DRILL_MAX_AGE_HOURS" ]]; then
+  # Minutes, not truncated hours — see check_backup for why.
+  local age_min
+  age_min=$(( (now - last_run_epoch) / 60 ))
+  age_hours=$(( age_min / 60 ))
+  if [[ "$age_min" -gt $(( DRILL_MAX_AGE_HOURS * 60 )) ]]; then
     echo "[opscheck] $(timestamp) $label check: FAIL — last restore rehearsal was ${age_hours}h ago (max ${DRILL_MAX_AGE_HOURS}h)" >&2
     return 1
   fi

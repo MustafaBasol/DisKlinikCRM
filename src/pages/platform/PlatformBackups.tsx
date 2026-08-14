@@ -128,6 +128,12 @@ interface RunBackupResult {
 
 interface RestoreTestResult {
   backupFilename: string;
+  /**
+   * The scratch database the restore test created. The server redacts this to
+   * a placeholder when it verified the drop; when cleanup FAILED it returns
+   * the real name, because that is the exact object the operator has to drop
+   * by hand. Never mask or truncate it in the UI.
+   */
   tempDbName: string;
   success: boolean;
   tableCount?: number;
@@ -136,6 +142,15 @@ interface RestoreTestResult {
   migrationsCount?: number;
   durationMs: number;
   errorSummary?: string;
+  /**
+   * False ⇒ a full plaintext copy of the patient database is still on the
+   * production cluster. The status endpoint also reports this on the next
+   * refresh, but the operator who pressed the button must see it immediately,
+   * in the result panel, not only after re-reading the page.
+   */
+  cleanupVerified?: boolean;
+  /** Ledger row id for this drill, for cross-referencing the evidence table. */
+  drillRunId?: string | null;
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
@@ -278,6 +293,23 @@ const TRIGGER_KEYS: Record<string, string> = {
 };
 
 const OK_STATUSES = new Set(['completed', 'passed']);
+
+/**
+ * Statuses that mean "still working", not "finished badly" (F4-FCR-001-R1 /
+ * H1-UI). Treating these as failures painted the whole page red during every
+ * normal nightly sweep, and — because a row that has not finished cannot have
+ * verified its own cleanup — also raised a cleanup alarm for a run that simply
+ * had not got there yet. An operator who learns that red is routine stops
+ * reading red at all, which is the actual danger.
+ *
+ * This state is bounded: a row abandoned by a crashed process is swept to
+ * `failed` by the recovery reapers, so "in progress" cannot persist forever.
+ */
+const IN_PROGRESS_STATUSES = new Set(['running']);
+
+/** In flight = an in-progress status AND no finish timestamp yet. */
+const isInFlight = (status: string | null | undefined, finishedAt: string | null | undefined): boolean =>
+  !!status && IN_PROGRESS_STATUSES.has(status) && !finishedAt;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -451,6 +483,14 @@ const PlatformBackups: React.FC = () => {
   const fileRunAgeMinutes = fileBackup
     ? (typeof fileBackup.lastRunAgeMinutes === 'number' ? fileBackup.lastRunAgeMinutes : minutesSince(fileRun?.startedAt))
     : null;
+  // The server derives freshness from `finishedAt` only, so a sweep that is
+  // still in flight reports `stale: true` for the duration of the run. That is
+  // the right server-side default (an unfinished run produced no artifact) but
+  // it is not something to alarm a human about while the run is happening —
+  // the card below shows it as in-progress instead. Bounded by the reaper: an
+  // abandoned run is swept to `failed` within the reaper cutoff, after which
+  // the stale warning appears normally.
+  const fileRunInFlight = isInFlight(fileRun?.status, fileRun?.finishedAt);
   const fileRunFailures = num(fileRun?.filesFailed) > 0 || num(fileRun?.filesMissing) > 0;
   const fileTotalsFailures = num(fileBackup?.totals?.failed) > 0 || num(fileBackup?.totals?.missingSource) > 0;
 
@@ -472,25 +512,35 @@ const PlatformBackups: React.FC = () => {
       );
     }
 
+    const inFlight = isInFlight(drill.status, drill.finishedAt);
     const ok = OK_STATUSES.has(drill.status);
     const samplesFailed = num(drill.samplesFailed) > 0;
-    const cleanupBad = drill.cleanupVerified === false || !!drill.residualArtifact;
-    const bad = !ok || samplesFailed || cleanupBad;
+    // A named residual object is always an alarm. `cleanupVerified: false` on
+    // its own is only meaningful once the drill has finished — before that it
+    // is simply "not yet", not "leaked".
+    const cleanupBad = !!drill.residualArtifact || (!inFlight && drill.cleanupVerified === false);
+    const bad = cleanupBad || samplesFailed || (!inFlight && !ok);
     const ageMinutes = typeof drill.ageMinutes === 'number' ? drill.ageMinutes : minutesSince(drill.startedAt);
 
     return (
       <div
+        data-testid={`drill-card-${drill.kind}`}
+        data-state={bad ? 'bad' : inFlight ? 'in-progress' : stale ? 'stale' : 'ok'}
         className={`rounded-xl border p-5 ${
           bad
             ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30'
-            : stale
-              ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20'
-              : 'border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900'
+            : inFlight
+              ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/20'
+              : stale
+                ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20'
+                : 'border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900'
         }`}
       >
         <div className="flex items-center gap-2 mb-3">
           {bad ? (
             <XCircle size={18} className="text-red-600 dark:text-red-400" />
+          ) : inFlight ? (
+            <Loader2 size={18} className="animate-spin text-blue-600 dark:text-blue-400" />
           ) : (
             <CheckCircle2 size={18} className="text-green-600 dark:text-green-400" />
           )}
@@ -507,7 +557,16 @@ const PlatformBackups: React.FC = () => {
         <InfoRow
           label={t('platform:backups.drillStatus')}
           value={
-            <span className={bad ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-green-600 dark:text-green-400 font-semibold'}>
+            <span
+              className={
+                bad
+                  ? 'text-red-600 dark:text-red-400 font-semibold'
+                  : inFlight
+                    ? 'inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-semibold'
+                    : 'text-green-600 dark:text-green-400 font-semibold'
+              }
+            >
+              {inFlight && <Loader2 size={13} className="animate-spin" />}
               {runStatusLabel(drill.status)}
             </span>
           }
@@ -535,11 +594,19 @@ const PlatformBackups: React.FC = () => {
         <InfoRow
           label={t('platform:backups.drillCleanup')}
           value={
-            <StatusBadge
-              ok={drill.cleanupVerified === true}
-              labelOk={t('platform:backups.cleanupVerified')}
-              labelFail={t('platform:backups.cleanupNotVerified')}
-            />
+            inFlight ? (
+              // Not "cleanup failed" — the drill has not reached its cleanup
+              // step yet. Reporting a red alarm here would train operators to
+              // ignore the one signal that means a plaintext database copy was
+              // actually left behind.
+              <span className="text-sm text-gray-500 dark:text-gray-400">{t('platform:backups.ageUnknown')}</span>
+            ) : (
+              <StatusBadge
+                ok={drill.cleanupVerified === true}
+                labelOk={t('platform:backups.cleanupVerified')}
+                labelFail={t('platform:backups.cleanupNotVerified')}
+              />
+            )
           }
         />
         {drill.errorCode && (
@@ -658,7 +725,7 @@ const PlatformBackups: React.FC = () => {
               })}
             />
           )}
-          {fileBackup && fileBackup.enabled && fileBackup.stale && (
+          {fileBackup && fileBackup.enabled && fileBackup.stale && !fileRunInFlight && (
             <AlertBanner
               level="warn"
               title={t('platform:backups.fileStaleTitle')}
@@ -827,12 +894,17 @@ const PlatformBackups: React.FC = () => {
                       label={t('platform:backups.fileRunStatus')}
                       value={
                         <span
+                          data-testid="file-run-status"
+                          data-state={fileRunInFlight ? 'in-progress' : OK_STATUSES.has(fileRun.status) ? 'ok' : 'bad'}
                           className={
-                            OK_STATUSES.has(fileRun.status)
-                              ? 'text-green-600 dark:text-green-400 font-semibold'
-                              : 'text-red-600 dark:text-red-400 font-semibold'
+                            fileRunInFlight
+                              ? 'inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-semibold'
+                              : OK_STATUSES.has(fileRun.status)
+                                ? 'text-green-600 dark:text-green-400 font-semibold'
+                                : 'text-red-600 dark:text-red-400 font-semibold'
                           }
                         >
+                          {fileRunInFlight && <Loader2 size={13} className="animate-spin" />}
                           {runStatusLabel(fileRun.status)}
                         </span>
                       }
@@ -840,7 +912,7 @@ const PlatformBackups: React.FC = () => {
                     <InfoRow
                       label={t('platform:backups.fileRunAge')}
                       value={
-                        <span className={fileBackup.stale ? 'text-red-600 dark:text-red-400 font-semibold' : undefined}>
+                        <span className={fileBackup.stale && !fileRunInFlight ? 'text-red-600 dark:text-red-400 font-semibold' : undefined}>
                           {formatAge(fileRunAgeMinutes)} — {localDate(fileRun.startedAt)}
                         </span>
                       }
@@ -1034,6 +1106,26 @@ const PlatformBackups: React.FC = () => {
                 </h3>
                 <span className="ml-auto text-xs text-gray-500">{(restoreResult.durationMs / 1000).toFixed(1)}s</span>
               </div>
+
+              {/* A restore test that could not drop its scratch database has
+                  left a full plaintext copy of the patient database on the
+                  production cluster. The operator who pressed the button must
+                  see that here and now, with the exact database name — that
+                  string is what they type into DROP DATABASE, so it is shown
+                  verbatim, never masked or truncated. */}
+              {restoreResult.cleanupVerified === false && (
+                <div className="mb-4">
+                  <AlertBanner level="alarm" title={t('platform:backups.residualTitle')} detail={t('platform:backups.residualDetail')}>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 bg-white dark:bg-red-950/60 border border-red-300 dark:border-red-700 rounded-lg px-3 py-2">
+                      <Trash2 size={14} className="text-red-600 dark:text-red-400 shrink-0" />
+                      <code className="font-mono text-sm font-bold text-red-700 dark:text-red-300 break-all">
+                        {restoreResult.tempDbName}
+                      </code>
+                    </div>
+                  </AlertBanner>
+                </div>
+              )}
+
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="p-3 bg-white/60 dark:bg-gray-900/40 rounded-lg">
                   <p className="text-xs text-gray-500 mb-0.5">{t('platform:backups.restoreFile')}</p>
