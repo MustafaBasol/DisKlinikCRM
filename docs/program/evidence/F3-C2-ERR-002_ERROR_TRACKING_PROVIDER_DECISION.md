@@ -1,5 +1,24 @@
 # F3-C2-ERR-002 — Error Tracking Provider Decision, Target Architecture and KVKK Classification
 
+> **AMENDED 2026-08-14 — `F3-C2-ERR-002-R1` Secondary Infrastructure Scope Reconciliation.**
+> The Türkiye host is **no longer scoped as observability-only**. Program-owner direction
+> reframes it as the **NoraMedi Türkiye Secondary Infrastructure VPS**, carrying three
+> logically separate workloads: **(A)** observability/GlitchTip, **(B)** off-host backup
+> target, **(C)** clinic imaging / object storage.
+>
+> **The provider decision below is unchanged and is preserved in full:** self-hosted
+> GlitchTip, on Türkiye-located infrastructure, with **no new cross-border error-tracking
+> transfer** provided the §6 E1–E5 evidence passes.
+>
+> **What the amendment changes:** the **2 vCPU / 4 GB / 80 GB** figure in §11.1 is
+> **GlitchTip-only sizing and MUST NOT be used as shared-VPS procurement sizing**.
+> Shared-host procurement sizing is **`UNRESOLVED`** — see the new **§11.3**. Workload
+> separation, storage isolation and the backup-independence limit are new **§11.2**,
+> **§11.4** and **§12.1**. Workloads B and C are **scoped and constrained here, not
+> designed here** — their design is `F0-011`
+> (`docs/architecture/object-storage-backup-migration-design.md`), phase `F4_STORAGE_AND_BACKUP`
+> and phase `F10_IMAGING_DICOM_AND_AI`, none of which this task opens.
+
 **Phase:** F3 — Production Hardening
 **Exit gate:** Criterion 2 · Governing checklist `TEN_ITEM_SECTION_5` · Target item **§5 item 10 — external error tracking**
 **Baseline:** `origin/main` @ `c600ea70022546dd503209002123efa3260666a3` (PR #416 merge commit; head `a115a670f4547713d68fea09ba0b8c59c69d9628`)
@@ -25,9 +44,17 @@ against current primary sources, and resolves the one question §15.10 left impl
 **where the self-hosted instance runs.** §15.10 assumed "on infrastructure already in the
 register" (i.e. colocated on the production application host). The program owner's
 direction for this task is different and, on the analysis in §7 below, better:
-**a separate observability VPS physically located in Türkiye.**
+**a second host physically located in Türkiye, separate from the application host.**
 
 That difference is material and is the main new finding of this document — see §7.3.
+
+**R1 amendment.** That second host is now scoped as the **NoraMedi Türkiye Secondary
+Infrastructure VPS** — shared across three workloads, not observability-only. GlitchTip
+is workload **A** and is the only one this task decides. Workloads **B** (off-host backup
+target) and **C** (imaging / object storage) are recorded here **only** so that the
+sizing, isolation, KVKK and failure-domain consequences of sharing a host are not lost
+between documents. **This document does not design, authorize or size B or C**, and it
+does not open `F4` or `F10`.
 
 ---
 
@@ -91,7 +118,7 @@ output.** No repository-wide scan was performed.
 
 Re-verified against current primary sources on 2026-08-14 (see §14 for citations).
 
-| | **Option A — self-hosted GlitchTip on a separate Türkiye VPS** *(recommended)* | **Option B — GlitchTip hosted EU** | **Option C — Sentry SaaS, DE region** |
+| | **Option A — self-hosted GlitchTip on the Türkiye Secondary Infrastructure VPS** *(recommended)* | **Option B — GlitchTip hosted EU** | **Option C — Sentry SaaS, DE region** |
 |---|---|---|---|
 | Physical / data region | **Türkiye** — operator-chosen, must be evidenced (§6) | **Frankfurt, Germany** — DigitalOcean FRA1, `eu.glitchtip.com`, behind Cloudflare as reverse proxy/WAF | **Frankfurt, Germany** — Sentry's EU data silo (GA since 2026-05-04) |
 | Cross-border transfer | **NO** (conditional on §6 evidence) | **YES** | **YES** |
@@ -121,13 +148,20 @@ commitment ("all data on the EU instance … stays within the EU") is a strong s
 
 ## 4. Decision
 
-> **ADOPTED PROVIDER MODEL: `OPTION A` — self-hosted GlitchTip on a dedicated
-> observability VPS physically located in Türkiye.**
+> **ADOPTED PROVIDER MODEL: `OPTION A` — self-hosted GlitchTip, running as workload A on
+> the NoraMedi Türkiye Secondary Infrastructure VPS.**
 >
 > **This is a decision to adopt a *model*, not an authorization to deploy.** Deployment is
 > gated on §6 (Türkiye hosting evidence), §9 Stage 1 (production Node compatibility), and
 > the register update in §8. `F3-SEC-EXIT-001` §5 item 10 stays `NOT_SATISFIED` until §9
 > Stage 5–6 have actually been performed and verified.
+>
+> **R1 scope boundary.** The decision is about **the error-tracking provider**, and its
+> validity does not depend on which other workloads the host ends up carrying — GlitchTip
+> is Sentry-protocol compatible and Türkiye-located either way. What co-tenancy *does*
+> change is **procurement sizing (§11.3, now `UNRESOLVED`)**, **storage isolation
+> (§11.4/§12.1)**, **the sensitivity of the data the hosting provider holds (§7.3)** and
+> **backup independence (§11.5)**. Those are amended below; the provider choice is not.
 
 **Exact reasons, in decision-weight order:**
 
@@ -300,13 +334,47 @@ processing; it does not change the role of the party storing it.** The same reas
 register already applies to the existing production VPS in §1 (`ACTIVE`, provider identity
 `TO BE VERIFIED`) applies here.
 
-**Classification: the Türkiye observability VPS provider is `LIKELY YES` a data
+**Classification: the Türkiye Secondary Infrastructure VPS provider is `LIKELY YES` a data
 processor/subprocessor and must be entered in the register. `COUNSEL` must confirm the
 precise characterization**, which depends on the contracting structure — specifically
 whether the platform entity or each individual clinic is the controller, the same open
 question the register already records for Google and Meta. **Evidence needed:** provider
 identity, the §6 E1–E5 residency pack, the executed hosting contract/DPA (or documented
 absence), encryption-at-rest capability, and the backup/snapshot storage region.
+
+**R1 amendment — the sensitivity of what that provider holds changes by orders of
+magnitude, and the register must not under-describe it.** Under the observability-only
+scope, the provider would have held a fixed message plus four bounded fields (§5) —
+minimized to the point where the processor question was almost academic. Under the shared
+scope it would hold, on the same disks and in the same snapshots:
+
+| Workload | What the hosting provider ends up holding |
+|---|---|
+| **A** — GlitchTip | The §5 payload: fixed message + `errType`/`role`/`requestId`/`route` template |
+| **B** — off-host backup target | **Full PostgreSQL dumps** — i.e. the entire patient database, including `AuditLog`, and the `uploads/` file tree if file backup is included |
+| **C** — imaging / object storage | **Clinic imaging bytes** — DICOM/CBCT and attachments, i.e. health data in the KVKK special-categories sense |
+
+**Consequences that are now non-optional:**
+
+1. The hosting DPA can no longer be scoped as "a telemetry host". It must cover **special
+   categories of personal data** (health data) under KVKK Art. 6, with the corresponding
+   security-measures obligations. **`COUNSEL`.**
+2. Encryption at rest stops being a checklist row and becomes a **primary control**, and
+   the §12 row 14 distinction between **provider-side** volume/snapshot encryption and
+   **guest-side** (LUKS/filesystem, NoraMedi-controlled) encryption becomes the deciding
+   question — because provider-side encryption does not protect against the provider.
+3. Support-access restrictions — whether provider staff can reach guest data or snapshots
+   — move from "flag it" to **must be answered contractually before workload C**.
+   `F0-011` §8 already flags this for any storage provider; it now applies to this host.
+4. **Register §6 (object storage / file backup) is engaged, not just §7.** It currently
+   reads `NOT YET INTEGRATED` / `NO SUBPROCESSOR IDENTIFIED`, with the database backup
+   destination explicitly noted as *"the same VPS … not a third-party subprocessor
+   relationship distinct from §1"*. Moving backups off-host **breaks that reasoning** and
+   creates a real second hosting relationship. §6 must be updated **before workload B or
+   C carries real data** — not as part of this task, which activates neither.
+
+**None of this blocks the error-tracking decision.** Workload A can proceed on evidence
+E1–E5 and the §8 register update alone. Workloads B and C carry their own, heavier gates.
 
 ### 7.4 A pre-existing gap this task must not paper over
 
@@ -340,11 +408,27 @@ File: `docs/compliance/62-kvkk-subprocessor-register.md`
 
 - §7 status → `ACTIVE`, naming GlitchTip as **self-operated software** (not a
   subprocessor).
-- **A new hosting row** (or a §1 sub-row) for the Türkiye observability VPS provider:
+- **A new hosting row** (or a §1 sub-row) for the Türkiye Secondary Infrastructure VPS
+  provider:
   identity, region + §6 E1–E5 evidence, DPA status, encryption at rest, backup region.
 - §9 summary table row `7c` — from `NO SUBPROCESSOR IDENTIFIED` to the resolved state.
 - §10 next-action 6 is the register's own instruction to do exactly this; it is satisfied
   by that later update, not by this one.
+
+**Additionally required by the R1 shared scope — before workload B or C carries real data
+(not before workload A):**
+
+- **§1 (Hosting / VPS infrastructure)** — a second hosting row, or an explicit statement
+  that NoraMedi now operates **two** hosting relationships. Today §1 is written as though
+  there is one.
+- **§6 (Object storage / file backup)** — currently `NOT YET INTEGRATED` /
+  `NO SUBPROCESSOR IDENTIFIED`, and it explicitly reasons that the database backup
+  destination is *"the same host … **not** a third-party subprocessor relationship distinct
+  from §1"*. **Workload B invalidates that sentence** and workload C invalidates the
+  status token. Both must be updated, with the DPA scoped to special-category health data
+  per §7.3.
+- These are recorded here so the transition cannot happen silently. **This task performs
+  none of them**, because it activates neither workload.
 
 ---
 
@@ -371,7 +455,12 @@ already correct for a production dependency — no deploy-script change is requi
 
 **Boolean-only output. Never `cat` the `.env`. Never `set -x`.**
 
-### Stage 2 — GlitchTip infrastructure (separate Türkiye VPS)
+### Stage 2 — GlitchTip infrastructure (workload A on the Türkiye Secondary Infrastructure VPS)
+
+> **R1 note.** Steps below provision **workload A only**. If the host is procured for the
+> shared scope, size it per **§11.3** — **not** per §11.1 — before running these steps;
+> §11.1 is GlitchTip-only. Workloads B and C are **not** provisioned here and must not be
+> added to this host until their own gates (§7.3, §11.4, §11.5, §8) are met.
 
 1. Provision the VPS in Türkiye. **Collect §6 E1–E5 before continuing.**
 2. Base OS: current Ubuntu LTS. Full patch + reboot; enable unattended security upgrades.
@@ -481,21 +570,27 @@ no NoraMedi-side state created by activation.**
 
 ## 11. Target architecture and sizing
 
-**No Kubernetes. No Kafka. No microservices. No database-per-tenant. One VPS, Docker
-Compose, four moving parts.**
+**No Kubernetes. No Kafka. No microservices. No database-per-tenant.** Workload A is one
+Docker Compose stack with three moving parts on a host that may also carry workloads B
+and C.
 
 ```
-  NoraMedi production host (existing, unchanged)          Türkiye observability VPS (new)
-  ┌──────────────────────────────────────┐                ┌──────────────────────────────┐
-  │ noramedi-api  (PM2, fork)            │                │ nginx :443 (TLS, LE)         │
-  │   └─ errorTracking.ts ── HTTPS ──────┼──── 443 ──────▶│   └─▶ glitchtip web          │
-  │ noramedi-worker (PM2, fork)          │                │        (127.0.0.1:8000)      │
-  │ PostgreSQL (production, untouched)   │                │        └─▶ postgres (14+)    │
-  └──────────────────────────────────────┘                │            (docker network,  │
-    UFW default-deny; only 443 outbound to the            │             no host port)    │
-    observability FQDN is added                           │ UFW: deny-in except 22*, 443 │
-                                                          └──────────────────────────────┘
-                                                            * SSH source-restricted
+  NoraMedi production host (existing, unchanged)   NoraMedi Türkiye Secondary Infra VPS
+  ┌──────────────────────────────────────┐         ┌──────────────────────────────────────┐
+  │ noramedi-api  (PM2, fork)            │         │ [A] nginx :443 (TLS, LE)             │
+  │   └─ errorTracking.ts ── HTTPS ──────┼── 443 ─▶│      └─▶ glitchtip web               │
+  │ noramedi-worker (PM2, fork)          │         │            (127.0.0.1:8000)          │
+  │ PostgreSQL (production, untouched)   │         │            └─▶ postgres (14+)        │
+  │ /root/noramedi-backups (same host,   │         │                (docker net, no port) │
+  │   R-030 — today's only DB backup)    │         │ ────────────────────────────────────  │
+  └──────────────────────────────────────┘         │ [B] off-host backup target   FUTURE  │
+    UFW default-deny; only 443 outbound to         │ ────────────────────────────────────  │
+    the secondary-infra FQDN is added by           │ [C] imaging / object storage FUTURE  │
+    workload A                                     │ UFW: deny-in except 22*, 443         │
+                                                   └──────────────────────────────────────┘
+                                                     * SSH source-restricted
+    [A] is decided and runbooked by this document.
+    [B] and [C] are SCOPED here, DESIGNED in F0-011 / F4 / F10. Not authorized here.
 ```
 
 **Valkey is omitted initially.** GlitchTip documents Valkey/Redis 7+ as **optional**;
@@ -506,9 +601,18 @@ fewer network service, one fewer memory hog and one fewer thing to firewall. Thi
 smallest F3-safe shape, and it is **not** a dead end: adding Valkey later is one compose
 service plus one env var.
 
-### 11.1 Minimum sizing
+### 11.1 GlitchTip-only sizing (workload A)
 
-| | Absolute floor | **Recommended for F3** |
+> ### ⚠ THIS TABLE IS GLITCHTIP-ONLY SIZING
+>
+> **It MUST NOT be used as procurement sizing for the shared Secondary Infrastructure
+> VPS.** It covers workload **A** and nothing else — no backup storage, no imaging bytes,
+> no object-storage service, no restore throughput. Procuring the shared host against
+> these numbers would under-provision it by whatever workloads B and C actually require,
+> which **§11.3 records as `UNRESOLVED`**. If the host is shared, size it from §11.3 and
+> treat the figures below only as workload A's slice of that total.
+
+| | Absolute floor | **Recommended for workload A** |
 |---|---|---|
 | vCPU | 1 (x86 or arm64) | **2** |
 | RAM | 512 MB (project's *recommended* figure; 256 MB is its documented all-in-one minimum **without** Valkey) | **4 GB** — headroom for PostgreSQL + nginx + OS on the same box |
@@ -520,7 +624,127 @@ instance**. NoraMedi's F3 expectation is several orders of magnitude below that,
 `GLITCHTIP_MAX_EVENT_LIFE_DAYS=30` caps growth regardless. 80 GB is chosen so that disk is
 never the thing that fails first.
 
-### 11.2 Scale-up triggers (measurable, not vibes)
+### 11.2 Workload separation (R1)
+
+Three **logically separate** workloads that happen to share a host. They are separated so
+that co-tenancy is a deliberate, reversible decision rather than an accident of
+procurement — and so that any one of them can later be moved to its own host without
+re-litigating the others.
+
+| | **A — Observability / GlitchTip** | **B — Off-host backup target** | **C — Imaging / object storage** |
+|---|---|---|---|
+| Status | **DECIDED, runbooked, not deployed** (this document) | **SCOPED ONLY** — design is `F0-011` §9 / phase `F4_STORAGE_AND_BACKUP` | **SCOPED ONLY** — design is `F0-011` §6/§7 / phase `F10_IMAGING_DICOM_AND_AI` |
+| Data held | §5 payload: fixed message + 4 bounded fields | PostgreSQL dumps; `uploads/` tree if included | DICOM/CBCT + attachments — **special-category health data** |
+| Direction | Inbound HTTPS from the app host | Inbound (push from app host) | Read/write from the app host |
+| Storage | GlitchTip's own PostgreSQL volume | Dedicated backup volume | Dedicated object/imaging volume or bucket |
+| Credentials | GlitchTip DB creds + DSN | Backup service account | Object-storage service account |
+| Retention | `GLITCHTIP_MAX_EVENT_LIFE_DAYS=30` (§5.3) | Per `F0-011` §9.4 tiers — **not set here** | Legal-hold-aware; **`F0-011` §8 forbids naive age-based lifecycle rules** |
+| Gates before real data | §6 E1–E5 + §8 register update | §7.3 special-category DPA + §11.5 + register §1/§6 update | All of B's gates, plus `F10` |
+| Authorized by this task | **Workload A only** | **NO** | **NO** |
+
+**Resource-contention note.** §4 reason 4 argued for moving observability *off* the
+application host so a Django app, a second PostgreSQL and a Celery worker would not
+compete with the healthcare API. That argument still holds, but co-tenancy on the second
+host reintroduces the same class of question **among A, B and C** — a large restore or an
+imaging-ingest burst can starve GlitchTip of I/O, and a GlitchTip disk-fill can break a
+backup write. Mitigations are **separate volumes** (§11.4) so no workload can consume
+another's free space, and the §11.6 triggers. **This is a real, accepted trade, not a
+solved problem** — and it is a further reason §11.3 must be resolved before procurement.
+
+### 11.3 Shared-VPS procurement sizing — `UNRESOLVED`
+
+> **Shared-host procurement sizing is `UNRESOLVED` and is NOT decided by this document.**
+> No number in this document is a shared-host procurement figure. §11.1 is workload A
+> only. Procuring against §11.1 would under-provision the shared host.
+
+The inputs below must be measured or agreed **before** the host is procured. They are
+listed as required inputs, **not** estimated here — estimating clinic imaging volume from
+this task's evidence base would be a guess presented as a figure, which is exactly what
+`F0-011` §9.4 already marks as business-approval-required.
+
+| # | Required input | Status | Where it must come from |
+|---|---|---|---|
+| 1 | DICOM/CBCT **average object size** | `UNRESOLVED` | Measured from real clinic studies; a CBCT volume and a single intraoral image differ by orders of magnitude, so a single mean is insufficient — a distribution is needed |
+| 2 | **Number of clinics** (current and 12-month target) | `UNRESOLVED` | Business/commercial plan |
+| 3 | Expected **images/studies per clinic per month** | `UNRESOLVED` | Measured from pilot usage, not assumed |
+| 4 | **Attachment growth** rate | `UNRESOLVED` | Existing production `uploads/` growth over a measured window (attachments are capped at 10 MB; imaging at `MAX_FILE_MB`) |
+| 5 | **DB + uploads backup size** per full backup | `UNRESOLVED` | Measured from the current production `pg_dump` output and `uploads/` tree size |
+| 6 | **Backup retention** depth | `UNRESOLVED` | `F0-011` §9.4 proposes 7–30 days operational plus legal-hold-linked long tier — **business/legal approval required**, not settled |
+| 7 | **Growth headroom** | `UNRESOLVED` | Explicit multiplier on (1×3×2 + 4 + 5×6); must be stated, not implied |
+| 8 | **Restore throughput requirement** | `UNRESOLVED` | Derived from the RTO target — `F0-011` §9.4 proposes ≤ 4 h for both DB and object storage, explicitly *"not measured"*. Drives network and disk IOPS, not just capacity |
+| 9 | **Object-storage replication / durability target** | `UNRESOLVED` | Must respect `F0-011` §8: replication regions scoped to Türkiye only, or disabled |
+
+**Sizing formula the procurement decision must show its working for:**
+
+```
+imaging_bytes   = clinics × studies_per_clinic_month × avg_study_size × months_retained
+attachment_bytes= measured uploads/ growth × months_retained
+backup_bytes    = (db_dump_size + uploads_size) × retention_depth × compression_factor
+glitchtip_bytes = §11.1 (bounded by MAX_EVENT_LIFE_DAYS=30 — the one term that is capped)
+TOTAL           = (imaging + attachment + backup + glitchtip) × growth_headroom
+```
+
+Only the `glitchtip_bytes` term is bounded today. **The other three are the procurement
+decision**, and they dominate the total by orders of magnitude — which is precisely why
+§11.1 must not be mistaken for it.
+
+**Escalation, stated plainly:** if inputs 1–9 cannot be established before procurement,
+the defensible move is to **procure for workload A now and add workloads B and C to a
+correctly-sized host later** — not to guess a shared size. Workload A's gates are met
+independently, and moving A later is trivial (§10.2).
+
+### 11.4 Storage isolation requirements (mandatory if the host is shared)
+
+Applies **before** workload B or C carries real data. Workload A alone does not require
+most of it, but nothing here conflicts with A.
+
+| # | Requirement | Note |
+|---|---|---|
+| 1 | **Separate volumes** per workload — A, B, C each on their own filesystem/mount | A full imaging volume must not stop a backup write or fill GlitchTip's database volume. Quota-per-directory is **not** an acceptable substitute for separate volumes |
+| 2 | **Separate directories/buckets** with no shared parent that any workload can write to | — |
+| 3 | **Separate credentials** — GlitchTip DB creds, backup service account, object-storage access keys — **no reuse**, and none reused from the production host | — |
+| 4 | **Separate service accounts / OS users** where the software allows; least-privilege per workload; **no workload runs as root** | Where a component cannot be separated, record the exception explicitly rather than silently colocating |
+| 5 | **No public PostgreSQL port** — Docker-internal network only, for GlitchTip's DB and any other | **Armed stop condition** (§12 row 7) |
+| 6 | **No public object-storage admin/console port** (e.g. MinIO console) — bind to `127.0.0.1`, reach it over an SSH tunnel or a restricted nginx location, never open to the internet | **Armed stop condition** |
+| 7 | **TLS on every externally-reachable endpoint**, including the object-storage S3 API — not only the GlitchTip UI | — |
+| 8 | **Encryption-at-rest evidence**, distinguishing **provider-side** (volume/snapshot — needs a provider statement) from **guest-side** (LUKS/filesystem — NoraMedi-controlled and independently evidenceable). For workload C this is a **primary control**, per §7.3 | Record which is actually in force; do not assume |
+| 9 | **Tenant-aware object keys** — use the structure `F0-011` §6.2 already designs: `<domain>/<clinicId>/<yyyy>/<mm>/<opaqueId><ext>`, with `<domain>` ∈ {`attachments`,`imaging`,`exports`,`lab-attachments`}. Keys and object metadata **must not** contain patient names, TC kimlik, phone, email, diagnosis or treatment text; the original filename stays DB-only | **Do not invent a new key scheme here** — `F0-011` is authoritative |
+| 10 | **Lifecycle / retention policies** that are DB-state-aware. `F0-011` §8 is explicit that a naive age-based lifecycle rule must **not** be able to delete an object whose DB row is under `legalHold` — the DB check remains authoritative | — |
+| 11 | **Audit / access controls** — named human accounts, no shared logins, storage-layer access logging per `F0-011` §7.2, and an access list recorded per §12 row 17 | — |
+
+### 11.5 Backup independence — the limit this host cannot exceed
+
+> **If imaging primary storage lives on this VPS, a backup stored on the same VPS is NOT
+> an independent backup for that imaging data.**
+
+Same disk, same filesystem, same hypervisor, same provider account, same physical
+facility, same blast radius. It protects against accidental deletion and application bugs;
+it does **not** protect against host loss, volume corruption, provider account compromise,
+ransomware reaching the host, or facility-level failure — which are the scenarios a
+backup exists for.
+
+Stated in program terms: today's `R-030` is *"the backup directory is on the same host as
+the database"*. Putting workload C's primary imaging storage **and** workload B's backup
+of it on the same second host **relocates R-030, it does not close it** — and it would be
+a regression to record it as closed.
+
+**Therefore:**
+
+1. **Workload B is a genuine off-host backup for the *application host's* data** —
+   PostgreSQL dumps and `uploads/` currently backed up only to `/root/noramedi-backups`
+   on the production host. For that data, this VPS **is** an independent second copy and
+   **does** materially improve on R-030. That gain is real and should be claimed.
+2. **Workload B is NOT an independent backup for workload C's data.** Imaging bytes whose
+   primary copy is on this host need a **third copy in a different failure domain** —
+   an independent provider snapshot held outside this account, a second object-storage
+   provider/region (Türkiye-scoped per `F0-011` §8), or a separate physical destination.
+3. **`F4` backup durability is NOT solved by this VPS alone, and this document does not
+   claim it is.** `F0-011` §9.2 already names the no-secondary-copy model as the weakest
+   option and flags it most strongly; §9.4's off-site requirement (`R-030`) and
+   restore-test requirement (`R-032`) remain open. Any future document asserting that this
+   VPS closes them should be checked against this section.
+
+### 11.6 Scale-up triggers (measurable, not vibes)
 
 | Trigger | Action |
 |---|---|
@@ -533,9 +757,14 @@ never the thing that fails first.
 
 ---
 
-## 12. Security baseline checklist (GlitchTip host)
+## 12. Security baseline checklist (Secondary Infrastructure VPS — workload A scope)
 
 **No secret value may be printed, logged, screenshotted or committed at any point.**
+
+**R1 scope note.** This table is the baseline for the **host** and is sufficient for
+workload **A**. It is **not** sufficient for workloads B or C — those additionally require
+every row of **§11.4**, and workload C requires the special-category DPA and the
+encryption-at-rest determination in **§7.3**. See §12.1.
 
 | # | Control | Requirement | Status |
 |---|---|---|---|
@@ -557,6 +786,22 @@ never the thing that fails first.
 | 16 | Patching | Unattended security upgrades; documented cadence for GlitchTip image updates | `REQUIRED` |
 | 17 | Access control | Named human accounts only; no shared logins; access list recorded | `REQUIRED` |
 | 18 | Incident rollback | §10.1 and §10.2 rehearsed before Stage 5 | `REQUIRED` |
+
+### 12.1 Additional gates before workload B or C (R1)
+
+None of these apply to workload A, and none of them block it. **All of them apply before
+any backup or imaging data reaches this host.**
+
+| # | Gate | Reference |
+|---|---|---|
+| B/C-1 | All 11 storage-isolation requirements satisfied | §11.4 |
+| B/C-2 | Hosting DPA scoped to **special categories** (health data), KVKK Art. 6 | §7.3 — **`COUNSEL`** |
+| B/C-3 | Provider support-access restrictions answered **contractually** | §7.3 item 3; `F0-011` §8 |
+| B/C-4 | Encryption at rest determined as provider-side vs guest-side, and recorded | §7.3 item 2; §12 row 14 |
+| B/C-5 | Subprocessor register §1 **and** §6 updated | §8 |
+| B/C-6 | Shared-host sizing inputs 1–9 resolved | §11.3 |
+| B/C-7 | Third-copy / independent failure domain planned for workload C | §11.5 |
+| B/C-8 | Restore test performed and evidenced (`R-032` remains open) | `F0-011` §9.4 |
 
 ---
 
@@ -593,6 +838,21 @@ never the thing that fails first.
     new relationship even though the **software** is not (§7.3).
 12. **New:** the subprocessor register cannot presently evidence that the *existing*
     production host is in Türkiye (§7.4) — a pre-existing gap this task does not close.
+13. **R1:** the provider decision is **independent of host co-tenancy** — GlitchTip is
+    Sentry-protocol compatible and Türkiye-located whether or not the host also carries
+    backups and imaging. Co-tenancy changes sizing, isolation, DPA scope and backup
+    independence; it does not change the provider choice.
+14. **R1:** register §6 explicitly reasons that the DB backup destination is *"the same
+    VPS … **not** a third-party subprocessor relationship distinct from §1"*. **Workload B
+    breaks that reasoning** and workload C breaks the `NOT YET INTEGRATED` status token
+    (§8). Neither is triggered by this task.
+15. **R1:** `F0-011` §6.2 already designs the tenant-aware object-key structure
+    (`<domain>/<clinicId>/<yyyy>/<mm>/<opaqueId><ext>`) and the metadata allow-list, and
+    §8 already forbids naive age-based lifecycle rules against `legalHold`. §11.4
+    **references** them rather than inventing a second scheme.
+16. **R1:** workload B **does** materially improve on `R-030` for the *application host's*
+    data (today's only DB backup is `/root/noramedi-backups` on the same host) — that gain
+    is real and claimable. It does **not** extend to workload C's own primary data (§11.5).
 
 ### 13.2 Rejected / unverified
 
@@ -607,6 +867,11 @@ never the thing that fails first.
 | The hosting provider's precise KVKK role | **`LIKELY YES` processor/subprocessor — `COUNSEL`** | Depends on the platform-vs-clinic contracting structure, itself an open register question |
 | KVKK compliance is achieved by Option A | **`NOT CLAIMED`** | Option A avoids a *new* transfer; it does not make the register complete or resolve any `TO BE VERIFIED` marker |
 | `@sentry/core`-only alternative should replace `@sentry/node` | **`OUT_OF_SCOPE`** | Recorded in `F3-OBS-001` §15.6; not reopened here |
+| **R1:** shared Secondary Infrastructure VPS procurement sizing | **`UNRESOLVED` — blocking for shared procurement** | Inputs 1–9 in §11.3 are unmeasured. §11.1 is workload-A-only and must not be substituted |
+| **R1:** DICOM/CBCT average object size, studies per clinic/month, clinic count | **`UNRESOLVED`** | Must be measured from real usage; estimating them here would be a guess presented as a figure |
+| **R1:** backup retention depth and RPO/RTO targets | **`PROPOSED, NOT APPROVED`** | `F0-011` §9.4 marks every value business/legal-approval-required and explicitly *"not measured"* |
+| **R1:** this VPS solves `F4` backup durability | **`REJECTED`** | §11.5 — a same-host backup of same-host primary data is not an independent copy; `R-030` would be relocated, not closed, and `R-032` (restore test) remains open |
+| **R1:** workloads B and C are designed by this document | **`NO — SCOPED ONLY`** | Design belongs to `F0-011`, phase `F4_STORAGE_AND_BACKUP`, phase `F10_IMAGING_DICOM_AND_AI`. This task opens none of them |
 
 ---
 
@@ -628,9 +893,15 @@ never the thing that fails first.
 
 ## 15. Lifecycle and program state
 
-- Repository work (this document): `AGENT_COMPLETED`
+- Repository work (this document, incl. the `R1` amendment): `AGENT_COMPLETED`
 - Tests: **`N/A` — documentation-only change**, no runtime code touched
 - `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO`
+- **R1:** Secondary Infrastructure VPS **procured**: **NO** · shared sizing:
+  **`UNRESOLVED`** (§11.3) · workload **A** authorized by this document: **YES (decision
+  only, not deployment)** · workloads **B** and **C** authorized: **NO — scoped only**
+- **R1:** no Kubernetes, no Kafka, no microservices, no database-per-tenant introduced;
+  `F4` and `F10` remain unopened and `F4` backup durability is explicitly **not** claimed
+  (§11.5)
 - Provider **model** adopted: **YES (Option A)** · Provider **deployed**: **NO** ·
   DSN configured: **NO** · Synthetic event sent: **NO** · Provider-UI verification:
   `NOT_PERFORMED`
