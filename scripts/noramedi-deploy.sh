@@ -8,6 +8,7 @@
 #   2. npm ci                                           (skip: --skip-build)
 #   3. prisma migrate deploy                            (skip: --skip-migrate)
 #   4. prisma generate                                  (skip: --skip-generate)
+#   4b. export RELEASE_SHA=<deployed git SHA>           (F3-C2-ERR-001; no flag)
 #   5. pm2 startOrReload ecosystem.config.cjs --only noramedi-api --update-env
 #   6. pm2 startOrReload ecosystem.config.cjs --only noramedi-worker --update-env
 #   7. API healthcheck with retry (401 = healthy)
@@ -127,6 +128,26 @@ verify_pm2_online() {
     sleep "$interval"
   done
 }
+
+# 4b. Release identifier (F3-C2-ERR-001). `server/src/utils/errorTracking.ts`
+#     tags external error-tracking events with `RELEASE_SHA` so an operator can
+#     tell which deployed commit produced an event. Before this, nothing in the
+#     repository ever set it, so the field was always empty even with a DSN
+#     configured. Exported here — before the `pm2 ... --update-env` calls below,
+#     which is what propagates the current shell environment into both
+#     processes.
+#
+#     Not a secret: it is the same SHA `git log` already shows, and it is
+#     printed below deliberately so the deploy log records what was deployed.
+#     `SENTRY_DSN` itself is NOT handled here and is never printed — it lives in
+#     $APP_DIR/server/.env exactly like DATABASE_URL and every other credential.
+#
+#     An operator-supplied RELEASE_SHA wins, so a deploy from a detached/dirty
+#     checkout can still be labelled explicitly; `|| echo unknown` keeps a
+#     non-git deploy directory from aborting the script under `set -e`.
+RELEASE_SHA="${RELEASE_SHA:-$(git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || echo unknown)}"
+export RELEASE_SHA
+echo "[$(timestamp)] Release SHA for this deploy: $RELEASE_SHA"
 
 # 5. Reload/start API (graceful reload if config unchanged; otherwise a
 #    one-time restart — see ecosystem.config.cjs's operational note).

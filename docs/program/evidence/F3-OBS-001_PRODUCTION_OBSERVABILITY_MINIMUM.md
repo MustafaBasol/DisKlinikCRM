@@ -191,3 +191,180 @@ Every change is additive (new files, new mounted routes, new `process.on()` hand
 **Test:** added a dedicated poisoned-`Error.name` case to `errorTracking.test.ts` (`err.name` set to an embedded patient/email/phone/token sentinel string) asserting none of that text reaches `captureMessage`'s message/tags/extra or `init()`'s options, and that `errType` resolves to the bounded `'Error'` literal regardless. `test:error-tracking` is now 8/8 (was 7/7 pre-R2; the R1-era "4 assertions" count in §10/§11 above predates the 3 privacy-boundary tests R1 itself added and was already stale before this R2 note).
 
 No route/readiness/schema code touched by R2; `test:fatal-error-handlers` (5/5) and `test:http-log-privacy` (44/44) re-run clean as directly-coupled regressions.
+
+## 15. R3 — external error-tracking minimum safe activation (F3-C2-ERR-001)
+
+**Task:** `F3-C2-ERR-001`, phase F3, driven by `F3-SEC-EXIT-001` §5 item 10 (external error tracking), which `F3-EXIT-C2` §11 records as criterion-2 blocking reason 5. Baseline `origin/main` @ `49e7da9e8da07376a312f4013068496308027216`, branch `feature/f3-c2-err-001-external-error-tracking-activation`, isolated worktree, no rebase.
+
+**Blocker:** §5's boundary was never deliverable. `@sentry/node` was deliberately not a dependency, so on the production host the `SENTRY_DSN`-set path could only ever hit the "package not installed" branch and no-op. Production evidence at deployed SHA `0478c86bf97b74b2aa9f465130d2a4daaa3579ec` confirmed exactly that: `ERROR_TRACKING_BOUNDARY_PRESENT=YES`, `GLOBAL_5XX_WIRING_PRESENT=YES`, but `SENTRY_NODE_INSTALLED=NO`, `SENTRY_DSN_CONFIGURED=NO`, `RELEASE_SHA_CONFIGURED=NO`, `PM2_NODE_ENV=UNSET`.
+
+**Scope:** make the existing boundary *deployable* and prepare an operator runbook. This task installs no provider, sets no DSN, sends no event, and deploys nothing. **§5 item 10 remains `NOT_SATISFIED` after this task** — see §15.11.
+
+### 15.1 What changed
+
+| File | Change |
+|---|---|
+| `server/package.json` | `@sentry/node` added to `dependencies`, pinned exact at `10.70.0` (npm, `--save-exact`, matching the `@prisma/client`/`pg` exact-pin precedent in the same block) |
+| `server/package-lock.json` | 31 packages added (see §15.6) |
+| `server/src/utils/errorTracking.ts` | deny-by-default `Sentry.init` options, bounded context fields, `beforeSend` outbound rebuild, non-throwing end to end |
+| `server/src/tests/errorTracking.test.ts` | 8 → 24 cases |
+| `server/.env.example` | `SENTRY_DSN`/`RELEASE_SHA` documentation rewritten for the activated state, incl. the KVKK precondition |
+| `scripts/noramedi-deploy.sh` | new step 4b: derive and export `RELEASE_SHA` from the deployed git SHA before `pm2 … --update-env` |
+
+No schema change, no migration, no new route, no new PM2 app, no change to `ecosystem.config.cjs`, no secret in source control.
+
+### 15.2 Adversarial SDK review — what `sendDefaultPii: false` does **not** cover
+
+R1/R2 already established that the SDK does not scrub what the application hands it. R3 established the converse and larger problem: **what the SDK attaches on its own.** Verified against the installed `@sentry/node@10.70.0` build (not documentation), the default integration set is 17 integrations, of which these would each independently breach this module's privacy contract:
+
+| Default integration | What it would have sent |
+|---|---|
+| `requestDataIntegration` | request URL, headers, cookies, query string, body |
+| `consoleIntegration` | every `console.*` call as a breadcrumb |
+| `httpIntegration`, `nativeNodeFetchIntegration` | outgoing-request breadcrumbs, i.e. URLs |
+| `onUncaughtExceptionIntegration`, `onUnhandledRejectionIntegration` | raw errors with message + stack, **bypassing this module entirely** — and colliding with `utils/fatalErrorHandlers.ts`, which already owns that path |
+| `contextLinesIntegration` | source code around each stack frame |
+| `localVariablesIntegration` | local variable **values** from stack frames |
+| `nodeContextIntegration` | `contexts.os` / `device` (incl. CPU model) / `culture` (locale, timezone) / `app` |
+| `modulesIntegration` | the full installed-package inventory |
+| `linkedErrorsIntegration` | the `error.cause` chain |
+| `childProcessIntegration`, `processSessionIntegration` | child-process events, release-health sessions |
+
+Two further leaks are **not** integrations and are therefore **not** covered by `defaultIntegrations: false`:
+
+- `server_name` defaults to `os.hostname()` in the client constructor (`@sentry/node-core/build/cjs/sdk/client.js:14`) and is applied in `@sentry/core/build/cjs/server-runtime-client.js:165-167`. Only `includeServerName: false` suppresses it. **This option is present and functional in the installed types (`@sentry/core/build/types/types/options.d.ts:62`, with an explicitly PII-motivated JSDoc) but is absent from the public Sentry documentation** — recorded as a real-but-undocumented dependency of this configuration.
+- `contexts.runtime` and `contexts.trace` are attached client-side and survive an empty integration list. Only `beforeSend` removes them.
+
+And two env-driven activations mean "option unset" is not "feature off": `@sentry/node-core`'s `getClientOptions` falls back to `process.env.SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_DEBUG` and `SENTRY_SPOTLIGHT`. Every such option is therefore pinned explicitly rather than left to its default.
+
+### 15.3 The pinned configuration
+
+`buildSentryInitOptions()` in `server/src/utils/errorTracking.ts`. Each line below was verified individually load-bearing against the installed build:
+
+- `defaultIntegrations: false` + `integrations: []` — resolves to an empty integration list (`@sentry/core`'s `getIntegrationsToSetup` evaluates `options.defaultIntegrations || []`; `@sentry/node`'s `_init` short-circuits at `options.defaultIntegrations ?? getDefaultIntegrations(options)`).
+- `skipOpenTelemetrySetup: true` — `initOpenTelemetry()` and `validateOpenTelemetrySetup()` sit inside `if (client && !options.skipOpenTelemetrySetup)`; no tracer provider, no OTel globals.
+- `registerEsmLoaderHooks: false` — **mandatory, not cosmetic.** `@sentry/node-core`'s `_init` runs `initializeEsmLoader()` unless this is exactly `false`, *independently of* `skipOpenTelemetrySetup`, and on Node >= 21 in ESM (this server) that registers the `import-in-the-middle` module hook.
+- `includeServerName: false` — suppresses the hostname (§15.2).
+- `tracesSampleRate: 0`, `profileSessionSampleRate: 0`, `maxBreadcrumbs: 0`, `attachStacktrace: false`, `enableLogs: false`, `sendDefaultPii: false`, `sendClientReports: false`, `spotlight: false`, `debug: false`.
+- `beforeBreadcrumb: () => null`, `beforeSendTransaction: () => null`.
+- `beforeSend: sanitizeOutboundEvent` — discards the SDK's event and rebuilds one from an allow-list of exactly `message`, `level`, `platform`, `event_id`, `timestamp`, `environment`, `release`, `tags`, `extra`; **returns `null` unless the event's message is exactly the module's fixed constant.** This is the SDK-independent net: a `captureException` called anywhere else in the process cannot egress, because it would not carry that message.
+
+Caller-supplied `role`, `requestId` and `route` are additionally re-validated against bounded patterns; a `route` that fails is replaced with the fixed `'/:unsafe-route'` rather than forwarded or silently dropped.
+
+### 15.4 Verified outbound payload
+
+Run against the **real** `@sentry/node@10.70.0` on Node v24.18.0 in ESM with a stub transport capturing literal envelope bytes, using this module's exact options. Three capture attempts were made: the approved synthetic event, a `captureException` of a sentinel-poisoned `Error` (message, `name` and stack all carrying patient/token text), and a `captureMessage` with a different message.
+
+**One envelope was emitted. The other two were dropped by `beforeSend`.** Event body, verbatim:
+
+```json
+{ "message": "internal error captured", "level": "error", "platform": "node",
+  "event_id": "...", "timestamp": 1786696033.557,
+  "environment": "production", "release": "deadbeefcafebabe",
+  "tags": { "errType": "Error", "role": "api", "requestId": "4711" },
+  "extra": { "route": "/api/patients/:id" },
+  "sdk": { "name": "sentry.javascript.node", "version": "10.70.0",
+           "integrations": [], "packages": [{ "name": "npm:@sentry/node", "version": "10.70.0" }] } }
+```
+
+Process state after `init()`: **0** active integrations, **0** OpenTelemetry globals, **no** ESM loader hook, **0** `uncaughtException`/`unhandledRejection`/`beforeExit`/`exit`/`SIGTERM` listeners added, resolved `serverName === undefined`. Sentinel leak scan: **none**. Hostname on the wire: **no**. No `contexts`, no `modules`, no `server_name`, no `breadcrumbs`, no `request`, no `user`.
+
+**Honest residue, not claimed away:**
+
+- `sdk.integrations`/`sdk.packages` are re-attached by `@sentry/core`'s `createEventEnvelope` **after** `beforeSend`, so `beforeSend` cannot control them. Verified content is SDK self-identification only (`npm:@sentry/node@10.70.0`, empty integration list) — it is **not** NoraMedi's module inventory, which is `event.modules` and is confirmed absent.
+- The envelope *header* irreducibly carries `event_id`, `sent_at`, `sdk.{name,version}` and a `trace` dynamic-sampling context (`environment`, `release`, `public_key`, `trace_id`, `org_id`). None of it is request-derived.
+- `@sentry/node-core`'s `_init` installs an OpenTelemetry **async-context strategy** unconditionally. Verified to register no OTel global, no instrumentation and no exporter — in-process bookkeeping only, zero egress — but `@opentelemetry/api` is loaded into the process once a DSN is set.
+
+### 15.5 Availability finding closed by this task
+
+`server/src/index.ts:312` calls this as `void captureFatalError(...)`, and `utils/fatalErrorHandlers.ts` registers a process-level `unhandledRejection` handler that logs and then `process.exit(1)`. Before R3 the only throwing path was the dynamic import, already caught. **Installing a real SDK would have introduced a path where a provider/SDK failure crashes the API process, not merely fails to report.** `captureFatalError` is now wrapped end to end, `Sentry.init` failure is latched so a permanently broken SDK is not retried on every 5xx, and both are covered by tests.
+
+### 15.6 Dependency / supply-chain finding — recorded, **not** closed
+
+`npm install @sentry/node@10.70.0` adds **31 packages / ~54 MB** to `server/node_modules`, including `@opentelemetry/{api,api-logs,core,instrumentation,resources,sdk-trace,sdk-trace-base,semantic-conventions}`, `import-in-the-middle`, `require-in-the-middle`, and `@apm-js-collab/{code-transformer,code-transformer-bundler-plugins,tracing-hooks}`.
+
+This is in tension with the task's own constraint "do not introduce OpenTelemetry". It is recorded rather than hidden. Mitigations that make it acceptable *as configured*:
+
+- **Zero of it is loaded unless `SENTRY_DSN` is set.** The import is dynamic and DSN-gated, so in the current (and default) production state the cost is disk, not runtime surface or attack surface.
+- v10 no longer ships `@opentelemetry/instrumentation-*` library packages; per-library instrumentation is vendored inside `@sentry/node` and is only constructed when tracing is enabled, which it is not.
+- No OTel runtime setup, no ESM loader hook, no diagnostics-channel injection (its loader is unset by default).
+
+**A strictly smaller alternative exists and is offered to the decision owner rather than taken unilaterally:** a hand-wired client on `@sentry/core` alone — 2 packages / ~15 MB, zero OpenTelemetry and zero `import-in-the-middle` on disk, ~197 ms vs ~649 ms first-import cost, and a payload that is already minimal without `beforeSend`. It was verified working end to end (real envelope delivered) and costs roughly 15 lines of `fetch`-based transport code plus forgoing the vendor-supported `@sentry/node` surface. **This task followed its brief's explicit instruction to add `@sentry/node`; the alternative is recorded here so the trade-off is a decision, not an omission.**
+
+A second cost: the lazy `import('@sentry/node')` measures **~649 ms cold**, landing on the first 5xx after a restart. It is fire-and-forget and cannot delay the HTTP response, but it is real.
+
+### 15.7 Tests
+
+```
+cd server && npm run test:error-tracking          # 24 passed, 0 failed  (was 8/8)
+cd server && npm run typecheck                    # exit 0
+cd server && npm run test:fatal-error-handlers    # directly-coupled regression
+cd server && npm run test:http-log-privacy        # directly-coupled regression
+cd server && npm run test:route-error-log-privacy # directly-coupled regression
+cd server && npm run server:test:non-disposable   # full non-disposable suite
+```
+
+The 16 new cases prove: the full `init` restriction contract; `captureException` is never called; exactly one `init` across 25 failures; `sanitizeOutboundEvent` drops non-synthetic events and strips `server_name`/`modules`/`contexts`/`request`/`user`/`breadcrumbs`/`exception`/`threads`/`logentry`; poisoned `errType`/`role`/`requestId`/`route` are re-bounded; header/cookie/authorization/query-shaped context values cannot enter `tags`; a raw path with an embedded id + query becomes `'/:unsafe-route'`; legitimate Express 5 templates survive verbatim; `err.stack` and arbitrary custom error properties never appear; a throwing `init`/`captureMessage`/loader never rejects into the caller; and the fire-and-forget call never blocks its caller.
+
+**Regression fixed in the test file itself:** the two pre-existing "package not installed" cases previously let the *real* dynamic import run and relied on it failing. With `@sentry/node` now installed, that would have constructed a real client and attempted a real outbound HTTPS request to the test DSN's host **from CI**. Both were rewritten onto the existing injection seam; no test in this file reaches the network, and a guard-rail case documents the rule.
+
+### 15.8 Production activation runbook (operator action — NOT performed by this task)
+
+Nothing below has been done. Steps 1-2 are decision/legal gates and are **not** optional.
+
+1. **Choose the provider and record the decision.** See §15.10. Until this is recorded, stop here.
+2. **KVKK / data-processor review.** Add the chosen provider to `docs/compliance/62-kvkk-subprocessor-register.md` §7/§9 with data region, DPA status and international-transfer mechanism. Obtain counsel sign-off. Do not proceed on the strength of `sendDefaultPii: false`.
+3. **Deploy this change** through the normal path (`noramedi-deploy.sh`), with **no `SENTRY_DSN` set**. The boundary stays a no-op; this only puts the pinned dependency and the new `RELEASE_SHA` export on the host. Confirm normal API health.
+4. **Store the DSN without printing it.** On the host, append `SENTRY_DSN=<value>` to `/var/www/noramedi/server/.env` using an editor or a redirect — never a command line that echoes it, never `set -x`, never a shell-history-visible `echo`. Verify with a boolean-only check: `grep -qc '^SENTRY_DSN=.\+' server/.env && echo SENTRY_DSN_CONFIGURED=YES`. Do not `cat` the file.
+5. **`RELEASE_SHA` needs no manual step** — `noramedi-deploy.sh` step 4b now derives it from the deployed SHA and exports it before `pm2 startOrReload --update-env`. An operator-set value still wins if one is exported explicitly.
+6. **Restart through the supported path only:** re-run `noramedi-deploy.sh` (`--skip-pull --skip-build --skip-migrate --skip-generate` if only the env changed). `--update-env` is what makes PM2 pick up the new environment; a bare `pm2 restart` without it will not.
+7. **Verify configuration by boolean-only checks.** Confirm `SENTRY_DSN_CONFIGURED=YES`, `RELEASE_SHA_CONFIGURED=YES`, `NODE_ENV=production`, `SENTRY_NODE_INSTALLED=YES` (`test -d server/node_modules/@sentry/node`), and `noramedi-api` PM2 status `online`. **Never print the DSN value in any evidence artifact.**
+8. **Generate exactly one synthetic event** through a controlled existing 5xx path, or a one-shot invocation of the same `captureFatalError` boundary from a throwaway script on the host. **Do not add a public synthetic-error route.**
+9. **Verify in the provider UI** that the event shows: message exactly `internal error captured`; tags exactly `errType` / `role` / `requestId`; extra exactly `route` (a template, never a real path); `environment` and `release` set; and **no** `server_name`, OS/device/culture/runtime context, module list, breadcrumbs, request data, user, stack trace, or any patient/tenant/token/query/cookie/header value. Anything else present is a **stop-and-revert** condition.
+10. **Re-verify normal API health** (`noramedi-healthcheck.sh`, PM2 status, 5xx rate unchanged).
+11. Record the result. Only then may §5 item 10 be re-assessed.
+
+### 15.9 Rollback
+
+Two independent levels, neither involving data:
+
+- **Deactivation (no code deploy):** remove/blank `SENTRY_DSN` in `server/.env`, re-run `noramedi-deploy.sh` so PM2 reloads with `--update-env`. `captureFatalError` returns to a pure no-op and `@sentry/node` is no longer imported at all. This is the runbook's stop-and-revert action.
+- **Full revert:** `git revert` this PR's merge commit, then `npm ci` in `server/` and redeploy. Removes the dependency and the `RELEASE_SHA` export.
+
+No DB migration, no schema change, no data rollback, no provider-side state created by this task.
+
+### 15.10 Provider / KVKK classification
+
+**No provider has been chosen.** This task records the options and their consequences; the decision belongs to the program/decision owner.
+
+| | Option A — self-hosted GlitchTip (or self-hosted Sentry) | Option B — Sentry SaaS, EU region | Option C — Sentry SaaS, US region |
+|---|---|---|---|
+| Protocol compatibility | Yes — speaks the same client protocol; this boundary is unchanged | Yes | Yes |
+| New subprocessor | **None** (runs on infrastructure already in the register) | Yes — Functional Software, Inc. (Sentry) | Yes |
+| Data leaves Türkiye | **No**, if hosted on the existing production infrastructure | **Yes** — EU (Frankfurt) | **Yes** — United States |
+| DPA / subprocessor record | Not required for a new processor; still needs a register entry for the component | Required — Sentry DPA + subprocessor list review | Required |
+| KVKK Art. 9 cross-border mechanism | **Not engaged** | Engaged — requires an Art. 9 mechanism; **Türkiye has issued no adequacy decision**, so this means the standard contract (with its KVKK notification duty) or another listed basis. **Counsel must confirm.** | Engaged, same, with a wider transfer footprint |
+| Operational cost | Hosting, upgrades, storage retention are NoraMedi's | Vendor-managed | Vendor-managed |
+
+**Recommendation to the decision owner: Option A.** It satisfies §5 item 10's substance (an external, out-of-process error-tracking sink that survives an application crash) with **no cross-border transfer and no new subprocessor**, which is the cheapest possible KVKK posture and avoids re-opening the Art. 9 question during an exit gate. Option B is acceptable but converts this into a legal workstream.
+
+**Residual privacy risk, stated exactly:**
+
+1. **The strongest claim this task supports is:** as configured and as verified on the wire, the only NoraMedi-derived values that egress are the fixed message, `errType` in {`Error`,`UnknownError`}, `role`, an opaque per-process `requestId` counter, a route *template*, `NODE_ENV`, and the deployed git SHA. No patient, tenant, message, credential or request-derived content is reachable through this path.
+2. **What is nonetheless true:** an event *stream* is metadata. Volume, timing and route-template distribution of 5xx errors reveal operational patterns about a healthcare provider to a third party. Under Option B/C that pattern data crosses a border.
+3. `requestId` correlates one external event to NoraMedi's own logs. It is not PII by itself; it becomes a join key for anyone holding both. Only NoraMedi holds the logs.
+4. `route` is bounded structurally, not semantically. `/api/patients/:id` discloses that a patients endpoint exists — schema shape, not data.
+5. **`sendDefaultPii: false` is deprecated in v10 and removed in v11** (superseded by `dataCollection`). This configuration does not depend on it — every integration that would act on it is disabled — but a future major upgrade must re-run this review rather than assume the flag still carries the guarantee.
+6. **KVKK compliance is NOT claimed complete by this task, and explicitly not on the strength of `sendDefaultPii: false`.** Steps 1-2 of §15.8 are unperformed.
+
+### 15.11 Lifecycle and what this does **not** close
+
+- Repository implementation: `AGENT_COMPLETED`
+- Tests: `TESTS_PASSED`
+- Merge: `NOT_MERGED` · Deploy: `NOT_DEPLOYED` · Production verification: `NOT_PRODUCTION_VERIFIED`
+- Provider adopted: **NO** · DSN configured: **NO** · Synthetic event sent: **NO** · Provider-UI verification: **NOT_PERFORMED**
+- **`F3-SEC-EXIT-001` §5 item 10: `NOT_SATISFIED`.** This task makes activation *possible and safe*; it does not activate. Item 10 asks for external error tracking to exist, which requires a provider decision, a KVKK record, a DSN, and a verified synthetic event — §15.8 steps 1, 2, 4 and 8-11, none performed.
+- **`F3_EXIT_CRITERION_2 = NOT_SATISFIED`, unchanged.** `F3-EXIT-C2` §11's blocking reasons 1-4 and 6-7 are untouched by this task; reason 5 is narrowed, not closed.
+- `F3_EXIT_CRITERION_3`: not touched, not assessed.
+- `F3_EXIT_GATE = NOT SATISFIED`, `F3_COMPLETE = NO`, `F4_TRANSITION_AUTHORIZED = NO`.
+- Also not done here, deliberately: wiring error tracking into the crash path (§4's still-open gap — the SDK's own `onFatalError`/`shutdownTimeout` handling is exactly the kind of auto-behaviour this configuration disables, so §4's gap is now a *decision*, not just an absence), log aggregation, OTel metrics/tracing, elevated-5xx-rate alerting, ADR-012.
