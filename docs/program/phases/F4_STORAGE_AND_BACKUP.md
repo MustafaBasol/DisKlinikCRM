@@ -1,8 +1,57 @@
 # F4 — Storage and Backup Foundation
 
-Faz durumu: `TODO` · Son güncelleme: 2026-08-14 (F4-1A)
+Faz durumu: `TODO` · Son güncelleme: 2026-08-14 (F4-FCR-001)
 
-> **Faz durumu değişmedi.** F4-1A, sağlayıcıdan bağımsız ve ek (additive) bir depo-içi hazırlık adımıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevle ilgisizdir).
+> **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
+
+## F4-FCR-001 — First-Customer Recovery Closure (kanıt, görünürlük, güvenlik)
+
+`F4-FCR-001_STATUS = AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
+
+### Dondurma (freeze) pozisyonu — yeni istisna ALINMADI
+
+Bu görev **yeni bir dondurma istisnası talep etmemiş ve kullanmamıştır.** [`KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md`](../KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md) §2 satır 18'in yasakladığı şey "**any live backup/PITR implementation**"dır. F4-FCR-001'in tamamı üç kategoriye girer ve hiçbiri bu tanıma girmez:
+
+1. **Gözlemlenebilirlik** — mevcut, üretimde doğrulanmış `noramedi-opscheck.sh` yoluna iki kontrol eklemek; Platform Admin'e salt-okunur görünürlük.
+2. **Güvenlik düzeltmeleri** — mevcut kodda tespit edilen sızıntı/temizlik kusurlarının giderilmesi.
+3. **Kanıt (evidence)** — restore tatbikatlarının ölçülebilir ve kalıcı hale getirilmesi.
+
+Yedekleme mekanizmasının kendisi, hedefi, şifrelemesi, zamanlaması ve PITR durumu **değiştirilmemiştir**. §8 madde 1'in dondurduğu "**geniş** Prisma şema değişiklikleri" kapsamına girmemek için şema değişikliği tek ve tamamen ek bir tabloyla sınırlıdır (`RecoveryDrillRun`) — bu, `FILE_BACKUP_COVERAGE_001` ve `SecurityIncident` ile aynı additive-tablo emsalini izler.
+
+> **Program sahibine not (yönetişim boşluğu, bu görevin sebep olmadığı):** `FILE_BACKUP_COVERAGE_001`, satır 18'in "separate user decision to begin F0-011" çıkış koşulunu kendi görev dağıtımının karşıladığını **yalnızca bir kanıt dosyasında** ilan etmiş, hiçbir merkezî izleyici dosyayı güncellememiştir. Bu yüzden bugün `KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md:41` hâlâ "any live backup/PITR implementation" yasağını, `RISK_REGISTER.md` ise R-030/R-031/R-032'yi `OPEN` olarak göstermektedir — dosya yedekleme uygulaması merkeze alınmış olmasına rağmen. F4-FCR-001 bu boşluğu **tekrarlamamak** için kendi konumunu burada açıkça kaydeder; boşluğun kendisini kapatmak program sahibinin kararıdır.
+
+### Bu görevin yaptığı
+
+| Yetenek | Önce | Sonra |
+|---|---|---|
+| Restore tatbikat kanıtı | Yok; süre hiç kalıcılaştırılmıyordu | `RecoveryDrillRun` defteri (DB restore testi + dosya restore tatbikatı) |
+| Ölçülebilir RPO/RTO | Ölçülemiyordu | `durationMs` = RTO; `sourceArtifactAgeMinutes` = efektif RPO |
+| Bit-rot tespiti | **Yapısal olarak imkânsız** — `verified` kayıt bir daha doğrulanmıyor, yalnızca en yeni 5 kayıt örnekleniyordu | `mixed`/`oldest` örnekleme stratejileri eskiyen nesneleri de sınar |
+| Çökmüş yedek koşusu | Sonsuza dek `running` | `failed` / `run_abandoned` olarak süpürülür |
+| Artık restore-test veritabanı | Üretim kümesinde tam, düz-metin, çapraz-tenant hasta veritabanı kopyası kalabiliyor; adı **redakte**, uyarı yok, tekrar deneme yok | Tekrar denenir, deftere gerçek adıyla yazılır, denetlenir, Platform Admin'de gösterilir |
+| Dosya yedekleme operatör görünürlüğü | **Sıfır** (`grep -rn "file-backups\|fileBackup" src/` → hiç sonuç yok) | Platform Admin bölümü |
+| Dosya yedekleme / tatbikat alarmı | Yok | `opscheck` → Healthchecks.io → operatör e-postası |
+| Yedek log ifşası | Harici betiğin logu HTTP üzerinden **birebir** dönüyordu | Bağlantı dizgesi/parola/erişim anahtarı redaksiyonu |
+
+### Bu görevin YAPMADIĞI (ve neden)
+
+- **PITR/WAL arşivleme yok.** Araç seçimi kaydedildi (**pgBackRest**; gerekçe ve gereken istisna metni [`runbooks/F4_RECOVERY_OPERATIONS.md`](../runbooks/F4_RECOVERY_OPERATIONS.md) §7.1). Etkinleştirme hem üretim PostgreSQL yeniden başlatması hem de yeni bir dondurma istisnası gerektirir. `R-031` `OPEN` kalır.
+- **Off-host hedef yok.** İkincil Türkiye altyapı VPS'i **tedarik edilmemiştir**. Ayrıca deponun kendi kaydı gereği: imaging birincil deposu o VPS'te ise, aynı VPS o veri için bağımsız yedek **sayılamaz** — bu R-030'u taşır, kapatmaz. `R-030` `OPEN` kalır.
+- **Yedek formatı şifrelemesi yok.** Üretim `.dump` dosyası düz metindir (ampirik olarak doğrulanmıştır).
+- **DB yedek betiği depoya alınmadı.** `/usr/local/sbin/noramedi-db-backup.sh` bu programda **hiç okunmamıştır**; okunmadan yeniden yazmak bilinmeyen davranışı bozma riski taşır. Doğru ilk adım betiğin salt-okunur olarak temin edilmesidir.
+- **Legal-hold / silme yayılımı yok** — harici hukuki karara bağlıdır (`COUNSEL_REVIEW_REQUIRED`).
+
+### F0-011 / F0-006 bayat iddia düzeltmeleri (mevcut kodla çelişenler)
+
+- `f0-011-backup-restore-gap-matrix.json` GAP-C "dosya baytlarının yedeği yok" — **bayat**; uygulama mevcut (yalnızca üretimde kapalı).
+- Aynı dosya GAP-A "`runRestoreTest()` gerçekten çalıştırıldığına dair kalıcı kanıt yok" — **bayat**; `BACKUP_RESTORE_REHEARSAL_001.md` iki gerçek koşu kaydeder (`PASS`, RTO 3 sn).
+- `PILOT_BACKUP_RESTORE_AND_FILE_COVERAGE_AUDIT.md:41` "yedek hatası için izleme/alarm yok" — **bayat**; `noramedi-opscheck.sh` `check_backup()` üretimde kurulu ve canlı-alarm doğrulanmış.
+- `F0-006_configuration_inventory.json:127` "`backupService.ts` yorumları PITR'ı hedef yetenek olarak tanımlıyor" — **bayat**; güncel dosyada böyle bir yorum yok. Aynı satırın `archive_mode=off` kısmı **geçerli**.
+- `PRODUCTION_TOPOLOGY.md:103` / `LAUNCH_GATES.md:38` "depoda `ecosystem.config.*` yok" — **bayat**; kök dizinde mevcuttur.
+
+Bayat **olmayan** (düzeltilmemeli): versiyonlama, object-lock/değişmezlik, yaşam döngüsü/saklama, bucket-config doğrulaması, PITR ve yedek baytlarının uygulama katmanı şifrelemesi — bunlar gerçekten uygulanmamıştır.
+
+
 
 ## F4-1A — Storage Key Contract Reconciliation and Foundation
 
@@ -122,3 +171,4 @@ Imaging (DICOM/CBCT) ölçeklenmeden önce object storage zorunludur (PROGRAM DI
 |---|---|---|
 | 2026-07-17 | F0-001 | Faz dokümanı oluşturuldu (yüksek seviyeli). |
 | 2026-08-14 | F4-1A | Storage-key sözleşme reconciliation'ı kaydedildi; dört rakip üretici tek yetkili üretici altında toplandı; dar kapsamlı dondurma istisnası kaydedildi. Faz durumu `TODO` olarak **değişmedi**. F0-011'in yedekleme/checksum bölümünün bayatladığı not edildi: `FileBackupRun`/`FileBackupEntry`, streaming SHA-256, read-back doğrulaması ve restore rehearsal artık mevcuttur. |
+| 2026-08-14 | F4-FCR-001 | Restore tatbikat kanıt defteri (`RecoveryDrillRun`), ölçülebilir RPO/RTO, zamanlanabilir dosya restore tatbikatı (`mixed`/`oldest` örnekleme ile bit-rot tespiti), çökmüş koşu süpürücüsü, artık restore-test veritabanı olayının tespiti/denetimi/görünürlüğü, yedek log redaksiyonu, `opscheck` `filebackup` + `drill` kontrolleri ve Platform Admin görünürlüğü eklendi. **Yeni dondurma istisnası alınmadı**; PITR ve off-host hedef bilinçli olarak kapsam dışı bırakıldı. Faz durumu `TODO` olarak **değişmedi**; R-030/R-031/R-032 `OPEN` kalır. |

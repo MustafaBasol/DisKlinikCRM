@@ -366,6 +366,51 @@ async function runFileBackupLocked(options: { trigger?: 'scheduled' | 'manual' }
   }
 }
 
+// ─── Stale run reaper ───────────────────────────────────────────────────────
+
+/** Default cutoff: a FileBackupRun still `running` after 3 hours is abandoned. */
+export const DEFAULT_FILE_BACKUP_MAX_RUNNING_MINUTES = 180;
+
+/**
+ * Sweeps crashed FileBackupRun rows to a terminal state and returns how many
+ * it swept.
+ *
+ * Without this, a process that dies mid-sweep leaves its run row `running`
+ * with `finishedAt: null` FOREVER: getFileBackupStatus()'s `lastRun` then
+ * reports a backup that looks perpetually in flight, and any "when did a
+ * backup last complete" question silently reads the wrong row. The in-process
+ * `backupRunning` flag and the JobLock lease both clear themselves on crash —
+ * the ledger row is the one piece of state that does not.
+ *
+ * `errorSummary` is set to the fixed label `run_abandoned`, never a raw error
+ * message (there is no error object here to begin with — the process simply
+ * vanished).
+ *
+ * Never throws: it runs at the top of a job tick and must not stop the real
+ * work behind it.
+ */
+export async function reapStaleFileBackupRuns(
+  maxRunningMinutes: number = DEFAULT_FILE_BACKUP_MAX_RUNNING_MINUTES,
+): Promise<number> {
+  const minutes =
+    Number.isFinite(maxRunningMinutes) && maxRunningMinutes > 0 ? maxRunningMinutes : DEFAULT_FILE_BACKUP_MAX_RUNNING_MINUTES;
+  const cutoff = new Date(Date.now() - minutes * 60_000);
+
+  try {
+    const result = await prisma.fileBackupRun.updateMany({
+      where: { status: 'running', startedAt: { lt: cutoff } },
+      data: { status: 'failed', finishedAt: new Date(), errorSummary: 'run_abandoned' },
+    });
+    if (result.count > 0) {
+      console.warn(`[file-backup] Reaped ${result.count} abandoned backup run(s) older than ${minutes} minutes.`);
+    }
+    return result.count;
+  } catch (err) {
+    console.error('[file-backup] Failed to reap abandoned backup runs:', safeErrorFields(err));
+    return 0;
+  }
+}
+
 // ─── Status / monitoring ────────────────────────────────────────────────────
 
 export async function getFileBackupStatus() {
@@ -529,7 +574,52 @@ export interface RestoreRehearsalResult {
   passed: number;
   failed: number;
   results: Array<{ sourceModel: string; sourceRecordId: string; checksumMatch: boolean }>;
+  /** Measured wall-clock cost of the whole rehearsal — the file-side RTO evidence. */
+  durationMs: number;
+  /** Which sampling strategy actually ran ('newest' | 'oldest' | 'mixed'). */
+  strategy: string;
+  /** createdAt of the OLDEST entry actually exercised, ISO string, or null. */
+  oldestSampledAt: string | null;
+  /** createdAt of the NEWEST entry actually exercised, ISO string, or null. */
+  newestSampledAt: string | null;
   error?: string;
+}
+
+/**
+ * How the rehearsal picks which verified entries to exercise.
+ *
+ *   - 'newest' — most recently created entries first. This was the original
+ *     (and only) behavior.
+ *   - 'oldest' — least recently created entries first. This is the one that
+ *     can detect destination-side bit rot / silent object loss in OLD backup
+ *     objects. A newest-only sample structurally cannot: the newest objects
+ *     were written minutes-to-days ago and have had no time to rot, so a
+ *     newest-only rehearsal can pass indefinitely while every object older
+ *     than the sampling window is quietly unrecoverable.
+ *   - 'mixed' (default) — half newest, half oldest, deduplicated by entry id.
+ *     Keeps the "did last night's backup actually restore" signal while also
+ *     continuously re-proving the long tail.
+ */
+export type RestoreRehearsalStrategy = 'newest' | 'oldest' | 'mixed';
+
+export interface RestoreRehearsalOptions {
+  sampleSize?: number;
+  strategy?: RestoreRehearsalStrategy;
+}
+
+/**
+ * One verified entry chosen for a rehearsal. `clinicId` is included so a
+ * caller can enforce a pre-flight safety policy (e.g. the restore-rehearsal
+ * job's synthetic-clinic-only guard) BEFORE any real patient bytes are
+ * written to a scratch directory. It must never be logged.
+ */
+export interface RestoreRehearsalSampleEntry {
+  id: string;
+  sourceModel: string;
+  sourceRecordId: string;
+  clinicId: string;
+  createdAt: Date;
+  copiedAt: Date | null;
 }
 
 let restoreRehearsalRunning = false;
@@ -537,31 +627,114 @@ export function isFileBackupRestoreRehearsalRunning(): boolean {
   return restoreRehearsalRunning;
 }
 
+/** Normalizes the backward-compatible `number | options | undefined` argument. */
+function normalizeRehearsalOptions(input?: number | RestoreRehearsalOptions): Required<RestoreRehearsalOptions> {
+  const options: RestoreRehearsalOptions = typeof input === 'number' ? { sampleSize: input } : (input ?? {});
+  const rawSize = options.sampleSize;
+  const sampleSize = typeof rawSize === 'number' && Number.isFinite(rawSize) && rawSize > 0 ? Math.floor(rawSize) : getRestoreRehearsalSampleSize();
+  return { sampleSize, strategy: options.strategy ?? 'mixed' };
+}
+
 /**
- * Automated restore-rehearsal: picks a bounded sample of the most recently
- * verified backup entries, restores each into a disposable OS-temp
- * directory, checks the restored bytes' checksum, then deletes the temp
- * directory in `finally` regardless of outcome. This is the file-backup
- * equivalent of backupService.ts's runRestoreTest() for the database — it
- * gives durable, re-runnable evidence that "restore actually works," not
- * just that "a backup copy exists somewhere."
+ * Chooses the verified entries a rehearsal would exercise, without touching
+ * the filesystem or restoring anything. Exported so a caller can run a
+ * pre-flight policy check (see restoreRehearsalJob.ts's synthetic-clinic
+ * guard) against exactly the same selection the rehearsal will use.
+ *
+ * Note the selection is a read of live ledger state, so a pre-flight call and
+ * the rehearsal's own call are not one atomic snapshot — an entry created in
+ * between could differ. That is acceptable for a periodic safety gate (it can
+ * only ever be one tick late, and the next tick re-checks), and the
+ * alternative — threading a policy predicate through the restore path — would
+ * put tenant-policy logic inside the byte-copy code this task must not touch.
  */
-export async function runFileBackupRestoreRehearsal(sampleSize: number = getRestoreRehearsalSampleSize()): Promise<RestoreRehearsalResult> {
+export async function selectRestoreRehearsalSample(input?: number | RestoreRehearsalOptions): Promise<RestoreRehearsalSampleEntry[]> {
+  const { sampleSize, strategy } = normalizeRehearsalOptions(input);
+  const select = { id: true, sourceModel: true, sourceRecordId: true, clinicId: true, createdAt: true, copiedAt: true } as const;
+
+  if (strategy === 'newest' || strategy === 'oldest') {
+    return prisma.fileBackupEntry.findMany({
+      where: { status: 'verified' },
+      orderBy: { createdAt: strategy === 'newest' ? 'desc' : 'asc' },
+      take: sampleSize,
+      select,
+    });
+  }
+
+  // 'mixed': ceil(N/2) from each end, then dedupe by id (the two halves
+  // overlap whenever the ledger holds fewer than N verified entries) and cap
+  // the result back at N.
+  const half = Math.max(1, Math.ceil(sampleSize / 2));
+  const [newest, oldest] = await Promise.all([
+    prisma.fileBackupEntry.findMany({ where: { status: 'verified' }, orderBy: { createdAt: 'desc' }, take: half, select }),
+    prisma.fileBackupEntry.findMany({ where: { status: 'verified' }, orderBy: { createdAt: 'asc' }, take: half, select }),
+  ]);
+
+  const seen = new Set<string>();
+  const merged: RestoreRehearsalSampleEntry[] = [];
+  for (const entry of [...newest, ...oldest]) {
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    merged.push(entry);
+    if (merged.length >= sampleSize) break;
+  }
+  return merged;
+}
+
+/**
+ * Newest `copiedAt` across all verified backup entries — i.e. the freshness of
+ * the most recent off-host artifact a file restore could fall back on. This is
+ * the RPO input a recovery drill records as `sourceArtifactAt`.
+ */
+export async function getLatestVerifiedBackupArtifactAt(): Promise<Date | null> {
+  const newest = await prisma.fileBackupEntry.findFirst({
+    where: { status: 'verified', copiedAt: { not: null } },
+    orderBy: { copiedAt: 'desc' },
+    select: { copiedAt: true },
+  });
+  return newest?.copiedAt ?? null;
+}
+
+/**
+ * Automated restore-rehearsal: picks a bounded sample of verified backup
+ * entries (see RestoreRehearsalStrategy for how), restores each into a
+ * disposable OS-temp directory, checks the restored bytes' checksum, then
+ * deletes the temp directory in `finally` regardless of outcome. This is the
+ * file-backup equivalent of backupService.ts's runRestoreTest() for the
+ * database — it gives durable, re-runnable evidence that "restore actually
+ * works," not just that "a backup copy exists somewhere."
+ *
+ * Accepts either a bare sample-size number (the original signature, still used
+ * by the platform-admin route and the operator CLI) or an options object.
+ */
+export async function runFileBackupRestoreRehearsal(input?: number | RestoreRehearsalOptions): Promise<RestoreRehearsalResult> {
   if (restoreRehearsalRunning) {
     throw new Error('A restore rehearsal is already running');
   }
   restoreRehearsalRunning = true;
+  const startedAtMs = Date.now();
 
   try {
-    const entries = await prisma.fileBackupEntry.findMany({
-      where: { status: 'verified' },
-      orderBy: { createdAt: 'desc' },
-      take: sampleSize,
-      select: { sourceModel: true, sourceRecordId: true },
-    });
+    const { sampleSize, strategy } = normalizeRehearsalOptions(input);
+    const entries = await selectRestoreRehearsalSample({ sampleSize, strategy });
     if (entries.length === 0) {
-      return { success: false, sampleSize: 0, passed: 0, failed: 0, results: [], error: 'No verified backup entries available to rehearse' };
+      return {
+        success: false,
+        sampleSize: 0,
+        passed: 0,
+        failed: 0,
+        results: [],
+        durationMs: Date.now() - startedAtMs,
+        strategy,
+        oldestSampledAt: null,
+        newestSampledAt: null,
+        error: 'No verified backup entries available to rehearse',
+      };
     }
+
+    const sampledTimes = entries.map((entry) => entry.createdAt.getTime());
+    const oldestSampledAt = new Date(Math.min(...sampledTimes)).toISOString();
+    const newestSampledAt = new Date(Math.max(...sampledTimes)).toISOString();
 
     const rehearsalDir = path.join(os.tmpdir(), `diskliniks-file-backup-rehearsal-${crypto.randomUUID()}`);
     await fs.promises.mkdir(rehearsalDir, { recursive: true, mode: 0o700 });
@@ -585,7 +758,17 @@ export async function runFileBackupRestoreRehearsal(sampleSize: number = getRest
       await fs.promises.rm(rehearsalDir, { recursive: true, force: true }).catch(() => {});
     }
 
-    return { success: failed === 0, sampleSize: entries.length, passed, failed, results };
+    return {
+      success: failed === 0,
+      sampleSize: entries.length,
+      passed,
+      failed,
+      results,
+      durationMs: Date.now() - startedAtMs,
+      strategy,
+      oldestSampledAt,
+      newestSampledAt,
+    };
   } finally {
     restoreRehearsalRunning = false;
   }

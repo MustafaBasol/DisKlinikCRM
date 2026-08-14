@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# noramedi-opscheck.test.sh — F3-OBS-002
+# noramedi-opscheck.test.sh — F3-OBS-002, extended by F4-FCR-001
 #
 # Unit-like test harness for scripts/noramedi-opscheck.sh. No real pm2/df/
 # curl/production paths are touched: a temp bin directory with fake `pm2`,
 # `df`, and `curl` executables is prepended to PATH, and BACKUP_DIR/
-# DISK_PATH/STATE_DIR are redirected into a temp directory via the script's
-# documented test-only override env vars.
+# DISK_PATH/STATE_DIR/RECOVERY_STATUS_FILE are redirected into a temp
+# directory via the script's documented override env vars.
 #
 # Run with: bash scripts/noramedi-opscheck.test.sh
 
@@ -107,6 +107,7 @@ run_opscheck() {
     NORAMEDI_OPSCHECK_DISK_PATH="/" \
     NORAMEDI_OPSCHECK_BACKUP_DIR="$BACKUP_DIR" \
     NORAMEDI_OPSCHECK_STATE_DIR="$STATE_DIR" \
+    NORAMEDI_OPSCHECK_RECOVERY_STATUS_FILE="$RECOVERY_STATUS_FILE" \
     env "${EXTRA_ENV[@]}" "$OPSCHECK" "$@" 2>&1)"
   CODE=$?
   set -e
@@ -116,6 +117,13 @@ run_opscheck() {
 new_scenario_dirs() {
   BACKUP_DIR="$(mktemp -d "$WORK/backup.XXXXXX")"
   STATE_DIR="$(mktemp -d "$WORK/state.XXXXXX")"
+  # Always redirected away from the real /var/lib/noramedi path, and NOT
+  # created here: "no status file at all" is the default starting state, so a
+  # scenario that forgets to write one fails the filebackup/drill checks
+  # rather than silently reading some other file.
+  RECOVERY_STATUS_DIR="$(mktemp -d "$WORK/recovery.XXXXXX")"
+  RECOVERY_STATUS_FILE="$RECOVERY_STATUS_DIR/recovery-status.json"
+  reset_recovery_status_fields
 }
 
 touch_backup_file() {
@@ -144,6 +152,57 @@ touch_backup_file_future() {
   touch -d "@$epoch" "$f"
 }
 
+# ── recovery status file fixtures (F4-FCR-001) ──────────────────────────
+#
+# The filebackup and drill checks read an application-written status file
+# rather than the database (see the script header for why). These helpers
+# build that file. Every field is a variable so a scenario can perturb
+# exactly one thing and leave the rest healthy; reset_recovery_status_fields
+# (called by new_scenario_dirs) restores the all-healthy baseline so a
+# perturbation can never leak into the next scenario.
+
+# iso_age HOURS — ISO-8601 UTC timestamp HOURS in the past. A NEGATIVE value
+# yields a FUTURE timestamp (the clock-skew cases). Computed from an absolute
+# epoch, for the same reason touch_backup_file uses `@epoch`: any
+# local-time-interpreting formatting would skew the fixture by the host's
+# UTC offset and quietly move every boundary case.
+iso_age() {
+  local h="$1" now epoch
+  now="$(date -u +%s)"
+  epoch=$(( now - h * 3600 ))
+  date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$epoch" +%Y-%m-%dT%H:%M:%SZ
+}
+
+reset_recovery_status_fields() {
+  RS_SCHEMA_VERSION=1
+  RS_GENERATED_AGE_H=1
+  RS_FB_AGE_H=2
+  RS_FB_STATUS=completed
+  RS_FB_FAILED=0
+  RS_FB_MISSING=0
+  RS_FB_ENABLED=true
+  RS_DRILL_AGE_H=48
+  RS_DRILL_STATUS=passed
+}
+
+# write_recovery_status — writes the status file from the current RS_* values.
+write_recovery_status() {
+  cat > "$RECOVERY_STATUS_FILE" <<EOF
+{
+  "schemaVersion": $RS_SCHEMA_VERSION,
+  "generatedAt": "$(iso_age "$RS_GENERATED_AGE_H")",
+  "fileBackup": { "lastRunAt": "$(iso_age "$RS_FB_AGE_H")", "status": "$RS_FB_STATUS", "filesFailed": $RS_FB_FAILED, "filesMissing": $RS_FB_MISSING, "enabled": $RS_FB_ENABLED },
+  "drill":      { "lastRunAt": "$(iso_age "$RS_DRILL_AGE_H")", "kind": "file_restore_rehearsal", "status": "$RS_DRILL_STATUS" }
+}
+EOF
+}
+
+# write_raw_recovery_status CONTENT — writes arbitrary bytes, for the
+# malformed/unparseable cases the structured writer above cannot express.
+write_raw_recovery_status() {
+  printf '%s' "$1" > "$RECOVERY_STATUS_FILE"
+}
+
 # ── bash -n syntax check ────────────────────────────────────────────────
 section "Syntax"
 if bash -n "$OPSCHECK"; then pass "noramedi-opscheck.sh parses (bash -n)"; else fail "noramedi-opscheck.sh has a syntax error"; fi
@@ -155,10 +214,13 @@ write_fake_pm2 "$(pm2_jlist_json online online 3 3)"
 write_fake_df 42
 write_fake_curl 0 "$WORK/curl.log"
 touch_backup_file "noramedi_crm-20260101-030000.dump" 1
+write_recovery_status
 EXTRA_ENV=(
   NORAMEDI_OPSCHECK_PM2_PING_URL=http://x/PM2SECRET
   NORAMEDI_OPSCHECK_DISK_PING_URL=http://x/DISKSECRET
   NORAMEDI_OPSCHECK_BACKUP_PING_URL=http://x/BACKUPSECRET
+  NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/FILEBACKUPSECRET
+  NORAMEDI_OPSCHECK_DRILL_PING_URL=http://x/DRILLSECRET
 )
 run_opscheck
 
@@ -166,6 +228,9 @@ run_opscheck
 [[ "$OUT" == *"pm2 check: 'noramedi-api' online"* ]] && pass "reports api online" || fail "missing api-online line"
 [[ "$OUT" == *"disk check: OK"* ]] && pass "reports disk OK" || fail "missing disk-OK line"
 [[ "$OUT" == *"backup check: OK"* ]] && pass "reports backup OK" || fail "missing backup-OK line"
+[[ "$OUT" == *"filebackup check: OK"* ]] && pass "reports filebackup OK" || fail "missing filebackup-OK line ($OUT)"
+[[ "$OUT" == *"drill check: OK"* ]] && pass "reports drill OK" || fail "missing drill-OK line ($OUT)"
+[[ "$OUT" == *"checks=[pm2 disk backup filebackup drill]"* ]] && pass "all five checks run by default" || fail "default check list is not the expected five ($OUT)"
 
 # ── scenario: api offline ───────────────────────────────────────────────
 section "API process offline"
@@ -225,32 +290,53 @@ EXTRA_ENV=(NORAMEDI_OPSCHECK_DISK_PING_URL=http://x/s NORAMEDI_OPSCHECK_DISK_THR
 run_opscheck --check disk
 [[ "$CODE" -ne 0 ]] && pass "non-numeric DISK_THRESHOLD_PERCENT is rejected (nonzero exit), not silently treated as healthy" || fail "expected nonzero exit for invalid threshold, got $CODE ($OUT)"
 [[ "$OUT" == *"FATAL"* ]] && pass "invalid threshold reports FATAL, not a false pass" || fail "missing FATAL message for invalid threshold ($OUT)"
-[[ "$CODE" -eq 16 ]] && pass "invalid threshold exits with the dedicated config-error code 16, not the pm2-bit-colliding 1" || fail "expected exit 16 for invalid threshold, got $CODE ($OUT)"
+[[ "$CODE" -eq 64 ]] && pass "invalid threshold exits with the dedicated config-error code 64, not the pm2-bit-colliding 1" || fail "expected exit 64 for invalid threshold, got $CODE ($OUT)"
 
 new_scenario_dirs
 write_fake_df 10
 EXTRA_ENV=(NORAMEDI_OPSCHECK_DISK_PING_URL=http://x/s NORAMEDI_OPSCHECK_DISK_THRESHOLD_PERCENT=150)
 run_opscheck --check disk
 [[ "$CODE" -ne 0 ]] && pass "out-of-range DISK_THRESHOLD_PERCENT (150) is rejected" || fail "expected nonzero exit for out-of-range threshold, got $CODE ($OUT)"
-[[ "$CODE" -eq 16 ]] && pass "out-of-range threshold also exits 16, not the pm2-bit-colliding 1" || fail "expected exit 16 for out-of-range threshold, got $CODE ($OUT)"
+[[ "$CODE" -eq 64 ]] && pass "out-of-range threshold also exits 64, not the pm2-bit-colliding 1" || fail "expected exit 64 for out-of-range threshold, got $CODE ($OUT)"
 
 # ── scenario: exit-code contract — config/CLI errors vs. the check bitmask ─
-section "Exit-code contract: config/CLI errors use 16, never collide with bitmask bits 0-3"
+section "Exit-code contract: config/CLI errors use 64, never collide with bitmask bits 0-5"
 new_scenario_dirs
 EXTRA_ENV=()
 run_opscheck --bogus-flag
-[[ "$CODE" -eq 16 ]] && pass "unknown CLI flag exits 16" || fail "expected exit 16 for unknown flag, got $CODE ($OUT)"
+[[ "$CODE" -eq 64 ]] && pass "unknown CLI flag exits 64" || fail "expected exit 64 for unknown flag, got $CODE ($OUT)"
 
 new_scenario_dirs
 EXTRA_ENV=()
 run_opscheck --check bogus-check-name
-[[ "$CODE" -eq 16 ]] && pass "unrecognized --check value exits 16" || fail "expected exit 16 for unrecognized --check value, got $CODE ($OUT)"
+[[ "$CODE" -eq 64 ]] && pass "unrecognized --check value exits 64" || fail "expected exit 64 for unrecognized --check value, got $CODE ($OUT)"
+[[ "$OUT" == *"pm2|disk|backup|filebackup|drill"* ]] && pass "the unknown --check error message lists all five valid names" || fail "unknown --check message does not list the five check names ($OUT)"
 
 new_scenario_dirs
 write_fake_pm2 "$(pm2_jlist_json stopped online 1 1)"
 EXTRA_ENV=(NORAMEDI_OPSCHECK_PM2_PING_URL=http://x/s)
 run_opscheck --check pm2
-[[ "$CODE" -eq 1 ]] && pass "a genuine pm2-check failure still exits with bit 0 (1), distinct from the 16 config-error code" || fail "expected exit 1 (pm2 bit only) for a real pm2 failure, got $CODE ($OUT)"
+[[ "$CODE" -eq 1 ]] && pass "a genuine pm2-check failure still exits with bit 0 (1), distinct from the 64 config-error code" || fail "expected exit 1 (pm2 bit only) for a real pm2 failure, got $CODE ($OUT)"
+
+# Each new *_MAX_AGE_HOURS value gets the same fail-closed startup validation
+# as the two that predate F4-FCR-001 — an unparseable age must never fall
+# through to a comparison that quietly reports "fresh".
+section "Invalid recovery-status max-age config fails closed"
+for bad_var in NORAMEDI_OPSCHECK_FILEBACKUP_MAX_AGE_HOURS \
+               NORAMEDI_OPSCHECK_DRILL_MAX_AGE_HOURS \
+               NORAMEDI_OPSCHECK_RECOVERY_STATUS_MAX_AGE_HOURS; do
+  new_scenario_dirs
+  write_recovery_status
+  EXTRA_ENV=(NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/s "${bad_var}=not-a-number")
+  run_opscheck --check filebackup
+  [[ "$CODE" -eq 64 ]] && pass "non-numeric $bad_var exits 64 (config error), not a false healthy" || fail "expected exit 64 for invalid $bad_var, got $CODE ($OUT)"
+
+  new_scenario_dirs
+  write_recovery_status
+  EXTRA_ENV=(NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/s "${bad_var}=0")
+  run_opscheck --check filebackup
+  [[ "$CODE" -eq 64 ]] && pass "zero $bad_var is rejected (must be a positive integer)" || fail "expected exit 64 for ${bad_var}=0, got $CODE ($OUT)"
+done
 
 # ── scenario: backup stale ──────────────────────────────────────────────
 section "Backup stale"
@@ -288,7 +374,7 @@ EXTRA_ENV=(NORAMEDI_OPSCHECK_BACKUP_PING_URL=http://x/s NORAMEDI_OPSCHECK_BACKUP
 run_opscheck --check backup
 [[ "$CODE" -ne 0 ]] && pass "non-numeric BACKUP_MAX_AGE_HOURS is rejected (nonzero exit), not silently treated as healthy" || fail "expected nonzero exit for invalid max-age, got $CODE ($OUT)"
 [[ "$OUT" == *"FATAL"* ]] && pass "invalid max-age reports FATAL, not a false pass" || fail "missing FATAL message for invalid max-age ($OUT)"
-[[ "$CODE" -eq 16 ]] && pass "invalid max-age also exits 16, not the pm2-bit-colliding 1" || fail "expected exit 16 for invalid max-age, got $CODE ($OUT)"
+[[ "$CODE" -eq 64 ]] && pass "invalid max-age also exits 64, not the pm2-bit-colliding 1" || fail "expected exit 64 for invalid max-age, got $CODE ($OUT)"
 
 # ── scenario: backup dir missing entirely ───────────────────────────────
 section "Backup directory missing"
@@ -306,6 +392,258 @@ EXTRA_ENV=(NORAMEDI_OPSCHECK_BACKUP_PING_URL=http://x/s)
 run_opscheck --check backup
 [[ "$((CODE & 4))" -eq 4 ]] && pass "backup bit (4) set when no file matches the backup filename pattern" || fail "expected bit 4 set, got $CODE ($OUT)"
 
+# ── scenario: filebackup check (F4-FCR-001) ─────────────────────────────
+#
+# Every one of these runs ONLY the filebackup check with a working fake curl
+# and a configured ping URL, so the exit code is exactly the filebackup bit
+# (8) or 0 — nothing else can contaminate the assertion.
+
+write_fake_curl 0 "$WORK/curl.log"
+
+# run_filebackup [EXTRA_NAME=VALUE...] — filebackup check, ping configured.
+run_filebackup() {
+  EXTRA_ENV=(NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/FILEBACKUPSECRET "$@")
+  run_opscheck --check filebackup
+}
+
+# run_drill [EXTRA_NAME=VALUE...] — drill check, ping configured.
+run_drill() {
+  EXTRA_ENV=(NORAMEDI_OPSCHECK_DRILL_PING_URL=http://x/DRILLSECRET "$@")
+  run_opscheck --check drill
+}
+
+section "File backup healthy"
+new_scenario_dirs
+write_recovery_status
+run_filebackup
+[[ "$CODE" -eq 0 ]] && pass "exit 0 when the file-backup sweep is enabled, recent, completed and clean" || fail "expected exit 0, got $CODE ($OUT)"
+[[ "$OUT" == *"filebackup check: OK"* ]] && pass "reports the filebackup OK line" || fail "missing filebackup-OK line ($OUT)"
+
+section "File backup: exit-code bit is exactly 8"
+new_scenario_dirs   # no status file written at all
+run_filebackup
+[[ "$CODE" -eq 8 ]] && pass "filebackup bit is exactly 8 (bit 3) — the F4-FCR-001 contract value" || fail "expected exit exactly 8, got $CODE ($OUT)"
+
+section "File backup: status file missing"
+new_scenario_dirs
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when the recovery status file does not exist" || fail "expected bit 8 set, got $CODE ($OUT)"
+[[ "$OUT" == *"does not exist"* ]] && pass "names the missing-status-file condition" || fail "missing diagnostic for absent status file ($OUT)"
+
+section "File backup: status file unreadable/unparseable"
+new_scenario_dirs
+write_raw_recovery_status "this is not json at all"
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set for a non-JSON status file" || fail "expected bit 8 set for non-JSON file, got $CODE ($OUT)"
+
+new_scenario_dirs
+write_raw_recovery_status '{ "schemaVersion": 1, "generatedAt": "2026-08-14T03:05:00Z", "fileBackup": { "lastRunAt": "2026-08-14T03:00:12Z", "status": "compl'
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set for a truncated status file (partial write)" || fail "expected bit 8 set for truncated file, got $CODE ($OUT)"
+
+new_scenario_dirs
+write_raw_recovery_status ""
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set for an empty status file" || fail "expected bit 8 set for empty file, got $CODE ($OUT)"
+
+new_scenario_dirs
+write_raw_recovery_status '{ "generatedAt": "2026-08-14T03:05:00Z", "fileBackup": { "enabled": true } }'
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when schemaVersion is absent entirely" || fail "expected bit 8 set for absent schemaVersion, got $CODE ($OUT)"
+
+section "File backup: wrong schemaVersion"
+new_scenario_dirs
+RS_SCHEMA_VERSION=2
+write_recovery_status
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set for schemaVersion=2 (never interpreted on a guess)" || fail "expected bit 8 set for schemaVersion=2, got $CODE ($OUT)"
+[[ "$OUT" == *"schemaVersion"* ]] && pass "names schemaVersion in the diagnostic" || fail "missing schemaVersion diagnostic ($OUT)"
+
+section "File backup disabled is itself alertable"
+new_scenario_dirs
+RS_FB_ENABLED=false
+write_recovery_status
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when fileBackup.enabled is false" || fail "expected bit 8 set when disabled, got $CODE ($OUT)"
+[[ "$OUT" == *"DISABLED"* ]] && pass "explains that attachments have no second copy" || fail "missing disabled-file-backup diagnostic ($OUT)"
+
+section "File backup: last run did not complete"
+new_scenario_dirs
+RS_FB_STATUS=failed
+write_recovery_status
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when fileBackup.status is 'failed'" || fail "expected bit 8 set for status=failed, got $CODE ($OUT)"
+
+new_scenario_dirs
+RS_FB_STATUS=running
+write_recovery_status
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set for any status other than 'completed'" || fail "expected bit 8 set for status=running, got $CODE ($OUT)"
+
+section "File backup: failed/missing files"
+new_scenario_dirs
+RS_FB_FAILED=3
+write_recovery_status
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when filesFailed > 0" || fail "expected bit 8 set for filesFailed=3, got $CODE ($OUT)"
+
+new_scenario_dirs
+RS_FB_MISSING=2
+write_recovery_status
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when filesMissing > 0" || fail "expected bit 8 set for filesMissing=2, got $CODE ($OUT)"
+
+section "File backup: lastRunAt staleness"
+new_scenario_dirs
+RS_FB_AGE_H=40
+write_recovery_status
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when lastRunAt is 40h old (max 30h)" || fail "expected bit 8 set for stale lastRunAt, got $CODE ($OUT)"
+
+new_scenario_dirs
+RS_FB_AGE_H=30
+write_recovery_status
+run_filebackup
+[[ "$CODE" -eq 0 ]] && pass "filebackup bit clear at exactly 30h with max 30h (age > max, matching check_backup's boundary semantics)" || fail "expected exit 0 at the max-age boundary, got $CODE ($OUT)"
+
+new_scenario_dirs
+RS_FB_AGE_H=40
+write_recovery_status
+run_filebackup NORAMEDI_OPSCHECK_FILEBACKUP_MAX_AGE_HOURS=48
+[[ "$CODE" -eq 0 ]] && pass "a raised NORAMEDI_OPSCHECK_FILEBACKUP_MAX_AGE_HOURS is honoured (40h under a 48h max)" || fail "expected exit 0 with max-age 48, got $CODE ($OUT)"
+
+section "File backup: future-dated lastRunAt fails closed"
+new_scenario_dirs
+RS_FB_AGE_H=-5   # five hours in the FUTURE
+write_recovery_status
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when lastRunAt is in the future (clock skew fails closed, never 'fresh')" || fail "expected bit 8 set for future lastRunAt, got $CODE ($OUT)"
+[[ "$OUT" == *"future"* ]] && pass "names the future-timestamp condition" || fail "missing future-timestamp diagnostic ($OUT)"
+
+section "File backup: status file itself stopped being refreshed"
+new_scenario_dirs
+RS_GENERATED_AGE_H=40   # writer died 40h ago; the fields inside still look healthy
+write_recovery_status
+EXTRA_ENV=(
+  NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/FILEBACKUPSECRET
+  NORAMEDI_OPSCHECK_DRILL_PING_URL=http://x/DRILLSECRET
+)
+run_opscheck --check filebackup --check drill
+[[ "$((CODE & 8))" -eq 8 ]] && pass "filebackup bit (8) set when generatedAt is 40h old (max 30h) even though every field inside still reads healthy" || fail "expected bit 8 set for a stale generatedAt, got $CODE ($OUT)"
+[[ "$OUT" == *"writer is not running"* ]] && pass "diagnoses the stale status file as a dead writer, not a backup problem" || fail "missing dead-writer diagnostic ($OUT)"
+[[ "$CODE" -eq 8 ]] && pass "generatedAt staleness is scoped to the filebackup check — the drill check is not double-alerted by it" || fail "expected exit exactly 8 (filebackup only), got $CODE ($OUT)"
+
+new_scenario_dirs
+RS_GENERATED_AGE_H=40
+write_recovery_status
+run_filebackup NORAMEDI_OPSCHECK_RECOVERY_STATUS_MAX_AGE_HOURS=48
+[[ "$CODE" -eq 0 ]] && pass "a raised NORAMEDI_OPSCHECK_RECOVERY_STATUS_MAX_AGE_HOURS is honoured" || fail "expected exit 0 with status max-age 48, got $CODE ($OUT)"
+
+section "File backup: raw status-file content is never echoed"
+new_scenario_dirs
+RS_FB_STATUS="failed-0f3c1d7b-this-parsed-value-must-not-be-echoed-verbatim"
+write_recovery_status
+run_filebackup
+[[ "$((CODE & 8))" -eq 8 ]] && pass "an unexpected status value fails the check" || fail "expected bit 8 set, got $CODE ($OUT)"
+[[ "$OUT" != *"0f3c1d7b"* ]] && pass "an over-long/unexpected parsed value is rendered as a placeholder, never echoed verbatim" || fail "CONTENT LEAK: raw status-file value appeared in script output ($OUT)"
+
+# ── scenario: drill check (F4-FCR-001) ──────────────────────────────────
+
+section "Drill healthy"
+new_scenario_dirs
+write_recovery_status
+run_drill
+[[ "$CODE" -eq 0 ]] && pass "exit 0 when a restore rehearsal passed 48h ago (max 192h)" || fail "expected exit 0, got $CODE ($OUT)"
+[[ "$OUT" == *"drill check: OK"* ]] && pass "reports the drill OK line" || fail "missing drill-OK line ($OUT)"
+
+section "Drill: exit-code bit is exactly 16"
+new_scenario_dirs   # no status file at all
+run_drill
+[[ "$CODE" -eq 16 ]] && pass "drill bit is exactly 16 (bit 4) — the F4-FCR-001 contract value, formerly the config-error code" || fail "expected exit exactly 16, got $CODE ($OUT)"
+
+section "Drill: no drill object recorded"
+new_scenario_dirs
+write_raw_recovery_status '{ "schemaVersion": 1, "generatedAt": "2026-08-14T03:05:00Z", "fileBackup": { "lastRunAt": "2026-08-14T03:00:12Z", "status": "completed", "filesFailed": 0, "filesMissing": 0, "enabled": true } }'
+run_drill
+[[ "$((CODE & 16))" -eq 16 ]] && pass "drill bit (16) set when no rehearsal has ever been recorded" || fail "expected bit 16 set for a missing drill object, got $CODE ($OUT)"
+
+section "Drill: stale rehearsal"
+new_scenario_dirs
+RS_DRILL_AGE_H=200
+write_recovery_status
+run_drill
+[[ "$((CODE & 16))" -eq 16 ]] && pass "drill bit (16) set when the last rehearsal was 200h ago (max 192h)" || fail "expected bit 16 set for a stale drill, got $CODE ($OUT)"
+
+new_scenario_dirs
+RS_DRILL_AGE_H=192
+write_recovery_status
+run_drill
+[[ "$CODE" -eq 0 ]] && pass "drill bit clear at exactly 192h with max 192h (age > max, one weekly rehearsal plus margin)" || fail "expected exit 0 at the drill max-age boundary, got $CODE ($OUT)"
+
+new_scenario_dirs
+RS_DRILL_AGE_H=200
+write_recovery_status
+run_drill NORAMEDI_OPSCHECK_DRILL_MAX_AGE_HOURS=240
+[[ "$CODE" -eq 0 ]] && pass "a raised NORAMEDI_OPSCHECK_DRILL_MAX_AGE_HOURS is honoured (200h under a 240h max)" || fail "expected exit 0 with drill max-age 240, got $CODE ($OUT)"
+
+section "Drill: future-dated lastRunAt fails closed"
+new_scenario_dirs
+RS_DRILL_AGE_H=-5
+write_recovery_status
+run_drill
+[[ "$((CODE & 16))" -eq 16 ]] && pass "drill bit (16) set when drill.lastRunAt is in the future" || fail "expected bit 16 set for a future drill timestamp, got $CODE ($OUT)"
+
+section "Drill: rehearsal did not pass"
+new_scenario_dirs
+RS_DRILL_STATUS=failed
+write_recovery_status
+run_drill
+[[ "$((CODE & 16))" -eq 16 ]] && pass "drill bit (16) set when drill.status is 'failed'" || fail "expected bit 16 set for status=failed, got $CODE ($OUT)"
+
+new_scenario_dirs
+RS_DRILL_STATUS=skipped
+write_recovery_status
+run_drill
+[[ "$((CODE & 16))" -eq 16 ]] && pass "drill bit (16) set for any status other than 'passed'" || fail "expected bit 16 set for status=skipped, got $CODE ($OUT)"
+
+section "Exit-code contract: the two new bits are independent and additive"
+new_scenario_dirs
+RS_FB_ENABLED=false
+RS_DRILL_STATUS=failed
+write_recovery_status
+EXTRA_ENV=(
+  NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/FILEBACKUPSECRET
+  NORAMEDI_OPSCHECK_DRILL_PING_URL=http://x/DRILLSECRET
+)
+run_opscheck --check filebackup --check drill
+[[ "$CODE" -eq 24 ]] && pass "filebackup (8) + drill (16) failing together exits 24, distinct from every other code" || fail "expected exit 24, got $CODE ($OUT)"
+
+new_scenario_dirs
+RS_DRILL_STATUS=failed
+write_recovery_status
+EXTRA_ENV=(
+  NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/FILEBACKUPSECRET
+  NORAMEDI_OPSCHECK_DRILL_PING_URL=http://x/DRILLSECRET
+)
+run_opscheck --check filebackup --check drill
+[[ "$CODE" -eq 16 ]] && pass "a failing drill does not set the filebackup bit (the checks are independent)" || fail "expected exit exactly 16, got $CODE ($OUT)"
+
+section "Suppressed ping for the two new checks"
+new_scenario_dirs
+write_recovery_status
+: > "$WORK/curl.log"
+write_fake_curl 0 "$WORK/curl.log"
+EXTRA_ENV=(
+  NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/FILEBACKUPSECRET
+  NORAMEDI_OPSCHECK_DRILL_PING_URL=http://x/DRILLSECRET
+  NORAMEDI_OPSCHECK_SUPPRESS_PING=filebackup,drill
+)
+run_opscheck --check filebackup --check drill
+[[ ! -s "$WORK/curl.log" ]] && pass "NORAMEDI_OPSCHECK_SUPPRESS_PING recognizes the new check names (no curl invoked)" || fail "expected no curl invocations with both new checks suppressed ($(cat "$WORK/curl.log"))"
+[[ "$OUT" == *"ping suppressed for 'filebackup'"* ]] && pass "reports filebackup suppression explicitly" || fail "missing filebackup suppression line ($OUT)"
+[[ "$OUT" == *"ping suppressed for 'drill'"* ]] && pass "reports drill suppression explicitly" || fail "missing drill suppression line ($OUT)"
+[[ "$CODE" -eq 0 ]] && pass "suppression does not change the local result of either new check" || fail "expected exit 0, got $CODE ($OUT)"
+
 # ── scenario: ping/curl transport failure ───────────────────────────────
 section "Ping transport failure (local checks otherwise healthy)"
 new_scenario_dirs
@@ -313,7 +651,8 @@ write_fake_pm2 "$(pm2_jlist_json online online 1 1)"
 write_fake_curl 7 "$WORK/curl.log"
 EXTRA_ENV=(NORAMEDI_OPSCHECK_PM2_PING_URL=http://x/s)
 run_opscheck --check pm2
-[[ "$((CODE & 8))" -eq 8 ]] && pass "ping bit (8) set when curl fails" || fail "expected bit 8 set, got $CODE ($OUT)"
+[[ "$((CODE & 32))" -eq 32 ]] && pass "ping bit (32) set when curl fails" || fail "expected bit 32 set, got $CODE ($OUT)"
+[[ "$CODE" -eq 32 ]] && pass "a ping-only failure exits exactly 32 (the F4-FCR-001 value; it was 8 before the filebackup bit took that value)" || fail "expected exit exactly 32 for a ping-only failure, got $CODE ($OUT)"
 [[ "$((CODE & 1))" -eq 0 ]] && pass "pm2 bit stays clear — ping failure is separate from local-check failure" || fail "pm2 bit incorrectly set on ping-only failure ($OUT)"
 
 # ── scenario: missing ping URL entirely ─────────────────────────────────
@@ -323,7 +662,7 @@ write_fake_pm2 "$(pm2_jlist_json online online 1 1)"
 write_fake_curl 0 "$WORK/curl.log"
 EXTRA_ENV=()
 run_opscheck --check pm2
-[[ "$((CODE & 8))" -eq 8 ]] && pass "ping bit (8) set when ping URL env var is unset" || fail "expected bit 8 set, got $CODE ($OUT)"
+[[ "$((CODE & 32))" -eq 32 ]] && pass "ping bit (32) set when ping URL env var is unset" || fail "expected bit 32 set, got $CODE ($OUT)"
 [[ "$OUT" == *"no ping URL configured"* ]] && pass "explains the missing-config condition" || fail "missing explanatory message ($OUT)"
 
 # ── scenario: dry-run never invokes curl ────────────────────────────────
@@ -343,18 +682,21 @@ new_scenario_dirs
 write_fake_pm2 "$(pm2_jlist_json online online 1 1)"
 write_fake_df 10
 touch_backup_file "noramedi_crm-20260101-030000.dump" 1
+write_recovery_status
 : > "$WORK/curl.log"
 write_fake_curl 0 "$WORK/curl.log"
 EXTRA_ENV=(
   NORAMEDI_OPSCHECK_PM2_PING_URL=http://x/PM2SECRET
   NORAMEDI_OPSCHECK_DISK_PING_URL=http://x/DISKSECRET
   NORAMEDI_OPSCHECK_BACKUP_PING_URL=http://x/BACKUPSECRET
+  NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL=http://x/FILEBACKUPSECRET
+  NORAMEDI_OPSCHECK_DRILL_PING_URL=http://x/DRILLSECRET
   NORAMEDI_OPSCHECK_SUPPRESS_PING=disk
 )
 run_opscheck
 
 lines_hitting_curl="$(wc -l < "$WORK/curl.log" | tr -d ' ')"
-[[ "$lines_hitting_curl" -eq 2 ]] && pass "only the non-suppressed checks (pm2, backup) actually pinged" || fail "expected exactly 2 curl invocations, got $lines_hitting_curl"
+[[ "$lines_hitting_curl" -eq 4 ]] && pass "only the non-suppressed checks (pm2, backup, filebackup, drill) actually pinged" || fail "expected exactly 4 curl invocations, got $lines_hitting_curl"
 [[ "$OUT" == *"ping suppressed for 'disk'"* ]] && pass "reports the suppression explicitly" || fail "missing suppression report line ($OUT)"
 [[ "$CODE" -eq 0 ]] && pass "suppressed check still reports overall healthy (local check itself still ran and passed)" || fail "expected exit 0, got $CODE ($OUT)"
 
@@ -365,11 +707,15 @@ write_fake_pm2 "$(pm2_jlist_json stopped online 1 1)"
 write_fake_df 95
 write_fake_curl 1 "$WORK/curl.log"
 touch_backup_file "noramedi_crm-20260101-030000.dump" 999
+# No recovery status file written: the filebackup and drill checks take their
+# failure paths too, so this covers every check's failure branch at once.
 SECRET="hcuuid-4f9a2b7e-do-not-print-this-token"
 EXTRA_ENV=(
   NORAMEDI_OPSCHECK_PM2_PING_URL="http://hc-ping.example/$SECRET"
   NORAMEDI_OPSCHECK_DISK_PING_URL="http://hc-ping.example/$SECRET"
   NORAMEDI_OPSCHECK_BACKUP_PING_URL="http://hc-ping.example/$SECRET"
+  NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL="http://hc-ping.example/$SECRET"
+  NORAMEDI_OPSCHECK_DRILL_PING_URL="http://hc-ping.example/$SECRET"
 )
 run_opscheck
 
