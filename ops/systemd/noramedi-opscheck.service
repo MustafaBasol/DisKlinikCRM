@@ -1,9 +1,13 @@
 # noramedi-opscheck.service — F3-OBS-002
 #
-# NOT YET INSTALLED ON PRODUCTION. This is a reviewed template only — see
+# INSTALLED AND ACTIVE ON PRODUCTION since 2026-08-13 (F3-OBS-002-CLOSE),
+# matching the header of noramedi-opscheck.timer in this same directory. The
+# installation commands below were executed and verified — see
 # docs/program/evidence/F3-OBS-002_LIVE_OBSERVABILITY_WIRING_ALERT_VERIFICATION.md
-# for the exact proposed installation commands and the required operator
-# approval step before any of this is deployed.
+# §17. (This block previously said "NOT YET INSTALLED ON PRODUCTION", which
+# was left stale when the unit was actually deployed; corrected in F4-FCR-001.)
+# Re-running any of those commands is how an updated script/unit is rolled
+# out, and remains subject to the same operator approval step.
 #
 # Deliberately a standalone systemd unit, NOT an application node-cron job
 # inside noramedi-api/noramedi-worker: the whole point of this check is to
@@ -60,7 +64,7 @@
 # verified against the script's actual dependency, not assumed safe.
 
 [Unit]
-Description=NoraMedi ops health check (F3-OBS-002) — PM2 status, disk, backup freshness
+Description=NoraMedi ops health check (F3-OBS-002, F4-FCR-001) — PM2 status, disk, DB backup freshness, file backup freshness, restore-drill freshness
 Documentation=file:///var/www/noramedi/docs/program/evidence/F3-OBS-002_LIVE_OBSERVABILITY_WIRING_ALERT_VERIFICATION.md
 After=network-online.target
 Wants=network-online.target

@@ -3412,6 +3412,86 @@ model FileBackupEntry {
   @@index([sourceModel, sourceRecordId])
 }
 
+// ─── Recovery Drill Evidence (F4-FCR-001) ──────────────────────────────────
+// Durable evidence trail for recovery exercises (database restore tests and
+// file restore rehearsals). Purely additive: does NOT modify FileBackupRun,
+// FileBackupEntry, or any other existing model, and nothing in this table is
+// tenant-scoped — a recovery drill is a platform-level operation, never a
+// per-clinic one.
+
+/// One row per recovery drill execution. This is the durable RPO/RTO
+/// evidence trail: before this model existed, a restore test proved only
+/// "restore works right now" in a log line that scrolled away — there was no
+/// queryable record of WHEN the last successful drill ran, HOW LONG recovery
+/// took (RTO), or HOW OLD the artifact it recovered from was (RPO).
+///
+///   - `durationMs` is the measured RTO evidence for one drill.
+///   - `sourceArtifactAt` / `sourceArtifactAgeMinutes` are the RPO evidence:
+///     the age, at drill start, of the newest backup artifact the drill
+///     actually exercised.
+///   - `cleanupVerified` / `residualArtifact` close the loop on the drill's
+///     own side effects — a drill that restores into a scratch database or a
+///     temp directory must be provably able to say it cleaned up after
+///     itself, not merely assumed to have done so.
+///
+/// Append-only history — a drill run row is never deleted, so "was a
+/// recovery drill ever actually run, and when" stays answerable
+/// indefinitely. Mirrors FileBackupRun's append-only evidence convention.
+model RecoveryDrillRun {
+  id String @id @default(uuid())
+
+  /// db_restore_test | file_restore_rehearsal
+  kind    String
+  /// scheduled | manual | cli
+  trigger String @default("scheduled")
+  /// running | passed | failed. A row left in `running` after a crash is
+  /// swept to `failed` with errorCode `drill_abandoned` by
+  /// reapStaleRecoveryDrills() — see recoveryDrillService.ts.
+  status  String @default("running")
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  /// RTO evidence: finishedAt - startedAt, in milliseconds. Null for a run
+  /// that never finished (crashed/abandoned), which is itself the signal.
+  durationMs Int?
+
+  /// The backup artifact this drill recovered FROM: the dump file's mtime
+  /// for a db_restore_test, or the newest exercised FileBackupEntry's
+  /// copiedAt for a file_restore_rehearsal.
+  sourceArtifactAt         DateTime?
+  /// RPO evidence: drill start - sourceArtifactAt, in minutes. This is the
+  /// real, measured data-loss window a recovery from that artifact would
+  /// have incurred — not a policy target.
+  sourceArtifactAgeMinutes Int?
+
+  samplesAttempted Int @default(0)
+  samplesPassed    Int @default(0)
+  samplesFailed    Int @default(0)
+
+  /// True only when the drill positively confirmed its own scratch
+  /// artifacts were removed. Defaults to false so "we never checked" and
+  /// "we checked and it failed" are never confused with success.
+  cleanupVerified  Boolean @default(false)
+  /// Non-sensitive operator-actionable label of anything cleanup failed to
+  /// remove — most importantly a LEAKED TEMPORARY DATABASE NAME, e.g.
+  /// `noramedi_restore_test_1723545600000_ab12cd34`. That string is
+  /// deliberately safe to persist and to show an operator: it contains no
+  /// PHI, no patient identifier, no clinic identifier and no secret — it is
+  /// a generated scratch name — and an operator NEEDS it verbatim to go
+  /// drop the leftover database by hand. Never put a file name, storage
+  /// key, absolute path, clinic id, or raw error message here.
+  residualArtifact String?
+
+  /// Sanitized failure classification only (safeErrorFields().errorCode
+  /// style, or a fixed label such as `drill_abandoned`). Never a raw error
+  /// message — raw messages embed absolute paths and endpoints.
+  errorCode String?
+  createdAt DateTime @default(now())
+
+  @@index([kind, startedAt])
+  @@index([status, startedAt])
+}
+
 // ── External Calendar Integration Framework (DigiDentiS + future providers) ──
 // See docs/architecture/external-calendar-integration.md for the full design.
 // Provider-agnostic by construction: `provider` is a free-form key (starts

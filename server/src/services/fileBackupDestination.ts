@@ -97,9 +97,50 @@ export function isFileBackupDestinationConfigured(): boolean {
   return getFileBackupDestinationKind() !== 'none';
 }
 
-/** True only for the destination kind this program treats as off-host. */
+/**
+ * Hosts that are, by definition, the SAME machine — so an S3-compatible
+ * endpoint pointing at one of them is not a second failure domain.
+ */
+function isLoopbackEndpointHost(host: string): boolean {
+  const h = host.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h === '::1' || h === '0.0.0.0') return true;
+  // Whole 127.0.0.0/8, not just 127.0.0.1.
+  return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
+}
+
+/**
+ * True only for a destination this program can honestly call off-host.
+ *
+ * F4-FCR-001 promotes this value into an operator-facing "off-host ✓" badge,
+ * into the recovery status file, and into the host monitor's failure-domain
+ * alarm — so it must not answer `true` for something that is demonstrably the
+ * same machine. Kind `s3` alone is not sufficient evidence: the module
+ * deliberately permits `FILE_BACKUP_S3_ENDPOINT=http://localhost:9000` (a
+ * MinIO container on this very VPS) via FILE_BACKUP_S3_ALLOW_INSECURE_ENDPOINT,
+ * and that configuration shares a disk, a host, and a blast radius with the
+ * primary data. Claiming it as an independent copy is exactly the false
+ * assurance R-030 exists to prevent.
+ *
+ * A non-loopback endpoint is still only a claim about the CONFIGURED address,
+ * not proof of a distinct failure domain — a remote-looking hostname can still
+ * resolve to this host. It is the strongest check available in application
+ * code; the durability argument itself remains an operator/architecture
+ * decision (see docs/program/runbooks/F4_RECOVERY_OPERATIONS.md §7.2).
+ */
 export function isFileBackupDestinationOffHost(): boolean {
-  return getFileBackupDestinationKind() === 's3';
+  if (getFileBackupDestinationKind() !== 's3') return false;
+
+  const endpoint = process.env.FILE_BACKUP_S3_ENDPOINT?.trim();
+  // No endpoint means real AWS S3, which is never this host.
+  if (!endpoint) return true;
+
+  try {
+    return !isLoopbackEndpointHost(new URL(endpoint).hostname);
+  } catch {
+    // An unparseable endpoint cannot be shown to be off-host. Fail closed:
+    // under-claiming durability is safe, over-claiming it is not.
+    return false;
+  }
 }
 
 let s3Client: S3Client | null = null;

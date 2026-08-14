@@ -1880,7 +1880,7 @@ router.post('/backups/run', async (req: PlatformAdminRequest, res: Response) => 
       resourceKey: 'database',
       outcome: 'success',
     }).catch((auditErr) => {
-      console.error('[platform-backup] Failed to write audit event for completed manual backup run', auditErr);
+      console.error('[platform-backup] Failed to write audit event for completed manual backup run', safeErrorFields(auditErr));
     });
     res.json(result);
   } catch (err: any) {
@@ -1890,9 +1890,9 @@ router.post('/backups/run', async (req: PlatformAdminRequest, res: Response) => 
       resourceType: 'backup',
       resourceKey: 'database',
       outcome: 'error',
-      safeMetadata: { errorType: err?.name ?? 'Error' },
+      safeMetadata: { errorType: boundedErrorType(err) },
     }).catch((auditErr) => {
-      console.error('[platform-backup] Failed to write audit event for failed manual backup run', auditErr);
+      console.error('[platform-backup] Failed to write audit event for failed manual backup run', safeErrorFields(auditErr));
     });
     res.status(500).json({ error: `Backup run failed: ${err?.message ?? 'Unknown error'}` });
   }
@@ -1911,7 +1911,9 @@ router.post('/backups/restore-test', async (req: PlatformAdminRequest, res: Resp
       return res.status(409).json({ error: 'A restore test is already running' });
     }
     console.log(`[platform-backup] Restore test triggered by admin ${actorPlatformAdminId}, file: ${filename ?? 'latest'}`);
-    const result = await runRestoreTest(filename);
+    // Explicit trigger: this execution is recorded in the recovery drill
+    // ledger, and 'manual' vs 'scheduled' is part of that evidence.
+    const result = await runRestoreTest(filename, 'manual');
     await writePlatformAdminAuditEvent({
       actorPlatformAdminId,
       action: 'backup.restore_test.completed',
@@ -1920,7 +1922,7 @@ router.post('/backups/restore-test', async (req: PlatformAdminRequest, res: Resp
       outcome: 'success',
       safeMetadata: { filename: filename ?? 'latest' },
     }).catch((auditErr) => {
-      console.error('[platform-backup] Failed to write audit event for completed restore test', auditErr);
+      console.error('[platform-backup] Failed to write audit event for completed restore test', safeErrorFields(auditErr));
     });
     res.json(result);
   } catch (err: any) {
@@ -1931,9 +1933,9 @@ router.post('/backups/restore-test', async (req: PlatformAdminRequest, res: Resp
       resourceType: 'backup',
       resourceKey: 'restore_test',
       outcome: 'error',
-      safeMetadata: { filename: filename ?? 'latest', errorType: err?.name ?? 'Error' },
+      safeMetadata: { filename: filename ?? 'latest', errorType: boundedErrorType(err) },
     }).catch((auditErr) => {
-      console.error('[platform-backup] Failed to write audit event for failed restore test', auditErr);
+      console.error('[platform-backup] Failed to write audit event for failed restore test', safeErrorFields(auditErr));
     });
     res.status(status).json({ error: err?.message ?? 'Restore test failed' });
   }
@@ -1998,6 +2000,14 @@ router.post('/file-backups/run', async (req: PlatformAdminRequest, res: Response
 });
 
 // POST /api/platform/file-backups/restore-rehearsal
+//
+// F4-FCR-001-R1 (M1a): this route MUST go through
+// runRestoreRehearsalTick(), not runFileBackupRestoreRehearsal() directly.
+// The direct call bypassed the RESTORE_REHEARSAL_REQUIRE_SYNTHETIC gate (so
+// one click could restore real patient bytes into /tmp on the production host
+// with the flag on), the cluster job lock (so a manual run could race the
+// scheduled one), and the recovery drill ledger (so the run left no evidence
+// row at all). The tick applies all three.
 router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest, res: Response) => {
   const { sampleSize } = req.body ?? {};
   if (sampleSize !== undefined && (typeof sampleSize !== 'number' || !Number.isFinite(sampleSize) || sampleSize <= 0)) {
@@ -2005,18 +2015,49 @@ router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest,
   }
   const actorPlatformAdminId = req.platformAdmin?.id ?? null;
   try {
-    const { runFileBackupRestoreRehearsal, isFileBackupRestoreRehearsalRunning } = await import('../services/fileBackupService.js');
+    const [{ isFileBackupRestoreRehearsalRunning }, { runRestoreRehearsalTick }] = await Promise.all([
+      import('../services/fileBackupService.js'),
+      import('../jobs/restoreRehearsalJob.js'),
+    ]);
     if (isFileBackupRestoreRehearsalRunning()) {
       return res.status(409).json({ error: 'A restore rehearsal is already running' });
     }
     console.log(`[platform-file-backup] Restore rehearsal triggered by admin ${actorPlatformAdminId}`);
-    const result = await runFileBackupRestoreRehearsal(sampleSize);
+    const outcome = await runRestoreRehearsalTick({ trigger: 'manual', sampleSize });
+
+    if (outcome.skipReason !== null || outcome.result === null) {
+      // Refused, not failed. 409 keeps "the guard stopped this" distinct from
+      // "the rehearsal ran and broke", and the message names the flag so the
+      // operator knows which knob produced the refusal.
+      const message =
+        outcome.skipReason === 'synthetic_guard'
+          ? 'Restore rehearsal blocked: RESTORE_REHEARSAL_REQUIRE_SYNTHETIC=true and the sampled backup entries are not all in RESTORE_REHEARSAL_SYNTHETIC_CLINIC_IDS'
+          : outcome.skipReason === 'lock_held'
+            ? 'A restore rehearsal is already running'
+            : 'No verified backup entries available to rehearse';
+      await writePlatformAdminAuditEvent({
+        actorPlatformAdminId,
+        action: 'file_backup.restore_rehearsal.blocked',
+        resourceType: 'file_backup',
+        resourceKey: 'restore_rehearsal',
+        outcome: 'error',
+        safeMetadata: { sampleSize: sampleSize ?? null, reason: outcome.skipReason ?? 'no_result' },
+      }).catch((auditErr) => {
+        console.error('[platform-file-backup] Failed to write audit event for blocked restore rehearsal', safeErrorFields(auditErr));
+      });
+      return res.status(409).json({ error: message });
+    }
+
+    const result = { ...outcome.result, drillRunId: outcome.drillId };
     await writePlatformAdminAuditEvent({
       actorPlatformAdminId,
       action: 'file_backup.restore_rehearsal.completed',
       resourceType: 'file_backup',
       resourceKey: 'restore_rehearsal',
       outcome: 'success',
+      // Metadata shape is pinned by platformFileBackupAudit.test.ts — keep it
+      // to exactly `sampleSize`. The drill ledger row is the durable
+      // cross-reference and it is returned in the response body below.
       safeMetadata: { sampleSize: sampleSize ?? null },
     }).catch((auditErr) => {
       console.error('[platform-file-backup] Failed to write audit event for completed restore rehearsal', safeErrorFields(auditErr));
@@ -2034,6 +2075,66 @@ router.post('/file-backups/restore-rehearsal', async (req: PlatformAdminRequest,
       console.error('[platform-file-backup] Failed to write audit event for failed restore rehearsal', safeErrorFields(auditErr));
     });
     res.status(500).json({ error: err?.message ?? 'Restore rehearsal failed' });
+  }
+});
+
+// ─── Recovery Status (F4-FCR-001) ─────────────────────────────────────────────
+//
+// One call that answers "can we actually recover?" across all three legs:
+// the database backup, the file backup, and the recovery drill ledger.
+// Before this, an operator had to hit three endpoints and do the staleness
+// arithmetic in their head — and "no backup has ever been taken" looked
+// identical to "all quiet". Every leg here reports `stale: true` when it has
+// never run.
+//
+// Returns no secrets, no backup file paths, and no clinic ids.
+
+// GET /api/platform/recovery/status
+router.get('/recovery/status', async (_req, res: Response) => {
+  try {
+    const [
+      { getBackupStatus, computeArtifactAgeMinutes, isBackupStale, resolveMaxAgeHours },
+      { getFileBackupStatus },
+      { getRecoveryDrillStatus },
+    ] = await Promise.all([
+      import('../services/backupService.js'),
+      import('../services/fileBackupService.js'),
+      import('../services/recoveryDrillService.js'),
+    ]);
+
+    const [dbBackup, fileBackupStatus, drills] = await Promise.all([
+      getBackupStatus(),
+      getFileBackupStatus(),
+      getRecoveryDrillStatus(),
+    ]);
+
+    // fileBackupService owns its status shape but not its staleness policy, so
+    // the age/stale fields are derived here from its `lastRun`.
+    //
+    // ONLY finishedAt counts (F4-FCR-001-R1 / M6). A run that started but
+    // never finished produced no usable artifact, so it must not refresh the
+    // freshness clock — and there is deliberately no startedAt fallback: with
+    // one, a nightly sweep that crashes on start every single night would keep
+    // `stale: false` forever, because startedAt is always fresh. A lastRun
+    // with a null finishedAt therefore yields age null ⇒ stale: true, the same
+    // as never having run at all.
+    const fileBackupThresholdHours = resolveMaxAgeHours(process.env.FILE_BACKUP_MAX_AGE_HOURS);
+    const fileBackupLastRunAt = fileBackupStatus.lastRun?.finishedAt ?? null;
+    const fileBackupAgeMinutes = computeArtifactAgeMinutes(fileBackupLastRunAt);
+
+    res.json({
+      dbBackup,
+      fileBackup: {
+        ...fileBackupStatus,
+        lastRunAgeMinutes: fileBackupAgeMinutes,
+        stale: isBackupStale(fileBackupAgeMinutes, fileBackupThresholdHours),
+        staleThresholdHours: fileBackupThresholdHours,
+      },
+      drills,
+    });
+  } catch (err: unknown) {
+    console.error('[platform-recovery] Failed to build recovery status', safeErrorFields(err));
+    res.status(500).json({ error: 'Failed to get recovery status' });
   }
 });
 
