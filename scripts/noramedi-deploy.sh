@@ -13,6 +13,8 @@
 #   6. pm2 startOrReload ecosystem.config.cjs --only noramedi-worker --update-env
 #   7. API healthcheck with retry (401 = healthy)
 #   8. worker PM2-status verification with retry (F3-IMPL-002)
+#   8b. RELEASE_SHA propagation verification, both apps (F3-C2-ERR-003-R1;
+#       warns, never aborts — release tagging only)
 #
 # Steps 5-8 use the repository-defined ecosystem.config.cjs (F3-IMPL-002) as
 # the single source of truth for both PM2 processes — see that file's
@@ -129,13 +131,45 @@ verify_pm2_online() {
   done
 }
 
+# release_sha_state_of NAME EXPECTED — prints one of "match", "mismatch",
+# "unset", or "missing" for app NAME. F3-C2-ERR-003-R1: proves on the live
+# process that the ecosystem `env:` declaration actually landed. Only ever
+# prints that single state word — never any environment value, so no secret
+# from the process environment can reach the deploy log through this helper.
+release_sha_state_of() {
+  local name="$1" expected="$2"
+  pm2 jlist | node -e '
+    let raw = "";
+    process.stdin.on("data", chunk => { raw += chunk; });
+    process.stdin.on("end", () => {
+      let apps;
+      try { apps = JSON.parse(raw); } catch { process.stdout.write("missing"); return; }
+      const app = apps.find(a => a.name === process.argv[1]);
+      if (!app || !app.pm2_env) { process.stdout.write("missing"); return; }
+      const actual = app.pm2_env.RELEASE_SHA;
+      if (!actual) { process.stdout.write("unset"); return; }
+      process.stdout.write(actual === process.argv[2] ? "match" : "mismatch");
+    });
+  ' "$name" "$expected"
+}
+
 # 4b. Release identifier (F3-C2-ERR-001). `server/src/utils/errorTracking.ts`
 #     tags external error-tracking events with `RELEASE_SHA` so an operator can
 #     tell which deployed commit produced an event. Before this, nothing in the
 #     repository ever set it, so the field was always empty even with a DSN
-#     configured. Exported here — before the `pm2 ... --update-env` calls below,
-#     which is what propagates the current shell environment into both
-#     processes.
+#     configured.
+#
+#     F3-C2-ERR-003-R1 correction: exporting it here is NOT by itself what
+#     propagates it. PM2's CLI environment is *conservative* — on
+#     restart/reload it reuses the environment recorded when the process was
+#     first started — so after the F3-C2-ERR-001 deploy both processes came up
+#     with RELEASE_SHA unset. What PM2 does guarantee is that values declared
+#     under an ecosystem file's `env:` attribute are applied on every
+#     restart/reload, so `ecosystem.config.cjs` now declares RELEASE_SHA for
+#     both apps and resolves it from this exported variable when the PM2 CLI
+#     evaluates that file. The export below is still required (it is the input
+#     the ecosystem file reads); it is simply no longer sufficient on its own.
+#     Step 8b re-verifies the result on the live processes.
 #
 #     Not a secret: it is the same SHA `git log` already shows, and it is
 #     printed below deliberately so the deploy log records what was deployed.
@@ -176,6 +210,34 @@ if ! verify_pm2_online "$PM2_WORKER_NAME" 12 5; then
   echo "[$(timestamp)] FATAL — $PM2_WORKER_NAME did not reach 'online' state." >&2
   echo "[$(timestamp)] Background jobs (reminders, retries, cleanup, sync) may not be running. Deploy aborted." >&2
   exit 1
+fi
+
+# 8b. Release-tag verification (F3-C2-ERR-003-R1). Non-fatal by design: a
+#     missing release tag degrades error-tracking attribution only — it never
+#     makes the deployed application unhealthy, so it must not abort a
+#     deploy that reached "both processes online". It is reported loudly so
+#     the operator sees a regression in the deploy log itself instead of
+#     discovering it during a separate production verification pass.
+echo "[$(timestamp)] Verifying RELEASE_SHA propagation into both PM2 processes..."
+release_sha_ok=true
+for app_name in "$PM2_API_NAME" "$PM2_WORKER_NAME"; do
+  state="$(release_sha_state_of "$app_name" "$RELEASE_SHA" 2>/dev/null || echo missing)"
+  case "$state" in
+    match)
+      echo "[$(timestamp)] OK — '$app_name': RELEASE_SHA_CONFIGURED=YES RELEASE_SHA_MATCH=YES"
+      ;;
+    unset)
+      release_sha_ok=false
+      echo "[$(timestamp)] WARNING — '$app_name': RELEASE_SHA_CONFIGURED=NO RELEASE_SHA_MATCH=NO" >&2
+      ;;
+    *)
+      release_sha_ok=false
+      echo "[$(timestamp)] WARNING — '$app_name': RELEASE_SHA_CONFIGURED=? RELEASE_SHA_MATCH=NO (state: $state)" >&2
+      ;;
+  esac
+done
+if [[ "$release_sha_ok" == "false" ]]; then
+  echo "[$(timestamp)] WARNING — release tagging is degraded: external error-tracking events from this deploy may carry no release. Application health is unaffected." >&2
 fi
 
 echo "=== [$(timestamp)] Deploy complete — $PM2_API_NAME and $PM2_WORKER_NAME both online ==="

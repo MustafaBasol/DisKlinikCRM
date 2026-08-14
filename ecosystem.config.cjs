@@ -32,16 +32,71 @@
 // already run their existing graceful-shutdown handlers regardless (SIGTERM
 // drains the HTTP server / lets in-flight job ticks finish before exiting).
 //
+// F3-C2-ERR-003-R1: each app also declares RELEASE_SHA. F3-C2-ERR-001 had
+// scripts/noramedi-deploy.sh `export RELEASE_SHA=<deployed git SHA>` before
+// its `pm2 startOrReload ... --update-env` calls, on the assumption that the
+// exported shell variable would reach both processes. Production verification
+// after that deploy proved it does not: both `noramedi-api` and
+// `noramedi-worker` came up with RELEASE_SHA unset, so
+// server/src/utils/errorTracking.ts's `release` tag would still be empty once
+// a DSN is configured. PM2 documents why — "Via CLI, the environment is
+// conservative meaning that, when you will run different process management
+// actions (restart, reload, stop/start), new environment variables will not
+// be updated into your application", whereas "If you are using Ecosystem file
+// to manage your application environment variables under the `env:`
+// attribute, the updated ones will always be updated on `pm2
+// <restart/reload> app`"
+// (https://pm2.io/docs/runtime/best-practices/environment-variables/).
+// Declaring it in `env:` below is therefore the mechanism PM2 guarantees.
+//
+// The value is resolved when the PM2 CLI evaluates this file (it is a plain
+// CommonJS module that PM2 `require`s), never hard-coded: an operator- or
+// deploy-script-supplied RELEASE_SHA wins — preserving F3-C2-ERR-001's
+// deliberate override for detached/dirty-checkout deploys — and otherwise it
+// falls back to this checkout's own git HEAD, so a bare
+// `pm2 startOrReload ecosystem.config.cjs` (reboot recovery, manual reload)
+// still labels both processes with the deployed commit instead of clearing a
+// previously correct value. Every failure mode degrades to the string
+// "unknown"; nothing here may throw, because a config-load failure would
+// abort the deploy.
+//
 // No secrets live here. DATABASE_URL, REDIS_URL, ENCRYPTION_KEY, and every
 // other secret/credential continue to come from the process's own
 // environment (systemd/.env/shell profile) exactly as before — this file
-// only adds the two small, non-secret variables described above.
+// only adds the three small, non-secret variables described above.
+// RELEASE_SHA is non-secret by construction: it is the same commit id
+// `git log` already prints, and it is deliberately NOT a DSN or credential —
+// SENTRY_DSN is never read, written, or referenced by this file.
 
 'use strict';
 
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 
 const SERVER_DIR = path.join(__dirname, 'server');
+
+/**
+ * Deployed release identifier for both PM2 apps. Precedence:
+ *   1. an explicitly supplied RELEASE_SHA (deploy script or operator)
+ *   2. this checkout's git HEAD
+ *   3. the literal "unknown"
+ */
+function resolveReleaseSha() {
+  const supplied = (process.env.RELEASE_SHA || '').trim();
+  if (supplied) return supplied;
+
+  try {
+    const head = execFileSync('git', ['-C', __dirname, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return head || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+const RELEASE_SHA = resolveReleaseSha();
 
 module.exports = {
   apps: [
@@ -55,6 +110,7 @@ module.exports = {
       env: {
         NORAMEDI_PROCESS_ROLE: 'api',
         RUN_BACKGROUND_JOBS: 'false',
+        RELEASE_SHA,
       },
     },
     {
@@ -66,6 +122,7 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NORAMEDI_PROCESS_ROLE: 'worker',
+        RELEASE_SHA,
       },
     },
   ],
