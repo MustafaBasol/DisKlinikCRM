@@ -63,14 +63,116 @@ function bucket(): string {
   return process.env.S3_BUCKET!.trim();
 }
 
+// ── Authoritative storage-key contract (F4-1A) ───────────────────────────────
+
+/**
+ * F4-1A key-contract reconciliation.
+ *
+ * Before F4-1A there were two independent key builders here plus two more in
+ * fileBackupDestination.ts / fileBackupService.ts, each deciding its own
+ * literal shape inline. `buildObjectStorageKey` is now the single place where
+ * the shape of a *primary runtime object key* is decided; `buildStorageKey`
+ * and `buildExportStorageKey` are kept as the class-specific façades their
+ * existing callers (and the static call-site regression tests) rely on, and
+ * both delegate here.
+ *
+ * The key SHAPES are deliberately unchanged — this is a contract/validation
+ * change, not a key migration (storage-key migration is frozen: see
+ * docs/program/KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md §3 item 8). Every
+ * previously-written DB `filePath`/`storageKey` value stays byte-identical and
+ * keeps resolving through the same code path, because nothing in the codebase
+ * ever *reconstructs* a key — reads always pass the persisted column value.
+ *
+ * Backup destination keys (`file-backups/<domain>/<clinicId>/<id>.bin`) and
+ * backup run manifests (`file-backups/manifests/<runId>.json`) are NOT part of
+ * this contract. They are operational backup artifacts owned by
+ * fileBackupDestination.ts / fileBackupService.ts, derived from an already-
+ * persisted source record rather than from request input, and they stay
+ * separate on purpose.
+ */
+export type StorageObjectSpec =
+  /** Patient attachment, lab-order attachment and imaging image binaries all
+   *  share one key namespace: `<clinicId>/<opaqueId><ext>`. */
+  | { kind: 'patient-attachment' | 'lab-attachment' | 'imaging-image'; clinicId: string; originalName: string }
+  /** KVKK patient export and clinic bulk export archives: `exports/<clinicId>/<exportId>.zip`. */
+  | { kind: 'export-archive'; clinicId: string; exportId: string };
+
+/** A single key path segment may never be empty, carry a separator, traverse. */
+function assertSafeKeySegment(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`Invalid storage key segment: ${label} must be a non-empty string`);
+  }
+  if (/[\\/]/.test(value)) {
+    throw new Error(`Invalid storage key segment: ${label} must not contain a path separator`);
+  }
+  if (CONTROL_CHAR.test(value)) {
+    throw new Error(`Invalid storage key segment: ${label} must not contain control characters`);
+  }
+  if (value === '.' || value === '..' || value.includes('..')) {
+    throw new Error(`Invalid storage key segment: ${label} must not contain path traversal`);
+  }
+  if (WINDOWS_DRIVE_PREFIX.test(value)) {
+    throw new Error(`Invalid storage key segment: ${label} must not be a drive-qualified path`);
+  }
+  return value;
+}
+
+/**
+ * Extension is the ONLY fragment of a key influenced by client input, so it is
+ * taken from the (already signature-validated) originalName and then hard
+ * constrained to a short alphanumeric suffix. Anything else — including the
+ * bare "." that path.extname() returns for a name like "report." — is dropped
+ * rather than embedded in a key.
+ */
+function normalizeKeyExtension(originalName: string): string {
+  const ext = path.extname(typeof originalName === 'string' ? originalName : '').toLowerCase();
+  return /^\.[a-z0-9]{1,12}$/.test(ext) ? ext : '';
+}
+
+/**
+ * The authoritative builder for primary runtime object keys. Validates every
+ * server-derived segment, then re-checks its own output against
+ * isSafeStorageKey() so no caller can ever persist a key that the KVKK-era
+ * lookup gate (fileExists/statFile) would later refuse to resolve.
+ */
+export function buildObjectStorageKey(spec: StorageObjectSpec): string {
+  const clinicId = assertSafeKeySegment(spec.clinicId, 'clinicId');
+  let key: string;
+  switch (spec.kind) {
+    case 'patient-attachment':
+    case 'lab-attachment':
+    case 'imaging-image':
+      key = `${clinicId}/${Date.now()}-${Math.random().toString(36).slice(2)}${normalizeKeyExtension(spec.originalName)}`;
+      break;
+    case 'export-archive':
+      key = `exports/${clinicId}/${assertSafeKeySegment(spec.exportId, 'exportId')}.zip`;
+      break;
+    default: {
+      const exhaustive: never = spec;
+      throw new Error(`Unsupported storage object kind: ${JSON.stringify(exhaustive)}`);
+    }
+  }
+  if (!isSafeStorageKey(key)) {
+    // Unreachable given the segment validation above; kept as a fail-closed
+    // post-condition so a future edit to the templates cannot silently emit a
+    // key that escapes the upload root via resolveLocalPath().
+    throw new Error('Refusing to emit an unsafe storage key');
+  }
+  return key;
+}
+
 /**
  * Yeni dosya için depolama anahtarı üretir: `clinicId/timestamp-rand.ext`.
  * clinicId ve üretilen ad sunucu kaynaklı olduğundan path traversal riski yok;
  * uzantı yine de dosya adından değil, doğrulanmış originalName'den alınır.
+ *
+ * Delegates to buildObjectStorageKey — see the contract note above. Throws if
+ * clinicId is empty or carries a separator/traversal: previously such a value
+ * produced a key like "/1699999999-abc.pdf", which resolveLocalPath() would
+ * have honoured as an ABSOLUTE path and written outside the upload root.
  */
 export function buildStorageKey(clinicId: string, originalName: string): string {
-  const ext = path.extname(originalName).toLowerCase();
-  return `${clinicId}/${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+  return buildObjectStorageKey({ kind: 'patient-attachment', clinicId, originalName });
 }
 
 /** Depolama anahtarından dosya adını (DB'deki fileName kolonu) döner. */
@@ -207,7 +309,7 @@ export async function statFile(ref: string): Promise<{ size: number } | null> {
  * imkansızdır.
  */
 export function buildExportStorageKey(clinicId: string, exportId: string): string {
-  return `exports/${clinicId}/${exportId}.zip`;
+  return buildObjectStorageKey({ kind: 'export-archive', clinicId, exportId });
 }
 
 // ── Private export temp directory (KVKK-HIGH-004 crash-safety remediation) ─
