@@ -31,7 +31,44 @@ export interface CombinedOutcome {
   reasons: string[];
 }
 
-export function combineOutcome(testPhase: TestPhaseResult, cleanup: CleanupResult): CombinedOutcome {
+/**
+ * F4-CI-L4-STORAGE-GATE-001 — distinct, greppable exit codes for the three
+ * fail-closed conditions this task adds. They are deliberately not 1: a
+ * reviewer reading a red job must be able to tell "the suite failed" from
+ * "the suite never proved it ran" from "the process died silently" without
+ * reading the whole log.
+ */
+export const EXIT_NO_EXECUTION_PROOF = 90;
+export const EXIT_ABNORMAL_TERMINATION = 91;
+export const EXIT_UNCAUGHT_ERROR = 92;
+export const EXIT_SUMMARY_WRITE_FAILED = 94;
+
+/**
+ * Positive-execution evidence for the profile's test phase, as evaluated by
+ * lib/executionProof.ts. `required: false` means the profile does not carry
+ * a receipt contract (postgres/postgres-compat today) and the field is
+ * informational only.
+ */
+export interface ExecutionProofOutcome {
+  required: boolean;
+  satisfied: boolean;
+  executedCount: number;
+  failures: string[];
+}
+
+/**
+ * F4-CI-L4-STORAGE-GATE-001: `executionProof` is optional so existing callers
+ * (postgres/postgres-compat) are unaffected. When it is present AND required,
+ * a test-phase exit code of 0 is NOT sufficient for an overall pass — the run
+ * must additionally have proved the intended suite executed. This is the
+ * fail-open fix: "the child exited 0" can no longer, by itself, produce a
+ * green run.
+ */
+export function combineOutcome(
+  testPhase: TestPhaseResult,
+  cleanup: CleanupResult,
+  executionProof?: ExecutionProofOutcome,
+): CombinedOutcome {
   const reasons: string[] = [];
   let exitCode: number;
 
@@ -41,6 +78,21 @@ export function combineOutcome(testPhase: TestPhaseResult, cleanup: CleanupResul
   } else {
     exitCode = testPhase.testExitCode ?? 1;
     reasons.push(exitCode === 0 ? 'tests passed' : `tests failed with exit code ${exitCode}`);
+  }
+
+  if (executionProof?.required) {
+    if (executionProof.satisfied) {
+      reasons.push(`execution proof satisfied (${executionProof.executedCount} test case(s) executed)`);
+    } else {
+      reasons.push(
+        `execution proof NOT satisfied — refusing to report success without evidence the intended suite ran: ${
+          executionProof.failures.join('; ') || 'unknown'
+        }`,
+      );
+      if (exitCode === 0) {
+        exitCode = EXIT_NO_EXECUTION_PROOF;
+      }
+    }
   }
 
   if (!cleanup.success) {
