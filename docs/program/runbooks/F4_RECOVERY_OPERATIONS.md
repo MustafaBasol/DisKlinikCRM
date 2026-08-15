@@ -409,15 +409,33 @@ below is an operator action. Steps 0–10 are the stage-1 (local, encrypted)
 scope; off-host is **separately blocked** — see §16.
 
 ```bash
-# 0. Host facts this repository cannot know. Run these FIRST — the pgdg apt
-#    component is derived from the release codename and must not be guessed.
+# 0. Host facts this repository cannot know. Run these FIRST — the release
+#    codename determines which apt component supplies the package.
 lsb_release -a
 nproc
 sudo -u postgres psql -Atc "SHOW data_directory;"
+apt-cache policy pgbackrest  # installed vs candidate, and WHICH component
 
-# 1. Install pgBackRest from PGDG (the distro package may lag).
-sudo apt-get install -y pgbackrest
+# 1. Install pgBackRest from the DISTRO package. DO NOT ADD PGDG.
+#    Verified on this host 2026-08-15 (CHECKPOINT C0): Ubuntu 24.04 noble
+#    offers pgbackrest 2.50-1build2 from noble/universe, installed: none.
+#    2.50 >= 2.41, so repo1-bundle=y is valid; adding a PGDG apt source
+#    would be a larger mutation for a version that is not newer. If a future
+#    host's candidate is < 2.41, resolve it THEN — do not pre-add a source.
+#
+#    Run the simulate first: the "NEW packages will be installed" line it
+#    prints is the exact rollback list, and it must be captured before the
+#    install, not reconstructed afterwards.
+apt-get install --simulate --no-install-recommends pgbackrest
+sudo apt-get install -y --no-install-recommends pgbackrest
 pgbackrest version           # gates repo1-bundle (>= 2.41) and compress-type=zst
+#    compress-type: ldd is the determinant — a Debian/Ubuntu build links
+#    libzstd/liblz4 only when compiled with them. Do NOT probe with
+#    `pgbackrest --compress-type=zst info`: an option-not-valid-for-command
+#    error is indistinguishable from an unsupported-value error. The first
+#    command that actually consumes compress-type is stanza-create (step 4),
+#    which fails closed with OPTION_INVALID_VALUE and creates nothing.
+ldd "$(command -v pgbackrest)" | grep -Ei 'zstd|lz4' || echo "neither -> use gz"
 
 # 2. Repository directory and config.
 sudo install -d -o postgres -g postgres -m 0750 /var/lib/pgbackrest
