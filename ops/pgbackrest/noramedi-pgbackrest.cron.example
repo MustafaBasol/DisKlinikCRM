@@ -75,10 +75,18 @@ MAILTO=root
 # Weekly PITR restore drill, Sunday 03:45 — COMMENTED OUT until the first
 # manual drill has been run and reviewed by a human.
 #
-# It restores into a disposable, RAM-backed, loopback-only cluster and destroys
-# it, but it restores REAL PATIENT DATA to do so, and a physical backup is
-# cluster-wide and therefore cross-tenant. Scheduling that unattended before
-# anyone has watched it work once is the wrong order. Note also that
+# It restores into a disposable, RAM-backed, SOCKET-ONLY cluster and destroys
+# it. Socket-only is literal: the drill pins listen_addresses='' via pg_ctl -o,
+# so the restored cluster has NO TCP listener at all — not loopback, not
+# anything — and the only pg_hba rule is `local ... peer` over a mode-0700
+# socket directory. Earlier revisions of this file described a loopback-bound
+# cluster with a `trust` rule; that design was removed in F4-FCR-002A and the
+# test suite mutation-tests both defects to prove they cannot come back.
+# See F4_RECOVERY_OPERATIONS.md §14.1 for the full safety contract.
+#
+# It still restores REAL PATIENT DATA, and a physical backup is cluster-wide
+# and therefore cross-tenant. Scheduling that unattended before anyone has
+# watched it work once is the wrong order. Note also that
 # RESTORE_REHEARSAL_REQUIRE_SYNTHETIC has no equivalent here: a physical
 # restore cannot be limited to designated synthetic clinics the way the
 # file-tier rehearsal can, because there is no per-tenant physical backup.
@@ -86,6 +94,23 @@ MAILTO=root
 # requiring its own hukuki sebep is an open COUNSEL_REVIEW_REQUIRED question
 # (F4_RECOVERY_OPERATIONS.md §7.3 item 2).
 #
-# REHEARSAL_OS_USER has no default and must be set explicitly.
+# ⚠ BEFORE UNCOMMENTING, SET BOTH VARIABLES. Neither has a default:
 #
-# 45 3 * * 0  root  REHEARSAL_OS_USER=postgres /usr/local/sbin/noramedi-pgbackrest-restore-drill.sh --port 55433
+#   REHEARSAL_OS_USER        the unprivileged OS user the drill drops to. It
+#                            must be able to READ the deployed server
+#                            directory; the drill checks that BEFORE
+#                            restoring, not after.
+#   NORAMEDI_APP_SERVER_DIR  the deployed server directory PM2 actually runs
+#                            (contains package.json, prisma/migrations and
+#                            node_modules/@prisma/client). The application
+#                            smoke and the migration-set comparison both read
+#                            the DEPLOYED release from it.
+#
+# The line below carries a <REPLACE> placeholder on purpose. Uncommenting it
+# unedited makes the drill abort at preflight with exit 3 having restored
+# nothing — fail-closed, by design, because a run that only proves a cluster
+# starts is not R-032 evidence. Also install the smoke helper next to the
+# drill script (`install -m 0755 scripts/noramedi-pitr-app-smoke.mjs
+# /usr/local/sbin/`); the drill refuses to run without it.
+#
+# 45 3 * * 0  root  REHEARSAL_OS_USER=postgres NORAMEDI_APP_SERVER_DIR=<REPLACE — deployed server dir> /usr/local/sbin/noramedi-pgbackrest-restore-drill.sh --port 55433
