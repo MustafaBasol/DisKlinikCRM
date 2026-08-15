@@ -92,7 +92,21 @@ EOF
 # (built dynamically per-scenario into an array) would never actually reach
 # the script's environment that way. `env` has no such restriction — it
 # inspects each of its own argv strings for a literal `=` regardless of
-# where that string came from, so `env "${EXTRA_ENV[@]}" "$OPSCHECK" "$@"`
+# Invoked as `bash "$OPSCHECK"`, NOT as `"$OPSCHECK"` directly.
+#
+# The script is tracked mode 100644 — like every other script in this
+# directory, because they are deployed with `install -m 0755` rather than by
+# being executed from the checkout. Executing it directly therefore fails on
+# Linux with exit 126 "Permission denied". Git Bash on Windows ignores the
+# exec bit, so this passed locally for as long as the suite was run by hand
+# and only surfaced when F4-FCR-002 wired it into CI — which is exactly the
+# point of wiring it in. `bash <file>` needs no exec bit and is equivalent
+# here, since the shebang is `#!/usr/bin/env bash`.
+#
+# The `env` form below is still required for the environment array, so the
+# ordering is: env, its assignments, then `bash`, then the script.
+#
+# where that string came from, so `env "${EXTRA_ENV[@]}" bash "$OPSCHECK" "$@"`
 # correctly applies every array-expanded assignment and then executes
 # $OPSCHECK with "$@" as ITS arguments (env stops treating argv as
 # assignments at the first token without `=`, which is $OPSCHECK itself —
@@ -109,7 +123,7 @@ run_opscheck() {
     NORAMEDI_OPSCHECK_STATE_DIR="$STATE_DIR" \
     NORAMEDI_OPSCHECK_RECOVERY_STATUS_FILE="$RECOVERY_STATUS_FILE" \
     NORAMEDI_OPSCHECK_PITR_STATUS_FILE="$PITR_STATUS_FILE" \
-    env "${EXTRA_ENV[@]}" "$OPSCHECK" "$@" 2>&1)"
+    env "${EXTRA_ENV[@]}" bash "$OPSCHECK" "$@" 2>&1)"
   CODE=$?
   set -e
   EXTRA_ENV=()
