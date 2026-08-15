@@ -57,7 +57,10 @@ Bayat **olmayan** (düzeltilmemeli): versiyonlama, object-lock/değişmezlik, ya
 
 `F4-FCR-002A_STATUS = IN_PROGRESS` · **`PREFLIGHT_DECISION = NO_GO`**
 `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
-Taban çizgisi: `origin/main` @ `def01bf6a2d4ec6bd7aea222979f7be60e29847e`
+Taban çizgisi: `origin/main` @ `a384bf67fb791a724af111b52b761d82fd57bd3a` (PR #426 merged)
+— önceki `def01bf6` (PR #422) taban çizgisinden rebase edildi; böylece dal, PR #424
+fail-closed Layer 4 yürütme kanıtını ve PR #426 sınırlandırılmış MinIO hazırlık
+düzeltmesini devralır.
 
 > **Bu görev tamamlanmamıştır.** `F4-FCR-002A`, gerçek tatbikat çalıştırılıp
 > doğrulanana ve temizlenene kadar `IN_PROGRESS` kalır. **Restore
