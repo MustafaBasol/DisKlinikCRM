@@ -868,6 +868,18 @@ zeros and nulls. That is the expected reading, not an error.
 
 ## 19. Verification state (F4-FCR-002)
 
+> **[Superseded in part on 2026-08-15 by F4-FCR-002A-CLOSE — the table below is
+> preserved unedited as the dated F4-FCR-002 record, not rewritten.]** Eight of
+> its rows are no longer current. As of the controlled production drill
+> `20260815-213109-709154`: pgBackRest **is** installed, `archive_mode` is
+> **`on`**, the encrypted local `repo1` **exists**, production deployment and
+> production verification have both happened, measured RPO is **5 min** and
+> measured RTO **7 s**, and `R-031`/`R-032` are **`CLOSED`**. Three rows are
+> unchanged and must not be read as advanced by that drill: the **off-host
+> repository is still NOT PROCURED**, no byte has left the host, `R-030` is
+> **`OPEN`**, and `FIRST_CUSTOMER_RECOVERY_GATE` is still **`NOT_SATISFIED`**.
+> Current values are in §21.7.
+
 | Item | State |
 |---|---|
 | Repository implementation | `COMPLETE` |
@@ -1264,6 +1276,15 @@ from `repo < 2` because a same-host repository is not an independent failure
 domain. `R-031`/`R-032` and `FIRST_CUSTOMER_RECOVERY_GATE` are closed only by
 an executed, passing, cleaned-up drill.
 
+> **[Clarified 2026-08-15 by F4-FCR-002A-CLOSE — necessary, not sufficient.]**
+> "Closed only by" states a **necessary** condition. That condition is now met
+> (§21.7), and it closed `R-031` and `R-032`. It did **not** close
+> `FIRST_CUSTOMER_RECOVERY_GATE`, because the same paragraph above also holds
+> that `R-030` stays `OPEN` regardless of the drill's outcome, and an open
+> `R-030` — a backup repository sharing its primary's failure domain — is a
+> blocker for a *recovery* gate. The gate remains `NOT_SATISFIED`. This
+> sentence is clarified, not rewritten.
+
 ### 21.6 F4-FCR-002A-R4 — the two executed drills, and the one stage that failed
 
 **Status: both drills FAILED. `R-032` is not closed and nothing below closes
@@ -1389,3 +1410,147 @@ smoke.application         = passed
 Until such a run exists, `R-030`, `R-031` and `R-032` remain **`OPEN`** and
 `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. A code fix and a green test
 suite are not a passing drill.
+
+> **[2026-08-15 — that run now exists. See §21.7.]** The remaining evidence this
+> subsection demanded was produced by drill `20260815-213109-709154`, which
+> exited `0` with `pitrVerification.verified = true` **and**
+> `smoke.application = passed`. `R-031` and `R-032` are `CLOSED`; `R-030` is
+> **not**, and neither is the gate. The paragraphs above are left unedited as
+> the dated F4-FCR-002A-R4 record.
+
+### 21.7 F4-FCR-002A-CLOSE — the drill that passed, and what it does not prove
+
+**Status: `PASS`.** This section records the first controlled production PITR
+drill that completed end to end, was verified at its stop point, was usable by
+the deployed application, and cleaned itself up. It is written **after** §21.6
+and does not replace it: the two failed drills, and the two further failures
+recorded below, remain the honest history of how this evidence was obtained.
+
+Production release / tooling commit under test:
+`309351885c1389c53d40e4b15e630264dc54954f` (PR #427's merge commit — the R4
+application-smoke fix, deployed). PostgreSQL 16.14. pgBackRest `repo1`,
+**local**, AES-256-CBC.
+
+#### The four attempts before this one
+
+| # | Outcome | Cause |
+|---|---|---|
+| 1 | `FAIL` | Stale inputs — migration set `73/74`, effective RPO `385 min` (§21.6) |
+| 2 | `FAIL` | Application smoke only — Prisma 7 constructor contract (§21.6) |
+| 3 | `FAIL` | **RPO.** After the R4 fix was deployed, the drill passed the application smoke — and failed on RPO, because the marker pair being re-used had aged: the target was **96 minutes** old against a 60-minute program target. Re-using a marker pair is what made the run cheap; ageing is what made it fail. |
+| 4 | `FAIL` | **Sentinel organization mismatch.** A fresh marker pair was written, and stop-point verification failed because the operator marker utility wrote the rows under a **different** `organizationId` than the one the drill queries. Nothing was wrong with the recovery; the verifier was looking in the wrong place. See the lesson below. |
+
+None of these is rewritten as a success, and none of the earlier `FAIL`
+verdicts is withdrawn. Attempt 3 in particular is the reason a marker pair is
+**per-drill-attempt** and not a reusable fixture.
+
+#### The successful run
+
+| Field | Value |
+|---|---|
+| Drill execution `run_id` | `20260815-213109-709154` |
+| Backup set | `20260815-224355F` |
+| Marker `runId` | `F4-FCR-002A-20260815-03` |
+| Marker A `createdAt` | `2026-08-15T21:25:33.447Z` (**UTC**) |
+| Marker B `createdAt` | `2026-08-15T21:27:36.605Z` (**UTC**) |
+| Target `T` | `2026-08-15 21:26:35.026000+00` |
+| Marker WAL segment | `00000001000000000000008C` |
+| Marker organization | `noramedi-f4-pitr-sentinel` (via `NORAMEDI_PITR_MARKER_ORG` — read the lesson below) |
+
+The `+00` offset rule of §21.3 was applied unchanged, and the target is again
+an unrounded midpoint carrying microseconds.
+
+#### Verified outcome
+
+| Gate | Result |
+|---|---|
+| PITR stop point | **VERIFIED** — marker A = 1, marker B = 0 |
+| Recovery point | `2026-08-15T21:26:00Z` against target `2026-08-15 21:26:35.026000+00` |
+| Migration set | **PASS** — applied `74`, expected `74`, `missing = 0`, `ahead = 0`, unfinished `0`, rolled back `0` |
+| Schema | `106` public tables |
+| Application smoke | **passed** |
+| Tenant-isolation smoke | **passed** — cross-clinic appointments `0`, orphan clinic references `0`, orphaned appointments `0` |
+| RLS policies | `0`, expected `0` |
+| RPO | **PASS** — effective `5 min` ≤ `60 min` target |
+| RTO | **PASS** — measured `7 s` ≤ `14400 s` target |
+| Cleanup | **PASS** — verified |
+| **Overall** | **`PASS`**, `R032_eligible = true` |
+
+Stage timings, for the next operator's sizing rather than for the record's own
+sake: restore `1 s`, connections ready `2 s`, promotion `4 s`, database
+verification `5 s`, application smoke `7 s`, tenant smoke `7 s`. The measured
+RTO is the drill's own endpoint — the point at which the restored database was
+proven usable — not postmaster readiness.
+
+Cleanup: the disposable cluster was shut down,
+`/dev/shm/noramedi-pitr-drill-20260815-213109-709154` was removed, and removal
+was **verified** rather than assumed. No cleanup incident marker was written.
+
+#### Why this run succeeded where four did not
+
+Three independent corrections had to hold at the same time, and each of the
+earlier failures removed exactly one of them:
+
+1. **A fresh backup** (`20260815-224355F`) — fixes attempt 1's stale migration
+   set and 385-minute RPO.
+2. **The R4 application-smoke fix, actually deployed** — the helper now selects
+   the Prisma 7 driver-adapter contract from the deployed client's major
+   version, so the restored database is exercised by the same construction
+   family production runs. Fixes attempt 2.
+3. **A marker pair written fresh, immediately before the drill, under the
+   organization id the drill actually queries** — fixes attempts 3 and 4.
+
+#### The operational lesson: one sentinel organization, two programs
+
+The marker writer and the drill verifier must use the **same** sentinel
+`organizationId`. They are separate programs and neither validates the other's
+choice:
+
+- The drill's default is **`__noramedi_pitr_drill__`**
+  (`scripts/noramedi-pgbackrest-restore-drill.sh:308`, overridable via
+  `NORAMEDI_PITR_MARKER_ORG`).
+- The operator marker utility that wrote the successful run's markers used
+  **`noramedi-f4-pitr-sentinel`**. That utility is an operator-side script under
+  `server/src/scripts/` per §21.3's form; it is **not in this repository**, so
+  the repository could not have caught the divergence.
+- The successful run therefore had to pass
+  `NORAMEDI_PITR_MARKER_ORG=noramedi-f4-pitr-sentinel` to the drill.
+
+**This discrepancy is recorded, not normalized.** Silently rewriting the drill's
+default to match the operator utility — or vice versa — would erase the reason
+attempt 4 failed and would leave the *next* operator with the same two-programs
+problem under a different pair of names. The failure mode is not cosmetic: a
+mismatch presents as **marker A = 0**, which is indistinguishable at a glance
+from a genuine undershoot, and it costs a full restore before it is detected.
+
+Follow-up, **not performed by F4-FCR-002A-CLOSE** (which changed no runtime
+script): pick one canonical sentinel literal and make the two programs share it
+by construction — either commit the marker writer to this repository so both
+read the same default, or have the drill fail closed when
+`NORAMEDI_PITR_MARKER_ORG` is unset while `--pitr-run-id` is given, forcing the
+operator to state it once per run. Until then, **every** drill invocation that
+passes `--pitr-run-id` must also pass the marker organization explicitly, and
+§21.4's invocation should be read with that argument added.
+
+#### What this run does NOT prove
+
+`R-030` is **`OPEN`**, unchanged and unweakened. This drill restored from
+**`repo1`, which is LOCAL** — the same host, the same disk, the same
+hypervisor, the same provider account and the same facility as the PostgreSQL
+primary it protects. That is **one failure domain**, and host loss takes the
+database and its only backup repository together. The drill enforces this
+itself: it refuses to write an off-host proof marker from `repo < 2`, and no
+such marker was written by this run.
+
+Encryption does not substitute for independence. AES-256-CBC on `repo1`
+protects the backup's **confidentiality**; it does nothing for **durability**
+against loss of the host. Nothing in this section may be cited as evidence of
+off-host or independent-failure-domain recoverability.
+
+The off-host prerequisites of §16.2 are all still unmet, the secondary Türkiye
+VPS is **not procured**, and the `R-030-DB` / `R-030-FILES` split of §16.1
+remains an open program-owner decision.
+
+`FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`, because `R-030` blocks it. The
+PITR and restore-usability half of that gate is now satisfied on evidence;
+the off-host durability half is not, and the gate is the conjunction.
