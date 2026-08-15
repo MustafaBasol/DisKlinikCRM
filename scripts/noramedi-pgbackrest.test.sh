@@ -92,7 +92,11 @@ case "$sql" in
   *"SHOW wal_level"*)       echo "${FAKE_WAL_LEVEL:-replica}" ;;
   *"SHOW archive_command"*) echo "${FAKE_ARCHIVE_COMMAND:-}" ;;
   *"SHOW archive_timeout"*) echo "${FAKE_ARCHIVE_TIMEOUT:-300s}" ;;
-  *"SHOW data_directory"*)  echo "${FAKE_DATA_DIRECTORY:-/var/lib/postgresql/16/main}" ;;
+  # `-` not `:-` on purpose: a test needs to simulate a cluster that answers
+  # with NOTHING, which is the input the production-PGDATA guard must fail
+  # closed on. `:-` would silently substitute the default and the guard would
+  # look like it passed.
+  *"SHOW data_directory"*)  echo "${FAKE_DATA_DIRECTORY-/var/lib/postgresql/16/main}" ;;
   *"SHOW config_file"*)     echo "${FAKE_CONFIG_FILE:-/etc/postgresql/16/main/postgresql.conf}" ;;
   *"SHOW include_dir"*)     echo "${FAKE_INCLUDE_DIR:-}" ;;
   *"SHOW server_version"*)  echo "${FAKE_SERVER_VERSION:-16.14}" ;;
@@ -125,18 +129,24 @@ EOF
   chmod +x "$FAKEBIN/psql"
 }
 
-# pgbackrest fake: `version`, `info --output=json`, `check`.
+# pgbackrest fake: `version`, `info --output=json`, `check`, `restore`.
+# Every invocation is appended to $WORK/pgbackrest.log so a test can assert that
+# a precondition failure happened BEFORE anything was restored — "it exited 3"
+# and "it exited 3 without writing a cross-tenant copy of the patient database
+# into tmpfs first" are different claims.
 write_fake_pgbackrest() {
-  cat > "$FAKEBIN/pgbackrest" <<'EOF'
+  cat > "$FAKEBIN/pgbackrest" <<EOF
 #!/usr/bin/env bash
-for a in "$@"; do
-  case "$a" in
-    version) echo "pgBackRest ${FAKE_PGBR_VERSION:-2.54.2}"; exit 0 ;;
+echo "pgbackrest \$*" >> "${WORK}/pgbackrest.log"
+for a in "\$@"; do
+  case "\$a" in
+    version) echo "pgBackRest \${FAKE_PGBR_VERSION:-2.54.2}"; exit 0 ;;
   esac
 done
-case "$*" in
-  *info*) printf '%s' "${FAKE_INFO_JSON:-[]}"; exit "${FAKE_INFO_RC:-0}" ;;
-  *check*) exit "${FAKE_CHECK_RC:-0}" ;;
+case "\$*" in
+  *info*) printf '%s' "\${FAKE_INFO_JSON:-[]}"; exit "\${FAKE_INFO_RC:-0}" ;;
+  *check*) exit "\${FAKE_CHECK_RC:-0}" ;;
+  *restore*) exit "\${FAKE_RESTORE_RC:-0}" ;;
   *help*) echo "zst lz4 gz none"; exit 0 ;;
 esac
 exit 0
@@ -144,20 +154,66 @@ EOF
   chmod +x "$FAKEBIN/pgbackrest"
 }
 
-# df fake: -Pm output with a controllable free-MB figure.
+# df fake: -Pm output with a controllable free-MB figure, and -PT output with a
+# controllable filesystem type (the drill refuses a non-tmpfs drill root).
 write_fake_df() {
   cat > "$FAKEBIN/df" <<'EOF'
 #!/usr/bin/env bash
-echo "Filesystem 1M-blocks Used Available Use% Mounted on"
-echo "/dev/fake 76000 7600 ${FAKE_FREE_MB:-65000} 11% /"
+want_type=false
+for a in "$@"; do case "$a" in -*T*) want_type=true ;; esac; done
+if [[ "$want_type" == true ]]; then
+  echo "Filesystem Type 1024-blocks Used Available Capacity Mounted on"
+  echo "/dev/fake ${FAKE_FSTYPE:-tmpfs} 76000000 7600000 65000000 11% /dev/shm"
+else
+  echo "Filesystem 1M-blocks Used Available Use% Mounted on"
+  echo "/dev/fake 76000 7600 ${FAKE_FREE_MB:-65000} 11% /"
+fi
 EOF
   chmod +x "$FAKEBIN/df"
+}
+
+# ss fake: the drill treats `ss` as a hard requirement because it is the only
+# thing that can prove the drill port is free before a restore and closed again
+# after teardown. FAKE_LISTEN_PORT simulates a collision.
+write_fake_ss() {
+  cat > "$FAKEBIN/ss" <<'EOF'
+#!/usr/bin/env bash
+echo "State  Recv-Q Send-Q Local-Address:Port Peer-Address:Port"
+if [[ -n "${FAKE_LISTEN_PORT:-}" ]]; then
+  echo "LISTEN 0      128    127.0.0.1:${FAKE_LISTEN_PORT} 0.0.0.0:*"
+fi
+EOF
+  chmod +x "$FAKEBIN/ss"
+}
+
+# pg_ctl fake: records every invocation and fails to start by default, so the
+# precondition tests below can assert exactly how far the drill got.
+write_fake_pg_ctl() {
+  cat > "$FAKEBIN/pg_ctl" <<EOF
+#!/usr/bin/env bash
+echo "pg_ctl \$*" >> "${WORK}/pgctl.log"
+exit "\${FAKE_PGCTL_RC:-1}"
+EOF
+  chmod +x "$FAKEBIN/pg_ctl"
+}
+
+# pg_lsclusters fake: silent by default. Present so the production-PGDATA guard
+# behaves identically whether or not the CI image happens to ship the real one.
+write_fake_pg_lsclusters() {
+  cat > "$FAKEBIN/pg_lsclusters" <<'EOF'
+#!/usr/bin/env bash
+printf '%s' "${FAKE_LSCLUSTERS:-}"
+EOF
+  chmod +x "$FAKEBIN/pg_lsclusters"
 }
 
 write_fake_runuser
 write_fake_psql
 write_fake_pgbackrest
 write_fake_df
+write_fake_ss
+write_fake_pg_ctl
+write_fake_pg_lsclusters
 
 # ════════════════════════════════════════════════════════════════════════
 section "Syntax"
@@ -517,9 +573,318 @@ EXTRA_ENV=(); run bash "$DRILL" --set "'; rm -rf /"
 
 section "Restore drill: production-safety statements are present"
 grep -q 'noramedi_crm' "$DRILL" && pass "names the production database it must never create" || fail "production database name absent"
-grep -q '127.0.0.1' "$DRILL" && pass "binds loopback only" || fail "no loopback binding"
 grep -q 'listen_addresses' "$DRILL" && pass "verifies the bound address at runtime, not just in config" || fail "no runtime bind verification"
 grep -q 'REHEARSAL_OS_USER' "$DRILL" && pass "requires an explicit unprivileged OS user" || fail "no privilege delegation"
+
+# ════════════════════════════════════════════════════════════════════════
+# F4-FCR-002A HARDENING GUARDS
+#
+# Each guard below is a predicate over a script file, so it can be run twice:
+# once against the real script (must hold) and once against a deliberately
+# MUTATED copy that reintroduces the original defect (must not hold). A guard
+# that cannot fail is not a test, and every one of these defects shipped once
+# already.
+# ════════════════════════════════════════════════════════════════════════
+
+# The synthesised pg_hba block, extracted from the heredoc rather than grepped
+# out of the whole file — this asserts what the disposable cluster is actually
+# configured with, not what the surrounding prose says about it.
+hba_block() { awk "/<<'HBA'/{f=1;next} /^HBA\"/{f=0} f" "$1"; }
+
+guard_no_trust_auth() {
+  ! hba_block "$1" | grep -qE '^[[:space:]]*(local|host|hostssl|hostnossl)[[:space:]].*[[:space:]]trust[[:space:]]*$'
+}
+guard_no_tcp_rule() {
+  ! hba_block "$1" | grep -qE '^[[:space:]]*host(ssl|nossl)?[[:space:]]'
+}
+guard_peer_auth_present() {
+  hba_block "$1" | grep -qE '^[[:space:]]*local[[:space:]].*[[:space:]]peer([[:space:]]|$)'
+}
+guard_no_tcp_listener() { grep -qE "^PG_OPTS\+=\" -c listen_addresses=''\"" "$1"; }
+guard_pinned_startup_gucs() {
+  local f="$1" g
+  for g in data_directory hba_file ident_file listen_addresses unix_socket_directories archive_mode archive_command; do
+    grep -qE "^PG_OPTS\+=\" -c ${g}=" "$f" || return 1
+  done
+}
+guard_trap_covers_hup() { grep -qE '^trap cleanup EXIT INT TERM HUP[[:space:]]*$' "$1"; }
+# Comment lines are stripped first: the script QUOTES the defect it replaced in
+# order to explain why, and a guard that cannot tell code from prose would
+# either fail on the real file or have to be weakened until it caught nothing.
+guard_no_silent_rm() {
+  ! grep -vE '^[[:space:]]*#' "$1" | grep -qE 'rm -rf[^|]*2>/dev/null[[:space:]]*\|\|[[:space:]]*true'
+}
+guard_kill_escalation() { grep -q 'kill -KILL' "$1" && grep -q 'kill -TERM' "$1"; }
+guard_cleanup_verified() { grep -q 'STILL EXISTS after removal' "$1"; }
+guard_shm_preflight() { grep -q 'MemAvailable' "$1" && grep -qE 'df -Pm "\$DRILL_PARENT"' "$1"; }
+guard_port_preflight() { grep -q 'port_listener_present' "$1"; }
+guard_rpo_mandatory() { grep -q 'RPO could not be measured' "$1"; }
+guard_rto_endpoint() { grep -q 'tenant_smoke_complete' "$1"; }
+guard_migration_compare() { grep -q 'the restore is STALE' "$1"; }
+guard_r032_gate() { grep -q 'R032_ELIGIBLE=true' "$1" && grep -q 'not R-032 eligible' "$1"; }
+
+# Runs a guard against the real script and against a mutated copy.
+# $1 guard  $2 description  $3 sed program that reintroduces the defect
+mutate_and_check() {
+  local guard="$1" desc="$2" mutation="$3"
+  if "$guard" "$DRILL"; then pass "$desc"; else fail "$desc — the real script does NOT satisfy this guard"; fi
+  local mutant="$WORK/mutant-$$.sh"
+  sed "$mutation" "$DRILL" > "$mutant"
+  if cmp -s "$mutant" "$DRILL"; then
+    fail "$desc — MUTATION WAS A NO-OP; this guard is untested and may be incapable of failing"
+  elif "$guard" "$mutant"; then
+    fail "$desc — the guard still PASSES on a mutant that reintroduces the defect"
+  else
+    pass "$desc — and the guard fails on a mutant that reintroduces it"
+  fi
+  rm -f "$mutant"
+}
+
+section "Restore drill (HIGH): no trust authentication, no TCP rule"
+mutate_and_check guard_no_trust_auth \
+  "the synthesised pg_hba grants no 'trust' anywhere" \
+  "s|^local   all   \\\${PG_SUPERUSER}   peer map=noramedidrill\$|host    all   all   127.0.0.1/32   trust|"
+mutate_and_check guard_no_tcp_rule \
+  "the synthesised pg_hba contains no 'host' rule at all" \
+  "s|^local   all   \\\${PG_SUPERUSER}   peer map=noramedidrill\$|host    all   all   127.0.0.1/32   scram-sha-256|"
+guard_peer_auth_present "$DRILL" \
+  && pass "the only accepted client is peer-authenticated over the unix socket" \
+  || fail "no peer authentication rule in the synthesised pg_hba"
+grep -q 'unix_socket_permissions = 0700' "$DRILL" \
+  && pass "the unix socket directory is mode 0700 (the socket is the only way in)" \
+  || fail "the unix socket permissions are not pinned to 0700"
+grep -q 'pg_hba_file_rules' "$DRILL" \
+  && pass "asserts the ABSENCE of non-local and trust rules against the live cluster, not just the file it wrote" \
+  || fail "no runtime pg_hba assertion"
+if grep -q 'PGPASSWORD' "$DRILL"; then
+  fail "the drill introduces a PGPASSWORD"
+else
+  pass "no password exists to leak — peer auth needs none"
+fi
+
+section "Restore drill (HIGH): no TCP listener at all"
+mutate_and_check guard_no_tcp_listener \
+  "the disposable cluster is started with listen_addresses=''" \
+  "s|^PG_OPTS+=\" -c listen_addresses=''\"\$|PG_OPTS+=\" -c listen_addresses=127.0.0.1\"|"
+
+section "Restore drill (HIGH/MEDIUM): startup GUCs are pinned on the command line"
+mutate_and_check guard_pinned_startup_gucs \
+  "data_directory, hba_file, ident_file, listen_addresses, socket dir, archive_mode and archive_command are all pinned via pg_ctl -o" \
+  "/^PG_OPTS+=\" -c data_directory=/d"
+grep -q 'archive_command=' "$DRILL" \
+  && pass "a restored configuration cannot make the disposable cluster push WAL into the real repository" \
+  || fail "archive_command is not neutralised"
+
+section "Restore drill (HIGH): cleanup is fail-closed"
+mutate_and_check guard_trap_covers_hup \
+  "cleanup traps EXIT, INT, TERM and HUP (an SSH drop must not orphan a PHI-bearing cluster)" \
+  "s|^trap cleanup EXIT INT TERM HUP\$|trap cleanup EXIT INT TERM|"
+mutate_and_check guard_no_silent_rm \
+  "no 'rm -rf ... 2>/dev/null || true' anywhere" \
+  "s|^    rm -rf \"\$DRILL_ROOT\" .*\$|    rm -rf \"\$DRILL_ROOT\" 2>/dev/null \|\| true|"
+guard_kill_escalation "$DRILL" \
+  && pass "stop escalates through SIGTERM to SIGKILL rather than assuming pg_ctl worked" \
+  || fail "no bounded kill escalation"
+guard_cleanup_verified "$DRILL" \
+  && pass "removal is verified and an unremoved drill root is reported, not assumed" \
+  || fail "removal is not verified"
+grep -q 'CLEANUP_INCIDENT_EXIT_CODE=5' "$DRILL" \
+  && pass "a cleanup failure has its own non-zero exit code (5)" \
+  || fail "cleanup failure has no dedicated exit code"
+grep -q 'incident marker written to' "$DRILL" \
+  && pass "a cleanup failure writes explicit operator incident evidence" \
+  || fail "no incident evidence is written on cleanup failure"
+
+section "Restore drill (MEDIUM): preflights that must run BEFORE the restore"
+guard_port_preflight "$DRILL" && pass "the drill port is checked for a collision before restoring" || fail "no port preflight"
+guard_shm_preflight "$DRILL" && pass "/dev/shm capacity and MemAvailable are both checked" || fail "no capacity preflight"
+grep -q "Free space on / is not the constraint" "$DRILL" \
+  && pass "records that root-filesystem free space is not the constraint (the target is RAM)" \
+  || fail "the capacity message does not distinguish RAM from disk"
+grep -q 'not tmpfs' "$DRILL" \
+  && pass "refuses a drill root that would write cleartext patient data to a block device" \
+  || fail "no tmpfs enforcement"
+
+section "Restore drill: R-032 evidence contract"
+guard_rpo_mandatory "$DRILL" && pass "an unmeasurable RPO FAILS the drill (it can no longer be '<unknown>' and pass)" || fail "RPO is still optional"
+guard_rto_endpoint "$DRILL" && pass "RTO is measured to smoke completion, not to postmaster readiness" || fail "RTO endpoint is still postmaster readiness"
+guard_migration_compare "$DRILL" && pass "a structurally healthy but STALE restore fails" || fail "no migration-set comparison"
+guard_r032_gate "$DRILL" && pass "r032Eligible requires the application and tenant smokes to have run and passed" || fail "no R-032 eligibility gate"
+grep -q 'rlsUsedByDomain: false' "$DRILL" \
+  && pass "records explicitly that this domain does NOT use RLS, so a green tenant line cannot be misread as RLS coverage" \
+  || fail "RLS status is not recorded"
+grep -q 'not writing the off-host proof marker: this run is not R-032 eligible' "$DRILL" \
+  && pass "--record refuses to write an off-host proof for a run that proved nothing about the application" \
+  || fail "--record is not gated on R-032 eligibility"
+
+# ════════════════════════════════════════════════════════════════════════
+# Behavioural: the preconditions actually fire, and they fire BEFORE the
+# restore. Static greps cannot distinguish "checked" from "checked too late".
+# ════════════════════════════════════════════════════════════════════════
+DRILL_SHM="$WORK/shm"
+mkdir -p "$DRILL_SHM"
+APP_DIR="$WORK/app"
+mkdir -p "$APP_DIR/prisma/migrations/20260101000000_init" "$APP_DIR/node_modules/@prisma/client"
+echo '{"name":"server"}' > "$APP_DIR/package.json"
+
+drill_env() {
+  EXTRA_ENV=(
+    PG_BINDIR="$FAKEBIN"
+    NORAMEDI_PGBACKREST_DRILL_ROOT="$DRILL_SHM/drill"
+    NORAMEDI_APP_SERVER_DIR="$APP_DIR"
+    NORAMEDI_PITR_DRILL_RESULT_FILE="$WORK/result.json"
+    PROD_PG_PORT=5432
+    "$@"
+  )
+}
+
+section "Restore drill (behaviour): a port collision aborts before anything is restored"
+: > "$WORK/pgbackrest.log"
+drill_env FAKE_LISTEN_PORT=55433
+run bash "$DRILL"
+[[ "$CODE" -eq 3 ]] && pass "a busy drill port is a precondition failure (exit 3)" || fail "expected exit 3, got $CODE ($OUT)"
+grep -q 'restore' "$WORK/pgbackrest.log" \
+  && fail "pgbackrest restore ran despite the port collision" \
+  || pass "pgbackrest restore was never invoked — nothing was written to tmpfs"
+
+section "Restore drill (behaviour): the anti-production guard fails CLOSED"
+# The superseded version only attempted this lookup as root and merely logged a
+# warning otherwise, so a non-root invocation skipped the one check standing
+# between the drill and production's PGDATA.
+: > "$WORK/pgbackrest.log"
+drill_env FAKE_DATA_DIRECTORY="" FAKE_LSCLUSTERS=""
+run bash "$DRILL"
+[[ "$CODE" -eq 3 ]] && pass "an undeterminable production PGDATA REFUSES TO RUN rather than warning and continuing" || fail "expected exit 3, got $CODE ($OUT)"
+[[ "$OUT" == *"REFUSING TO RUN"* ]] && pass "says plainly that it refused" || fail "no refusal message ($OUT)"
+grep -q 'restore' "$WORK/pgbackrest.log" && fail "restore ran without the production guard" || pass "nothing was restored"
+
+section "Restore drill (behaviour): a drill path inside production PGDATA is refused"
+drill_env FAKE_DATA_DIRECTORY="$DRILL_SHM"
+run bash "$DRILL"
+[[ "$CODE" -eq 3 ]] && pass "a drill root inside the production data directory is refused" || fail "expected exit 3, got $CODE ($OUT)"
+
+section "Restore drill (behaviour): a non-tmpfs drill root is refused"
+: > "$WORK/pgbackrest.log"
+drill_env FAKE_FSTYPE=ext4
+run bash "$DRILL"
+[[ "$CODE" -eq 3 ]] && pass "refuses to write cleartext cross-tenant patient data to a block device" || fail "expected exit 3, got $CODE ($OUT)"
+grep -q 'restore' "$WORK/pgbackrest.log" && fail "restore ran onto a non-tmpfs root" || pass "nothing was restored"
+drill_env FAKE_FSTYPE=ext4 NORAMEDI_PITR_DRILL_ALLOW_NON_TMPFS=1
+run bash "$DRILL"
+# Asserted on the log rather than the exit code: later preconditions differ by
+# host, but "did the tmpfs gate let this through, and did it say so" does not.
+[[ "$OUT" == *"NOT tmpfs — proceeding only because"* ]] && [[ "$OUT" == *"port ${DRILL_PORT_UNDER_TEST:-55433} is free"* ]] \
+  && pass "the deliberate override is honoured, loudly warned, and execution continues past the gate" \
+  || fail "the override did not take effect ($OUT)"
+
+section "Restore drill (behaviour): capacity is checked before the restore"
+: > "$WORK/pgbackrest.log"
+drill_env FAKE_FREE_MB=100
+run bash "$DRILL"
+[[ "$CODE" -eq 3 ]] && pass "insufficient tmpfs capacity aborts (exit 3)" || fail "expected exit 3, got $CODE ($OUT)"
+grep -q 'restore' "$WORK/pgbackrest.log" \
+  && fail "restore ran into a filesystem too small to hold it — the ENOSPC-mid-replay failure this check exists to prevent" \
+  || pass "restore was never invoked"
+
+if awk '/^MemAvailable:/ {found=1} END {exit !found}' /proc/meminfo 2>/dev/null; then
+  section "Restore drill (behaviour): RAM headroom is enforced"
+  drill_env NORAMEDI_PITR_DRILL_MIN_FREE_RAM_MB=999999999
+  run bash "$DRILL"
+  [[ "$CODE" -eq 3 ]] && pass "refuses to starve the live production postmaster of RAM" || fail "expected exit 3, got $CODE ($OUT)"
+else
+  section "Restore drill (behaviour): an unreadable MemAvailable fails CLOSED"
+  # This host has no MemAvailable in /proc/meminfo. That is exactly the
+  # fail-closed path: the drill must refuse rather than allocate a tmpfs
+  # cluster of unknown affordability.
+  drill_env
+  run bash "$DRILL"
+  [[ "$CODE" -eq 3 ]] && pass "an unreadable MemAvailable is a precondition failure, not an assumption that memory is fine" || fail "expected exit 3, got $CODE ($OUT)"
+  [[ "$OUT" == *"MemAvailable"* ]] && pass "names the missing input" || fail "no diagnostic naming MemAvailable ($OUT)"
+fi
+
+section "Restore drill (behaviour): the application smoke is mandatory by default"
+EXTRA_ENV=(PG_BINDIR="$FAKEBIN" NORAMEDI_PGBACKREST_DRILL_ROOT="$DRILL_SHM/drill" PROD_PG_PORT=5432)
+run bash "$DRILL"
+[[ "$CODE" -eq 3 ]] && pass "an unset NORAMEDI_APP_SERVER_DIR aborts (a drill that only proves a cluster starts is not R-032 evidence)" || fail "expected exit 3, got $CODE ($OUT)"
+[[ "$OUT" == *"not R-032 evidence"* ]] && pass "explains why, in R-032 terms" || fail "no R-032 explanation ($OUT)"
+
+EXTRA_ENV=(PG_BINDIR="$FAKEBIN" NORAMEDI_PGBACKREST_DRILL_ROOT="$DRILL_SHM/drill" NORAMEDI_APP_SERVER_DIR="$WORK/not-an-app" PROD_PG_PORT=5432)
+run bash "$DRILL"
+[[ "$CODE" -eq 3 ]] && pass "a NORAMEDI_APP_SERVER_DIR without prisma/migrations aborts" || fail "expected exit 3, got $CODE ($OUT)"
+
+section "Restore drill (behaviour): --record is refused for a non-evidential run"
+EXTRA_ENV=(PG_BINDIR="$FAKEBIN" NORAMEDI_PGBACKREST_DRILL_ROOT="$DRILL_SHM/drill" PROD_PG_PORT=5432)
+run bash "$DRILL" --allow-missing-app-smoke
+[[ "$OUT" == *"cannot be R-032 evidence"* ]] \
+  && pass "--allow-missing-app-smoke states up front that the run cannot be R-032 evidence" \
+  || fail "the triage mode does not disclaim its own evidence value ($OUT)"
+
+section "Restore drill (behaviour): positive control — the gates are not simply always-failing"
+# Without this, every assertion above would also pass on a script that exited 3
+# unconditionally.
+if awk '/^MemAvailable:/ {found=1} END {exit !found}' /proc/meminfo 2>/dev/null; then
+  : > "$WORK/pgbackrest.log"
+  : > "$WORK/pgctl.log"
+  drill_env NORAMEDI_PITR_DRILL_MIN_FREE_RAM_MB=0 NORAMEDI_PITR_DRILL_ASSUMED_DB_MB=1 \
+            NORAMEDI_PITR_DRILL_WAL_ALLOWANCE_MB=1 FAKE_PGCTL_RC=1
+  run bash "$DRILL"
+  grep -q 'restore' "$WORK/pgbackrest.log" \
+    && pass "with every precondition satisfied the drill DOES reach the restore" \
+    || fail "the drill never restored even on the clean path — the preconditions above prove nothing ($OUT)"
+  [[ "$CODE" -eq 1 ]] && pass "a cluster that will not start is a drill FAILURE (exit 1), not a precondition error" || fail "expected exit 1, got $CODE ($OUT)"
+  SURVIVORS="$(find "$DRILL_SHM" -maxdepth 1 -name 'drill-*' 2>/dev/null || true)"
+  [[ -z "$SURVIVORS" ]] \
+    && pass "the drill root was removed on the failure path" \
+    || fail "a drill root survived teardown: $SURVIVORS"
+else
+  # Reported, not silently dropped: a suite that quietly skips its own positive
+  # control reads as "everything passed" when it proved much less.
+  echo "  SKIPPED - positive control needs MemAvailable in /proc/meminfo (absent on this host);"
+  echo "            the drill's RAM gate fails closed here, which the section above asserts instead."
+fi
+
+# ════════════════════════════════════════════════════════════════════════
+section "Application smoke helper"
+SMOKE="$SCRIPT_DIR/noramedi-pitr-app-smoke.mjs"
+if [[ -f "$SMOKE" ]]; then
+  pass "noramedi-pitr-app-smoke.mjs is present (the drill refuses to run without it)"
+  if command -v node >/dev/null 2>&1; then
+    node --check "$SMOKE" >/dev/null 2>&1 && pass "app smoke parses (node --check)" || fail "app smoke has a syntax error"
+
+    # It must always emit exactly one contract line, including on its own
+    # failure paths — the drill treats a missing line as a failed stage, so a
+    # helper that dies silently and a helper that reports failure would be
+    # indistinguishable in the evidence.
+    SM_OUT="$(node "$SMOKE" 2>&1 || true)"
+    [[ "$(grep -c '^APP_SMOKE_RESULT ' <<<"$SM_OUT")" -eq 1 ]] \
+      && pass "emits exactly one APP_SMOKE_RESULT line when its environment is missing" \
+      || fail "did not emit exactly one result line ($SM_OUT)"
+    [[ "$SM_OUT" == *"APP_SMOKE_RESULT failed"* ]] && pass "a missing environment is a FAILURE, not a skip" || fail "expected a failed result ($SM_OUT)"
+
+    SM_OUT="$(NORAMEDI_SMOKE_APP_DIR="$APP_DIR" NORAMEDI_SMOKE_SOCKET_DIR="127.0.0.1" \
+              NORAMEDI_SMOKE_PORT=55433 NORAMEDI_SMOKE_DB=noramedi_crm NORAMEDI_SMOKE_USER=postgres \
+              node "$SMOKE" 2>&1 || true)"
+    [[ "$SM_OUT" == *"refusing to connect over TCP"* ]] \
+      && pass "refuses a non-absolute (i.e. TCP) host — it must only ever reach the drill's own socket" \
+      || fail "a TCP host was not refused ($SM_OUT)"
+
+    SM_OUT="$(NORAMEDI_SMOKE_APP_DIR="$APP_DIR" NORAMEDI_SMOKE_SOCKET_DIR="$WORK/nosock" \
+              NORAMEDI_SMOKE_PORT=55433 NORAMEDI_SMOKE_DB=noramedi_crm NORAMEDI_SMOKE_USER=postgres \
+              node "$SMOKE" 2>&1 || true)"
+    [[ "$SM_OUT" == *"no unix socket"* ]] && pass "refuses to run when the drill socket is absent" || fail "a missing socket was not detected ($SM_OUT)"
+  fi
+
+  grep -q 'PGPASSWORD' "$SMOKE" && fail "app smoke references PGPASSWORD" || pass "app smoke holds no credential (peer auth needs none)"
+  grep -qE 'console\.log' "$SMOKE" && fail "app smoke uses console.log, which could print a row" || pass "app smoke never console.logs"
+  grep -q 'result deliberately unused' "$SMOKE" \
+    && pass "the findFirst() schema-drift probe discards its row rather than inspecting it" \
+    || fail "the drift probe does not document discarding its row"
+  grep -q 'createRequire' "$SMOKE" \
+    && pass "loads the DEPLOYED Prisma client from the app directory, not its own dependencies" \
+    || fail "does not resolve the deployed client"
+else
+  fail "noramedi-pitr-app-smoke.mjs is missing — the drill's application smoke cannot run"
+fi
 
 # ════════════════════════════════════════════════════════════════════════
 section "Preflight: read-only by default"

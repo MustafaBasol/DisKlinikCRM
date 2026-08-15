@@ -56,15 +56,47 @@ Bayat **olmayan** (düzeltilmemeli): versiyonlama, object-lock/değişmezlik, ya
 ## F4-FCR-002 — pgBackRest / PITR / Off-Host Kurtarma Temeli
 
 `F4-FCR-002_STATUS = AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
-`F4-FCR-002_SCOPED_FREEZE_EXCEPTION = DRAFT_PENDING_PROGRAM_OWNER` — **VERİLMEDİ**
+`F4-FCR-002_SCOPED_FREEZE_EXCEPTION = AUTHORIZED_BY_PROGRAM_OWNER_2026-08-15`
 
-### Dondurma (freeze) pozisyonu — istisna TASLAK, ALINMADI
+### Dondurma (freeze) pozisyonu — istisna VERİLDİ (2026-08-15), üretim henüz değişmedi
+
+> **2026-08-15 — istisnanın kaydı.** Program sahibi, dar kapsamlı dondurma
+> istisnasını `F4-FCR-002A` görevi kapsamında **vermiştir**. Kayıt, F4-1A
+> emsaline ve aşağıdaki 69. satırdaki gerekliliğe uygun olarak **bu dosyada**
+> tutulmaktadır; yalnızca bir kanıt dosyasında ilan edilmemiştir.
+>
+> İstisnanın **kapsamı** [`runbooks/F4_RECOVERY_OPERATIONS.md`](../runbooks/F4_RECOVERY_OPERATIONS.md)
+> §14'te yazılı olanla sınırlıdır ve **genişletilmemiştir**: pgBackRest kurulumu
+> ve yapılandırması, `archive_mode`/`archive_command` etkinleştirmesi, şifreli
+> yerel kurtarma deposu, sürekli WAL arşivleme, kurtarma doğrulaması, izole
+> **üretim-dışı** restore tatbikatı, operatör izlemesi ve **ayrıca onaylanacak**
+> saha dışı depo bağlantısı. İstisna; RLS değişikliklerini, kiracı (tenant)
+> genişletmesini, depolama anahtarı göçünü, görüntüleme yeniden konumlandırmasını,
+> fiziksel silme yeniden tasarımını, ilgisiz Prisma/şema değişikliklerini, ilgisiz
+> altyapı yeniden tasarımını, mevcut `pg_dump` zincirinin değiştirilmesini veya
+> geniş kapsamlı KVKK mimari değişikliklerini **kapsamaz**.
+>
+> **İstisnanın verilmiş olması, üretimin değiştiği anlamına gelmez.** Bu satırın
+> yazıldığı anda `archive_mode` hâlâ `off`, pgBackRest **kurulu değil**, depo
+> **oluşturulmamış**, hiçbir kimlik bilgisi üretilmemiş ve `R-030`/`R-031`/`R-032`
+> **`OPEN`** durumdadır. Aşağıdaki bölümlerin "üretimde hiçbir şey
+> etkinleştirilmemiştir" ifadeleri **hâlâ doğrudur**; değişen tek şey, artık
+> etkinleştirmeye **izin verilmiş** olmasıdır.
+>
+> **`F4-FCR-002A` ön koşulu (2026-08-15).** İlk gerçek restore tatbikatı,
+> `scripts/noramedi-pgbackrest-restore-drill.sh`'in F4-FCR-002A sertleştirmesi
+> uygulanmadan **çalıştırılmayacaktır**: TCP `trust` kimlik doğrulamasının
+> kaldırılması, hataya-kapalı (fail-closed) temizlik, başlangıç GUC'lerinin
+> sabitlenmesi, port ve `/dev/shm` ön kontrolleri, uygulama ve kiracı-izolasyonu
+> smoke testleri, göç (migration) kümesi karşılaştırması ile zorunlu RPO/RTO
+> kanıtı. Bu ön koşul karşılanmadan üretilen hiçbir çıktı **R-032 kanıtı
+> değildir**.
 
 F4-FCR-001'den farklı olarak bu görev, [`KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md`](../KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md) §2 satır 18'in yasakladığı "**any live backup/PITR implementation**" tanımının **tam olarak içine giren** bir yeteneği hedeflemektedir. Bu nedenle:
 
 - **Depo (repository) çalışması yapılmıştır** — §4'ün açıkça izin verdiği "backup/PITR **design**" ve dokümantasyon sınırının ötesine geçen hiçbir **canlı** eylem gerçekleştirilmemiştir.
 - **Üretimde hiçbir şey etkinleştirilmemiştir.** `archive_mode` `off` olarak kalmıştır; pgBackRest kurulmamıştır; depo oluşturulmamıştır; hiçbir kimlik bilgisi üretilmemiş, hiçbir bayt sunucu dışına taşınmamıştır.
-- **Dar kapsamlı istisna metni hazırlanmıştır** ([`runbooks/F4_RECOVERY_OPERATIONS.md`](../runbooks/F4_RECOVERY_OPERATIONS.md) §14) ve **program sahibinin kararını beklemektedir**. Hiçbir ajan kendi kendini onaylayamaz (tracker §2.3).
+- **Dar kapsamlı istisna metni hazırlanmıştır** ([`runbooks/F4_RECOVERY_OPERATIONS.md`](../runbooks/F4_RECOVERY_OPERATIONS.md) §14) ve **2026-08-15'te program sahibi tarafından verilmiştir** (yukarıdaki kayıt). Hiçbir ajan kendi kendini onaylayamaz (tracker §2.3); bu kayıt bir ajanın değil, program sahibinin kararıdır.
 
 > **Program sahibine not (F4-FCR-001'in kaydettiği yönetişim boşluğu, tekrarlanmamıştır):** İstisna verilirse, F4-1A emsalindeki gibi **bu dosyaya** `F4-FCR-002_SCOPED_FREEZE_EXCEPTION = AUTHORIZED_BY_PROGRAM_OWNER_<tarih>` biçiminde kaydedilmelidir. Yalnızca bir kanıt dosyasında ilan etmek, yukarıda 21. satırda kayıtlı olan ve `FILE_BACKUP_COVERAGE_001`'in düştüğü boşluğun aynısıdır.
 

@@ -341,8 +341,9 @@ behaviour change and belongs to the operator.
 | `scripts/noramedi-pgbackrest-preflight.sh` | Validates every precondition, reads the four host facts the repository cannot know, prints the intended change, writes the drop-in only with `--apply`. **Never restarts PostgreSQL.** |
 | `scripts/noramedi-pgbackrest-backup.sh` | Backup / expire / verify wrapper with the disk-exhaustion abort the freeze exception requires. |
 | `scripts/noramedi-pgbackrest-status.sh` | Publishes `/var/lib/noramedi/pitr-status.json`. |
-| `scripts/noramedi-pgbackrest-restore-drill.sh` | PITR restore into a disposable RAM-backed loopback cluster, plus smoke checks and measured RPO/RTO. |
-| `scripts/noramedi-pgbackrest.test.sh` | 75 assertions including canary-token secret-leak tests. |
+| `scripts/noramedi-pgbackrest-restore-drill.sh` | PITR restore into a disposable RAM-backed **socket-only** cluster, plus structural, application and tenant-isolation smoke checks, migration-set comparison against the deployed release, mandatory RPO/RTO evidence, and a verified fail-closed teardown. See §14.1. |
+| `scripts/noramedi-pitr-app-smoke.mjs` | Loads the **deployed** generated Prisma client and issues typed queries against the restored database over the drill socket. Must be installed next to the drill script. |
+| `scripts/noramedi-pgbackrest.test.sh` | 141 assertions, including canary-token secret-leak tests and mutation tests that reintroduce each F4-FCR-002A defect to prove the guards can fail. |
 | `scripts/noramedi-opscheck.sh` | New **opt-in** `pitr` check, exit bit **128**. |
 | `server/src/services/pitrStatusFile.ts` | Fail-closed reader; extends `GET /api/platform/recovery/status`. |
 | `src/pages/platform/PlatformBackups.tsx` | PITR panel with tri-state off-host rendering. |
@@ -464,7 +465,18 @@ sudo systemctl daemon-reload && sudo systemctl enable --now noramedi-pgbackrest-
 sudo /usr/local/sbin/noramedi-opscheck.sh --dry-run --check pitr
 
 # 10. First restore drill, watched by a human.
-sudo REHEARSAL_OS_USER=postgres /usr/local/sbin/noramedi-pgbackrest-restore-drill.sh --port 55433
+#     Install the application-smoke helper NEXT TO the drill script first; the
+#     drill refuses to run without it.
+sudo install -m 0755 scripts/noramedi-pitr-app-smoke.mjs /usr/local/sbin/
+#     NORAMEDI_APP_SERVER_DIR is mandatory: the application smoke and the
+#     migration-set comparison both read the DEPLOYED release from it. Without
+#     it the drill aborts, because a run that only proves a cluster starts is
+#     not R-032 evidence. Point it at the server directory PM2 actually runs.
+#     The drill OS user must be able to READ that directory — the drill checks
+#     this before restoring rather than after.
+sudo REHEARSAL_OS_USER=postgres \
+     NORAMEDI_APP_SERVER_DIR=/path/to/deployed/server \
+     /usr/local/sbin/noramedi-pgbackrest-restore-drill.sh --port 55433
 ```
 
 **`NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=false` is a knowing, temporary
@@ -477,12 +489,41 @@ off-host copy has stopped working is disabled.
 at step 9, not earlier. Until WAL archiving is on, the local check fails by
 design and a provider-side check created early just sits DOWN.
 
-## 14. `F4-FCR-002_PITR_SCOPED_FREEZE_EXCEPTION` — DRAFT, NOT GRANTED
+## 14. `F4-FCR-002_PITR_SCOPED_FREEZE_EXCEPTION` — GRANTED 2026-08-15
 
-**Status: `DRAFT_PENDING_PROGRAM_OWNER`.** Per
-[`NORAMEDI_MASTER_TRACKER.md`](../NORAMEDI_MASTER_TRACKER.md) §2.3 no agent may
-self-approve. This supersedes the narrower draft at §7.1, extending it only by
-naming the monitoring and restore-verification artifacts explicitly.
+**Status: `AUTHORIZED_BY_PROGRAM_OWNER_2026-08-15`.** Recorded in
+[`phases/F4_STORAGE_AND_BACKUP.md`](../phases/F4_STORAGE_AND_BACKUP.md) §F4-FCR-002,
+which is the location [`NORAMEDI_MASTER_TRACKER.md`](../NORAMEDI_MASTER_TRACKER.md)
+§2.3 requires; the declaration below is the text that was granted, not a
+self-approval by an agent. This supersedes the narrower draft at §7.1,
+extending it only by naming the monitoring and restore-verification artifacts
+explicitly.
+
+**The grant is permission, not activation.** At the time of writing pgBackRest
+is still not installed, `archive_mode` is still `off`, no repository exists, no
+credential has been generated, and `R-030`/`R-031`/`R-032` are all still `OPEN`.
+Every "nothing has been activated" statement elsewhere in this runbook remains
+accurate.
+
+**The scope below has not been widened.** It authorizes pgBackRest installation
+and configuration, `archive_mode`/`archive_command` activation, an encrypted
+local recovery repository, continuous WAL archival, recovery verification, an
+isolated non-production restore drill, operator monitoring, and a separately
+approved off-host repository connection — and nothing else. It does not
+authorize RLS changes, tenant extension, storage-key migration, imaging
+relocation, physical-deletion redesign, unrelated Prisma/schema changes,
+unrelated infrastructure redesign, replacing the existing `pg_dump` chain, or
+broad KVKK architecture changes.
+
+**Blocking precondition for the first drill (F4-FCR-002A, 2026-08-15).** The
+first controlled restore drill must NOT be run with the F4-FCR-002 version of
+`scripts/noramedi-pgbackrest-restore-drill.sh`. That version synthesised
+`host all all 127.0.0.1/32 trust`, which exposed every tenant's patient rows to
+any local account for the drill's duration; its teardown was
+`rm -rf … 2>/dev/null || true` with no verification; and it had no `/dev/shm`
+capacity preflight, no application smoke and no tenant-isolation smoke, so its
+output could never have been honest R-032 evidence. The hardened version is
+required first — see §14.1.
 
 > **F4-FCR-002_PITR_SCOPED_FREEZE_EXCEPTION**
 >
@@ -526,12 +567,38 @@ naming the monitoring and restore-verification artifacts explicitly.
 > Rollback is a single documented command pair: remove the PostgreSQL drop-in
 > and restart (§17).
 
-**Recording, if granted.** Add to
+**Recorded.** Written to
 [`phases/F4_STORAGE_AND_BACKUP.md`](../phases/F4_STORAGE_AND_BACKUP.md) in the
 form F4-1A used:
-`F4-FCR-002_SCOPED_FREEZE_EXCEPTION = AUTHORIZED_BY_PROGRAM_OWNER_<date>`.
+`F4-FCR-002_SCOPED_FREEZE_EXCEPTION = AUTHORIZED_BY_PROGRAM_OWNER_2026-08-15`.
 Declaring it satisfied in an evidence file only — the governance gap recorded
-at `F4_STORAGE_AND_BACKUP.md:21` — is exactly what must not happen again.
+at `F4_STORAGE_AND_BACKUP.md:21` — is exactly what did not happen this time.
+
+### 14.1 Restore-drill safety contract (F4-FCR-002A)
+
+The drill script is the only artifact that can produce `R-032` evidence, so its
+failure modes are program-level, not script-level. These properties are
+enforced in code and asserted by `scripts/noramedi-pgbackrest.test.sh`; treat a
+change that removes any of them as a change to the program's recovery claim.
+
+| Property | Enforcement |
+|---|---|
+| No unauthenticated access to the restored PHI | Cluster starts with `listen_addresses=''`; `pg_hba.conf` contains a single `local … peer map=…` line and **no** `host` and **no** `trust` rule. Asserted after start via `pg_hba_file_rules` and `ss`. |
+| No credential to leak | `peer` is authenticated by kernel UID over a mode-0700 socket directory. There is no password, no `PGPASSWORD`, no pgpass file. |
+| Startup cannot be redirected | `data_directory`, `hba_file`, `ident_file`, `listen_addresses`, `unix_socket_directories`, `port`, `archive_mode=off` and `archive_command=''` are all pinned via `pg_ctl -o`, which outranks both `postgresql.conf` and `postgresql.auto.conf`. |
+| Never production PGDATA | Determined from the live cluster, `pg_lsclusters`, or an explicit override — and the drill **refuses to run** if none of them answers. The guard never fails open. |
+| Never persistent disk | The drill root's filesystem must be `tmpfs`; overriding that requires `NORAMEDI_PITR_DRILL_ALLOW_NON_TMPFS=1` and is loudly warned. |
+| Capacity is checked before the restore | `/dev/shm` free space and `MemAvailable`, against base size read from `pgbackrest info` + a WAL-replay allowance + overhead. Free space on `/` is irrelevant — the target is RAM. |
+| The port is free, then closed again | `ss` preflight before the restore, `ss` assertion during teardown. `ss` is a hard requirement, not a best-effort check. |
+| Teardown is fail-closed | `trap … EXIT INT TERM HUP`; stop escalates fast → immediate → `SIGTERM` → `SIGKILL` with liveness verification; removal is verified; any unverified step exits **5**, prints operator instructions, and writes an incident marker. |
+| A stale restore fails | The restored `_prisma_migrations` set is compared against the deployed release's `prisma/migrations` directory. Missing **or** extra migrations fail the drill. |
+| The application is proven, not assumed | `noramedi-pitr-app-smoke.mjs` loads the **deployed** generated Prisma client and issues typed queries over the drill socket. It never starts the app, never writes, never prints a row. |
+| Tenant scoping is proven | `Appointment.clinicId = Patient.clinicId` and no orphan clinic references. This domain does **not** use RLS; the policy count is recorded (expected 0) so a green line cannot be misread as RLS coverage. |
+| RPO and RTO are mandatory | An unmeasurable RPO fails the drill. RTO is measured to **application/tenant smoke completion**, not to postmaster readiness. Both are compared to targets in the result document. |
+| Evidence cannot be over-claimed | `r032Eligible` is true only when the application smoke, the tenant smoke, the migration comparison and both objectives all pass. `--record` refuses to write the off-host proof marker otherwise. |
+
+`--allow-missing-app-smoke` exists for triage only: it disables the application
+and tenant stages, forces `r032Eligible=false`, and blocks `--record`.
 
 ## 15. Key escrow — the highest-severity availability risk in this change
 
@@ -779,7 +846,7 @@ zeros and nulls. That is the expected reading, not an error.
 | pgBackRest installed in production | `NO` |
 | `archive_mode` | `off` — unchanged |
 | Repository created | `NO` |
-| Freeze exception | `DRAFT_PENDING_PROGRAM_OWNER` — **NOT GRANTED** |
+| Freeze exception | `AUTHORIZED_BY_PROGRAM_OWNER_2026-08-15` — **GRANTED** (permission only; nothing below has changed as a result) |
 | Off-host repository host | **NOT PROCURED** |
 | Credentials created | `NO` |
 | Data moved off-host | `NO` |
@@ -939,8 +1006,10 @@ one over-firm RPO claim in a config template were corrected.
 ### What this does not change
 
 No finding altered the program state. `archive_mode` is still `off`, nothing is
-installed, the freeze exception is still `DRAFT_PENDING_PROGRAM_OWNER`, and
-`R-030`/`R-031`/`R-032` remain `OPEN`. The honest status of this work is
+installed, and `R-030`/`R-031`/`R-032` remain `OPEN`. (The freeze exception was
+`DRAFT_PENDING_PROGRAM_OWNER` when this section was written and was granted on
+2026-08-15 — see §14. That changed what is *permitted*, not what has been
+*done*: every statement in this section still holds.) The honest status of this work is
 **repository-complete and never executed against a real cluster** — H3 is
 direct evidence of that, and it is why §13's activation sequence ends with a
 human-watched first drill rather than a scheduled one.
