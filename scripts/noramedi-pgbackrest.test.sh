@@ -822,6 +822,53 @@ grep -q 'restore' "$WORK/pgbackrest.log" \
   && fail "pgbackrest restore ran despite the port collision" \
   || pass "pgbackrest restore was never invoked — nothing was written to tmpfs"
 
+section "Restore drill (behaviour): a Prisma 7 release without @prisma/adapter-pg is refused up front"
+# F4-FCR-002A-R4. The second real drill restored production, verified the PITR
+# stop point, matched 74/74 migrations and passed tenant isolation — and then
+# could not construct PrismaClient, because the deployed release is Prisma 7
+# (driver-adapter only) and the smoke helper was on the Prisma 6 contract. A
+# release that cannot satisfy the smoke must be caught before a restore is
+# spent on it, not after.
+APP_DIR_V7="$WORK/app-v7-no-adapter"
+mkdir -p "$APP_DIR_V7/prisma/migrations/20260101000000_init" "$APP_DIR_V7/node_modules/@prisma/client"
+echo '{"name":"server"}' > "$APP_DIR_V7/package.json"
+echo '{"name":"@prisma/client","version":"7.9.1"}' > "$APP_DIR_V7/node_modules/@prisma/client/package.json"
+: > "$WORK/pgbackrest.log"
+EXTRA_ENV=(
+  PG_BINDIR="$FAKEBIN"
+  NORAMEDI_PGBACKREST_DRILL_ROOT="$DRILL_SHM/drill"
+  NORAMEDI_APP_SERVER_DIR="$APP_DIR_V7"
+  NORAMEDI_PITR_DRILL_RESULT_FILE="$WORK/result.json"
+  PROD_PG_PORT=5432
+)
+run bash "$DRILL"
+[[ "$CODE" -eq 3 ]] \
+  && pass "a v7 deployed client with no @prisma/adapter-pg is a precondition failure (exit 3)" \
+  || fail "expected exit 3, got $CODE ($OUT)"
+[[ "$OUT" == *"adapter-pg"* ]] \
+  && pass "the refusal names @prisma/adapter-pg so the operator knows what is missing" \
+  || fail "the refusal does not identify the missing package ($OUT)"
+grep -q 'restore' "$WORK/pgbackrest.log" \
+  && fail "pgbackrest restore ran despite an unusable deployed release" \
+  || pass "pgbackrest restore was never invoked — no restore was spent on a release that cannot be smoked"
+
+# The same check must NOT fire for a pre-7 release, which needs no adapter.
+APP_DIR_V6="$WORK/app-v6"
+mkdir -p "$APP_DIR_V6/prisma/migrations/20260101000000_init" "$APP_DIR_V6/node_modules/@prisma/client"
+echo '{"name":"server"}' > "$APP_DIR_V6/package.json"
+echo '{"name":"@prisma/client","version":"6.14.0"}' > "$APP_DIR_V6/node_modules/@prisma/client/package.json"
+EXTRA_ENV=(
+  PG_BINDIR="$FAKEBIN"
+  NORAMEDI_PGBACKREST_DRILL_ROOT="$DRILL_SHM/drill"
+  NORAMEDI_APP_SERVER_DIR="$APP_DIR_V6"
+  NORAMEDI_PITR_DRILL_RESULT_FILE="$WORK/result.json"
+  PROD_PG_PORT=5432
+)
+run bash "$DRILL"
+[[ "$OUT" != *"adapter-pg"* ]] \
+  && pass "a pre-7 deployed release is not asked for a driver adapter it does not use" \
+  || fail "the adapter requirement leaked onto a Prisma 6 release ($OUT)"
+
 section "Restore drill (behaviour): the anti-production guard fails CLOSED"
 # The superseded version only attempted this lookup as root and merely logged a
 # warning otherwise, so a non-root invocation skipped the one check standing

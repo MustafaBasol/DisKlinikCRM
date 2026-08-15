@@ -18,6 +18,14 @@
 // generate — and issues typed queries through it. A column the client expects
 // and the restore does not have surfaces here (Prisma P2022) and nowhere else.
 //
+// It also constructs that client the way the deployed runtime constructs it.
+// server/src/db.ts is on Prisma 7 and passes a `PrismaPg` driver adapter; a
+// smoke that built the client some other way would prove the restore usable by
+// a client production does not run. This script therefore loads BOTH
+// @prisma/client and @prisma/adapter-pg from the deployed directory and mirrors
+// that construction — without importing server/src/db.ts, which would resolve
+// the PRODUCTION DATABASE_URL and could connect to production.
+//
 // ── WHAT IT DELIBERATELY DOES NOT DO ─────────────────────────────────────
 //   - It never starts the application. No express app, no HTTP listener, no
 //     job runner, no worker. Only the Prisma client module is imported.
@@ -107,13 +115,19 @@ if (!fs.existsSync(path.join(sockDir, `.s.PGSQL.${port}`))) {
   bailSync(`no unix socket .s.PGSQL.${port} in ${sockDir}`);
 }
 
-// Resolve the DEPLOYED release's Prisma client, not this script's own
+// Resolve the DEPLOYED release's Prisma packages, not this script's own
 // dependencies. createRequire anchored at the app's package.json walks the
 // app's node_modules, so `@prisma/client` is whatever production has
 // installed and generated — which is the entire point of the check.
+let appRequire;
+try {
+  appRequire = createRequire(pathToFileURL(path.join(appDir, 'package.json')));
+} catch (err) {
+  bailSync(`could not anchor a require to ${appDir}/package.json: ${err && err.message}`);
+}
+
 let PrismaClient;
 try {
-  const appRequire = createRequire(pathToFileURL(path.join(appDir, 'package.json')));
   ({ PrismaClient } = appRequire('@prisma/client'));
 } catch (err) {
   bailSync(`could not load the deployed @prisma/client from ${appDir}: ${err && err.message}`);
@@ -122,24 +136,120 @@ if (typeof PrismaClient !== 'function') {
   bailSync(`the deployed @prisma/client did not export a PrismaClient constructor`);
 }
 
-// Unix-socket connection string. `host` is percent-encoded because the path
-// is a query-string value; libpq/Prisma reads it as the socket directory and
-// the port selects the .s.PGSQL.<port> file inside it. No password: the drill
+// ── which construction contract does the DEPLOYED client actually have? ──
+//
+// This is read, not guessed, and not discovered by try/catch. Prisma 7 removed
+// `datasourceUrl` and `datasources` from the constructor — it accepts a driver
+// adapter and rejects both legacy properties outright ("Unknown property
+// datasources provided to PrismaClient constructor"). Prisma 6 and earlier have
+// no `adapter` in the general case and take `datasourceUrl`.
+//
+// A blind `try adapter, catch, try datasourceUrl` would make those two eras
+// indistinguishable from a genuine construction bug and would report whichever
+// error came last — which is exactly how F4-FCR-002A's second drill failed:
+// the fallback's message was surfaced and the real one was swallowed. So the
+// major version selects the path, and a failure on the selected path is fatal
+// with its own error text.
+function readDeployedClientMajor() {
+  // Preferred: the package's own `./package.json` subpath export.
+  try {
+    const v = String(appRequire('@prisma/client/package.json').version ?? '');
+    const major = Number.parseInt(v.split('.')[0], 10);
+    if (major > 0) return major;
+  } catch (_) { /* fall through to the filesystem */ }
+
+  // Fallback for a package whose `exports` map does not publish package.json:
+  // resolve the module's real entry point and walk up to its package root.
+  // Same fact, different source — not a different contract.
+  try {
+    let dir = path.dirname(appRequire.resolve('@prisma/client'));
+    for (let depth = 0; depth < 10; depth += 1) {
+      const candidate = path.join(dir, 'package.json');
+      if (fs.existsSync(candidate)) {
+        const pkg = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+        if (pkg && pkg.name === '@prisma/client') {
+          const major = Number.parseInt(String(pkg.version ?? '').split('.')[0], 10);
+          if (major > 0) return major;
+        }
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch (_) { /* unknown */ }
+
+  return 0;
+}
+
+const clientMajor = readDeployedClientMajor();
+if (clientMajor === 0) {
+  bailSync('could not read the deployed @prisma/client version; refusing to guess its constructor contract');
+}
+const USES_DRIVER_ADAPTER = clientMajor >= 7;
+
+// Unix-socket connection string. `host` is percent-encoded because the path is
+// a query-string value; node-postgres reads it as the socket directory and the
+// port selects the .s.PGSQL.<port> file inside it. No password: the drill
 // cluster authenticates by peer (kernel-verified UID) over a mode-0700 socket
 // directory, so there is no credential for this process to hold or leak.
+//
+// Nothing here can name a TCP host: `sockDir` was already required to be an
+// absolute path above, and the socket file itself was required to exist.
 const url =
   `postgresql://${encodeURIComponent(dbUser)}@localhost:${encodeURIComponent(port)}` +
-  `/${encodeURIComponent(dbName)}?host=${encodeURIComponent(sockDir)}&connection_limit=1`;
+  `/${encodeURIComponent(dbName)}?host=${encodeURIComponent(sockDir)}`;
+
+// The connect deadline must be strictly inside the stage deadline, or a hung
+// TCP-less socket connect would be reported as "timed out" rather than as the
+// connection failure it is.
+const CONNECT_TIMEOUT_MS = Math.max(1000, Math.min(15000, TIMEOUT_MS));
 
 let prisma;
-try {
-  prisma = new PrismaClient({ datasourceUrl: url, log: [] });
-} catch (_) {
+if (USES_DRIVER_ADAPTER) {
+  // Same construction family as the deployed runtime (server/src/db.ts):
+  //   new PrismaClient({ adapter: new PrismaPg({ connectionString, ... }) })
+  // Loaded from the app directory for the same reason the client is — a smoke
+  // that used this script's own adapter would not be testing the release.
+  let PrismaPg;
   try {
-    // Older generated clients predate `datasourceUrl`.
-    prisma = new PrismaClient({ datasources: { db: { url } }, log: [] });
+    ({ PrismaPg } = appRequire('@prisma/adapter-pg'));
   } catch (err) {
-    bailSync(`could not construct the deployed PrismaClient: ${err && err.message}`);
+    bailSync(
+      `the deployed @prisma/client is v${clientMajor} (driver-adapter only) but @prisma/adapter-pg ` +
+      `could not be loaded from ${appDir}: ${err && err.message}`
+    );
+  }
+  if (typeof PrismaPg !== 'function') {
+    bailSync('the deployed @prisma/adapter-pg did not export a PrismaPg constructor');
+  }
+
+  let adapter;
+  try {
+    adapter = new PrismaPg({
+      connectionString: url,
+      // One connection: this stage issues six short reads in sequence and the
+      // drill cluster is running in tmpfs alongside a PHI-bearing restore.
+      max: 1,
+      connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+      idleTimeoutMillis: CONNECT_TIMEOUT_MS,
+    });
+  } catch (err) {
+    bailSync(`could not construct the deployed PrismaPg adapter: ${err && err.message}`);
+  }
+
+  try {
+    prisma = new PrismaClient({ adapter, log: [] });
+  } catch (err) {
+    bailSync(`could not construct the deployed PrismaClient (v${clientMajor}, adapter): ${err && err.message}`);
+  }
+} else {
+  // Prisma ≤ 6: no driver adapter, `datasourceUrl` is the contract. Kept so a
+  // rollback to a pre-7 release still gets a real application smoke instead of
+  // a stage that fails for a reason unrelated to the restore.
+  try {
+    prisma = new PrismaClient({ datasourceUrl: `${url}&connection_limit=1`, log: [] });
+  } catch (err) {
+    bailSync(`could not construct the deployed PrismaClient (v${clientMajor}, datasourceUrl): ${err && err.message}`);
   }
 }
 

@@ -1,6 +1,6 @@
 # F4 — Storage and Backup Foundation
 
-Faz durumu: `TODO` · Son güncelleme: 2026-08-15 (F4-FCR-002A — yalnızca ön kontrol; **restore çalıştırılmadı**)
+Faz durumu: `TODO` · Son güncelleme: 2026-08-15 (F4-FCR-002A-R4 — iki tatbikat çalıştırıldı, **ikisi de `FAIL`**; ikincisi yalnızca uygulama smoke'unda)
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
 
@@ -154,6 +154,127 @@ kanıtlanmadan bayatlık bayrağını 168 saat yeşile çevirirdi.
 
 Bu satırlar **işlem düzeyinde PITR kanıt girdileridir, kalıcı kanıt değildir**;
 kalıcı kanıt program saklama politikasına göre tatbikat sonuç belgesine yazılmalıdır.
+
+## F4-FCR-002A-R4 — İki tatbikat çalıştırıldı; ikincisi yalnızca uygulama smoke'unda kapandı
+
+`F4-FCR-002A_STATUS = IN_PROGRESS` · `R032_ELIGIBLE = false`
+`NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
+Üretim sürümü: `75c8c2f2f4a2027ee3a42ae55bc211b710383005` · PostgreSQL 16.14
+
+> **Bu görev hâlâ tamamlanmamıştır.** İki tatbikat çalıştırıldı ve **ikisi de
+> `FAIL` ile kapandı**. `R-030`/`R-031`/`R-032` `OPEN` kalır;
+> `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. Bu bölüm bir düzeltmeyi ve
+> iki tatbikatın kanıtını kaydeder — **geçen bir tatbikatı değil.**
+
+### Birinci tatbikat — bayat girdi (`FAIL`)
+
+İlk kontrollü tatbikat, girdilerinin bayatlığı nedeniyle kapandı: migration
+kümesi **73/74** ile eşleşmedi (dağıtılmış sürüm bir migration geride) ve
+kullanılan yedek **RPO = 385 dakika** verdi — 60 dakikalık ilk-müşteri hedefinin
+altı katından fazlası. Bu bir kod kusuru değil, bir **tazelik** kusurudur:
+tatbikat, kanıt üretmeye elverişli olmayan bir girdiyle beslendiğinde bunu
+doğru biçimde `FAIL` olarak raporlamıştır. Düzeltme, taze bir tam yedek
+(`20260815-224355F`) alınması olmuştur.
+
+### İkinci tatbikat — her şey geçti, uygulama smoke'u hariç (`FAIL`)
+
+`runId = F4-FCR-002A-20260815-02`. Taze yedekle çalıştırıldı ve **kanıt
+üretmesi beklenen her kapı geçti**:
+
+| Kapı | Sonuç |
+|---|---|
+| PITR durma noktası (marker A = 1, marker B = 0) | **PASS** — hedef `2026-08-15 19:46:39.550000+00`, replay `2026-08-15T19:46:00Z` |
+| Migration kümesi (beklenen/uygulanan) | **PASS** — 74/74, `missing=0`, `ahead=0` |
+| Tenant izolasyon smoke | **PASS** — klinikler arası randevu = 0, yetim klinik referansı = 0 |
+| RPO | **PASS** — 3 dk ≤ 60 dk |
+| RTO | **PASS** — 5 sn ≤ 14400 sn |
+| Temizlik (cleanup) | **PASS** — doğrulandı |
+| **Uygulama smoke** | **FAIL** — `PrismaClient` **kurulamadı** |
+
+Tam hata:
+
+```
+Unknown property datasources provided to PrismaClient constructor
+```
+
+**Sonuç `FAIL`'dir ve öyle kalmalıdır.** Tatbikat doğru davranmıştır: uygulama
+smoke'u, geri yüklenen veritabanını **üretimin fiilen çalıştırdığı kodun**
+kullanabildiğini kanıtlayan tek aşamadır; kurulamayan bir istemci hiçbir şey
+kanıtlamaz. `R032_ELIGIBLE = false` olarak kalmıştır ve off-host kanıt marker'ı
+yazılmamıştır.
+
+### Kök neden — smoke yardımcısı üretimin Prisma 7 sözleşmesini taklit etmiyordu
+
+Dağıtılmış çalışma zamanı (`server/src/db.ts:15-22`) istemciyi **sürücü
+adaptörü** ile kurar:
+
+```ts
+new PrismaClient({ adapter: new PrismaPg({ connectionString: getRequiredDatabaseUrl(), ... }) })
+```
+
+`server/package.json` `@prisma/client` **7.9.1** ve `@prisma/adapter-pg`
+**7.9.1** sabitler. Prisma 7 hem `datasourceUrl` hem `datasources`
+özelliklerini kaldırmıştır ve ikisini de reddeder.
+
+Smoke yardımcısı ise (`scripts/noramedi-pitr-app-smoke.mjs:136-144`, düzeltme
+öncesi) önce `datasourceUrl`, sonra `datasources` deniyordu — **ve ilk hatayı
+boş bir `catch (_)` ile yutuyordu.** Bu yüzden tatbikat kaydına yalnızca
+*ikinci* denemenin mesajı düştü; gerçek neden (istemcinin bir adaptör beklediği)
+hiçbir zaman raporlanmadı. Bu, düzeltilen ikinci kusurdur: **teşhisi gizleyen
+catch-all**.
+
+### Düzeltme — sürüm farkındalıklı, catch-all değil
+
+Yardımcı artık dağıtılmış `@prisma/client`'ın **sürümünü okur** ve yolu buna
+göre seçer; bir yapılandırma hatasını yakalayıp körlemesine ikinci bir yol
+denemez:
+
+- **major ≥ 7** → `@prisma/adapter-pg` de aynı `createRequire` ile
+  **dağıtılmış dizinden** yüklenir, `new PrismaPg({ connectionString, max: 1, ... })`
+  kurulur ve istemci `new PrismaClient({ adapter, log: [] })` ile üretilir —
+  yani `server/src/db.ts` ile **aynı sözleşme ailesi**.
+- **major < 7** → `datasourceUrl` (bir rollback sürümünde smoke'un anlamsız bir
+  nedenle düşmemesi için korunur).
+- Sürüm okunamazsa **fail-closed**: sözleşme tahmin edilmez.
+- `@prisma/adapter-pg` eksikse **fail-closed** ve hata paketi adıyla söyler.
+
+`server/src/db.ts` **içe aktarılmaz** — o modül üretim `DATABASE_URL`'ini
+çözerdi. Bağlantı dizesi yalnızca tatbikatın unix socket'ini, portunu ve
+veritabanını adresler; parola yoktur (peer auth). Havuz `max: 1`'dir. Tatbikat
+socket güvenlik kontrolleri (mutlak yol zorunluluğu, `.s.PGSQL.<port>`
+varlığı) ve `current_setting('port')` ham sorgu kanıtı **korunmuştur**.
+
+Tatbikat betiği ayrıca artık **restore'dan önce** `@prisma/adapter-pg`'yi
+ön kontrol eder: v7+ bir istemci varken adaptör yoksa tatbikat, pahalı kısmı
+harcamadan reddeder.
+
+### Neden hiçbir test bunu yakalamamıştı
+
+`scripts/noramedi-pgbackrest.test.sh` yardımcıyı zaten kapsıyordu — ama
+**vakalarının tamamı kurulumdan (construction) ÖNCE** düşüyordu (eksik ortam,
+TCP host, olmayan socket). Depoda hiçbir yerde istemci gerçekten kurulmamıştı,
+bu yüzden kusur tüm süite görünmezdi ve yalnızca gerçek bir restore onu
+bulabildi.
+
+Yeni `scripts/noramedi-pitr-app-smoke.test.sh` bu boşluğu kapatır: **sahte bir
+dağıtılmış sürüm dizini** (`node_modules/@prisma/{client,adapter-pg}`) kurar,
+sahte istemci Prisma 7'nin davranışını **birebir taklit eder** (legacy
+özellikler için gerçek "Unknown property …" hatasını fırlatır, adaptörsüz
+kurulmayı reddeder) ve yardımcının gerçek kur/bağlan/sorgula yolunu uçtan uca
+sürer. PostgreSQL, ağ veya kimlik bilgisi gerektirmez.
+
+**Mutasyon kanıtı:** süit, düzeltme öncesi yardımcıya karşı çalıştırıldığında
+**22 assertion başarısız olur** ve üretimdeki hatanın **tam metnini** raporlar;
+düzeltilmiş yardımcıya karşı **50/50 geçer**.
+
+### Bu bölümün KAPATMADIĞI
+
+`R-031` ve `R-032` **`OPEN` kalır.** Bir kod düzeltmesi ve yeşil bir test
+süiti, geçen bir tatbikat **değildir**. `R-032` yalnızca, düzeltilmiş
+yardımcıyla yeniden çalıştırılan bir tatbikatın `0` ile çıkması ve sonuç
+belgesinde `pitrVerification.verified = true` **ile birlikte**
+`smoke.application = passed` bulunması hâlinde kapanabilir. Bu görev o
+yeniden çalıştırmayı **yapmamıştır**.
 
 ## F4-FCR-002 — pgBackRest / PITR / Off-Host Kurtarma Temeli
 
@@ -376,3 +497,4 @@ Imaging (DICOM/CBCT) ölçeklenmeden önce object storage zorunludur (PROGRAM DI
 | 2026-08-14 | F4-FCR-001 | Restore tatbikat kanıt defteri (`RecoveryDrillRun`), ölçülebilir RPO/RTO, zamanlanabilir dosya restore tatbikatı (`mixed`/`oldest` örnekleme ile bit-rot tespiti), çökmüş koşu süpürücüsü, artık restore-test veritabanı olayının tespiti/denetimi/görünürlüğü, yedek log redaksiyonu, `opscheck` `filebackup` + `drill` kontrolleri ve Platform Admin görünürlüğü eklendi. **Yeni dondurma istisnası alınmadı**; PITR ve off-host hedef bilinçli olarak kapsam dışı bırakıldı. Faz durumu `TODO` olarak **değişmedi**; R-030/R-031/R-032 `OPEN` kalır. |
 | 2026-08-15 | F4-FCR-002 | pgBackRest/PITR/off-host kurtarma temeli **depo tarafında** kuruldu: şifreli yerel repo şablonu, additive PostgreSQL drop-in, operatör preflight (belirsiz durumda reddeder, PostgreSQL'i asla yeniden başlatmaz), disk-tükenmesi abort koşulu, ayrı systemd timer'lı PITR durum yazıcısı, opscheck `pitr` kontrolü (bit **128** — hiçbir mevcut çıkış kodu taşınmadı; opt-in), tek kullanımlık RAM-destekli kümede PITR restore tatbikatı, **üç durumlu** off-host raporlaması ve Platform Admin paneli. Yol boyunca iki kusur düzeltildi: `redactBackupLogLine()` pgBackRest depo parolasını **hiç** redakte etmiyordu ve `scripts/` altındaki kabuk betiklerinin **hiçbir** otomatik koruması yoktu (artık `npm run test:shell`, CI Layer 1). **Üretimde hiçbir mutasyon yok**; `archive_mode` `off` kalır; mevcut 03:15 `pg_dump` zinciri değiştirilmedi; dar kapsamlı dondurma istisnası **TASLAK — VERİLMEDİ** *(**[2026-08-15, F4-FCR-002A tarafından GEÇERSİZ KILINDI]** — istisna aynı gün, bu satır yazıldıktan sonra verilmiştir: `AUTHORIZED_BY_PROGRAM_OWNER_2026-08-15`, bkz. bu dosyadaki F4-FCR-002 bölümünün `F4-FCR-002_SCOPED_FREEZE_EXCEPTION` anahtar satırı ve altındaki "istisnanın kaydı" bloğu ile `NORAMEDI_MASTER_TRACKER.md` §5.1. Özgün ifade tarihsel kayıt olarak korunmuştur.)*. Faz durumu `TODO` olarak **değişmedi**; R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
 | 2026-08-15 | F4-FCR-002A | İzole restore/PITR tatbikatı **yalnızca ön kontrol (PRE-FLIGHT)**; **restore ÇALIŞTIRILMADI**. Canlı üretim kanıtına karşı 27 bölümlük GO/NO-GO raporu üretildi; sonuç **`PREFLIGHT_DECISION = NO_GO`** — güvenlik tasarımı nedeniyle değil, hazırlık eksikleri nedeniyle. Geçen kapılar: `DISK_CAPACITY_GATE = PASS`, `PG_VERSION_COMPATIBILITY_GATE = PASS` (PostgreSQL 16.14), `MIGRATION_COMPATIBILITY_GATE = PASS` (dağıtılmış 73 = DB 73; `origin/main` 74 ile bir sürüm önde, bu beklenen deploy gecikmesidir), `TENANT_ISOLATION_SMOKE_GATE = PLANNED_SAFE`, `PITR_MARKER_GATE = PLANNED_SAFE`, `MARKER_ARCHIVE_GATE = PASS`. **Uygulama smoke Stage B = BLOCKED**: `RUN_BACKGROUND_JOBS` yalnızca API sürecini devre dışı bırakır, worker onu hiç okumaz (`backgroundJobsOwnership.ts:65-70`), mesajlaşma kimlik bilgileri veritabanı satırlarındadır ve `withJobLock` geri yüklenen veritabanının kendi kilitlerine yazar — gerçek hastalara çift gönderim riski. Güvenli yol Stage A (yalnızca SQL invariant'ları) + `noramedi-pitr-app-smoke.mjs`'dir; bu yardımcı uygulamayı hiç başlatmaz. Depoda **en küçük eklemeli düzeltme** yapıldı: tatbikata deterministik **PITR durma noktası doğrulaması** eklendi (marker A = 1, marker B = 0, replay ≤ hedef, fail-closed, R-032 uygunluğu buna bağlandı, kanıt kalıcı sonuç belgesine yazılıyor) + 19 yeni kabuk testi. Üretime **onaylı, klinik olmayan** bir marker çifti yazıldı (`runId = F4-FCR-002A-20260815-01`, hiçbir kiracıya ait olmayan sentinel `organizationId`, uygulamanın kendi `recordOperationalEvent()` servisi üzerinden); WAL'ı arşivlendiği doğrulandı (`000000010000000000000020`, `failed_count = 0`, `.ready = 0`). Marker zaman damgalarının **UTC** olduğu üretim kanıtıyla saptandı; bu koşunun hedefi **`2026-08-15 12:59:26.405500+00`**'dır ve önceki `+03` hedefi reddedilmiştir — kural artık hem tatbikatta zorlanır (`--pitr-run-id` ile ofsetsiz `--target` reddedilir) hem de sonuç belgesine `markerTimestampZone` olarak yazılır. Dondurma istisnası çelişkisi §5.1'de **yalnızca yönetişim kayıtlarına dayanarak** çözüldü; üretimin fiilî aktivasyon durumu yetki kanıtı olarak **kullanılmadı**. **Faz durumu `TODO` olarak değişmedi**; **F4-FCR-002A KAPANMADI** (`IN_PROGRESS`); R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
+| 2026-08-15 | F4-FCR-002A-R4 | **İki tatbikat çalıştırıldı; ikisi de `FAIL`.** Birinci tatbikat bayat girdiyle kapandı (migration kümesi **73/74**, **RPO = 385 dk**); taze bir tam yedek alındı (`20260815-224355F`). İkinci tatbikat (`runId = F4-FCR-002A-20260815-02`) **PITR durma noktasını** (marker A = 1, marker B = 0, hedef `2026-08-15 19:46:39.550000+00`, replay `2026-08-15T19:46:00Z`), **74/74 migration**'ı (`missing=0`, `ahead=0`), **tenant izolasyonunu** (klinikler arası randevu = 0, yetim klinik referansı = 0), **RPO = 3 dk ≤ 60 dk**, **RTO = 5 sn ≤ 14400 sn** ve **temizliği** geçirdi — ve **yalnızca uygulama smoke'unda** kapandı: `Unknown property datasources provided to PrismaClient constructor`. Kök neden: `scripts/noramedi-pitr-app-smoke.mjs` istemciyi `datasourceUrl`/`datasources` ile kuruyordu, oysa dağıtılmış çalışma zamanı (`server/src/db.ts:15-22`, `@prisma/client` + `@prisma/adapter-pg` **7.9.1**) Prisma 7 **sürücü adaptörü** kullanır; ayrıca boş bir `catch (_)` ilk (gerçek) hatayı yutup yalnızca ikinci denemenin mesajını raporluyordu. **Düzeltme (yalnızca depo):** yardımcı artık dağıtılmış istemcinin **sürümünü okuyup** yolu seçer — major ≥ 7 ise `@prisma/adapter-pg`'yi de dağıtılmış dizinden yükleyip `new PrismaClient({ adapter: new PrismaPg({ connectionString, max: 1, ... }) })` kurar, major < 7 ise `datasourceUrl` kullanır, sürüm okunamazsa veya adaptör eksikse **fail-closed** olur; tatbikat betiği adaptörü artık **restore'dan önce** ön kontrol eder. `server/src/db.ts` içe aktarılmaz (üretim `DATABASE_URL`'ini çözerdi); bağlantı yalnızca tatbikat unix socket'ine, parolasızdır, havuz `max: 1`'dir; socket güvenlik kontrolleri, tipli delege probe'ları ve `current_setting('port')` kanıtı korunmuştur. Kusuru hiçbir testin yakalamamış olmasının nedeni, mevcut süitteki tüm smoke vakalarının **kurulumdan önce** düşmesiydi; yeni `scripts/noramedi-pitr-app-smoke.test.sh` sahte bir dağıtılmış sürüm dizini ile gerçek kurulum yolunu sürer (**50/50 geçer**; düzeltme öncesi yardımcıya karşı **22 assertion başarısız** olur ve üretim hatasının tam metnini üretir) ve CI Layer 1'de `npm run test:shell` ile koşar. **Şema/migration YOK, üretim mutasyonu YOK, tatbikat yeniden çalıştırılmadı.** Faz durumu `TODO` olarak **değişmedi**; **F4-FCR-002A KAPANMADI**; `R032_ELIGIBLE = false`; R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
