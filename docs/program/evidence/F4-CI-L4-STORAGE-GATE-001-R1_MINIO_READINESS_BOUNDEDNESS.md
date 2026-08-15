@@ -228,7 +228,77 @@ the real-socket accept-then-RST test passing on **that** interpreter is the
 load-bearing result.
 
 No `server/**` file is touched, so the server typecheck is unaffected by this
-change.
+change. (CI ran it anyway — see §5.1 — and it passed.)
+
+### 5.1 CI acceptance
+
+PR **#426**, run **`31897950871`** (head `2d259f3d`) — **all 13 jobs `success`,
+`PR Gate` `success`**.
+
+Layer 4 job **`95044204052`** ran for real, start to finish:
+
+```
+17:20:43.165 [test-runtime] stage: storage:postgres-readiness
+17:20:45.048 [test-runtime] stage: storage:minio-provision
+17:20:46.089 [test-runtime] stage: storage:minio-readiness
+17:20:46.090 [test-runtime] MinIO destination topology: container-network (172.18.0.3:9000)
+                            — off-host classification expected: true
+17:20:56.276 [test-runtime] stage: storage:migrations
+             74 migrations found in prisma/migrations
+             All migrations have been successfully applied.
+             [test-runtime] stage: storage:run-tests(server:test:storage-integration)
+             > tsx src/tests/dbVerification/fileBackupDbIntegration.test.ts
+             [test-runtime] stage: storage:complete(exit=0)
+[layer4-gate] PASS: storage suite executed 25 test case(s) against a
+              container-network MinIO destination, migrations applied, cleanup clean.
+```
+
+Run-summary artifact (`storage-integration-run-summary-31897950871-1`,
+artifact ID `9250331019`, 650 bytes), verbatim:
+
+```json
+{
+  "migration": { "code": 0, "step": "ok" },
+  "test": { "scriptName": "server:test:storage-integration", "code": 0 },
+  "minio": {
+    "addressMode": "container-network",
+    "endpointHost": "172.18.0.3",
+    "endpointPort": "9000",
+    "offHostClassification": true
+  },
+  "executionProof": {
+    "required": true,
+    "satisfied": true,
+    "executedCount": 25,
+    "failures": [],
+    "suite": "fileBackupDbIntegration",
+    "passedCount": 25,
+    "failedCount": 0,
+    "missingRequiredMemberIds": []
+  },
+  "cleanup": { "success": true, "errors": [] },
+  "outcome": { "exitCode": 0, "reasons": ["tests passed", "execution proof satisfied (25 test case(s) executed)", "cleanup succeeded"] }
+}
+```
+
+| Acceptance criterion | Result |
+|---|---|
+| PostgreSQL provisioned | ✅ `nmtest-pg-storage-20260815t172034z-214e9443-2497`, host port 32768 |
+| MinIO provisioned and readiness completed | ✅ readiness resolved in **1.04 s** to `container-network 172.18.0.3:9000` |
+| Migrations applied | ✅ 74 migrations, "All migrations have been successfully applied" |
+| `fileBackupDbIntegration` non-zero tests | ✅ 25 executed |
+| `executionProof.satisfied` | ✅ `true` |
+| `executedCount > 0` | ✅ `25` |
+| `failedCount` | ✅ `0` |
+| `missingRequiredMemberIds` | ✅ `[]` |
+| `offHostClassification` | ✅ `true` |
+| `verify-storage-run` | ✅ **PASS** |
+| `cleanup.success` | ✅ `true`, and the residual sweep found `candidates: []`, `removed: []`, `errors: []` |
+| Summary artifact uploaded + secret scan | ✅ "No prohibited secret patterns detected"; artifact `9250331019` uploaded |
+
+The new regression suite also ran in CI on **Node 20**, in Layer 1 job
+`95044111269`: `orchestratorUnit: 74 passed, 0 failed` ·
+`storageGate: 61 passed, 0 failed` · `minioReadiness: 29 passed, 0 failed`.
 
 ---
 
@@ -255,7 +325,32 @@ change.
 
 ---
 
-## 7. Deferred — recorded, deliberately NOT fixed here
+## 7. Does this make PR #423 merge-safe?
+
+**Not on its own — one step remains.**
+
+What is now true: the drain that blocked PR #423 is fixed and proven, and
+Layer 4 has been demonstrated to run end-to-end and produce full execution
+evidence (§5.1). The blocker itself is cleared.
+
+What is still required, in order:
+
+1. Merge this PR (**#426**) into `main`.
+2. **Rebase PR #423 onto the new `main`.** Its head `7fd7e38` predates this
+   fix, so re-running Layer 4 on it as-is would re-run the *unbounded* probe
+   and could drain again on the same race.
+3. Re-run Layer 4 on the rebased #423 and confirm it produces the same
+   evidence shape as §5.1 — `executionProof.satisfied=true`,
+   `executedCount>0`, `failedCount=0`, `missingRequiredMemberIds=[]`,
+   `offHostClassification=true`, `verify-storage-run` PASS, `cleanup.success=true`.
+
+Only after (3) is PR #423 merge-safe on the Layer 4 axis. This task makes no
+statement about #423's own content — it was never read for correctness here
+and not one of its files was touched.
+
+---
+
+## 8. Deferred — recorded, deliberately NOT fixed here
 
 **`ci-main-and-nightly` cascading skip (`fastMode=false`).** Every job in the
 `ci-main-and-nightly` workflow is being **skipped**, so push-to-main, the
