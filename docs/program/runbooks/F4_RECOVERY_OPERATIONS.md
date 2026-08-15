@@ -343,7 +343,7 @@ behaviour change and belongs to the operator.
 | `scripts/noramedi-pgbackrest-status.sh` | Publishes `/var/lib/noramedi/pitr-status.json`. |
 | `scripts/noramedi-pgbackrest-restore-drill.sh` | PITR restore into a disposable RAM-backed **socket-only** cluster, plus structural, application and tenant-isolation smoke checks, migration-set comparison against the deployed release, mandatory RPO/RTO evidence, and a verified fail-closed teardown. See §14.1. |
 | `scripts/noramedi-pitr-app-smoke.mjs` | Loads the **deployed** generated Prisma client **and `@prisma/adapter-pg`**, constructs the client the way the deployed runtime does (Prisma 7 driver adapter; see §21.6), and issues typed queries against the restored database over the drill socket. Must be installed next to the drill script. |
-| `scripts/noramedi-pgbackrest.test.sh` | 173 assertions, including canary-token secret-leak tests and mutation tests that reintroduce each F4-FCR-002A defect to prove the guards can fail. |
+| `scripts/noramedi-pgbackrest.test.sh` | 175 assertions on Linux CI (173 where `/proc/meminfo` is unavailable and the RAM positive control self-skips), including canary-token secret-leak tests and mutation tests that reintroduce each F4-FCR-002A defect to prove the guards can fail. |
 | `scripts/noramedi-pitr-app-smoke.test.sh` | 50 assertions covering the app-smoke helper's **construction** path against a fake deployed release — the path no pre-existing test ever reached, which is how the Prisma 7 defect in §21.6 survived to a real drill. |
 | `scripts/noramedi-opscheck.sh` | New **opt-in** `pitr` check, exit bit **128**. |
 | `server/src/services/pitrStatusFile.ts` | Fail-closed reader; extends `GET /api/platform/recovery/status`. |
