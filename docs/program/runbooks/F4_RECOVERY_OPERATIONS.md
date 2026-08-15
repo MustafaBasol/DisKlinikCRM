@@ -251,11 +251,11 @@ No production data is mutated by any part of this task.
 | Automated tests | See the PR body for exact commands and results. |
 | Production deployment | `NOT_DEPLOYED` |
 | Production verification | `NOT_PRODUCTION_VERIFIED` |
-| Measured RPO | `UNVERIFIED` — instrumentation exists; no production drill has run. |
-| Measured RTO | `UNVERIFIED` — same. |
+| Measured RPO | **`MEASURED`, on a `FAIL`ed drill** — 385 min on the first drill, **3 min ≤ 60 min** on the second. See §21.6. |
+| Measured RTO | **`MEASURED`, on a `FAIL`ed drill** — **5 sec ≤ 14400 sec** on the second drill. See §21.6. |
 | `R-030` off-host backup | `OPEN` |
 | `R-031` PITR | `OPEN` |
-| `R-032` restore-test evidence | `OPEN` — the mechanism to close it now exists, but closure requires a *scheduled* execution in production. |
+| `R-032` restore-test evidence | `OPEN` — **two drills have now been executed and both returned `FAIL`** (§21.6). Closure requires a run that passes end to end, including the application smoke. |
 
 ---
 
@@ -342,8 +342,9 @@ behaviour change and belongs to the operator.
 | `scripts/noramedi-pgbackrest-backup.sh` | Backup / expire / verify wrapper with the disk-exhaustion abort the freeze exception requires. |
 | `scripts/noramedi-pgbackrest-status.sh` | Publishes `/var/lib/noramedi/pitr-status.json`. |
 | `scripts/noramedi-pgbackrest-restore-drill.sh` | PITR restore into a disposable RAM-backed **socket-only** cluster, plus structural, application and tenant-isolation smoke checks, migration-set comparison against the deployed release, mandatory RPO/RTO evidence, and a verified fail-closed teardown. See §14.1. |
-| `scripts/noramedi-pitr-app-smoke.mjs` | Loads the **deployed** generated Prisma client and issues typed queries against the restored database over the drill socket. Must be installed next to the drill script. |
-| `scripts/noramedi-pgbackrest.test.sh` | 141 assertions, including canary-token secret-leak tests and mutation tests that reintroduce each F4-FCR-002A defect to prove the guards can fail. |
+| `scripts/noramedi-pitr-app-smoke.mjs` | Loads the **deployed** generated Prisma client **and `@prisma/adapter-pg`**, constructs the client the way the deployed runtime does (Prisma 7 driver adapter; see §21.6), and issues typed queries against the restored database over the drill socket. Must be installed next to the drill script. |
+| `scripts/noramedi-pgbackrest.test.sh` | 173 assertions, including canary-token secret-leak tests and mutation tests that reintroduce each F4-FCR-002A defect to prove the guards can fail. |
+| `scripts/noramedi-pitr-app-smoke.test.sh` | 50 assertions covering the app-smoke helper's **construction** path against a fake deployed release — the path no pre-existing test ever reached, which is how the Prisma 7 defect in §21.6 survived to a real drill. |
 | `scripts/noramedi-opscheck.sh` | New **opt-in** `pitr` check, exit bit **128**. |
 | `server/src/services/pitrStatusFile.ts` | Fail-closed reader; extends `GET /api/platform/recovery/status`. |
 | `src/pages/platform/PlatformBackups.tsx` | PITR panel with tri-state off-host rendering. |
@@ -620,7 +621,7 @@ change that removes any of them as a change to the program's recovery claim.
 | The port is free, then closed again | `ss` preflight before the restore, `ss` assertion during teardown. `ss` is a hard requirement, not a best-effort check. |
 | Teardown is fail-closed | `trap … EXIT INT TERM HUP`; stop escalates fast → immediate → `SIGTERM` → `SIGKILL` with liveness verification; removal is verified; any unverified step exits **5**, prints operator instructions, and writes an incident marker. |
 | A stale restore fails | The restored `_prisma_migrations` set is compared against the deployed release's `prisma/migrations` directory. Missing **or** extra migrations fail the drill. |
-| The application is proven, not assumed | `noramedi-pitr-app-smoke.mjs` loads the **deployed** generated Prisma client and issues typed queries over the drill socket. It never starts the app, never writes, never prints a row. |
+| The application is proven, not assumed | `noramedi-pitr-app-smoke.mjs` loads the **deployed** generated Prisma client, constructs it the way the deployed runtime does (Prisma 7 driver adapter — see §21.6, where getting this wrong failed a real drill), and issues typed queries over the drill socket. It never starts the app, never writes, never prints a row. |
 | Tenant scoping is proven | `Appointment.clinicId = Patient.clinicId` and no orphan clinic references. This domain does **not** use RLS; the policy count is recorded (expected 0) so a green line cannot be misread as RLS coverage. |
 | RPO and RTO are mandatory | An unmeasurable RPO fails the drill. RTO is measured to **application/tenant smoke completion**, not to postmaster readiness. Both are compared to targets in the result document. |
 | Evidence cannot be over-claimed | `r032Eligible` is true only when the application smoke, the tenant smoke, the migration comparison and both objectives all pass. `--record` refuses to write the off-host proof marker otherwise. |
@@ -1262,3 +1263,129 @@ outcome — `repo1` is local, and the drill refuses to write an off-host proof
 from `repo < 2` because a same-host repository is not an independent failure
 domain. `R-031`/`R-032` and `FIRST_CUSTOMER_RECOVERY_GATE` are closed only by
 an executed, passing, cleaned-up drill.
+
+### 21.6 F4-FCR-002A-R4 — the two executed drills, and the one stage that failed
+
+**Status: both drills FAILED. `R-032` is not closed and nothing below closes
+it.** This section records what was actually executed, what it proved, and the
+single defect that stopped it — so the next operator starts from evidence
+rather than from a summary.
+
+Production release under test: `75c8c2f2f4a2027ee3a42ae55bc211b710383005`.
+PostgreSQL 16.14. 74/74 migrations applied. pgBackRest `repo1` local +
+AES-256-CBC.
+
+#### First drill — `FAIL` on stale inputs
+
+| Finding | Value |
+|---|---|
+| Migration set (expected/applied) | **73/74** — the deployed release was one migration behind |
+| Effective RPO | **385 min** against a 60-min first-customer target |
+
+Neither is a defect in the drill: it was fed inputs that could not produce
+evidence and correctly refused to call the result a pass. The remedy was
+operational — take a fresh full backup. That backup is **`20260815-224355F`**.
+
+#### Second drill — everything passed except the application smoke
+
+`runId = F4-FCR-002A-20260815-02`, run against the fresh backup.
+
+| Gate | Result |
+|---|---|
+| PITR stop-point verification | **PASS** — marker A = 1, marker B = 0, target `2026-08-15 19:46:39.550000+00`, replay `2026-08-15T19:46:00Z` |
+| Migration set (expected/applied) | **PASS** — 74/74, `missing=0`, `ahead=0` |
+| Tenant-isolation smoke | **PASS** — cross-clinic appointments = 0, orphan clinic references = 0 |
+| RPO | **PASS** — 3 min ≤ 60 min |
+| RTO | **PASS** — 5 sec ≤ 14400 sec |
+| Cleanup | **PASS** — verified |
+| **Application smoke** | **FAIL** — `PrismaClient` could not be constructed |
+
+Exact error:
+
+```
+Unknown property datasources provided to PrismaClient constructor
+```
+
+`OVERALL RESULT = FAIL`, `R032_eligible = false`, no off-host proof marker
+written.
+
+> **Do not read this as "almost passed".** The application smoke is the only
+> stage that proves the restored database is usable by the code production
+> actually runs. Six green gates plus a client that will not construct is a
+> restore nobody has proven the application can use — which is precisely the
+> claim `R-032` exists to make. The drill behaved correctly by failing closed.
+
+#### Root cause
+
+The deployed runtime is Prisma 7 and constructs the client from a **driver
+adapter** (`server/src/db.ts:15-22`):
+
+```ts
+new PrismaClient({ adapter: new PrismaPg({ connectionString: getRequiredDatabaseUrl(), ... }) })
+```
+
+`server/package.json` pins `@prisma/client` **7.9.1** and `@prisma/adapter-pg`
+**7.9.1**. Prisma 7 removed both `datasourceUrl` and `datasources` and rejects
+either outright.
+
+The smoke helper was still on the Prisma 6 contract, and — the second defect —
+hid its own diagnosis: it tried `datasourceUrl`, discarded that error in an
+empty `catch (_)`, then tried `datasources`. Only the *second* message reached
+the drill log, so the real reason (the client requires an adapter) was never
+reported to the operator.
+
+#### What R4 changed (repository only — the drill was NOT re-run)
+
+- `scripts/noramedi-pitr-app-smoke.mjs` **reads the deployed client's major
+  version** and selects the construction contract from it. Major ≥ 7 loads
+  `@prisma/adapter-pg` from `NORAMEDI_SMOKE_APP_DIR` through the same anchored
+  `createRequire` used for the client, builds
+  `new PrismaPg({ connectionString, max: 1, ... })`, and passes it as `adapter`
+  — the same family as `server/src/db.ts`. Major < 7 keeps `datasourceUrl`.
+  An unreadable version, a missing adapter, or a construction failure on the
+  **selected** path all fail closed, each with its own error text. There is no
+  catch-all that could hide the next such defect.
+- `scripts/noramedi-pgbackrest-restore-drill.sh` pre-flights
+  `@prisma/adapter-pg` **before** anything is restored, alongside the existing
+  `@prisma/client` check.
+- `scripts/noramedi-pitr-app-smoke.test.sh` (**new**, 50 assertions, in CI
+  Layer 1 via `npm run test:shell`) stands up a fake deployed release whose
+  stub client reproduces Prisma 7's exact rejection behaviour, then drives the
+  helper's real construct → connect → typed-probe path with no PostgreSQL, no
+  network and no credential. Against the pre-fix helper it fails **22
+  assertions** and reproduces the production error verbatim; against the fixed
+  helper it passes **50/50**.
+
+Unchanged and re-asserted by that suite: unix-socket-only connection (absolute
+path required, `.s.PGSQL.<port>` must exist), no password on any path, the
+typed `clinic`/`patient`/`appointment` `count`+`findFirst` probes, the
+`current_setting('port')` proof that the client reached the drill cluster,
+exactly one `APP_SMOKE_RESULT` line, and no row content in any output.
+
+`server/src/db.ts` is deliberately **not** imported by the helper: that module
+resolves the production `DATABASE_URL` and importing it would put a production
+connection one mistake away from a drill process.
+
+#### Why the existing suite missed it
+
+`scripts/noramedi-pgbackrest.test.sh` already covered the helper — but every
+one of its cases bailed **before** construction (missing environment, TCP host,
+absent socket). No test in the repository had ever constructed the client, so
+the defect was invisible to the whole suite and only a real restore could find
+it. That is the gap §21.6's new suite exists to close.
+
+#### Exact remaining evidence for `R-032`
+
+Install the fixed helper per §21.1 (re-verify the SHA-256), then obtain a
+**separate explicit operator authorisation** and re-run the drill per §21.4.
+`R-032` may be considered for closure only when that run exits `0` and
+`/var/lib/noramedi/pitr-drill-result.json` contains **both**:
+
+```
+pitrVerification.verified = true
+smoke.application         = passed
+```
+
+Until such a run exists, `R-030`, `R-031` and `R-032` remain **`OPEN`** and
+`FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. A code fix and a green test
+suite are not a passing drill.

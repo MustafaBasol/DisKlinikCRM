@@ -547,6 +547,18 @@ else
   [[ -d "$APP_SERVER_DIR/node_modules/@prisma/client" ]] || {
     fail "NORAMEDI_APP_SERVER_DIR='${APP_SERVER_DIR}' has no node_modules/@prisma/client — the application smoke must load the DEPLOYED generated client, not a freshly installed one"
     exit "$PRECONDITION_EXIT_CODE"; }
+  # Prisma 7 constructs the client from a driver adapter, so @prisma/adapter-pg
+  # is as load-bearing as the client itself. Its absence is caught here rather
+  # than after a full restore has been written into tmpfs — which is where
+  # F4-FCR-002A's second drill discovered its constructor mismatch.
+  # The directory is passed through the environment, never interpolated into
+  # the -e source: an operator path may legitimately contain quotes.
+  APP_PRISMA_MAJOR="$(NORAMEDI_APP_SERVER_DIR="$APP_SERVER_DIR" node -e 'try{const p=require("node:path").join(process.env.NORAMEDI_APP_SERVER_DIR,"node_modules/@prisma/client/package.json");process.stdout.write(String(parseInt(require(p).version,10)||0))}catch(e){process.stdout.write("0")}' 2>/dev/null)"
+  if [[ "${APP_PRISMA_MAJOR:-0}" -ge 7 ]]; then
+    [[ -d "$APP_SERVER_DIR/node_modules/@prisma/adapter-pg" ]] || {
+      fail "NORAMEDI_APP_SERVER_DIR='${APP_SERVER_DIR}' has @prisma/client v7+ but no node_modules/@prisma/adapter-pg — a Prisma 7 client cannot be constructed without a driver adapter, so the application smoke would fail after the restore"
+      exit "$PRECONDITION_EXIT_CODE"; }
+  fi
   # The smoke runs as the drill OS user, which is typically `postgres` and
   # frequently cannot read the deploy directory. Finding that out AFTER a full
   # restore has been written into tmpfs wastes the expensive part of the drill.
