@@ -20,6 +20,7 @@
     "test:vitest": "vitest run",
     "test:runtime:unit": "tsx scripts/test-runtime/__tests__/orchestratorUnit.test.ts",
     "test:runtime:storage-gate": "tsx scripts/test-runtime/__tests__/storageGate.test.ts",
+    "test:runtime:minio-readiness": "tsx scripts/test-runtime/__tests__/minioReadiness.test.ts",
     "verify:storage-run": "tsx scripts/test-runtime/verify-storage-run.ts",
     "test:runtime:postgres": "tsx scripts/test-runtime/orchestrator.ts postgres",
     "test:runtime:postgres-compat": "tsx scripts/test-runtime/orchestrator.ts postgres-compat",
