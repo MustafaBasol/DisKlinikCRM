@@ -1,0 +1,92 @@
+# noramedi-pgbackrest-status.service — F4-FCR-002
+#
+# NOT INSTALLED ON PRODUCTION. This is a reviewed template only. Installing it
+# is part of the PITR activation sequence in
+# docs/program/runbooks/F4_RECOVERY_OPERATIONS.md §13, which requires the
+# scoped freeze exception (§14, DRAFT_PENDING_PROGRAM_OWNER — NOT GRANTED).
+#
+# Publishes /var/lib/noramedi/pitr-status.json, which noramedi-opscheck.sh's
+# opt-in `pitr` check reads.
+#
+# WHY THIS IS A SEPARATE UNIT FROM noramedi-opscheck.service:
+# opscheck runs with TimeoutStartSec=60 and monitors five subsystems. If it
+# called `pgbackrest info` itself and that call hung — entirely possible
+# against a network-backed repository — systemd would kill the WHOLE opscheck
+# run. pm2, disk, backup, filebackup and drill would all stop pinging, and
+# roughly twenty minutes later the operator would receive five simultaneous
+# DOWN emails, none of which described a real problem. A slow backup
+# repository must not be able to take out unrelated monitoring.
+#
+# So the slow, dependency-heavy work lives here, and opscheck only reads the
+# resulting file. If THIS unit dies, the document goes stale and opscheck's
+# pitr check fails closed on its 2-hour generatedAt gate — which is the
+# correct, contained failure.
+#
+# Runs as root because it delegates to the postgres OS user via runuser: it
+# needs to read /etc/pgbackrest/pgbackrest.conf (0600 postgres) and to run
+# pgbackrest as the cluster owner. It never runs pgBackRest AS root — pgBackRest
+# refuses that, and it would be wrong regardless.
+#
+# Installation (execute deliberately, after the freeze exception is granted):
+#   install -o root -g root -m 0755 scripts/noramedi-pgbackrest-status.sh \
+#           /usr/local/sbin/noramedi-pgbackrest-status.sh
+#   install -o root -g root -m 0644 ops/systemd/noramedi-pgbackrest-status.service \
+#           /etc/systemd/system/noramedi-pgbackrest-status.service
+#   install -o root -g root -m 0644 ops/systemd/noramedi-pgbackrest-status.timer \
+#           /etc/systemd/system/noramedi-pgbackrest-status.timer
+#   install -d -o root -g root -m 0755 /var/lib/noramedi          # already exists if F4-FCR-001 was activated
+#   systemctl daemon-reload
+#   systemctl enable --now noramedi-pgbackrest-status.timer
+#
+# Smoke test BEFORE enabling the timer (writes nothing):
+#   /usr/local/sbin/noramedi-pgbackrest-status.sh --stdout --no-check
+#
+# Rollback:
+#   systemctl disable --now noramedi-pgbackrest-status.timer
+#   rm -f /etc/systemd/system/noramedi-pgbackrest-status.{service,timer}
+#   systemctl daemon-reload
+#   rm -f /var/lib/noramedi/pitr-status.json
+# Removing this unit stops PITR reporting; it does NOT stop WAL archiving,
+# which is a PostgreSQL setting (see the runbook's rollback table).
+
+[Unit]
+Description=NoraMedi pgBackRest / PITR status writer (F4-FCR-002)
+Documentation=file:///var/www/noramedi/docs/program/runbooks/F4_RECOVERY_OPERATIONS.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=-/etc/noramedi/pgbackrest-status.env
+ExecStart=/usr/local/sbin/noramedi-pgbackrest-status.sh
+
+# Bounded well under the timer interval so a hung pgbackrest call cannot let
+# two writers overlap. The script also bounds each individual pgbackrest/psql
+# call itself (NORAMEDI_PGBACKREST_CMD_TIMEOUT, default 60s).
+TimeoutStartSec=120
+
+# Hardening. ProtectSystem=strict makes the filesystem read-only except for
+# ReadWritePaths below — this unit's entire purpose is to write two files.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/noramedi /var/lib/noramedi-pgbackrest
+# ProtectHome is deliberately NOT set to "yes": unlike opscheck this unit has
+# no reason to read under /root, and the pgBackRest repository lives in
+# /var/lib/pgbackrest precisely so that it does not.
+ProtectHome=yes
+StateDirectory=noramedi-pgbackrest
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# MemoryDenyWriteExecute intentionally omitted: the script shells out to
+# `node -e` to parse `pgbackrest info --output=json` (jq is not a dependency
+# anywhere in this repository), and V8's JIT requires writable+executable
+# mappings. Setting it is a known way to break any Node.js process outright.
+
+[Install]
+WantedBy=multi-user.target

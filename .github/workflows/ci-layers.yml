@@ -331,13 +331,29 @@ jobs:
       - name: actionlint (.github/workflows/**)
         run: ./actionlint -color
 
-      - name: Shell syntax check (scripts/test-runtime/*.sh)
+      - name: Shell syntax check (scripts/*.sh, scripts/test-runtime/*.sh)
         run: |
           set -euo pipefail
-          for f in scripts/test-runtime/*.sh; do
+          # Widened in F4-FCR-002. This previously covered only
+          # scripts/test-runtime/*.sh, which left every operator-facing script
+          # in scripts/ — the deploy, healthcheck, opscheck, restore-rehearsal
+          # and pgBackRest scripts — with no syntax gate at all.
+          for f in scripts/*.sh scripts/test-runtime/*.sh; do
+            [ -e "$f" ] || continue
             echo "== $f =="
             bash -n "$f"
           done
+
+      - name: Operator shell test suites (opscheck, pgBackRest)
+        run: |
+          set -euo pipefail
+          # These suites had NO automated enforcement before F4-FCR-002: they
+          # were run by hand and their output pasted into an evidence file, so
+          # a regression could only be caught if somebody remembered to run
+          # them. They are hermetic (PATH-injected fakes, mktemp working dirs,
+          # no network, no database, no real paths touched), so there is no
+          # reason for them not to be a gate.
+          npm run test:shell
 
       - name: PowerShell parser validation (scripts/test-runtime/*.ps1)
         shell: pwsh

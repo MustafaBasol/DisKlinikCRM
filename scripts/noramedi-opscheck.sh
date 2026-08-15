@@ -19,6 +19,12 @@
 #   filebackup  the file-backup (patient attachment) sweep is enabled, ran
 #               recently, and completed with zero failed/missing files
 #   drill       a restore rehearsal ran recently and passed
+#   pitr        (F4-FCR-002, OPT-IN — not in the default set) WAL archiving is
+#               on, the archive_command is unaltered, no archiver failures, the
+#               newest archived WAL and the newest pgBackRest backup are fresh,
+#               the repository is encrypted and reports ok, `pgbackrest check`
+#               passed recently, and the repository is in an independent
+#               failure domain
 #
 # The last two read the application-written recovery status file (F4-FCR-001,
 # default /var/lib/noramedi/recovery-status.json). Their subsystem state
@@ -56,6 +62,7 @@
 #   bit 5 (32): a ping transport failed, OR a check ran without its ping URL
 #               configured (local check result is still computed/reported;
 #               only the *ping* is affected)
+#   bit 7 (128): pitr check failed (F4-FCR-002 — see the ADDITION note below)
 #
 # This bitmask applies ONLY once the script has started running checks.
 # Startup/CLI configuration errors (an invalid *_THRESHOLD_PERCENT or
@@ -87,6 +94,35 @@
 # F4-FCR-001 before acting on a 8 or a 16. Config errors remain strictly
 # outside the bitmask range (now 0-63), so that distinction still holds.
 #
+# ✅ EXIT-CODE CONTRACT *ADDITION* (F4-FCR-002) — NOTHING MOVED THIS TIME.
+# The pitr check was assigned bit 7 (128). Every pre-existing value keeps its
+# meaning exactly, so unlike the F4-FCR-001 revision above, NO historical
+# journal entry changes interpretation and no operator runbook needs re-dating.
+#
+#   meaning                        | before | after
+#   -------------------------------+--------+-------
+#   pm2 / disk / backup            | 1/2/4  | 1/2/4  (unchanged)
+#   filebackup / drill             | 8/16   | 8/16   (unchanged)
+#   ping transport / URL missing   |  32    |  32    (unchanged)
+#   config/CLI error               |  64    |  64    (unchanged)
+#   pitr check failed              |   —    | 128    (NEW)
+#
+# The alternative considered and rejected was giving pitr bit 6 (64) and moving
+# the config-error code to 128. That keeps the check bits contiguous, but it
+# would re-date every historical `64` for the second contract change in two
+# tasks. Bit 128 costs only the loss of the "checks are contiguous and the
+# config code sits above them" wording; the property that actually matters
+# operationally is preserved, and provably so: the check bits can sum to at
+# most 1+2+4+8+16+32 = 63, so 64 remains UNREACHABLE by any combination of
+# check failures and therefore still means, unambiguously, "misconfigured, no
+# check ran". Combined check failures now range over 0-63 and 128-191.
+#
+# Note for whoever reads a raw `$?` in a shell: values >= 128 are also the
+# convention for "killed by signal N-128". systemd does not have this ambiguity
+# (journalctl distinguishes `code=exited, status=191` from `code=killed`), and
+# the deployed runner is a systemd oneshot — but if you are running this by
+# hand and see 128-191, it is a pitr failure, not a signal.
+#
 # Restart-count / crash-loop signal: pm2_env.restart_time is read and its
 # delta since the previous run is logged as an informational line — it does
 # NOT affect the exit code. A legitimate `pm2 startOrReload` deploy also
@@ -97,13 +133,16 @@
 #
 # Usage:
 #   noramedi-opscheck.sh [--dry-run]
-#                        [--check pm2|disk|backup|filebackup|drill]
+#                        [--check pm2|disk|backup|filebackup|drill|pitr]
 #                        [-h|--help]
 #
 # Options:
 #   --dry-run   Run all local checks; never invoke curl. Prints what would
 #               have been pinged (label + outcome only, never a URL).
-#   --check X   Run only the named check (repeatable). Default: all five.
+#   --check X   Run only the named check (repeatable). Default: the five
+#               always-on checks (pm2, disk, backup, filebackup, drill).
+#               `pitr` is opt-in and must be requested explicitly, either with
+#               --check pitr or by setting NORAMEDI_OPSCHECK_CHECKS.
 #
 # Test-only overrides (do not set these in production — they exist solely so
 # noramedi-opscheck.test.sh can inject fixtures without touching real paths):
@@ -147,9 +186,44 @@
 #     integer) — max age of drill.lastRunAt. 192h = 8 days: one weekly
 #     restore rehearsal plus a day of margin, so a single skipped or
 #     slightly-late rehearsal does not alert.
+#
+#   ── PITR / WAL archive (F4-FCR-002, all opt-in with the pitr check) ──
+#   NORAMEDI_OPSCHECK_CHECKS                   comma-separated check names,
+#     overriding the default set. This is how the opt-in pitr check is
+#     switched on at activation time, with no unit-file edit and no redeploy:
+#       NORAMEDI_OPSCHECK_CHECKS=pm2,disk,backup,filebackup,drill,pitr
+#   NORAMEDI_OPSCHECK_PITR_STATUS_FILE         default:
+#     /var/lib/noramedi/pitr-status.json — written by
+#     noramedi-pgbackrest-status.sh under its own systemd timer. A SEPARATE
+#     document from the recovery status file, with its own writer, cadence and
+#     schema version. This script never invokes pgbackrest itself.
+#   NORAMEDI_OPSCHECK_PITR_STATUS_MAX_AGE_HOURS  default: 2 (positive integer)
+#     — the "did the PITR writer itself die?" guard. Much tighter than the
+#     recovery status file's 30h because its writer runs every 15 minutes and
+#     because a stale PITR document hides exactly the fast-moving signal
+#     (archived-WAL age) it exists to carry.
+#   NORAMEDI_OPSCHECK_PITR_MAX_WAL_AGE_MINUTES   default: 120 (positive int)
+#     — max age of the newest ARCHIVED WAL segment. This is the assertion that
+#     catches a broken archive hiding behind a fresh backup. With
+#     archive_timeout=300 a healthy cluster archives at least every ~5 min, so
+#     120m alerts well before the <= 60 min RPO target is actually at risk.
+#   NORAMEDI_OPSCHECK_PITR_MAX_BACKUP_AGE_HOURS  default: 30 (positive int)
+#     — max age of the newest pgBackRest backup. Independent of WAL age: they
+#     fail separately and are both asserted.
+#   NORAMEDI_OPSCHECK_PITR_CHECK_MAX_AGE_HOURS   default: 30 (positive int)
+#     — max age of the last `pgbackrest check` result, the only command that
+#     validates the whole archive_command -> repository path end to end.
+#   NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST       default: true
+#     — whether a repository that is not in an independent failure domain
+#     fails the check. Fail-closed by default: a stage-1 LOCAL pgBackRest repo
+#     improves RPO and provides NO host-loss protection, and reporting it
+#     green would merge two separate capabilities into one light. Set to
+#     exactly "false" to accept that knowingly during the stage-1 pilot; the
+#     check then emits a WARNING and passes.
+#
 #   NORAMEDI_OPSCHECK_SUPPRESS_PING            comma-separated check names
 #                                               (pm2,disk,backup,filebackup,
-#                                               drill) to skip pinging for —
+#                                               drill,pitr) to skip pinging for —
 #                                               local check still runs and is
 #                                               still reported. Used only for
 #                                               the controlled DRILL B
@@ -167,6 +241,8 @@
 #   NORAMEDI_OPSCHECK_BACKUP_PING_URL
 #   NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL
 #   NORAMEDI_OPSCHECK_DRILL_PING_URL
+#   NORAMEDI_OPSCHECK_PITR_PING_URL            (F4-FCR-002; only needed once
+#                                               the opt-in pitr check is on)
 #
 # Recovery status file contract (schemaVersion 1) — written by the app, read
 # here. Every field except schemaVersion is optional in the JSON sense; a
@@ -189,6 +265,45 @@
 # fixed labels, computed ages, and short validated tokens are printed. The
 # file is assumed to contain neither secrets nor PHI, and this script still
 # treats it as untrusted input.
+#
+# PITR status file contract (schemaVersion 1, F4-FCR-002) — a SEPARATE
+# document with its own writer (noramedi-pgbackrest-status.sh, root, own
+# systemd timer), its own path, and its own schema version. Same parsing
+# rules, same fail-closed handling:
+#
+#   {
+#     "schemaVersion": 1,
+#     "generatedAt": "2026-08-15T10:00:00Z",
+#     "archive": { "mode": "on", "commandOk": true, "walLevel": "replica",
+#                  "timeoutSeconds": 300, "failedCount": 0,
+#                  "archivedCount": 128, "lastArchivedAt": "...",
+#                  "lastArchivedAgeMinutes": 3 },
+#     "repo":    { "installed": true, "stanza": "noramedi", "statusOk": true,
+#                  "cipherType": "aes-256-cbc", "checkStatus": "ok",
+#                  "checkAt": "...", "checkAgeMinutes": 12,
+#                  "lastBackupAt": "...", "lastBackupAgeMinutes": 480,
+#                  "lastBackupType": "full", "backupCount": 7,
+#                  "walMin": "...", "walMax": "...",
+#                  "offHost": "no", "tier": "T1",
+#                  "offHostReason": "NO_REPO2_CONFIGURED" }
+#   }
+#
+# WHY A SEPARATE FILE RATHER THAN A THIRD OBJECT IN THE RECOVERY STATUS FILE:
+# different writer (a root shell script vs. the Node application), different
+# cadence (15 min vs. 10 min), and different staleness tolerance (2h vs. 30h).
+# Folding PITR into the app-written document would also mean the app had to
+# learn about pgBackRest, and would layer one document's staleness on top of
+# another's. Critically, it would NOT have allowed a schemaVersion bump: the
+# opscheck already installed in production hard-fails any recovery-status
+# document whose schemaVersion is not 1, so changing that number would make
+# the live monitor fail every check the moment the app deployed.
+#
+# `offHost` is a TRI-STATE string — "no" | "unproven" | "yes" — not a boolean.
+# "unproven" means a remote repository is configured but no restore has ever
+# been performed from it. Configuration is not proof: a remote-looking
+# hostname can still resolve to this machine, and an existing repository is
+# no evidence that anything is recoverable from it. Only "yes" passes, and
+# only a successful restore drill sourced from that repository produces it.
 
 set -euo pipefail
 
@@ -231,6 +346,29 @@ FILEBACKUP_MAX_AGE_HOURS="${NORAMEDI_OPSCHECK_FILEBACKUP_MAX_AGE_HOURS:-30}"
 # not a backup. Set to exactly "false" to accept a same-host copy knowingly.
 FILEBACKUP_REQUIRE_OFFHOST="${NORAMEDI_OPSCHECK_FILEBACKUP_REQUIRE_OFFHOST:-true}"
 DRILL_MAX_AGE_HOURS="${NORAMEDI_OPSCHECK_DRILL_MAX_AGE_HOURS:-192}"
+# ── PITR / WAL archive (F4-FCR-002) ──────────────────────────────────────
+# A SEPARATE document from the recovery status file, written by
+# noramedi-pgbackrest-status.sh under its own systemd timer. This script must
+# not talk to pgBackRest itself: `pgbackrest info` against a network-backed
+# repository can outlast the unit's TimeoutStartSec=60, and systemd would then
+# kill the WHOLE run — so pm2, disk, backup, filebackup and drill would all
+# stop pinging and the operator would get five simultaneous FALSE alerts. One
+# slow backup repository must never be able to take out unrelated monitoring.
+PITR_STATUS_FILE="${NORAMEDI_OPSCHECK_PITR_STATUS_FILE:-/var/lib/noramedi/pitr-status.json}"
+PITR_STATUS_MAX_AGE_HOURS="${NORAMEDI_OPSCHECK_PITR_STATUS_MAX_AGE_HOURS:-2}"
+# Worst-case data loss is bounded by archive_timeout (recommended 300s) plus
+# push latency. 2h therefore alerts long before the <= 60 min RPO target is at
+# risk, while tolerating a couple of missed 15-minute writer ticks.
+PITR_MAX_WAL_AGE_MINUTES="${NORAMEDI_OPSCHECK_PITR_MAX_WAL_AGE_MINUTES:-120}"
+PITR_MAX_BACKUP_AGE_HOURS="${NORAMEDI_OPSCHECK_PITR_MAX_BACKUP_AGE_HOURS:-30}"
+PITR_CHECK_MAX_AGE_HOURS="${NORAMEDI_OPSCHECK_PITR_CHECK_MAX_AGE_HOURS:-30}"
+# Whether a repository that is not in an independent failure domain fails the
+# check. Defaults to true (fail closed), matching FILEBACKUP_REQUIRE_OFFHOST.
+# A local-only pgBackRest repository is a real RPO improvement and NO host-loss
+# protection at all; reporting it healthy would merge two separate capabilities
+# into one green light. Set to exactly "false" to accept that knowingly during
+# the stage-1 pilot, which emits a WARNING and passes.
+PITR_REQUIRE_OFFHOST="${NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST:-true}"
 SUPPRESS_PING="${NORAMEDI_OPSCHECK_SUPPRESS_PING:-}"
 CURL_MAX_TIME=5
 CURL_CONNECT_TIMEOUT=3
@@ -261,6 +399,34 @@ if ! [[ "$DRILL_MAX_AGE_HOURS" =~ ^[0-9]+$ ]] || [[ "$DRILL_MAX_AGE_HOURS" -lt 1
   echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_DRILL_MAX_AGE_HOURS='$DRILL_MAX_AGE_HOURS' is not a positive integer" >&2
   exit "$CONFIG_ERROR_EXIT_CODE"
 fi
+if ! [[ "$PITR_STATUS_MAX_AGE_HOURS" =~ ^[0-9]+$ ]] || [[ "$PITR_STATUS_MAX_AGE_HOURS" -lt 1 ]]; then
+  echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_STATUS_MAX_AGE_HOURS='$PITR_STATUS_MAX_AGE_HOURS' is not a positive integer" >&2
+  exit "$CONFIG_ERROR_EXIT_CODE"
+fi
+if ! [[ "$PITR_MAX_WAL_AGE_MINUTES" =~ ^[0-9]+$ ]] || [[ "$PITR_MAX_WAL_AGE_MINUTES" -lt 1 ]]; then
+  echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_MAX_WAL_AGE_MINUTES='$PITR_MAX_WAL_AGE_MINUTES' is not a positive integer" >&2
+  exit "$CONFIG_ERROR_EXIT_CODE"
+fi
+if ! [[ "$PITR_MAX_BACKUP_AGE_HOURS" =~ ^[0-9]+$ ]] || [[ "$PITR_MAX_BACKUP_AGE_HOURS" -lt 1 ]]; then
+  echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_MAX_BACKUP_AGE_HOURS='$PITR_MAX_BACKUP_AGE_HOURS' is not a positive integer" >&2
+  exit "$CONFIG_ERROR_EXIT_CODE"
+fi
+if ! [[ "$PITR_CHECK_MAX_AGE_HOURS" =~ ^[0-9]+$ ]] || [[ "$PITR_CHECK_MAX_AGE_HOURS" -lt 1 ]]; then
+  echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_CHECK_MAX_AGE_HOURS='$PITR_CHECK_MAX_AGE_HOURS' is not a positive integer" >&2
+  exit "$CONFIG_ERROR_EXIT_CODE"
+fi
+# Validated as a strict enum rather than tested with `== "true"` at the point
+# of use. The older FILEBACKUP_REQUIRE_OFFHOST knob treats ANY value that is
+# not exactly "true" as an opt-out, so a typo — `FALSE`, `0`, `no`, a stray
+# space — silently disables a durability guard and the check goes green. That
+# is fail-OPEN on a misconfiguration, which is the one direction this script
+# refuses to fail everywhere else. Rejecting anything outside {true,false}
+# here keeps the deliberate opt-out available while making a typo loud.
+if [[ "$PITR_REQUIRE_OFFHOST" != "true" ]] && [[ "$PITR_REQUIRE_OFFHOST" != "false" ]]; then
+  echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST='$PITR_REQUIRE_OFFHOST' is not exactly 'true' or 'false'" >&2
+  exit "$CONFIG_ERROR_EXIT_CODE"
+fi
+PITR_STATUS_SCHEMA_VERSION=1
 # Mirrors server/src/services/backupService.ts BACKUP_FILENAME_RE exactly —
 # intentionally NOT importing/duplicating business logic, just the one
 # filename shape needed to identify a real backup file on disk.
@@ -300,7 +466,40 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#CHECKS_TO_RUN[@]} -eq 0 ]]; then
-  CHECKS_TO_RUN=(pm2 disk backup filebackup drill)
+  # `pitr` is deliberately NOT in this default set.
+  #
+  # F4-FCR-001 added filebackup and drill to the default and documented an
+  # install ordering so they would not alert on a missing status file. That was
+  # right for those two: the subsystems existed and only needed provisioning.
+  # PITR is different. WAL archiving cannot be switched on without a granted
+  # freeze exception AND a production PostgreSQL restart, so a defaulted-on
+  # pitr check would fail on EVERY five-minute run, indefinitely, for as long
+  # as that decision takes. A check that is guaranteed red for weeks does not
+  # protect anything — it teaches the operator that red is the normal colour,
+  # which is precisely how a real alert gets ignored later.
+  #
+  # It is therefore opt-in, enabled in one line of /etc/noramedi/opscheck.env
+  # at the moment PITR is actually activated:
+  #     NORAMEDI_OPSCHECK_CHECKS=pm2,disk,backup,filebackup,drill,pitr
+  # No unit file edit and no redeploy is needed — systemd re-reads
+  # EnvironmentFile= on every ExecStart.
+  if [[ -n "${NORAMEDI_OPSCHECK_CHECKS:-}" ]]; then
+    IFS=',' read -r -a CHECKS_TO_RUN <<<"$NORAMEDI_OPSCHECK_CHECKS"
+    # Trim whitespace; reject empties rather than silently skipping them, so a
+    # trailing comma cannot quietly shrink the monitored set.
+    _cleaned=()
+    for _c in "${CHECKS_TO_RUN[@]}"; do
+      _c="${_c#"${_c%%[![:space:]]*}"}"; _c="${_c%"${_c##*[![:space:]]}"}"
+      if [[ -z "$_c" ]]; then
+        echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_CHECKS contains an empty entry" >&2
+        exit "$CONFIG_ERROR_EXIT_CODE"
+      fi
+      _cleaned+=("$_c")
+    done
+    CHECKS_TO_RUN=("${_cleaned[@]}")
+  else
+    CHECKS_TO_RUN=(pm2 disk backup filebackup drill)
+  fi
 fi
 
 # Ping suppression, by check name: pm2, disk, backup, filebackup, drill.
@@ -578,27 +777,38 @@ iso_to_epoch() {
   printf '%s' "$epoch"
 }
 
-# load_recovery_status LABEL — reads and sanity-checks the status file into
-# the RECOVERY_STATUS_BLOB global. Returns non-zero, with a LABEL-prefixed
-# diagnostic on stderr, on any problem. The blob is returned via a global
-# rather than stdout specifically so that there is no code path on which the
-# file's contents could be printed.
+# load_status_document LABEL FILE SCHEMA_VERSION MAX_AGE_HOURS NOUN
+#
+# Reads and sanity-checks ONE status document into the STATUS_BLOB global.
+# Returns non-zero, with a LABEL-prefixed diagnostic on stderr, on any
+# problem. The blob is returned via a global rather than stdout specifically
+# so that there is no code path on which the file's contents could be printed.
+#
+# Generalized in F4-FCR-002 so the pitr check gets the SAME gates —
+# existence, readability, JSON-object shape, exactly-one-schemaVersion, a
+# known schema version, and writer liveness — instead of a second,
+# subtly-weaker implementation. The two callers below preserve their own
+# nouns so every pre-existing diagnostic string is byte-identical.
+STATUS_BLOB=""
+STATUS_GENERATED_AGE_MIN=0
 RECOVERY_STATUS_BLOB=""
 RECOVERY_STATUS_GENERATED_AGE_MIN=0
+PITR_STATUS_BLOB=""
 
-load_recovery_status() {
-  local label="$1" raw blob occurrences schema_version
+load_status_document() {
+  local label="$1" file="$2" want_version="$3" max_age_hours="$4" noun="$5"
+  local raw blob occurrences schema_version
 
-  if [[ ! -e "$RECOVERY_STATUS_FILE" ]]; then
-    echo "[opscheck] $(timestamp) $label check: FAIL — recovery status file '$RECOVERY_STATUS_FILE' does not exist (never written, or the writer is not running)" >&2
+  if [[ ! -e "$file" ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — $noun '$file' does not exist (never written, or the writer is not running)" >&2
     return 1
   fi
-  if [[ ! -f "$RECOVERY_STATUS_FILE" ]] || [[ ! -r "$RECOVERY_STATUS_FILE" ]]; then
-    echo "[opscheck] $(timestamp) $label check: FAIL — recovery status file '$RECOVERY_STATUS_FILE' is not a readable regular file" >&2
+  if [[ ! -f "$file" ]] || [[ ! -r "$file" ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — $noun '$file' is not a readable regular file" >&2
     return 1
   fi
-  if ! raw="$(cat "$RECOVERY_STATUS_FILE" 2>/dev/null)"; then
-    echo "[opscheck] $(timestamp) $label check: FAIL — could not read recovery status file '$RECOVERY_STATUS_FILE'" >&2
+  if ! raw="$(cat "$file" 2>/dev/null)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — could not read $noun '$file'" >&2
     return 1
   fi
 
@@ -610,11 +820,11 @@ load_recovery_status() {
   blob="${blob%"${blob##*[![:space:]]}"}"
 
   if [[ -z "$blob" ]]; then
-    echo "[opscheck] $(timestamp) $label check: FAIL — recovery status file is empty" >&2
+    echo "[opscheck] $(timestamp) $label check: FAIL — $noun is empty" >&2
     return 1
   fi
   if [[ "${blob:0:1}" != "{" ]] || [[ "${blob: -1}" != "}" ]]; then
-    echo "[opscheck] $(timestamp) $label check: FAIL — recovery status file is not a JSON object (unparseable)" >&2
+    echo "[opscheck] $(timestamp) $label check: FAIL — $noun is not a JSON object (unparseable)" >&2
     return 1
   fi
 
@@ -623,15 +833,15 @@ load_recovery_status() {
   # below would be picking arbitrarily between them.
   occurrences="$(grep -oE '"schemaVersion"' <<<"$blob" | wc -l | tr -d ' ')"
   if [[ "$occurrences" != "1" ]]; then
-    echo "[opscheck] $(timestamp) $label check: FAIL — recovery status file does not contain exactly one 'schemaVersion' field (found ${occurrences})" >&2
+    echo "[opscheck] $(timestamp) $label check: FAIL — $noun does not contain exactly one 'schemaVersion' field (found ${occurrences})" >&2
     return 1
   fi
   if ! schema_version="$(json_uint "$blob" schemaVersion)"; then
     echo "[opscheck] $(timestamp) $label check: FAIL — 'schemaVersion' is missing or is not a non-negative integer" >&2
     return 1
   fi
-  if [[ "$schema_version" != "$RECOVERY_STATUS_SCHEMA_VERSION" ]]; then
-    echo "[opscheck] $(timestamp) $label check: FAIL — recovery status file declares schemaVersion=$(safe_token "$schema_version"), this script understands only ${RECOVERY_STATUS_SCHEMA_VERSION}" >&2
+  if [[ "$schema_version" != "$want_version" ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — $noun declares schemaVersion=$(safe_token "$schema_version"), this script understands only ${want_version}" >&2
     return 1
   fi
 
@@ -655,13 +865,31 @@ load_recovery_status() {
     echo "[opscheck] $(timestamp) $label check: FAIL — 'generatedAt' is in the future (clock skew fails closed)" >&2
     return 1
   fi
-  RECOVERY_STATUS_GENERATED_AGE_MIN=$(( (now - generated_epoch) / 60 ))
-  if [[ "$RECOVERY_STATUS_GENERATED_AGE_MIN" -gt $(( RECOVERY_STATUS_MAX_AGE_HOURS * 60 )) ]]; then
-    echo "[opscheck] $(timestamp) $label check: FAIL — recovery status file was last refreshed $(( RECOVERY_STATUS_GENERATED_AGE_MIN / 60 ))h ago (max ${RECOVERY_STATUS_MAX_AGE_HOURS}h) — the writer is not running" >&2
+  STATUS_GENERATED_AGE_MIN=$(( (now - generated_epoch) / 60 ))
+  if [[ "$STATUS_GENERATED_AGE_MIN" -gt $(( max_age_hours * 60 )) ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — $noun was last refreshed $(( STATUS_GENERATED_AGE_MIN / 60 ))h ago (max ${max_age_hours}h) — the writer is not running" >&2
     return 1
   fi
 
-  RECOVERY_STATUS_BLOB="$blob"
+  STATUS_BLOB="$blob"
+  return 0
+}
+
+# Thin wrappers. Each keeps its own noun so every diagnostic string that
+# existed before F4-FCR-002 is unchanged, and each publishes to the global its
+# own consumers already read.
+load_recovery_status() {
+  load_status_document "$1" "$RECOVERY_STATUS_FILE" "$RECOVERY_STATUS_SCHEMA_VERSION" \
+    "$RECOVERY_STATUS_MAX_AGE_HOURS" "recovery status file" || return 1
+  RECOVERY_STATUS_BLOB="$STATUS_BLOB"
+  RECOVERY_STATUS_GENERATED_AGE_MIN="$STATUS_GENERATED_AGE_MIN"
+  return 0
+}
+
+load_pitr_status() {
+  load_status_document "$1" "$PITR_STATUS_FILE" "$PITR_STATUS_SCHEMA_VERSION" \
+    "$PITR_STATUS_MAX_AGE_HOURS" "PITR status file" || return 1
+  PITR_STATUS_BLOB="$STATUS_BLOB"
   return 0
 }
 
@@ -818,6 +1046,154 @@ check_drill() {
   return 0
 }
 
+# ── check: PITR / WAL archive (F4-FCR-002) ───────────────────────────────
+#
+# Reads ONLY the PITR status document. It never invokes pgbackrest, never
+# opens a database connection, and carries no credential — see the note at
+# PITR_STATUS_FILE for why that separation is load-bearing.
+#
+# All five signals ride this ONE exit bit deliberately. Giving each its own bit
+# would exhaust the mask and create five provider-side checks for a single
+# subsystem, which is how an operator learns to ignore a check.
+#
+# The ordering below matters. Assertions 3 and 4 exist because a monitor that
+# only checks last-BACKUP age reports green straight through a total WAL-archive
+# outage: scheduled backups keep succeeding (each needs only the couple of
+# segments spanning its own start and stop) while inter-backup archiving is
+# broken and the continuous PITR chain has a hole. Backup freshness and archive
+# freshness are independent failures and are both asserted.
+check_pitr() {
+  local label="pitr" body mode value age check_status offhost tier
+
+  load_pitr_status "$label" || return 1
+
+  if ! body="$(json_object_body "$PITR_STATUS_BLOB" archive)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — 'archive' object is missing or not a flat object" >&2
+    return 1
+  fi
+
+  # 1. archive_mode. `off` is the CURRENT production state, so this check
+  #    correctly fails until PITR is actually activated. That is not a false
+  #    alarm — it is the check refusing to report a capability that does not
+  #    exist. Do not install the provider-side check before activating.
+  if ! mode="$(json_string "$body" mode)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — 'archive.mode' is missing or is not a string" >&2
+    return 1
+  fi
+  if [[ "$mode" != "on" ]] && [[ "$mode" != "always" ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — archive_mode='$(safe_token "$mode")' (expected on) — WAL archiving is NOT active and there is no PITR capability" >&2
+    return 1
+  fi
+
+  # 2. archive_command integrity. A command wrapped in `|| true` or otherwise
+  #    swallowing its exit status makes PostgreSQL mark segments archived and
+  #    recycle them while nothing reaches the repository — backups keep
+  #    succeeding and every dashboard stays green. The writer compares against
+  #    the exact expected string; anything else is reported as not ok.
+  if ! value="$(json_bool "$body" commandOk)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — 'archive.commandOk' is missing or is not a boolean" >&2
+    return 1
+  fi
+  if [[ "$value" != "true" ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — archive_command does not exactly match the expected pgbackrest archive-push invocation (a wrapped or altered command can silently discard WAL while reporting success)" >&2
+    return 1
+  fi
+
+  # 3. Archiver failures reported by PostgreSQL itself.
+  if ! value="$(json_uint "$body" failedCount)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — 'archive.failedCount' is missing or is not a non-negative integer" >&2
+    return 1
+  fi
+  if [[ "$value" -gt 0 ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — pg_stat_archiver reports ${value} failed archive attempt(s)" >&2
+    return 1
+  fi
+
+  # 4. Newest archived WAL age — the assertion that catches a broken archive
+  #    behind a fresh backup.
+  if ! age="$(json_uint "$body" lastArchivedAgeMinutes)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — no WAL segment has ever been archived, or its timestamp is missing/in the future (clock skew fails closed)" >&2
+    return 1
+  fi
+  if [[ "$age" -gt "$PITR_MAX_WAL_AGE_MINUTES" ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — newest archived WAL is ${age}m old (max ${PITR_MAX_WAL_AGE_MINUTES}m) — the recoverable point is falling behind the RPO target" >&2
+    return 1
+  fi
+
+  # ── repository ─────────────────────────────────────────────────────────
+  if ! body="$(json_object_body "$PITR_STATUS_BLOB" repo)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — 'repo' object is missing or not a flat object" >&2
+    return 1
+  fi
+
+  if ! value="$(json_bool "$body" statusOk)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — 'repo.statusOk' is missing or is not a boolean" >&2
+    return 1
+  fi
+  if [[ "$value" != "true" ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — pgbackrest reports the stanza as not ok" >&2
+    return 1
+  fi
+
+  # 5. Repository encryption. The repository holds a physical copy of every
+  #    table, including special-category health data, and no patient column is
+  #    encrypted at column level — so this is the only confidentiality control
+  #    on the artifact. An unencrypted repo is a failure, not a warning.
+  if ! value="$(json_string "$body" cipherType)" || [[ "$value" != "aes-256-cbc" ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — repository cipherType='$(safe_token "${value:-missing}")' (expected aes-256-cbc); an unencrypted repository holds cleartext special-category health data" >&2
+    return 1
+  fi
+
+  # 6. `pgbackrest check` — the only command that validates the whole
+  #    archive_command -> repository path end to end.
+  if ! check_status="$(json_string "$body" checkStatus)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — 'repo.checkStatus' is missing or is not a string" >&2
+    return 1
+  fi
+  if [[ "$check_status" != "ok" ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — last 'pgbackrest check' result is '$(safe_token "$check_status")' (expected ok)" >&2
+    return 1
+  fi
+  if ! age="$(json_uint "$body" checkAgeMinutes)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — 'repo.checkAgeMinutes' is missing or in the future (clock skew fails closed)" >&2
+    return 1
+  fi
+  if [[ "$age" -gt $(( PITR_CHECK_MAX_AGE_HOURS * 60 )) ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — last 'pgbackrest check' was $(( age / 60 ))h ago (max ${PITR_CHECK_MAX_AGE_HOURS}h)" >&2
+    return 1
+  fi
+
+  # 7. Backup freshness — independent of WAL freshness (see the header note).
+  if ! age="$(json_uint "$body" lastBackupAgeMinutes)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — no pgBackRest backup exists, or its timestamp is missing/in the future" >&2
+    return 1
+  fi
+  if [[ "$age" -gt $(( PITR_MAX_BACKUP_AGE_HOURS * 60 )) ]]; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — newest pgBackRest backup is $(( age / 60 ))h old (max ${PITR_MAX_BACKUP_AGE_HOURS}h)" >&2
+    return 1
+  fi
+
+  # 8. Independent failure domain. Tri-state, and only "yes" counts: "unproven"
+  #    means a remote repository is configured but no restore has ever been
+  #    performed from it, which is exactly the state that must not be allowed
+  #    to render as a green off-host tick.
+  if ! offhost="$(json_string "$body" offHost)"; then
+    echo "[opscheck] $(timestamp) $label check: FAIL — 'repo.offHost' is missing or is not a string" >&2
+    return 1
+  fi
+  tier="$(json_string "$body" tier 2>/dev/null || echo '?')"
+  if [[ "$offhost" != "yes" ]]; then
+    if [[ "$PITR_REQUIRE_OFFHOST" == "true" ]]; then
+      echo "[opscheck] $(timestamp) $label check: FAIL — repository off-host state is '$(safe_token "$offhost")' (tier $(safe_token "$tier")); the backup does not survive loss of this host. Set NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=false to accept a same-host repository knowingly during the stage-1 pilot." >&2
+      return 1
+    fi
+    echo "[opscheck] $(timestamp) $label check: WARNING — repository off-host state is '$(safe_token "$offhost")' (tier $(safe_token "$tier")); accepted because NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=false. RPO is improved; host-loss durability is NOT." >&2
+  fi
+
+  echo "[opscheck] $(timestamp) $label check: OK — archive_mode=$(safe_token "$mode"), newest WAL fresh, repo encrypted, check ok, off-host=$(safe_token "$offhost")"
+  return 0
+}
+
 # ── run ──────────────────────────────────────────────────────────────────
 EXIT_CODE=0
 PM2_LABEL="pm2"
@@ -825,6 +1201,7 @@ DISK_LABEL="disk"
 BACKUP_LABEL="backup"
 FILEBACKUP_LABEL="filebackup"
 DRILL_LABEL="drill"
+PITR_LABEL="pitr"
 
 run_check() {
   local name="$1" fn="$2" label="$3" ping_var="$4" bit="$5"
@@ -849,7 +1226,11 @@ for c in "${CHECKS_TO_RUN[@]}"; do
     backup)     run_check "backup"     check_backup     "$BACKUP_LABEL"     NORAMEDI_OPSCHECK_BACKUP_PING_URL      4 ;;
     filebackup) run_check "filebackup" check_filebackup "$FILEBACKUP_LABEL" NORAMEDI_OPSCHECK_FILEBACKUP_PING_URL  8 ;;
     drill)      run_check "drill"      check_drill      "$DRILL_LABEL"      NORAMEDI_OPSCHECK_DRILL_PING_URL      16 ;;
-    *) echo "Unknown --check value: $c (expected pm2|disk|backup|filebackup|drill)" >&2; exit "$CONFIG_ERROR_EXIT_CODE" ;;
+    # 128, not 64. See the EXIT-CODE CONTRACT ADDITION note in the header: 64
+    # is CONFIG_ERROR_EXIT_CODE, and no combination of check bits can reach it
+    # (1+2+4+8+16+32 = 63), so it stays unambiguous while nothing moves.
+    pitr)       run_check "pitr"       check_pitr       "$PITR_LABEL"       NORAMEDI_OPSCHECK_PITR_PING_URL      128 ;;
+    *) echo "Unknown --check value: $c (expected pm2|disk|backup|filebackup|drill|pitr)" >&2; exit "$CONFIG_ERROR_EXIT_CODE" ;;
   esac
 done
 

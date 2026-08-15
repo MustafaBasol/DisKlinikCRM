@@ -2096,16 +2096,24 @@ router.get('/recovery/status', async (_req, res: Response) => {
       { getBackupStatus, computeArtifactAgeMinutes, isBackupStale, resolveMaxAgeHours },
       { getFileBackupStatus },
       { getRecoveryDrillStatus },
+      { readPitrStatus },
     ] = await Promise.all([
       import('../services/backupService.js'),
       import('../services/fileBackupService.js'),
       import('../services/recoveryDrillService.js'),
+      import('../services/pitrStatusFile.js'),
     ]);
 
-    const [dbBackup, fileBackupStatus, drills] = await Promise.all([
+    const [dbBackup, fileBackupStatus, drills, pitr] = await Promise.all([
       getBackupStatus(),
       getFileBackupStatus(),
       getRecoveryDrillStatus(),
+      // Extends this endpoint rather than adding a second one: the client
+      // makes exactly one call here and falls back to /backups/status if it
+      // fails, so a separate endpoint would sit outside that degradation
+      // contract. readPitrStatus never throws — an absent file is the normal
+      // state today and must not take the whole page down.
+      readPitrStatus(),
     ]);
 
     // fileBackupService owns its status shape but not its staleness policy, so
@@ -2131,6 +2139,7 @@ router.get('/recovery/status', async (_req, res: Response) => {
         staleThresholdHours: fileBackupThresholdHours,
       },
       drills,
+      pitr,
     });
   } catch (err: unknown) {
     console.error('[platform-recovery] Failed to build recovery status', safeErrorFields(err));

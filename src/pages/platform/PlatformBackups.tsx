@@ -17,6 +17,7 @@ import {
   Database,
   ScrollText,
   Trash2,
+  History,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePlatformApi } from '../../context/PlatformAuthContext';
@@ -113,10 +114,66 @@ interface DrillsStatus {
   runningDrills: number | null;
 }
 
+/**
+ * PITR / WAL-archive status (F4-FCR-002).
+ *
+ * Mirrors server/src/services/pitrStatusFile.ts. `available: false` is the
+ * NORMAL state today — production runs archive_mode=off, and activating WAL
+ * archiving needs both a granted freeze exception and a PostgreSQL restart —
+ * so the panel must render "not configured" as an ordinary, un-alarming
+ * status rather than an error.
+ */
+interface PitrArchive {
+  mode: string;
+  commandOk: boolean;
+  walLevel?: string;
+  timeoutSeconds?: number;
+  failedCount?: number;
+  archivedCount?: number;
+  lastArchivedAt?: string;
+  lastArchivedAgeMinutes?: number;
+  lastFailedAt?: string;
+}
+
+interface PitrRepo {
+  installed: boolean;
+  stanza?: string;
+  statusOk: boolean;
+  statusMessage?: string;
+  version?: string;
+  cipherType: string;
+  encrypted: boolean;
+  checkStatus: string;
+  checkAt?: string;
+  checkAgeMinutes?: number;
+  lastBackupAt?: string;
+  lastBackupAgeMinutes?: number;
+  lastBackupType?: string;
+  backupCount?: number;
+  walMin?: string;
+  walMax?: string;
+  /** Tri-state. 'unproven' must render distinctly, never collapsed into yes/no. */
+  offHost: 'no' | 'unproven' | 'yes';
+  tier: string;
+  offHostReason?: string;
+}
+
+interface PitrStatus {
+  available: boolean;
+  reason?: string;
+  filePath?: string;
+  generatedAt?: string;
+  ageMinutes?: number;
+  archive?: PitrArchive;
+  repo?: PitrRepo;
+  pitrActive?: boolean;
+}
+
 interface RecoveryStatus {
   dbBackup: BackupStatus;
   fileBackup: FileBackupStatus | null;
   drills: DrillsStatus | null;
+  pitr: PitrStatus | null;
 }
 
 interface RunBackupResult {
@@ -460,6 +517,7 @@ const PlatformBackups: React.FC = () => {
 
   const fileBackup = recovery?.fileBackup ?? null;
   const drills = recovery?.drills ?? null;
+  const pitr = recovery?.pitr ?? null;
   const residualArtifacts = (drills?.residualArtifacts ?? []).filter((d) => !!d && !!d.residualArtifact);
 
   const dbThresholdHours = status?.staleThresholdHours ?? null;
@@ -735,6 +793,36 @@ const PlatformBackups: React.FC = () => {
               })}
             />
           )}
+          {/*
+            PITR banners. Deliberately NOT raised when the document is simply
+            absent (`not_configured`): WAL archiving has never been activated,
+            that is the known and expected state, and a permanent red banner
+            for a known-absent capability is how an operator learns to ignore
+            banners. These two fire only once PITR reports itself ACTIVE and
+            something about it is wrong — which is the case that is genuinely
+            dangerous, because everything else on this page still looks green.
+          */}
+          {pitr?.available && pitr.pitrActive && pitr.archive?.commandOk === false && (
+            <AlertBanner
+              level="alarm"
+              title={t('platform:backups.pitrCommandBrokenTitle')}
+              detail={t('platform:backups.pitrCommandBrokenDetail')}
+            />
+          )}
+          {pitr?.available && pitr.pitrActive && pitr.repo?.encrypted === false && (
+            <AlertBanner
+              level="alarm"
+              title={t('platform:backups.pitrPlaintextTitle')}
+              detail={t('platform:backups.pitrPlaintextDetail')}
+            />
+          )}
+          {pitr?.available && !pitr.pitrActive && pitr.repo?.installed && (
+            <AlertBanner
+              level="warn"
+              title={t('platform:backups.pitrInactiveTitle')}
+              detail={t('platform:backups.pitrInactiveDetail')}
+            />
+          )}
           {recoveryDegraded && (
             <AlertBanner
               level="warn"
@@ -965,6 +1053,180 @@ const PlatformBackups: React.FC = () => {
                   </>
                 )}
               </SectionCard>
+            </div>
+          )}
+
+          {/* ── PITR / WAL archive (F4-FCR-002) ───────────────────────────── */}
+          {pitr && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <History size={18} className="text-cyan-500" />
+                <h2 className="font-semibold text-gray-900 dark:text-white">{t('platform:backups.pitrTitle')}</h2>
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500">{t('platform:backups.pitrNote')}</p>
+
+              {!pitr.available ? (
+                /*
+                 * NOT an error state. Production runs archive_mode=off and
+                 * activating WAL archiving needs a granted freeze exception and
+                 * a PostgreSQL restart, so "not configured" is the expected
+                 * reading today and must not be dressed up as a fault. Every
+                 * other reason (stale writer, malformed document, clock skew)
+                 * IS a fault and is shown as one.
+                 */
+                <SectionCard
+                  icon={<History size={18} className={pitr.reason === 'not_configured' ? 'text-gray-400' : 'text-amber-500'} />}
+                  title={t('platform:backups.pitrUnavailableTitle')}
+                >
+                  <InfoRow
+                    label={t('platform:backups.pitrState')}
+                    value={
+                      <span
+                        className={
+                          pitr.reason === 'not_configured'
+                            ? 'text-gray-500 dark:text-gray-400'
+                            : 'text-amber-600 dark:text-amber-400 font-semibold'
+                        }
+                      >
+                        {t(`platform:backups.pitrReason.${pitr.reason ?? 'unreadable'}`)}
+                      </span>
+                    }
+                  />
+                  {pitr.ageMinutes !== undefined && (
+                    <InfoRow label={t('platform:backups.pitrDocumentAge')} value={formatAge(pitr.ageMinutes)} />
+                  )}
+                  <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                    {t('platform:backups.pitrNotConfiguredHint')}
+                  </p>
+                </SectionCard>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-4">
+                  <SectionCard icon={<History size={18} className="text-cyan-500" />} title={t('platform:backups.pitrArchiveTitle')}>
+                    <InfoRow
+                      label={t('platform:backups.pitrActive')}
+                      value={
+                        <StatusBadge
+                          ok={pitr.pitrActive === true}
+                          labelOk={t('platform:backups.pitrActiveYes')}
+                          labelFail={t('platform:backups.pitrActiveNo')}
+                        />
+                      }
+                    />
+                    <InfoRow label={t('platform:backups.pitrArchiveMode')} value={pitr.archive?.mode ?? '—'} />
+                    {/*
+                     * Surfaced as its own row, not folded into "active": an
+                     * archive_command that has been wrapped or altered makes
+                     * PostgreSQL mark segments archived and recycle them while
+                     * nothing reaches the repository. Backups keep succeeding
+                     * and everything else on this page stays green.
+                     */}
+                    <InfoRow
+                      label={t('platform:backups.pitrCommandOk')}
+                      value={
+                        <StatusBadge
+                          ok={pitr.archive?.commandOk === true}
+                          labelOk={t('platform:backups.pitrCommandOkYes')}
+                          labelFail={t('platform:backups.pitrCommandOkNo')}
+                        />
+                      }
+                    />
+                    <InfoRow
+                      label={t('platform:backups.pitrLastArchivedWal')}
+                      value={
+                        pitr.archive?.lastArchivedAgeMinutes !== undefined
+                          ? formatAge(pitr.archive.lastArchivedAgeMinutes)
+                          : t('platform:backups.pitrNever')
+                      }
+                    />
+                    <InfoRow
+                      label={t('platform:backups.pitrArchiveFailures')}
+                      value={
+                        <span className={num(pitr.archive?.failedCount) > 0 ? 'text-red-600 dark:text-red-400 font-semibold' : ''}>
+                          {pitr.archive?.failedCount ?? '—'}
+                        </span>
+                      }
+                    />
+                    {pitr.archive?.timeoutSeconds !== undefined && (
+                      <InfoRow
+                        label={t('platform:backups.pitrArchiveTimeout')}
+                        value={t('platform:backups.pitrSeconds', { n: pitr.archive.timeoutSeconds })}
+                      />
+                    )}
+                  </SectionCard>
+
+                  <SectionCard icon={<Database size={18} className="text-cyan-500" />} title={t('platform:backups.pitrRepoTitle')}>
+                    <InfoRow
+                      label={t('platform:backups.pitrRepoStatus')}
+                      value={
+                        <StatusBadge
+                          ok={pitr.repo?.statusOk === true}
+                          labelOk={t('platform:backups.pitrRepoOk')}
+                          labelFail={t('platform:backups.pitrRepoNotOk')}
+                        />
+                      }
+                    />
+                    <InfoRow
+                      label={t('platform:backups.pitrEncrypted')}
+                      value={
+                        <StatusBadge
+                          ok={pitr.repo?.encrypted === true}
+                          labelOk={t('platform:backups.pitrEncryptedYes')}
+                          labelFail={t('platform:backups.pitrEncryptedNo')}
+                        />
+                      }
+                    />
+                    {/*
+                     * TRI-STATE, rendered as three distinct states. Collapsing
+                     * 'unproven' into either neighbour is the whole failure this
+                     * field exists to prevent: a configured remote repository
+                     * from which nothing has ever been restored is not an
+                     * off-host backup, and must not show the same green tick as
+                     * one that has been proven.
+                     */}
+                    <InfoRow
+                      label={t('platform:backups.pitrOffHost')}
+                      value={
+                        pitr.repo?.offHost === 'yes' ? (
+                          <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400 text-xs font-medium">
+                            <CheckCircle2 size={14} /> {t('platform:backups.pitrOffHostYes')}
+                          </span>
+                        ) : pitr.repo?.offHost === 'unproven' ? (
+                          <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 text-xs font-medium">
+                            <AlertTriangle size={14} /> {t('platform:backups.pitrOffHostUnproven')}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-red-500 dark:text-red-400 text-xs font-medium">
+                            <XCircle size={14} /> {t('platform:backups.pitrOffHostNo')}
+                          </span>
+                        )
+                      }
+                    />
+                    <InfoRow label={t('platform:backups.pitrTier')} value={pitr.repo?.tier ?? '—'} />
+                    <InfoRow
+                      label={t('platform:backups.pitrCheck')}
+                      value={
+                        <StatusBadge
+                          ok={pitr.repo?.checkStatus === 'ok'}
+                          labelOk={t('platform:backups.pitrCheckOk')}
+                          labelFail={t('platform:backups.pitrCheckNotOk', { status: pitr.repo?.checkStatus ?? '—' })}
+                        />
+                      }
+                    />
+                    <InfoRow
+                      label={t('platform:backups.pitrLastBackup')}
+                      value={
+                        pitr.repo?.lastBackupAgeMinutes !== undefined
+                          ? `${formatAge(pitr.repo.lastBackupAgeMinutes)}${pitr.repo.lastBackupType ? ` (${pitr.repo.lastBackupType})` : ''}`
+                          : t('platform:backups.pitrNever')
+                      }
+                    />
+                    {pitr.repo?.backupCount !== undefined && (
+                      <InfoRow label={t('platform:backups.pitrBackupCount')} value={pitr.repo.backupCount} />
+                    )}
+                    {pitr.repo?.version && <InfoRow label={t('platform:backups.pitrVersion')} value={pitr.repo.version} />}
+                  </SectionCard>
+                </div>
+              )}
             </div>
           )}
 

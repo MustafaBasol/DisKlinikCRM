@@ -1,0 +1,77 @@
+# noramedi-pgbackrest.cron.example — F4-FCR-002
+#
+# Host target: /etc/cron.d/noramedi-pgbackrest   (root:root, 0644)
+#
+# NOT INSTALLED. Installing this is the last step of the activation sequence in
+# docs/program/runbooks/F4_RECOVERY_OPERATIONS.md §13, after `pgbackrest check`
+# has passed. It requires the scoped freeze exception (§14, NOT GRANTED).
+#
+# ═════════════════════════════════════════════════════════════════════════
+# ⚠ THIS FILE DOES NOT REPLACE /etc/cron.d/noramedi-db-backup.
+#
+# The existing pg_dump chain stays exactly as it is:
+#
+#   15 3 * * * root /usr/local/sbin/noramedi-db-backup.sh
+#
+# It keeps running at 03:15, keeps writing to /root/noramedi-backups, keeps
+# its 7-day retention and its own flock. It is the fallback for the entire
+# transition, and removing it is a separate program decision that has not been
+# made. Do not edit, disable, or "consolidate" it as part of enabling
+# pgBackRest.
+# ═════════════════════════════════════════════════════════════════════════
+#
+# WHY 02:30 AND 02:00:
+# Both slots are chosen to clear the 03:15 pg_dump with a wide margin. The
+# database is ~16 MB, so a full backup completes in seconds and 45 minutes of
+# separation is generous — but the two mechanisms read the same cluster and
+# there is no reason to let them overlap while pgBackRest is unproven.
+#
+# WHY A DAILY FULL RATHER THAN WEEKLY-FULL + DAILY-DIFF:
+# Weekly-full/daily-diff is the conventional answer and it is wrong at this
+# size. At ~16 MB a full costs seconds, and a full-only chain makes restore a
+# single step with no dependency graph to reason about during an incident —
+# which matters far more than the storage it saves. Revisit around ~1 GB.
+# The wrapper already supports `--type diff` when that day comes.
+#
+# The flock mirrors the convention the existing pg_dump script uses. pgBackRest
+# takes its own per-stanza lock as well, but that one makes an overlapping run
+# ERROR; the wrapper's lock makes it exit 5, so cron mail says "skipped,
+# already running" instead of reporting a failure.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=root
+
+# Daily full backup at 02:30.
+# Exit codes the wrapper produces: 0 ok · 1 pgBackRest failed · 2 usage
+# · 3 precondition · 4 ABORTED, disk below the free-space floor · 5 lock held.
+# Code 4 is the disk-exhaustion abort the freeze exception requires: it means
+# pgBackRest was NOT invoked, deliberately, because a full filesystem breaks
+# archive_command, which grows pg_wal, which stops PostgreSQL.
+30 2 * * *  root  /usr/bin/flock -n /var/lock/noramedi-pgbackrest.lock /usr/local/sbin/noramedi-pgbackrest-backup.sh --type full
+
+# Weekly repository integrity verification, Sunday 02:00.
+# `pgbackrest verify` checks that what is IN the repository is intact. It is
+# NOT a restore test and must never be reported as one — R-032 is closed only
+# by an actual restore, which is what noramedi-pgbackrest-restore-drill.sh
+# performs. Nothing in the pre-existing pg_dump tier has any equivalent of
+# either check.
+0 2 * * 0   root  /usr/bin/flock -n /var/lock/noramedi-pgbackrest.lock /usr/local/sbin/noramedi-pgbackrest-backup.sh --verify
+
+# Weekly PITR restore drill, Sunday 03:45 — COMMENTED OUT until the first
+# manual drill has been run and reviewed by a human.
+#
+# It restores into a disposable, RAM-backed, loopback-only cluster and destroys
+# it, but it restores REAL PATIENT DATA to do so, and a physical backup is
+# cluster-wide and therefore cross-tenant. Scheduling that unattended before
+# anyone has watched it work once is the wrong order. Note also that
+# RESTORE_REHEARSAL_REQUIRE_SYNTHETIC has no equivalent here: a physical
+# restore cannot be limited to designated synthetic clinics the way the
+# file-tier rehearsal can, because there is no per-tenant physical backup.
+# Whether rehearsing on real patient data is a distinct processing activity
+# requiring its own hukuki sebep is an open COUNSEL_REVIEW_REQUIRED question
+# (F4_RECOVERY_OPERATIONS.md §7.3 item 2).
+#
+# REHEARSAL_OS_USER has no default and must be set explicitly.
+#
+# 45 3 * * 0  root  REHEARSAL_OS_USER=postgres /usr/local/sbin/noramedi-pgbackrest-restore-drill.sh --port 55433

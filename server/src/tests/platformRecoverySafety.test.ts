@@ -114,6 +114,62 @@ async function main() {
     assert.ok(line.includes(`secretAccessKey=${REDACTED_TOKEN}`), `secretAccessKey key was not preserved: ${line}`);
   });
 
+  // ── Regression: pgBackRest repository passphrase (F4-FCR-002) ─────────────
+  //
+  // Before F4-FCR-002 every line below passed through this redactor COMPLETELY
+  // UNCHANGED, verified empirically against the shipped regex. None of the
+  // pre-existing alternatives can match `cipher-pass`: `pgpass`, `password`,
+  // `passwd` and `pwd` all require more than the bare substring `pass`, and
+  // the `[A-Za-z0-9_]*` key prefix cannot cross a hyphen.
+  //
+  // Severity is not "one more secret shape". `repo1-cipher-pass` is the
+  // passphrase for the pgBackRest repository, and pgBackRest cannot decrypt a
+  // repository without it — there is no escrow, no recovery, no vendor. It is
+  // simultaneously the secret that protects every backup and the secret whose
+  // loss destroys every backup, and it was the one shape this redactor did not
+  // cover while `GET /api/platform/backups/logs` served the line verbatim.
+
+  const cipherPassCases: Array<{ label: string; line: string; keptKey: string }> = [
+    { label: 'repo1-cipher-pass= (pgBackRest spelling)', line: 'repo1-cipher-pass=Sup3rS3cretPassphrase', keptKey: 'cipher-pass=' },
+    { label: 'repo2-cipher-pass= (off-host repository)', line: 'repo2-cipher-pass=Sup3rS3cretPassphrase', keptKey: 'cipher-pass=' },
+    { label: 'bare cipher-pass=', line: 'cipher-pass=Sup3rS3cretPassphrase', keptKey: 'cipher-pass=' },
+    { label: 'underscore spelling cipher_pass=', line: 'cipher_pass=Sup3rS3cretPassphrase', keptKey: 'cipher_pass=' },
+    { label: 'CLI flag form --repo-cipher-pass=', line: 'exec pgbackrest --repo-cipher-pass=Sup3rS3cretPassphrase backup', keptKey: 'cipher-pass=' },
+    { label: 'JSON form "cipherPass": "..."', line: '{"cipherPass": "Sup3rS3cretPassphrase"}', keptKey: 'cipherPass' },
+    { label: 'cipher-password= (long spelling)', line: 'repo1-cipher-password=Sup3rS3cretPassphrase', keptKey: 'cipher-password=' },
+  ];
+
+  for (const c of cipherPassCases) {
+    await test(`pgBackRest passphrase redacted — ${c.label}`, () => {
+      const line = redactBackupLogLine(c.line);
+      assert.ok(
+        !line.includes('Sup3rS3cretPassphrase'),
+        `repository passphrase survived redaction: ${line}`,
+      );
+      assert.ok(line.includes(REDACTED_TOKEN), `no redaction token present: ${line}`);
+      assert.ok(line.includes(c.keptKey), `key name was not preserved (operator cannot tell WHICH secret appeared): ${line}`);
+    });
+  }
+
+  await test('an SSH private key block is redacted whole (off-host repo transport)', () => {
+    const key = [
+      '-----BEGIN OPENSSH PRIVATE KEY-----',
+      'b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtz',
+      'c2gtZW5kMjU1MTkAAAAgSECRETKEYMATERIALDONOTLOGTHISEVER0000000000=',
+      '-----END OPENSSH PRIVATE KEY-----',
+    ].join('\n');
+    const line = redactBackupLogLine(`ssh transport failed using key ${key} for repo2`);
+    assert.ok(!line.includes('SECRETKEYMATERIAL'), `private key body survived redaction: ${line}`);
+    assert.ok(!line.includes('BEGIN OPENSSH PRIVATE KEY'), `PEM header survived redaction: ${line}`);
+    assert.ok(line.startsWith('ssh transport failed using key '), `line context was destroyed: ${line}`);
+    assert.ok(line.endsWith(' for repo2'), `trailing context was destroyed: ${line}`);
+  });
+
+  await test('a stanza name is NOT redacted — it is operational context, not a secret', () => {
+    const line = redactBackupLogLine('pgbackrest --stanza=noramedi archive-push completed in 0.4s');
+    assert.equal(line, 'pgbackrest --stanza=noramedi archive-push completed in 0.4s');
+  });
+
   // ── Regression: the `\b`-anchored rule that shipped first (F4 review, H2) ──
   //
   // Every line below was VERIFIED to pass through UNREDACTED and to be served

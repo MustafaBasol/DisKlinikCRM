@@ -116,6 +116,49 @@ const drills = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/**
+ * PITR fixture (F4-FCR-002). Defaults to a FULLY ACTIVATED, healthy
+ * deployment so each test perturbs exactly one signal — which is not the
+ * current production state (archive_mode is off today), by design: a fixture
+ * that starts unhealthy makes every failure assertion pass for the wrong
+ * reason.
+ */
+const pitr = (over: Record<string, unknown> = {}) => ({
+  available: true,
+  filePath: '/var/lib/noramedi/pitr-status.json',
+  generatedAt: '2026-08-15T11:55:00Z',
+  ageMinutes: 5,
+  pitrActive: true,
+  archive: {
+    mode: 'on',
+    commandOk: true,
+    walLevel: 'replica',
+    timeoutSeconds: 300,
+    failedCount: 0,
+    archivedCount: 128,
+    lastArchivedAt: '2026-08-15T11:57:00Z',
+    lastArchivedAgeMinutes: 3,
+    ...((over.archive as object) ?? {}),
+  },
+  repo: {
+    installed: true,
+    stanza: 'noramedi',
+    statusOk: true,
+    version: '2.54.2',
+    cipherType: 'aes-256-cbc',
+    encrypted: true,
+    checkStatus: 'ok',
+    checkAgeMinutes: 30,
+    lastBackupAgeMinutes: 570,
+    lastBackupType: 'full',
+    backupCount: 7,
+    offHost: 'yes',
+    tier: 'T2',
+    ...((over.repo as object) ?? {}),
+  },
+  ...over,
+});
+
 /** Wire the recovery endpoint to `payload`; legacy endpoints stay available. */
 const mountWithRecovery = (payload: unknown) => {
   apiGet.mockImplementation((url: string) => {
@@ -524,5 +567,144 @@ describe('PlatformBackups — restore test result panel', () => {
     expect(await screen.findByText(K('restoreTestFailed'))).toBeInTheDocument();
     expect(screen.getByText(leaked)).toBeInTheDocument();
     expect(screen.getByText('pg_restore_failed')).toBeInTheDocument();
+  });
+});
+
+describe('PlatformBackups — PITR / WAL archive panel (F4-FCR-002)', () => {
+  it('renders nothing at all when the server does not report a pitr key (backward compatible)', async () => {
+    mountWithRecovery({ dbBackup: dbBackup(), fileBackup: fileBackup(), drills: drills() });
+    await screen.findByText(K('fileTitle'));
+    expect(screen.queryByText(K('pitrTitle'))).not.toBeInTheDocument();
+  });
+
+  it('renders "not configured" as an ordinary state, not an alarm, when PITR has never been activated', async () => {
+    // This is today's real production reading: archive_mode is off and
+    // activating it needs a freeze exception plus a restart. A permanent red
+    // banner for a known-absent capability trains the operator to ignore
+    // banners, so the absence must render quietly.
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: { available: false, reason: 'not_configured', filePath: '/var/lib/noramedi/pitr-status.json' },
+    });
+
+    expect(await screen.findByText(K('pitrTitle'))).toBeInTheDocument();
+    expect(screen.getByText(K('pitrReason.not_configured'))).toBeInTheDocument();
+    expect(screen.queryByText(K('pitrInactiveTitle'))).not.toBeInTheDocument();
+    expect(screen.queryByText(K('pitrCommandBrokenTitle'))).not.toBeInTheDocument();
+    expect(screen.queryByText(K('pitrPlaintextTitle'))).not.toBeInTheDocument();
+  });
+
+  it('distinguishes a dead status writer from a never-configured one', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: { available: false, reason: 'stale', generatedAt: '2026-08-15T06:00:00Z', ageMinutes: 360 },
+    });
+
+    expect(await screen.findByText(K('pitrReason.stale'))).toBeInTheDocument();
+    expect(screen.queryByText(K('pitrReason.not_configured'))).not.toBeInTheDocument();
+  });
+
+  it('shows the healthy activated state', async () => {
+    mountWithRecovery({ dbBackup: dbBackup(), fileBackup: fileBackup(), drills: drills(), pitr: pitr() });
+
+    expect(await screen.findByText(K('pitrArchiveTitle'))).toBeInTheDocument();
+    expect(screen.getByText(K('pitrActiveYes'))).toBeInTheDocument();
+    expect(screen.getByText(K('pitrCommandOkYes'))).toBeInTheDocument();
+    expect(screen.getByText(K('pitrEncryptedYes'))).toBeInTheDocument();
+    expect(screen.getByText(K('pitrOffHostYes'))).toBeInTheDocument();
+  });
+
+  it('renders off-host "unproven" as its OWN state, never as the proven tick', async () => {
+    // The whole point of the tri-state. A configured remote repository from
+    // which nothing has ever been restored must not show the same green tick
+    // as one that has been proven by an actual restore.
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ repo: { offHost: 'unproven', tier: 'T2' } }),
+    });
+
+    expect(await screen.findByText(K('pitrOffHostUnproven'))).toBeInTheDocument();
+    expect(screen.queryByText(K('pitrOffHostYes'))).not.toBeInTheDocument();
+    expect(screen.queryByText(K('pitrOffHostNo'))).not.toBeInTheDocument();
+  });
+
+  it('renders off-host "no" for a same-host repository', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ repo: { offHost: 'no', tier: 'T1' } }),
+    });
+
+    expect(await screen.findByText(K('pitrOffHostNo'))).toBeInTheDocument();
+    expect(screen.queryByText(K('pitrOffHostYes'))).not.toBeInTheDocument();
+  });
+
+  it('alarms loudly when archiving is on but the archive_command has been altered', async () => {
+    // The green-but-broken case: every other tile on the page still reads
+    // healthy while the recovery chain is silently acquiring a hole.
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ pitrActive: true, archive: { commandOk: false } }),
+    });
+
+    expect(await screen.findByText(K('pitrCommandBrokenTitle'))).toBeInTheDocument();
+    expect(screen.getByText(K('pitrCommandOkNo'))).toBeInTheDocument();
+  });
+
+  it('alarms when the repository is unencrypted', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ repo: { cipherType: 'none', encrypted: false } }),
+    });
+
+    expect(await screen.findByText(K('pitrPlaintextTitle'))).toBeInTheDocument();
+    expect(screen.getByText(K('pitrEncryptedNo'))).toBeInTheDocument();
+  });
+
+  it('warns when pgBackRest is installed but archiving was never switched on', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ pitrActive: false, archive: { mode: 'off' } }),
+    });
+
+    expect(await screen.findByText(K('pitrInactiveTitle'))).toBeInTheDocument();
+    expect(screen.getByText(K('pitrActiveNo'))).toBeInTheDocument();
+  });
+
+  it('does not raise the inactive warning when pgBackRest is not installed at all', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ pitrActive: false, archive: { mode: 'off' }, repo: { installed: false } }),
+    });
+
+    await screen.findByText(K('pitrTitle'));
+    expect(screen.queryByText(K('pitrInactiveTitle'))).not.toBeInTheDocument();
+  });
+
+  it('reports a never-archived WAL as "never" rather than as fresh', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ archive: { lastArchivedAgeMinutes: undefined, lastArchivedAt: undefined } }),
+    });
+
+    await screen.findByText(K('pitrArchiveTitle'));
+    expect(screen.getAllByText(K('pitrNever')).length).toBeGreaterThan(0);
   });
 });

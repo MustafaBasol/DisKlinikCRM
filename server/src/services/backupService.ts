@@ -161,9 +161,29 @@ export function externalFailureCode(err: unknown): string {
  *      token), or a bare non-space run. Only this part is replaced.
  *
  * Case-insensitive: shell uses SCREAMING_SNAKE, JSON payloads use camelCase.
+ *
+ * `cipher[_-]?pass(?:word)?` is listed FIRST and deliberately: pgBackRest's
+ * repository passphrase is spelled `repo1-cipher-pass`, and none of the other
+ * alternatives match it. `pgpass`/`password`/`passwd`/`pwd` all require more
+ * than the bare substring `pass`, and the `[A-Za-z0-9_]*` prefix cannot cross
+ * the hyphen in `cipher-pass`. So before F4-FCR-002 a log line reading
+ * `repo1-cipher-pass=<value>` passed through this redactor COMPLETELY
+ * UNCHANGED — the one secret whose loss makes every backup permanently
+ * unrecoverable was the one secret shape not covered. Verified by
+ * `redactBackupLogLine` cases in backupServiceRedaction.test.ts; do not
+ * reorder or remove without re-running them.
  */
 const SECRET_ASSIGNMENT_RE =
-  /([A-Za-z0-9_]*(?:secret[_-]?access[_-]?key|access[_-]?key[_-]?id|session[_-]?token|api[_-]?key|pgpassword|pgpass|password|passwd|pwd|authorization|bearer|secret|token|credentials?))("?\s*[=:]\s*)((?:bearer|basic|token)\s+\S+|"[^"]*"|'[^']*'|\S+)/gi;
+  /([A-Za-z0-9_]*(?:cipher[_-]?pass(?:word)?|secret[_-]?access[_-]?key|access[_-]?key[_-]?id|session[_-]?token|api[_-]?key|pgpassword|pgpass|password|passwd|pwd|authorization|bearer|secret|token|credentials?))("?\s*[=:]\s*)((?:bearer|basic|token)\s+\S+|"[^"]*"|'[^']*'|\S+)/gi;
+
+/**
+ * A PEM private-key block. pgBackRest's off-host repository transport is SSH,
+ * so an operator pasting or a script echoing a key file becomes a realistic
+ * shape in this log for the first time. The whole block is replaced — unlike
+ * an assignment, there is no useful "key name" half worth preserving.
+ */
+const PRIVATE_KEY_BLOCK_RE =
+  /-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----/g;
 
 /**
  * Bare `Bearer <token>` with no key in front of it (e.g. a curl header echoed
@@ -193,6 +213,10 @@ export function redactBackupLogLine(line: string): string {
 
   // 2. AWS access key ids appear verbatim in the wild (AKIA + 16 uppercase/digits).
   out = out.replace(/\bAKIA[0-9A-Z]{16}\b/g, REDACTED_TOKEN);
+
+  // 2b. PEM private-key blocks. Runs before the assignment pass so a key body
+  //     containing "=" padding cannot be partially matched by it first.
+  out = out.replace(PRIVATE_KEY_BLOCK_RE, REDACTED_TOKEN);
 
   // 3. key=value / key: value assignments for credential-bearing names. The
   //    key is preserved (it tells the operator WHICH credential appeared);
