@@ -79,8 +79,13 @@
 #                                        [--allow-missing-app-smoke] [-h|--help]
 #
 # Options:
-#   --target TS       PITR target timestamp. Omit to restore the latest
-#                     backup with no recovery target.
+#   --target TS       PITR target timestamp, fractional seconds allowed. Omit
+#                     to restore the latest backup with no recovery target.
+#                     An explicit UTC offset is MANDATORY with --pitr-run-id:
+#                     a bare target resolves in the drill cluster's timezone
+#                     while the markers it is checked against were written in
+#                     production's, and the mismatch stops the recovery hours
+#                     from the intended point without erroring.
 #   --set LABEL       Restore a specific backup label instead of the latest.
 #   --repo N          Repository to restore FROM (1 = local, 2 = off-host).
 #                     Default 1. Restoring from repo 2 is the ONLY thing that
@@ -92,6 +97,24 @@
 #                     still checked for collisions and still asserted unbound.
 #   --result-file P   Where to write the machine-readable result JSON.
 #                     Default /var/lib/noramedi/pitr-drill-result.json
+#   --pitr-run-id ID  Verify the recovery STOP POINT against the controlled
+#                     marker pair written to production under this run id
+#                     before the restore (see the F4-FCR-002A runbook).
+#                     Requires --target. Asserts marker A present (exactly 1)
+#                     and marker B absent (exactly 0) in the RESTORED cluster,
+#                     and that the replay point is at or before --target.
+#                     WITHOUT it a --target run is recorded as `not_verified`
+#                     and can never be R-031/R-032 evidence: passing --target
+#                     to pgbackrest proves a restore ran, not that recovery
+#                     stopped where it was told to.
+#   --marker-seg SEG  WAL segment that carried the marker pair, recorded as
+#                     evidence in the result document (24 hex characters).
+#   --marker-b-at TS  Marker B's production timestamp. It does not exist in a
+#                     correctly stopped restore, so it cannot be measured
+#                     there — it is recorded from the marker procedure so the
+#                     target window can be re-derived from the artifact alone.
+#                     Marker timestamps read out of OperationalEvent are UTC;
+#                     see the timezone rule at the verification block below.
 #   --record          After a PASS, additionally write the off-host proof
 #                     marker (only meaningful with --repo 2). This marker is
 #                     what upgrades the reported off-host state from
@@ -180,6 +203,9 @@ RESULT_FILE_OVERRIDE=""
 DO_RECORD=false
 KEEP_ON_FAILURE=false
 ALLOW_MISSING_APP_SMOKE=false
+PITR_RUN_ID=""
+MARKER_SEG=""
+MARKER_B_AT=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -189,6 +215,9 @@ while [[ $# -gt 0 ]]; do
     --stanza)          STANZA="${2:-}"; shift 2 ;;
     --port)            DRILL_PORT="${2:-}"; shift 2 ;;
     --result-file)     RESULT_FILE_OVERRIDE="${2:-}"; shift 2 ;;
+    --pitr-run-id)     PITR_RUN_ID="${2:-}"; shift 2 ;;
+    --marker-seg)      MARKER_SEG="${2:-}"; shift 2 ;;
+    --marker-b-at)     MARKER_B_AT="${2:-}"; shift 2 ;;
     --record)          DO_RECORD=true; shift ;;
     --keep-on-failure) KEEP_ON_FAILURE=true; shift ;;
     --allow-missing-app-smoke) ALLOW_MISSING_APP_SMOKE=true; shift ;;
@@ -197,14 +226,53 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# The run id is interpolated into a SQL string literal that crosses as_drill's
+# build_cmd and a far-side `sh -c`. Constrain it to the shape the marker
+# procedure actually emits (F4-FCR-002A-20260815-01) rather than trusting the
+# caller — the same discipline --target and --stanza already apply.
+if [[ -n "$PITR_RUN_ID" ]] && [[ ! "$PITR_RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]]; then
+  echo "Invalid --pitr-run-id '$PITR_RUN_ID' (expected [A-Za-z0-9._-], max 64)" >&2
+  exit "$USAGE_ERROR_EXIT_CODE"
+fi
+if [[ -n "$MARKER_SEG" ]] && [[ ! "$MARKER_SEG" =~ ^[0-9A-F]{24}$ ]]; then
+  echo "Invalid --marker-seg '$MARKER_SEG' (expected a 24-hex-character WAL segment name)" >&2
+  exit "$USAGE_ERROR_EXIT_CODE"
+fi
+if [[ -n "$MARKER_B_AT" ]] && [[ ! "$MARKER_B_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}[\ T][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?([+-][0-9]{2}(:?[0-9]{2})?|Z)?$ ]]; then
+  echo "Invalid --marker-b-at '$MARKER_B_AT' (expected 'YYYY-MM-DD HH:MM:SS[.ffffff][+TZ]')" >&2
+  exit "$USAGE_ERROR_EXIT_CODE"
+fi
+if [[ -n "$PITR_RUN_ID" ]] && [[ -z "$TARGET_TS" ]]; then
+  echo "--pitr-run-id requires --target: marker verification is meaningless without a recovery target" >&2
+  exit "$USAGE_ERROR_EXIT_CODE"
+fi
+
 [[ "$STANZA" =~ ^[a-z0-9][a-z0-9_]{0,31}$ ]] || { echo "Invalid --stanza" >&2; exit "$USAGE_ERROR_EXIT_CODE"; }
 [[ "$REPO_NUM" =~ ^[1-4]$ ]] || { echo "Invalid --repo '$REPO_NUM' (expected 1-4)" >&2; exit "$USAGE_ERROR_EXIT_CODE"; }
 [[ "$DRILL_PORT" =~ ^[0-9]+$ ]] && [[ "$DRILL_PORT" -ge 1024 ]] && [[ "$DRILL_PORT" -le 65535 ]] \
   || { echo "Invalid --port '$DRILL_PORT'" >&2; exit "$USAGE_ERROR_EXIT_CODE"; }
 # The target string is interpolated into a pgbackrest argument. Constrain it to
 # a timestamp shape instead of trusting the caller.
-if [[ -n "$TARGET_TS" ]] && [[ ! "$TARGET_TS" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}[\ T][0-9]{2}:[0-9]{2}:[0-9]{2}([+-][0-9]{2}(:?[0-9]{2})?|Z)?$ ]]; then
-  echo "Invalid --target '$TARGET_TS' (expected 'YYYY-MM-DD HH:MM:SS[+TZ]')" >&2
+#
+# Fractional seconds are accepted deliberately. The marker procedure derives the
+# target as the MIDPOINT of two createdAt values, which is fractional whenever
+# their difference is an odd number of seconds — 12:59:26.405500 in the first
+# real run. Rejecting it would have failed the drill at argument parsing, and
+# rounding it away would move the stop point by up to a second in whichever
+# direction the operator happened to round. PostgreSQL accepts fractional
+# recovery_target_time, so it is passed through unchanged.
+if [[ -n "$TARGET_TS" ]] && [[ ! "$TARGET_TS" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}[\ T][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?([+-][0-9]{2}(:?[0-9]{2})?|Z)?$ ]]; then
+  echo "Invalid --target '$TARGET_TS' (expected 'YYYY-MM-DD HH:MM:SS[.ffffff][+TZ]')" >&2
+  exit "$USAGE_ERROR_EXIT_CODE"
+fi
+# A bare --target carries no offset, so PostgreSQL resolves recovery_target_time
+# in the DRILL cluster's timezone while the marker timestamps it is compared
+# against come from PRODUCTION. When those two zones differ the run does not
+# error — it stops hours away from where it was told to, silently. The offset is
+# therefore mandatory for a verified run, and optional only for an unverified
+# triage restore that claims no R-031/R-032 evidence.
+if [[ -n "$PITR_RUN_ID" ]] && [[ ! "$TARGET_TS" =~ ([+-][0-9]{2}(:?[0-9]{2})?|Z)$ ]]; then
+  echo "--pitr-run-id requires an explicit UTC offset on --target (e.g. '2026-08-15 12:59:26.405500+00'), got '$TARGET_TS': a bare target is resolved in the drill cluster's timezone, not production's" >&2
   exit "$USAGE_ERROR_EXIT_CODE"
 fi
 # pgBackRest labels are `<full>` for a full, and `<full>_<stamp><D|I>` for a
@@ -234,6 +302,11 @@ MIN_FREE_RAM_MB="${NORAMEDI_PITR_DRILL_MIN_FREE_RAM_MB:-2048}"
 SHM_MARGIN_PCT="${NORAMEDI_PITR_DRILL_SHM_MARGIN_PCT:-20}"
 WAL_ALLOWANCE_MB="${NORAMEDI_PITR_DRILL_WAL_ALLOWANCE_MB:-1024}"
 ASSUMED_DB_MB="${NORAMEDI_PITR_DRILL_ASSUMED_DB_MB:-2048}"
+# Sentinel tenant used by the controlled PITR marker procedure. It is a literal
+# that belongs to no organization: OperationalEvent.organizationId carries no
+# foreign key, so the marker rows are attached to no clinic and no patient.
+PITR_MARKER_ORG="${NORAMEDI_PITR_MARKER_ORG:-__noramedi_pitr_drill__}"
+PITR_MARKER_TASK="${NORAMEDI_PITR_MARKER_TASK:-F4-FCR-002A}"
 
 for _n in RPO_MAX_MINUTES RTO_MAX_SECONDS MIN_FREE_RAM_MB SHM_MARGIN_PCT WAL_ALLOWANCE_MB ASSUMED_DB_MB; do
   if [[ ! "${!_n}" =~ ^[0-9]+$ ]]; then
@@ -823,6 +896,88 @@ RESULT="passed"
 [[ "$ORPHAN_APPTS" == "0" ]]                                           || { fail "referential integrity broken: $ORPHAN_APPTS appointments without a patient"; RESULT="failed"; }
 [[ "$IN_RECOVERY" == "f" ]]                                            || { fail "cluster is still in recovery — the target was not reached"; RESULT="failed"; }
 
+# ── deterministic PITR stop-point verification ───────────────────────────
+#
+# Everything above proves a cluster STARTED. None of it proves recovery
+# stopped where it was told to: a replay that ignored recovery_target_time and
+# ran to the end of the WAL produces exactly the same tables, migrations and
+# counts. Without this stage a --target run could report `passed` while having
+# silently recovered to `latest`, which is not R-031 evidence.
+#
+# The proof is a controlled marker pair written to production BEFORE the
+# restore (see the F4-FCR-002A runbook): marker A committed before the target,
+# marker B after it. A correct stop yields A present and B absent. Overshoot
+# shows B; undershoot loses A. Both markers are non-clinical rows on a
+# sentinel organizationId, and only COUNTS are read here — never row content.
+PITR_VERIFY_STATUS="not_applicable"
+PITR_MARKER_A_COUNT=""
+PITR_MARKER_B_COUNT=""
+PITR_MARKER_A_AT=""
+PITR_REPLAY_EPOCH=""
+PITR_TARGET_EPOCH=""
+
+pitr_marker_count() {
+  q "SELECT count(*) FROM \"OperationalEvent\" WHERE \"organizationId\"='${PITR_MARKER_ORG}' AND \"metadata\"->>'task'='${PITR_MARKER_TASK}' AND \"metadata\"->>'runId'='${PITR_RUN_ID}' AND \"metadata\"->>'marker'='${1}';"
+}
+
+if [[ -n "$TARGET_TS" ]] && [[ -z "$PITR_RUN_ID" ]]; then
+  # Fail closed, but do not fail the drill: a targeted run without a marker id
+  # is a legitimate triage restore. It simply cannot claim a verified stop
+  # point, so R-032 eligibility is withheld below.
+  PITR_VERIFY_STATUS="not_verified"
+  log "WARNING: --target was given without --pitr-run-id — the recovery stop point is NOT verified; this run cannot be R-031/R-032 evidence"
+elif [[ -n "$PITR_RUN_ID" ]]; then
+  PITR_MARKER_A_COUNT="$(pitr_marker_count A)"
+  PITR_MARKER_B_COUNT="$(pitr_marker_count B)"
+  # TIMEZONE RULE FOR THIS COLUMN — read this before changing the query below.
+  #
+  # OperationalEvent.createdAt is `timestamp without time zone`, so the value
+  # carries no offset of its own and the naive reading is ambiguous. It is NOT
+  # ambiguous in practice: the application writes it through Prisma, which
+  # serialises to UTC, so the stored wall clock IS UTC regardless of the
+  # server's or the session's TimeZone. Established empirically against
+  # production on 2026-08-15 — session TimeZone `Europe/Istanbul`, stored value
+  # 12:57:29.852, and only the UTC reading is consistent with the archive
+  # timings for that segment. The `+03` reading was rejected on that evidence.
+  #
+  # Consequences, both load-bearing:
+  #   1. The value is emitted with a literal `Z` — a LABEL of the zone it is
+  #      already in, not a shift. A conversion here would move it by the
+  #      server's offset and corrupt the record.
+  #   2. The `--target` derived from these markers must therefore carry `+00`.
+  #      That is enforced at argument parsing, not trusted.
+  PITR_MARKER_A_AT="$(q "SELECT to_char(max(\"createdAt\"),'YYYY-MM-DD') || 'T' || to_char(max(\"createdAt\"),'HH24:MI:SS.US') || 'Z' FROM \"OperationalEvent\" WHERE \"organizationId\"='${PITR_MARKER_ORG}' AND \"metadata\"->>'task'='${PITR_MARKER_TASK}' AND \"metadata\"->>'runId'='${PITR_RUN_ID}' AND \"metadata\"->>'marker'='A';")"
+
+  PITR_VERIFY_STATUS="passed"
+  if [[ "$PITR_MARKER_A_COUNT" != "1" ]]; then
+    fail "PITR verification: expected exactly 1 marker A row for runId '${PITR_RUN_ID}', found '${PITR_MARKER_A_COUNT:-<unreadable>}' — recovery undershot the target or the marker was never archived"
+    PITR_VERIFY_STATUS="failed"
+  fi
+  if [[ "$PITR_MARKER_B_COUNT" != "0" ]]; then
+    fail "PITR verification: expected 0 marker B rows for runId '${PITR_RUN_ID}', found '${PITR_MARKER_B_COUNT:-<unreadable>}' — recovery OVERSHOT the target, so recovery_target_time was not honoured"
+    PITR_VERIFY_STATUS="failed"
+  fi
+
+  # Independent second check. A marker pair alone cannot distinguish "stopped
+  # at the target" from "stopped somewhere between A and B for an unrelated
+  # reason"; the replay clock can. Both must agree.
+  PITR_REPLAY_EPOCH="$(date -u -d "${RECOVERY_POINT:-}" +%s 2>/dev/null || echo "")"
+  PITR_TARGET_EPOCH="$(date -u -d "${TARGET_TS}" +%s 2>/dev/null || echo "")"
+  if [[ ! "$PITR_REPLAY_EPOCH" =~ ^[0-9]+$ ]] || [[ ! "$PITR_TARGET_EPOCH" =~ ^[0-9]+$ ]]; then
+    fail "PITR verification: could not compare replay point '${RECOVERY_POINT:-<none>}' against target '${TARGET_TS}' — an unverifiable stop point is not a verified one"
+    PITR_VERIFY_STATUS="failed"
+  elif [[ "$PITR_REPLAY_EPOCH" -gt "$PITR_TARGET_EPOCH" ]]; then
+    fail "PITR verification: replay reached ${RECOVERY_POINT} which is AFTER the requested target ${TARGET_TS}"
+    PITR_VERIFY_STATUS="failed"
+  fi
+
+  if [[ "$PITR_VERIFY_STATUS" == "passed" ]]; then
+    log "PITR stop point VERIFIED for runId ${PITR_RUN_ID}: marker A=1, marker B=0, replay ${RECOVERY_POINT} <= target ${TARGET_TS}"
+  else
+    RESULT="failed"
+  fi
+fi
+
 T_DB_VERIFY_DONE="$(date -u +%s)"
 
 # ── migration-set comparison against the DEPLOYED RELEASE ────────────────
@@ -992,13 +1147,17 @@ fi
 # A run only counts as first-customer restore evidence if it actually
 # exercised the application and the tenant invariants against the restored
 # data, and stated both objectives as numbers.
+# A PITR run whose stop point was never verified is explicitly excluded: it
+# proves a restore, not a point-in-time recovery, and letting it through would
+# be the same class of error as accepting "pg_ctl start returned 0" as proof.
 R032_ELIGIBLE=false
 if [[ "$RESULT" == "passed" ]] \
    && [[ "$APP_SMOKE_STATUS" == "passed" ]] \
    && [[ "$TENANT_SMOKE_STATUS" == "passed" ]] \
    && [[ "$MIGRATION_COMPARE_DONE" == true ]] \
    && [[ "$RPO_WITHIN_TARGET" == true ]] \
-   && [[ "$RTO_WITHIN_TARGET" == true ]]; then
+   && [[ "$RTO_WITHIN_TARGET" == true ]] \
+   && [[ "$PITR_VERIFY_STATUS" == "passed" || "$PITR_VERIFY_STATUS" == "not_applicable" ]]; then
   R032_ELIGIBLE=true
 fi
 
@@ -1022,6 +1181,11 @@ if [[ -d "$RESULT_DIR" ]]; then
     R_T_RESTORE_DONE="$T_RESTORE_DONE" R_T_READY="$T_CONNECTIONS_READY" R_T_PROMOTED="$T_PROMOTED" \
     R_T_DBVERIFY="$T_DB_VERIFY_DONE" R_T_APP="${T_APP_SMOKE_DONE:-}" R_T_TENANT="${T_TENANT_SMOKE_DONE:-}" \
     R_REASON="${FAIL_REASON:-}" \
+    R_PITR_STATUS="$PITR_VERIFY_STATUS" R_PITR_RUNID="${PITR_RUN_ID:-}" \
+    R_PITR_A="${PITR_MARKER_A_COUNT:-}" R_PITR_B="${PITR_MARKER_B_COUNT:-}" \
+    R_PITR_A_AT="${PITR_MARKER_A_AT:-}" R_PITR_B_AT="${MARKER_B_AT:-}" \
+    R_PITR_SEG="${MARKER_SEG:-}" R_PITR_MARKER_ORG="$PITR_MARKER_ORG" \
+    R_PITR_MARKER_TASK="$PITR_MARKER_TASK" \
     node -e '
       const E = process.env;
       const uint = v => (typeof v === "string" && /^\d+$/.test(v)) ? Number(v) : undefined;
@@ -1060,6 +1224,33 @@ if [[ -d "$RESULT_DIR" ]]; then
       d.counts = { tables: uint(E.R_TABLES) ?? 0, migrations: uint(E.R_MIGRATIONS) ?? 0,
                    clinics: uint(E.R_CLINICS) ?? 0, patients: uint(E.R_PATIENTS) ?? 0,
                    appointments: uint(E.R_APPTS) ?? 0 };
+      // Durable PITR proof. Every field is a count, a timestamp, a WAL segment
+      // name or a sentinel literal — no tenant, patient or clinical value can
+      // reach this document. `verified` is the single boolean a reader should
+      // trust; the operands are recorded so the verdict can be re-derived
+      // without rerunning a drill that costs a full restore.
+      const p = { status: E.R_PITR_STATUS,
+                  verified: E.R_PITR_STATUS === "passed" };
+      put(p, "runId", E.R_PITR_RUNID);
+      put(p, "markerOrganizationId", E.R_PITR_MARKER_ORG);
+      put(p, "markerTask", E.R_PITR_MARKER_TASK);
+      if (E.R_PITR_STATUS === "passed" || E.R_PITR_STATUS === "failed") {
+        p.markerACount = uint(E.R_PITR_A) ?? null;
+        p.markerBCount = uint(E.R_PITR_B) ?? null;
+        p.expected = { markerACount: 1, markerBCount: 0 };
+      }
+      put(p, "markerAAt", E.R_PITR_A_AT);
+      put(p, "markerBAt", E.R_PITR_B_AT);
+      // Stated, not implied. OperationalEvent.createdAt is a naive column, so a
+      // future reader comparing markerAAt against recoveryTarget has no way to
+      // know which zone it is in — and guessing wrong shifts the comparison by
+      // whole hours. Recording the rule alongside the values is what stops that
+      // question from being re-litigated from an artifact nobody can re-run.
+      p.markerTimestampZone = "UTC";
+      put(p, "markerWalSegment", E.R_PITR_SEG);
+      put(p, "recoveryTarget", E.R_TARGET);
+      put(p, "replayedTo", E.R_POINT);
+      d.pitrVerification = p;
       // Bounded and shape-checked: a failure reason must never carry restore
       // stderr, which can embed row values (e.g. `Key (email)=(...)`).
       if (E.R_REASON) d.failureSummary = String(E.R_REASON).slice(0,160).replace(/[^\x20-\x7E]/g," ");

@@ -718,6 +718,81 @@ grep -q 'not writing the off-host proof marker: this run is not R-032 eligible' 
   || fail "--record is not gated on R-032 eligibility"
 
 # ════════════════════════════════════════════════════════════════════════
+section "Restore drill: deterministic PITR stop-point verification (R-031)"
+# Before this, the drill passed --target to pgbackrest and recorded
+# pg_last_xact_replay_timestamp(), but asserted nothing about where replay
+# actually stopped. A recovery that ignored recovery_target_time and ran to the
+# end of the WAL produced identical tables, migrations and counts — so the
+# drill would report `passed` over an unproven PITR.
+grep -q "PITR_MARKER_A_COUNT\" != \"1\"" "$DRILL" \
+  && pass "asserts exactly one marker A row (undershoot is caught)" \
+  || fail "no marker A assertion"
+grep -q "PITR_MARKER_B_COUNT\" != \"0\"" "$DRILL" \
+  && pass "asserts zero marker B rows (OVERSHOOT is caught)" \
+  || fail "no marker B assertion"
+grep -q 'recovery OVERSHOT the target, so recovery_target_time was not honoured' "$DRILL" \
+  && pass "names overshoot explicitly, so the failure is actionable" \
+  || fail "overshoot is not named"
+grep -q 'PITR_REPLAY_EPOCH" -gt "\$PITR_TARGET_EPOCH' "$DRILL" \
+  && pass "independently asserts replay point <= recovery target" \
+  || fail "no replay-vs-target comparison"
+grep -q 'an unverifiable stop point is not a verified one' "$DRILL" \
+  && pass "an unparseable replay/target pair FAILS closed rather than passing silently" \
+  || fail "the comparison can fail open"
+grep -q 'PITR_VERIFY_STATUS" == "passed" || "\$PITR_VERIFY_STATUS" == "not_applicable"' "$DRILL" \
+  && pass "r032Eligible additionally requires a verified (or not-applicable) PITR stop point" \
+  || fail "R-032 eligibility ignores PITR verification"
+grep -q 'the recovery stop point is NOT verified' "$DRILL" \
+  && pass "a --target run without --pitr-run-id is marked not_verified instead of silently trusted" \
+  || fail "an unverified targeted run is indistinguishable from a verified one"
+grep -q 'd.pitrVerification = p;' "$DRILL" \
+  && pass "the durable result artifact carries the PITR verification block" \
+  || fail "PITR evidence is not written to the result document"
+for _f in markerACount markerBCount markerWalSegment markerAAt markerBAt; do
+  grep -q "$_f" "$DRILL" \
+    && pass "result artifact records ${_f}" \
+    || fail "result artifact is missing ${_f}"
+done
+# Deliberately NOT a bare `runId` grep: the result document already carries the
+# drill's own runId, so that pattern matches the pre-change script and proves
+# nothing. Only the PITR block's own runId is evidence of this feature.
+grep -q 'put(p, "runId", E.R_PITR_RUNID)' "$DRILL" \
+  && pass "result artifact records the PITR marker runId (distinct from the drill's own runId)" \
+  || fail "the PITR verification block does not record its marker runId"
+# Written as an explicit presence check FIRST. The obvious form —
+# `grep -q 'AT TIME ZONE' <<<"$(...)" && fail || pass` — passes vacuously when
+# the PITR block does not exist at all, i.e. it would have gone green against
+# the very version this section was written to catch.
+_PITR_BLOCK="$(sed -n '/deterministic PITR stop-point/,/^T_DB_VERIFY_DONE/p' "$DRILL")"
+if ! grep -q 'PITR_MARKER_A_AT=' <<<"$_PITR_BLOCK"; then
+  fail "the marker-A timestamp query is missing from the PITR verification block"
+elif grep 'createdAt' <<<"$_PITR_BLOCK" | grep -q 'AT TIME ZONE'; then
+  fail "marker timestamps are silently converted to a timezone the script cannot know"
+else
+  pass "marker timestamps are recorded verbatim, with no assumed timezone conversion"
+fi
+# The naive column is UTC — established against production, not assumed. The
+# value must therefore be LABELLED `Z`, never shifted: an unlabelled timestamp
+# in the artifact is what let a +03 reading be derived and accepted once
+# already, and that target was three hours from where it was meant to be.
+if ! grep -q 'PITR_MARKER_A_AT=' <<<"$_PITR_BLOCK"; then
+  fail "the marker-A timestamp query is missing, so its zone labelling cannot be checked"
+elif grep -q "|| 'Z' FROM" <<<"$_PITR_BLOCK"; then
+  pass "the marker-A timestamp is emitted with an explicit Z, so the artifact is unambiguous"
+else
+  fail "the marker-A timestamp is emitted with no zone label — a future reader cannot tell UTC from local"
+fi
+grep -q 'TIMEZONE RULE FOR THIS COLUMN' "$DRILL" \
+  && pass "the createdAt timezone rule is stated in the script, not left to be re-derived" \
+  || fail "the timezone rule is undocumented, so the next drill can repeat the +03 mistake"
+grep -q 'p.markerTimestampZone = "UTC"' "$DRILL" \
+  && pass "the result artifact states the zone of its own marker timestamps" \
+  || fail "the artifact records marker timestamps without saying what zone they are in"
+grep -q 'explicit UTC offset on --target' "$DRILL" \
+  && pass "a verified run refuses a --target with no explicit offset" \
+  || fail "a bare --target can still be paired with marker verification"
+
+# ════════════════════════════════════════════════════════════════════════
 # Behavioural: the preconditions actually fire, and they fire BEFORE the
 # restore. Static greps cannot distinguish "checked" from "checked too late".
 # ════════════════════════════════════════════════════════════════════════
@@ -925,6 +1000,43 @@ EXTRA_ENV=(); run bash "$PREFLIGHT" --stanza "BAD NAME"
 [[ "$CODE" -eq 2 ]] && pass "an invalid stanza name exits 2" || fail "expected exit 2, got $CODE"
 EXTRA_ENV=(NORAMEDI_PGBACKREST_MIN_FREE_MB=nope); run bash "$PREFLIGHT"
 [[ "$CODE" -eq 2 ]] && pass "a malformed free-space floor exits 2 (fail closed)" || fail "expected exit 2, got $CODE"
+
+# ════════════════════════════════════════════════════════════════════════
+section "Restore drill (behaviour): PITR marker CLI validation fails closed"
+# These all abort during argument validation, before any precondition and long
+# before anything is restored — so they are safe to run with no fake cluster.
+EXTRA_ENV=(); run bash "$DRILL" --pitr-run-id F4-FCR-002A-20260815-01
+[[ "$CODE" -eq 2 ]] && pass "--pitr-run-id without --target exits 2 (verification without a target is meaningless)" || fail "expected exit 2, got $CODE ($OUT)"
+
+EXTRA_ENV=(); run bash "$DRILL" --target '2026-08-15 12:59:26+00' --pitr-run-id 'bad id; DROP'
+[[ "$CODE" -eq 2 ]] && pass "a run id outside [A-Za-z0-9._-] exits 2 (it is interpolated into SQL)" || fail "expected exit 2, got $CODE ($OUT)"
+
+EXTRA_ENV=(); run bash "$DRILL" --target '2026-08-15 12:59:26+00' --pitr-run-id ok --marker-seg 'not-a-segment'
+[[ "$CODE" -eq 2 ]] && pass "a malformed WAL segment name exits 2" || fail "expected exit 2, got $CODE ($OUT)"
+
+EXTRA_ENV=(); run bash "$DRILL" --target '2026-08-15 12:59:26+00' --pitr-run-id ok --marker-b-at 'yesterday'
+[[ "$CODE" -eq 2 ]] && pass "a malformed marker-B timestamp exits 2" || fail "expected exit 2, got $CODE ($OUT)"
+
+# A bare target is resolved in the DRILL cluster's timezone while the markers it
+# is compared against were written in production's. The run does not error — it
+# stops in the wrong place. Rejected at parse time for verified runs only.
+EXTRA_ENV=(); run bash "$DRILL" --target '2026-08-15 12:59:26' --pitr-run-id F4-FCR-002A-20260815-01
+[[ "$CODE" -eq 2 ]] && pass "a --target with no UTC offset exits 2 when verification is requested" || fail "expected exit 2, got $CODE ($OUT)"
+[[ "$OUT" == *"explicit UTC offset"* ]] && pass "the offset refusal says what is wrong and shows the expected shape" || fail "unhelpful offset error ($OUT)"
+
+# The same run WITHOUT --pitr-run-id must still be allowed: an unverified triage
+# restore is legitimate, it simply claims no R-031/R-032 evidence. If the offset
+# rule leaked into the general path it would break ordinary recovery work.
+EXTRA_ENV=(); run bash "$DRILL" --target '2026-08-15 12:59:26'
+[[ "$OUT" != *"explicit UTC offset"* ]] && pass "a bare target is still permitted for an unverified triage restore" || fail "the offset requirement leaked outside verified runs ($OUT)"
+
+# The marker procedure derives the target as the midpoint of two createdAt
+# values, so fractional seconds are the normal case, not an edge case — the
+# first real run produced 12:59:26.405500+00. An argument validator that
+# rejected it would have failed the drill before pgbackrest was ever called.
+EXTRA_ENV=(); run bash "$DRILL" --target '2026-08-15 12:59:26.405500+00' --pitr-run-id F4-FCR-002A-20260815-01
+[[ "$CODE" -ne 2 ]] && pass "a fractional-second target with an explicit offset is accepted" || fail "the real derived target was rejected at argument validation ($OUT)"
+[[ "$OUT" != *"Invalid --target"* ]] && pass "no spurious --target rejection for microsecond precision" || fail "microseconds are rejected ($OUT)"
 
 # ════════════════════════════════════════════════════════════════════════
 section "Summary"
