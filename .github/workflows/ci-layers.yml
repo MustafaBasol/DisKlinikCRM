@@ -225,6 +225,13 @@ jobs:
         run: npm run test:runtime:unit
       - name: Docker-free Layer 4 storage-gate regression tests
         run: npm run test:runtime:storage-gate
+      # F4-CI-L4-STORAGE-GATE-001-R1. Gates the MinIO readiness path that
+      # drained the event loop on PR #423 (run 31893589449, job 95040001240).
+      # Runs here, in Layer 1, on purpose: it is Docker-free and it is a
+      # `needs:` of Layer 4, so a regression is caught before a disposable
+      # runtime is ever provisioned.
+      - name: Docker-free MinIO readiness boundedness regression tests
+        run: npm run test:runtime:minio-readiness
       - name: Typecheck scripts/ci-classify
         run: npm run typecheck:ci-classify
       - name: Changed-path classifier unit tests

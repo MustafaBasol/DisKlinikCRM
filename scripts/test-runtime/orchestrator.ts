@@ -63,6 +63,7 @@ import { provisionPostgres, waitForPostgresReady, POSTGRES_IMAGE, type PostgresI
 import {
   provisionMinio,
   selectReadyMinioEndpoint,
+  DEFAULT_PROBE_ATTEMPT_TIMEOUT_MS as MINIO_PROBE_ATTEMPT_TIMEOUT_MS,
   MINIO_IMAGE_REF,
   type MinioInstance,
   type MinioEndpointCandidate,
@@ -427,7 +428,18 @@ async function runDisposableProfile(opts: RunOptions): Promise<RunSummary> {
       }
 
       logStage('storage:minio-readiness');
-      const selected = await selectReadyMinioEndpoint({ candidates, timeoutMs: readinessTimeout });
+      // F4-CI-L4-STORAGE-GATE-001-R1: the per-attempt ceiling is stated HERE,
+      // at the call site, because it is the property that makes this stage
+      // survivable. Before it existed, one dropped `fetch()` against the
+      // freshly-published MinIO port parked this await forever and drained the
+      // event loop 42ms into the stage (run 31893589449, job 95040001240) —
+      // no migrations, no tests, no summary. Every attempt is now bounded, so
+      // a stalled probe costs one retry instead of the whole run.
+      const selected = await selectReadyMinioEndpoint({
+        candidates,
+        timeoutMs: readinessTimeout,
+        attemptTimeoutMs: Math.max(1, Math.min(MINIO_PROBE_ATTEMPT_TIMEOUT_MS, readinessTimeout)),
+      });
       minio = { ...minio, endpoint: selected.endpoint, addressMode: selected.mode };
       const selectedUrl = new URL(selected.endpoint);
       minioSummary = {
