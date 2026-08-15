@@ -1,6 +1,6 @@
 # F4 — Storage and Backup Foundation
 
-Faz durumu: `TODO` · Son güncelleme: 2026-08-15 (F4-FCR-002A-R4 — iki tatbikat çalıştırıldı, **ikisi de `FAIL`**; ikincisi yalnızca uygulama smoke'unda)
+Faz durumu: `TODO` · Son güncelleme: 2026-08-15 (F4-FCR-002A-CLOSE — kontrollü üretim PITR tatbikatı **`PASS`**; `R-031`/`R-032` `CLOSED`, **`R-030` `OPEN`**, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`)
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
 
@@ -276,6 +276,80 @@ belgesinde `pitrVerification.verified = true` **ile birlikte**
 `smoke.application = passed` bulunması hâlinde kapanabilir. Bu görev o
 yeniden çalıştırmayı **yapmamıştır**.
 
+> **[2026-08-15, F4-FCR-002A-CLOSE — o yeniden çalıştırma artık mevcuttur.]**
+> Yukarıdaki koşul karşılandı ve `R-031`/`R-032` **`CLOSED`** oldu; bkz. bu
+> dosyadaki `F4-FCR-002A-CLOSE` bölümü. **`R-030` `OPEN` kalır** ve
+> `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. Bu bölümün metni, iki
+> başarısız tatbikatın tarihli kaydı olarak **düzeltilmeden** bırakılmıştır.
+
+## F4-FCR-002A-CLOSE — Kontrollü üretim PITR tatbikatı `PASS`; beş yetenek ayrı ayrı
+
+`F4-FCR-002A_STATUS = PRODUCTION_VERIFIED` · `R032_ELIGIBLE = true` · **`RESULT = PASS`**
+`MERGED = YES` (PR #427) / `DEPLOYED = YES` / `PRODUCTION_VERIFIED = YES`
+Üretim sürümü / araç commit'i: `309351885c1389c53d40e4b15e630264dc54954f` · PostgreSQL 16.14
+
+> **Bu bölüm bir başarıyı kaydeder — ve onun sınırını.** Beşinci denemede
+> kontrollü üretim PITR tatbikatı uçtan uca geçti, durma noktası doğrulandı,
+> geri yüklenen veritabanı **üretimin fiilen çalıştırdığı kodla** kullanıldı ve
+> temizlik doğrulandı. `R-031` ve `R-032` **`CLOSED`**. **`R-030` `OPEN`
+> kalır** ve `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` — kurtarma deposu
+> hâlâ `repo1`, **YEREL**, veritabanı birincilinin arıza alanının **içinde**.
+> Önceki dört başarısız tatbikat silinmemiştir; bu bölüm onların üzerine yazar,
+> yerlerine geçmez.
+
+### Beş yetenek — tek bir "yedekleme çözüldü" cümlesine indirgenmez
+
+| Yetenek | Durum | Kanıt / neden |
+|---|---|---|
+| **PITR yeteneği** (WAL arşivleme, keyfî bir zamana kurtarma) | **KANITLANDI** | `archive_mode=on`, marker WAL `00000001000000000000008C` arşivlendi; kurtarma iki marker'ın **arasında** durdu: marker A = 1, marker B = 0, kurtarma noktası `2026-08-15T21:26:00Z`, hedef `2026-08-15 21:26:35.026000+00`. → `R-031` `CLOSED` |
+| **Restore / uygulama kullanılabilirliği** | **KANITLANDI** | Tatbikat `0` ile çıktı; `pitrVerification.verified = true` **ve** `smoke.application = passed`; migration kümesi 74/74 (`missing=0`, `ahead=0`, unfinished `0`, rolled back `0`), 106 public tablo. → `R-032` `CLOSED` |
+| **Kiracı (tenant) izolasyonu doğrulaması** | **KANITLANDI (bu koşu için)** | Klinikler arası randevu `0`, yetim klinik referansı `0`, yetim randevu `0`, RLS politikası `0` (beklenen `0`). Bu, geri yüklenen veri üzerinde bir **invariant kontrolüdür**; uygulama katmanı kiracı izolasyonunun genel kanıtı değildir (bkz. `R-001`, `R-054`/`R-055` — dokunulmadı). |
+| **RPO / RTO** | **HEDEF İÇİNDE (ölçüldü)** | Efektif RPO **5 dk** ≤ 60 dk; ölçülen RTO **7 sn** ≤ 14400 sn. Bunlar **tek bir kontrollü tatbikatın** ölçümleridir — bir hizmet seviyesi taahhüdü değil, bir kapasite kanıtıdır. |
+| **Saha dışı (off-host) dayanıklılık** | **KANITLANMADI** | Tatbikat `repo1`'den geri yükledi; `repo1` **YEREL**'dir. Tatbikat `repo < 2`'den saha dışı kanıt marker'ı yazmayı **reddeder** ve yazmamıştır. İkincil Türkiye VPS'i **tedarik edilmemiştir**; runbook §16.2'nin yedi ön koşulu **karşılanmamıştır**. → `R-030` **`OPEN`** |
+
+**Şifreleme dayanıklılık değildir.** `repo1` üzerindeki AES-256-CBC yedeğin
+**gizliliğini** korur; host kaybına karşı **dayanıklılık** sağlamaz. Bu bölümün
+hiçbir cümlesi bağımsız arıza alanı kanıtı olarak alıntılanamaz.
+
+### Geçen koşu — kanıt değerleri
+
+| Alan | Değer |
+|---|---|
+| Tatbikat `run_id` | `20260815-213109-709154` |
+| Yedek | `20260815-224355F` |
+| Marker `runId` | `F4-FCR-002A-20260815-03` |
+| Marker A / B | `2026-08-15T21:25:33.447Z` / `2026-08-15T21:27:36.605Z` (**UTC**) |
+| Hedef | `2026-08-15 21:26:35.026000+00` |
+| Marker WAL | `00000001000000000000008C` |
+| Aşama süreleri | restore `1 sn`, bağlantılar `2 sn`, promotion `4 sn`, DB doğrulaması `5 sn`, uygulama smoke `7 sn`, tenant smoke `7 sn` |
+| Temizlik | `PASS` — küme kapatıldı, `/dev/shm/noramedi-pitr-drill-20260815-213109-709154` silindi, silinme **doğrulandı** |
+| Sonuç | **`PASS`**, `R032_eligible = true` |
+
+### Beşinci denemede — önceki dördü geçersiz kılınmaz
+
+| # | Sonuç | Neden |
+|---|---|---|
+| 1 | `FAIL` | Bayat girdi — migration 73/74, RPO 385 dk |
+| 2 | `FAIL` | Yalnızca uygulama smoke'u — Prisma 7 constructor sözleşmesi |
+| 3 | `FAIL` | **RPO.** R4 dağıtıldıktan sonra uygulama smoke'u geçti; yeniden kullanılan marker hedefi **96 dakika** yaşlanmıştı ve 60 dk hedefini aştı. |
+| 4 | `FAIL` | **Sentinel organizasyon uyuşmazlığı.** Taze marker çifti yazıldı, fakat operatör marker yardımcısı satırları tatbikatın sorguladığından **farklı** bir `organizationId` altında yazmıştı. Kurtarmada hata yoktu; doğrulayıcı yanlış yere bakıyordu. |
+
+Üçüncü tatbikat, marker çiftinin **her deneme için yeniden** üretilmesi
+gerektiğinin nedenidir: yeniden kullanım koşuyu ucuzlatır, yaşlanma
+başarısız kılar. Dördüncüsünün operasyonel dersi ve **kasıtlı olarak
+normalize edilmemiş** sentinel farkı runbook §21.7'de kayıtlıdır — tatbikatın
+varsayılanı `__noramedi_pitr_drill__`, geçen koşu ise
+`NORAMEDI_PITR_MARKER_ORG=noramedi-f4-pitr-sentinel` kullanmıştır. Bu görev
+**hiçbir çalışma zamanı betiğini değiştirmemiştir**.
+
+### Bu bölümün KAPATMADIĞI
+
+`R-030` `OPEN`. `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. F4 fazı
+`TODO` — geçen bir kurtarma tatbikatı, faz çıkış kapısı değildir ve bu görev
+faz durumunu değiştirmez. Off-host aktivasyonu; tedarik, DPA, E1–E5 yerleşim
+kanıtı ve subprocessor register güncellemelerine bağlıdır (runbook §16.2) ve
+`R-030`'un iki yarıya bölünmesi (§16.1) hâlâ program sahibinin kararıdır.
+
 ## F4-FCR-002 — pgBackRest / PITR / Off-Host Kurtarma Temeli
 
 `F4-FCR-002_STATUS = AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
@@ -498,3 +572,4 @@ Imaging (DICOM/CBCT) ölçeklenmeden önce object storage zorunludur (PROGRAM DI
 | 2026-08-15 | F4-FCR-002 | pgBackRest/PITR/off-host kurtarma temeli **depo tarafında** kuruldu: şifreli yerel repo şablonu, additive PostgreSQL drop-in, operatör preflight (belirsiz durumda reddeder, PostgreSQL'i asla yeniden başlatmaz), disk-tükenmesi abort koşulu, ayrı systemd timer'lı PITR durum yazıcısı, opscheck `pitr` kontrolü (bit **128** — hiçbir mevcut çıkış kodu taşınmadı; opt-in), tek kullanımlık RAM-destekli kümede PITR restore tatbikatı, **üç durumlu** off-host raporlaması ve Platform Admin paneli. Yol boyunca iki kusur düzeltildi: `redactBackupLogLine()` pgBackRest depo parolasını **hiç** redakte etmiyordu ve `scripts/` altındaki kabuk betiklerinin **hiçbir** otomatik koruması yoktu (artık `npm run test:shell`, CI Layer 1). **Üretimde hiçbir mutasyon yok**; `archive_mode` `off` kalır; mevcut 03:15 `pg_dump` zinciri değiştirilmedi; dar kapsamlı dondurma istisnası **TASLAK — VERİLMEDİ** *(**[2026-08-15, F4-FCR-002A tarafından GEÇERSİZ KILINDI]** — istisna aynı gün, bu satır yazıldıktan sonra verilmiştir: `AUTHORIZED_BY_PROGRAM_OWNER_2026-08-15`, bkz. bu dosyadaki F4-FCR-002 bölümünün `F4-FCR-002_SCOPED_FREEZE_EXCEPTION` anahtar satırı ve altındaki "istisnanın kaydı" bloğu ile `NORAMEDI_MASTER_TRACKER.md` §5.1. Özgün ifade tarihsel kayıt olarak korunmuştur.)*. Faz durumu `TODO` olarak **değişmedi**; R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
 | 2026-08-15 | F4-FCR-002A | İzole restore/PITR tatbikatı **yalnızca ön kontrol (PRE-FLIGHT)**; **restore ÇALIŞTIRILMADI**. Canlı üretim kanıtına karşı 27 bölümlük GO/NO-GO raporu üretildi; sonuç **`PREFLIGHT_DECISION = NO_GO`** — güvenlik tasarımı nedeniyle değil, hazırlık eksikleri nedeniyle. Geçen kapılar: `DISK_CAPACITY_GATE = PASS`, `PG_VERSION_COMPATIBILITY_GATE = PASS` (PostgreSQL 16.14), `MIGRATION_COMPATIBILITY_GATE = PASS` (dağıtılmış 73 = DB 73; `origin/main` 74 ile bir sürüm önde, bu beklenen deploy gecikmesidir), `TENANT_ISOLATION_SMOKE_GATE = PLANNED_SAFE`, `PITR_MARKER_GATE = PLANNED_SAFE`, `MARKER_ARCHIVE_GATE = PASS`. **Uygulama smoke Stage B = BLOCKED**: `RUN_BACKGROUND_JOBS` yalnızca API sürecini devre dışı bırakır, worker onu hiç okumaz (`backgroundJobsOwnership.ts:65-70`), mesajlaşma kimlik bilgileri veritabanı satırlarındadır ve `withJobLock` geri yüklenen veritabanının kendi kilitlerine yazar — gerçek hastalara çift gönderim riski. Güvenli yol Stage A (yalnızca SQL invariant'ları) + `noramedi-pitr-app-smoke.mjs`'dir; bu yardımcı uygulamayı hiç başlatmaz. Depoda **en küçük eklemeli düzeltme** yapıldı: tatbikata deterministik **PITR durma noktası doğrulaması** eklendi (marker A = 1, marker B = 0, replay ≤ hedef, fail-closed, R-032 uygunluğu buna bağlandı, kanıt kalıcı sonuç belgesine yazılıyor) + 19 yeni kabuk testi. Üretime **onaylı, klinik olmayan** bir marker çifti yazıldı (`runId = F4-FCR-002A-20260815-01`, hiçbir kiracıya ait olmayan sentinel `organizationId`, uygulamanın kendi `recordOperationalEvent()` servisi üzerinden); WAL'ı arşivlendiği doğrulandı (`000000010000000000000020`, `failed_count = 0`, `.ready = 0`). Marker zaman damgalarının **UTC** olduğu üretim kanıtıyla saptandı; bu koşunun hedefi **`2026-08-15 12:59:26.405500+00`**'dır ve önceki `+03` hedefi reddedilmiştir — kural artık hem tatbikatta zorlanır (`--pitr-run-id` ile ofsetsiz `--target` reddedilir) hem de sonuç belgesine `markerTimestampZone` olarak yazılır. Dondurma istisnası çelişkisi §5.1'de **yalnızca yönetişim kayıtlarına dayanarak** çözüldü; üretimin fiilî aktivasyon durumu yetki kanıtı olarak **kullanılmadı**. **Faz durumu `TODO` olarak değişmedi**; **F4-FCR-002A KAPANMADI** (`IN_PROGRESS`); R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
 | 2026-08-15 | F4-FCR-002A-R4 | **İki tatbikat çalıştırıldı; ikisi de `FAIL`.** Birinci tatbikat bayat girdiyle kapandı (migration kümesi **73/74**, **RPO = 385 dk**); taze bir tam yedek alındı (`20260815-224355F`). İkinci tatbikat (`runId = F4-FCR-002A-20260815-02`) **PITR durma noktasını** (marker A = 1, marker B = 0, hedef `2026-08-15 19:46:39.550000+00`, replay `2026-08-15T19:46:00Z`), **74/74 migration**'ı (`missing=0`, `ahead=0`), **tenant izolasyonunu** (klinikler arası randevu = 0, yetim klinik referansı = 0), **RPO = 3 dk ≤ 60 dk**, **RTO = 5 sn ≤ 14400 sn** ve **temizliği** geçirdi — ve **yalnızca uygulama smoke'unda** kapandı: `Unknown property datasources provided to PrismaClient constructor`. Kök neden: `scripts/noramedi-pitr-app-smoke.mjs` istemciyi `datasourceUrl`/`datasources` ile kuruyordu, oysa dağıtılmış çalışma zamanı (`server/src/db.ts:15-22`, `@prisma/client` + `@prisma/adapter-pg` **7.9.1**) Prisma 7 **sürücü adaptörü** kullanır; ayrıca boş bir `catch (_)` ilk (gerçek) hatayı yutup yalnızca ikinci denemenin mesajını raporluyordu. **Düzeltme (yalnızca depo):** yardımcı artık dağıtılmış istemcinin **sürümünü okuyup** yolu seçer — major ≥ 7 ise `@prisma/adapter-pg`'yi de dağıtılmış dizinden yükleyip `new PrismaClient({ adapter: new PrismaPg({ connectionString, max: 1, ... }) })` kurar, major < 7 ise `datasourceUrl` kullanır, sürüm okunamazsa veya adaptör eksikse **fail-closed** olur; tatbikat betiği adaptörü artık **restore'dan önce** ön kontrol eder. `server/src/db.ts` içe aktarılmaz (üretim `DATABASE_URL`'ini çözerdi); bağlantı yalnızca tatbikat unix socket'ine, parolasızdır, havuz `max: 1`'dir; socket güvenlik kontrolleri, tipli delege probe'ları ve `current_setting('port')` kanıtı korunmuştur. Kusuru hiçbir testin yakalamamış olmasının nedeni, mevcut süitteki tüm smoke vakalarının **kurulumdan önce** düşmesiydi; yeni `scripts/noramedi-pitr-app-smoke.test.sh` sahte bir dağıtılmış sürüm dizini ile gerçek kurulum yolunu sürer (**50/50 geçer**; düzeltme öncesi yardımcıya karşı **22 assertion başarısız** olur ve üretim hatasının tam metnini üretir) ve CI Layer 1'de `npm run test:shell` ile koşar. **Şema/migration YOK, üretim mutasyonu YOK, tatbikat yeniden çalıştırılmadı.** Faz durumu `TODO` olarak **değişmedi**; **F4-FCR-002A KAPANMADI**; `R032_ELIGIBLE = false`; R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
+| 2026-08-15 | F4-FCR-002A-CLOSE | **Kontrollü üretim PITR tatbikatı `PASS` — beşinci denemede.** Üretim sürümü `309351885c1389c53d40e4b15e630264dc54954f` (PR #427 merge commit, dağıtıldı), yedek `20260815-224355F`, marker `runId = F4-FCR-002A-20260815-03` (A `2026-08-15T21:25:33.447Z`, B `2026-08-15T21:27:36.605Z`, UTC), hedef `2026-08-15 21:26:35.026000+00`, marker WAL `00000001000000000000008C`, tatbikat `run_id = 20260815-213109-709154`. **PITR durma noktası VERIFIED** (marker A = 1, marker B = 0, kurtarma noktası `2026-08-15T21:26:00Z`); migration **74/74** (`missing=0`, `ahead=0`); 106 public tablo; **uygulama smoke `passed`**; **tenant izolasyon smoke `passed`** (klinikler arası randevu 0, yetim klinik referansı 0, yetim randevu 0, RLS 0/0); **RPO 5 dk ≤ 60 dk**; **RTO 7 sn ≤ 14400 sn**; **temizlik doğrulandı** (`/dev/shm/noramedi-pitr-drill-20260815-213109-709154` silindi). `RESULT = PASS`, `R032_eligible = true`. **`R-031` → `CLOSED`, `R-032` → `CLOSED`** (her ikisi de kendi yazılı kriterleri üzerinden; runbook §21.5/§21.6). **`R-030` `OPEN` kalır** — kurtarma `repo1`'den yapıldı, `repo1` **YEREL**'dir ve veritabanı birincilinin arıza alanının içindedir; tatbikat `repo < 2`'den saha dışı kanıt yazmayı reddetti ve yazmadı; şifreleme dayanıklılık değildir. **`FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`** (blokaj: `R-030`). Önceki dört başarısız tatbikat **başarıya çevrilmemiştir**; üçüncüsü yaşlanmış marker hedefiyle (96 dk) RPO'da, dördüncüsü sentinel `organizationId` uyuşmazlığıyla düşmüştür — sentinel farkı (`__noramedi_pitr_drill__` vs. `NORAMEDI_PITR_MARKER_ORG=noramedi-f4-pitr-sentinel`) runbook §21.7'de operasyonel kanıt olarak **kaydedilmiş, normalize edilmemiştir**. Yalnızca dokümantasyon: şema/migration/çalışma zamanı/üretim mutasyonu **YOK**. **Faz durumu `TODO` olarak değişmedi.** |
