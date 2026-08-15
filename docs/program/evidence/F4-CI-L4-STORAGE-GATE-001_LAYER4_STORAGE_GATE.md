@@ -211,7 +211,73 @@ Run from the isolated worktree (`E:/Ek Gelir/Siteler/wt-f4-l4-storage`).
 
 Not runnable locally: the full Layer 4 storage suite itself needs a Docker
 daemon, which is not available on the authoring machine. It is exercised by
-Layer 4 in CI on this PR — see §8.
+Layer 4 in CI on this PR — see §5.1.
+
+### 5.1 CI verification on this PR (run `31891866307`, job `95029378747`)
+
+Layer 4 executed **for real** for the first time. Stage trace:
+
+```
+15:10:04.089  stage: storage:start
+15:10:04.089  stage: storage:docker-available-check
+15:10:04.129  stage: storage:network-create
+15:10:05.304  stage: storage:postgres-provision
+15:10:19.523  stage: storage:postgres-readiness
+15:10:21.969  stage: storage:minio-provision
+15:10:25.281  stage: storage:minio-readiness
+15:10:26.312  MinIO destination topology: container-network (172.18.0.3:9000)
+              — off-host classification expected: true
+15:10:26.312  stage: storage:migrations
+15:10:32.979  stage: storage:run-tests(server:test:storage-integration)
+15:10:34.362  fileBackupDbIntegration: 25 passed, 0 failed
+15:10:34.362  execution receipt written: 25 passed, 0 failed
+15:10:34.408  stage: storage:collect-execution-proof
+15:10:34.408  stage: storage:teardown
+15:10:34.887  stage: storage:complete(exit=0)
+15:10:35.218  [layer4-gate] PASS: storage suite executed 25 test case(s) against a
+              container-network MinIO destination, migrations applied, cleanup clean.
+```
+
+Emitted `storage-run-summary.json` (uploaded as an artifact on this green run —
+previously it was uploaded only on failure):
+
+```json
+"minio":          { "addressMode": "container-network", "endpointHost": "172.18.0.3",
+                    "endpointPort": "9000", "offHostClassification": true },
+"executionProof": { "required": true, "satisfied": true, "executedCount": 25,
+                    "failures": [], "suite": "fileBackupDbIntegration",
+                    "passedCount": 25, "failedCount": 0, "missingRequiredMemberIds": [] },
+"outcome":        { "exitCode": 0, "reasons": ["tests passed",
+                    "execution proof satisfied (25 test case(s) executed)",
+                    "cleanup succeeded"] }
+```
+
+Note the off-host case in particular: it passed against `172.18.0.3:9000`
+through the **unmodified** production predicate, which is the whole point of
+Lane C.
+
+### 5.2 On the proximate trigger
+
+The **structural** cause in §2.1 is proven and fixed. The **proximate** trigger
+of the specific pre-fix terminations is characterised but not fully
+determined, and this is stated deliberately rather than guessed at:
+
+- the pre-fix process died ≈9.5 s after start, which the stage trace above
+  places inside `provisionPostgres()`'s `docker run` (the disposable-Postgres
+  image pull spans 05.3 → 19.5 here);
+- that call is a **synchronous** `spawnSync`, and every synchronous failure of
+  it is caught and printed — so the orchestrator process itself must have been
+  terminated from outside, and its wrapper reported that as exit 0;
+- the provisioning code on that path is byte-for-byte unchanged by this PR
+  (only stage markers were added around it), so this PR did not "fix" the
+  trigger, and the trigger may recur.
+
+**That is acceptable and is the point of the fix.** If it recurs, the run is
+now RED, not green: the abnormal-termination trap forces exit 91 where it can,
+and — independently of whether the orchestrator process survives long enough
+to run any of its own code — the always-on gate step fails because
+`storage-run-summary.json` does not exist. The stage marker will also name the
+exact stage it died in, which the previous zero-output failure never did.
 
 ## 6. Mutation / negative proof of the fail-open fix
 
@@ -273,7 +339,27 @@ Both are also asserted as standing tests in the `MUTATION PROOF` section of
   outcome rather than only on failure.
 - **No deployment and no restore was executed by this task.**
 
-## 8. Does PR #423 become merge-safe?
+## 8. Known remaining gap (deliberately out of this task's scope)
+
+Layers 3 and 5b run the same orchestrator with the `postgres` /
+`postgres-compat` profiles, and this task's scope is Layer 4 storage. They
+**do** inherit the profile-independent half of the fix — stage tracing and the
+abnormal-termination trap, so a silent exit-0 death is now impossible for them
+too. They do **not** yet have:
+
+- an execution-receipt contract (their aggregates chain dozens of leaf
+  scripts, so a per-suite receipt is a larger design question), or
+- an always-on summary gate — their summary-validation, secret-scan and
+  upload steps are still `if: failure()`, exactly as Layer 4's were.
+
+So a Layer 3 run whose npm aggregate resolved to zero commands would still
+report success. That is a smaller hole than the one closed here (their
+provisioning failures already surface, and their suites do print output that a
+reviewer can see), but it is the same shape and should be closed by a
+follow-up task rather than left implicit. Recorded here so it is not mistaken
+for something this PR already covers.
+
+## 9. Does PR #423 become merge-safe?
 
 **Not on this PR's merge alone.** Merging this PR makes Layer 4 *capable* of
 failing honestly; it does not retroactively give PR #423 storage coverage.

@@ -531,6 +531,29 @@ test('the orchestrator source keeps teardown OUTSIDE the try/catch, so cleanup s
   );
 });
 
+test('every required member id is actually tagged on a case in the storage suite (the contract cannot drift silently)', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const suitePath = join(here, '..', '..', '..', 'server', 'src', 'tests', 'dbVerification', 'fileBackupDbIntegration.test.ts');
+  const suite = readFileSync(suitePath, 'utf8').replace(/\r\n/g, '\n');
+
+  // The suite tags a case by passing its id as `test()`'s third argument:
+  //   await test('name', async () => { ... }, 'the-id');
+  const taggedIds = new Set([...suite.matchAll(/\}, '([a-z0-9-]+)'\);/g)].map((m) => m[1]));
+  assert(taggedIds.size > 0, 'anchor: no tagged test ids were found in the storage suite');
+
+  const untagged = STORAGE_REQUIRED_MEMBER_IDS.filter((id) => !taggedIds.has(id));
+  assertEqual(
+    untagged.join(', '),
+    '',
+    'every id in STORAGE_REQUIRED_MEMBER_IDS must be tagged on a real case, otherwise the gate demands a member that can never be produced and Layer 4 is permanently red',
+  );
+
+  assert(
+    STORAGE_REQUIRED_MEMBER_IDS.length <= STORAGE_MINIMUM_EXECUTED,
+    'the executed-count floor must be at least as large as the number of required members',
+  );
+});
+
 test('the abnormal-termination trap is wired to a process exit handler with a distinct code', () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const source = readFileSync(join(here, '..', 'orchestrator.ts'), 'utf8');

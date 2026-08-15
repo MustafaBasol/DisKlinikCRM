@@ -497,10 +497,10 @@ jobs:
       # "the process exited 0". These steps now run on EVERY outcome, and the
       # gate treats a missing/empty/unproven summary as a hard failure.
       - name: 'Gate: run summary must prove the storage suite actually executed'
-        if: always()
+        if: ${{ !cancelled() }}
         run: npm run verify:storage-run -- storage-run-summary.json --require-offhost-destination
       - name: Scan run-summary artifact for prohibited secret patterns
-        if: always()
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           if [ ! -f storage-run-summary.json ]; then
@@ -513,7 +513,7 @@ jobs:
           fi
           echo "No prohibited secret patterns detected in storage-run-summary.json"
       - name: Upload sanitized run summary
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: storage-integration-run-summary-${{ github.run_id }}-${{ github.run_attempt }}
