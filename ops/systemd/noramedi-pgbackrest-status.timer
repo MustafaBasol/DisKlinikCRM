@@ -1,0 +1,43 @@
+# noramedi-pgbackrest-status.timer — F4-FCR-002
+#
+# NOT INSTALLED ON PRODUCTION. See noramedi-pgbackrest-status.service in this
+# same directory for installation commands and rollback.
+#
+# Runs the PITR status writer every 15 minutes.
+#
+# WHY 15 MINUTES AND NOT 5 (the opscheck interval):
+# The document this writes carries archived-WAL freshness, whose own bound is
+# archive_timeout = 300s. A 15-minute refresh is comfortably inside the
+# 2-hour staleness gate that opscheck's pitr check applies
+# (NORAMEDI_OPSCHECK_PITR_STATUS_MAX_AGE_HOURS), so up to seven consecutive
+# ticks can be missed before the check alarms — while each tick costs a
+# `pgbackrest info` and a handful of `SHOW` queries, which is real work to
+# repeat every five minutes for a signal that cannot move faster than five
+# minutes anyway.
+#
+# The result is that opscheck keeps pinging its dead-man's switches every 5
+# minutes as before (nothing about the existing timer changes), and the PITR
+# data it reads is at most ~15 minutes old.
+#
+# `pgbackrest check` is NOT run on every tick — it forces a WAL segment switch,
+# so running it four times an hour would manufacture segments purely for
+# monitoring. The script rate-limits it to once an hour by default
+# (NORAMEDI_PGBACKREST_CHECK_MIN_INTERVAL_SECONDS) and caches the last result.
+#
+# OnUnitActiveSec is relative to the last deactivation, so a slow run pushes
+# the next one later rather than stacking. Persistent=false: after a reboot
+# there is no value in replaying missed status snapshots, and OnBootSec covers
+# the immediate post-boot case.
+
+[Unit]
+Description=Run the NoraMedi pgBackRest/PITR status writer every 15 minutes (F4-FCR-002)
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+AccuracySec=30s
+Persistent=false
+Unit=noramedi-pgbackrest-status.service
+
+[Install]
+WantedBy=timers.target

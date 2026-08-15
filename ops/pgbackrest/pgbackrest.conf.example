@@ -1,0 +1,216 @@
+; pgbackrest.conf.example — F4-FCR-002
+;
+; TEMPLATE ONLY. This file is committed to the repository and therefore MUST
+; NOT contain a real cipher passphrase, a real SSH key, or a real S3 secret.
+; Every secret-valued option below is left blank or marked <REPLACE>.
+;
+; Host target:  /etc/pgbackrest/pgbackrest.conf
+; Ownership:    postgres:postgres
+; Mode:         0600   (it holds repo1-cipher-pass once filled in)
+;
+;   install -d -o postgres -g postgres -m 0750 /etc/pgbackrest
+;   install -o postgres -g postgres -m 0600 /dev/null /etc/pgbackrest/pgbackrest.conf
+;   $EDITOR /etc/pgbackrest/pgbackrest.conf     # paste this file, fill <REPLACE>
+;
+; NOTHING IN THIS FILE IS AUTHORIZED FOR PRODUCTION. Activation requires the
+; scoped freeze exception drafted in
+; docs/program/runbooks/F4_RECOVERY_OPERATIONS.md §7.1 / §12, which is
+; DRAFT_PENDING_PROGRAM_OWNER. See that runbook for the activation sequence.
+;
+; ─────────────────────────────────────────────────────────────────────────
+; FOUR VALUES BELOW CANNOT BE DERIVED FROM THIS REPOSITORY.
+; scripts/noramedi-pgbackrest-preflight.sh reads them from the host and
+; REFUSES to proceed rather than guessing. Do not hand-edit them from memory.
+;
+;   pg1-path        <- sudo -u postgres psql -Atc "SHOW data_directory;"
+;   process-max     <- nproc            (vCPU count is not recorded anywhere)
+;   repo1-bundle    <- pgbackrest version   (requires >= 2.41)
+;   compress-type   <- pgbackrest version   (zst requires a libzstd build)
+; ─────────────────────────────────────────────────────────────────────────
+
+[global]
+
+; ── Repository 1: LOCAL, ENCRYPTED ───────────────────────────────────────
+; Stage 1 is deliberately host-local. Once activated it is DESIGNED to bound
+; RPO at <= 60 min (see archive_timeout in postgresql-pitr.conf.example) — but
+; that number is UNVERIFIED until a production drill measures it, and it
+; provides NO host-loss protection whatsoever. Durability and RPO are separate
+; capabilities and must never be reported as one
+; (F4_RECOVERY_OPERATIONS.md §7.1; measured RPO/RTO are recorded as UNVERIFIED
+; in §19).
+;
+; NOT under /root: /root/noramedi-backups is root-only and the postgres user
+; cannot read or write it. Keeping the pgBackRest repo out of that directory
+; also guarantees this task cannot disturb the existing pg_dump chain.
+repo1-path=/var/lib/pgbackrest
+
+; Native repository encryption. This is the control that answers the
+; confirmed plaintext-PHI-at-rest finding (F4_STORAGE_AND_BACKUP.md:40).
+;
+; ⚠ THE PASSPHRASE IS FIXED AT stanza-create AND CANNOT BE ROTATED IN PLACE.
+; ⚠ LOSING IT MAKES EVERY BACKUP PERMANENTLY UNRECOVERABLE.
+; Escrow it OFF-HOST (password manager / sealed envelope) BEFORE running
+; stanza-create. A repo encrypted with a passphrase that lives only on the
+; host being backed up protects against disk theft and nothing else — if the
+; host is lost you hold ciphertext you cannot open. Stage 1 is host-local by
+; design, but the passphrase escrow is the one part that must not wait for
+; stage 2.
+repo1-cipher-type=aes-256-cbc
+repo1-cipher-pass=<REPLACE — 32+ random chars, escrowed off-host, never committed>
+
+; ── Retention ────────────────────────────────────────────────────────────
+; OPERATIONAL RECOVERY RETENTION ONLY. This is not a legal retention period
+; and must not be cited as one — see F4_RECOVERY_OPERATIONS.md §11.
+;
+; 7 fulls mirrors the existing pg_dump 7-day retention so the two tiers stay
+; legible side by side. Unlike backupService.ts's RETENTION_DAYS (a display
+; constant that prunes nothing), this one actually enforces.
+repo1-retention-full=7
+repo1-retention-full-type=count
+
+; Set explicitly rather than relying on derivation from retention-full. When
+; retention-archive is lower than retention-full, `pgbackrest info` shows N
+; restorable backups while the WAL needed for continuous PITR across the
+; older ones has already expired — the PITR window silently becomes shorter
+; than the backup list implies.
+repo1-retention-archive=7
+repo1-retention-archive-type=full
+
+; ── Storage/CPU ──────────────────────────────────────────────────────────
+; repo1-bundle packs many small files into larger repo objects. Real win for
+; a ~16 MB database with many tiny relation files. REQUIRES pgbackrest >= 2.41
+; — preflight verifies and comments this line out on older builds.
+repo1-bundle=y
+
+; zst requires a libzstd-enabled build. Preflight falls back to lz4, then to
+; the gz default, rather than letting pgbackrest fail at first backup.
+compress-type=zst
+compress-level=3
+
+; Placeholder. Preflight sets this to min(nproc, 2); the host vCPU count is
+; not recorded anywhere in this repository.
+process-max=2
+
+; ── Logging ──────────────────────────────────────────────────────────────
+; pgBackRest never logs the cipher passphrase, but log-level-file=detail does
+; record repository paths and file names. /var/log/pgbackrest must therefore
+; be 0750 postgres:postgres and is NOT covered by the application's log
+; redaction (that only applies to the pg_dump script's log surfaced over
+; HTTP by backupService.getBackupLogs()).
+log-level-console=info
+log-level-file=detail
+log-path=/var/log/pgbackrest
+
+; ── Lock path — MUST NOT be left at the /tmp default ─────────────────────
+; pgBackRest's default lock-path is /tmp/pgbackrest. The status writer's
+; systemd unit sets PrivateTmp=yes, which gives it a PRIVATE /tmp — so a lock
+; taken there would be invisible to the cron-driven `pgbackrest backup` in the
+; host /tmp, and vice versa. The hourly `pgbackrest check` (which forces a WAL
+; segment switch) could then run concurrently with a backup, which is exactly
+; what the lock exists to prevent.
+;
+; An explicit path outside /tmp makes both see the same directory. Create it:
+;   install -d -o postgres -g postgres -m 0750 /var/lib/pgbackrest/lock
+lock-path=/var/lib/pgbackrest/lock
+
+; pgBackRest's OWN wait-for-WAL timeout, in seconds: how long `backup` and
+; `check` wait for a segment to appear in the repo before erroring.
+;
+; ⚠ THIS IS NOT PostgreSQL's archive_timeout GUC. Different thing, different
+; file, different units of meaning. The GUC (forced WAL segment switch, and
+; the option that actually bounds RPO) is set in postgresql.conf — see
+; ops/pgbackrest/postgresql-pitr.conf.example.
+archive-timeout=60
+
+; archive-async is deliberately NOT enabled.
+;
+; At this write volume it buys nothing and imports the single worst
+; silent-failure mode pgBackRest has: with archive-push-queue-max set, an
+; overflowing queue makes pgBackRest DROP WAL segments and return SUCCESS to
+; PostgreSQL. The cluster stays green, backups keep succeeding, and the PITR
+; chain acquires a permanent hole. Async also defers failure reporting to a
+; later archive-push invocation, which on a low-write cluster can be hours.
+;
+; Do not set archive-push-queue-max or archive-get-queue-max in stage 1.
+; spool-path is unused without archive-async and is intentionally omitted.
+
+[global:backup]
+; Force an immediate checkpoint instead of waiting up to checkpoint_timeout.
+start-fast=y
+
+; delta=y is scoped to [global:backup] ON PURPOSE and must NOT be moved to
+; bare [global]. The option name is shared with restore, where it means
+; "restore only differing files instead of requiring an empty PGDATA" — a
+; bare [global] entry would silently make every restore a delta restore.
+delta=y
+
+[global:archive-push]
+compress-level=3
+
+; ── Stanza ───────────────────────────────────────────────────────────────
+; A stanza is a CLUSTER, not a database. Named `noramedi`, deliberately not
+; `noramedi_crm`: the host runs one cluster serving one database today, and
+; naming the stanza after the database would mislead whoever adds a second.
+; The name appears in every archive_command invocation — keep it short and
+; hyphen-free.
+[noramedi]
+; VERIFY, DO NOT ASSUME. /var/lib/postgresql/16/main is the Debian/Ubuntu
+; convention for a PostgreSQL 16 cluster named "main"; production is 16.14 on
+; Ubuntu, but the actual data directory has never been read.
+;   sudo -u postgres psql -Atc "SHOW data_directory;"
+pg1-path=/var/lib/postgresql/16/main
+pg1-port=5432
+pg1-user=postgres
+
+; ─────────────────────────────────────────────────────────────────────────
+; STAGE 2 — OFF-HOST REPOSITORY. COMMENTED OUT AND NOT AUTHORIZED.
+;
+; R-030 (no independent failure domain) is NOT closed by anything above.
+; A second repository is what closes it, and it is blocked on: the secondary
+; Türkiye VPS being procured, a hosting DPA scoped to special-category health
+; data (KVKK Art. 6), Türkiye residency evidence E1-E5, and subprocessor
+; register updates. See F4_RECOVERY_OPERATIONS.md §7.2.
+;
+; Option 1 (RECOMMENDED — repo host over SSH). Chosen over S3 on procurement
+; evidence, not elegance: Türkiye IaaS is recorded as market-available, while
+; no Türkiye-resident S3-compatible provider is evidenced anywhere in this
+; repository.
+;
+;   repo2-host=<REPLACE>
+;   repo2-host-user=postgres
+;   repo2-path=/var/lib/pgbackrest
+;   repo2-cipher-type=aes-256-cbc
+;   repo2-cipher-pass=<REPLACE — distinct from repo1>
+;   repo2-retention-full=7
+;   repo2-retention-archive=7
+;
+; Option 3 (promote to primary the moment a named Türkiye S3-compatible
+; provider clears E1-E5 and counsel — it is better on every axis except
+; procurement evidence):
+;
+;   repo2-type=s3
+;   repo2-s3-bucket=<REPLACE>
+;   repo2-s3-endpoint=<REPLACE — https:// only>
+;   repo2-s3-region=<REPLACE>
+;   repo2-s3-uri-style=host
+;   repo2-s3-key=<REPLACE>
+;   repo2-s3-key-secret=<REPLACE>
+;   repo2-cipher-type=aes-256-cbc
+;   repo2-cipher-pass=<REPLACE — distinct from repo1>
+;
+; ⚠ BEFORE ENABLING ANY repo2 LINE, VERIFY AGAINST THE INSTALLED BINARY:
+;   1. Does this build support multiple repositories at all?  (`pgbackrest
+;      version`; multi-repo is not present in older builds, and Ubuntu's
+;      distro package may lag PGDG.)
+;   2. Does an UNREACHABLE repo2 stall archive-push and let pg_wal grow until
+;      the cluster shuts down?  This is a PRODUCTION-OUTAGE risk, not a
+;      documentation nicety. Establish the failure semantics on a scratch
+;      host before pointing production at a remote repo.
+;   3. Does this build support repo-type=sftp (no pgBackRest needed on the far
+;      side)? If not, repo-host mode requires pgBackRest installed and
+;      version-matched on BOTH hosts.
+;
+; ⚠ A SECOND repo PATH ON THIS SAME HOST IS NOT OFF-HOST. Neither is a second
+; mount, a bind mount, a loopback S3 endpoint, or a remote-looking hostname
+; that resolves back to this machine. See §12 of the recovery runbook for the
+; four conditions a target must meet before the word "off-host" may be used.

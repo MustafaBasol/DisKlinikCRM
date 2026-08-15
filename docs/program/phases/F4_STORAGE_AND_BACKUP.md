@@ -1,6 +1,6 @@
 # F4 — Storage and Backup Foundation
 
-Faz durumu: `TODO` · Son güncelleme: 2026-08-14 (F4-FCR-001)
+Faz durumu: `TODO` · Son güncelleme: 2026-08-15 (F4-FCR-002)
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
 
@@ -51,6 +51,74 @@ Yedekleme mekanizmasının kendisi, hedefi, şifrelemesi, zamanlaması ve PITR d
 
 Bayat **olmayan** (düzeltilmemeli): versiyonlama, object-lock/değişmezlik, yaşam döngüsü/saklama, bucket-config doğrulaması, PITR ve yedek baytlarının uygulama katmanı şifrelemesi — bunlar gerçekten uygulanmamıştır.
 
+
+
+## F4-FCR-002 — pgBackRest / PITR / Off-Host Kurtarma Temeli
+
+`F4-FCR-002_STATUS = AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
+`F4-FCR-002_SCOPED_FREEZE_EXCEPTION = DRAFT_PENDING_PROGRAM_OWNER` — **VERİLMEDİ**
+
+### Dondurma (freeze) pozisyonu — istisna TASLAK, ALINMADI
+
+F4-FCR-001'den farklı olarak bu görev, [`KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md`](../KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md) §2 satır 18'in yasakladığı "**any live backup/PITR implementation**" tanımının **tam olarak içine giren** bir yeteneği hedeflemektedir. Bu nedenle:
+
+- **Depo (repository) çalışması yapılmıştır** — §4'ün açıkça izin verdiği "backup/PITR **design**" ve dokümantasyon sınırının ötesine geçen hiçbir **canlı** eylem gerçekleştirilmemiştir.
+- **Üretimde hiçbir şey etkinleştirilmemiştir.** `archive_mode` `off` olarak kalmıştır; pgBackRest kurulmamıştır; depo oluşturulmamıştır; hiçbir kimlik bilgisi üretilmemiş, hiçbir bayt sunucu dışına taşınmamıştır.
+- **Dar kapsamlı istisna metni hazırlanmıştır** ([`runbooks/F4_RECOVERY_OPERATIONS.md`](../runbooks/F4_RECOVERY_OPERATIONS.md) §14) ve **program sahibinin kararını beklemektedir**. Hiçbir ajan kendi kendini onaylayamaz (tracker §2.3).
+
+> **Program sahibine not (F4-FCR-001'in kaydettiği yönetişim boşluğu, tekrarlanmamıştır):** İstisna verilirse, F4-1A emsalindeki gibi **bu dosyaya** `F4-FCR-002_SCOPED_FREEZE_EXCEPTION = AUTHORIZED_BY_PROGRAM_OWNER_<tarih>` biçiminde kaydedilmelidir. Yalnızca bir kanıt dosyasında ilan etmek, yukarıda 21. satırda kayıtlı olan ve `FILE_BACKUP_COVERAGE_001`'in düştüğü boşluğun aynısıdır.
+
+### Üretim yedekleme gerçekliği — artık kanıtlı
+
+`/usr/local/sbin/noramedi-db-backup.sh` ve `/etc/cron.d/noramedi-db-backup` operatör tarafından **salt-okunur olarak temin edilmiştir** (2026-08-15). Bu, F4-FCR-001'in 41. satırda "bu programda hiç okunmamıştır" diye kaydettiği ön koşulu kapatır.
+
+| Özellik | Değer |
+|---|---|
+| Yedekleme komutu | `pg_dump -Fc` (PostgreSQL custom format) |
+| Zamanlama | Günlük 03:15 (cron) |
+| Saklama | 7 gün (**betik tarafından gerçekten uygulanıyor**) |
+| Çakışma koruması | `flock` |
+| Dosya izinleri | `0600`, `umask 077`, geçici dosya → atomik `mv` |
+| Parola kaynağı | `/root/noramedi-db-password.txt` (dosya; `PGPASSWORD` **değil**) |
+| Sunucu dışı kopya | **YOK** · WAL arşivleme **YOK** · PITR **YOK** |
+| Format şifrelemesi | **DOĞRULANMADI** — `chmod 600` bir dosya sistemi iznidir, şifreleme değildir |
+
+**Doğrulanan varsayımlar:** `backupService.ts:38`'deki `BACKUP_FILENAME_RE` betiğin ürettiğiyle eşleşmektedir; `backupService.ts`'in yalnızca *gösterdiği* 7 günlük saklama süresi **gerçekten uygulanmaktadır** (depo kodu tarafından değil, betik tarafından). F4-FCR-001'in "hiçbir depo kodu bir şey budamıyor" tespiti geçerliliğini korur; değişen, operasyonel sonucun artık varsayım değil kanıt olmasıdır.
+
+**Değişmeyen gerçek:** en kötü durum RPO ≈ 24 saat. İlk-müşteri hedefi olan ≤ 60 dakika **karşılanmamaktadır** ve bu mekanizmanın zamanlamasında yapılacak hiçbir değişiklikle karşılanamaz — bu boşluğu yalnızca sürekli WAL arşivleme kapatır.
+
+### Bu görevin yaptığı
+
+| Yetenek | Önce | Sonra |
+|---|---|---|
+| pgBackRest yapılandırması | Depoda **hiç yok** (`pgbackrest` için sıfır kod referansı) | Şifreli yerel `repo1` şablonu; `repo2` yorum satırında ve açıkça yetkisiz |
+| PostgreSQL PITR yapılandırması | Yok | Ek (additive) drop-in şablonu: `archive_mode`, `archive_command`, `archive_timeout=300` |
+| Operatör aktivasyon güvenliği | Yok | `noramedi-pgbackrest-preflight.sh` — 4 host gerçeğini okur, niyetlenen değişikliği yazdırır, **belirsizlikte reddeder**, yalnızca `--apply` ile yazar, **PostgreSQL'i asla yeniden başlatmaz** |
+| Disk tükenmesi koruması | Yok | Yedekleme sarmalayıcısında **abort** (uyarı değil) — istisna metninin talep ettiği koşul; ölçülemeyen disk de fail-closed |
+| WAL/PITR gözlemlenebilirliği | Yok | Ayrı systemd timer'lı durum yazıcısı → `pitr-status.json` → opscheck `pitr` kontrolü (bit 128) → Healthchecks.io → operatör e-postası |
+| PITR restore kanıtı | Yapısal olarak imkânsız | `noramedi-pgbackrest-restore-drill.sh` — tek kullanımlık, RAM destekli, yalnızca loopback küme; şema/migration/bütünlük kontrolleri; ölçülen RPO/RTO |
+| Off-host iddiası | İkili (boolean), fazla iddialı olabilir | **Üç durumlu** `no`/`unproven`/`yes`; `yes` yalnızca repo2'den geçmiş bir restore tatbikatıyla kazanılır ve 30 günde süresi dolar |
+| Platform Admin PITR görünürlüğü | Yok | Yeni panel; `unproven` ayrı bir durum olarak render edilir |
+| Kabuk betiği testleri | **CI'da hiç çalışmıyordu** | `npm run test:shell` — 219 assertion, CI Layer 1'e bağlandı |
+
+### Yol boyunca düzeltilen iki kusur
+
+1. **`redactBackupLogLine()` pgBackRest parolasını redakte etmiyordu.** `repo1-cipher-pass=`, `cipher_pass=`, `--repo-cipher-pass=`, `"cipherPass":` — hepsi **hiç değişmeden** geçiyor ve `GET /api/platform/backups/logs` tarafından birebir sunuluyordu. Mevcut alternatiflerin hiçbiri eşleşemiyordu: `pgpass`/`password`/`passwd`/`pwd` çıplak `pass` alt dizesinden fazlasını gerektirir ve anahtar öneki kalıbı tire karakterini geçemez. Bu, kapsanmayan **tek** gizli-anahtar biçimiydi ve kaybı her yedeği kalıcı olarak kurtarılamaz kılan anahtardı. Ampirik olarak öncesi/sonrası doğrulandı; 9 regresyon vakası eklendi. PEM özel anahtar blokları da artık redakte edilmektedir.
+2. **`scripts/` altındaki kabuk betiklerinde hiçbir otomatik koruma yoktu.** `log-privacy-guard` (yanlış kök, yanlış uzantı), `adminScriptsLogPrivacy.test.ts` (üç sabit `.ts` yolu), CI kabuk adımı (`scripts/test-runtime/*.sh` ile sınırlı) — hiçbiri kapsamıyordu ve depoda gizli-anahtar tarayıcısı bulunmamaktadır. Artık `npm run test:shell` her iki paketi de çalıştırır ve CI Layer 1'e bağlıdır; sözdizimi kontrolü `scripts/*.sh` tamamına genişletildi.
+
+### Bu görevin YAPMADIĞI (ve neden)
+
+- **Hiçbir üretim mutasyonu yok.** pgBackRest kurulmadı, `archive_mode` değiştirilmedi, PostgreSQL yeniden başlatılmadı, depo oluşturulmadı.
+- **Mevcut `pg_dump` zinciri değiştirilmedi.** 03:15 cron, `/root/noramedi-backups`, parola dosyası, saklama süresi — hiçbiri dokunulmadı ve geçiş boyunca yedek (fallback) olarak kalır. Kaldırılması ayrı bir program kararıdır ve alınmamıştır.
+- **Off-host etkinleştirilmedi.** İkincil Türkiye VPS'i **tedarik edilmemiştir**; DPA, E1–E5 yerleşim kanıtı ve subprocessor register güncellemeleri karşılanmamıştır.
+- **Şema değişikliği yok, migration yok.** `RecoveryDrillRun` yeniden kullanılabilir durumdadır ancak bu görev ona satır yazan bir kod yolu eklememiştir — restore tatbikatı bir kabuk betiğidir ve sonucunu JSON olarak yazar. Bu boşluk bilinçli olarak **kaydedilmiştir**, sessizce tekrarlanmamıştır (bkz. runbook §12).
+- **`RETENTION_DAYS` görüntüleme sabiti değiştirilmedi** — pgBackRest'in yerel saklama mekanizması onun yerini alacaktır, ancak yalnızca etkinleştirildiğinde.
+
+### Riskler — hiçbiri kapatılmadı
+
+`R-030`, `R-031`, `R-032` **`OPEN`** olarak kalır. Depo çalışması bunların hiçbirini kapatmaz; üretim kanıtı gerektirir. R-030'un artık **iki ayrı yarıya** ayrılması gerektiği kaydedilmiştir (`R-030-DB` kapatılabilir, `R-030-FILES` imaging birincil deposunun nereye konacağına bağlıdır) — bkz. runbook §16.1.
+
+`FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`.
 
 
 ## F4-1A — Storage Key Contract Reconciliation and Foundation
@@ -172,3 +240,4 @@ Imaging (DICOM/CBCT) ölçeklenmeden önce object storage zorunludur (PROGRAM DI
 | 2026-07-17 | F0-001 | Faz dokümanı oluşturuldu (yüksek seviyeli). |
 | 2026-08-14 | F4-1A | Storage-key sözleşme reconciliation'ı kaydedildi; dört rakip üretici tek yetkili üretici altında toplandı; dar kapsamlı dondurma istisnası kaydedildi. Faz durumu `TODO` olarak **değişmedi**. F0-011'in yedekleme/checksum bölümünün bayatladığı not edildi: `FileBackupRun`/`FileBackupEntry`, streaming SHA-256, read-back doğrulaması ve restore rehearsal artık mevcuttur. |
 | 2026-08-14 | F4-FCR-001 | Restore tatbikat kanıt defteri (`RecoveryDrillRun`), ölçülebilir RPO/RTO, zamanlanabilir dosya restore tatbikatı (`mixed`/`oldest` örnekleme ile bit-rot tespiti), çökmüş koşu süpürücüsü, artık restore-test veritabanı olayının tespiti/denetimi/görünürlüğü, yedek log redaksiyonu, `opscheck` `filebackup` + `drill` kontrolleri ve Platform Admin görünürlüğü eklendi. **Yeni dondurma istisnası alınmadı**; PITR ve off-host hedef bilinçli olarak kapsam dışı bırakıldı. Faz durumu `TODO` olarak **değişmedi**; R-030/R-031/R-032 `OPEN` kalır. |
+| 2026-08-15 | F4-FCR-002 | pgBackRest/PITR/off-host kurtarma temeli **depo tarafında** kuruldu: şifreli yerel repo şablonu, additive PostgreSQL drop-in, operatör preflight (belirsiz durumda reddeder, PostgreSQL'i asla yeniden başlatmaz), disk-tükenmesi abort koşulu, ayrı systemd timer'lı PITR durum yazıcısı, opscheck `pitr` kontrolü (bit **128** — hiçbir mevcut çıkış kodu taşınmadı; opt-in), tek kullanımlık RAM-destekli kümede PITR restore tatbikatı, **üç durumlu** off-host raporlaması ve Platform Admin paneli. Yol boyunca iki kusur düzeltildi: `redactBackupLogLine()` pgBackRest depo parolasını **hiç** redakte etmiyordu ve `scripts/` altındaki kabuk betiklerinin **hiçbir** otomatik koruması yoktu (artık `npm run test:shell`, CI Layer 1). **Üretimde hiçbir mutasyon yok**; `archive_mode` `off` kalır; mevcut 03:15 `pg_dump` zinciri değiştirilmedi; dar kapsamlı dondurma istisnası **TASLAK — VERİLMEDİ**. Faz durumu `TODO` olarak **değişmedi**; R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |

@@ -33,6 +33,9 @@
     "typecheck:ci-classify": "tsc --noEmit -p scripts/ci-classify/tsconfig.json",
     "log-privacy-guard:scan": "tsx scripts/log-privacy-guard/cli.ts",
     "test:log-privacy-guard": "tsx scripts/log-privacy-guard/__tests__/index.test.ts",
+    "test:shell:opscheck": "bash scripts/noramedi-opscheck.test.sh",
+    "test:shell:pgbackrest": "bash scripts/noramedi-pgbackrest.test.sh",
+    "test:shell": "npm run test:shell:opscheck && npm run test:shell:pgbackrest",
     "typecheck:log-privacy-guard": "tsc --noEmit -p scripts/log-privacy-guard/tsconfig.json"
   },
   "dependencies": {

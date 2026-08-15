@@ -92,7 +92,21 @@ EOF
 # (built dynamically per-scenario into an array) would never actually reach
 # the script's environment that way. `env` has no such restriction — it
 # inspects each of its own argv strings for a literal `=` regardless of
-# where that string came from, so `env "${EXTRA_ENV[@]}" "$OPSCHECK" "$@"`
+# Invoked as `bash "$OPSCHECK"`, NOT as `"$OPSCHECK"` directly.
+#
+# The script is tracked mode 100644 — like every other script in this
+# directory, because they are deployed with `install -m 0755` rather than by
+# being executed from the checkout. Executing it directly therefore fails on
+# Linux with exit 126 "Permission denied". Git Bash on Windows ignores the
+# exec bit, so this passed locally for as long as the suite was run by hand
+# and only surfaced when F4-FCR-002 wired it into CI — which is exactly the
+# point of wiring it in. `bash <file>` needs no exec bit and is equivalent
+# here, since the shebang is `#!/usr/bin/env bash`.
+#
+# The `env` form below is still required for the environment array, so the
+# ordering is: env, its assignments, then `bash`, then the script.
+#
+# where that string came from, so `env "${EXTRA_ENV[@]}" bash "$OPSCHECK" "$@"`
 # correctly applies every array-expanded assignment and then executes
 # $OPSCHECK with "$@" as ITS arguments (env stops treating argv as
 # assignments at the first token without `=`, which is $OPSCHECK itself —
@@ -108,7 +122,8 @@ run_opscheck() {
     NORAMEDI_OPSCHECK_BACKUP_DIR="$BACKUP_DIR" \
     NORAMEDI_OPSCHECK_STATE_DIR="$STATE_DIR" \
     NORAMEDI_OPSCHECK_RECOVERY_STATUS_FILE="$RECOVERY_STATUS_FILE" \
-    env "${EXTRA_ENV[@]}" "$OPSCHECK" "$@" 2>&1)"
+    NORAMEDI_OPSCHECK_PITR_STATUS_FILE="$PITR_STATUS_FILE" \
+    env "${EXTRA_ENV[@]}" bash "$OPSCHECK" "$@" 2>&1)"
   CODE=$?
   set -e
   EXTRA_ENV=()
@@ -123,7 +138,13 @@ new_scenario_dirs() {
   # rather than silently reading some other file.
   RECOVERY_STATUS_DIR="$(mktemp -d "$WORK/recovery.XXXXXX")"
   RECOVERY_STATUS_FILE="$RECOVERY_STATUS_DIR/recovery-status.json"
+  # Same rule for the PITR document (F4-FCR-002): redirected away from the
+  # real path and deliberately NOT created, so "no PITR status file" is the
+  # default starting state and a scenario that forgets to write one fails.
+  PITR_STATUS_DIR="$(mktemp -d "$WORK/pitr.XXXXXX")"
+  PITR_STATUS_FILE="$PITR_STATUS_DIR/pitr-status.json"
   reset_recovery_status_fields
+  reset_pitr_status_fields
 }
 
 touch_backup_file() {
@@ -202,6 +223,55 @@ EOF
 # malformed/unparseable cases the structured writer above cannot express.
 write_raw_recovery_status() {
   printf '%s' "$1" > "$RECOVERY_STATUS_FILE"
+}
+
+# ── PITR status file fixtures (F4-FCR-002) ──────────────────────────────
+#
+# A SEPARATE document from the recovery status file, written on production by
+# noramedi-pgbackrest-status.sh under its own systemd timer. Same
+# one-variable-per-field pattern so a scenario can perturb exactly one signal
+# and leave everything else healthy.
+#
+# The baseline below is a FULLY HEALTHY, FULLY ACTIVATED PITR deployment,
+# which is deliberately NOT the current production state (archive_mode is off
+# today). The healthy baseline is what makes each perturbation meaningful:
+# every failure test must fail for the ONE reason it perturbs, not because the
+# fixture was never healthy to begin with.
+
+reset_pitr_status_fields() {
+  PS_SCHEMA_VERSION=1
+  PS_GENERATED_AGE_H=0
+  PS_A_MODE=on
+  PS_A_COMMAND_OK=true
+  PS_A_FAILED=0
+  PS_A_WAL_AGE_MIN=3
+  PS_R_STATUS_OK=true
+  PS_R_CIPHER=aes-256-cbc
+  PS_R_CHECK=ok
+  PS_R_CHECK_AGE_MIN=30
+  PS_R_BACKUP_AGE_MIN=480
+  PS_R_OFFHOST=yes
+  PS_R_TIER=T2
+}
+
+write_pitr_status() {
+  cat > "$PITR_STATUS_FILE" <<EOF
+{
+  "schemaVersion": $PS_SCHEMA_VERSION,
+  "generatedAt": "$(iso_age "$PS_GENERATED_AGE_H")",
+  "archive": { "mode": "$PS_A_MODE", "commandOk": $PS_A_COMMAND_OK, "walLevel": "replica", "timeoutSeconds": 300, "failedCount": $PS_A_FAILED, "archivedCount": 128, "lastArchivedAgeMinutes": $PS_A_WAL_AGE_MIN },
+  "repo": { "installed": true, "stanza": "noramedi", "statusOk": $PS_R_STATUS_OK, "cipherType": "$PS_R_CIPHER", "checkStatus": "$PS_R_CHECK", "checkAgeMinutes": $PS_R_CHECK_AGE_MIN, "lastBackupAgeMinutes": $PS_R_BACKUP_AGE_MIN, "lastBackupType": "full", "backupCount": 7, "offHost": "$PS_R_OFFHOST", "tier": "$PS_R_TIER", "offHostReason": "RESTORE_PROVEN_FROM_REPO2" }
+}
+EOF
+}
+
+write_raw_pitr_status() {
+  printf '%s' "$1" > "$PITR_STATUS_FILE"
+}
+
+# run_pitr — the pitr check alone, in dry-run so no curl is ever invoked.
+run_pitr() {
+  run_opscheck --dry-run --check pitr
 }
 
 # ── bash -n syntax check ────────────────────────────────────────────────
@@ -641,6 +711,230 @@ RS_DRILL_STATUS=skipped
 write_recovery_status
 run_drill
 [[ "$((CODE & 16))" -eq 16 ]] && pass "drill bit (16) set for any status other than 'passed'" || fail "expected bit 16 set for status=skipped, got $CODE ($OUT)"
+
+# ════════════════════════════════════════════════════════════════════════
+# PITR / WAL archive check (F4-FCR-002)
+# ════════════════════════════════════════════════════════════════════════
+
+section "PITR: opt-in — absent from the default check set"
+new_scenario_dirs
+# No PITR status file exists, which would fail the pitr check. The default run
+# must not include it: WAL archiving cannot be enabled without a granted freeze
+# exception and a PostgreSQL restart, so a defaulted-on pitr check would be red
+# on every five-minute run indefinitely and would train the operator to ignore
+# a red monitor.
+touch_backup_file "noramedi_crm-20260814-031500.dump" 2
+write_recovery_status
+run_opscheck --dry-run
+[[ "$((CODE & 128))" -eq 0 ]] && pass "pitr bit (128) NOT set by a default run — the check is opt-in" || fail "expected bit 128 clear on a default run, got $CODE ($OUT)"
+[[ "$OUT" != *"pitr check"* ]] && pass "pitr check does not run by default" || fail "pitr ran without being requested ($OUT)"
+
+section "PITR: NORAMEDI_OPSCHECK_CHECKS opts it in without a unit-file edit"
+new_scenario_dirs
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_CHECKS=pitr)
+run_opscheck --dry-run
+[[ "$OUT" == *"pitr check: OK"* ]] && pass "NORAMEDI_OPSCHECK_CHECKS=pitr enables the check" || fail "pitr did not run via NORAMEDI_OPSCHECK_CHECKS ($OUT)"
+[[ "$CODE" -eq 0 ]] && pass "a fully healthy PITR document exits 0" || fail "expected exit 0, got $CODE ($OUT)"
+
+new_scenario_dirs
+EXTRA_ENV=(NORAMEDI_OPSCHECK_CHECKS="pm2,,drill")
+run_opscheck --dry-run
+[[ "$CODE" -eq 64 ]] && pass "an empty entry in NORAMEDI_OPSCHECK_CHECKS exits 64 (a trailing comma must not silently shrink the monitored set)" || fail "expected exit 64, got $CODE ($OUT)"
+
+section "PITR: missing / malformed status document fails closed"
+new_scenario_dirs
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when the PITR status file does not exist" || fail "expected bit 128, got $CODE ($OUT)"
+
+new_scenario_dirs
+write_raw_pitr_status '{ "schemaVersion": 1, "generatedAt": "2026-08-15T10:00:00Z", "archive": { "mode": "on"'
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set for a truncated document" || fail "expected bit 128 for truncated JSON, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_SCHEMA_VERSION=2
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set for an unknown schemaVersion (never interpreted on a guess)" || fail "expected bit 128 for schemaVersion=2, got $CODE ($OUT)"
+[[ "$OUT" == *"schemaVersion"* ]] && pass "names schemaVersion in the PITR diagnostic" || fail "missing schemaVersion diagnostic ($OUT)"
+
+section "PITR: writer liveness — a stale document is not healthy"
+new_scenario_dirs
+PS_GENERATED_AGE_H=5
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when the PITR document is 5h old (max 2h) even though every field inside reads healthy" || fail "expected bit 128 for a stale document, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_GENERATED_AGE_H=-2
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set for a future-dated generatedAt (clock skew fails closed)" || fail "expected bit 128 for a future generatedAt, got $CODE ($OUT)"
+
+section "PITR: archive_mode must actually be on"
+new_scenario_dirs
+PS_A_MODE=off
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when archive_mode=off (today's real production state — there is no PITR capability)" || fail "expected bit 128 for archive_mode=off, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_A_MODE=always
+write_pitr_status
+run_pitr
+[[ "$CODE" -eq 0 ]] && pass "archive_mode=always is accepted as well as 'on'" || fail "expected exit 0 for archive_mode=always, got $CODE ($OUT)"
+
+section "PITR: a tampered archive_command is a failure, not a warning"
+new_scenario_dirs
+PS_A_COMMAND_OK=false
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when archive_command does not exactly match the expected invocation (a wrapped command can discard WAL while reporting success)" || fail "expected bit 128, got $CODE ($OUT)"
+
+section "PITR: archiver failures reported by PostgreSQL"
+new_scenario_dirs
+PS_A_FAILED=1
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when pg_stat_archiver reports a failed archive attempt" || fail "expected bit 128, got $CODE ($OUT)"
+
+section "PITR: stale WAL behind a fresh backup — the green-but-broken case"
+new_scenario_dirs
+# The backup is FRESH (8h, well inside the 30h bound) and everything else is
+# healthy. Only the archived-WAL age is stale. A monitor that checked backup
+# age alone would report green straight through this, which is a total PITR
+# outage with a healthy-looking backup list.
+PS_R_BACKUP_AGE_MIN=480
+PS_A_WAL_AGE_MIN=200
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when the newest archived WAL is 200m old (max 120m) DESPITE a fresh backup" || fail "expected bit 128 for stale WAL, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_A_WAL_AGE_MIN=120
+write_pitr_status
+run_pitr
+[[ "$CODE" -eq 0 ]] && pass "WAL age exactly AT the 120m threshold is fresh (strict >, matching every other staleness comparison)" || fail "expected exit 0 at the boundary, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_A_WAL_AGE_MIN=121
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "WAL age one minute OVER the threshold fails" || fail "expected bit 128 at threshold+1, got $CODE ($OUT)"
+
+section "PITR: repository encryption is mandatory"
+new_scenario_dirs
+PS_R_CIPHER=none
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when the repository cipher is 'none' (it holds cleartext special-category health data)" || fail "expected bit 128 for an unencrypted repo, got $CODE ($OUT)"
+
+section "PITR: pgbackrest check result and freshness"
+new_scenario_dirs
+PS_R_CHECK=failed
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when the last 'pgbackrest check' failed" || fail "expected bit 128, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_R_CHECK=not_run
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when 'pgbackrest check' has never run (never assumed to have passed)" || fail "expected bit 128, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_R_CHECK_AGE_MIN=2000
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when the last 'pgbackrest check' is 33h old (max 30h)" || fail "expected bit 128, got $CODE ($OUT)"
+
+section "PITR: stanza status"
+new_scenario_dirs
+PS_R_STATUS_OK=false
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set when pgbackrest reports the stanza as not ok" || fail "expected bit 128, got $CODE ($OUT)"
+
+section "PITR: off-host is tri-state and only 'yes' passes"
+new_scenario_dirs
+PS_R_OFFHOST=unproven
+PS_R_TIER=T2
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set for offHost='unproven' — a configured remote repo with no restore ever performed from it must not render as a green off-host tick" || fail "expected bit 128 for unproven, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_R_OFFHOST=no
+PS_R_TIER=T1
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] && pass "pitr bit (128) set for offHost='no' by default (fail closed)" || fail "expected bit 128 for no, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_R_OFFHOST=no
+PS_R_TIER=T1
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=false)
+run_pitr
+[[ "$CODE" -eq 0 ]] && pass "a same-host repository PASSES when the stage-1 opt-out is set explicitly" || fail "expected exit 0 with the opt-out, got $CODE ($OUT)"
+[[ "$OUT" == *"WARNING"* ]] && pass "the opt-out still emits a WARNING (RPO improved, host-loss durability NOT)" || fail "expected a WARNING line ($OUT)"
+
+new_scenario_dirs
+PS_R_OFFHOST=no
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=FALSE)
+run_pitr
+# Deliberately stricter than the older FILEBACKUP_REQUIRE_OFFHOST knob, which
+# treats any non-"true" value as an opt-out and therefore fails OPEN on a typo.
+# Here a misspelled opt-out is a config error, not a silently disabled guard.
+[[ "$CODE" -eq 64 ]] && pass "a non-exact opt-out value ('FALSE') exits 64 rather than silently disabling the off-host guard" || fail "expected exit 64 for a non-exact opt-out value, got $CODE ($OUT)"
+
+new_scenario_dirs
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=)
+run_pitr
+[[ "$CODE" -eq 0 ]] && pass "an empty NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST falls back to the fail-closed default" || fail "expected the default to apply, got $CODE ($OUT)"
+
+section "PITR: malformed tuning values exit 64 rather than being ignored"
+for badvar in NORAMEDI_OPSCHECK_PITR_MAX_WAL_AGE_MINUTES NORAMEDI_OPSCHECK_PITR_STATUS_MAX_AGE_HOURS NORAMEDI_OPSCHECK_PITR_MAX_BACKUP_AGE_HOURS NORAMEDI_OPSCHECK_PITR_CHECK_MAX_AGE_HOURS; do
+  new_scenario_dirs
+  write_pitr_status
+  EXTRA_ENV=("$badvar=abc")
+  run_pitr
+  [[ "$CODE" -eq 64 ]] && pass "$badvar=abc exits 64 (fail closed)" || fail "expected exit 64 for $badvar=abc, got $CODE ($OUT)"
+  new_scenario_dirs
+  write_pitr_status
+  EXTRA_ENV=("$badvar=0")
+  run_pitr
+  [[ "$CODE" -eq 64 ]] && pass "$badvar=0 exits 64 (fail closed)" || fail "expected exit 64 for $badvar=0, got $CODE ($OUT)"
+done
+
+section "PITR: exit-code contract — 128 is additive and nothing moved"
+new_scenario_dirs
+PS_A_MODE=off
+write_pitr_status
+RS_DRILL_STATUS=failed
+write_recovery_status
+EXTRA_ENV=(
+  NORAMEDI_OPSCHECK_DRILL_PING_URL=http://x/DRILLSECRET
+  NORAMEDI_OPSCHECK_PITR_PING_URL=http://x/PITRSECRET
+)
+run_opscheck --dry-run --check drill --check pitr
+[[ "$CODE" -eq 144 ]] && pass "drill (16) + pitr (128) failing together exits 144, distinct from every other code" || fail "expected exit 144, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_A_MODE=off
+write_pitr_status
+write_recovery_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_PING_URL=http://x/PITRSECRET)
+run_opscheck --dry-run --check drill --check pitr
+[[ "$CODE" -eq 128 ]] && pass "a failing pitr check does not set the drill bit (the checks are independent)" || fail "expected exit exactly 128, got $CODE ($OUT)"
+
+new_scenario_dirs
+run_opscheck --check nosuchcheck
+[[ "$CODE" -eq 64 ]] && pass "an unrecognized --check name still exits 64, unchanged by the new check" || fail "expected exit 64, got $CODE ($OUT)"
+[[ "$OUT" == *"pitr"* ]] && pass "the unknown-check error message lists pitr among the valid names" || fail "error message does not mention pitr ($OUT)"
 
 section "Exit-code contract: the two new bits are independent and additive"
 new_scenario_dirs

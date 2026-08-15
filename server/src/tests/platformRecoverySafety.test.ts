@@ -31,6 +31,7 @@
 import assert from 'node:assert/strict';
 import {
   redactBackupLogLine,
+  redactBackupLog,
   REDACTED_TOKEN,
   computeArtifactAgeMinutes,
   isBackupStale,
@@ -112,6 +113,106 @@ async function main() {
     assert.ok(!line.includes('wJalrXUtnFEMIK7MDENG'), `secretAccessKey value survived redaction: ${line}`);
     assert.ok(line.includes(`accessKeyId=${REDACTED_TOKEN}`), `accessKeyId key was not preserved: ${line}`);
     assert.ok(line.includes(`secretAccessKey=${REDACTED_TOKEN}`), `secretAccessKey key was not preserved: ${line}`);
+  });
+
+  // ── Regression: pgBackRest repository passphrase (F4-FCR-002) ─────────────
+  //
+  // Before F4-FCR-002 every line below passed through this redactor COMPLETELY
+  // UNCHANGED, verified empirically against the shipped regex. None of the
+  // pre-existing alternatives can match `cipher-pass`: `pgpass`, `password`,
+  // `passwd` and `pwd` all require more than the bare substring `pass`, and
+  // the `[A-Za-z0-9_]*` key prefix cannot cross a hyphen.
+  //
+  // Severity is not "one more secret shape". `repo1-cipher-pass` is the
+  // passphrase for the pgBackRest repository, and pgBackRest cannot decrypt a
+  // repository without it — there is no escrow, no recovery, no vendor. It is
+  // simultaneously the secret that protects every backup and the secret whose
+  // loss destroys every backup, and it was the one shape this redactor did not
+  // cover while `GET /api/platform/backups/logs` served the line verbatim.
+
+  const cipherPassCases: Array<{ label: string; line: string; keptKey: string }> = [
+    { label: 'repo1-cipher-pass= (pgBackRest spelling)', line: 'repo1-cipher-pass=Sup3rS3cretPassphrase', keptKey: 'cipher-pass=' },
+    { label: 'repo2-cipher-pass= (off-host repository)', line: 'repo2-cipher-pass=Sup3rS3cretPassphrase', keptKey: 'cipher-pass=' },
+    { label: 'bare cipher-pass=', line: 'cipher-pass=Sup3rS3cretPassphrase', keptKey: 'cipher-pass=' },
+    { label: 'underscore spelling cipher_pass=', line: 'cipher_pass=Sup3rS3cretPassphrase', keptKey: 'cipher_pass=' },
+    { label: 'CLI flag form --repo-cipher-pass=', line: 'exec pgbackrest --repo-cipher-pass=Sup3rS3cretPassphrase backup', keptKey: 'cipher-pass=' },
+    { label: 'JSON form "cipherPass": "..."', line: '{"cipherPass": "Sup3rS3cretPassphrase"}', keptKey: 'cipherPass' },
+    { label: 'cipher-password= (long spelling)', line: 'repo1-cipher-password=Sup3rS3cretPassphrase', keptKey: 'cipher-password=' },
+  ];
+
+  for (const c of cipherPassCases) {
+    await test(`pgBackRest passphrase redacted — ${c.label}`, () => {
+      const line = redactBackupLogLine(c.line);
+      assert.ok(
+        !line.includes('Sup3rS3cretPassphrase'),
+        `repository passphrase survived redaction: ${line}`,
+      );
+      assert.ok(line.includes(REDACTED_TOKEN), `no redaction token present: ${line}`);
+      assert.ok(line.includes(c.keptKey), `key name was not preserved (operator cannot tell WHICH secret appeared): ${line}`);
+    });
+  }
+
+  // ── Regression: multi-line redaction must run BEFORE the split ──────────
+  //
+  // These go through redactBackupLog(), which is what getBackupLogs() actually
+  // calls. An earlier version of this test called redactBackupLogLine()
+  // directly on a `\n`-joined fixture — which the production path can never
+  // produce, because it split the log into lines first. The multi-line rule
+  // was therefore structurally unable to fire, and the key material lines were
+  // served verbatim over GET /api/platform/backups/logs while this test was
+  // green. Assert against the real entry point, never a shape the caller
+  // cannot generate.
+
+  await test('an SSH private key block is redacted (the real, line-split code path)', () => {
+    const log = [
+      '2026-08-15 02:30:01 starting archive push',
+      '-----BEGIN OPENSSH PRIVATE KEY-----',
+      'b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtz',
+      'c2gtZW5kMjU1MTkAAAAgSECRETKEYMATERIALDONOTLOGTHISEVER0000000000=',
+      '-----END OPENSSH PRIVATE KEY-----',
+      '2026-08-15 02:30:04 done',
+    ].join('\n');
+
+    const lines = redactBackupLog(log);
+    const joined = lines.join('\n');
+
+    assert.ok(!joined.includes('SECRETKEYMATERIAL'), `private key body survived redaction: ${joined}`);
+    assert.ok(!joined.includes('b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQ'), `key body line survived: ${joined}`);
+    assert.ok(!joined.includes('BEGIN OPENSSH PRIVATE KEY'), `PEM header survived: ${joined}`);
+    // Ordinary surrounding lines must still be readable — an operator has to
+    // be able to debug a failed backup.
+    assert.ok(joined.includes('starting archive push'), `context line was destroyed: ${joined}`);
+    assert.ok(joined.includes('done'), `context line was destroyed: ${joined}`);
+  });
+
+  await test('a TRUNCATED key block (tail cut off the BEGIN marker) still does not leak body lines', () => {
+    // `tail -n` routinely starts mid-file, so the block rule may have no
+    // anchor at all. The lone-base64-line rule is the backstop.
+    const log = [
+      'c2gtZW5kMjU1MTkAAAAgSECRETKEYMATERIALDONOTLOGTHISEVER0000000000=',
+      '-----END OPENSSH PRIVATE KEY-----',
+      '2026-08-15 02:30:04 done',
+    ].join('\n');
+
+    const joined = redactBackupLog(log).join('\n');
+    assert.ok(!joined.includes('SECRETKEYMATERIAL'), `orphaned key body line survived redaction: ${joined}`);
+    assert.ok(joined.includes('done'), `context line was destroyed: ${joined}`);
+  });
+
+  await test('redactBackupLog drops empty lines and tolerates a non-string input', () => {
+    assert.deepEqual(redactBackupLog('a\n\nb'), ['a', 'b']);
+    assert.deepEqual(redactBackupLog(undefined as unknown as string), []);
+  });
+
+  await test('ordinary base64-looking prose is not destroyed by the backstop rule', () => {
+    // The lone-base64 rule must be narrow enough not to eat readable lines.
+    const joined = redactBackupLog('2026-08-15 02:30:02 wrote noramedi_crm-20260815-023001.dump (3.2 MB)').join('\n');
+    assert.ok(joined.includes('noramedi_crm-20260815-023001.dump'), `an ordinary line was redacted: ${joined}`);
+  });
+
+  await test('a stanza name is NOT redacted — it is operational context, not a secret', () => {
+    const line = redactBackupLogLine('pgbackrest --stanza=noramedi archive-push completed in 0.4s');
+    assert.equal(line, 'pgbackrest --stanza=noramedi archive-push completed in 0.4s');
   });
 
   // ── Regression: the `\b`-anchored rule that shipped first (F4 review, H2) ──

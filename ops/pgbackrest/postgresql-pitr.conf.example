@@ -1,0 +1,136 @@
+# postgresql-pitr.conf.example — F4-FCR-002
+#
+# The ADDITIVE PostgreSQL settings that turn on continuous WAL archiving.
+# This is a TEMPLATE. It is not applied by any script in this repository and
+# it is not authorized for production.
+#
+# ⚠ APPLYING THESE SETTINGS REQUIRES:
+#     1. the scoped freeze exception in
+#        docs/program/runbooks/F4_RECOVERY_OPERATIONS.md §12
+#        (status: DRAFT_PENDING_PROGRAM_OWNER — NOT GRANTED), and
+#     2. a PostgreSQL RESTART, which is a production mutation.
+#   No agent may self-approve either (NORAMEDI_MASTER_TRACKER.md §2.3).
+#
+# ⚠ ORDERING. `pgbackrest stanza-create` MUST succeed BEFORE archive_mode is
+#   turned on. If archive_command points at a stanza that does not exist yet,
+#   every push fails, PostgreSQL retries forever, pg_wal grows without bound,
+#   and the cluster eventually shuts down on a full disk. Production is a
+#   single 76 GB filesystem shared with PGDATA, uploads and
+#   /root/noramedi-backups — there is no second volume to absorb that.
+#   scripts/noramedi-pgbackrest-preflight.sh enforces this ordering.
+#
+# HOW TO APPLY — do not paste this file over postgresql.conf. Use a drop-in
+# so the change is one file to add and one file to delete:
+#
+#   sudo -u postgres psql -Atc "SHOW config_file;"        # confirm the real path
+#   sudo -u postgres psql -Atc "SHOW data_directory;"     # confirm PGDATA
+#   # confirm a conf.d include actually exists before relying on it:
+#   sudo -u postgres psql -Atc "SHOW include_dir;"
+#
+#   sudo install -o root -g root -m 0644 \
+#        ops/pgbackrest/postgresql-pitr.conf.example \
+#        /etc/postgresql/16/main/conf.d/10-noramedi-pitr.conf
+#
+# root:root 0644 matches what noramedi-pgbackrest-preflight.sh --apply writes.
+# The file only has to be READABLE by the postmaster (which runs as postgres),
+# not writable by it — configuration that the database can rewrite is a
+# privilege-escalation surface, not a convenience.
+#
+# If the cluster has no conf.d include directory, the preflight script REFUSES
+# to proceed rather than appending to postgresql.conf: an append cannot be
+# rolled back by deleting a file, and reconstructing the previous state from
+# memory during an incident is the failure this whole design exists to prevent.
+# Enable an include_dir first (add `include_dir = 'conf.d'` to postgresql.conf,
+# create the directory, reload).
+#
+# Run the preflight script with no arguments first. It is READ-ONLY by default
+# and prints both the four host-derived values and the exact drop-in it would
+# write, without writing anything:
+#
+#   sudo /usr/local/sbin/noramedi-pgbackrest-preflight.sh            # dry-run
+#   sudo /usr/local/sbin/noramedi-pgbackrest-preflight.sh --apply    # writes it
+
+# ── wal_level ────────────────────────────────────────────────────────────
+# Production is ALREADY `replica` (PRODUCTION_TOPOLOGY.md:52), which is the
+# minimum pgBackRest needs. This line is written here for completeness and to
+# make the required end state explicit; setting it to the value it already
+# holds changes nothing.
+#
+# Do NOT raise this to `logical` as part of this task. It is not needed for
+# PITR, it increases WAL volume, and it is outside the freeze exception.
+wal_level = replica
+
+# ── archive_mode ─────────────────────────────────────────────────────────
+# THIS is the line that requires a restart (PGC_POSTMASTER). Everything else
+# in this file is reloadable with SIGHUP.
+#
+# Rollback is exactly this line back to `off` plus a restart. That single
+# command pair is the rollback the freeze exception text requires.
+archive_mode = on
+
+# ── archive_command ──────────────────────────────────────────────────────
+# EXACTLY this, character for character. Nothing appended, nothing wrapping
+# it, no `|| true`, no `; exit 0`, no shell function.
+#
+# An archive_command that swallows its exit status is the most destructive
+# misconfiguration available here: PostgreSQL marks the segment archived and
+# recycles it, so the WAL is gone from pg_wal and was never written to the
+# repository — while backups keep succeeding and every dashboard stays green.
+#
+# %p is the path of the segment to archive. pgBackRest handles retries,
+# compression and encryption itself.
+archive_command = 'pgbackrest --stanza=noramedi archive-push %p'
+
+# ── archive_timeout — THE SETTING THAT ACTUALLY BOUNDS RPO ────────────────
+# 300 seconds = 5 minutes.
+#
+# WAL is archived one segment at a time, and a segment is only handed to
+# archive_command when it CLOSES — either by filling (16 MB) or by a forced
+# switch. The production database is ~16 MB total with load average 0.00, so
+# a 16 MB segment can take many hours or days to fill on its own. Without
+# this setting, a backup can be minutes old while the newest recoverable
+# point is a day old, and no amount of monitoring can tell the difference
+# between "idle cluster" and "archiving has been broken since Tuesday".
+#
+# Worst-case data loss is bounded at roughly:
+#     archive_timeout + push latency + detection lag  ≈ 5-6 minutes
+#
+# Why 300 and not 3600: setting this equal to the RPO target leaves zero
+# margin for push latency, a retry, and the monitoring interval. 300 gives a
+# ~10x margin under the <= 60 min target recorded in
+# F4_RECOVERY_OPERATIONS.md §7.1, and also satisfies the tighter <= 15 min
+# figure proposed in docs/architecture/object-storage-backup-migration-design.md
+# §230. Those two documents disagree; 300 resolves it in the safe direction
+# without either being silently overridden. The disagreement itself is
+# recorded for reconciliation, not settled by this file.
+#
+# Cost, stated honestly: a forced switch archives a FULL-SIZE 16 MB segment
+# no matter how little it contains. 300 s => up to 288 segments/day ≈ 4.6 GB
+# raw. Compressed, near-empty segments collapse to a few KB each, so real
+# consumption should be tens of MB/day — but that estimate depends entirely
+# on compression and has NOT been measured on this host. Do not treat it as a
+# fact. WAL segments are not covered by repo1-bundle.
+#
+# 600 (10 min) halves the object count and still clears both RPO targets — a
+# defensible pilot choice if disk headroom is the greater worry.
+# 60 is NOT justified: 1440 segments/day for a 60-minute target buys nothing
+# and multiplies exactly the disk-exhaustion risk the freeze exception names.
+#
+# MEASURE, THEN DECIDE. After one week:
+#     sudo du -sh /var/lib/pgbackrest/archive
+# gives the real per-day figure. Until then, the disk-exhaustion abort in
+# scripts/noramedi-pgbackrest-backup.sh is what makes it safe to be wrong.
+archive_timeout = 300
+
+# ── restore_command — NOT SET HERE, DELIBERATELY ─────────────────────────
+# restore_command belongs on the RESTORE side, not on a running primary.
+# `pgbackrest restore` writes it into postgresql.auto.conf and creates
+# recovery.signal itself. Setting it here would be inert at best.
+#
+# For reference, the value pgBackRest writes is:
+#     restore_command = 'pgbackrest --stanza=noramedi archive-get %f "%p"'
+#
+# ⚠ NEVER run a restore against the production data directory to "test" it.
+# scripts/noramedi-pgbackrest-restore-drill.sh restores into a disposable
+# cluster on a scratch path and a scratch port, and refuses to run against
+# the production PGDATA, the production port, or the database noramedi_crm.

@@ -1,0 +1,120 @@
+# noramedi-pgbackrest-status.service — F4-FCR-002
+#
+# NOT INSTALLED ON PRODUCTION. This is a reviewed template only. Installing it
+# is part of the PITR activation sequence in
+# docs/program/runbooks/F4_RECOVERY_OPERATIONS.md §13, which requires the
+# scoped freeze exception (§14, DRAFT_PENDING_PROGRAM_OWNER — NOT GRANTED).
+#
+# Publishes /var/lib/noramedi/pitr-status.json, which noramedi-opscheck.sh's
+# opt-in `pitr` check reads.
+#
+# WHY THIS IS A SEPARATE UNIT FROM noramedi-opscheck.service:
+# opscheck runs with TimeoutStartSec=60 and monitors five subsystems. If it
+# called `pgbackrest info` itself and that call hung — entirely possible
+# against a network-backed repository — systemd would kill the WHOLE opscheck
+# run. pm2, disk, backup, filebackup and drill would all stop pinging, and
+# roughly twenty minutes later the operator would receive five simultaneous
+# DOWN emails, none of which described a real problem. A slow backup
+# repository must not be able to take out unrelated monitoring.
+#
+# So the slow, dependency-heavy work lives here, and opscheck only reads the
+# resulting file. If THIS unit dies, the document goes stale and opscheck's
+# pitr check fails closed on its 2-hour generatedAt gate — which is the
+# correct, contained failure.
+#
+# Runs as root because it delegates to the postgres OS user via runuser: it
+# needs to read /etc/pgbackrest/pgbackrest.conf (0600 postgres) and to run
+# pgbackrest as the cluster owner. It never runs pgBackRest AS root — pgBackRest
+# refuses that, and it would be wrong regardless.
+#
+# Installation (execute deliberately, after the freeze exception is granted):
+#   install -o root -g root -m 0755 scripts/noramedi-pgbackrest-status.sh \
+#           /usr/local/sbin/noramedi-pgbackrest-status.sh
+#   install -o root -g root -m 0644 ops/systemd/noramedi-pgbackrest-status.service \
+#           /etc/systemd/system/noramedi-pgbackrest-status.service
+#   install -o root -g root -m 0644 ops/systemd/noramedi-pgbackrest-status.timer \
+#           /etc/systemd/system/noramedi-pgbackrest-status.timer
+#   install -d -o root -g root -m 0755 /var/lib/noramedi          # already exists if F4-FCR-001 was activated
+#   systemctl daemon-reload
+#   systemctl enable --now noramedi-pgbackrest-status.timer
+#
+# Smoke test BEFORE enabling the timer (writes nothing):
+#   /usr/local/sbin/noramedi-pgbackrest-status.sh --stdout --no-check
+#
+# Rollback:
+#   systemctl disable --now noramedi-pgbackrest-status.timer
+#   rm -f /etc/systemd/system/noramedi-pgbackrest-status.{service,timer}
+#   systemctl daemon-reload
+#   rm -f /var/lib/noramedi/pitr-status.json
+# Removing this unit stops PITR reporting; it does NOT stop WAL archiving,
+# which is a PostgreSQL setting (see the runbook's rollback table).
+
+[Unit]
+Description=NoraMedi pgBackRest / PITR status writer (F4-FCR-002)
+Documentation=file:///var/www/noramedi/docs/program/runbooks/F4_RECOVERY_OPERATIONS.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=-/etc/noramedi/pgbackrest-status.env
+ExecStart=/usr/local/sbin/noramedi-pgbackrest-status.sh
+
+# The script makes up to 5 psql calls plus `info` and (hourly) `check`, each
+# individually bounded by NORAMEDI_PGBACKREST_CMD_TIMEOUT (default 60s), so the
+# arithmetic worst case is ~7 minutes — NOT the 120s an earlier version of this
+# comment claimed. 480s is set to exceed that worst case rather than truncate
+# it: a unit killed mid-run writes no status file at all, and the operator then
+# sees the 2-hour staleness alarm instead of the real diagnosis (a degraded
+# PostgreSQL). It remains well under the 15-minute timer interval, so two
+# writers still cannot overlap.
+TimeoutStartSec=480
+
+# Hardening. ProtectSystem=strict makes the filesystem read-only except for
+# ReadWritePaths below.
+NoNewPrivileges=yes
+ProtectSystem=strict
+#
+# /var/log/pgbackrest is REQUIRED here, not optional: pgbackrest.conf sets
+# log-level-file=detail, so every `info` and `check` this unit runs writes to
+# it. Under ProtectSystem=strict an unwritable log path makes pgBackRest warn
+# or error depending on build — and an erroring `check` would pin checkStatus
+# to "failed" permanently, i.e. a permanent FALSE RED on a healthy cluster.
+#
+# /var/lib/pgbackrest is required for the lock directory (see PrivateTmp below).
+ReadWritePaths=/var/lib/noramedi /var/lib/noramedi-pgbackrest /var/log/pgbackrest /var/lib/pgbackrest
+# ProtectHome=yes is safe here and deliberate: unlike opscheck — which must
+# read /root/noramedi-backups and therefore uses read-only — this unit never
+# touches /root, because the pgBackRest repository lives under /var/lib
+# precisely so that it does not. (An earlier revision of this file carried a
+# comment saying the opposite of the directive below; the directive was always
+# the correct one.)
+ProtectHome=yes
+StateDirectory=noramedi-pgbackrest
+#
+# PrivateTmp gives this unit its own /tmp. That is good hygiene but it BREAKS
+# pgBackRest's default lock-path of /tmp/pgbackrest: a lock taken here would be
+# invisible to the cron-driven `pgbackrest backup` running in the host /tmp,
+# and vice versa — so the hourly `check` (which forces a WAL segment switch)
+# could run concurrently with a backup, which is exactly what pgBackRest's lock
+# exists to prevent.
+#
+# Therefore pgbackrest.conf MUST set an explicit, shared lock-path outside
+# /tmp: `lock-path=/var/lib/pgbackrest/lock` (see
+# ops/pgbackrest/pgbackrest.conf.example). Both this unit and the cron job then
+# use the same real directory and the lock works across them.
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# MemoryDenyWriteExecute intentionally omitted: the script shells out to
+# `node -e` to parse `pgbackrest info --output=json` (jq is not a dependency
+# anywhere in this repository), and V8's JIT requires writable+executable
+# mappings. Setting it is a known way to break any Node.js process outright.
+
+[Install]
+WantedBy=multi-user.target
