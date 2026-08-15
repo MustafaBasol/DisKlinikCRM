@@ -509,6 +509,16 @@ design and a provider-side check created early just sits DOWN.
 
 ## 14. `F4-FCR-002_PITR_SCOPED_FREEZE_EXCEPTION` — GRANTED 2026-08-15
 
+> **[F4-FCR-002A, 2026-08-15 — key-name reconciliation.]** This heading and
+> §591 name the same grant differently. The **canonical key is
+> `F4-FCR-002_SCOPED_FREEZE_EXCEPTION`** (as used by §591, the phase document
+> and the master tracker); `F4-FCR-002_PITR_SCOPED_FREEZE_EXCEPTION` is an
+> alias, **not a second exception**. See `NORAMEDI_MASTER_TRACKER.md` §5.1 for
+> the full reconciliation of the contradictory GRANTED / NOT-GRANTED records
+> across this runbook, the tracker and the phase document. The §189–§191
+> "NOT GRANTED" text below refers to a *different*, still-ungranted proposal
+> and is unaffected.
+
 **Status: `AUTHORIZED_BY_PROGRAM_OWNER_2026-08-15`.** Recorded in
 [`phases/F4_STORAGE_AND_BACKUP.md`](../phases/F4_STORAGE_AND_BACKUP.md) §F4-FCR-002,
 which is the location [`NORAMEDI_MASTER_TRACKER.md`](../NORAMEDI_MASTER_TRACKER.md)
@@ -1031,3 +1041,176 @@ installed, and `R-030`/`R-031`/`R-032` remain `OPEN`. (The freeze exception was
 **repository-complete and never executed against a real cluster** — H3 is
 direct evidence of that, and it is why §13's activation sequence ends with a
 human-watched first drill rather than a scheduled one.
+
+---
+
+## 21. F4-FCR-002A — drill installation, evidence directory, and the controlled PITR marker
+
+Added by **F4-FCR-002A** (pre-flight only). Every command below is an
+**operator** action. None has been executed by an agent, and none of them
+executes a restore. The drill itself remains `NO_GO` until §21.5 is satisfied.
+
+Pre-flight found the production host missing three things the drill needs, all
+discovered *before* a restore rather than after one: the drill scripts are not
+installed, `/var/lib/noramedi` does not exist, and — until the marker
+procedure below — no post-backup event existed against which a point-in-time
+recovery could be *proved* rather than merely performed.
+
+### 21.1 Install the drill and its application-smoke helper
+
+Both files must land in the **same directory**: the drill resolves the smoke
+helper relative to its own path, and refuses to run without it.
+
+```bash
+sudo install -m 0755 -o root -g root \
+  /var/www/noramedi/scripts/noramedi-pgbackrest-restore-drill.sh /usr/local/sbin/
+sudo install -m 0755 -o root -g root \
+  /var/www/noramedi/scripts/noramedi-pitr-app-smoke.mjs /usr/local/sbin/
+```
+
+**Hash-verify both copies**, following the precedent set by
+`F3-IMPL-002-PROD-RECON` — an installed script that silently drifts from the
+repository copy is exactly the failure that task existed to close (`R-077`):
+
+```bash
+for f in noramedi-pgbackrest-restore-drill.sh noramedi-pitr-app-smoke.mjs; do
+  a="$(sha256sum "/var/www/noramedi/scripts/$f" | cut -d' ' -f1)"
+  b="$(sha256sum "/usr/local/sbin/$f"           | cut -d' ' -f1)"
+  [ "$a" = "$b" ] && echo "OK   $f $a" || echo "DRIFT $f repo=$a installed=$b"
+done
+bash -n /usr/local/sbin/noramedi-pgbackrest-restore-drill.sh && echo "syntax OK"
+node --check /usr/local/sbin/noramedi-pitr-app-smoke.mjs   && echo "smoke parses"
+```
+
+Record both SHA-256 values in the task evidence. **Version note:** the deployed
+tree at `/var/www/noramedi` was one release behind `origin/main` at pre-flight
+time (73 applied migrations vs 74 directories on `main`). Confirm these two
+files exist in the deployed tree before installing; if they do not, the
+release must be deployed first — which is a separate, separately-approved
+action, because a deploy also runs `prisma migrate deploy`.
+
+### 21.2 Create the evidence directory
+
+Without it the drill runs to completion and then writes **nothing**: the
+result document is written only `if [[ -d "$RESULT_DIR" ]]`, and
+`write_incident_marker` returns silently when the directory is absent. A drill
+that proves recoverability and leaves no artifact has produced no evidence.
+
+```bash
+sudo install -d -m 0750 -o root -g root /var/lib/noramedi
+```
+
+Least privilege: owned by `root:root`, mode `0750`, no group or world write.
+The drill writes each file inside it as mode `0600`. The directory holds
+recovery metadata — counts, timestamps, WAL segment names — and must never be
+used for restored data.
+
+### 21.3 Controlled PITR marker procedure
+
+A point-in-time recovery can only be *proved* with an event that must exist
+before the target and an event that must not exist after it. Production had no
+such event: at pre-flight the newest `AuditLog` row predated the base backup by
+roughly 39 hours, because the system is pre-first-customer and genuinely idle.
+
+The marker pair is written through the application's own
+`recordOperationalEvent()` service to `OperationalEvent`, on a sentinel
+`organizationId` that belongs to **no tenant** (`organizationId` carries no
+foreign key). Both rows are `severity=info`, `source=system`, with an
+operator-authored fixed message. **No patient, clinical or personal data is
+involved.**
+
+`RecoveryDrillRun` was deliberately **not** used, for two reasons worth
+recording: its table is created by a migration not applied in production, and
+`isRecoveryDrillStale()` keys only on the newest row's `startedAt`
+*irrespective of `status`* — so inserting a `db_restore_test` row would have
+flipped the staleness flag green for 168 hours before any restore was proven,
+subverting that ledger's own "silence must never read as success" invariant.
+
+```bash
+RUN_ID='F4-FCR-002A-<YYYYMMDD>-<NN>'      # unique per drill attempt
+cd /var/www/noramedi/server
+```
+
+| Step | Action | Gate |
+|---|---|---|
+| 0 | read-only probe: `current_database`, `current_user`, `inet_server_port`, `TimeZone`, `now()`, `localtimestamp` | `noramedi_crm`, port `5432`; **record `TimeZone`** |
+| 0b | count existing rows for this `runId` | must be `0` |
+| 1 | write marker **A** (`metadata` = `{task, runId, marker:'A'}`) | script reports `rows=1` |
+| 2 | wait 120 s | — |
+| 3 | write marker **B** | script reports `rows=1` |
+| 4 | read both back, ordered by `createdAt` | exactly two rows, ~120 s apart |
+| 5 | `SELECT pg_current_wal_lsn(), pg_walfile_name(pg_current_wal_lsn());` | record `MARKER_SEG` |
+| 6 | poll `pg_stat_archiver` + `archive_status/*.ready` | `last_archived_wal >= MARKER_SEG`, `failed_count=0`, `.ready=0` |
+
+Step 0 is **mandatory, not diagnostic**: `getRequiredDatabaseUrl()` throws on a
+missing `DATABASE_URL` only when `NODE_ENV=production`, and otherwise lets
+node-postgres fall back to `PG*` variables or driver defaults — connecting
+somewhere else *silently*. Step 0 is the control for that.
+
+Run these as **file-based scripts** under `server/src/scripts/`, importing
+`'dotenv/config'` then `../db.js` — the form proven by
+`fileBackupRestoreCli.ts` and `platform-admin-recover-password.ts`. This
+resolves `DATABASE_URL` from `server/.env` exactly as the live PM2 processes
+do, so **no secret is ever set, printed, copied or reconstructed** on a command
+line. `tsx --eval` does **not** work here: it cannot resolve `./src/db.js` to
+the TypeScript source and fails with `Cannot find module`.
+
+`archive_timeout=5min` closes and archives the segment automatically — expect
+roughly six minutes after marker B. **No WAL switch is required**, and
+`pg_switch_wal()` is a production mutation that would need its own approval.
+
+**Deriving the target `T`:** the midpoint of the two `createdAt` values,
+expressed with an **explicit UTC offset**. `createdAt` is `timestamp without
+time zone`; a bare `recovery_target_time` is interpreted in the server's
+timezone and is the most common PITR footgun there is. Confirm the offset
+empirically against Step 0's `TimeZone` and the archive timing before using it
+— an offset that is wrong by hours produces a silent undershoot.
+
+**Retention.** These rows are transaction-level PITR proof *inputs*, **not
+guaranteed permanent evidence**. Durable proof — `runId`, both marker
+timestamps, `T`, `MARKER_SEG`, the archive readings and the marker counts —
+belongs in the drill result artifact under the program retention policy. Never
+`DELETE` the marker rows during a drill; if they should leave an unresolved
+operational-events view, resolve them through the existing mechanism.
+
+### 21.4 Drill invocation with stop-point verification
+
+```bash
+sudo REHEARSAL_OS_USER=postgres \
+     PG_BINDIR=/usr/lib/postgresql/16/bin \
+     NORAMEDI_APP_SERVER_DIR=/var/www/noramedi/server \
+     NORAMEDI_PITR_DRILL_PROD_PGDATA=/var/lib/postgresql/16/main \
+  /usr/local/sbin/noramedi-pgbackrest-restore-drill.sh \
+     --set 20260815-150014F \
+     --target '<T with explicit offset>' \
+     --pitr-run-id "$RUN_ID" \
+     --marker-seg "$MARKER_SEG" \
+     --marker-b-at '<marker B createdAt>'
+```
+
+`PG_BINDIR` is pinned deliberately. The drill auto-detects it by globbing
+`/usr/lib/postgresql/*/bin` and keeping the lexically last match, with **no**
+assertion that the binary's major version matches the backup. Only PostgreSQL
+16 is installed today, so detection happens to be correct — pinning makes it
+correct by construction instead of by circumstance.
+
+With `--pitr-run-id`, the drill asserts inside the restored cluster that
+marker A is present exactly once, marker B is absent, and
+`pg_last_xact_replay_timestamp() <= --target`. Any of those failing fails the
+drill. **Without it**, a `--target` run is recorded as `not_verified` and is
+excluded from R-032 eligibility — passing `--target` to pgBackRest proves a
+restore ran, not that recovery stopped where it was told to.
+
+Expected verdicts: marker A = 1 and B = 0 is a **proven** PITR; A = 0 is an
+undershoot; B = 1 is an **overshoot**, meaning `recovery_target_time` was not
+honoured. Historical marker pairs from earlier drills are present in the
+restored cluster and are inert — every query filters on `runId`.
+
+### 21.5 Still NOT authorised by this section
+
+Executing the drill. §21.1–§21.3 are preparation; the restore itself requires
+a separate explicit operator decision. `R-030` stays `OPEN` regardless of the
+outcome — `repo1` is local, and the drill refuses to write an off-host proof
+from `repo < 2` because a same-host repository is not an independent failure
+domain. `R-031`/`R-032` and `FIRST_CUSTOMER_RECOVERY_GATE` are closed only by
+an executed, passing, cleaned-up drill.

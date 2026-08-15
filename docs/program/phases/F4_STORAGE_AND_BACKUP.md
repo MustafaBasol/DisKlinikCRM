@@ -1,6 +1,6 @@
 # F4 — Storage and Backup Foundation
 
-Faz durumu: `TODO` · Son güncelleme: 2026-08-15 (F4-FCR-002)
+Faz durumu: `TODO` · Son güncelleme: 2026-08-15 (F4-FCR-002A — yalnızca ön kontrol; **restore çalıştırılmadı**)
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
 
@@ -52,6 +52,88 @@ Yedekleme mekanizmasının kendisi, hedefi, şifrelemesi, zamanlaması ve PITR d
 Bayat **olmayan** (düzeltilmemeli): versiyonlama, object-lock/değişmezlik, yaşam döngüsü/saklama, bucket-config doğrulaması, PITR ve yedek baytlarının uygulama katmanı şifrelemesi — bunlar gerçekten uygulanmamıştır.
 
 
+
+## F4-FCR-002A — İzole restore/PITR tatbikatı: YALNIZCA ÖN KONTROL (PRE-FLIGHT)
+
+`F4-FCR-002A_STATUS = IN_PROGRESS` · **`PREFLIGHT_DECISION = NO_GO`**
+`NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
+Taban çizgisi: `origin/main` @ `def01bf6a2d4ec6bd7aea222979f7be60e29847e`
+
+> **Bu görev tamamlanmamıştır.** `F4-FCR-002A`, gerçek tatbikat çalıştırılıp
+> doğrulanana ve temizlenene kadar `IN_PROGRESS` kalır. **Restore
+> çalıştırılmadı.** `R-030`/`R-031`/`R-032` `OPEN`;
+> `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`.
+
+### Sonuç: NO_GO — hazırlık eksikliğinden, güvenlik tasarımından değil
+
+İzolasyon tasarımı düşmanca incelemeden geçti: yalnızca tmpfs, yalnızca unix
+socket (`listen_addresses=''`, `0700` socket dizini, `peer` auth), tatbikat
+örneğinde `archive_mode=off` ve boş `archive_command`, üretim PGDATA'sını
+çözemediğinde **açık başarısız olmayı reddeden** koruma (exit 3), `--delta`
+yok, ve doğrulanamayan bir temizliği başarı olarak raporlamak yerine olaya
+yükselten cleanup.
+
+| Kapı | Sonuç |
+|---|---|
+| `DISK_CAPACITY_GATE` | `PASS` (tatbikatın kendi formülüyle hostta yeniden hesaplandı) |
+| `PG_VERSION_COMPATIBILITY_GATE` | `PASS` — PostgreSQL 16.14, ikili dosyalar `/usr/lib/postgresql/16/bin` |
+| `MIGRATION_COMPATIBILITY_GATE` | `PASS` — dağıtılmış 73 = DB 73 (`origin/main` 74; olağan deploy gecikmesi) |
+| `TENANT_ISOLATION_SMOKE_GATE` | `PLANNED_SAFE` |
+| `PITR_MARKER_GATE` | `PLANNED_SAFE` (kontrollü marker sonrası) |
+| `MARKER_ARCHIVE_GATE` | `PASS` — `000000010000000000000020`, `failed_count=0`, `.ready=0` |
+
+### Kalan blokajlar (tatbikattan önce)
+
+1. `/usr/local/sbin/noramedi-pgbackrest-restore-drill.sh` ve
+   `noramedi-pitr-app-smoke.mjs` üretimde **kurulu değil** → runbook §21.1.
+2. `/var/lib/noramedi` **yok**; sonuç belgesi yalnızca
+   `if [[ -d "$RESULT_DIR" ]]` yazılır ve `write_incident_marker` dizin
+   yoksa sessizce döner → runbook §21.2.
+3. Tatbikatın PITR **durma noktası doğrulaması** — bu görevde **eklendi**;
+   çağrıda `--pitr-run-id` verilmesi gerekir.
+4. Dondurma istisnası çelişkisi — `NORAMEDI_MASTER_TRACKER.md` §5.1'de
+   kaynak önceliğine göre **çözüldü**.
+
+### Uygulama smoke Stage B = BLOCKED (ve gerekli değil)
+
+`RUN_BACKGROUND_JOBS` yalnızca API sürecini kapsam dışı bırakır;
+`resolveWorkerBackgroundJobsOwnership()` koşulsuz `ownsJobs: true` döner ve bu
+değişkeni **hiç okumaz** (`backgroundJobsOwnership.ts:65-70`), `ecosystem.config.cjs`
+worker `env` bloğunda kasıtlı olarak yoktur. Mesajlaşma kimlik bilgileri
+ortam değişkeni değil **veritabanı satırlarıdır** ve üretim `ENCRYPTION_KEY`
+ile çözülür; `withJobLock` geri yüklenen veritabanının kendi kilit tablosuna
+yazar, dolayısıyla üretimin kilitleri çift gönderimi engelleyemez. Güvenli ve
+yeterli yol: Stage A (yalnızca SQL invariant'ları) + `noramedi-pitr-app-smoke.mjs`
+— bu yardımcı Express'i hiç başlatmaz, iş zamanlamaz, yazmaz, satır yazdırmaz
+ve TCP bağlantısını reddeder.
+
+### Depo düzeltmesi (en küçük eklemeli değişiklik)
+
+`scripts/noramedi-pgbackrest-restore-drill.sh` artık PITR durma noktasını
+**deterministik** doğrular: `--pitr-run-id` ile geri yüklenen kümede marker
+A = 1, marker B = 0 ve `pg_last_xact_replay_timestamp() <= --target`. Herhangi
+biri sağlanmazsa tatbikat başarısız olur; karşılaştırma yapılamazsa
+**fail-closed**. `--pitr-run-id` verilmeyen bir `--target` koşusu
+`not_verified` olarak damgalanır ve R-032 uygunluğundan çıkarılır. Kanıt
+(`runId`, marker sayıları/zamanları, hedef, WAL segmenti) kalıcı sonuç
+belgesine `pitrVerification` altında yazılır. 19 yeni kabuk testi eklendi;
+`schemaVersion` **2'de bırakıldı** — değişiklik tamamen eklemelidir ve bu
+belgenin sürüme bağlı bir tüketicisi yoktur.
+
+### Kontrollü üretim marker'ı (onaylı, klinik olmayan)
+
+`runId = F4-FCR-002A-20260815-01`. Uygulamanın kendi `recordOperationalEvent()`
+servisi üzerinden `OperationalEvent`'e iki satır; hiçbir kiracıya ait olmayan
+sentinel `organizationId` (bu sütunun yabancı anahtarı yoktur),
+`severity=info`, `source=system`, sabit operatör metni. **Hasta, klinik veya
+kişisel veri yok.** `RecoveryDrillRun` bilinçli olarak **kullanılmadı**:
+tablosu üretimde uygulanmamış bir migration ile gelir ve
+`isRecoveryDrillStale()` yalnızca en yeni satırın `startedAt` değerine bakar,
+**`status`'tan bağımsız** — bir `db_restore_test` satırı, hiçbir restore
+kanıtlanmadan bayatlık bayrağını 168 saat yeşile çevirirdi.
+
+Bu satırlar **işlem düzeyinde PITR kanıt girdileridir, kalıcı kanıt değildir**;
+kalıcı kanıt program saklama politikasına göre tatbikat sonuç belgesine yazılmalıdır.
 
 ## F4-FCR-002 — pgBackRest / PITR / Off-Host Kurtarma Temeli
 
@@ -272,4 +354,5 @@ Imaging (DICOM/CBCT) ölçeklenmeden önce object storage zorunludur (PROGRAM DI
 | 2026-07-17 | F0-001 | Faz dokümanı oluşturuldu (yüksek seviyeli). |
 | 2026-08-14 | F4-1A | Storage-key sözleşme reconciliation'ı kaydedildi; dört rakip üretici tek yetkili üretici altında toplandı; dar kapsamlı dondurma istisnası kaydedildi. Faz durumu `TODO` olarak **değişmedi**. F0-011'in yedekleme/checksum bölümünün bayatladığı not edildi: `FileBackupRun`/`FileBackupEntry`, streaming SHA-256, read-back doğrulaması ve restore rehearsal artık mevcuttur. |
 | 2026-08-14 | F4-FCR-001 | Restore tatbikat kanıt defteri (`RecoveryDrillRun`), ölçülebilir RPO/RTO, zamanlanabilir dosya restore tatbikatı (`mixed`/`oldest` örnekleme ile bit-rot tespiti), çökmüş koşu süpürücüsü, artık restore-test veritabanı olayının tespiti/denetimi/görünürlüğü, yedek log redaksiyonu, `opscheck` `filebackup` + `drill` kontrolleri ve Platform Admin görünürlüğü eklendi. **Yeni dondurma istisnası alınmadı**; PITR ve off-host hedef bilinçli olarak kapsam dışı bırakıldı. Faz durumu `TODO` olarak **değişmedi**; R-030/R-031/R-032 `OPEN` kalır. |
-| 2026-08-15 | F4-FCR-002 | pgBackRest/PITR/off-host kurtarma temeli **depo tarafında** kuruldu: şifreli yerel repo şablonu, additive PostgreSQL drop-in, operatör preflight (belirsiz durumda reddeder, PostgreSQL'i asla yeniden başlatmaz), disk-tükenmesi abort koşulu, ayrı systemd timer'lı PITR durum yazıcısı, opscheck `pitr` kontrolü (bit **128** — hiçbir mevcut çıkış kodu taşınmadı; opt-in), tek kullanımlık RAM-destekli kümede PITR restore tatbikatı, **üç durumlu** off-host raporlaması ve Platform Admin paneli. Yol boyunca iki kusur düzeltildi: `redactBackupLogLine()` pgBackRest depo parolasını **hiç** redakte etmiyordu ve `scripts/` altındaki kabuk betiklerinin **hiçbir** otomatik koruması yoktu (artık `npm run test:shell`, CI Layer 1). **Üretimde hiçbir mutasyon yok**; `archive_mode` `off` kalır; mevcut 03:15 `pg_dump` zinciri değiştirilmedi; dar kapsamlı dondurma istisnası **TASLAK — VERİLMEDİ**. Faz durumu `TODO` olarak **değişmedi**; R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
+| 2026-08-15 | F4-FCR-002 | pgBackRest/PITR/off-host kurtarma temeli **depo tarafında** kuruldu: şifreli yerel repo şablonu, additive PostgreSQL drop-in, operatör preflight (belirsiz durumda reddeder, PostgreSQL'i asla yeniden başlatmaz), disk-tükenmesi abort koşulu, ayrı systemd timer'lı PITR durum yazıcısı, opscheck `pitr` kontrolü (bit **128** — hiçbir mevcut çıkış kodu taşınmadı; opt-in), tek kullanımlık RAM-destekli kümede PITR restore tatbikatı, **üç durumlu** off-host raporlaması ve Platform Admin paneli. Yol boyunca iki kusur düzeltildi: `redactBackupLogLine()` pgBackRest depo parolasını **hiç** redakte etmiyordu ve `scripts/` altındaki kabuk betiklerinin **hiçbir** otomatik koruması yoktu (artık `npm run test:shell`, CI Layer 1). **Üretimde hiçbir mutasyon yok**; `archive_mode` `off` kalır; mevcut 03:15 `pg_dump` zinciri değiştirilmedi; dar kapsamlı dondurma istisnası **TASLAK — VERİLMEDİ** *(**[2026-08-15, F4-FCR-002A tarafından GEÇERSİZ KILINDI]** — istisna aynı gün, bu satır yazıldıktan sonra verilmiştir: `AUTHORIZED_BY_PROGRAM_OWNER_2026-08-15`, bkz. bu dosyanın 59. satırı ve `NORAMEDI_MASTER_TRACKER.md` §5.1. Özgün ifade tarihsel kayıt olarak korunmuştur.)*. Faz durumu `TODO` olarak **değişmedi**; R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
+| 2026-08-15 | F4-FCR-002A | İzole restore/PITR tatbikatı **yalnızca ön kontrol (PRE-FLIGHT)**; **restore ÇALIŞTIRILMADI**. Canlı üretim kanıtına karşı 27 bölümlük GO/NO-GO raporu üretildi; sonuç **`PREFLIGHT_DECISION = NO_GO`** — güvenlik tasarımı nedeniyle değil, hazırlık eksikleri nedeniyle. Geçen kapılar: `DISK_CAPACITY_GATE = PASS`, `PG_VERSION_COMPATIBILITY_GATE = PASS` (PostgreSQL 16.14), `MIGRATION_COMPATIBILITY_GATE = PASS` (dağıtılmış 73 = DB 73; `origin/main` 74 ile bir sürüm önde, bu beklenen deploy gecikmesidir), `TENANT_ISOLATION_SMOKE_GATE = PLANNED_SAFE`, `PITR_MARKER_GATE = PLANNED_SAFE`, `MARKER_ARCHIVE_GATE = PASS`. **Uygulama smoke Stage B = BLOCKED**: `RUN_BACKGROUND_JOBS` yalnızca API sürecini devre dışı bırakır, worker onu hiç okumaz (`backgroundJobsOwnership.ts:65-70`), mesajlaşma kimlik bilgileri veritabanı satırlarındadır ve `withJobLock` geri yüklenen veritabanının kendi kilitlerine yazar — gerçek hastalara çift gönderim riski. Güvenli yol Stage A (yalnızca SQL invariant'ları) + `noramedi-pitr-app-smoke.mjs`'dir; bu yardımcı uygulamayı hiç başlatmaz. Depoda **en küçük eklemeli düzeltme** yapıldı: tatbikata deterministik **PITR durma noktası doğrulaması** eklendi (marker A = 1, marker B = 0, replay ≤ hedef, fail-closed, R-032 uygunluğu buna bağlandı, kanıt kalıcı sonuç belgesine yazılıyor) + 19 yeni kabuk testi. Üretime **onaylı, klinik olmayan** bir marker çifti yazıldı (`runId = F4-FCR-002A-20260815-01`, hiçbir kiracıya ait olmayan sentinel `organizationId`, uygulamanın kendi `recordOperationalEvent()` servisi üzerinden); WAL'ı arşivlendiği doğrulandı (`000000010000000000000020`, `failed_count = 0`, `.ready = 0`). Dondurma istisnası çelişkisi §5.1'de kaynak önceliğine göre çözüldü. **Faz durumu `TODO` olarak değişmedi**; **F4-FCR-002A KAPANMADI** (`IN_PROGRESS`); R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
