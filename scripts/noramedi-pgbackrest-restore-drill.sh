@@ -79,8 +79,13 @@
 #                                        [--allow-missing-app-smoke] [-h|--help]
 #
 # Options:
-#   --target TS       PITR target timestamp. Omit to restore the latest
-#                     backup with no recovery target.
+#   --target TS       PITR target timestamp, fractional seconds allowed. Omit
+#                     to restore the latest backup with no recovery target.
+#                     An explicit UTC offset is MANDATORY with --pitr-run-id:
+#                     a bare target resolves in the drill cluster's timezone
+#                     while the markers it is checked against were written in
+#                     production's, and the mismatch stops the recovery hours
+#                     from the intended point without erroring.
 #   --set LABEL       Restore a specific backup label instead of the latest.
 #   --repo N          Repository to restore FROM (1 = local, 2 = off-host).
 #                     Default 1. Restoring from repo 2 is the ONLY thing that
@@ -108,6 +113,8 @@
 #                     correctly stopped restore, so it cannot be measured
 #                     there — it is recorded from the marker procedure so the
 #                     target window can be re-derived from the artifact alone.
+#                     Marker timestamps read out of OperationalEvent are UTC;
+#                     see the timezone rule at the verification block below.
 #   --record          After a PASS, additionally write the off-host proof
 #                     marker (only meaningful with --repo 2). This marker is
 #                     what upgrades the reported off-host state from
@@ -246,8 +253,26 @@ fi
   || { echo "Invalid --port '$DRILL_PORT'" >&2; exit "$USAGE_ERROR_EXIT_CODE"; }
 # The target string is interpolated into a pgbackrest argument. Constrain it to
 # a timestamp shape instead of trusting the caller.
-if [[ -n "$TARGET_TS" ]] && [[ ! "$TARGET_TS" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}[\ T][0-9]{2}:[0-9]{2}:[0-9]{2}([+-][0-9]{2}(:?[0-9]{2})?|Z)?$ ]]; then
-  echo "Invalid --target '$TARGET_TS' (expected 'YYYY-MM-DD HH:MM:SS[+TZ]')" >&2
+#
+# Fractional seconds are accepted deliberately. The marker procedure derives the
+# target as the MIDPOINT of two createdAt values, which is fractional whenever
+# their difference is an odd number of seconds — 12:59:26.405500 in the first
+# real run. Rejecting it would have failed the drill at argument parsing, and
+# rounding it away would move the stop point by up to a second in whichever
+# direction the operator happened to round. PostgreSQL accepts fractional
+# recovery_target_time, so it is passed through unchanged.
+if [[ -n "$TARGET_TS" ]] && [[ ! "$TARGET_TS" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}[\ T][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?([+-][0-9]{2}(:?[0-9]{2})?|Z)?$ ]]; then
+  echo "Invalid --target '$TARGET_TS' (expected 'YYYY-MM-DD HH:MM:SS[.ffffff][+TZ]')" >&2
+  exit "$USAGE_ERROR_EXIT_CODE"
+fi
+# A bare --target carries no offset, so PostgreSQL resolves recovery_target_time
+# in the DRILL cluster's timezone while the marker timestamps it is compared
+# against come from PRODUCTION. When those two zones differ the run does not
+# error — it stops hours away from where it was told to, silently. The offset is
+# therefore mandatory for a verified run, and optional only for an unverified
+# triage restore that claims no R-031/R-032 evidence.
+if [[ -n "$PITR_RUN_ID" ]] && [[ ! "$TARGET_TS" =~ ([+-][0-9]{2}(:?[0-9]{2})?|Z)$ ]]; then
+  echo "--pitr-run-id requires an explicit UTC offset on --target (e.g. '2026-08-15 12:59:26.405500+00'), got '$TARGET_TS': a bare target is resolved in the drill cluster's timezone, not production's" >&2
   exit "$USAGE_ERROR_EXIT_CODE"
 fi
 # pgBackRest labels are `<full>` for a full, and `<full>_<stamp><D|I>` for a
@@ -904,10 +929,24 @@ if [[ -n "$TARGET_TS" ]] && [[ -z "$PITR_RUN_ID" ]]; then
 elif [[ -n "$PITR_RUN_ID" ]]; then
   PITR_MARKER_A_COUNT="$(pitr_marker_count A)"
   PITR_MARKER_B_COUNT="$(pitr_marker_count B)"
-  # Recorded verbatim as the stored wall-clock value, with no AT TIME ZONE
-  # conversion: OperationalEvent.createdAt is `timestamp without time zone`,
-  # so converting here would silently assert a zone this script cannot know.
-  PITR_MARKER_A_AT="$(q "SELECT to_char(max(\"createdAt\"),'YYYY-MM-DD') || 'T' || to_char(max(\"createdAt\"),'HH24:MI:SS.US') FROM \"OperationalEvent\" WHERE \"organizationId\"='${PITR_MARKER_ORG}' AND \"metadata\"->>'task'='${PITR_MARKER_TASK}' AND \"metadata\"->>'runId'='${PITR_RUN_ID}' AND \"metadata\"->>'marker'='A';")"
+  # TIMEZONE RULE FOR THIS COLUMN — read this before changing the query below.
+  #
+  # OperationalEvent.createdAt is `timestamp without time zone`, so the value
+  # carries no offset of its own and the naive reading is ambiguous. It is NOT
+  # ambiguous in practice: the application writes it through Prisma, which
+  # serialises to UTC, so the stored wall clock IS UTC regardless of the
+  # server's or the session's TimeZone. Established empirically against
+  # production on 2026-08-15 — session TimeZone `Europe/Istanbul`, stored value
+  # 12:57:29.852, and only the UTC reading is consistent with the archive
+  # timings for that segment. The `+03` reading was rejected on that evidence.
+  #
+  # Consequences, both load-bearing:
+  #   1. The value is emitted with a literal `Z` — a LABEL of the zone it is
+  #      already in, not a shift. A conversion here would move it by the
+  #      server's offset and corrupt the record.
+  #   2. The `--target` derived from these markers must therefore carry `+00`.
+  #      That is enforced at argument parsing, not trusted.
+  PITR_MARKER_A_AT="$(q "SELECT to_char(max(\"createdAt\"),'YYYY-MM-DD') || 'T' || to_char(max(\"createdAt\"),'HH24:MI:SS.US') || 'Z' FROM \"OperationalEvent\" WHERE \"organizationId\"='${PITR_MARKER_ORG}' AND \"metadata\"->>'task'='${PITR_MARKER_TASK}' AND \"metadata\"->>'runId'='${PITR_RUN_ID}' AND \"metadata\"->>'marker'='A';")"
 
   PITR_VERIFY_STATUS="passed"
   if [[ "$PITR_MARKER_A_COUNT" != "1" ]]; then
@@ -1202,6 +1241,12 @@ if [[ -d "$RESULT_DIR" ]]; then
       }
       put(p, "markerAAt", E.R_PITR_A_AT);
       put(p, "markerBAt", E.R_PITR_B_AT);
+      // Stated, not implied. OperationalEvent.createdAt is a naive column, so a
+      // future reader comparing markerAAt against recoveryTarget has no way to
+      // know which zone it is in — and guessing wrong shifts the comparison by
+      // whole hours. Recording the rule alongside the values is what stops that
+      // question from being re-litigated from an artifact nobody can re-run.
+      p.markerTimestampZone = "UTC";
       put(p, "markerWalSegment", E.R_PITR_SEG);
       put(p, "recoveryTarget", E.R_TARGET);
       put(p, "replayedTo", E.R_POINT);

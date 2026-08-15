@@ -1133,7 +1133,7 @@ cd /var/www/noramedi/server
 
 | Step | Action | Gate |
 |---|---|---|
-| 0 | read-only probe: `current_database`, `current_user`, `inet_server_port`, `TimeZone`, `now()`, `localtimestamp` | `noramedi_crm`, port `5432`; **record `TimeZone`** |
+| 0 | read-only probe: `current_database`, `current_user`, `inet_server_port`, `TimeZone`, `now()`, `localtimestamp` | `noramedi_crm`, port `5432`; record `TimeZone` as **context only — it does not set the marker offset**, see below |
 | 0b | count existing rows for this `runId` | must be `0` |
 | 1 | write marker **A** (`metadata` = `{task, runId, marker:'A'}`) | script reports `rows=1` |
 | 2 | wait 120 s | — |
@@ -1159,12 +1159,54 @@ the TypeScript source and fails with `Cannot find module`.
 roughly six minutes after marker B. **No WAL switch is required**, and
 `pg_switch_wal()` is a production mutation that would need its own approval.
 
-**Deriving the target `T`:** the midpoint of the two `createdAt` values,
-expressed with an **explicit UTC offset**. `createdAt` is `timestamp without
-time zone`; a bare `recovery_target_time` is interpreted in the server's
-timezone and is the most common PITR footgun there is. Confirm the offset
-empirically against Step 0's `TimeZone` and the archive timing before using it
-— an offset that is wrong by hours produces a silent undershoot.
+#### Deriving the target `T` — and the timezone rule that decides it
+
+`T` is the midpoint of the two `createdAt` values, expressed with an **explicit
+UTC offset**. A bare `recovery_target_time` is resolved in the *server's*
+timezone, and it is the most common PITR footgun there is.
+
+**The rule, settled empirically on 2026-08-15 and not to be re-derived:**
+
+> `OperationalEvent.createdAt` is `timestamp without time zone`. The stored
+> wall clock is **UTC**, because the application writes it through Prisma,
+> which serialises to UTC irrespective of the server's or the session's
+> `TimeZone`. **The correct offset to append is therefore `+00`.**
+
+Established, not assumed: production reported `session_tz = Europe/Istanbul`
+with a raw value of `12:57:29.852`, and only the UTC reading is consistent with
+the archive timings for that segment. The `+03` reading is **rejected** — it
+resolves to roughly three hours *before* marker A, which would undershoot,
+find marker A absent, and fail the drill after paying for a full restore.
+
+This is precisely the trap the session timezone sets: `psql` displays
+`Europe/Istanbul`, the naive value looks like local time, and the wrong offset
+is the natural inference. It produces no error at any point — the recovery
+simply stops in the wrong place.
+
+**Recorded values for `RUN_ID = F4-FCR-002A-20260815-01`:**
+
+| Field | Value |
+|---|---|
+| `RUN_ID` | `F4-FCR-002A-20260815-01` |
+| Marker A `createdAt` | `2026-08-15 12:57:29.852` (**UTC**) |
+| Marker B `createdAt` | `2026-08-15 13:01:22.959` (**UTC**) |
+| Marker LSN | `0/200021D0` |
+| `MARKER_SEG` | `000000010000000000000020` |
+| **Target `T`** | **`2026-08-15 12:59:26.405500+00`** |
+| Superseded target | ~~`2026-08-15 12:59:26.405500+03`~~ — **rejected**, wrong offset |
+| `last_archived_wal` | `000000010000000000000020`, `failed_count = 0`, `.ready = 0` |
+
+`T` carries microseconds because the markers are an odd number of seconds
+apart. Pass it through **unrounded**: the drill accepts fractional seconds, and
+rounding moves the stop point by up to a second in whichever direction the
+operator happened to round.
+
+Two enforcement points now back this rule up rather than relying on the
+operator reading it. The drill **refuses at argument parsing** to pair
+`--pitr-run-id` with a `--target` that carries no explicit offset, and it
+records `markerTimestampZone: "UTC"` in the result artifact so the values in
+the evidence file cannot be misread later by someone who never saw this
+section.
 
 **Retention.** These rows are transaction-level PITR proof *inputs*, **not
 guaranteed permanent evidence**. Durable proof — `runId`, both marker
@@ -1182,11 +1224,17 @@ sudo REHEARSAL_OS_USER=postgres \
      NORAMEDI_PITR_DRILL_PROD_PGDATA=/var/lib/postgresql/16/main \
   /usr/local/sbin/noramedi-pgbackrest-restore-drill.sh \
      --set 20260815-150014F \
-     --target '<T with explicit offset>' \
-     --pitr-run-id "$RUN_ID" \
-     --marker-seg "$MARKER_SEG" \
-     --marker-b-at '<marker B createdAt>'
+     --target '2026-08-15 12:59:26.405500+00' \
+     --pitr-run-id 'F4-FCR-002A-20260815-01' \
+     --marker-seg '000000010000000000000020' \
+     --marker-b-at '2026-08-15 13:01:22.959'
 ```
+
+Concrete values for `RUN_ID = F4-FCR-002A-20260815-01` are inlined above rather
+than left as placeholders, because the one field an operator would have to fill
+in by hand — the offset on `--target` — is exactly the one that was got wrong
+once already. **`+00`, not `+03`.** For any later run, re-derive every value
+from §21.3 and re-check the offset rule there.
 
 `PG_BINDIR` is pinned deliberately. The drill auto-detects it by globbing
 `/usr/lib/postgresql/*/bin` and keeping the lexically last match, with **no**
