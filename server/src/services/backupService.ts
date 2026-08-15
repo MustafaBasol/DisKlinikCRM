@@ -181,9 +181,38 @@ const SECRET_ASSIGNMENT_RE =
  * so an operator pasting or a script echoing a key file becomes a realistic
  * shape in this log for the first time. The whole block is replaced — unlike
  * an assignment, there is no useful "key name" half worth preserving.
+ *
+ * ⚠ THIS IS MULTI-LINE AND MUST THEREFORE BE APPLIED BEFORE THE LOG IS SPLIT.
+ * A PEM block occupies at least three lines; the middle lines — which carry
+ * the actual key material — contain neither the BEGIN nor the END marker, so a
+ * per-line pass can never match them and would emit the key verbatim. See
+ * `redactBackupLog()`, which is the entry point `getBackupLogs()` uses.
  */
 const PRIVATE_KEY_BLOCK_RE =
   /-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----/g;
+
+/**
+ * A lone line of base64-ish key material. Defence in depth for a TRUNCATED PEM
+ * block — `tail -n` can easily start mid-key, leaving body lines with no BEGIN
+ * marker anywhere in the captured text for the block rule to anchor on.
+ *
+ * Deliberately narrow on BOTH ends: base64 alphabet only, nothing else on the
+ * line, and 40-200 characters. Ordinary log prose contains spaces or
+ * punctuation outside that set, so readable lines are unaffected.
+ *
+ * The UPPER bound is not cosmetic. PEM body lines are 64-76 characters by
+ * convention, so 200 covers every real one with room to spare, while a
+ * pathological multi-kilobyte run of a single character — which is not key
+ * material and which an existing test pins as length-bounded-with-a-truncation
+ * -marker — falls through to the truncation rule instead of being silently
+ * replaced. Without the bound this rule swallowed that case and broke a
+ * contract it had no business touching.
+ *
+ * A key emitted as one very long unbroken line is therefore NOT caught here;
+ * it is caught by PRIVATE_KEY_BLOCK_RE when its BEGIN/END markers are present,
+ * and bounded by truncation otherwise. That residual is accepted knowingly.
+ */
+const LONE_BASE64_LINE_RE = /^[A-Za-z0-9+/]{40,200}={0,2}$/;
 
 /**
  * Bare `Bearer <token>` with no key in front of it (e.g. a curl header echoed
@@ -214,9 +243,11 @@ export function redactBackupLogLine(line: string): string {
   // 2. AWS access key ids appear verbatim in the wild (AKIA + 16 uppercase/digits).
   out = out.replace(/\bAKIA[0-9A-Z]{16}\b/g, REDACTED_TOKEN);
 
-  // 2b. PEM private-key blocks. Runs before the assignment pass so a key body
-  //     containing "=" padding cannot be partially matched by it first.
-  out = out.replace(PRIVATE_KEY_BLOCK_RE, REDACTED_TOKEN);
+  // 2b. A lone base64 line — a PEM body line whose BEGIN marker was cut off by
+  //     `tail`. The whole-text block rule in redactBackupLog() handles intact
+  //     blocks; this catches truncated ones, which a per-line pass otherwise
+  //     cannot see at all.
+  if (LONE_BASE64_LINE_RE.test(out.trim())) return REDACTED_TOKEN;
 
   // 3. key=value / key: value assignments for credential-bearing names. The
   //    key is preserved (it tells the operator WHICH credential appeared);
@@ -233,6 +264,28 @@ export function redactBackupLogLine(line: string): string {
     out = `${out.slice(0, MAX_LOG_LINE_LENGTH)}...[truncated]`;
   }
   return out;
+}
+
+/**
+ * Redacts a WHOLE log capture, then splits it into lines.
+ *
+ * This exists because redaction is not uniformly a per-line operation and
+ * treating it as one silently disabled a rule. `getBackupLogs()` used to do
+ * `stdout.split('\n').map(redactBackupLogLine)`, which meant the multi-line
+ * PEM private-key rule could never match: a key block spans at least three
+ * lines, and its middle lines — the ones carrying the actual key material —
+ * contain neither the BEGIN nor the END marker. Every one of them was served
+ * verbatim over `GET /api/platform/backups/logs`. The unit test did not catch
+ * it because it called `redactBackupLogLine` directly on a joined fixture,
+ * asserting a property the production path did not have.
+ *
+ * Order matters: whole-text rules first (they need the newlines), then the
+ * per-line rules, which are unaffected by having run second.
+ */
+export function redactBackupLog(text: string): string[] {
+  if (typeof text !== 'string') return [];
+  const blockRedacted = text.replace(PRIVATE_KEY_BLOCK_RE, REDACTED_TOKEN);
+  return blockRedacted.split('\n').filter(Boolean).map(redactBackupLogLine);
 }
 
 /**
@@ -401,7 +454,10 @@ export async function getBackupLogs(lines: number): Promise<string[]> {
   const n = Math.min(300, Math.max(1, lines));
   try {
     const { stdout } = await execFile('tail', ['-n', String(n), BACKUP_LOG], { timeout: 10_000 });
-    return stdout.split('\n').filter(Boolean).map(redactBackupLogLine);
+    // Whole-text redaction BEFORE splitting — see redactBackupLog(). Splitting
+    // first would make the multi-line private-key rule structurally unable to
+    // match the lines that actually carry the key.
+    return redactBackupLog(stdout);
   } catch {
     return [];
   }

@@ -1,6 +1,6 @@
 # F4 — Recovery Operations Runbook
 
-**Tasks:** F4-FCR-001 (§1–§10) · F4-FCR-002 (§11–§19)
+**Tasks:** F4-FCR-001 (§1–§10) · F4-FCR-002 (§11–§19) · F4-FCR-002-R1 adversarial review (§20)
 **Phase:** F4 — Object Storage, Backup, PITR and Restore Evidence
 **Type:** Repository-only implementation + operator activation procedures.
 **Baseline:** F4-FCR-001 `origin/main` @ `fb3d649dfd492961b95d96df29aecc7b1f03a3c5`; F4-FCR-002 `origin/main` @ `6a096d7b2efdeeaf401d506b328783f29c440f1a`.
@@ -791,3 +791,156 @@ zeros and nulls. That is the expected reading, not an error.
 | `R-031` PITR | `OPEN` |
 | `R-032` restore-test evidence | `OPEN` |
 | `FIRST_CUSTOMER_RECOVERY_GATE` | `NOT_SATISFIED` |
+
+## 20. F4-FCR-002-R1 — adversarial review findings and resolutions
+
+An adversarial pass over the implementation found defects the green test suite
+did not catch. All CRITICAL and HIGH findings are resolved. They are recorded
+here rather than silently fixed, because two of them would have made the whole
+capability inert on the real host while every gate stayed green — which is
+exactly the class of failure this task exists to prevent.
+
+**The common cause: every "healthy" path in the original suite was
+fixture-built.** Each side was tested against its own hand-written inputs, so
+nothing exercised the code paths that only execute on a real cluster.
+
+### CRITICAL
+
+**C1 — the cron entry self-deadlocked; scheduled backups would never have run.**
+The `flock -n /var/lock/… <script>` wrapper and the script's own internal lock
+used the same path. `flock(2)` locks belong to the open file description, not
+the process, so the child's independent `open()` conflicted with its own
+parent. Every scheduled run would have exited 5 and never invoked pgBackRest.
+The failure mode was the dangerous kind: cron mails *"another pgBackRest run
+holds the lock — skipping this run"*, which reads as benign overlap, while the
+repository accumulates nothing and — with `archive_mode=on` — WAL grows on a
+single 76 GB disk with no backup ever expiring it. The disk-exhaustion abort
+would never have been reached either, because the lock check precedes it.
+*Resolved:* the outer `flock` is removed from both cron lines, with the reason
+recorded in the file so it is not "fixed" back. The script owns its lock, which
+is why exit 5 is a documented code, and the existing pg_dump entry has no outer
+flock for the same reason.
+
+**C2 — the `pg_stat_archiver` query was corrupted in transit, killing the WAL
+freshness signal.** The delegation helper built a command *string* and then
+re-parsed it through a second shell, so one layer of escaping faced two layers
+of parsing and every embedded double quote was eaten. The format
+`'YYYY-MM-DD"T"HH24:MI:SS"Z"'` arrived as `'YYYY-MM-DDTHH24:MI:SSZ'`, in which
+`TH` is `to_char`'s **ordinal-suffix** directive — so the output was not
+ISO-8601, the writer's own validator discarded it, `lastArchivedAgeMinutes` was
+omitted from every document, and the monitor failed permanently with *"no WAL
+segment has ever been archived"* on a perfectly healthy cluster. Fail-closed,
+but permanently and falsely — which trains an operator to ignore the one check
+that detects a broken WAL archive. Reproduced empirically before fixing.
+*Resolved:* the delegation helper now takes an **argument vector**, so there is
+no second parse; and the SQL is built by concatenation so it contains no double
+quote at all and survives even the `su -c` fallback. The test fake now
+**inspects the SQL it receives** instead of echoing a fixture, and a new
+assertion requires a healthy run to actually *emit* `lastArchivedAgeMinutes`.
+Mutation-tested: reintroducing the old form fails three assertions.
+
+### HIGH
+
+**H1 — the ordering guard trusted an exit code `pgbackrest info` does not set.**
+`info` is informational and exits 0 for a stanza that does not exist, reporting
+the absence in its JSON body. So `--apply` could have written an
+`archive_command` pointing at a non-existent stanza — the exact sequence the
+script's own header describes as ending in *"pg_wal grows without bound, and
+the cluster shuts down on a full disk"*. *Resolved:* both the preflight and the
+backup wrapper now check for the `archive/<stanza>` and `backup/<stanza>`
+directories that `stanza-create` builds. That is directly observable and
+version-independent, unlike pgBackRest's numeric status codes.
+
+**H2 — the new PEM private-key redaction could never fire in production.**
+`getBackupLogs()` split the log into lines *before* redacting, and a PEM block
+spans at least three lines whose middle lines — the ones carrying the key
+material — contain neither the BEGIN nor the END marker. Every one of them was
+served verbatim over `GET /api/platform/backups/logs`. The test passed because
+it called `redactBackupLogLine` directly on a `\n`-joined fixture, asserting a
+property the production path did not have. *Resolved:* a new `redactBackupLog()`
+applies whole-text rules **before** splitting and is what `getBackupLogs()`
+calls; a bounded lone-base64-line rule catches blocks truncated by `tail -n`;
+and the tests now go through the real entry point.
+
+**H3 — the restore drill could not have started a cluster on this host.** On
+Debian/Ubuntu, `postgresql.conf`, `pg_hba.conf` and `pg_ident.conf` live in
+`/etc/postgresql/<ver>/<cluster>/`, while pgBackRest backs up `pg1-path` only —
+so a restored PGDATA contains none of them and the postmaster fails with
+*"could not open configuration file"*. The generic diagnostic would have blamed
+recovery. *Resolved:* the drill now synthesises a minimal `pg_hba.conf` and
+`pg_ident.conf`, passes `hba_file`/`ident_file` explicitly (so a restored
+`postgresql.conf` cannot override them), and verifies all three files exist
+before starting — failing with the real cause if not.
+
+**This finding proves the drill had never been executed end to end.** It has
+still not been, and cannot be until the freeze exception is granted. §19 records
+Measured RPO and RTO as `UNVERIFIED` for that reason.
+
+### MEDIUM (resolved)
+
+- **A false green in Platform Admin.** A stalled archiver keeps `failedCount`
+  at 0 and leaves `archive_mode`/`commandOk` healthy, so the page showed
+  "PITR active ✓ / archive_command OK ✓ / Archive failures 0 / Last archived
+  WAL: 3d" in neutral grey while opscheck was red on bit 128. The WAL age is
+  now evaluated against the **same 120-minute threshold the monitor uses**,
+  coloured, and raises its own alarm banner. Five UI tests pin it, including
+  the never-archived case and the exact boundary.
+- **`PrivateTmp=yes` defeated pgBackRest's own lock.** Its default `lock-path`
+  is `/tmp/pgbackrest`, so a private `/tmp` made the unit's hourly `check`
+  invisible to the cron backup's lock. `lock-path=/var/lib/pgbackrest/lock` is
+  now set explicitly and added to `ReadWritePaths`.
+- **`ProtectSystem=strict` made `/var/log/pgbackrest` read-only** while the
+  config sets `log-level-file=detail`, which could have pinned `checkStatus` to
+  `failed` permanently — a false RED. Added to `ReadWritePaths`.
+- **`TimeoutStartSec=120` was smaller than the script's own worst case** (~7
+  minutes of individually-bounded calls). Raised to 480s, still far under the
+  15-minute timer interval.
+- **The writer's self-check did not verify what its comment claimed.** It
+  counted `schemaVersion` but never checked flatness — the property the
+  consumer's parser actually depends on. Flatness is now asserted before
+  publishing, and braces are stripped from `statusMessage` so an upstream error
+  message cannot break the extraction.
+- **`SHOW include_dir` is not a GUC** (`include_dir` is a postgresql.conf
+  preprocessor directive), so that branch was dead code hidden by `|| true`.
+  The file is now parsed directly, which is what the script claimed to be doing.
+- **A documented `--print-config` flag did not exist.** The doc now describes
+  the read-only default, which is what actually exists.
+- **`--set` rejected every real differential/incremental label** — their suffix
+  contains a hyphen the pattern disallowed. Latent until `--type diff` is
+  adopted; fixed now.
+- **The drill sampled `pg_is_in_recovery()` immediately after `pg_ctl -w`**,
+  which returns while recovery is still replaying on PostgreSQL 16 — a spurious
+  RED on a good restore. Now polls, bounded.
+
+### LOW (resolved)
+
+Off-host proof markers are now **bound to the repo2 target** they were earned
+against and refuse a symlinked proof file, so repointing repo2 cannot inherit a
+stale proof; a proof with no binding is refused. A missing `flock` binary is now
+a precondition failure rather than being misreported as "lock busy". An
+unreachable `exit 3` behind `exec` was made reachable. A conflicting
+`ProtectHome` comment, a drop-in ownership mismatch between code and docs, and
+one over-firm RPO claim in a config template were corrected.
+
+### Accepted, not fixed
+
+- **Exit codes 128–191 overlap the shell "killed by signal N−128" convention**
+  (e.g. pitr+disk = 130, the SIGINT value). Disclosed in the opscheck header.
+  systemd distinguishes `code=exited` from `code=killed`, and the deployed
+  runner is a systemd oneshot. The alternative — moving the config-error code —
+  would re-date every historical `64` for the second time in two tasks.
+- **`walMin`/`walMax` are reported but continuity between them is not
+  asserted.** A gap *inside* the range is not detected by any consumer. Closing
+  this needs `pgbackrest verify` output parsing; recorded as future work rather
+  than claimed.
+- **The drill does not assert the age of the backup set it restored.** Backup
+  freshness is asserted separately by the monitor.
+
+### What this does not change
+
+No finding altered the program state. `archive_mode` is still `off`, nothing is
+installed, the freeze exception is still `DRAFT_PENDING_PROGRAM_OWNER`, and
+`R-030`/`R-031`/`R-032` remain `OPEN`. The honest status of this work is
+**repository-complete and never executed against a real cluster** — H3 is
+direct evidence of that, and it is why §13's activation sequence ends with a
+human-watched first drill rather than a scheduled one.

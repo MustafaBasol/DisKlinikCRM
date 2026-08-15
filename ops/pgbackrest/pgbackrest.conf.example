@@ -31,9 +31,13 @@
 [global]
 
 ; ── Repository 1: LOCAL, ENCRYPTED ───────────────────────────────────────
-; Stage 1 is deliberately host-local. It achieves RPO <= 60 min and provides
-; NO host-loss protection. Durability and RPO are separate capabilities and
-; must never be reported as one (F4_RECOVERY_OPERATIONS.md §7.1).
+; Stage 1 is deliberately host-local. Once activated it is DESIGNED to bound
+; RPO at <= 60 min (see archive_timeout in postgresql-pitr.conf.example) — but
+; that number is UNVERIFIED until a production drill measures it, and it
+; provides NO host-loss protection whatsoever. Durability and RPO are separate
+; capabilities and must never be reported as one
+; (F4_RECOVERY_OPERATIONS.md §7.1; measured RPO/RTO are recorded as UNVERIFIED
+; in §19).
 ;
 ; NOT under /root: /root/noramedi-backups is root-only and the postgres user
 ; cannot read or write it. Keeping the pgBackRest repo out of that directory
@@ -96,6 +100,18 @@ process-max=2
 log-level-console=info
 log-level-file=detail
 log-path=/var/log/pgbackrest
+
+; ── Lock path — MUST NOT be left at the /tmp default ─────────────────────
+; pgBackRest's default lock-path is /tmp/pgbackrest. The status writer's
+; systemd unit sets PrivateTmp=yes, which gives it a PRIVATE /tmp — so a lock
+; taken there would be invisible to the cron-driven `pgbackrest backup` in the
+; host /tmp, and vice versa. The hourly `pgbackrest check` (which forces a WAL
+; segment switch) could then run concurrently with a backup, which is exactly
+; what the lock exists to prevent.
+;
+; An explicit path outside /tmp makes both see the same directory. Create it:
+;   install -d -o postgres -g postgres -m 0750 /var/lib/pgbackrest/lock
+lock-path=/var/lib/pgbackrest/lock
 
 ; pgBackRest's OWN wait-for-WAL timeout, in seconds: how long `backup` and
 ; `check` wait for a segment to appear in the repo before erroring.

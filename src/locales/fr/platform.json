@@ -567,6 +567,8 @@
     "pitrPlaintextTitle": "Le dépôt pgBackRest n'est pas chiffré",
     "pitrPlaintextDetail": "Le dépôt contient une copie physique de chaque table, y compris des données de santé de catégorie particulière, et aucune colonne patient n'est chiffrée au niveau colonne. Le chiffrement du dépôt est le seul contrôle de confidentialité sur cet artefact.",
     "pitrInactiveTitle": "pgBackRest est installé mais l'archivage WAL est désactivé",
-    "pitrInactiveDetail": "Le dépôt existe mais archive_mode n'est pas activé ; il n'y a donc aucune capacité de récupération à un instant précis, et la perte de données maximale reste bornée uniquement par l'intervalle de sauvegarde quotidien."
+    "pitrInactiveDetail": "Le dépôt existe mais archive_mode n'est pas activé ; il n'y a donc aucune capacité de récupération à un instant précis, et la perte de données maximale reste bornée uniquement par l'intervalle de sauvegarde quotidien.",
+    "pitrWalStaleTitle": "L'archivage WAL est bloqué — le point récupérable prend du retard",
+    "pitrWalStaleDetail": "Le segment WAL archivé le plus récent date de {{age}} (seuil {{minutes}} minutes). Les sauvegardes et archive_command signalent toujours un succès, donc rien d'autre sur cette page ne passe au rouge — mais chaque transaction depuis lors est irrécupérable. Vérifiez `pgbackrest check` et le journal PostgreSQL pour des échecs d'archive_command."
   }
 }

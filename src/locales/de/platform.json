@@ -567,6 +567,8 @@
     "pitrPlaintextTitle": "Das pgBackRest-Repository ist nicht verschlüsselt",
     "pitrPlaintextDetail": "Das Repository enthält eine physische Kopie jeder Tabelle, einschließlich besonderer Kategorien von Gesundheitsdaten, und keine Patientenspalte ist auf Spaltenebene verschlüsselt. Die Repository-Verschlüsselung ist die einzige Vertraulichkeitskontrolle für dieses Artefakt.",
     "pitrInactiveTitle": "pgBackRest ist installiert, aber die WAL-Archivierung ist aus",
-    "pitrInactiveDetail": "Das Repository existiert, aber archive_mode ist nicht aktiv. Es gibt daher keine Point-in-Time-Recovery-Fähigkeit, und der maximale Datenverlust bleibt allein durch das tägliche Backup-Intervall begrenzt."
+    "pitrInactiveDetail": "Das Repository existiert, aber archive_mode ist nicht aktiv. Es gibt daher keine Point-in-Time-Recovery-Fähigkeit, und der maximale Datenverlust bleibt allein durch das tägliche Backup-Intervall begrenzt.",
+    "pitrWalStaleTitle": "Die WAL-Archivierung steht still — der wiederherstellbare Punkt fällt zurück",
+    "pitrWalStaleDetail": "Das neueste archivierte WAL-Segment ist {{age}} alt (Schwellenwert {{minutes}} Minuten). Backups und archive_command melden weiterhin Erfolg, daher wird auf dieser Seite sonst nichts rot — aber jede Transaktion seitdem ist nicht wiederherstellbar. Prüfen Sie `pgbackrest check` und das PostgreSQL-Log auf archive_command-Fehler."
   }
 }

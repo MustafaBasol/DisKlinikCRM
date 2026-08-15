@@ -293,15 +293,27 @@ fi
 # ═════════════════════════════════════════════════════════════════════════
 log "── 3. configuration target ──"
 CONFIG_DIR="$(dirname "$CONFIG_FILE")"
-INCLUDE_DIR_GUC="$(psql_show include_dir || true)"
 DROPIN_DIR=""
 DROPIN_PATH=""
 
-if [[ -n "$INCLUDE_DIR_GUC" ]]; then
-  # include_dir may be relative to the config file's directory.
-  if [[ "$INCLUDE_DIR_GUC" == /* ]]; then DROPIN_DIR="$INCLUDE_DIR_GUC"; else DROPIN_DIR="$CONFIG_DIR/$INCLUDE_DIR_GUC"; fi
-elif [[ -d "$CONFIG_DIR/conf.d" ]] && grep -qE "^[[:space:]]*include_dir[[:space:]]*=[[:space:]]*'?conf\.d'?" "$CONFIG_FILE" 2>/dev/null; then
-  DROPIN_DIR="$CONFIG_DIR/conf.d"
+# ⚠ `include_dir` IS NOT A GUC — do not add `psql_show include_dir` here.
+# `include`, `include_if_exists` and `include_dir` are postgresql.conf
+# PREPROCESSOR DIRECTIVES, not settings, so `SHOW include_dir` returns
+# "unrecognized configuration parameter". An earlier revision queried it and
+# swallowed the error with `|| true`, which made that branch dead code and left
+# the grep below doing all the real work while the script claimed to be reading
+# rather than guessing. The file is the only authority here.
+INCLUDE_DIR_RAW="$(grep -oE "^[[:space:]]*include_dir[[:space:]]*=[[:space:]]*'[^']+'" "$CONFIG_FILE" 2>/dev/null \
+  | tail -n1 | sed -E "s/.*=[[:space:]]*'//; s/'$//" || true)"
+if [[ -z "$INCLUDE_DIR_RAW" ]]; then
+  # Unquoted form: include_dir = conf.d
+  INCLUDE_DIR_RAW="$(grep -oE "^[[:space:]]*include_dir[[:space:]]*=[[:space:]]*[^'#[:space:]]+" "$CONFIG_FILE" 2>/dev/null \
+    | tail -n1 | sed -E 's/.*=[[:space:]]*//' || true)"
+fi
+
+if [[ -n "$INCLUDE_DIR_RAW" ]]; then
+  # A relative include_dir resolves against the config file's own directory.
+  if [[ "$INCLUDE_DIR_RAW" == /* ]]; then DROPIN_DIR="$INCLUDE_DIR_RAW"; else DROPIN_DIR="$CONFIG_DIR/$INCLUDE_DIR_RAW"; fi
 fi
 
 if [[ -n "$DROPIN_DIR" ]]; then
@@ -420,13 +432,40 @@ fi
 # 6. Stanza must already exist  (ordering guard)
 # ═════════════════════════════════════════════════════════════════════════
 log "── 6. stanza ──"
+# ⚠ DO NOT REDUCE THIS TO `pgbackrest info >/dev/null; then`.
+#
+# `pgbackrest info` is an INFORMATIONAL command: it exits 0 for a stanza that
+# does not exist and reports the absence inside the JSON body instead. Trusting
+# its exit status therefore reports "stanza exists" on a host where none was
+# ever created — and this is the guard that stops --apply from writing an
+# archive_command pointing at a non-existent stanza, which is the exact
+# sequence this script's header describes as ending in "pg_wal grows without
+# bound, and the cluster shuts down on a full disk".
+#
+# The authoritative signal used here is the FILESYSTEM: `stanza-create` builds
+# <repo>/archive/<stanza> and <repo>/backup/<stanza>. That is directly
+# observable, needs no JSON parsing, and — unlike pgBackRest's numeric status
+# codes, which Agent A flagged as version-dependent and not safe to hard-code —
+# does not change between releases. The `info` body is then read as a
+# cross-check and reported, but never as the sole basis for the decision.
 STANZA_EXISTS=false
 if [[ -n "$PGBR_VERSION" ]] && [[ -f "$PGBACKREST_CONF" ]]; then
-  if as_pg "pgbackrest --stanza=$(printf '%q' "$STANZA") info --output=json" >/dev/null 2>&1; then
+  ARCHIVE_DIR="$REPO_PATH/archive/$STANZA"
+  BACKUP_DIR_STANZA="$REPO_PATH/backup/$STANZA"
+  if [[ -d "$ARCHIVE_DIR" ]] && [[ -d "$BACKUP_DIR_STANZA" ]]; then
     STANZA_EXISTS=true
-    ok "stanza '$STANZA' exists"
+    ok "stanza '$STANZA' exists (archive/ and backup/ present under $REPO_PATH)"
+
+    # Cross-check the body. A stanza directory that exists while info reports a
+    # problem is worth surfacing, but it does not by itself block: a freshly
+    # created stanza legitimately has no backups yet, and that condition is
+    # reported as a non-zero status code by design.
+    INFO_BODY="$(as_pg "pgbackrest --stanza=$(printf '%q' "$STANZA") info --output=json" 2>/dev/null || true)"
+    if [[ -z "$INFO_BODY" ]] || [[ "$INFO_BODY" == "[]" ]]; then
+      warn "'pgbackrest info' returned nothing for stanza '$STANZA' even though its repository directories exist — inspect before proceeding"
+    fi
   else
-    bad "stanza '$STANZA' does not exist yet. Create it BEFORE enabling archive_mode, or every WAL push will fail and pg_wal will grow until the disk is full:"
+    bad "stanza '$STANZA' does not exist yet (expected $ARCHIVE_DIR and $BACKUP_DIR_STANZA). Create it BEFORE enabling archive_mode, or every WAL push will fail and pg_wal will grow until the disk is full:"
     log  "     sudo -u $PG_SUPERUSER pgbackrest --stanza=$STANZA stanza-create"
   fi
 fi

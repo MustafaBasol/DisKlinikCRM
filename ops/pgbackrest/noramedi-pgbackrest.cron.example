@@ -33,10 +33,24 @@
 # which matters far more than the storage it saves. Revisit around ~1 GB.
 # The wrapper already supports `--type diff` when that day comes.
 #
-# The flock mirrors the convention the existing pg_dump script uses. pgBackRest
-# takes its own per-stanza lock as well, but that one makes an overlapping run
-# ERROR; the wrapper's lock makes it exit 5, so cron mail says "skipped,
-# already running" instead of reporting a failure.
+# ⚠ NO OUTER `flock` ON THESE LINES — DELIBERATE. DO NOT "FIX" IT BACK.
+#
+# The obvious-looking form
+#     flock -n /var/lock/noramedi-pgbackrest.lock /usr/local/sbin/…-backup.sh
+# is a SELF-DEADLOCK. flock(2) locks belong to the open file description, not
+# to the process, so the wrapper would hold the lock on its own fd while the
+# script's own independent open() of the same path conflicts with its parent.
+# Every scheduled run would exit 5 — "another pgBackRest run holds the lock" —
+# and never invoke pgBackRest at all. The failure mode is the dangerous kind:
+# cron mails a message that reads like benign overlap while the repository
+# silently accumulates nothing, and with archive_mode=on the WAL keeps growing
+# on a single 76 GB disk with no backup ever expiring it. The disk-exhaustion
+# abort would never be reached either, because the lock check precedes it.
+#
+# The script owns its lock internally (fd 9, exit 5 on conflict), which is
+# exactly why exit 5 is a documented code. The existing pg_dump cron entry has
+# no outer flock for the same reason. pgBackRest also takes its own per-stanza
+# lock, but that one makes an overlapping run ERROR rather than exit cleanly.
 
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
@@ -48,7 +62,7 @@ MAILTO=root
 # Code 4 is the disk-exhaustion abort the freeze exception requires: it means
 # pgBackRest was NOT invoked, deliberately, because a full filesystem breaks
 # archive_command, which grows pg_wal, which stops PostgreSQL.
-30 2 * * *  root  /usr/bin/flock -n /var/lock/noramedi-pgbackrest.lock /usr/local/sbin/noramedi-pgbackrest-backup.sh --type full
+30 2 * * *  root  /usr/local/sbin/noramedi-pgbackrest-backup.sh --type full
 
 # Weekly repository integrity verification, Sunday 02:00.
 # `pgbackrest verify` checks that what is IN the repository is intact. It is
@@ -56,7 +70,7 @@ MAILTO=root
 # by an actual restore, which is what noramedi-pgbackrest-restore-drill.sh
 # performs. Nothing in the pre-existing pg_dump tier has any equivalent of
 # either check.
-0 2 * * 0   root  /usr/bin/flock -n /var/lock/noramedi-pgbackrest.lock /usr/local/sbin/noramedi-pgbackrest-backup.sh --verify
+0 2 * * 0   root  /usr/local/sbin/noramedi-pgbackrest-backup.sh --verify
 
 # Weekly PITR restore drill, Sunday 03:45 — COMMENTED OUT until the first
 # manual drill has been run and reviewed by a human.

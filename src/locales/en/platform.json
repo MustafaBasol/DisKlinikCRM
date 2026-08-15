@@ -567,6 +567,8 @@
     "pitrPlaintextTitle": "The pgBackRest repository is not encrypted",
     "pitrPlaintextDetail": "The repository holds a physical copy of every table, including special-category health data, and no patient column is encrypted at column level. Repository encryption is the only confidentiality control on this artifact.",
     "pitrInactiveTitle": "pgBackRest is installed but WAL archiving is off",
-    "pitrInactiveDetail": "The repository exists but archive_mode is not on, so there is no point-in-time recovery capability and worst-case data loss remains bounded only by the daily backup interval."
+    "pitrInactiveDetail": "The repository exists but archive_mode is not on, so there is no point-in-time recovery capability and worst-case data loss remains bounded only by the daily backup interval.",
+    "pitrWalStaleTitle": "WAL archiving has stalled — the recoverable point is falling behind",
+    "pitrWalStaleDetail": "The newest archived WAL segment is {{age}} old (threshold {{minutes}} minutes). Backups and archive_command still report success, so nothing else on this page turns red — but every transaction since then is unrecoverable. Check `pgbackrest check` and the PostgreSQL log for archive_command failures."
   }
 }

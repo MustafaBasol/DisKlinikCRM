@@ -518,6 +518,27 @@ const PlatformBackups: React.FC = () => {
   const fileBackup = recovery?.fileBackup ?? null;
   const drills = recovery?.drills ?? null;
   const pitr = recovery?.pitr ?? null;
+
+  /**
+   * WAL staleness, evaluated HERE because the server deliberately reports the
+   * age and leaves the policy to the caller.
+   *
+   * 120 minutes matches NORAMEDI_OPSCHECK_PITR_MAX_WAL_AGE_MINUTES in
+   * scripts/noramedi-opscheck.sh. Without this the page rendered
+   * "PITR active ✓ / archive_command OK ✓ / Archive failures 0 / Last archived
+   * WAL: 3d" in neutral grey — a green page over a stalled archiver, while
+   * opscheck was red on bit 128. A stalled archiver has failedCount = 0, which
+   * is precisely why the failure-count tile alone cannot catch it. An operator
+   * comparing a green page against a red alert believes the page.
+   */
+  const PITR_WAL_STALE_AFTER_MINUTES = 120;
+  const pitrWalAgeMinutes = pitr?.archive?.lastArchivedAgeMinutes;
+  const pitrWalStale =
+    pitr?.available === true &&
+    pitr.pitrActive === true &&
+    // Never archived at all is stale too — silence is the most dangerous way
+    // for an archive to fail.
+    (pitrWalAgeMinutes === undefined || pitrWalAgeMinutes > PITR_WAL_STALE_AFTER_MINUTES);
   const residualArtifacts = (drills?.residualArtifacts ?? []).filter((d) => !!d && !!d.residualArtifact);
 
   const dbThresholdHours = status?.staleThresholdHours ?? null;
@@ -807,6 +828,19 @@ const PlatformBackups: React.FC = () => {
               level="alarm"
               title={t('platform:backups.pitrCommandBrokenTitle')}
               detail={t('platform:backups.pitrCommandBrokenDetail')}
+            />
+          )}
+          {pitrWalStale && (
+            <AlertBanner
+              level="alarm"
+              title={t('platform:backups.pitrWalStaleTitle')}
+              detail={t('platform:backups.pitrWalStaleDetail', {
+                age:
+                  pitrWalAgeMinutes !== undefined
+                    ? formatAge(pitrWalAgeMinutes)
+                    : t('platform:backups.pitrNever'),
+                minutes: PITR_WAL_STALE_AFTER_MINUTES,
+              })}
             />
           )}
           {pitr?.available && pitr.pitrActive && pitr.repo?.encrypted === false && (
@@ -1130,12 +1164,21 @@ const PlatformBackups: React.FC = () => {
                         />
                       }
                     />
+                    {/*
+                      Coloured against the SAME threshold the monitor uses.
+                      Rendering this as neutral text was a false green: a
+                      stalled archiver keeps failedCount at 0, so nothing else
+                      on this page changes colour while the recoverable point
+                      silently falls behind.
+                    */}
                     <InfoRow
                       label={t('platform:backups.pitrLastArchivedWal')}
                       value={
-                        pitr.archive?.lastArchivedAgeMinutes !== undefined
-                          ? formatAge(pitr.archive.lastArchivedAgeMinutes)
-                          : t('platform:backups.pitrNever')
+                        <span className={pitrWalStale ? 'text-red-600 dark:text-red-400 font-semibold' : ''}>
+                          {pitr.archive?.lastArchivedAgeMinutes !== undefined
+                            ? formatAge(pitr.archive.lastArchivedAgeMinutes)
+                            : t('platform:backups.pitrNever')}
+                        </span>
                       }
                     />
                     <InfoRow

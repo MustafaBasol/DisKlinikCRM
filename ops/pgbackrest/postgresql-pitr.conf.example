@@ -27,15 +27,28 @@
 #   # confirm a conf.d include actually exists before relying on it:
 #   sudo -u postgres psql -Atc "SHOW include_dir;"
 #
-#   sudo install -o postgres -g postgres -m 0644 \
+#   sudo install -o root -g root -m 0644 \
 #        ops/pgbackrest/postgresql-pitr.conf.example \
 #        /etc/postgresql/16/main/conf.d/10-noramedi-pitr.conf
 #
-# If the cluster has no conf.d include directory, appending to postgresql.conf
-# is acceptable but you must record the exact lines added so the rollback is
-# a deletion and not a reconstruction from memory. Run the preflight script
-# with --print-config first; it detects which of the two applies and refuses
-# to guess when the state is ambiguous.
+# root:root 0644 matches what noramedi-pgbackrest-preflight.sh --apply writes.
+# The file only has to be READABLE by the postmaster (which runs as postgres),
+# not writable by it — configuration that the database can rewrite is a
+# privilege-escalation surface, not a convenience.
+#
+# If the cluster has no conf.d include directory, the preflight script REFUSES
+# to proceed rather than appending to postgresql.conf: an append cannot be
+# rolled back by deleting a file, and reconstructing the previous state from
+# memory during an incident is the failure this whole design exists to prevent.
+# Enable an include_dir first (add `include_dir = 'conf.d'` to postgresql.conf,
+# create the directory, reload).
+#
+# Run the preflight script with no arguments first. It is READ-ONLY by default
+# and prints both the four host-derived values and the exact drop-in it would
+# write, without writing anything:
+#
+#   sudo /usr/local/sbin/noramedi-pgbackrest-preflight.sh            # dry-run
+#   sudo /usr/local/sbin/noramedi-pgbackrest-preflight.sh --apply    # writes it
 
 # ── wal_level ────────────────────────────────────────────────────────────
 # Production is ALREADY `replica` (PRODUCTION_TOPOLOGY.md:52), which is the

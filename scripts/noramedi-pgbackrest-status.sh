@@ -129,18 +129,42 @@ command -v node >/dev/null 2>&1 || {
   fail "node is required to parse 'pgbackrest info --output=json' safely"
   exit 1; }
 
+# build_cmd — per-argument %q escaping, for the one delegation form that can
+# only take a string.
+build_cmd() { local out=""; for a in "$@"; do out+="$(printf '%q' "$a") "; done; printf '%s' "$out"; }
+
+# as_pg ARGV... — runs a command as the PostgreSQL OS user.
+#
+# ⚠ TAKES AN ARGUMENT VECTOR, NOT A COMMAND STRING, AND THAT IS LOAD-BEARING.
+# The earlier string form built `bash -c "... as_pg <escaped string>"` and then
+# `as_pg` re-parsed its argument through another `bash -c`. That is TWO parse
+# layers against ONE layer of escaping, so every embedded double quote was
+# silently eaten. Concretely: the pg_stat_archiver query's
+# `to_char(..., 'YYYY-MM-DD"T"HH24:MI:SS"Z"')` arrived at PostgreSQL as
+# `'YYYY-MM-DDTHH24:MI:SSZ'`, in which `TH` is to_char's ORDINAL-SUFFIX
+# pattern — so the result was not ISO-8601, the writer's own validator
+# discarded it, `lastArchivedAgeMinutes` was omitted from every document, and
+# the monitor failed permanently with "no WAL segment has ever been archived"
+# on a perfectly healthy cluster. Fail-closed, but permanently and falsely —
+# which trains an operator to ignore the one check that detects a broken WAL
+# archive. Keep the argv form.
+#
+# Only the `su` fallback must flatten to a string; build_cmd escapes each
+# argument for exactly the one parse `su -c` performs.
 as_pg() {
-  local cmd="$1"
-  if command -v runuser >/dev/null 2>&1; then
-    runuser -u "$PG_SUPERUSER" -- /bin/bash -c "$cmd"
+  if [[ "$(id -un 2>/dev/null || echo '')" == "$PG_SUPERUSER" ]]; then
+    timeout "$CMD_TIMEOUT" "$@"
+  elif command -v runuser >/dev/null 2>&1; then
+    timeout "$CMD_TIMEOUT" runuser -u "$PG_SUPERUSER" -- "$@"
+  elif command -v su >/dev/null 2>&1; then
+    timeout "$CMD_TIMEOUT" su -s /bin/bash "$PG_SUPERUSER" -c "$(build_cmd "$@")"
   else
-    su -s /bin/bash "$PG_SUPERUSER" -c "$cmd"
+    return 127
   fi
 }
 
 psql_one() {
-  local sql="$1"
-  timeout "$CMD_TIMEOUT" bash -c "$(declare -f as_pg); PG_SUPERUSER=$(printf '%q' "$PG_SUPERUSER") as_pg $(printf '%q' "psql -Atc \"$sql\"")" 2>/dev/null || true
+  as_pg psql -Atc "$1" 2>/dev/null || true
 }
 
 Q_STANZA="$(printf '%q' "$STANZA")"
@@ -156,7 +180,15 @@ ARCHIVE_TIMEOUT_RAW="$(psql_one 'SHOW archive_timeout;')"
 # them, so without this a stale archive is indistinguishable from an idle
 # cluster. Emitted as ISO-8601 UTC with a trailing Z to match the parser
 # contract every other status file in this program uses.
-ARCHIVER_ROW="$(psql_one "SELECT COALESCE(to_char(last_archived_time AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'),'') || '|' || COALESCE(to_char(last_failed_time AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'),'') || '|' || failed_count || '|' || archived_count FROM pg_stat_archiver;")"
+# Built by CONCATENATION rather than with to_char's double-quoted literals
+# (`'YYYY-MM-DD"T"HH24:MI:SS"Z"'`). Belt and braces alongside the argv fix in
+# as_pg: this SQL contains no double quote at all, so it survives intact even
+# through the `su -c` fallback, which is the one delegation path that still
+# has to flatten to a string. `TH` in a to_char pattern is the ordinal-suffix
+# directive, so a stripped `"T"` does not merely look wrong — it changes the
+# meaning of the format and silently produces a non-ISO value.
+ARCHIVER_SQL="SELECT COALESCE(to_char(last_archived_time AT TIME ZONE 'UTC','YYYY-MM-DD') || 'T' || to_char(last_archived_time AT TIME ZONE 'UTC','HH24:MI:SS') || 'Z','') || '|' || COALESCE(to_char(last_failed_time AT TIME ZONE 'UTC','YYYY-MM-DD') || 'T' || to_char(last_failed_time AT TIME ZONE 'UTC','HH24:MI:SS') || 'Z','') || '|' || failed_count || '|' || archived_count FROM pg_stat_archiver;"
+ARCHIVER_ROW="$(psql_one "$ARCHIVER_SQL")"
 
 LAST_ARCHIVED_AT=""; LAST_FAILED_AT=""; FAILED_COUNT=""; ARCHIVED_COUNT=""
 if [[ "$ARCHIVER_ROW" == *"|"*"|"*"|"* ]]; then
@@ -199,7 +231,7 @@ fi
 
 INFO_JSON=""
 if [[ "$PGBR_INSTALLED" == true ]]; then
-  INFO_JSON="$(timeout "$CMD_TIMEOUT" bash -c "$(declare -f as_pg); PG_SUPERUSER=$(printf '%q' "$PG_SUPERUSER") as_pg $(printf '%q' "pgbackrest --stanza=${Q_STANZA} info --output=json")" 2>/dev/null || true)"
+  INFO_JSON="$(as_pg pgbackrest --stanza="$STANZA" info --output=json 2>/dev/null || true)"
 fi
 
 # ── pgbackrest check, rate-limited ───────────────────────────────────────
@@ -229,7 +261,7 @@ fi
 if [[ "$SKIP_CHECK" != true ]] && [[ "$PGBR_INSTALLED" == true ]] \
    && [[ "$ARCHIVE_MODE" == "on" || "$ARCHIVE_MODE" == "always" ]] \
    && [[ $(( NOW_EPOCH - _prev_epoch )) -ge "$CHECK_MIN_INTERVAL" ]]; then
-  if timeout "$CMD_TIMEOUT" bash -c "$(declare -f as_pg); PG_SUPERUSER=$(printf '%q' "$PG_SUPERUSER") as_pg $(printf '%q' "pgbackrest --stanza=${Q_STANZA} check")" >/dev/null 2>&1; then
+  if as_pg pgbackrest --stanza="$STANZA" check >/dev/null 2>&1; then
     CHECK_STATUS="ok"
   else
     CHECK_STATUS="failed"
@@ -309,7 +341,12 @@ if [[ -n "$REPO2_HOST" || -n "$REPO2_TYPE" || -n "$REPO2_PATH" ]]; then
     OFFHOST_REASON="NO_RESTORE_PROOF_FROM_REPO2"
     # A successful restore drill sourced from repo2 is the only thing that
     # upgrades this to "yes". Configuration is not proof.
-    if [[ -f "$OFFHOST_PROOF" ]]; then
+    # The currently-configured repo2 target, so a proof earned against a
+    # DIFFERENT target cannot be inherited by a newly-repointed repository.
+    CURRENT_TARGET="${REPO2_HOST:-${REPO2_S3_ENDPOINT:-${REPO2_PATH:-}}}"
+    # -f, not -e: a symlink pointing at an attacker-writable location must not
+    # be able to manufacture off-host readiness.
+    if [[ -f "$OFFHOST_PROOF" ]] && [[ ! -L "$OFFHOST_PROOF" ]]; then
       # No top-level `return` here: `node -e` compiles its argument as a
       # script, not a function body, so a bare `return` is a SyntaxError and
       # the whole snippet would fail — silently yielding 0 and making the
@@ -323,6 +360,12 @@ if [[ -n "$REPO2_HOST" || -n "$REPO2_TYPE" || -n "$REPO2_PATH" ]]; then
             // Every field is checked: a proof from repo1 (the LOCAL
             // repository) or from a failed drill must never count.
             if (d && d.result === "passed" && Number(d.repo) >= 2 && typeof d.finishedAt === "string") {
+              // The proof must have been earned against the CURRENTLY
+              // configured target. argv[2] is that target; a proof written
+              // before this binding existed carries "unknown" and is refused,
+              // which is the correct direction to fail.
+              const want = process.argv[2] || "";
+              if (want !== "" && d.target !== want) return 0;
               const t = Date.parse(d.finishedAt);
               if (Number.isFinite(t)) return Math.floor(t / 1000);
             }
@@ -330,7 +373,7 @@ if [[ -n "$REPO2_HOST" || -n "$REPO2_TYPE" || -n "$REPO2_PATH" ]]; then
           return 0;
         })();
         process.stdout.write(String(epoch));
-      ' "$OFFHOST_PROOF" 2>/dev/null || echo 0)"
+      ' "$OFFHOST_PROOF" "$CURRENT_TARGET" 2>/dev/null || echo 0)"
       [[ "$_proof_epoch" =~ ^[0-9]+$ ]] || _proof_epoch=0
       if [[ "$_proof_epoch" -gt 0 ]] \
          && [[ $(( NOW_EPOCH - _proof_epoch )) -le $(( PROOF_MAX_AGE_HOURS * 3600 )) ]] \
@@ -407,7 +450,17 @@ DOC="$(
           // is not 0 is a failure and the message is carried verbatim.
           repo.statusOk = s.status.code === 0;
           if (!repo.statusOk && typeof s.status.message === "string") {
-            repo.statusMessage = s.status.message.slice(0, 120).replace(/[^\x20-\x7E]/g, " ");
+            // Braces are stripped ALONG WITH control characters. They are
+            // printable ASCII, so the [\x20-\x7E] filter alone would let a
+            // pgBackRest error message containing a brace through, and a brace
+            // inside this string breaks the flat-object extraction the
+            // consumer performs over the whole "repo" object.
+            // (No apostrophes in this block: it lives inside node -e in a
+            // single-quoted shell string.)
+            repo.statusMessage = s.status.message
+              .slice(0, 120)
+              .replace(/[^\x20-\x7E]/g, " ")
+              .replace(/[{}]/g, " ");
           }
         }
         if (typeof s?.cipher === "string") repo.cipherType = s.cipher;
@@ -457,6 +510,19 @@ if [[ "$(grep -c '"schemaVersion"' <<<"$DOC")" -ne 1 ]]; then
   fail "assembled document does not contain exactly one schemaVersion"
   exit 1
 fi
+
+# FLATNESS, checked rather than merely asserted in a comment. The consumer
+# extracts these with `\{[^{}]*\}`, so a nested object — or a brace that leaked
+# into a string value — makes the extraction silently not match, and the check
+# fails closed with a diagnostic pointing at the wrong thing. Verified against
+# the same whitespace-collapsed form the consumer builds.
+_FLAT="$(tr -s '\n\r\t ' ' ' <<<"$DOC")"
+for _obj in archive repo; do
+  if ! grep -qE "\"${_obj}\"[[:space:]]*:[[:space:]]*\{[^{}]*\}" <<<"$_FLAT"; then
+    fail "assembled document's '${_obj}' object is not flat — the consumer's parser cannot read it"
+    exit 1
+  fi
+done
 
 if [[ "$TO_STDOUT" == true ]]; then
   printf '%s' "$DOC"

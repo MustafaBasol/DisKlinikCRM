@@ -125,8 +125,14 @@ if [[ -n "$TARGET_TS" ]] && [[ ! "$TARGET_TS" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}[\ T
   echo "Invalid --target '$TARGET_TS' (expected 'YYYY-MM-DD HH:MM:SS[+TZ]')" >&2
   exit "$USAGE_ERROR_EXIT_CODE"
 fi
-if [[ -n "$BACKUP_SET" ]] && [[ ! "$BACKUP_SET" =~ ^[0-9]{8}-[0-9]{6}[FDI]([_0-9]*[DI])?$ ]]; then
-  echo "Invalid --set '$BACKUP_SET'" >&2; exit "$USAGE_ERROR_EXIT_CODE"
+# pgBackRest labels are `<full>` for a full, and `<full>_<stamp><D|I>` for a
+# differential or incremental — e.g. 20260815-023000F_20260815-133000I. The
+# suffix contains a HYPHEN, which an earlier `[_0-9]*` character class rejected,
+# so every real diff/incr label was refused. Harmless while the wrapper defaults
+# to --type full, latent the moment --type diff is adopted.
+if [[ -n "$BACKUP_SET" ]] && [[ ! "$BACKUP_SET" =~ ^[0-9]{8}-[0-9]{6}F(_[0-9]{8}-[0-9]{6}[DI])?$ ]]; then
+  echo "Invalid --set '$BACKUP_SET' (expected e.g. 20260815-023000F or 20260815-023000F_20260815-133000I)" >&2
+  exit "$USAGE_ERROR_EXIT_CODE"
 fi
 
 DRILL_ROOT_BASE="${NORAMEDI_PGBACKREST_DRILL_ROOT:-/dev/shm/noramedi-pitr-drill}"
@@ -239,18 +245,59 @@ RESTORE_DONE_EPOCH="$(date -u +%s)"
 log "restore completed in $(( RESTORE_DONE_EPOCH - START_EPOCH ))s"
 
 # ── REFUSAL 2: loopback-only, scratch port ───────────────────────────────
-# Appended AFTER restore, because pgbackrest writes postgresql.auto.conf.
+#
+# ⚠ ON DEBIAN/UBUNTU THE CONFIG FILES DO NOT LIVE IN PGDATA.
+# postgresql.conf, pg_hba.conf and pg_ident.conf are in
+# /etc/postgresql/<ver>/<cluster>/, while pgBackRest backs up pg1-path only.
+# A restored PGDATA therefore contains NONE of them, and a postmaster started
+# against it fails with `could not open configuration file ".../pg_hba.conf"` —
+# which the generic start-failure diagnostic below would have blamed on
+# recovery not reaching a consistent point, sending the operator to look in
+# entirely the wrong place.
+#
+# So the drill SYNTHESISES the three files it needs. They are deliberately
+# minimal and deliberately trust-auth: the cluster is RAM-backed, bound to
+# loopback only, on a scratch port, and destroyed on exit — there is no
+# network path to it, and adding password auth would mean inventing a
+# credential for a cluster that lives for seconds.
+as_drill /bin/bash -c "cat > $(printf '%q' "$PGDATA_DIR")/pg_hba.conf <<'HBA'
+# noramedi PITR drill — disposable cluster, loopback only, destroyed on exit.
+local   all   all                  trust
+host    all   all   127.0.0.1/32   trust
+host    all   all   ::1/128        trust
+HBA"
+as_drill /bin/bash -c ": > $(printf '%q' "$PGDATA_DIR")/pg_ident.conf"
+as_drill chmod 600 "$PGDATA_DIR/pg_hba.conf" "$PGDATA_DIR/pg_ident.conf"
+
+# Appended (not overwritten) because pgbackrest restore writes recovery
+# settings into postgresql.auto.conf and may have left a postgresql.conf.
 as_drill /bin/bash -c "cat >> $(printf '%q' "$PGDATA_DIR")/postgresql.conf <<'CONF'
 
 # --- noramedi PITR drill overrides (appended by the drill script) ---
 listen_addresses = '127.0.0.1'
 port = ${DRILL_PORT}
 unix_socket_directories = '${DRILL_ROOT}'
+hba_file = '${PGDATA_DIR}/pg_hba.conf'
+ident_file = '${PGDATA_DIR}/pg_ident.conf'
 CONF"
 
+# Fail with the RIGHT diagnostic if the synthesis did not take effect, rather
+# than letting a missing auth file masquerade as a recovery problem.
+for required in postgresql.conf pg_hba.conf pg_ident.conf; do
+  if ! as_drill test -f "$PGDATA_DIR/$required"; then
+    fail "'$required' is missing from the restored data directory — on Debian/Ubuntu these live outside PGDATA and are not part of the backup; the drill synthesises them, so this means the synthesis step failed"
+    exit 1
+  fi
+done
+
 log "starting disposable cluster on 127.0.0.1:${DRILL_PORT}"
-if ! as_drill "$PG_CTL" -D "$PGDATA_DIR" -o "-c logging_collector=off" -w -t 120 start; then
-  fail "the restored cluster did not start (recovery may not have reached a consistent point)"
+# hba_file/ident_file are ALSO passed on the command line: a postgresql.conf
+# restored from the backup could contain its own absolute hba_file pointing at
+# /etc/postgresql/..., and -o wins over the file.
+if ! as_drill "$PG_CTL" -D "$PGDATA_DIR" \
+     -o "-c logging_collector=off -c hba_file=$PGDATA_DIR/pg_hba.conf -c ident_file=$PGDATA_DIR/pg_ident.conf" \
+     -w -t 120 start; then
+  fail "the restored cluster did not start — check the postmaster log under ${PGDATA_DIR}/log (recovery may not have reached a consistent point, or a config file is missing)"
   exit 1
 fi
 STARTED=true
@@ -271,8 +318,31 @@ READY_EPOCH="$(date -u +%s)"
 # of the disposable cluster is that patient bytes stay inside it.
 q() { as_drill "$PSQL" -h 127.0.0.1 -p "$DRILL_PORT" -d "$PROD_DB_NAME" -Atc "$1" 2>/dev/null || echo ""; }
 
-RECOVERY_POINT="$(as_drill "$PSQL" -h 127.0.0.1 -p "$DRILL_PORT" -d postgres -Atc "SELECT to_char(pg_last_xact_replay_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"');" 2>/dev/null || echo "")"
-IN_RECOVERY="$(as_drill "$PSQL" -h 127.0.0.1 -p "$DRILL_PORT" -d postgres -Atc "SELECT pg_is_in_recovery();" 2>/dev/null || echo "")"
+# `pg_ctl -w` returns as soon as the postmaster ACCEPTS CONNECTIONS, which on
+# PostgreSQL 16 (hot_standby defaults to on) happens while recovery is still
+# replaying. Sampling pg_is_in_recovery() immediately would therefore report
+# `t` on a perfectly good restore and fail the drill for a reason that is not
+# true — a false RED on the one artifact that produces R-032 evidence.
+# Poll until promotion completes, bounded.
+RECOVERY_WAIT_SECONDS="${NORAMEDI_PITR_DRILL_RECOVERY_WAIT_SECONDS:-180}"
+[[ "$RECOVERY_WAIT_SECONDS" =~ ^[0-9]+$ ]] || RECOVERY_WAIT_SECONDS=180
+log "waiting up to ${RECOVERY_WAIT_SECONDS}s for recovery to reach its target and promote"
+IN_RECOVERY=""
+_waited=0
+while [[ "$_waited" -lt "$RECOVERY_WAIT_SECONDS" ]]; do
+  IN_RECOVERY="$(as_drill "$PSQL" -h 127.0.0.1 -p "$DRILL_PORT" -d postgres -Atc "SELECT pg_is_in_recovery();" 2>/dev/null || echo "")"
+  [[ "$IN_RECOVERY" == "f" ]] && break
+  sleep 2
+  _waited=$(( _waited + 2 ))
+done
+[[ "$IN_RECOVERY" == "f" ]] && log "recovery completed after ${_waited}s" \
+  || log "still in recovery after ${_waited}s — the smoke checks below will fail this drill"
+
+# Built by concatenation rather than to_char's double-quoted literals: this
+# string passes through as_drill's build_cmd and then a shell -c on the far
+# side, and a stripped `"T"` would silently turn into to_char's ordinal-suffix
+# pattern rather than an ISO separator.
+RECOVERY_POINT="$(as_drill "$PSQL" -h 127.0.0.1 -p "$DRILL_PORT" -d postgres -Atc "SELECT to_char(pg_last_xact_replay_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD') || 'T' || to_char(pg_last_xact_replay_timestamp() AT TIME ZONE 'UTC','HH24:MI:SS') || 'Z';" 2>/dev/null || echo "")"
 
 TABLE_COUNT="$(q "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")"
 MIGRATION_COUNT="$(q "SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL;")"
@@ -361,9 +431,17 @@ if [[ "$DO_RECORD" == true ]]; then
   else
     PROOF_DIR="$(dirname "$OFFHOST_PROOF")"
     if [[ -d "$PROOF_DIR" ]]; then
+      # The proof records WHICH target it was earned against, so that
+      # repointing repo2 at a different host cannot inherit it. The status
+      # writer compares this against the currently-configured repo2 and
+      # discards a proof that does not match. Without the binding, a 29-day-old
+      # proof would keep a brand-new, never-restored-from destination showing a
+      # green "off-host" tick.
+      PROOF_TARGET="$(grep -oE '^[[:space:]]*repo2-(host|s3-endpoint|path)[[:space:]]*=[[:space:]]*[^[:space:]]+' "${NORAMEDI_PGBACKREST_CONF:-/etc/pgbackrest/pgbackrest.conf}" 2>/dev/null \
+        | sed -E 's/.*=[[:space:]]*//' | head -n1 || true)"
       TMP_PROOF="$(mktemp "${PROOF_DIR}/.pitr-proof.XXXXXX")"
-      printf '{\n  "schemaVersion": 1,\n  "result": "passed",\n  "repo": %s,\n  "stanza": "%s",\n  "runId": "%s",\n  "finishedAt": "%s"\n}\n' \
-        "$REPO_NUM" "$STANZA" "$RUN_ID" "$(date -u -d "@$FINISH_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')" > "$TMP_PROOF"
+      printf '{\n  "schemaVersion": 1,\n  "result": "passed",\n  "repo": %s,\n  "stanza": "%s",\n  "target": "%s",\n  "runId": "%s",\n  "finishedAt": "%s"\n}\n' \
+        "$REPO_NUM" "$STANZA" "${PROOF_TARGET:-unknown}" "$RUN_ID" "$(date -u -d "@$FINISH_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')" > "$TMP_PROOF"
       chmod 0600 "$TMP_PROOF"
       mv -f "$TMP_PROOF" "$OFFHOST_PROOF"
       log "off-host proof marker written to ${OFFHOST_PROOF}"

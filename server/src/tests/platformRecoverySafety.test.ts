@@ -31,6 +31,7 @@
 import assert from 'node:assert/strict';
 import {
   redactBackupLogLine,
+  redactBackupLog,
   REDACTED_TOKEN,
   computeArtifactAgeMinutes,
   isBackupStale,
@@ -151,18 +152,62 @@ async function main() {
     });
   }
 
-  await test('an SSH private key block is redacted whole (off-host repo transport)', () => {
-    const key = [
+  // ── Regression: multi-line redaction must run BEFORE the split ──────────
+  //
+  // These go through redactBackupLog(), which is what getBackupLogs() actually
+  // calls. An earlier version of this test called redactBackupLogLine()
+  // directly on a `\n`-joined fixture — which the production path can never
+  // produce, because it split the log into lines first. The multi-line rule
+  // was therefore structurally unable to fire, and the key material lines were
+  // served verbatim over GET /api/platform/backups/logs while this test was
+  // green. Assert against the real entry point, never a shape the caller
+  // cannot generate.
+
+  await test('an SSH private key block is redacted (the real, line-split code path)', () => {
+    const log = [
+      '2026-08-15 02:30:01 starting archive push',
       '-----BEGIN OPENSSH PRIVATE KEY-----',
       'b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtz',
       'c2gtZW5kMjU1MTkAAAAgSECRETKEYMATERIALDONOTLOGTHISEVER0000000000=',
       '-----END OPENSSH PRIVATE KEY-----',
+      '2026-08-15 02:30:04 done',
     ].join('\n');
-    const line = redactBackupLogLine(`ssh transport failed using key ${key} for repo2`);
-    assert.ok(!line.includes('SECRETKEYMATERIAL'), `private key body survived redaction: ${line}`);
-    assert.ok(!line.includes('BEGIN OPENSSH PRIVATE KEY'), `PEM header survived redaction: ${line}`);
-    assert.ok(line.startsWith('ssh transport failed using key '), `line context was destroyed: ${line}`);
-    assert.ok(line.endsWith(' for repo2'), `trailing context was destroyed: ${line}`);
+
+    const lines = redactBackupLog(log);
+    const joined = lines.join('\n');
+
+    assert.ok(!joined.includes('SECRETKEYMATERIAL'), `private key body survived redaction: ${joined}`);
+    assert.ok(!joined.includes('b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQ'), `key body line survived: ${joined}`);
+    assert.ok(!joined.includes('BEGIN OPENSSH PRIVATE KEY'), `PEM header survived: ${joined}`);
+    // Ordinary surrounding lines must still be readable — an operator has to
+    // be able to debug a failed backup.
+    assert.ok(joined.includes('starting archive push'), `context line was destroyed: ${joined}`);
+    assert.ok(joined.includes('done'), `context line was destroyed: ${joined}`);
+  });
+
+  await test('a TRUNCATED key block (tail cut off the BEGIN marker) still does not leak body lines', () => {
+    // `tail -n` routinely starts mid-file, so the block rule may have no
+    // anchor at all. The lone-base64-line rule is the backstop.
+    const log = [
+      'c2gtZW5kMjU1MTkAAAAgSECRETKEYMATERIALDONOTLOGTHISEVER0000000000=',
+      '-----END OPENSSH PRIVATE KEY-----',
+      '2026-08-15 02:30:04 done',
+    ].join('\n');
+
+    const joined = redactBackupLog(log).join('\n');
+    assert.ok(!joined.includes('SECRETKEYMATERIAL'), `orphaned key body line survived redaction: ${joined}`);
+    assert.ok(joined.includes('done'), `context line was destroyed: ${joined}`);
+  });
+
+  await test('redactBackupLog drops empty lines and tolerates a non-string input', () => {
+    assert.deepEqual(redactBackupLog('a\n\nb'), ['a', 'b']);
+    assert.deepEqual(redactBackupLog(undefined as unknown as string), []);
+  });
+
+  await test('ordinary base64-looking prose is not destroyed by the backstop rule', () => {
+    // The lone-base64 rule must be narrow enough not to eat readable lines.
+    const joined = redactBackupLog('2026-08-15 02:30:02 wrote noramedi_crm-20260815-023001.dump (3.2 MB)').join('\n');
+    assert.ok(joined.includes('noramedi_crm-20260815-023001.dump'), `an ordinary line was redacted: ${joined}`);
   });
 
   await test('a stanza name is NOT redacted — it is operational context, not a secret', () => {

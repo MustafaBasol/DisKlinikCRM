@@ -62,21 +62,49 @@ Group=root
 EnvironmentFile=-/etc/noramedi/pgbackrest-status.env
 ExecStart=/usr/local/sbin/noramedi-pgbackrest-status.sh
 
-# Bounded well under the timer interval so a hung pgbackrest call cannot let
-# two writers overlap. The script also bounds each individual pgbackrest/psql
-# call itself (NORAMEDI_PGBACKREST_CMD_TIMEOUT, default 60s).
-TimeoutStartSec=120
+# The script makes up to 5 psql calls plus `info` and (hourly) `check`, each
+# individually bounded by NORAMEDI_PGBACKREST_CMD_TIMEOUT (default 60s), so the
+# arithmetic worst case is ~7 minutes — NOT the 120s an earlier version of this
+# comment claimed. 480s is set to exceed that worst case rather than truncate
+# it: a unit killed mid-run writes no status file at all, and the operator then
+# sees the 2-hour staleness alarm instead of the real diagnosis (a degraded
+# PostgreSQL). It remains well under the 15-minute timer interval, so two
+# writers still cannot overlap.
+TimeoutStartSec=480
 
 # Hardening. ProtectSystem=strict makes the filesystem read-only except for
-# ReadWritePaths below — this unit's entire purpose is to write two files.
+# ReadWritePaths below.
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/var/lib/noramedi /var/lib/noramedi-pgbackrest
-# ProtectHome is deliberately NOT set to "yes": unlike opscheck this unit has
-# no reason to read under /root, and the pgBackRest repository lives in
-# /var/lib/pgbackrest precisely so that it does not.
+#
+# /var/log/pgbackrest is REQUIRED here, not optional: pgbackrest.conf sets
+# log-level-file=detail, so every `info` and `check` this unit runs writes to
+# it. Under ProtectSystem=strict an unwritable log path makes pgBackRest warn
+# or error depending on build — and an erroring `check` would pin checkStatus
+# to "failed" permanently, i.e. a permanent FALSE RED on a healthy cluster.
+#
+# /var/lib/pgbackrest is required for the lock directory (see PrivateTmp below).
+ReadWritePaths=/var/lib/noramedi /var/lib/noramedi-pgbackrest /var/log/pgbackrest /var/lib/pgbackrest
+# ProtectHome=yes is safe here and deliberate: unlike opscheck — which must
+# read /root/noramedi-backups and therefore uses read-only — this unit never
+# touches /root, because the pgBackRest repository lives under /var/lib
+# precisely so that it does not. (An earlier revision of this file carried a
+# comment saying the opposite of the directive below; the directive was always
+# the correct one.)
 ProtectHome=yes
 StateDirectory=noramedi-pgbackrest
+#
+# PrivateTmp gives this unit its own /tmp. That is good hygiene but it BREAKS
+# pgBackRest's default lock-path of /tmp/pgbackrest: a lock taken here would be
+# invisible to the cron-driven `pgbackrest backup` running in the host /tmp,
+# and vice versa — so the hourly `check` (which forces a WAL segment switch)
+# could run concurrently with a backup, which is exactly what pgBackRest's lock
+# exists to prevent.
+#
+# Therefore pgbackrest.conf MUST set an explicit, shared lock-path outside
+# /tmp: `lock-path=/var/lib/pgbackrest/lock` (see
+# ops/pgbackrest/pgbackrest.conf.example). Both this unit and the cron job then
+# use the same real directory and the lock works across them.
 PrivateTmp=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes

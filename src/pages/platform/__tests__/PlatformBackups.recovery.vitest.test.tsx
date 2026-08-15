@@ -708,3 +708,69 @@ describe('PlatformBackups — PITR / WAL archive panel (F4-FCR-002)', () => {
     expect(screen.getAllByText(K('pitrNever')).length).toBeGreaterThan(0);
   });
 });
+
+describe('PlatformBackups — stalled WAL archiving must not render green (F4-FCR-002-R1)', () => {
+  // The false green this closes: a stalled archiver keeps failedCount at 0 and
+  // leaves archive_mode/commandOk healthy, so before this every tile on the
+  // page stayed neutral while opscheck was red on bit 128. An operator
+  // comparing a green page against a red alert believes the page.
+  it('alarms when the newest archived WAL is older than the monitor threshold', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ archive: { lastArchivedAgeMinutes: 4320, failedCount: 0 } }),
+    });
+
+    expect(await screen.findByText(K('pitrWalStaleTitle'))).toBeInTheDocument();
+  });
+
+  it('alarms when no WAL has EVER been archived, rather than showing a blank', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ archive: { lastArchivedAgeMinutes: undefined, lastArchivedAt: undefined } }),
+    });
+
+    expect(await screen.findByText(K('pitrWalStaleTitle'))).toBeInTheDocument();
+  });
+
+  it('does NOT alarm at exactly the threshold (strict >, matching the monitor)', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ archive: { lastArchivedAgeMinutes: 120 } }),
+    });
+
+    await screen.findByText(K('pitrArchiveTitle'));
+    expect(screen.queryByText(K('pitrWalStaleTitle'))).not.toBeInTheDocument();
+  });
+
+  it('does NOT alarm about stale WAL when PITR is not active at all', async () => {
+    // archive_mode=off already has its own, quieter message. Raising a second
+    // alarm about WAL age on a cluster that was never archiving would be noise.
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: pitr({ pitrActive: false, archive: { mode: 'off', lastArchivedAgeMinutes: undefined } }),
+    });
+
+    await screen.findByText(K('pitrTitle'));
+    expect(screen.queryByText(K('pitrWalStaleTitle'))).not.toBeInTheDocument();
+  });
+
+  it('does NOT alarm when the PITR document is unavailable', async () => {
+    mountWithRecovery({
+      dbBackup: dbBackup(),
+      fileBackup: fileBackup(),
+      drills: drills(),
+      pitr: { available: false, reason: 'not_configured' },
+    });
+
+    await screen.findByText(K('pitrTitle'));
+    expect(screen.queryByText(K('pitrWalStaleTitle'))).not.toBeInTheDocument();
+  });
+});

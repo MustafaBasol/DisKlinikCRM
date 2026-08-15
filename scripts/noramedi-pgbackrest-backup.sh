@@ -126,9 +126,34 @@ fi
 # Skipped in --dry-run: there is nothing to serialise against when the run
 # invokes nothing, and taking the lock would make a harmless preview able to
 # block (or be blocked by) a real backup.
+#
+# ⚠ DO NOT WRAP THIS SCRIPT IN `flock -n <same path> …` FROM CRON.
+# flock(2) locks belong to the OPEN FILE DESCRIPTION, not the process, so an
+# outer `flock -n /var/lock/noramedi-pgbackrest.lock <this script>` holds the
+# lock on its own fd and this script's independent open() then conflicts with
+# its own parent — every scheduled run would exit 5 "another run holds the
+# lock" and never invoke pgBackRest at all, while cron mail reported a benign
+# overlap. The existing pg_dump cron entry has no outer flock for the same
+# reason: the script owns its lock.
 LOCK_FILE="${NORAMEDI_PGBACKREST_LOCK_FILE:-/var/lock/noramedi-pgbackrest.lock}"
 if [[ "$DRY_RUN" != true ]]; then
-  exec 9>"$LOCK_FILE" || { fail "cannot open lock file $LOCK_FILE"; exit "$PRECONDITION_EXIT_CODE"; }
+  # Verified BEFORE the lock attempt. Without this, a missing flock binary
+  # makes `flock -n 9` exit 127, which the check below would report as "lock
+  # busy" — silently skipping every backup forever behind a reassuring
+  # message. An absent locking tool is a precondition failure, not an overlap.
+  command -v flock >/dev/null 2>&1 || {
+    fail "flock is not available; refusing to run without an overlap guard"
+    exit "$PRECONDITION_EXIT_CODE"
+  }
+  # `exec` on a failed redirection terminates a non-interactive shell before
+  # any `||` runs, so the directory is checked first to make the diagnostic
+  # reachable rather than dying silently on exit 1.
+  LOCK_DIR="$(dirname "$LOCK_FILE")"
+  [[ -d "$LOCK_DIR" ]] && [[ -w "$LOCK_DIR" ]] || {
+    fail "lock directory '$LOCK_DIR' does not exist or is not writable"
+    exit "$PRECONDITION_EXIT_CODE"
+  }
+  exec 9>"$LOCK_FILE"
   if ! flock -n 9; then
     fail "another pgBackRest run holds $LOCK_FILE — skipping this run"
     exit "$LOCKED_EXIT_CODE"
@@ -148,8 +173,13 @@ as_pg() {
 command -v pgbackrest >/dev/null 2>&1 || { fail "pgbackrest is not installed"; exit "$PRECONDITION_EXIT_CODE"; }
 [[ -d "$REPO_PATH" ]] || { fail "repo path '$REPO_PATH' does not exist"; exit "$PRECONDITION_EXIT_CODE"; }
 
-if ! as_pg "pgbackrest --stanza=$(printf '%q' "$STANZA") info --output=json" >/dev/null 2>&1; then
-  fail "stanza '$STANZA' is not readable — run stanza-create first, and never enable archive_mode before it exists"
+# Filesystem check, not `info`'s exit status: `pgbackrest info` is
+# informational and exits 0 for a stanza that does not exist, reporting the
+# absence in its JSON body. `stanza-create` builds these two directories, so
+# their presence is the version-independent signal. See the longer note in
+# noramedi-pgbackrest-preflight.sh.
+if [[ ! -d "$REPO_PATH/archive/$STANZA" ]] || [[ ! -d "$REPO_PATH/backup/$STANZA" ]]; then
+  fail "stanza '$STANZA' does not exist under '$REPO_PATH' — run stanza-create first, and never enable archive_mode before it exists"
   exit "$PRECONDITION_EXIT_CODE"
 fi
 

@@ -96,7 +96,28 @@ case "$sql" in
   *"SHOW config_file"*)     echo "${FAKE_CONFIG_FILE:-/etc/postgresql/16/main/postgresql.conf}" ;;
   *"SHOW include_dir"*)     echo "${FAKE_INCLUDE_DIR:-}" ;;
   *"SHOW server_version"*)  echo "${FAKE_SERVER_VERSION:-16.14}" ;;
-  *pg_stat_archiver*)       echo "${FAKE_ARCHIVER_ROW:-|||}" ;;
+  *pg_stat_archiver*)
+    # This fake DELIBERATELY inspects the SQL it received rather than blindly
+    # echoing a fixture.
+    #
+    # The previous version matched `*pg_stat_archiver*` and printed
+    # $FAKE_ARCHIVER_ROW regardless of what actually arrived, which made it
+    # structurally incapable of noticing that the query had been mangled in
+    # transit. It was: the delegation used to re-parse the command string, so
+    # every embedded quote was eaten and the ISO format directive silently
+    # became something else. A test that ignores its input cannot catch that.
+    #
+    # The writer now builds the timestamp by concatenation and must therefore
+    # send `|| 'T' ||`. If any future refactor reintroduces a parse layer that
+    # strips quoting, this returns the CORRUPT marker instead of a timestamp,
+    # the writer's ISO validator discards it, and the "healthy run emits
+    # lastArchivedAgeMinutes" assertion fails loudly.
+    if [[ "$sql" == *"|| 'T' ||"* ]] && [[ "$sql" == *"'Z'"* ]]; then
+      echo "${FAKE_ARCHIVER_ROW:-|||}"
+    else
+      echo "SQL-QUOTING-CORRUPTED-IN-TRANSIT|||"
+    fi
+    ;;
   *) echo "" ;;
 esac
 exit 0
@@ -229,6 +250,26 @@ repo_body="$(grep -oE '"repo"[[:space:]]*:[[:space:]]*\{[^{}]*\}' <<<"$FLAT" || 
 [[ -n "$archive_body" ]] && pass "'archive' is a FLAT object (opscheck's parser rejects nesting)" || fail "'archive' is nested or unmatched"
 [[ -n "$repo_body" ]] && pass "'repo' is a FLAT object" || fail "'repo' is nested or unmatched"
 
+section "Status writer: a healthy run EMITS the WAL-freshness fields"
+# The assertion that was missing. Every other WAL test asserted the field's
+# ABSENCE on a failure path, which passes both when the feature works and when
+# the field is never emitted at all — precisely the state a quoting bug in the
+# pg_stat_archiver query produced. `lastArchivedAgeMinutes` is the input to
+# opscheck's only check for "archiving stopped while backups kept succeeding";
+# if it is missing, that check fails permanently for a false reason.
+[[ "$OUT" == *'"lastArchivedAt"'* ]] \
+  && pass "a healthy run emits lastArchivedAt (the pg_stat_archiver query survived delegation intact)" \
+  || fail "lastArchivedAt MISSING — the archiver query was mangled or rejected ($OUT)"
+[[ "$OUT" == *'"lastArchivedAgeMinutes"'* ]] \
+  && pass "a healthy run emits lastArchivedAgeMinutes (the field opscheck's stale-WAL assertion consumes)" \
+  || fail "lastArchivedAgeMinutes MISSING — opscheck's stale-WAL check would fail permanently for a false reason ($OUT)"
+[[ "$OUT" != *"SQL-QUOTING-CORRUPTED-IN-TRANSIT"* ]] \
+  && pass "the archiver SQL reached psql with its quoting intact" \
+  || fail "the archiver SQL was CORRUPTED IN TRANSIT — a parse layer is eating quotes ($OUT)"
+[[ "$OUT" == *'"failedCount": 0'* ]] \
+  && pass "archiver failure count is parsed from the query result" \
+  || fail "failedCount not parsed ($OUT)"
+
 section "Status writer: the canary never appears"
 [[ "$OUT" != *"$CANARY"* ]] && pass "the repository passphrase never reaches stdout/stderr on the healthy path" || fail "CANARY LEAKED on the healthy path"
 
@@ -339,32 +380,67 @@ run bash "$STATUS" --stdout --no-check
 [[ "$(offhost_of "$OUT")" == "no" ]] && pass "a remote but UNENCRYPTED repo2 -> offHost='no' (REPO2_PLAINTEXT)" || fail "expected no for a plaintext repo2 ($OUT)"
 
 # 7. With a fresh, valid restore proof from repo2 -> yes.
-printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","runId":"t","finishedAt":"%s"}\n' \
+printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","target":"backup.example.tr","runId":"t","finishedAt":"%s"}\n' \
   "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF"
 EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s13" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
 run bash "$STATUS" --stdout --no-check
 [[ "$(offhost_of "$OUT")" == "yes" ]] && pass "a fresh restore proof from repo2 upgrades offHost to 'yes'" || fail "expected yes with a valid proof ($OUT)"
 
 # 8. A proof from repo1 must NOT count — the local repo is not independent.
-printf '{"schemaVersion":1,"result":"passed","repo":1,"stanza":"noramedi","runId":"t","finishedAt":"%s"}\n' \
+printf '{"schemaVersion":1,"result":"passed","repo":1,"stanza":"noramedi","target":"backup.example.tr","runId":"t","finishedAt":"%s"}\n' \
   "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF"
 EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s14" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
 run bash "$STATUS" --stdout --no-check
 [[ "$(offhost_of "$OUT")" == "unproven" ]] && pass "a restore proof from repo1 does NOT prove off-host recoverability" || fail "expected unproven for a repo1 proof ($OUT)"
 
 # 9. A stale proof must not keep claiming success forever.
-printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","runId":"t","finishedAt":"%s"}\n' \
+printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","target":"backup.example.tr","runId":"t","finishedAt":"%s"}\n' \
   "$(date -u -d '-100 days' '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF"
 EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s15" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
 run bash "$STATUS" --stdout --no-check
 [[ "$(offhost_of "$OUT")" == "unproven" ]] && pass "a 100-day-old restore proof expires back to 'unproven'" || fail "expected unproven for a stale proof ($OUT)"
 
 # 10. A FAILED drill must never count as proof.
-printf '{"schemaVersion":1,"result":"failed","repo":2,"stanza":"noramedi","runId":"t","finishedAt":"%s"}\n' \
+printf '{"schemaVersion":1,"result":"failed","repo":2,"stanza":"noramedi","target":"backup.example.tr","runId":"t","finishedAt":"%s"}\n' \
   "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF"
 EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s16" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
 run bash "$STATUS" --stdout --no-check
 [[ "$(offhost_of "$OUT")" == "unproven" ]] && pass "a FAILED restore drill is not proof" || fail "expected unproven for a failed drill ($OUT)"
+
+# 11. A proof earned against a DIFFERENT repo2 target must not be inherited.
+printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","target":"some-other-host.example","runId":"t","finishedAt":"%s"}\n' \
+  "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s17" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$(offhost_of "$OUT")" == "unproven" ]] \
+  && pass "a proof earned against a DIFFERENT repo2 target is not inherited when repo2 is repointed" \
+  || fail "expected unproven for a target-mismatched proof ($OUT)"
+
+# 12. A legacy proof with no target binding at all must also be refused.
+printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","runId":"t","finishedAt":"%s"}\n' \
+  "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s18" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$(offhost_of "$OUT")" == "unproven" ]] \
+  && pass "a proof with no target binding is refused (fails toward unproven, never toward yes)" \
+  || fail "expected unproven for an unbound proof ($OUT)"
+
+section "Status writer: emitted objects are verified flat before publishing"
+# The writer checks its OWN output against the consumer's flat-object rule
+# rather than merely asserting flatness in a comment. A brace arriving inside
+# a pgBackRest error message would otherwise break the consumer's extraction.
+EXTRA_ENV=(
+  NORAMEDI_PGBACKREST_CONF="$CONF"
+  NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s19"
+  FAKE_ARCHIVE_MODE=on
+  FAKE_INFO_JSON='[{"name":"noramedi","status":{"code":3,"message":"repo path {broken} unreachable"},"backup":[],"archive":[]}]'
+)
+run bash "$STATUS" --stdout --no-check
+[[ "$CODE" -eq 0 ]] && pass "a brace inside a pgbackrest error message does not break publishing" || fail "expected exit 0, got $CODE ($OUT)"
+FLAT_OUT="$(tr -s '\n\r\t ' ' ' <<<"$OUT")"
+grep -qE '"repo"[[:space:]]*:[[:space:]]*\{[^{}]*\}' <<<"$FLAT_OUT" \
+  && pass "the repo object stays flat even when the upstream message contained braces" \
+  || fail "a brace leaked into repo and broke flatness ($OUT)"
 
 section "Status writer: malformed tuning values fail closed"
 for bad in NORAMEDI_PGBACKREST_CHECK_MIN_INTERVAL_SECONDS NORAMEDI_PGBACKREST_CMD_TIMEOUT NORAMEDI_PGBACKREST_OFFHOST_PROOF_MAX_AGE_HOURS; do
@@ -382,10 +458,22 @@ run bash "$STATUS" --out "$WORK/no-such-dir/pitr-status.json" --no-check
 [[ "$CODE" -eq 1 ]] && pass "a missing output directory is an error, not silently created (a self-creating writer hides a misconfigured path)" || fail "expected exit 1, got $CODE ($OUT)"
 
 # ════════════════════════════════════════════════════════════════════════
+section "Backup wrapper: stanza must exist before anything else"
+# `stanza-create` builds archive/<stanza> and backup/<stanza>. The wrapper
+# checks for those DIRECTORIES rather than trusting `pgbackrest info`'s exit
+# status, because info is informational and exits 0 for a stanza that does not
+# exist — reporting the absence only in its JSON body.
+mkdir -p "$WORK/repo"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_FREE_MB=65000)
+run bash "$BACKUP" --dry-run
+[[ "$CODE" -eq 3 ]] && pass "a repo with no stanza directories is a precondition failure (exit 3), not a silent success" || fail "expected exit 3, got $CODE ($OUT)"
+
+# Everything below needs a stanza that actually exists.
+mkdir -p "$WORK/repo/archive/noramedi" "$WORK/repo/backup/noramedi"
+
 section "Backup wrapper: disk-exhaustion abort"
 # Required explicitly by the drafted freeze exception. An alert notifies
 # someone after the fact; an abort refuses to make it worse.
-mkdir -p "$WORK/repo"
 EXTRA_ENV=(NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" NORAMEDI_PGBACKREST_MIN_FREE_MB=10240 FAKE_FREE_MB=500)
 run bash "$BACKUP" --dry-run
 [[ "$CODE" -eq 4 ]] && pass "aborts with the dedicated code 4 when free space is under the floor" || fail "expected exit 4, got $CODE ($OUT)"
