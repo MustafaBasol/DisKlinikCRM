@@ -223,6 +223,8 @@ jobs:
         run: npm run typecheck:runtime
       - name: Docker-free orchestrator unit tests
         run: npm run test:runtime:unit
+      - name: Docker-free Layer 4 storage-gate regression tests
+        run: npm run test:runtime:storage-gate
       - name: Typecheck scripts/ci-classify
         run: npm run typecheck:ci-classify
       - name: Changed-path classifier unit tests
@@ -488,25 +490,36 @@ jobs:
         working-directory: server
       - name: Provision disposable PostgreSQL + MinIO, run server:test:storage-integration, tear down
         run: npm run test:runtime:storage -- --summary-file=storage-run-summary.json
-      - name: Validate run-summary artifact is real JSON (failure only)
-        if: failure()
-        run: node -e "JSON.parse(require('fs').readFileSync('storage-run-summary.json','utf8')); console.log('storage-run-summary.json is valid JSON')"
-      - name: Scan run-summary artifact for prohibited secret patterns (failure only)
-        if: failure()
+      # F4-CI-L4-STORAGE-GATE-001. Everything below used to be `if: failure()`,
+      # which is precisely how this job stayed green for weeks while executing
+      # nothing: on the (vacuously) passing path the summary artifact was never
+      # parsed, never checked and never even uploaded, so "green" meant only
+      # "the process exited 0". These steps now run on EVERY outcome, and the
+      # gate treats a missing/empty/unproven summary as a hard failure.
+      - name: 'Gate: run summary must prove the storage suite actually executed'
+        if: always()
+        run: npm run verify:storage-run -- storage-run-summary.json --require-offhost-destination
+      - name: Scan run-summary artifact for prohibited secret patterns
+        if: always()
         run: |
           set -euo pipefail
+          if [ ! -f storage-run-summary.json ]; then
+            echo "No storage-run-summary.json to scan (the gate step above has already failed the job)."
+            exit 0
+          fi
           if grep -EiI 'postgresql://|postgres://|s3://|AKIA[0-9A-Z]{16}|BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY|secretAccessKey|accessKeyId["'"'"']?\s*[:=]|password["'"'"']?\s*[:=]' storage-run-summary.json; then
             echo "Prohibited secret-like pattern found in artifact candidate - refusing to upload" >&2
             exit 1
           fi
           echo "No prohibited secret patterns detected in storage-run-summary.json"
-      - name: Upload sanitized run summary (failure only)
-        if: failure()
+      - name: Upload sanitized run summary
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: storage-integration-run-summary-${{ github.run_id }}-${{ github.run_attempt }}
           path: storage-run-summary.json
           retention-days: 7
+          if-no-files-found: ignore
       - name: Label-scoped residual-resource check (fails on any leftover/cleanup error)
         if: always()
         run: npm run test:runtime:cleanup-stale -- --live --ttl-hours=0.01

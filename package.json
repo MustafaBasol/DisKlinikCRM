@@ -19,6 +19,8 @@
     "test:patient-detail-nav-i18n-parity": "tsx src/pages/__tests__/patientDetailNavI18nParity.test.ts",
     "test:vitest": "vitest run",
     "test:runtime:unit": "tsx scripts/test-runtime/__tests__/orchestratorUnit.test.ts",
+    "test:runtime:storage-gate": "tsx scripts/test-runtime/__tests__/storageGate.test.ts",
+    "verify:storage-run": "tsx scripts/test-runtime/verify-storage-run.ts",
     "test:runtime:postgres": "tsx scripts/test-runtime/orchestrator.ts postgres",
     "test:runtime:postgres-compat": "tsx scripts/test-runtime/orchestrator.ts postgres-compat",
     "test:runtime:storage": "tsx scripts/test-runtime/orchestrator.ts storage",

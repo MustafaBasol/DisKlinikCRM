@@ -15,6 +15,7 @@
  */
 
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
@@ -28,21 +29,46 @@ import {
   cleanupAllFixtures,
 } from './dbVerificationHarness.js';
 
+/**
+ * F4-CI-L4-STORAGE-GATE-001 — execution receipt.
+ *
+ * The Layer 4 orchestrator used to infer "the storage suite ran" from this
+ * process exiting 0, which is not evidence of anything: a suite that never
+ * reaches its first assertion exits 0 too, and a suite that is never spawned
+ * leaves the orchestrator's own exit code unset (also 0). So this suite now
+ * publishes what it actually executed, and the orchestrator refuses to report
+ * success without it. Written on BOTH the success and the fatal-error path
+ * (see the `.finally()` at the bottom) — a crashed run must still report the
+ * partial truth rather than leaving the gate with nothing to read.
+ *
+ * Entirely opt-in: with NMTEST_EXECUTION_RECEIPT_FILE unset (a developer
+ * running this file by hand) nothing is written and behaviour is unchanged.
+ */
+interface ExecutionReceiptEntry {
+  id?: string;
+  name: string;
+  status: 'passed' | 'failed';
+}
+const receiptEntries: ExecutionReceiptEntry[] = [];
+const suiteStartedAt = new Date().toISOString();
+
 const { section, test, summary } = (() => {
   let passed = 0;
   let failed = 0;
   function sectionFn(name: string) {
     console.log(`\n${name}`);
   }
-  async function testFn(name: string, fn: () => void | Promise<void>) {
+  async function testFn(name: string, fn: () => void | Promise<void>, id?: string) {
     try {
       await fn();
       console.log(`  ✓ ${name}`);
       passed++;
+      receiptEntries.push({ ...(id ? { id } : {}), name, status: 'passed' });
     } catch (err) {
       console.error(`  ✗ ${name}`);
       console.error(`      ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
       failed++;
+      receiptEntries.push({ ...(id ? { id } : {}), name, status: 'failed' });
     }
   }
   function summaryFn() {
@@ -52,6 +78,36 @@ const { section, test, summary } = (() => {
   }
   return { section: sectionFn, test: testFn, summary: summaryFn };
 })();
+
+function writeExecutionReceipt(): void {
+  const receiptPath = process.env.NMTEST_EXECUTION_RECEIPT_FILE;
+  if (!receiptPath) return;
+  const receipt = {
+    suite: 'fileBackupDbIntegration',
+    runId: process.env.NMTEST_EXECUTION_RUN_ID ?? '',
+    startedAt: suiteStartedAt,
+    finishedAt: new Date().toISOString(),
+    passed: receiptEntries.filter((e) => e.status === 'passed').length,
+    failed: receiptEntries.filter((e) => e.status === 'failed').length,
+    entries: receiptEntries,
+  };
+  try {
+    fsSync.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2), 'utf8');
+    console.log(`[file-backup-db-integration] execution receipt written: ${receipt.passed} passed, ${receipt.failed} failed`);
+  } catch (err) {
+    // Never mask a real test result with an artifact-write problem. The
+    // orchestrator fails closed on a missing receipt anyway, so silence here
+    // still produces a red run — it just needs to say why.
+    console.error(`[file-backup-db-integration] failed to write execution receipt: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Loopback == same machine. Mirrors the production predicate's own rule set. */
+function isLoopbackEndpointHostname(host: string): boolean {
+  const h = host.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h === '::1' || h === '0.0.0.0') return true;
+  return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
+}
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
@@ -188,7 +244,7 @@ async function main() {
     assert(firstRun.filesCopied >= 5, `expected >=5 files copied, got ${firstRun.filesCopied}`);
     assert(firstRun.filesVerified >= 5, `expected >=5 files verified, got ${firstRun.filesVerified}`);
     assertEqual(firstRun.filesFailed, 0, 'no failures expected');
-  });
+  }, 'local-first-run-backs-up-seeded-files');
 
   await test('Imaging read-port migration parity: destination key is tenant-scoped and domain-scoped, no cross-clinic overlap, both clinics reached by the global ops-port enumeration', async () => {
     const entryImgA = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: imagingImageA1.id } });
@@ -232,7 +288,7 @@ async function main() {
     const chunks: Buffer[] = [];
     for await (const chunk of stream!) chunks.push(chunk as Buffer);
     assertEqual(Buffer.concat(chunks).toString('utf8'), contentA1.toString('utf8'), 'round-tripped content');
-  });
+  }, 'local-destination-bytes-match-source');
 
   await test('second run is idempotent: already-verified entries are skipped, no duplicate ledger rows', async () => {
     const countBefore = await prisma.fileBackupEntry.count({ where: { sourceRecordId: patientAttachmentA1.id, status: 'verified' } });
@@ -426,7 +482,7 @@ async function main() {
 
   await test('MinIO bucket can be created (disposable S3-compatible destination reachable)', async () => {
     await adminS3.send(new CreateBucketCommand({ Bucket: bucketName }));
-  });
+  }, 's3-bucket-created');
 
   process.env.FILE_BACKUP_S3_BUCKET = bucketName;
   process.env.FILE_BACKUP_S3_ENDPOINT = minioEndpoint;
@@ -453,17 +509,60 @@ async function main() {
     },
   });
 
-  await test('getFileBackupDestinationKind reports s3 and off-host once FILE_BACKUP_S3_BUCKET is set', async () => {
+  // F4-CI-L4-STORAGE-GATE-001 (Lane C). This case previously asserted
+  // `isFileBackupDestinationOffHost() === true` unconditionally, which
+  // directly contradicted the F4-FCR-001 tightening that (correctly) refuses
+  // to call a loopback endpoint off-host. The contradiction is resolved on
+  // the TEST side, not the production side: the orchestrator now hands this
+  // suite the MinIO container's own non-loopback network address wherever
+  // that is routable, so the unmodified production predicate answers `true`
+  // on its own merits; where only the published loopback mapping is usable,
+  // the honest answer is `false` and that is what is asserted. Production
+  // policy is untouched in both directions.
+  await test('destination is s3, and the off-host classification matches the real endpoint topology it was handed', async () => {
     assertEqual(dest.getFileBackupDestinationKind(), 's3', 'kind');
-    assertEqual(dest.isFileBackupDestinationOffHost(), true, 'off-host');
-  });
+
+    const endpointHost = new URL(minioEndpoint).hostname;
+    const endpointIsLoopback = isLoopbackEndpointHostname(endpointHost);
+    assertEqual(
+      dest.isFileBackupDestinationOffHost(),
+      !endpointIsLoopback,
+      `off-host classification for endpoint host "${endpointHost}" (loopback=${endpointIsLoopback}) — a loopback destination must NEVER be reported as off-host, and a genuinely non-loopback one must be`,
+    );
+
+    // When the orchestrator says it provisioned an off-host-SHAPED
+    // destination, a loopback endpoint here means the topology silently
+    // degraded and the off-host path stopped being covered at all. That is a
+    // coverage regression, so it fails rather than passing quietly.
+    if (process.env.NMTEST_EXPECT_OFFHOST_DESTINATION === 'true') {
+      assert(
+        !endpointIsLoopback,
+        `the runtime promised an off-host-shaped MinIO destination (NMTEST_MINIO_ADDRESS_MODE=${process.env.NMTEST_MINIO_ADDRESS_MODE ?? 'unset'}) but handed this suite loopback endpoint "${minioEndpoint}"`,
+      );
+      assertEqual(dest.isFileBackupDestinationOffHost(), true, 'off-host destination must classify as off-host');
+    }
+  }, 's3-destination-kind-and-offhost-classification');
+
+  await test('a loopback S3 endpoint is never classified as off-host, even in this same s3 destination kind (production policy, asserted live against the real module)', async () => {
+    const realEndpoint = process.env.FILE_BACKUP_S3_ENDPOINT;
+    try {
+      for (const loopback of ['http://127.0.0.1:9000', 'http://localhost:9000', 'http://127.5.6.7:9000', 'http://0.0.0.0:9000']) {
+        process.env.FILE_BACKUP_S3_ENDPOINT = loopback;
+        assertEqual(dest.getFileBackupDestinationKind(), 's3', `kind stays s3 for ${loopback}`);
+        assertEqual(dest.isFileBackupDestinationOffHost(), false, `${loopback} must not be reported as off-host`);
+      }
+    } finally {
+      if (realEndpoint === undefined) delete process.env.FILE_BACKUP_S3_ENDPOINT;
+      else process.env.FILE_BACKUP_S3_ENDPOINT = realEndpoint;
+    }
+  }, 's3-loopback-never-offhost');
 
   let s3Run: Awaited<ReturnType<typeof runFileBackup>>;
   await test('backup run uploads to MinIO, verifies via independent read-back', async () => {
     s3Run = await runFileBackup({ trigger: 'manual' });
     assertEqual(s3Run.status, 'completed', 'run status');
     assert(s3Run.filesVerified >= 1, 'at least the new S3 row verified');
-  });
+  }, 's3-backup-run-uploads-and-verifies');
 
   await test('object is independently readable directly from MinIO via a separate S3 client (not just through our own code path)', async () => {
     const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: patientAttachmentS3.id } });
@@ -471,7 +570,7 @@ async function main() {
     const chunks: Buffer[] = [];
     for await (const chunk of result.Body as any) chunks.push(chunk as Buffer);
     assertEqual(Buffer.concat(chunks).toString('utf8'), contentS3_1.toString('utf8'), 'independently read-back content matches source');
-  });
+  }, 's3-independent-read-back');
 
   await test('missing-object detection: deleting the MinIO object out-of-band makes restore fail cleanly (not silently succeed)', async () => {
     const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: patientAttachmentS3.id } });
@@ -484,7 +583,7 @@ async function main() {
     } finally {
       await fs.rm(restoreDir, { recursive: true, force: true });
     }
-  });
+  }, 's3-missing-object-restore-fails-cleanly');
 
   await test('corruption detection on MinIO: overwriting object bytes out-of-band is caught by restore checksum comparison', async () => {
     // Re-back-up (the object was deleted above, but the ledger entry is still 'verified'
@@ -500,7 +599,7 @@ async function main() {
     } finally {
       await fs.rm(restoreDir, { recursive: true, force: true });
     }
-  });
+  }, 's3-corruption-detected-at-restore');
 
   await test('a stale entry marked verified against now-tampered content is NEVER re-verified by subsequent backup runs (skip-if-verified is permanent, not re-checked)', async () => {
     const before = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: patientAttachmentS3.id } });
@@ -533,5 +632,8 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    // Written on both the success and the fatal-error path — see the
+    // execution-receipt comment at the top of this file.
+    writeExecutionReceipt();
     await prisma.$disconnect().catch(() => {});
   });

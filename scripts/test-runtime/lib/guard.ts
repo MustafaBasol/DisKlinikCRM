@@ -63,8 +63,40 @@ export function assertSafeDatabaseUrl(databaseUrl: string, ctx: GuardContext): v
   }
 }
 
+/**
+ * True for an IPv4 address inside RFC 1918 private space — the only ranges a
+ * Docker user-defined bridge network hands out. Deliberately narrow: this is
+ * a shape check layered UNDER the identity check below, never a substitute
+ * for it.
+ */
+export function isPrivateIpv4Address(host: string): boolean {
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host.trim());
+  if (!match) return false;
+  const octets = match.slice(1).map((o) => Number.parseInt(o, 10));
+  if (octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return false;
+  const [a, b] = octets;
+  if (a === 10) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  return false;
+}
+
+export interface MinioEndpointGuardOptions {
+  /**
+   * F4-CI-L4-STORAGE-GATE-001 (Lane C): the container addresses Docker itself
+   * reported for THIS run's own MinIO container on THIS run's own network.
+   * A non-loopback endpoint is accepted only when its host is an exact member
+   * of this list AND is RFC 1918 private space — i.e. the orchestrator is
+   * allowed to address a container it just created and can name, and nothing
+   * else. This is the same identity-check shape `assertSafeDatabaseUrl`
+   * already uses for the run-id-bearing database name; it is NOT a general
+   * relaxation of "must be loopback".
+   */
+  allowedContainerAddresses?: readonly string[];
+}
+
 /** Validates a constructed/candidate MinIO endpoint before any test import. */
-export function assertSafeMinioEndpoint(endpoint: string): void {
+export function assertSafeMinioEndpoint(endpoint: string, opts: MinioEndpointGuardOptions = {}): void {
   let parsed: URL;
   try {
     parsed = new URL(endpoint);
@@ -81,9 +113,14 @@ export function assertSafeMinioEndpoint(endpoint: string): void {
       `MINIO_ENDPOINT host "${parsed.hostname}" matches a known production hostname pattern — refusing`,
     );
   }
-  if (!isLoopbackHost(parsed.hostname)) {
-    throw new ProductionEndpointGuardError(`MINIO_ENDPOINT host "${parsed.hostname}" is not loopback — refusing`);
-  }
+  if (isLoopbackHost(parsed.hostname)) return;
+
+  const allowed = opts.allowedContainerAddresses ?? [];
+  if (allowed.includes(parsed.hostname) && isPrivateIpv4Address(parsed.hostname)) return;
+
+  throw new ProductionEndpointGuardError(
+    `MINIO_ENDPOINT host "${parsed.hostname}" is neither loopback nor an RFC1918 address Docker reported for this run's own MinIO container — refusing`,
+  );
 }
 
 /**

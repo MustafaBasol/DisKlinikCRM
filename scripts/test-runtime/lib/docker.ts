@@ -57,6 +57,41 @@ export function getHostPort(containerName: string, containerPort: string): numbe
   return parsePortBindings(result.stdout.trim(), containerPort);
 }
 
+/**
+ * Pure — parses `docker inspect --format '{{json .NetworkSettings.Networks}}'`
+ * output and returns the container's own IPv4 address *on the named network*,
+ * or null when the container is not attached to it / has no address there.
+ *
+ * F4-CI-L4-STORAGE-GATE-001: this is the address that makes the disposable
+ * MinIO destination a genuinely non-loopback network identity (its own
+ * container network namespace, not this host's loopback interface) — see
+ * lib/minio.ts and the Lane C rationale in
+ * docs/program/evidence/F4-CI-L4-STORAGE-GATE-001_LAYER4_STORAGE_GATE.md.
+ * Returning null (rather than throwing) is deliberate: a platform where the
+ * container network is not routable from the host must fall back to the
+ * published loopback port, not fail the run.
+ */
+export function parseContainerNetworkAddress(networksJson: string, networkName: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(networksJson);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const entry = (parsed as Record<string, { IPAddress?: unknown } | null>)[networkName];
+  const address = entry?.IPAddress;
+  if (typeof address !== 'string' || address.trim().length === 0) return null;
+  return address.trim();
+}
+
+/** Queries this container's own IPv4 address on the given user-defined network. */
+export function getContainerNetworkAddress(containerName: string, networkName: string): string | null {
+  const result = runDockerSync(['inspect', '--format', '{{json .NetworkSettings.Networks}}', containerName]);
+  if (result.code !== 0) return null;
+  return parseContainerNetworkAddress(result.stdout.trim(), networkName);
+}
+
 export function dockerRun(args: string[]): string {
   const result = runDockerSync(['run', '-d', ...args]);
   if (result.code !== 0) {
