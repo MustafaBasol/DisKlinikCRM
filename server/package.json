@@ -62,6 +62,7 @@
     "test:wa-persistence": "tsx src/tests/whatsappConversationPersistence.test.ts",
     "test:kvkk-lifecycle": "tsx src/tests/kvkkAttachmentImagingLifecycle.test.ts",
     "test:storage-key-contract": "tsx src/tests/storageKeyContract.test.ts",
+    "test:storage-deletion-evidence": "tsx src/tests/storageDeletionEvidence.test.ts",
     "test:finance": "tsx src/tests/financeDashboard.test.ts",
     "test:ops": "tsx src/tests/operationalMonitoring.test.ts",
     "test:no-shows": "tsx src/tests/noShow.test.ts",

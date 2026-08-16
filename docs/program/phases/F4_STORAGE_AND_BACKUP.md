@@ -4,6 +4,173 @@ Faz durumu: `TODO` · Son güncelleme: 2026-08-16 (F4-2 — program sahibi `R-03
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
 
+## F4-3 — Fiziksel silme güvenliği: kanıt, idempotency ve kiracı sınırı
+
+`F4-3_STATUS = AGENT_COMPLETED` (revizyon `R1` dâhil) · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
+Taban çizgisi: `origin/main` @ `fb22b94cf607c64fdb0e33ba98329018ef8c9f5e`, temiz çalışma ağacı.
+**Migration: YOK.** **Üretim mutasyonu: YOK.** **Faz durumu `TODO` olarak değişmedi.**
+
+> **Bu görev hiçbir saklama süresi belirlemedi, hiçbir silmeyi onaylamadı ve
+> hiçbir yeni silme yolu açmadı.** F4-3 sözleşmesinin `NO PHYSICAL DELETION
+> without approved legal/KVKK policy` kuralı korunmuştur: canlı silme endpoint'i
+> hâlâ yoktur, `deletion-review` hâlâ salt kuru-koşumdur, veri saklama politikası
+> hâlâ `COUNSEL_REVIEW_REQUIRED`. Yapılan tek şey, **zaten gerçekleşen**
+> kullanıcı-tetikli silmelerin güvenli, kiracı-sınırlı ve kanıtlanabilir hâle
+> getirilmesidir.
+
+### Kapatılan somut kusur
+
+Hasta baytlarını fiziksel olarak silen iki yol — `DELETE /api/patients/:patientId/attachments/:id`
+ve `DELETE /api/lab-orders/:id/attachments/:attId` — önce DB satırını siliyor
+(eklerde bu **doğrudur**: o `deleteMany` atomik legal-hold kapısıdır, PR #163),
+sonra `deleteFile(row.filePath)` çağırıp hatayı yutuyordu. Silinen satır
+depolama anahtarını tutan **tek** yer olduğundan, başarısız bir depo silmesi
+**kalıcı ve uzlaştırılamaz** bir yetim üretiyordu: nesne yerinde kalıyor, hiçbir
+şey onu bir daha adlandıramıyor, hiçbir alarm çalmıyor ve çağırana silme
+başarılı bildiriliyordu. KVKK açısından bu, sistemin **kanıtlayamadığı** bir
+silme iddiasıdır — ve sessiz kısmi silme, tam silmeden ayırt edilemediği için
+başarısızlığın kötü yarısıdır.
+
+Bunu kanıtlarken **ikinci ve daha geniş bir kusur** bulundu:
+`fileStorage.deleteFile` yerel modda **her** `unlink` hatasını yutuyordu,
+yalnızca "dosya zaten yok"u değil. `EPERM`, `EACCES`, `EBUSY`, `EROFS` ve G/Ç
+hataları — hepsi **her çağırana** başarılı silme olarak dönüyordu
+(`clinicBulkExportPackage.ts`'in "deleteFile zaten yerel ENOENT'i yutar, bu
+ikinci kontrol yalnızca uzak depo için gerekli" yorumu dâhil). Yalnızca `ENOENT`
+tanımı gereği idempotenttir; gerisi artık **yükseltilir**.
+
+### Yürürlüğe giren sözleşme — yeni bir sistem değil, mevcutların yeniden kullanımı
+
+Yeni `server/src/services/storageObjectDeletion.ts`
+(`deleteStoredObjectWithEvidence`) **paralel bir audit sistemi, kuyruk, outbox
+veya worker icat etmez.** Kabul edilmiş sözleşmeleri kullanır: **yetkili** kanıt
+defteri `writeAuditLogInTx` (kendi hatasını **yutmayan** yazıcı), **ikincil**
+operatör sinyali `recordOperationalEvent`, idempotency semantiği ise dışa aktarma
+artefaktları için zaten kabul edilmiş `deleteStorageObjectIdempotent` deseninin
+aynısı.
+
+| Özellik | Önce | Sonra |
+|---|---|---|
+| Kiracı sınırı | `deleteFile` kendisine verilen **her** anahtarı siler; A kliniğinin satırındaki bozuk bir `filePath` B kliniğinin nesnesini yok edebilirdi | Anahtar, sahibi kliniğin id'si ile **öneklenmiş olmalıdır** (F4-1A anahtar sözleşmesi). Değilse `rejected_tenant_mismatch` — **hiçbir şey silinmez** |
+| Fail-closed | Yok | Boş, traversal, UNC, sürücü-göreli veya kontrol karakterli anahtar reddedilir (`rejected_unsafe_key`). Doğrulanamayan kimlik **bir şey silerek** çözülmez |
+| Idempotency | Yok (tek deneme) | "Zaten yok" terminal başarıdır. Hata yükselirse varlık yeniden denetlenir; `already_absent`'e **yalnızca kiracı-kapsamlı** anahtar yükseltilebilir — `fileExists()` eski mutlak yol için `false` döndüğü için aksi hâlde **uydurma bir başarı** üretirdi |
+| Kanıt | Yalnızca engellenen (legal-hold) dalda `AuditLog`; başarılı silmede **hiç yok** | Her sonuç (retler dâhil) `writeAuditLogInTx` ile `AuditLog` yazar: klinik, organizasyon, entity tipi/id, aksiyon, `requestedAt`, `executedAt`, sonuç, hata kodu, aktör — DB satırı gittikten sonra nesneyi **hâlâ adlandıran** artefakt |
+| Dayanıklılık değişmezi (R1) | — | Satır silindikten sonra **ya (A)** fiziksel silme terminal başarıdır **ya da (B)** kanıt kaydı **commit edilmiştir**. Üçüncü, sessiz durum yoktur: kanıt commit edilemez ve nesne de kesin silinememişse sonuç `evidence_persistence_failed` olarak raporlanır (izlenen `failed` ile **karıştırılamaz**), süreç günlüğüne `UNEVIDENCED ORPHAN RISK` olarak yükseltilir ve rota `500` + `STORAGE_DELETE_UNEVIDENCED` + `recordDeleted: true` döner |
+| Yükseltme (escalation) | Lab siparişlerinde **tamamen sessiz** (`catch(() => {})`); eklerde yalnızca `console.error` | Terminal olmayan her sonuç ayrıca `OperationalEvent` yazar (`error`; kanıt commit edilemediyse `critical`). Bu **yalnızca ikincil uyarıdır** — best-effort bir yazıcının başka bir best-effort yazıcının başarısına kanıt sayılamayacağı, R1'de düzeltilen kusurun ta kendisidir |
+| PHI sızıntısı | — | Kiracı-kapsamlı anahtar sunucu üretimi ve opaktır, birebir yazılır. **Eski mutlak yol dosya adını taşıyabilir** (diş kliniğinde rutin olarak hasta adı), bu yüzden yalnızca SHA-256 **özeti** saklanır. Silmeyi kanıtlamak için hiçbir dosya adı, hasta adı, TCKN, telefon, e-posta veya DICOM metadata'sı yazılmaz |
+
+Lab siparişi eki DB silmesi ayrıca id-yalnız `delete({ where: { id } })`
+biçiminden `labWorkOrderId` + siparişin **kendi** `clinicId`'si ile kapsamlanmış
+koşullu `deleteMany`'ye daraltıldı — hasta eki rotasının emsalinin aynısı.
+
+### Sıralama neden değişmedi (DB önce, nesne sonra)
+
+Nesneyi önce silmek, legal-hold kararını `deleteMany`'nin WHERE'inden çıkarıp
+oku-sonra-sil hâline getirir ve PR #163'ün kapattığı TOCTOU penceresini
+**yeniden açardı**. Bu yüzden sıralama korunmuş, artık riski (satır gitti, nesne
+kalmış olabilir) **yeniden sıralamayla değil kanıtla** karşılanmıştır: depolama
+anahtarı — tek kopyası az önce silinen satırdaydı — kanıtta yaşamaya devam eder.
+
+### F4-3-R1 — mimari inceleme düzeltmesi (PR #430, 2026-08-16)
+
+PR #430'un mimari incelemesi, görevin **temel güvenlik iddiasının** henüz
+sağlanmadığını tespit etti ve haklıydı. İlk uygulama kanıtı `writeAuditLog` +
+`recordOperationalEvent` ile yazıyordu; **her ikisi de kendi kalıcılık hatasını
+yutan** fire-and-forget yazıcılardır. Dolayısıyla şu dizi hâlâ mümkündü:
+
+```
+DB satırı silindi -> fiziksel silme başarısız -> AuditLog yazımı başarısız (yutuldu)
+-> OperationalEvent yazımı başarısız (yutuldu) -> çağıran `failed` görür
+-> nesne duruyor, satır yok, nesneyi adlandıran hiçbir şey yok
+```
+
+Yani F4-3'ün kapattığını iddia ettiği **uzlaştırılamaz yetim** durumunun ta
+kendisi — üstelik "izleniyor" gibi görünen bir sonuç değeriyle. Bir best-effort
+yazıcı, başka bir best-effort yazıcının başarısına asla kanıt olamaz.
+
+**Düzeltme (yeni tablo, kuyruk, servis veya migration olmadan):** yetkili kanıt
+yazımı, deponun **zaten kabul edilmiş yutmayan** audit yazıcısı olan
+`writeAuditLogInTx`'e taşındı (bulk-export'un güvenlik-kritik olayları için
+eklenmişti; imzası `Pick<PrismaClient, 'auditLog'>` kabul ettiğinden global
+istemci doğrudan yeterlidir — bu modülün atomik olması gereken başka bir yazımı
+yoktur). Sonuç sözleşmesi genişletildi: `outcome` artık
+`evidence_persistence_failed` değerini de alabilir, `storageOutcome` depo
+tarafındaki gerçeği maskelenmeden taşır, `evidence` alanı kaydın commit edilip
+edilmediğini söyler ve `isReconciliationSafe()` değişmezi çağıranlar için tek
+bir yüklemde toplar. Her iki DELETE rotası da bu yüklemi kontrol eder ve
+değişmez ihlal edildiğinde `success: true` **döndürmez**; `500` +
+`STORAGE_DELETE_UNEVIDENCED` + `recordDeleted: true` ile kısmi durumu dürüstçe
+bildirir (depolama anahtarı/dosya adı **açığa çıkarılmaz**).
+
+Kapsam dürüstlüğü: bu düzeltme, başarısızlığın **ya kanıtlandığını ya da
+kanıtlanamadığının yüksek sesle bildirildiğini** garanti eder. Veritabanının
+kendisi erişilemezken kaydı kalıcı **yapamaz** — o durumda garanti kalıcılık
+değil, dürüst raporlamadır. Otomatik yeniden deneme hâlâ yoktur (`R-080` açık).
+
+Bu davranış kaynak taramasıyla değil, **Prisma delegesinde enjekte edilen
+kalıcılık hatasıyla** kanıtlanır (`storageDeletionEvidence.test.ts` §7, 10 iddia:
+başarı+kanıt, başarısızlık+kanıt, başarısızlık+kanıtsız, çapraz-kiracı
+reddi+kanıtsız, yükleme geri-alma+kanıtsız, PHI sızıntısı yok, fırlatma yok).
+
+### Bu görevin YAPMADIĞI
+
+- **Saklama süresi/lifecycle sınıfı belirlenmedi.** Hiçbir yaş temelli veya
+  politika temelli fiziksel silme yolu eklenmedi; olmadığı **test ile sabitlendi**
+  (`deletion-review/execute` yok, `dataRetentionPolicy.ts`/`dataRetentionCleanupJob.ts`
+  fiziksel silme yapmıyor, hiçbir zamanlanmış iş klinik nesne silmiyor).
+- **Sağlayıcı object-lock/immutability etkinleştirilmedi ve etkin gibi
+  gösterilmedi.** Bu, gelecekteki depo sağlayıcı şeridine aittir.
+- **Migration yaratılmadı.** İki gerçek şema boşluğu tespit edildi ve program
+  incelemesine **rapor edildi**, uygulanmadı (`R-079`, `R-080`).
+- **Görüntüleme (imaging) yolu değiştirilmedi.** `imagingIngestCore.ts:179`'daki
+  yükleme geri-alma silmesi F2 port sınırının içindedir ve dokunulmamıştır;
+  kaydedildi, sessizce genişletilmedi.
+- **`ActivityLog` metni değiştirilmedi.** `Dosya silindi: ${originalName}` uzun
+  süredir var olan, aynı kliniğin personeline görünen ürün davranışıdır; onu
+  değiştirmek bir ürün kararıdır, fail-closed bir güvenlik sınırı değildir.
+  **Yeni** kanıt kayıtlarının hiçbiri dosya adı taşımaz ve bu test ile sabittir.
+- **`markConfirmedMissing`'in ek dalı** hâlâ id-yalnız bir yazımdır (F2-STAGE3
+  tarafından bilinçli olarak kapsam dışı bırakılmıştı). Hiçbir rotadan
+  erişilebilir değildir ve silme yapmaz; **B kategorisi** olarak raporlanır,
+  değiştirilmemiştir.
+
+### Değişen dosyalar
+
+| Dosya | Neden |
+|---|---|
+| `server/src/services/storageObjectDeletion.ts` **(yeni)** | Kanıt üreten, idempotent, fail-closed tek silme sözleşmesi |
+| `server/src/services/fileStorage.ts` | `deleteFile` artık yalnızca `ENOENT`'i yutar; gerçek hata yükselir |
+| `server/src/routes/attachments.ts` | DELETE ve yükleme geri-alma yolları sözleşmeye bağlandı; yanıt `storageDeletion` sonucunu taşır; **R1:** `isReconciliationSafe()` ihlalinde `success: true` yerine `500`/`STORAGE_DELETE_UNEVIDENCED`, geri-alma sonucu artık yutulmuyor |
+| `server/src/routes/labOrders.ts` | Aynısı + DB silmesi sahibine kapsamlandı (`deleteMany`) |
+| `server/src/tests/storageDeletionEvidence.test.ts` **(yeni)** | 33 iddia; davranışsal + kalıcılık-hatası enjeksiyonu (§7) + yapısal |
+| `server/src/tests/kvkkAttachmentImagingLifecycle.test.ts` | Sabitlenmiş çağrı yeri güncellendi; **ayrıca kendi kusuru düzeltildi** — `getDeleteRouteBlock()`'un 3500 karakterlik sabit penceresi rotayı sessizce kesiyor ve iddiayı yanlış-negatife çeviriyordu |
+| `server/src/tests/labOrders.test.ts` | Geri-alma iddiası yeni sözleşmeye taşındı (F4-1A2'nin sabitlediği `buildStorageKey(order.clinicId` satırına **dokunulmadı**) |
+| `server/package.json` | `test:storage-deletion-evidence` |
+
+### Testler
+
+```
+npm run test:storage-deletion-evidence  -> exit 0 ·  33 passed / 0 failed  (R1: 23 -> 33)
+npm run test:kvkk-lifecycle             -> exit 0 · 111 passed / 0 failed
+npm run test:lab-orders                 -> exit 0 ·  32 passed / 0 failed
+npm run test:patient-privacy            -> exit 0 ·  38 passed / 0 failed
+npm run test:storage-key-contract       -> exit 0 ·  41 passed / 0 failed
+npm run test:clinic-bulk-export         -> exit 0 · 117 passed / 0 failed
+npm run test:imaging                    -> exit 0 · 103 passed / 0 failed
+npm run test:data-retention             -> exit 0 ·  43 passed / 0 failed
+npm run test:dental-chart-clinic-scope  -> exit 0 ·  17 passed / 0 failed
+npm run test:orphan-file-inspection-log-privacy -> exit 0 · 1 passed / 0 failed
+npm run typecheck (server)              -> exit 0
+npm run log-privacy-guard:scan          -> exit 0 · 268 dosya, yeni ihlal yok
+git diff --check                        -> exit 0
+```
+
+### Geri alma (rollback)
+
+Tek commit'lik revert yeterlidir. Kalıcı veri değişmedi, şema değişmedi,
+depolama anahtarı biçimi değişmedi. Revert'ün tek etkisi silme kanıtının
+üretilmeyi bırakmasıdır — mevcut hiçbir satır veya nesne etkilenmez.
+
 ## F4-FCR-001 — First-Customer Recovery Closure (kanıt, görünürlük, güvenlik)
 
 `F4-FCR-001_STATUS = AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
@@ -652,3 +819,5 @@ Imaging (DICOM/CBCT) ölçeklenmeden önce object storage zorunludur (PROGRAM DI
 | 2026-08-15 | F4-FCR-002A | İzole restore/PITR tatbikatı **yalnızca ön kontrol (PRE-FLIGHT)**; **restore ÇALIŞTIRILMADI**. Canlı üretim kanıtına karşı 27 bölümlük GO/NO-GO raporu üretildi; sonuç **`PREFLIGHT_DECISION = NO_GO`** — güvenlik tasarımı nedeniyle değil, hazırlık eksikleri nedeniyle. Geçen kapılar: `DISK_CAPACITY_GATE = PASS`, `PG_VERSION_COMPATIBILITY_GATE = PASS` (PostgreSQL 16.14), `MIGRATION_COMPATIBILITY_GATE = PASS` (dağıtılmış 73 = DB 73; `origin/main` 74 ile bir sürüm önde, bu beklenen deploy gecikmesidir), `TENANT_ISOLATION_SMOKE_GATE = PLANNED_SAFE`, `PITR_MARKER_GATE = PLANNED_SAFE`, `MARKER_ARCHIVE_GATE = PASS`. **Uygulama smoke Stage B = BLOCKED**: `RUN_BACKGROUND_JOBS` yalnızca API sürecini devre dışı bırakır, worker onu hiç okumaz (`backgroundJobsOwnership.ts:65-70`), mesajlaşma kimlik bilgileri veritabanı satırlarındadır ve `withJobLock` geri yüklenen veritabanının kendi kilitlerine yazar — gerçek hastalara çift gönderim riski. Güvenli yol Stage A (yalnızca SQL invariant'ları) + `noramedi-pitr-app-smoke.mjs`'dir; bu yardımcı uygulamayı hiç başlatmaz. Depoda **en küçük eklemeli düzeltme** yapıldı: tatbikata deterministik **PITR durma noktası doğrulaması** eklendi (marker A = 1, marker B = 0, replay ≤ hedef, fail-closed, R-032 uygunluğu buna bağlandı, kanıt kalıcı sonuç belgesine yazılıyor) + 19 yeni kabuk testi. Üretime **onaylı, klinik olmayan** bir marker çifti yazıldı (`runId = F4-FCR-002A-20260815-01`, hiçbir kiracıya ait olmayan sentinel `organizationId`, uygulamanın kendi `recordOperationalEvent()` servisi üzerinden); WAL'ı arşivlendiği doğrulandı (`000000010000000000000020`, `failed_count = 0`, `.ready = 0`). Marker zaman damgalarının **UTC** olduğu üretim kanıtıyla saptandı; bu koşunun hedefi **`2026-08-15 12:59:26.405500+00`**'dır ve önceki `+03` hedefi reddedilmiştir — kural artık hem tatbikatta zorlanır (`--pitr-run-id` ile ofsetsiz `--target` reddedilir) hem de sonuç belgesine `markerTimestampZone` olarak yazılır. Dondurma istisnası çelişkisi §5.1'de **yalnızca yönetişim kayıtlarına dayanarak** çözüldü; üretimin fiilî aktivasyon durumu yetki kanıtı olarak **kullanılmadı**. **Faz durumu `TODO` olarak değişmedi**; **F4-FCR-002A KAPANMADI** (`IN_PROGRESS`); R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
 | 2026-08-15 | F4-FCR-002A-R4 | **İki tatbikat çalıştırıldı; ikisi de `FAIL`.** Birinci tatbikat bayat girdiyle kapandı (migration kümesi **73/74**, **RPO = 385 dk**); taze bir tam yedek alındı (`20260815-224355F`). İkinci tatbikat (`runId = F4-FCR-002A-20260815-02`) **PITR durma noktasını** (marker A = 1, marker B = 0, hedef `2026-08-15 19:46:39.550000+00`, replay `2026-08-15T19:46:00Z`), **74/74 migration**'ı (`missing=0`, `ahead=0`), **tenant izolasyonunu** (klinikler arası randevu = 0, yetim klinik referansı = 0), **RPO = 3 dk ≤ 60 dk**, **RTO = 5 sn ≤ 14400 sn** ve **temizliği** geçirdi — ve **yalnızca uygulama smoke'unda** kapandı: `Unknown property datasources provided to PrismaClient constructor`. Kök neden: `scripts/noramedi-pitr-app-smoke.mjs` istemciyi `datasourceUrl`/`datasources` ile kuruyordu, oysa dağıtılmış çalışma zamanı (`server/src/db.ts:15-22`, `@prisma/client` + `@prisma/adapter-pg` **7.9.1**) Prisma 7 **sürücü adaptörü** kullanır; ayrıca boş bir `catch (_)` ilk (gerçek) hatayı yutup yalnızca ikinci denemenin mesajını raporluyordu. **Düzeltme (yalnızca depo):** yardımcı artık dağıtılmış istemcinin **sürümünü okuyup** yolu seçer — major ≥ 7 ise `@prisma/adapter-pg`'yi de dağıtılmış dizinden yükleyip `new PrismaClient({ adapter: new PrismaPg({ connectionString, max: 1, ... }) })` kurar, major < 7 ise `datasourceUrl` kullanır, sürüm okunamazsa veya adaptör eksikse **fail-closed** olur; tatbikat betiği adaptörü artık **restore'dan önce** ön kontrol eder. `server/src/db.ts` içe aktarılmaz (üretim `DATABASE_URL`'ini çözerdi); bağlantı yalnızca tatbikat unix socket'ine, parolasızdır, havuz `max: 1`'dir; socket güvenlik kontrolleri, tipli delege probe'ları ve `current_setting('port')` kanıtı korunmuştur. Kusuru hiçbir testin yakalamamış olmasının nedeni, mevcut süitteki tüm smoke vakalarının **kurulumdan önce** düşmesiydi; yeni `scripts/noramedi-pitr-app-smoke.test.sh` sahte bir dağıtılmış sürüm dizini ile gerçek kurulum yolunu sürer (**50/50 geçer**; düzeltme öncesi yardımcıya karşı **22 assertion başarısız** olur ve üretim hatasının tam metnini üretir) ve CI Layer 1'de `npm run test:shell` ile koşar. **Şema/migration YOK, üretim mutasyonu YOK, tatbikat yeniden çalıştırılmadı.** Faz durumu `TODO` olarak **değişmedi**; **F4-FCR-002A KAPANMADI**; `R032_ELIGIBLE = false`; R-030/R-031/R-032 `OPEN` kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`. |
 | 2026-08-15 | F4-FCR-002A-CLOSE | **Kontrollü üretim PITR tatbikatı `PASS` — beşinci denemede.** Üretim sürümü `309351885c1389c53d40e4b15e630264dc54954f` (PR #427 merge commit, dağıtıldı), yedek `20260815-224355F`, marker `runId = F4-FCR-002A-20260815-03` (A `2026-08-15T21:25:33.447Z`, B `2026-08-15T21:27:36.605Z`, UTC), hedef `2026-08-15 21:26:35.026000+00`, marker WAL `00000001000000000000008C`, tatbikat `run_id = 20260815-213109-709154`. **PITR durma noktası VERIFIED** (marker A = 1, marker B = 0, kurtarma noktası `2026-08-15T21:26:00Z`); migration **74/74** (`missing=0`, `ahead=0`); 106 public tablo; **uygulama smoke `passed`**; **tenant izolasyon smoke `passed`** (klinikler arası randevu 0, yetim klinik referansı 0, yetim randevu 0, RLS 0/0); **RPO 5 dk ≤ 60 dk**; **RTO 7 sn ≤ 14400 sn**; **temizlik doğrulandı** (`/dev/shm/noramedi-pitr-drill-20260815-213109-709154` silindi). `RESULT = PASS`, `R032_eligible = true`. **`R-031` → `CLOSED`, `R-032` → `CLOSED`** (her ikisi de kendi yazılı kriterleri üzerinden; runbook §21.5/§21.6). **`R-030` `OPEN` kalır** — kurtarma `repo1`'den yapıldı, `repo1` **YEREL**'dir ve veritabanı birincilinin arıza alanının içindedir; tatbikat `repo < 2`'den saha dışı kanıt yazmayı reddetti ve yazmadı; şifreleme dayanıklılık değildir. **`FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`** (blokaj: `R-030`). Önceki dört başarısız tatbikat **başarıya çevrilmemiştir**; üçüncüsü yaşlanmış marker hedefiyle (96 dk) RPO'da, dördüncüsü sentinel `organizationId` uyuşmazlığıyla düşmüştür — sentinel farkı (`__noramedi_pitr_drill__` vs. `NORAMEDI_PITR_MARKER_ORG=noramedi-f4-pitr-sentinel`) runbook §21.7'de operasyonel kanıt olarak **kaydedilmiş, normalize edilmemiştir**. Yalnızca dokümantasyon: şema/migration/çalışma zamanı/üretim mutasyonu **YOK**. **Faz durumu `TODO` olarak değişmedi.** |
+| 2026-08-16 | F4-3 | **Fiziksel silme güvenliği: kanıt, idempotency, kiracı sınırı — saklama politikası kararı ALINMADAN.** İki hasta-veri fiziksel silme yolu (`DELETE /patients/:patientId/attachments/:id`, `DELETE /lab-orders/:id/attachments/:attId`) DB satırını silip ardından `deleteFile`'ı **yutulmuş hatayla** çağırıyordu; silinen satır depolama anahtarını tutan **tek** yer olduğundan başarısız bir depo silmesi **kalıcı, alarmsız, uzlaştırılamaz** bir yetim üretiyor ve çağırana başarı bildiriliyordu — KVKK açısından kanıtlanamayan bir silme iddiası. Yol boyunca ikinci ve daha geniş bir kusur bulundu: **`fileStorage.deleteFile` yerel modda HER `unlink` hatasını yutuyordu** (`EPERM`/`EACCES`/`EBUSY`/`EROFS`/G-Ç dâhil), yani depodaki **tüm** çağıranlar gerçekleşmemiş silmeleri başarılı sanıyordu; artık yalnızca `ENOENT` yutulur. Yeni `services/storageObjectDeletion.ts` **paralel sistem icat etmeden** (`writeAuditLog` + `recordOperationalEvent` + export artefaktlarının zaten kabul edilmiş idempotency deseni) şunları getirir: anahtarın sahibi kliniğin id'siyle öneklenmiş olmasını zorunlu kılan **fail-closed kiracı sınırı** (`rejected_tenant_mismatch` — hiçbir şey silinmez), boş/traversal/UNC/sürücü-göreli/kontrol-karakterli anahtar reddi, "zaten yok = terminal başarı" idempotency'si (**yalnızca** kiracı-kapsamlı anahtar `already_absent`'e yükseltilebilir — `fileExists()` eski mutlak yol için `false` döndüğünden aksi hâlde uydurma başarı üretirdi), her sonuçta (retler dâhil) klinik/organizasyon/entity/aksiyon/`requestedAt`/`executedAt`/sonuç/hata-kodu/aktör taşıyan `AuditLog` kanıtı, ve terminal olmayan her sonuçta `severity=error` `OperationalEvent` — DB satırı gittikten sonra nesneyi **hâlâ adlandıran** tek artefakt. **Yeni PHI havuzu yaratılmadı:** kiracı-kapsamlı anahtar opaktır ve birebir yazılır, eski mutlak yol dosya adı taşıyabildiği için yalnızca SHA-256 **özeti** saklanır. Lab eki DB silmesi id-yalnız `delete`'ten `labWorkOrderId` + siparişin kendi `clinicId`'si ile kapsamlı `deleteMany`'ye daraltıldı. **DB-önce sıralaması bilinçle korundu** — nesneyi öne almak PR #163'ün kapattığı legal-hold TOCTOU penceresini yeniden açardı. **Saklama süresi belirlenmedi, canlı silme endpoint'i açılmadı, sağlayıcı object-lock etkinleştirilmedi/iddia edilmedi, imaging port yoluna dokunulmadı, ŞEMA/MIGRATION YOK, üretim mutasyonu YOK.** İki gerçek şema boşluğu **uygulanmadan rapor edildi**: **`R-079`** (`LabOrderAttachment`'ta `legalHold` alanı yok → üç ek-silme yolundan biri legal-hold kapısı taşımıyor) ve **`R-080`** (dayanıklı silme niyeti/otomatik yeniden deneme yok; ters-yetim tespiti hâlâ yok). Ayrıca iki test kusuru düzeltildi: `kvkkAttachmentImagingLifecycle.test.ts`'in `getDeleteRouteBlock()` fonksiyonundaki **3500 karakterlik sabit pencere** rotayı sessizce kesip iddiayı yanlış-negatife çeviriyordu, ve statik taramalar yorum satırlarını canlı çağrı yeri sanıyordu. **Birincil nesne silmenin yedeklerden silme ANLAMINA GELMEDİĞİ** açıkça belgelendi (`docs/compliance/53` §16A). Testler: `test:storage-deletion-evidence` 23/23, `test:kvkk-lifecycle` 111/111, `test:lab-orders` 32/32, `test:patient-privacy` 38/38, `test:storage-key-contract` 41/41, `test:clinic-bulk-export` 117/117, `test:imaging` 103/103, `test:data-retention` 43/43, `test:dental-chart-clinic-scope` 17/17, typecheck exit 0, log-privacy-guard exit 0. **Faz durumu `TODO` olarak değişmedi**; F4-2/R-030 ve F4-1A2 **dokunulmadı**. |
+| 2026-08-16 | F4-3-R1 | **PR #430 mimari inceleme düzeltmesi — dayanıklı kanıt değişmezi.** İnceleme, görevin temel güvenlik iddiasının ("satır silindikten sonra başarısız fiziksel silme, nesneyi adlandıran dayanıklı kanıt sayesinde uzlaştırılabilir kalır") **henüz sağlanmadığını** doğru şekilde tespit etti: ilk uygulama kanıtı `writeAuditLog` + `recordOperationalEvent` ile yazıyordu ve **her ikisi de kendi kalıcılık hatasını yutar**, dolayısıyla "DB satırı silindi → depo silmesi başarısız → her iki kanıt yazımı da sessizce başarısız → çağıran `failed` (izleniyor) görür → nesne duruyor, adlandıran hiçbir şey yok" dizisi hâlâ mümkündü. **Düzeltme:** yetkili kanıt yazımı, deponun zaten kabul edilmiş **yutmayan** audit yazıcısı `writeAuditLogInTx`'e taşındı (global istemci `Pick<PrismaClient, 'auditLog'>` imzasını karşılar; **yeni tablo/kuyruk/servis/migration YOK**); `recordOperationalEvent` yalnızca **ikincil uyarı** olarak kaldı. Sonuç sözleşmesi genişletildi: `outcome` yeni `evidence_persistence_failed` değerini alabilir (izlenen `failed` ile karıştırılamaz), `storageOutcome` depo tarafındaki gerçeği maskelenmeden taşır, `evidence` alanı commit durumunu söyler, `isReconciliationSafe()` değişmezi tek yüklemde toplar. Değişmez: satır silindikten sonra **ya (A)** fiziksel silme terminal başarıdır **ya da (B)** kanıt kaydı commit edilmiştir; sessiz üçüncü durum yoktur — ihlalde süreç günlüğüne `UNEVIDENCED ORPHAN RISK` yükseltilir ve her iki DELETE rotası `success: true` yerine `500` + `STORAGE_DELETE_UNEVIDENCED` + `recordDeleted: true` döner (depolama anahtarı/dosya adı açığa çıkarılmaz); yükleme geri-alma yollarındaki `.catch(() => {})` yutması kaldırıldı. **Kapsam dürüstlüğü:** düzeltme, başarısızlığın ya kanıtlandığını ya da kanıtlanamadığının yüksek sesle bildirildiğini garanti eder; veritabanı erişilemezken kaydı kalıcı **yapamaz** — o durumda garanti kalıcılık değil dürüst raporlamadır. Otomatik yeniden deneme hâlâ yok (`R-080` **açık**), `R-079` **açık**. Testler: `test:storage-deletion-evidence` **23 → 33** (yeni §7, Prisma delegesinde **enjekte edilen** kalıcılık hatasıyla davranışsal kanıt — kaynak taraması değil), `test:kvkk-lifecycle` 111/111, `test:lab-orders` 32/32, `test:patient-privacy` 38/38, `test:storage-key-contract` 41/41, `test:clinic-bulk-export` 117/117, `test:imaging` 103/103, `test:data-retention` 43/43, `test:dental-chart-clinic-scope` 17/17, `test:orphan-file-inspection-log-privacy` 1/1, typecheck exit 0, log-privacy-guard exit 0, `git diff --check` exit 0. **MIGRATION YOK, üretim mutasyonu YOK, faz durumu `TODO` değişmedi**; F4-2/R-030 ve F4-1A2 dokunulmadı. |

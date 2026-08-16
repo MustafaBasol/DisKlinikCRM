@@ -9,11 +9,14 @@ import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
 import { safeErrorFields } from '../utils/safeError.js';
 import {
   buildStorageKey,
-  deleteFile,
   fileNameFromKey,
   openFileStream,
   saveFile,
 } from '../services/fileStorage.js';
+import {
+  deleteStoredObjectWithEvidence,
+  isReconciliationSafe,
+} from '../services/storageObjectDeletion.js';
 
 const router = express.Router();
 
@@ -117,6 +120,7 @@ router.post(
     }
 
     let storageKey: string | null = null;
+    let rollbackClinicId: string | null = null;
     try {
       // Resolve scope via validateAndGetClinicIdScope (multi-branch clinic
       // scope helper — see imaging.ts) rather than req.user.clinicId, then
@@ -134,6 +138,11 @@ router.post(
         return res.status(404).json({ error: 'Patient not found' });
       }
       const clinicId = patient.clinicId;
+      // Hoisted so the rollback in the catch block below can attribute the
+      // compensating object deletion to a clinic. storageKey is only ever set
+      // after this assignment, so whenever there is something to roll back the
+      // owning clinic is known.
+      rollbackClinicId = clinicId;
 
       if (!isAllowedFileSignature(req.file.buffer, req.file.mimetype, req.file.originalname, ALLOWED_EXTENSIONS_BY_MIME)) {
         return res.status(400).json({
@@ -173,7 +182,43 @@ router.post(
       res.status(201).json(redactLegalHoldReason(attachment, canSeeLegalHoldReason(req)));
     } catch (err: any) {
       // Depoya yazıldıktan sonra DB kaydı başarısız olduysa dosyayı geri sil.
-      if (storageKey) await deleteFile(storageKey).catch(() => {});
+      // F4-3: a failed rollback leaves an object with NO DB row at all, which
+      // no reverse-orphan detection exists to find (orphanFileInspection.ts
+      // only walks DB rows). The evidence write below is the only record that
+      // such an object was ever created, so it is what makes it reconcilable.
+      //
+      // F4-3-R1: the rollback outcome is inspected rather than discarded. A
+      // rollback whose storage delete failed AND whose evidence did not commit
+      // leaves an object no query can reach, so it is escalated here instead of
+      // vanishing into a `.catch(() => {})`. The response below stays a 500
+      // either way — the upload genuinely failed — so this only affects what is
+      // recorded, never what the client is told about someone else's data.
+      if (storageKey && rollbackClinicId) {
+        await deleteStoredObjectWithEvidence({
+          organizationId: req.user!.organizationId,
+          clinicId: rollbackClinicId,
+          entityType: 'patient_attachment',
+          entityId: patientId,
+          storageKey,
+          source: 'upload_rollback',
+          actorUserId: req.user!.id,
+          actorRole: req.user!.role,
+          ...extractRequestMeta(req),
+        })
+          .then((result) => {
+            if (!isReconciliationSafe(result)) {
+              console.error(
+                '[attachments] upload rollback left an unevidenced storage object',
+                { patientId, outcome: result.outcome, keyForm: result.keyForm },
+              );
+            }
+          })
+          .catch((rollbackErr) => {
+            // Documented as never throwing; if that ever changes, the failure
+            // must still not be swallowed on the path that creates orphans.
+            console.error('[attachments] upload rollback failed', safeErrorFields(rollbackErr));
+          });
+      }
       console.error('[attachments] upload error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to upload attachment' });
     }
@@ -437,9 +482,26 @@ router.delete(
 
       // The DB row is confirmed gone (deleted while legalHold=false) — safe
       // to remove the physical file using the pre-read metadata.
-      await deleteFile(attachment.filePath).catch((deleteErr) => {
-        // DB kaydı silindi; depo silme hatası indirmeyi bozmaz, logla ve devam et.
-        console.error('[attachments] storage delete error:', deleteErr?.message ?? deleteErr);
+      //
+      // F4-3 ordering note: the DB delete deliberately stays FIRST. It is the
+      // atomic legal-hold gate (see the block comment above); moving the object
+      // delete ahead of it would reopen the read-then-delete TOCTOU window that
+      // PR #163 closed. The residual risk of that ordering — row gone, object
+      // possibly still present — is therefore handled by evidence rather than
+      // by reordering: deleteStoredObjectWithEvidence records the outcome
+      // durably, and the storage key (the only copy of which lived on the row
+      // just deleted) survives in that evidence so a failed deletion stays
+      // reconcilable instead of becoming an invisible permanent leak.
+      const storageDeletion = await deleteStoredObjectWithEvidence({
+        organizationId: req.user!.organizationId,
+        clinicId: attachment.clinicId,
+        entityType: 'patient_attachment',
+        entityId: id,
+        storageKey: attachment.filePath,
+        source: 'record_delete',
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        ...extractRequestMeta(req),
       });
 
       await prisma.activityLog.create({
@@ -453,7 +515,28 @@ router.delete(
         },
       });
 
-      res.json({ success: true });
+      // The DB row is gone either way, so a deletion that is merely EVIDENCED
+      // as failed still returns 200 — reporting failure would wrongly imply
+      // nothing happened, and the leak is tracked. `storageDeletion` is
+      // additive and exists so a caller is never told the bytes are gone when
+      // they may not be (KVKK: an erasure claim must match what was actually
+      // carried out).
+      //
+      // F4-3-R1: but when the object was NOT terminally deleted AND its durable
+      // evidence did not commit, there is no tracked leak — the row is gone and
+      // nothing names the object. That must not be dressed up as success, so it
+      // is reported as a server error that states the partial state plainly.
+      // No storage key, file name or other object internals are exposed.
+      if (!isReconciliationSafe(storageDeletion)) {
+        return res.status(500).json({
+          error: 'Attachment record was deleted but its file removal could not be confirmed or recorded.',
+          code: 'STORAGE_DELETE_UNEVIDENCED',
+          recordDeleted: true,
+          storageDeletion: storageDeletion.outcome,
+        });
+      }
+
+      res.json({ success: true, storageDeletion: storageDeletion.outcome });
     } catch (err: any) {
       console.error('[attachments] delete error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to delete attachment' });

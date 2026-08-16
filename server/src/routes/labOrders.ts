@@ -3,7 +3,13 @@ import multer from 'multer';
 import prisma from '../db.js';
 import { isAllowedFileSignature } from '../utils/fileSignature.js';
 import { isInlinePreviewable } from '../utils/filePreview.js';
-import { buildStorageKey, deleteFile, fileNameFromKey, openFileStream, saveFile } from '../services/fileStorage.js';
+import { buildStorageKey, fileNameFromKey, openFileStream, saveFile } from '../services/fileStorage.js';
+import {
+  deleteStoredObjectWithEvidence,
+  isReconciliationSafe,
+} from '../services/storageObjectDeletion.js';
+import { extractRequestMeta } from '../utils/auditLog.js';
+import { safeErrorFields } from '../utils/safeError.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
 import { getParam } from '../utils/helpers.js';
@@ -334,6 +340,10 @@ router.post(
     }
 
     let storageKey: string | null = null;
+    // Hoisted so the rollback in the catch block can attribute the compensating
+    // object deletion to a clinic — storageKey is only set after this is
+    // assigned, so whenever there is something to roll back the owner is known.
+    let rollbackClinicId: string | null = null;
     try {
       const accessibleIds = await getAccessibleClinicIds(req.user!);
       if (accessibleIds.length === 0) {
@@ -344,6 +354,7 @@ router.post(
       if (!order) {
         return res.status(404).json({ error: 'Lab work order not found' });
       }
+      rollbackClinicId = order.clinicId;
 
       if (!isAllowedFileSignature(req.file.buffer, req.file.mimetype, req.file.originalname, ALLOWED_EXTENSIONS_BY_MIME)) {
         return res.status(400).json({ error: 'Dosya içeriği doğrulanamadı', detail: 'Dosya uzantısı, MIME tipi veya dosya imzası desteklenen türlerle eşleşmiyor' });
@@ -376,7 +387,35 @@ router.post(
       res.status(201).json(attachment);
     } catch {
       // Depoya yazıldıktan sonra DB kaydı başarısız olduysa dosyayı geri sil.
-      if (storageKey) await deleteFile(storageKey).catch(() => {});
+      // F4-3: a failed rollback leaves an object with no DB row at all — the
+      // evidence write is the only record that makes it reconcilable.
+      // F4-3-R1: the rollback outcome is inspected, not discarded — a storage
+      // delete that failed with no committed evidence leaves an object nothing
+      // can name, so it is escalated rather than swallowed.
+      if (storageKey && rollbackClinicId) {
+        await deleteStoredObjectWithEvidence({
+          organizationId: req.user!.organizationId,
+          clinicId: rollbackClinicId,
+          entityType: 'lab_order_attachment',
+          entityId: id,
+          storageKey,
+          source: 'upload_rollback',
+          actorUserId: req.user!.id,
+          actorRole: req.user!.role,
+          ...extractRequestMeta(req),
+        })
+          .then((result) => {
+            if (!isReconciliationSafe(result)) {
+              console.error(
+                '[labOrders] upload rollback left an unevidenced storage object',
+                { labWorkOrderId: id, outcome: result.outcome, keyForm: result.keyForm },
+              );
+            }
+          })
+          .catch((rollbackErr) => {
+            console.error('[labOrders] upload rollback failed', safeErrorFields(rollbackErr));
+          });
+      }
       res.status(500).json({ error: 'Failed to upload attachment' });
     }
   },
@@ -483,15 +522,54 @@ router.delete('/lab-orders/:id/attachments/:attId', authorize([...LAB_ORDER_MANA
     const attachment = await prisma.labOrderAttachment.findFirst({ where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId } });
     if (!attachment) return res.status(404).json({ error: 'Not found' });
 
-    await prisma.labOrderAttachment.delete({ where: { id: attId } });
-    await deleteFile(attachment.filePath).catch(() => {});
+    // F4-3: the DB delete is scoped by the resolved owner (labWorkOrderId +
+    // the order's own clinicId), not by bare id. The preceding findFirst
+    // already proved ownership, but an id-only `delete` re-widens the write
+    // past that proof and would act on a row that changed underneath it; the
+    // conditional deleteMany keeps the authorization decision and the write in
+    // the same statement, matching the patient-attachment route's precedent.
+    const removed = await prisma.labOrderAttachment.deleteMany({
+      where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId },
+    });
+    if (removed.count === 0) return res.status(404).json({ error: 'Not found' });
+
+    // NOTE (F4-3, deliberately NOT changed here): LabOrderAttachment has no
+    // legalHold column, so unlike PatientAttachment this route has no
+    // legal-hold gate to enforce. Adding one is an additive schema change and
+    // is therefore reported to the program owner rather than made under this
+    // task's no-migration constraint — see docs/compliance/53.
+    const storageDeletion = await deleteStoredObjectWithEvidence({
+      organizationId: req.user!.organizationId,
+      clinicId: order.clinicId,
+      entityType: 'lab_order_attachment',
+      entityId: attId,
+      storageKey: attachment.filePath,
+      source: 'record_delete',
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      ...extractRequestMeta(req),
+    });
 
     await logActivity({
       clinicId: order.clinicId, userId: req.user!.id, entityType: 'lab_work_order', entityId: id, patientId: order.patientId,
       action: 'updated', description: `Lab işinden dosya silindi: ${attachment.originalName}`,
     });
 
-    res.json({ success: true });
+    // F4-3-R1: an evidenced storage failure still returns 200 (the row is gone
+    // and the leak is tracked), but a storage failure with NO committed
+    // evidence is not a success in any sense the caller could act on — the row
+    // is gone and nothing names the object. Report the partial state plainly,
+    // without exposing the storage key or file name.
+    if (!isReconciliationSafe(storageDeletion)) {
+      return res.status(500).json({
+        error: 'Attachment record was deleted but its file removal could not be confirmed or recorded.',
+        code: 'STORAGE_DELETE_UNEVIDENCED',
+        recordDeleted: true,
+        storageDeletion: storageDeletion.outcome,
+      });
+    }
+
+    res.json({ success: true, storageDeletion: storageDeletion.outcome });
   } catch {
     res.status(500).json({ error: 'Failed to delete attachment' });
   }
