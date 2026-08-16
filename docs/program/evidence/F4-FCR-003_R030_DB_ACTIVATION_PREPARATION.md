@@ -571,8 +571,23 @@ are asserted in the suites, not merely argued here.
 | `npx tsc --noEmit` (server) | 0 | 0 `error TS` | 0 | 0 |
 | `git diff --check` | 0 | clean | 0 | 0 |
 
-The single skip is Windows-only (`/proc/meminfo` absent); CI on
-`ubuntu-latest` runs it.
+The single skip is Windows-only (`/proc/meminfo` absent). CI on `ubuntu-latest`
+runs it, which is why the CI figures are two higher and carry no skip:
+
+| Suite | Local (Windows) | CI (`ubuntu-latest`, run `31959099545`) |
+|---|---|---|
+| opscheck | 178 / 0 | 178 / 0 |
+| pgBackRest | 229 / 0 / 1 skipped | **231 / 0** |
+| PITR app smoke | 50 / 0 | 50 / 0 |
+| **`npm run test:shell`** | **457 / 0 / 1** | **459 / 0 / 0** |
+
+CI on `02ef208`: **all 13 required checks green**, including the Layer 1 job
+that was red on `826aec1`. The two lines that matter, from that job's log:
+
+```
+ok - no 'rm -rf ... 2>/dev/null || true' anywhere — and the guard fails on a mutant that reintroduces it
+ok - guard_no_silent_rm detects the defect even when the haystack is far larger than one pipe buffer
+```
 
 ## R1.5 What R1 does NOT do
 
