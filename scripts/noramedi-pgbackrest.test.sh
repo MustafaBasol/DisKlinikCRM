@@ -100,6 +100,10 @@ case "$sql" in
   *"SHOW config_file"*)     echo "${FAKE_CONFIG_FILE:-/etc/postgresql/16/main/postgresql.conf}" ;;
   *"SHOW include_dir"*)     echo "${FAKE_INCLUDE_DIR:-}" ;;
   *"SHOW server_version"*)  echo "${FAKE_SERVER_VERSION:-16.14}" ;;
+  # WAL backlog (F4-FCR-003-R1). `-` not `:-`: a test needs to simulate a
+  # cluster that answers with NOTHING, which is the input the writer must omit
+  # the fields for rather than reporting an empty backlog.
+  *pg_ls_waldir*)           echo "${FAKE_WAL_BACKLOG_ROW-268435456|3}" ;;
   *pg_stat_archiver*)
     # This fake DELIBERATELY inspects the SQL it received rather than blindly
     # echoing a fixture.
@@ -325,6 +329,81 @@ section "Status writer: a healthy run EMITS the WAL-freshness fields"
 [[ "$OUT" == *'"failedCount": 0'* ]] \
   && pass "archiver failure count is parsed from the query result" \
   || fail "failedCount not parsed ($OUT)"
+
+section "Status writer: the WAL BACKLOG signals (F4-FCR-003-R1)"
+# This section re-runs the writer, so the healthy run's output is preserved and
+# restored: the sections below still mean what their labels say.
+HEALTHY_OUT="$OUT"
+# Gate 0 established that an unreachable repo2 stops the WHOLE archive chain
+# and makes PostgreSQL retain every segment, so the failure lands as disk
+# growth. Every other field here measures time or a rate; these two measure
+# volume, and without them repo2 cannot be activated with a monitor that can
+# see the failure coming.
+[[ "$OUT" == *'"walBytes": 268435456'* ]] \
+  && pass "a healthy run emits archive.walBytes (total bytes in pg_wal)" \
+  || fail "walBytes MISSING — WAL backlog cannot be observed ($OUT)"
+[[ "$OUT" == *'"readyCount": 3'* ]] \
+  && pass "a healthy run emits archive.readyCount (segments waiting to be archived)" \
+  || fail "readyCount MISSING — the .ready backlog cannot be observed ($OUT)"
+
+# The measurement must come from pg_catalog functions that resolve against the
+# data directory PostgreSQL is ACTUALLY running on. A hardcoded
+# /var/lib/postgresql/<major>/main would silently measure the wrong cluster —
+# or nothing — on any host whose PGDATA moved, and would report an empty
+# backlog while pg_wal filled.
+grep -q 'pg_ls_waldir()' "$STATUS" \
+  && pass "pg_wal size is read via pg_ls_waldir(), not from a hardcoded PGDATA path" \
+  || fail "no pg_ls_waldir() in the status writer"
+grep -q "pg_ls_dir('pg_wal/archive_status')" "$STATUS" \
+  && pass "the .ready backlog is read via pg_ls_dir('pg_wal/archive_status'), relative to the live data directory" \
+  || fail "no archive_status listing in the status writer"
+grep -qE '(du|ls)[^|]*-[^|]*/pg_wal' "$STATUS" \
+  && fail "the writer shells out to the filesystem for pg_wal instead of asking PostgreSQL" \
+  || pass "no filesystem walk of pg_wal — nothing can read a WAL segment's contents through this path"
+
+# UNMEASURABLE MUST MEAN ABSENT, NOT ZERO. A 0 would read as "no backlog"
+# during exactly the outage these fields exist to detect, and opscheck would
+# report green. The consumer fails closed on absence; it cannot fail closed on
+# a confident, wrong 0.
+EXTRA_ENV=(
+  NORAMEDI_PGBACKREST_CONF="$CONF"
+  NORAMEDI_PGBACKREST_STATE_DIR="$WORK/state-walbacklog"
+  FAKE_ARCHIVE_MODE=on
+  FAKE_ARCHIVE_COMMAND="pgbackrest --stanza=noramedi archive-push %p"
+  FAKE_ARCHIVER_ROW="$(date -u '+%Y-%m-%dT%H:%M:%SZ')||0|128"
+  FAKE_INFO_JSON="$INFO_ONE_BACKUP"
+  FAKE_WAL_BACKLOG_ROW=""
+)
+run bash "$STATUS" --stdout --no-check
+[[ "$CODE" -eq 0 ]] && pass "an unmeasurable WAL backlog does not fail the writer (collection is not judgement)" || fail "expected exit 0, got $CODE ($OUT)"
+[[ "$OUT" != *'"walBytes"'* ]] \
+  && pass "an unmeasurable pg_wal size is OMITTED, not reported as 0" \
+  || fail "walBytes was emitted despite no measurement ($OUT)"
+[[ "$OUT" != *'"readyCount"'* ]] \
+  && pass "an unmeasurable .ready count is OMITTED, not reported as 0" \
+  || fail "readyCount was emitted despite no measurement ($OUT)"
+[[ "$OUT" == *'"mode": "on"'* ]] \
+  && pass "the rest of the document is unaffected by an unmeasurable backlog" \
+  || fail "an unmeasurable backlog damaged the rest of the document ($OUT)"
+
+# A non-numeric answer must be refused rather than coerced.
+EXTRA_ENV=(
+  NORAMEDI_PGBACKREST_CONF="$CONF"
+  NORAMEDI_PGBACKREST_STATE_DIR="$WORK/state-walgarbage"
+  FAKE_ARCHIVE_MODE=on
+  FAKE_ARCHIVE_COMMAND="pgbackrest --stanza=noramedi archive-push %p"
+  FAKE_ARCHIVER_ROW="$(date -u '+%Y-%m-%dT%H:%M:%SZ')||0|128"
+  FAKE_INFO_JSON="$INFO_ONE_BACKUP"
+  FAKE_WAL_BACKLOG_ROW="ERROR:  permission denied for function pg_ls_waldir"
+)
+run bash "$STATUS" --stdout --no-check
+[[ "$OUT" != *'"walBytes"'* ]] && [[ "$OUT" != *'"readyCount"'* ]] \
+  && pass "an error string from psql is not coerced into a backlog figure" \
+  || fail "a psql error was parsed as a backlog measurement ($OUT)"
+[[ "$OUT" != *"permission denied"* ]] \
+  && pass "the raw psql error is not copied into the published document" \
+  || fail "a raw psql error string leaked into the document ($OUT)"
+OUT="$HEALTHY_OUT"
 
 section "Status writer: the canary never appears"
 [[ "$OUT" != *"$CANARY"* ]] && pass "the repository passphrase never reaches stdout/stderr on the healthy path" || fail "CANARY LEAKED on the healthy path"
@@ -779,14 +858,41 @@ grep -q 'REHEARSAL_OS_USER' "$DRILL" && pass "requires an explicit unprivileged 
 # configured with, not what the surrounding prose says about it.
 hba_block() { awk "/<<'HBA'/{f=1;next} /^HBA\"/{f=0} f" "$1"; }
 
+# absent_in / present_in — the ONE way this file asks "does this text contain
+# this pattern", and the reason it is a function rather than a pipeline.
+#
+# F4-FCR-003-R1. Every guard below used to be written `producer | grep -q …`,
+# and three of them negated the whole pipeline with a leading `!`. That shape
+# is UNSOUND under this file's `set -o pipefail`:
+#
+#   * `grep -q` exits 0 the instant it matches, without draining stdin;
+#   * the producer upstream then takes SIGPIPE on its next write and exits 141;
+#   * pipefail makes 141 — not grep's 0 — the pipeline's status;
+#   * the leading `!` turns that into SUCCESS, i.e. "pattern NOT found".
+#
+# So a negated guard reports CLEAN on precisely the input that contains the
+# defect, and only on that input: with no match, `grep -q` reads to EOF, the
+# producer exits 0, and the guard behaves. It is a race on how much the
+# producer still had to flush when grep left, which is why the pgBackRest suite
+# was green on a developer machine and red on ubuntu-latest with the identical
+# tree (PR #433, run 31952565128: "no 'rm -rf ... 2>/dev/null || true'
+# anywhere — the guard still PASSES on a mutant that reintroduces the defect").
+#
+# Materialising the haystack removes the pipeline, so the answer is grep's own
+# exit status and nothing else. `<<<` feeds grep from a temporary file, not a
+# pipe, so there is no reader/writer race left to lose.
+haystack_has() { grep -qE "$2" <<<"$1"; }
+absent_in()    { ! haystack_has "$1" "$2"; }
+present_in()   {   haystack_has "$1" "$2"; }
+
 guard_no_trust_auth() {
-  ! hba_block "$1" | grep -qE '^[[:space:]]*(local|host|hostssl|hostnossl)[[:space:]].*[[:space:]]trust[[:space:]]*$'
+  absent_in "$(hba_block "$1")" '^[[:space:]]*(local|host|hostssl|hostnossl)[[:space:]].*[[:space:]]trust[[:space:]]*$'
 }
 guard_no_tcp_rule() {
-  ! hba_block "$1" | grep -qE '^[[:space:]]*host(ssl|nossl)?[[:space:]]'
+  absent_in "$(hba_block "$1")" '^[[:space:]]*host(ssl|nossl)?[[:space:]]'
 }
 guard_peer_auth_present() {
-  hba_block "$1" | grep -qE '^[[:space:]]*local[[:space:]].*[[:space:]]peer([[:space:]]|$)'
+  present_in "$(hba_block "$1")" '^[[:space:]]*local[[:space:]].*[[:space:]]peer([[:space:]]|$)'
 }
 guard_no_tcp_listener() { grep -qE "^PG_OPTS\+=\" -c listen_addresses=''\"" "$1"; }
 guard_pinned_startup_gucs() {
@@ -799,8 +905,9 @@ guard_trap_covers_hup() { grep -qE '^trap cleanup EXIT INT TERM HUP[[:space:]]*$
 # Comment lines are stripped first: the script QUOTES the defect it replaced in
 # order to explain why, and a guard that cannot tell code from prose would
 # either fail on the real file or have to be weakened until it caught nothing.
+SILENT_RM_RE='rm -rf[^|]*2>/dev/null[[:space:]]*\|\|[[:space:]]*true'
 guard_no_silent_rm() {
-  ! grep -vE '^[[:space:]]*#' "$1" | grep -qE 'rm -rf[^|]*2>/dev/null[[:space:]]*\|\|[[:space:]]*true'
+  absent_in "$(grep -vE '^[[:space:]]*#' "$1")" "$SILENT_RM_RE"
 }
 guard_kill_escalation() { grep -q 'kill -KILL' "$1" && grep -q 'kill -TERM' "$1"; }
 guard_cleanup_verified() { grep -q 'STILL EXISTS after removal' "$1"; }
@@ -870,6 +977,37 @@ mutate_and_check guard_trap_covers_hup \
 mutate_and_check guard_no_silent_rm \
   "no 'rm -rf ... 2>/dev/null || true' anywhere" \
   "s|^    rm -rf \"\$DRILL_ROOT\" .*\$|    rm -rf \"\$DRILL_ROOT\" 2>/dev/null \|\| true|"
+
+# ── Control on the GUARD itself, not on the drill (F4-FCR-003-R1) ────────
+# The mutant above is a poor stress case for the guard: the drill's non-comment
+# body is ~50 KB and the defect lands two thirds of the way down, so it fits in
+# one 64 KiB pipe buffer and a pipeline-shaped guard usually wins the SIGPIPE
+# race by luck. It won here and lost on ubuntu-latest against the identical
+# tree. This control removes the luck rather than relying on the mutant to
+# happen to expose it: the defect is the FIRST line, followed by megabytes of
+# filler, so any guard that answers from a pipeline's exit status under
+# `set -o pipefail` reports CLEAN every single time, on every machine.
+BIGHAY="$WORK/silent-rm-bighay.sh"
+awk 'BEGIN {
+  printf "    rm -rf \"$DRILL_ROOT\" 2>/dev/null || true\n";
+  for (i = 0; i < 20000; i++)
+    printf "echo \"filler %d ------------------------------------------------------\"\n", i;
+}' > "$BIGHAY"
+if guard_no_silent_rm "$BIGHAY"; then
+  fail "guard_no_silent_rm reports CLEAN on a file whose FIRST line is the forbidden cleanup — it is answering from a pipeline exit status and SIGPIPE, not from grep"
+else
+  pass "guard_no_silent_rm detects the defect even when the haystack is far larger than one pipe buffer (the exact shape that was green here and red on CI)"
+fi
+# Non-vacuity: the same oversized haystack minus the one defect line must pass,
+# so the control above discriminates rather than merely rejecting large files.
+grep -v 'rm -rf' "$BIGHAY" > "${BIGHAY}.clean"
+if guard_no_silent_rm "${BIGHAY}.clean"; then
+  pass "…and reports CLEAN on the same oversized haystack once the forbidden line is removed"
+else
+  fail "guard_no_silent_rm rejects an oversized haystack that does NOT contain the defect — the control is vacuous"
+fi
+rm -f "$BIGHAY" "${BIGHAY}.clean"
+
 guard_kill_escalation "$DRILL" \
   && pass "stop escalates through SIGTERM to SIGKILL rather than assuming pg_ctl worked" \
   || fail "no bounded kill escalation"

@@ -1821,6 +1821,199 @@ that names paths rather than indexes and sends you to fix a correct directory.
 - Anything about **durability**. A severed container network models
   unreachability and is no model of an independent failure domain.
 
+> **Two of the three gaps above are addressed by §22.4a (F4-FCR-003-R1) and
+> one is not.** Version parity now has a real answer, and WAL backlog is now
+> observable. Time to `pg_wal` exhaustion under production-like headroom is
+> still unmeasured, and is still an open risk.
+
+---
+
+## 22.4a F4-FCR-003-R1 — production preflight, version parity, and WAL backlog monitoring
+
+Three things changed after §22.4 was written: CHECKPOINT 1 was actually run
+against production (read-only), the Gate 0 harness learned to pin a pgBackRest
+version, and the missing WAL-backlog signals were implemented. **Nothing here
+activates repo2, and nothing here closes `R-030-DB`.**
+
+### CHECKPOINT 1 — EXECUTED, read-only, no mutation
+
+Operator read of `disklinik-prod-01`. **No production state was changed.**
+
+| Item | Value observed |
+|---|---|
+| PostgreSQL | **16.14** |
+| pgBackRest | **2.50** |
+| `archive_mode` | `on` |
+| `archive_command` | `pgbackrest --stanza=noramedi archive-push %p` |
+| `archive_timeout` | `5min` |
+| `pg_stat_archiver` | **335 archived / 0 failed** |
+| repo1 status | `ok` |
+| repo1 cipher | `aes-256-cbc` |
+| `pgbackrest check` | **PASS** |
+| `process-max` | `2` |
+| `archive-async` | **not set** |
+| `spool-path` | **not set** |
+| `archive-push-queue-max` | **not set** |
+| Root filesystem | **≈13% used** |
+
+The three unset options matter and should stay unset. `archive-async` is what
+turns a push failure into an asynchronous one that `archive_command` reports as
+success; §16.5's template refuses it for exactly the reason Gate 0 then
+confirmed. `archive-push-queue-max` silently DISCARDS WAL once the queue
+exceeds it — with it unset, a stalled archive retains WAL and grows the disk,
+which is the failure mode the new monitoring below is built for.
+
+**The `df -B1` denominator for the PGDATA filesystem was NOT captured**, so the
+absolute `pg_wal` byte budget still has to come from the operator. See
+"Thresholds" below.
+
+### Version parity — production is 2.50, Gate 0 was run on 2.59.0
+
+§22.4's semantics were established on **2.59.0**. Production runs **2.50**, so
+the §22.6 gate ("if `pgbackrest version` is not 2.59.0, say so explicitly")
+fired. The harness now accepts `--pgbackrest-version` and
+`--postgres-image`, resolving pinned builds through the PostgreSQL **apt
+archive** (the live PGDG repository keeps only the two newest). An unresolvable
+pin FAILS the build rather than falling back — a result labelled 2.50 that
+actually ran on 2.59 would be worse than no result — and the pin is
+re-verified against the running binary before the experiment starts.
+
+```bash
+scripts/noramedi-gate0-repo2-unreachability.sh --mode smoke \
+  --pgbackrest-version 2.50 --postgres-image postgres:16.14-bookworm \
+  --allow-missing-repo2-backup \
+  --summary-file gate0-250.json --samples-file gate0-250-samples.ndjson
+```
+
+**Result: `OBSERVED_LOCAL_ONLY — SAME SEMANTICS`.** A control arm pinned at
+2.59.0 on the same PostgreSQL 16.14 image makes pgBackRest the only variable:
+
+| Property | 2.50 (production) | 2.59.0 (control) | Same? |
+|---|---|---|---|
+| `archive-push` under an unreachable repo2 | `FAILS_COMMAND` | `FAILS_COMMAND` | **yes** |
+| `archived_count` during outage | frozen (4 → 4) | frozen (12 → 12) | **yes** |
+| `failed_count` | 1 → 36 | 0 → 3 | **yes** (magnitude is retry cadence) |
+| `.ready` backlog | 1 → **12** | → **12** | **yes** |
+| `pg_wal` | 83.9 → 285.2 MB | 117.4 → 318.8 MB | **yes** |
+| foreground writes | accepted throughout | accepted throughout | **yes** |
+| backlog drains after repo2 returns | yes, to 0 | yes, to 0 | **yes** |
+| acknowledged commits lost | **0** | **0** | **yes** |
+| `backup --repo=2` on the PostgreSQL host | **REFUSED (`ERROR [072]`)** | succeeded | **NO** |
+
+**This is version parity established locally. It is not production
+verification** — production's filesystem, WAL rate, network and load are not
+reproduced. Full data: `evidence/F4-FCR-003-R1_gate0_pgbackrest_250_parity.json`.
+
+### The 2.50 finding that changes §22.11
+
+**On pgBackRest 2.50, `backup --repo=2` is REFUSED on the PostgreSQL host when
+`repo2-host` is configured:**
+
+```
+ERROR: [072]: backup command must be run on the repository host
+```
+
+The identical topology, config and command succeed on 2.59.0. This is not
+cosmetic. Running the backup on the **repository** host requires SSH trust in
+the **repo-host → production** direction — precisely the direction §16.5
+forbids ("the backup host must not be able to reach production"), and the
+direction the one-way trust in §22.9 deliberately does not create.
+
+So on production's current build, **§22.11 as written cannot work**:
+`noramedi-pgbackrest-backup.sh --repo 2` runs on the primary. Either
+pgBackRest is upgraded first (a separate, sequenced change that is not
+authorized here), or the one-way trust model is revisited (which is a security
+decision, not a runbook edit). **Do not attempt CHECKPOINT 7 on 2.50 without
+resolving this first.**
+
+### Thresholds — how to choose them, and why there is no default byte figure
+
+Two new opscheck limits, both **0 (not evaluated) by default**:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT` | `0` | max `.ready` markers in `pg_wal/archive_status` |
+| `NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES` | `0` | max total bytes in `pg_wal` |
+| `NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG` | `false` | activation gate: makes both mandatory |
+
+**`.ready` count — suggested starting value 32.** Derivation, from evidence in
+this repository rather than from a round number:
+
+- Production's `archive_timeout = 5min`, so an idle cluster completes at most
+  ~12 segments/hour. At the 16 MiB default segment size, **32 segments ≈ 512
+  MiB** of un-archived WAL, and an idle cluster needs ~2.7 h of *total* archive
+  outage to reach it — comfortably after the existing 120-minute
+  archived-WAL-age assertion has already fired.
+- Under **write** load the ordering reverses, and that is the point: WAL is
+  produced by bytes written, not by the clock, so 32 segments can accumulate in
+  minutes while `lastArchivedAgeMinutes` is still well inside 120. Age and
+  volume are independent failures, exactly as backup freshness and archive
+  freshness already are (§12).
+- opscheck runs every 5 minutes, so a single sample over the limit is already a
+  sustained condition, not a spike.
+
+**`pg_wal` bytes — no default, deliberately.** The safe value is a function of
+free space on the PGDATA filesystem, and this repository has never measured
+that on `disklinik-prod-01`. Root at ≈13% used is a percentage, not a
+denominator. Inventing a byte figure here would either alert on a healthy bulk
+import or fail to alert before the disk fills, and both are worse than
+requiring an operator read. Compute it at activation:
+
+```bash
+sudo -u postgres psql -Atc "show data_directory;"
+df -B1 <PGDATA>            # note the AVAILABLE column, in bytes
+```
+
+Set `NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES` to **no more than 25% of available
+bytes on that filesystem**, and record the `df` output alongside the value. The
+25% is a headroom convention, not a measurement — record it as such.
+
+### The activation gate
+
+`NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true` makes both limits mandatory
+and both measurements mandatory. With it set and either limit still `0`,
+opscheck **refuses to start** (exit 64) rather than running blind. Set it in
+the same change that adds the repo2 block:
+
+```bash
+NORAMEDI_OPSCHECK_CHECKS=pm2,disk,backup,filebackup,drill,pitr
+NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true
+NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT=32
+NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES=<25% of df -B1 available on PGDATA>
+```
+
+The invariant: **repo2 activation must not proceed with no way to observe WAL
+backlog accumulation.** Gate 0 showed an unreachable repo2 suspends the entire
+archive chain, so the outage arrives as disk growth — and until this change the
+only signals were archived-WAL age (time, not volume) and root filesystem
+percentage (which names the wrong subsystem when it finally trips).
+
+### Ordering, and why nothing breaks if you deploy these out of order
+
+Both new fields are **optional** on the **same `schemaVersion` 1** document.
+
+| Writer | Monitor | Result |
+|---|---|---|
+| pre-R1 | pre-R1 | unchanged |
+| pre-R1 | R1, limits unset (default) | unchanged |
+| pre-R1 | R1, limit set | **FAILS** — the measurement is missing and a configured check must never pass unmeasured |
+| R1 | pre-R1 | unchanged; the extra fields are ignored |
+| R1 | R1 | the new assertions apply |
+
+Deploy `noramedi-pgbackrest-status.sh` **before** setting any limit.
+
+### Still not established
+
+- **Time to `pg_wal` exhaustion** under production-like headroom. Smoke mode
+  does not run to a full disk. Unchanged from §22.4, and still an open risk.
+- **repo2 RESTORABILITY on 2.50.** No repo2 base backup could be taken on that
+  build in this harness (see `ERROR [072]` above), so the 2.50 run is capped at
+  `PASS_ARCHIVE_SEMANTICS_ONLY` and claims the archive-push semantics only.
+- **Anything about production.** Every Gate 0 result remains
+  `OBSERVED_LOCAL_ONLY`. A pinned local build is version parity, not production
+  verification: production's filesystem, WAL rate, network and load are not
+  reproduced here.
+
 ---
 
 ## 22.5 CHECKPOINT 0 — release identity (local, read-only)
@@ -1877,6 +2070,16 @@ ls -l /root/noramedi-backups | tail -5
 
 **Gate:** if `pgbackrest version` is **not 2.59.0**, say so explicitly —
 §22.4's semantics were established on 2.59.0 and do not automatically transfer.
+
+> **EXECUTED 2026-08-16 (F4-FCR-003-R1). The gate fired: production runs
+> pgBackRest 2.50, not 2.59.0.** The values read back are recorded in
+> **§22.4a**, together with what the version difference costs — on 2.50,
+> §22.11's `--repo 2` backup is refused on the PostgreSQL host. Read §22.4a
+> before running any later checkpoint.
+>
+> One item was **not** captured and is still required: `df -B1 <PGDATA>`. It is
+> the denominator for `NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES`, which must be set
+> before repo2 is activated. Re-run just that line and record it.
 
 ## 22.7 CHECKPOINT 2 — secondary host evidence (`OPERATOR EVIDENCE REQUIRED`)
 
@@ -1959,7 +2162,31 @@ sudo bash scripts/noramedi-pgbackrest-preflight.sh    # encryption + retention
 changes pgBackRest configuration only, not `postgresql.conf`. `archive_command`
 is unchanged. The `pg_dump` chain is untouched.
 
+**Also in this change — WAL backlog monitoring (F4-FCR-003-R1).** Deploy the
+current `noramedi-pgbackrest-status.sh` first, then add to the opscheck
+environment file, in the SAME change that adds the repo2 block:
+
+```bash
+NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true
+NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT=32
+NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES=<25% of `df -B1 <PGDATA>` available>
+```
+
+With `REQUIRE_WAL_BACKLOG=true` and either limit unset, opscheck **refuses to
+start** (exit 64). That is intentional: Gate 0 showed an unreachable repo2
+suspends the whole archive chain, so repo2 must not be switched on while the
+monitor cannot see WAL accumulating. Derivation of both figures: §22.4a.
+
 ## 22.11 CHECKPOINT 7 — stanza and first repo2 backup
+
+> **BLOCKED ON PRODUCTION'S BUILD (F4-FCR-003-R1).** Production runs pgBackRest
+> **2.50**, and 2.50 refuses `backup --repo=2` on the PostgreSQL host with
+> `ERROR: [072]: backup command must be run on the repository host`. The
+> command below runs on the primary, so on 2.50 it fails. The alternative —
+> initiating the backup on the repository host — needs SSH trust in the
+> repo-host → production direction, which §16.5 forbids. Resolve this in
+> §22.4a before attempting this checkpoint. `stanza-create` and `check` are
+> unaffected and pass on 2.50.
 
 ```bash
 sudo -u postgres pgbackrest --stanza=noramedi stanza-create   # NO --repo (§22.4)

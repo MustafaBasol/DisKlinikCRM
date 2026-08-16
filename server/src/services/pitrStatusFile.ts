@@ -84,6 +84,24 @@ export interface PitrArchiveStatus {
   lastArchivedAt?: string;
   lastArchivedAgeMinutes?: number;
   lastFailedAt?: string;
+  /**
+   * WAL BACKLOG (F4-FCR-003-R1). Both optional, on the SAME schemaVersion 1
+   * document: a host still running the previous writer simply omits them.
+   *
+   * `walBytes` is the total size of the segments in pg_wal; `readyCount` is
+   * the number of `.ready` markers in pg_wal/archive_status, i.e. segments
+   * waiting to be archived. Gate 0 showed that an unreachable repo2 makes
+   * `archive-push` fail as a whole, which suspends archiving to repo1 too and
+   * makes PostgreSQL retain every segment — so the failure arrives as disk
+   * growth. Every other field here measures time or a rate; these two are the
+   * only ones that measure volume.
+   *
+   * ABSENT means NOT MEASURED, never "zero". The writer omits them rather than
+   * emitting 0, because a 0 would read as "no backlog" during exactly the
+   * outage they exist to detect.
+   */
+  walBytes?: number;
+  readyCount?: number;
 }
 
 export interface PitrRepoStatus {
@@ -272,6 +290,10 @@ export function parsePitrStatusDocument(
   if (lastArchivedAgeMinutes !== undefined) archive.lastArchivedAgeMinutes = lastArchivedAgeMinutes;
   const lastFailedAt = isoString(a.lastFailedAt);
   if (lastFailedAt !== undefined) archive.lastFailedAt = lastFailedAt;
+  const walBytes = uint(a.walBytes);
+  if (walBytes !== undefined) archive.walBytes = walBytes;
+  const readyCount = uint(a.readyCount);
+  if (readyCount !== undefined) archive.readyCount = readyCount;
 
   const cipherType = safeToken(r.cipherType, 32) ?? 'none';
   const repo: PitrRepoStatus = {

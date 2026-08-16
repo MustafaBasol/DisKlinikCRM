@@ -47,6 +47,8 @@ const STATUS_WRITER = path.join(REPO_ROOT, 'scripts', 'noramedi-pgbackrest-statu
 
 /** Exit bit for the pitr check. Must match noramedi-opscheck.sh. */
 const BIT_PITR = 128;
+/** Startup configuration error. Must match noramedi-opscheck.sh. */
+const CONFIG_ERROR_EXIT_CODE = 64;
 
 let passed = 0;
 let failed = 0;
@@ -355,6 +357,116 @@ async function main() {
     assert.equal(code & BIT_PITR, BIT_PITR, `the monitor accepted a nested repo object (exit ${code}): ${output}`);
   });
 
+  // ── WAL backlog (F4-FCR-003-R1) ────────────────────────────────────────
+  // Gate 0 proved an unreachable repo2 suspends the ENTIRE archive chain and
+  // turns the outage into pg_wal growth. These two fields are the only ones in
+  // the document that measure VOLUME rather than time, and they must cross the
+  // same three-way boundary as everything else: writer -> reader -> monitor.
+  section('WAL backlog — the volume signals repo2 activation depends on');
+
+  const withBacklog = (readyCount?: number, walBytes?: number): string => {
+    const doc = JSON.parse(healthy) as Record<string, unknown>;
+    const archive = doc.archive as Record<string, unknown>;
+    if (readyCount !== undefined) archive.readyCount = readyCount;
+    if (walBytes !== undefined) archive.walBytes = walBytes;
+    return JSON.stringify(doc, null, 2) + '\n';
+  };
+
+  await test('the reader carries walBytes and readyCount through', () => {
+    const status = parsePitrStatusDocument(withBacklog(2, 335544320), new Date(), '/test/pitr-status.json');
+    assert.equal(status.available, true, `reader rejected a document carrying backlog fields: ${JSON.stringify(status)}`);
+    assert.equal(status.archive?.readyCount, 2, 'readyCount was dropped by the reader');
+    assert.equal(status.archive?.walBytes, 335544320, 'walBytes was dropped by the reader');
+  });
+
+  await test('absent backlog fields stay ABSENT, never defaulted to 0', () => {
+    // 0 would read as "no backlog" during exactly the outage these fields
+    // exist to detect, so "not measured" must remain distinguishable.
+    const status = parsePitrStatusDocument(healthy, new Date(), '/test/pitr-status.json');
+    assert.equal(status.available, true);
+    assert.equal(status.archive?.readyCount, undefined, 'readyCount was defaulted rather than omitted');
+    assert.equal(status.archive?.walBytes, undefined, 'walBytes was defaulted rather than omitted');
+  });
+
+  await test('BACKWARD COMPATIBLE: a pre-R1 document with no backlog fields still passes the monitor', () => {
+    // The deployment order is writer-then-monitor or monitor-then-writer, and
+    // neither may break production. With no limit configured — the default —
+    // the absence of these fields must change nothing at all.
+    const { code, output } = runOpscheckPitr(healthy);
+    assert.equal(code, 0, `a document without backlog fields was rejected by default (exit ${code}): ${output}`);
+  });
+
+  await test('a backlog within the configured limit passes, and the OK line reports it', () => {
+    const { code, output } = runOpscheckPitr(withBacklog(2, 335544320), {
+      NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT: '32',
+      NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES: '1073741824',
+    });
+    assert.equal(code, 0, `expected exit 0, got ${code}: ${output}`);
+    assert.ok(/waiting-to-archive=2/.test(output), `the OK line did not report the backlog: ${output}`);
+  });
+
+  await test('a .ready backlog OVER the limit fails, naming the un-archived segments', () => {
+    const { code, output } = runOpscheckPitr(withBacklog(40, 335544320), {
+      NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT: '32',
+    });
+    assert.equal(code & BIT_PITR, BIT_PITR, `the monitor accepted a 40-segment backlog (exit ${code}): ${output}`);
+    assert.ok(/waiting to be archived/.test(output), `diagnostic did not name the backlog: ${output}`);
+  });
+
+  await test('pg_wal OVER the byte limit fails', () => {
+    const { code, output } = runOpscheckPitr(withBacklog(2, 2147483648), {
+      NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES: '1073741824',
+    });
+    assert.equal(code & BIT_PITR, BIT_PITR, `the monitor accepted a 2 GiB pg_wal against a 1 GiB limit (exit ${code}): ${output}`);
+    assert.ok(/pg_wal holds/.test(output), `diagnostic did not name pg_wal: ${output}`);
+  });
+
+  await test('FAIL CLOSED: a configured limit with NO measurement in the document fails', () => {
+    // The whole point. An operator who switched the limit on must not be told
+    // "healthy" because the writer could not take the measurement — that is
+    // the silent-green this document exists to prevent.
+    const { code, output } = runOpscheckPitr(healthy, {
+      NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT: '32',
+    });
+    assert.equal(code & BIT_PITR, BIT_PITR, `an unmeasurable backlog passed while a limit was configured (exit ${code}): ${output}`);
+    assert.ok(/readyCount/.test(output), `diagnostic did not name the missing field: ${output}`);
+  });
+
+  await test('ACTIVATION GATE: REQUIRE_WAL_BACKLOG=true with unset limits refuses to start', () => {
+    // Enforced at startup, not at check time: activating repo2 with a monitor
+    // that cannot see WAL backlog is a configuration error, and a refusal to
+    // start is louder than a failing check and cannot be read as transient.
+    const { code, output } = runOpscheckPitr(healthy, {
+      NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG: 'true',
+    });
+    assert.equal(code, CONFIG_ERROR_EXIT_CODE, `expected the config-error exit ${CONFIG_ERROR_EXIT_CODE}, got ${code}: ${output}`);
+    assert.ok(/REQUIRE_WAL_BACKLOG/.test(output), `diagnostic did not name the gate: ${output}`);
+  });
+
+  await test('ACTIVATION GATE: REQUIRE_WAL_BACKLOG=true with limits set and both signals present passes', () => {
+    const { code, output } = runOpscheckPitr(withBacklog(1, 268435456), {
+      NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG: 'true',
+      NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT: '32',
+      NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES: '1073741824',
+    });
+    assert.equal(code, 0, `expected exit 0, got ${code}: ${output}`);
+  });
+
+  await test('ACTIVATION GATE: REQUIRE_WAL_BACKLOG=true with limits set but signals ABSENT fails', () => {
+    const { code, output } = runOpscheckPitr(healthy, {
+      NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG: 'true',
+      NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT: '32',
+      NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES: '1073741824',
+    });
+    assert.equal(code & BIT_PITR, BIT_PITR, `repo2 activation was allowed to proceed blind (exit ${code}): ${output}`);
+  });
+
+  await test('a backlog-bearing document is still FLAT (the monitor regex cannot match nesting)', () => {
+    const flat = withBacklog(2, 335544320).replace(/[\n\r\t ]+/g, ' ');
+    const re = /"archive"\s*:\s*\{[^{}]*\}/;
+    assert.ok(re.test(flat), 'the archive object stopped being flat once the backlog fields were added');
+  });
+
   section('The writer never leaks the repository passphrase');
 
   await test('a cipher passphrase in pgbackrest.conf never reaches the writer output', () => {
@@ -381,7 +493,7 @@ async function main() {
   console.log('\n─────────────────────────────────────────');
   console.log(`Results: ${passed} passed, ${failed} failed`);
   // Floor assertion: a partial run must not be able to report green.
-  const MIN_EXPECTED = 14;
+  const MIN_EXPECTED = 25;
   if (passed + failed < MIN_EXPECTED) {
     console.error(`Expected at least ${MIN_EXPECTED} tests, ran ${passed + failed}`);
     process.exit(1);

@@ -13,6 +13,15 @@
 # never backs up, restores, expires, starts, stops, or reloads anything, and
 # it never reads a patient row.
 #
+# ── WAL BACKLOG SIGNALS (F4-FCR-003-R1, additive) ────────────────────────
+# `archive.walBytes` and `archive.readyCount` were added for R-030-DB repo2
+# activation. Both are OPTIONAL fields on the SAME schemaVersion 1 document:
+# an opscheck already deployed in production ignores fields it does not read,
+# and this writer omits them when they cannot be measured, so a host running
+# the previous writer and a host running this one are both valid producers.
+# See the block at WAL_BACKLOG_SQL for what they measure and why neither can
+# expose WAL content, patient data or a secret.
+#
 # ── WHY THIS SCRIPT EXISTS SEPARATELY FROM noramedi-opscheck.sh ───────────
 # opscheck is the production dead-man's-switch monitor. Two properties make
 # it trustworthy and both would be destroyed by making it talk to pgBackRest
@@ -193,6 +202,48 @@ ARCHIVER_ROW="$(psql_one "$ARCHIVER_SQL")"
 LAST_ARCHIVED_AT=""; LAST_FAILED_AT=""; FAILED_COUNT=""; ARCHIVED_COUNT=""
 if [[ "$ARCHIVER_ROW" == *"|"*"|"*"|"* ]]; then
   IFS='|' read -r LAST_ARCHIVED_AT LAST_FAILED_AT FAILED_COUNT ARCHIVED_COUNT <<<"$ARCHIVER_ROW"
+fi
+
+# ── WAL BACKLOG (F4-FCR-003-R1) ──────────────────────────────────────────
+# Gate 0 established that an unreachable repo2 does not degrade gracefully: on
+# the build tested, `archive-push` fails as a whole, so a repo2 outage suspends
+# archiving to repo1 as well and PostgreSQL RETAINS every segment instead of
+# recycling it. That converts a durability risk into a DISK risk, and disk is
+# the one dimension this program could not see:
+#
+#   * `failedCount` rises, but a bounded retry storm also raises it, so it
+#     cannot express how much WAL is now un-archived;
+#   * `lastArchivedAgeMinutes` measures TIME, not VOLUME. Under bulk write load
+#     the filesystem can fill long before the 120-minute age threshold trips;
+#   * the `disk` check measures `/` as a PERCENTAGE. By the time a 90%-full
+#     root filesystem is reported, the archive backlog has usually been
+#     operationally dangerous for a while, and the operator is told "disk", not
+#     "your WAL archive stopped".
+#
+# Two direct signals close that gap. Both are read through pg_catalog functions
+# that resolve relative to the data directory POSTGRESQL ITSELF is running on:
+# no PGDATA is hardcoded here, none is derived from a version-specific path,
+# and none is guessed from the filesystem — so a cluster moved to a different
+# data directory keeps measuring the right one. They are the same two
+# quantities the Gate 0 sampler recorded, deliberately, so the production
+# document and the experiment's samples are directly comparable.
+#
+# NEITHER READS WAL CONTENT. `pg_ls_waldir()` returns per-segment names and
+# sizes; `pg_ls_dir('pg_wal/archive_status')` returns marker filenames. No
+# segment is opened, so no tuple, no patient row and no secret can be observed
+# through this path, let alone printed. Only the two aggregates leave the
+# query — a byte total and a count.
+#
+# Both fields are OPTIONAL in the document. A cluster whose role cannot read
+# these functions simply omits them, and the consumer decides whether that is
+# acceptable; a writer that emitted 0 for "could not measure" would report an
+# empty backlog during exactly the outage this exists to catch.
+WAL_BACKLOG_SQL="SELECT (SELECT coalesce(sum(size),0)::bigint FROM pg_ls_waldir()) || '|' || (SELECT count(*) FROM pg_ls_dir('pg_wal/archive_status') AS f WHERE f LIKE '%.ready');"
+WAL_BACKLOG_ROW="$(psql_one "$WAL_BACKLOG_SQL")"
+WAL_BYTES=""; WAL_READY_COUNT=""
+if [[ "$WAL_BACKLOG_ROW" =~ ^([0-9]+)\|([0-9]+)$ ]]; then
+  WAL_BYTES="${BASH_REMATCH[1]}"
+  WAL_READY_COUNT="${BASH_REMATCH[2]}"
 fi
 
 # archive_timeout is reported by SHOW with a unit suffix (e.g. "5min", "300s").
@@ -418,6 +469,7 @@ DOC="$(
   A_MODE="${ARCHIVE_MODE:-}" A_WAL="${WAL_LEVEL:-}" A_CMDOK="$ARCHIVE_COMMAND_OK" \
   A_TIMEOUT="${ARCHIVE_TIMEOUT_SECONDS:-}" A_FAILED="${FAILED_COUNT:-}" \
   A_ARCHIVED="${ARCHIVED_COUNT:-}" A_LASTOK="${LAST_ARCHIVED_AT:-}" A_LASTFAIL="${LAST_FAILED_AT:-}" \
+  A_WALBYTES="${WAL_BYTES:-}" A_READY="${WAL_READY_COUNT:-}" \
   R_INSTALLED="$PGBR_INSTALLED" R_VERSION="${PGBR_VERSION:-}" R_STANZA="$STANZA" \
   R_CIPHER="${CIPHER_TYPE:-none}" R_CHECK="$CHECK_STATUS" R_CHECKAT="${CHECK_AT:-}" \
   R_OFFHOST="$OFFHOST" R_TIER="$OFFHOST_TIER" R_REASON="$OFFHOST_REASON" \
@@ -445,6 +497,12 @@ DOC="$(
       put(archive, "lastArchivedAt", iso(E.A_LASTOK));
       put(archive, "lastArchivedAgeMinutes", ageMin(E.A_LASTOK));
       put(archive, "lastFailedAt", iso(E.A_LASTFAIL));
+      // WAL backlog. Omitted rather than zeroed when unmeasurable: a 0 here
+      // would read as "no backlog" during exactly the outage it exists to
+      // catch. The consumer decides whether an absent measurement is
+      // acceptable, and opscheck fails closed when it is not.
+      put(archive, "walBytes", uint(E.A_WALBYTES));
+      put(archive, "readyCount", uint(E.A_READY));
 
       const repo = {
         installed: E.R_INSTALLED === "true",
