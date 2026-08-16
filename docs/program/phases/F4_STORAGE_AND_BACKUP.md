@@ -122,6 +122,12 @@ reddi+kanıtsız, yükleme geri-alma+kanıtsız, PHI sızıntısı yok, fırlatm
   gösterilmedi.** Bu, gelecekteki depo sağlayıcı şeridine aittir.
 - **Migration yaratılmadı.** İki gerçek şema boşluğu tespit edildi ve program
   incelemesine **rapor edildi**, uygulanmadı (`R-079`, `R-080`).
+  **Güncelleme (F4-3-R2, 2026-08-16):** `R-079` program sahibinin yetkisiyle
+  ayrı bir turda giderildi ve kapanışı **önerildi**, ancak `R-079` hâlâ
+  `CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT` durumundadır — `CLOSED`
+  değildir (aşağıdaki F4-3-R2 bölümü). `R-080` **açık kalır** —
+  bu maddedeki "migration yaratılmadı" ifadesi F4-3/F4-3-R1 turları içindir ve
+  F4-3-R2 tarafından geçersiz kılınmaz.
 - **Görüntüleme (imaging) yolu değiştirilmedi.** `imagingIngestCore.ts:179`'daki
   yükleme geri-alma silmesi F2 port sınırının içindedir ve dokunulmamıştır;
   kaydedildi, sessizce genişletilmedi.
@@ -170,6 +176,117 @@ git diff --check                        -> exit 0
 Tek commit'lik revert yeterlidir. Kalıcı veri değişmedi, şema değişmedi,
 depolama anahtarı biçimi değişmedi. Revert'ün tek etkisi silme kanıtının
 üretilmeyi bırakmasıdır — mevcut hiçbir satır veya nesne etkilenmez.
+
+### F4-3-R2 — `R-079` için kapanış önerildi: lab eki legal-hold kapısı (2026-08-16)
+
+`F4-3-R2_STATUS = AGENT_COMPLETED` · `TESTS_PASSED` · `PR_OPENED` (#431, taslak)
+· `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
+**`R-079` durumu: `CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT` — `CLOSED`
+DEĞİL.** Düzeltme uygulanmış ve testle kanıtlanmıştır; ancak bu depo, kendi
+kuralı gereği (bkz. `R-071` satırı ve Tracker §2) birleştirilmemiş,
+dağıtılmamış ve üretimde doğrulanmamış bir düzeltmeyi kapanmış saymaz.
+`CLOSED`'a geçiş, PR #431 birleştirildikten **ve** migration/uygulama
+dağıtılıp üretimde doğrulandıktan sonra ayrı bir kayıtla yapılacaktır.
+
+F4-3 ve F4-3-R1, lab eki silmesini **kiracı-kapsamlı ve kanıtlanabilir** hâle
+getirdi; **engellenebilir** hâle getirmedi. `LabOrderAttachment` modelinde
+`legalHold` sütunu olmadığı için, deponun üç ek-silme yolundan biri hiçbir
+legal-hold kapısı taşımıyordu (`R-079`). Program sahibi bu boşluğu kapatmak
+için **yalnızca R-079'a mahsus, en küçük eklemeli migration'ı** yetkilendirdi.
+
+**Şema (tam olarak iki sütun + bir index — `PatientAttachment` emsalinin
+birebir aynısı):**
+
+```prisma
+legalHold       Boolean @default(false)
+legalHoldReason String?
+@@index([clinicId, legalHold])
+```
+
+`legalHoldAt`/`legalHoldById` **eklenmedi** — kabul edilmiş sözleşmede yoktur;
+aktör ve zaman zaten `AuditLog` satırındadır. `storageVerifiedMissingAt` de
+**eklenmedi**: o alan yetim-dosya incelemesine aittir ve
+`orphanFileInspection.ts` `labOrderAttachment`'ı hiç dolaşmaz. Saklama
+politikası alanı, lifecycle enum'u ve silme-niyeti tablosu **eklenmedi**
+(`R-080` **açık kalır**).
+
+**Değişmez — atomik yüklem.** Yetkilendirme kararı tek bir koşullu
+`deleteMany`'dir; bir okuma değildir:
+
+```ts
+prisma.labOrderAttachment.deleteMany({
+  where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId, legalHold: false },
+})
+```
+
+Rotadaki ön-okuma **yalnızca metadata** içindir (`filePath` depo silmesi için,
+`originalName` aktivite kaydı için) ve hiçbir şeyi yetkilendirmez. `count === 0`
+üç ayrı nedeni **kiracı kapsamını genişletmeden** ayırır: satır yok → `404`;
+satır var ve tutuluyor → `409 ATTACHMENT_LEGAL_HOLD` + denetim kaydı;
+sahiplik/kapsam uyuşmazlığı → bu dala hiç ulaşamaz (sipariş araması ve ön-okuma
+zaten reddeder). **Tutulu dalda hiçbir DB silmesi, hiçbir fiziksel depo silmesi
+ve gerçekleşmemiş bir denemeyi iddia eden hiçbir depo-silme kanıtı yoktur.**
+
+**Kiracı sahipliği** değişmedi: `erişilebilir klinik id'leri → LabWorkOrder →
+order.clinicId → LabOrderAttachment`. `req.user.clinicId` hiçbir yerde doğruluk
+kaynağı değildir.
+
+**Legal-hold yönetimi.** Alan-üstü genel bir mekanizma **yoktur** ve
+yaratılmadı: `attachments.ts` ve `imaging.ts` zaten kendi alanlarına ait ayrı
+PATCH uçları taşır. Aynı emsalle
+`PATCH /api/lab-orders/:id/attachments/:attId/legal-hold` eklendi —
+`authorize(['OWNER', 'ORG_ADMIN'])` (kabul edilmiş sözleşmeden; **yeni rol icat
+edilmedi** ve bu, rotanın geri kalanını yöneten `LAB_ORDER_MANAGE_ROLES`'tan
+bilinçle **dardır**), her iki yönde en az 3 karakterlik gerekçe zorunlu, her iki
+yön denetlenir. Yazımın kendisi de sahiplik yüklemiyle kapsamlı bir
+`updateMany`'dir; silinmiş bir satırı diriltemez. `legalHoldReason` üç okuma
+yolunda da (`GET /lab-orders/:id` iç içe `attachments`, `GET .../attachments`,
+`POST .../attachments`) rol-kapılı redaksiyondan geçer; `legalHold` boolean'ı
+hiç redakte edilmez.
+
+**Denetim/KVKK.** Yeni aksiyonlar: `lab_order_attachment_legal_hold_set` /
+`_released` / `_delete_blocked_legal_hold`. Hiçbirinde dosya adı, hasta adı,
+TCKN, telefon, e-posta, DICOM metadata veya gerekçe metni yoktur; yalnızca
+`entityId`, `labWorkOrderId` ve önceki/yeni boolean durum. **Birincil nesne
+silmenin yedeklerden silme anlamına gelmediği** hükmü (§16A) aynen geçerlidir;
+bu tur yedek saklama süresine dokunmaz.
+
+**Migration.** `20260816130000_add_lab_order_attachment_legal_hold` —
+expand-only, `ALTER TABLE ... ADD COLUMN` + `CREATE INDEX`. Mevcut satırlar
+`legalHold = false` alır; geriye dönük hold **uydurulmaz** (legal hold, bir
+`OWNER`/`ORG_ADMIN`'in gerekçesiyle kaydettiği olumlu bir hukuki eylemdir).
+Tek kullanımlık PostgreSQL 16 üzerinde doğrulandı: `migrate deploy` exit 0,
+**75 migration**, `unfinished = 0`, `rolled_back = 0`, `migrate status` =
+"up to date", `information_schema` `legalHold boolean NOT NULL DEFAULT false` +
+`legalHoldReason text NULL` + `LabOrderAttachment_clinicId_legalHold_idx`
+doğruladı, `migrate diff --from-config-datasource` çıktısında
+`LabOrderAttachment`/`legalHold` ile ilgili **hiçbir kalıntı yok**.
+
+**Geri alma:** önce **uygulama** geri alınır; sütunlar okunmadıkları sürece
+zararsızdır ve veritabanına dokunulması gerekmez. **Üretimde sütun düşürmek
+acil geri alma yolu DEĞİLDİR** (§14'teki yıkıcı-rollback prosedürü geçerlidir).
+
+**Testler (davranışsal, kaynak taraması değil):** yeni
+`test:lab-attachment-legal-hold` **21/21** — gerçek Express rota zinciri,
+diskte gerçek tek kullanımlık nesneler ve ön-okuma ile atomik `deleteMany`
+**arasına** hold yerleştiren TOCTOU kancası. Gerçek eşzamanlı Postgres kanıtı
+`scripts/verify-attachment-legal-hold-lifecycle.ts` §6'da (**34/34**), zorlanmış
+kilit çakışması dâhil: DELETE satır kilidinde **beklerken** hold commit edilir
+ve DELETE, READ COMMITTED altında yüklemi yeniden değerlendirip **0 satır**
+etkiler.
+
+### F4-3-R2 — değişen dosyalar
+
+| Dosya | Neden |
+|---|---|
+| `server/prisma/schema.prisma` | `LabOrderAttachment.legalHold` / `legalHoldReason` / `@@index([clinicId, legalHold])` |
+| `server/prisma/migrations/20260816130000_add_lab_order_attachment_legal_hold/` **(yeni)** | Expand-only migration |
+| `server/src/routes/labOrders.ts` | Atomik `legalHold: false` kapısı, `409` + denetimli ret dalı, `OWNER`/`ORG_ADMIN` legal-hold PATCH'i, üç okuma yolunda rol-kapılı `legalHoldReason` redaksiyonu |
+| `server/src/tests/labOrderAttachmentLegalHold.test.ts` **(yeni)** | 21 davranışsal iddia (TOCTOU, kiracı, rol, denetim, redaksiyon, depo servisinin hiç çağrılmaması) |
+| `server/scripts/verify-attachment-legal-hold-lifecycle.ts` | §6 — gerçek Postgres yarışı + zorlanmış kilit çakışması (23 → 34 iddia) |
+| `server/src/tests/storageDeletionEvidence.test.ts` | §9 kapı yüklemini ve "tutulu dalda depo silmesi yok" sıralamasını sabitler (33 → 34) |
+| `server/src/tests/kvkkAttachmentImagingLifecycle.test.ts` | Fiziksel silme yolu olan **her** ek modelinin `legalHold` taşıdığını ve lab PATCH'inin `OWNER`/`ORG_ADMIN` olduğunu sabitler (111 → 113) |
+| `server/package.json` | `test:lab-attachment-legal-hold`; **CI kapısı** olarak `server:test:non-disposable` ve `test` zincirlerine eklendi. **F4-3-R2 mimari inceleme düzeltmesi:** `test:storage-deletion-evidence` (hiçbir toplu zincirin üyesi değildi — hiçbir CI katmanı çalıştırmıyordu) ve `test:kvkk-lifecycle` (yalnızca `server:test:legacy-db-required` üyesiydi; o iş `STORAGE_IMAGING` sınıflandırmasında `runLegacyBackend` bayrağı **kurulmadığı** için depo/görüntüleme PR'larında atlanabiliyordu) de `server:test:non-disposable`'a eklendi. Her ikisi de canlı DB/MinIO gerektirmez: `kvkkAttachmentImagingLifecycle.test.ts` hiç `prisma.*` çağrısı yapmaz (kaynak taraması + enjekte bağımlılıklar), `storageDeletionEvidence.test.ts` ise `auditLog`/`operationalEvent` delegelerini stub'lar. `test:kvkk-lifecycle` `server:test:legacy-db-required` üyeliğini de **korur** (F1-003-P3-R1 sözleşmesi daraltılmadı; Katman 5b bir emniyet ağıdır, tekrar çalışması zararsızdır). |
 
 ## F4-FCR-001 — First-Customer Recovery Closure (kanıt, görünürlük, güvenlik)
 
@@ -821,3 +938,4 @@ Imaging (DICOM/CBCT) ölçeklenmeden önce object storage zorunludur (PROGRAM DI
 | 2026-08-15 | F4-FCR-002A-CLOSE | **Kontrollü üretim PITR tatbikatı `PASS` — beşinci denemede.** Üretim sürümü `309351885c1389c53d40e4b15e630264dc54954f` (PR #427 merge commit, dağıtıldı), yedek `20260815-224355F`, marker `runId = F4-FCR-002A-20260815-03` (A `2026-08-15T21:25:33.447Z`, B `2026-08-15T21:27:36.605Z`, UTC), hedef `2026-08-15 21:26:35.026000+00`, marker WAL `00000001000000000000008C`, tatbikat `run_id = 20260815-213109-709154`. **PITR durma noktası VERIFIED** (marker A = 1, marker B = 0, kurtarma noktası `2026-08-15T21:26:00Z`); migration **74/74** (`missing=0`, `ahead=0`); 106 public tablo; **uygulama smoke `passed`**; **tenant izolasyon smoke `passed`** (klinikler arası randevu 0, yetim klinik referansı 0, yetim randevu 0, RLS 0/0); **RPO 5 dk ≤ 60 dk**; **RTO 7 sn ≤ 14400 sn**; **temizlik doğrulandı** (`/dev/shm/noramedi-pitr-drill-20260815-213109-709154` silindi). `RESULT = PASS`, `R032_eligible = true`. **`R-031` → `CLOSED`, `R-032` → `CLOSED`** (her ikisi de kendi yazılı kriterleri üzerinden; runbook §21.5/§21.6). **`R-030` `OPEN` kalır** — kurtarma `repo1`'den yapıldı, `repo1` **YEREL**'dir ve veritabanı birincilinin arıza alanının içindedir; tatbikat `repo < 2`'den saha dışı kanıt yazmayı reddetti ve yazmadı; şifreleme dayanıklılık değildir. **`FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`** (blokaj: `R-030`). Önceki dört başarısız tatbikat **başarıya çevrilmemiştir**; üçüncüsü yaşlanmış marker hedefiyle (96 dk) RPO'da, dördüncüsü sentinel `organizationId` uyuşmazlığıyla düşmüştür — sentinel farkı (`__noramedi_pitr_drill__` vs. `NORAMEDI_PITR_MARKER_ORG=noramedi-f4-pitr-sentinel`) runbook §21.7'de operasyonel kanıt olarak **kaydedilmiş, normalize edilmemiştir**. Yalnızca dokümantasyon: şema/migration/çalışma zamanı/üretim mutasyonu **YOK**. **Faz durumu `TODO` olarak değişmedi.** |
 | 2026-08-16 | F4-3 | **Fiziksel silme güvenliği: kanıt, idempotency, kiracı sınırı — saklama politikası kararı ALINMADAN.** İki hasta-veri fiziksel silme yolu (`DELETE /patients/:patientId/attachments/:id`, `DELETE /lab-orders/:id/attachments/:attId`) DB satırını silip ardından `deleteFile`'ı **yutulmuş hatayla** çağırıyordu; silinen satır depolama anahtarını tutan **tek** yer olduğundan başarısız bir depo silmesi **kalıcı, alarmsız, uzlaştırılamaz** bir yetim üretiyor ve çağırana başarı bildiriliyordu — KVKK açısından kanıtlanamayan bir silme iddiası. Yol boyunca ikinci ve daha geniş bir kusur bulundu: **`fileStorage.deleteFile` yerel modda HER `unlink` hatasını yutuyordu** (`EPERM`/`EACCES`/`EBUSY`/`EROFS`/G-Ç dâhil), yani depodaki **tüm** çağıranlar gerçekleşmemiş silmeleri başarılı sanıyordu; artık yalnızca `ENOENT` yutulur. Yeni `services/storageObjectDeletion.ts` **paralel sistem icat etmeden** (`writeAuditLog` + `recordOperationalEvent` + export artefaktlarının zaten kabul edilmiş idempotency deseni) şunları getirir: anahtarın sahibi kliniğin id'siyle öneklenmiş olmasını zorunlu kılan **fail-closed kiracı sınırı** (`rejected_tenant_mismatch` — hiçbir şey silinmez), boş/traversal/UNC/sürücü-göreli/kontrol-karakterli anahtar reddi, "zaten yok = terminal başarı" idempotency'si (**yalnızca** kiracı-kapsamlı anahtar `already_absent`'e yükseltilebilir — `fileExists()` eski mutlak yol için `false` döndüğünden aksi hâlde uydurma başarı üretirdi), her sonuçta (retler dâhil) klinik/organizasyon/entity/aksiyon/`requestedAt`/`executedAt`/sonuç/hata-kodu/aktör taşıyan `AuditLog` kanıtı, ve terminal olmayan her sonuçta `severity=error` `OperationalEvent` — DB satırı gittikten sonra nesneyi **hâlâ adlandıran** tek artefakt. **Yeni PHI havuzu yaratılmadı:** kiracı-kapsamlı anahtar opaktır ve birebir yazılır, eski mutlak yol dosya adı taşıyabildiği için yalnızca SHA-256 **özeti** saklanır. Lab eki DB silmesi id-yalnız `delete`'ten `labWorkOrderId` + siparişin kendi `clinicId`'si ile kapsamlı `deleteMany`'ye daraltıldı. **DB-önce sıralaması bilinçle korundu** — nesneyi öne almak PR #163'ün kapattığı legal-hold TOCTOU penceresini yeniden açardı. **Saklama süresi belirlenmedi, canlı silme endpoint'i açılmadı, sağlayıcı object-lock etkinleştirilmedi/iddia edilmedi, imaging port yoluna dokunulmadı, ŞEMA/MIGRATION YOK, üretim mutasyonu YOK.** İki gerçek şema boşluğu **uygulanmadan rapor edildi**: **`R-079`** (`LabOrderAttachment`'ta `legalHold` alanı yok → üç ek-silme yolundan biri legal-hold kapısı taşımıyor) ve **`R-080`** (dayanıklı silme niyeti/otomatik yeniden deneme yok; ters-yetim tespiti hâlâ yok). Ayrıca iki test kusuru düzeltildi: `kvkkAttachmentImagingLifecycle.test.ts`'in `getDeleteRouteBlock()` fonksiyonundaki **3500 karakterlik sabit pencere** rotayı sessizce kesip iddiayı yanlış-negatife çeviriyordu, ve statik taramalar yorum satırlarını canlı çağrı yeri sanıyordu. **Birincil nesne silmenin yedeklerden silme ANLAMINA GELMEDİĞİ** açıkça belgelendi (`docs/compliance/53` §16A). Testler: `test:storage-deletion-evidence` 23/23, `test:kvkk-lifecycle` 111/111, `test:lab-orders` 32/32, `test:patient-privacy` 38/38, `test:storage-key-contract` 41/41, `test:clinic-bulk-export` 117/117, `test:imaging` 103/103, `test:data-retention` 43/43, `test:dental-chart-clinic-scope` 17/17, typecheck exit 0, log-privacy-guard exit 0. **Faz durumu `TODO` olarak değişmedi**; F4-2/R-030 ve F4-1A2 **dokunulmadı**. |
 | 2026-08-16 | F4-3-R1 | **PR #430 mimari inceleme düzeltmesi — dayanıklı kanıt değişmezi.** İnceleme, görevin temel güvenlik iddiasının ("satır silindikten sonra başarısız fiziksel silme, nesneyi adlandıran dayanıklı kanıt sayesinde uzlaştırılabilir kalır") **henüz sağlanmadığını** doğru şekilde tespit etti: ilk uygulama kanıtı `writeAuditLog` + `recordOperationalEvent` ile yazıyordu ve **her ikisi de kendi kalıcılık hatasını yutar**, dolayısıyla "DB satırı silindi → depo silmesi başarısız → her iki kanıt yazımı da sessizce başarısız → çağıran `failed` (izleniyor) görür → nesne duruyor, adlandıran hiçbir şey yok" dizisi hâlâ mümkündü. **Düzeltme:** yetkili kanıt yazımı, deponun zaten kabul edilmiş **yutmayan** audit yazıcısı `writeAuditLogInTx`'e taşındı (global istemci `Pick<PrismaClient, 'auditLog'>` imzasını karşılar; **yeni tablo/kuyruk/servis/migration YOK**); `recordOperationalEvent` yalnızca **ikincil uyarı** olarak kaldı. Sonuç sözleşmesi genişletildi: `outcome` yeni `evidence_persistence_failed` değerini alabilir (izlenen `failed` ile karıştırılamaz), `storageOutcome` depo tarafındaki gerçeği maskelenmeden taşır, `evidence` alanı commit durumunu söyler, `isReconciliationSafe()` değişmezi tek yüklemde toplar. Değişmez: satır silindikten sonra **ya (A)** fiziksel silme terminal başarıdır **ya da (B)** kanıt kaydı commit edilmiştir; sessiz üçüncü durum yoktur — ihlalde süreç günlüğüne `UNEVIDENCED ORPHAN RISK` yükseltilir ve her iki DELETE rotası `success: true` yerine `500` + `STORAGE_DELETE_UNEVIDENCED` + `recordDeleted: true` döner (depolama anahtarı/dosya adı açığa çıkarılmaz); yükleme geri-alma yollarındaki `.catch(() => {})` yutması kaldırıldı. **Kapsam dürüstlüğü:** düzeltme, başarısızlığın ya kanıtlandığını ya da kanıtlanamadığının yüksek sesle bildirildiğini garanti eder; veritabanı erişilemezken kaydı kalıcı **yapamaz** — o durumda garanti kalıcılık değil dürüst raporlamadır. Otomatik yeniden deneme hâlâ yok (`R-080` **açık**), `R-079` **açık**. Testler: `test:storage-deletion-evidence` **23 → 33** (yeni §7, Prisma delegesinde **enjekte edilen** kalıcılık hatasıyla davranışsal kanıt — kaynak taraması değil), `test:kvkk-lifecycle` 111/111, `test:lab-orders` 32/32, `test:patient-privacy` 38/38, `test:storage-key-contract` 41/41, `test:clinic-bulk-export` 117/117, `test:imaging` 103/103, `test:data-retention` 43/43, `test:dental-chart-clinic-scope` 17/17, `test:orphan-file-inspection-log-privacy` 1/1, typecheck exit 0, log-privacy-guard exit 0, `git diff --check` exit 0. **MIGRATION YOK, üretim mutasyonu YOK, faz durumu `TODO` değişmedi**; F4-2/R-030 ve F4-1A2 dokunulmadı. |
+| 2026-08-16 | F4-3-R2 | **`R-079` için kapanış önerildi (`CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT` — `CLOSED` DEĞİL) — lab eki legal-hold kapısı (en küçük eklemeli migration).** F4-3/F4-3-R1 lab eki silmesini kiracı-kapsamlı ve **kanıtlanabilir** hâle getirmişti; **engellenebilir** hâle getirmemişti — `LabOrderAttachment` modelinde `legalHold` sütunu yoktu, dolayısıyla deponun üç ek-silme yolundan biri hiçbir legal-hold kapısı taşımıyordu. Program sahibinin yetkisiyle **yalnızca R-079 için** eklemeli migration oluşturuldu: `legalHold Boolean @default(false)` + `legalHoldReason String?` + `@@index([clinicId, legalHold])` — `PatientAttachment` emsalinin birebir aynı şekli. `legalHoldAt`/`legalHoldById` **eklenmedi** (kabul edilmiş sözleşmede yok; aktör/zaman `AuditLog`'ta), `storageVerifiedMissingAt` **eklenmedi** (yetim incelemesine ait; `orphanFileInspection.ts` lab eklerini hiç dolaşmaz), saklama/lifecycle/silme-niyeti alanları **eklenmedi**. **Değişmez:** yetkilendirme kararı tek koşullu `deleteMany({ id, labWorkOrderId, clinicId, legalHold: false })` yüklemidir — ön-okuma yalnızca metadata içindir ve hiçbir şeyi yetkilendirmez; `count === 0` üç nedeni kiracı kapsamını genişletmeden ayırır (satır yok → `404`; tutuluyor → `409 ATTACHMENT_LEGAL_HOLD` + PII'siz denetim; sahiplik uyuşmazlığı → bu dala hiç ulaşamaz). **Tutulu dalda DB silmesi, fiziksel depo silmesi ve gerçekleşmemiş bir denemeyi iddia eden depo-silme kanıtı YOKTUR.** Kiracı sahipliği değişmedi (`erişilebilir klinik id'leri → LabWorkOrder → order.clinicId`); `req.user.clinicId` hiçbir yerde doğruluk kaynağı değildir. Alan-üstü genel bir legal-policy çerçevesi **yaratılmadı** — `attachments.ts`/`imaging.ts` zaten alan başına ayrı PATCH ucu taşıdığından aynı emsalle `PATCH /api/lab-orders/:id/attachments/:attId/legal-hold` eklendi (`authorize(['OWNER', 'ORG_ADMIN'])`, **yeni rol icat edilmedi**, `LAB_ORDER_MANAGE_ROLES`'tan bilinçle dar; her iki yönde gerekçe zorunlu ve denetimli; yazım da sahiplik yüklemiyle kapsamlı `updateMany`). `legalHoldReason` üç okuma yolunda da rol-kapılı redaksiyondan geçer; `legalHold` boolean'ı hiç redakte edilmez. **Migration** `20260816130000_add_lab_order_attachment_legal_hold` expand-only; mevcut satırlar `legalHold = false` alır (geriye dönük hold **uydurulmaz**); tek kullanımlık PostgreSQL 16: `migrate deploy` exit 0, **75 migration**, unfinished 0, rolled-back 0, `migrate status` up-to-date, `information_schema` doğrulandı, drift çıktısında `LabOrderAttachment`/`legalHold` ile ilgili **hiçbir kalıntı yok**. **Geri alma:** önce uygulama; sütunlar okunmadıkça zararsızdır — üretimde sütun düşürmek acil geri alma yolu **değildir**. **Testler (davranışsal):** yeni `test:lab-attachment-legal-hold` **21/21** (gerçek rota zinciri, diskte gerçek nesneler, ön-okuma ile atomik silme arasına hold yerleştiren TOCTOU kancası), `verify-attachment-legal-hold-lifecycle.ts` §6 **34/34** gerçek Postgres'te — **zorlanmış kilit çakışması** dâhil (DELETE satır kilidinde beklerken hold commit edilir; DELETE READ COMMITTED altında yüklemi yeniden değerlendirip 0 satır etkiler), `test:storage-deletion-evidence` **33 → 34**, `test:kvkk-lifecycle` **111 → 113**, `test:lab-orders` 32/32, `test:patient-privacy` 38/38, `test:storage-key-contract` 41/41, server `typecheck` exit 0, `log-privacy-guard:scan` exit 0, `guardrail:scan` exit 0, `git diff --check` exit 0. Yeni takım **CI kapısıdır** (`server:test:non-disposable`). **Mimari inceleme düzeltmesi (aynı PR):** `test:storage-deletion-evidence` ve `test:kvkk-lifecycle` de `server:test:non-disposable`'a eklendi — ilki hiçbir toplu zincirin üyesi değildi, ikincisi yalnızca `STORAGE_IMAGING` PR'larında atlanabilen Katman 5b zincirindeydi; bu PR her ikisini de değiştirdiği hâlde ikisi de bloke edici bir kapı değildi. **Bu tur `CLOSED` iddia etmez:** `agent completed = YES`, `tests passed = YES`, `PR opened = YES`, `merged = NO`, `deployed = NO`, `production verified = NO`. **`R-080` açık kalır; faz durumu `TODO` değişmedi; F4-2/R-030 ve F4-1A2 dokunulmadı.** |

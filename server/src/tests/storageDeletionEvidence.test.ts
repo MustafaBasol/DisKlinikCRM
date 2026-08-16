@@ -777,6 +777,34 @@ async function main() {
       !src.includes('labOrderAttachment.delete({ where: { id: attId } })'),
       'the unscoped id-only delete must be gone',
     );
+    // R-079 (closed): the legal-hold gate is part of the SAME statement, so it
+    // cannot be separated from the write and turned back into a read-then-delete.
+    assert.ok(
+      call.includes('legalHold: false'),
+      'the lab-order attachment delete must carry the atomic legal-hold gate (R-079)',
+    );
+  });
+
+  await test('the lab-order attachment legal-hold gate precedes any physical storage deletion', () => {
+    const src = readSrc('../routes/labOrders.ts');
+    const deleteManyIdx = src.indexOf('labOrderAttachment.deleteMany(');
+    const countCheckIdx = src.indexOf('removed.count === 0', deleteManyIdx);
+    const physicalIdx = src.indexOf('deleteStoredObjectWithEvidence({', deleteManyIdx);
+    assert.ok(countCheckIdx > -1, 'the route must branch on the deleteMany affected-row count');
+    assert.ok(physicalIdx > -1, 'the authorized path must still remove the physical object');
+    assert.ok(
+      countCheckIdx < physicalIdx,
+      'the zero-count (blocked) branch must be resolved before any physical storage deletion',
+    );
+    const blockedBranch = src.slice(countCheckIdx, physicalIdx);
+    assert.ok(
+      !blockedBranch.includes('deleteStoredObjectWithEvidence('),
+      'the blocked branch must never call the storage-deletion contract — no evidence may claim an attempt that did not happen',
+    );
+    assert.ok(
+      blockedBranch.includes("'lab_order_attachment_delete_blocked_legal_hold'"),
+      'the refusal must be audited under a stable, descriptive action code',
+    );
   });
 
   await test('the patient-attachment legal-hold gate is still the atomic authorization decision', () => {

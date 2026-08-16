@@ -423,6 +423,195 @@ async function main() {
   await prisma.patientAttachment.deleteMany({ where: { id: scopedAttachment.id } });
   await prisma.patient.deleteMany({ where: { id: patientB1.id } });
 
+  // ── 6. LabOrderAttachment legal hold (F4-3 / R-079) ──────────────────────
+  // Same atomic contract as section 1, against the model R-079 recorded as
+  // having no gate at all. Proved here under real concurrent Postgres
+  // transactions; the route-level behaviour (409 code, PII-free audit,
+  // reason redaction, storage service never invoked) is covered by
+  // src/tests/labOrderAttachmentLegalHold.test.ts.
+  section('6. LabOrderAttachment atomic legal-hold enforcement — real concurrent Postgres race (R-079)');
+
+  const laboratory = await prisma.laboratory.create({
+    data: { clinicId: clinicA2.id, name: `Verify Lab ${suffix}` },
+  });
+  const labOrder = await prisma.labWorkOrder.create({
+    data: {
+      clinicId: clinicA2.id,
+      patientId: patient.id,
+      laboratoryId: laboratory.id,
+      workType: 'crown',
+      createdById: ownerUser.id,
+    },
+  });
+
+  let labDeleteWon = 0;
+  let labHoldWon = 0;
+
+  await test(`${ITERATIONS} concurrent trials on LabOrderAttachment: a held row is never the one deleted`, async () => {
+    for (let i = 0; i < ITERATIONS; i++) {
+      const attachment = await prisma.labOrderAttachment.create({
+        data: {
+          clinicId: clinicA2.id,
+          labWorkOrderId: labOrder.id,
+          fileName: `lab-race-${i}.pdf`,
+          originalName: `lab-race-${i}.pdf`,
+          fileSize: 10,
+          mimeType: 'application/pdf',
+          filePath: `verify/${clinicA2.id}/lab-race-${i}.pdf`,
+          uploadedById: ownerUser.id,
+          legalHold: false,
+        },
+      });
+
+      // Mirrors the real routes: the PATCH legal-hold route's scoped
+      // `updateMany` racing the DELETE route's atomic
+      // `deleteMany({ ..., legalHold: false })`.
+      //
+      // The dispatch order is alternated on purpose. Both queries are issued
+      // the moment the array literal is evaluated, so over a fast loopback
+      // connection whichever is listed first reliably reaches Postgres first —
+      // a fixed order silently exercises only ONE of the two interleavings and
+      // reports a green run that never tested the case the gate exists for.
+      const hold = () => prisma.labOrderAttachment.updateMany({
+        where: { id: attachment.id, labWorkOrderId: labOrder.id, clinicId: clinicA2.id },
+        data: { legalHold: true, legalHoldReason: 'concurrent verify hold' },
+      });
+      const remove = () => prisma.labOrderAttachment.deleteMany({
+        where: { id: attachment.id, labWorkOrderId: labOrder.id, clinicId: clinicA2.id, legalHold: false },
+      });
+      const [holdResult, deleteResult] = i % 2 === 0
+        ? await Promise.allSettled([hold(), remove()])
+        : await Promise.allSettled([remove(), hold()]).then(([r, h]) => [h, r] as const);
+
+      const finalRow = await prisma.labOrderAttachment.findUnique({ where: { id: attachment.id } });
+      assert.equal(deleteResult.status, 'fulfilled', 'deleteMany must never itself throw');
+      assert.equal(holdResult.status, 'fulfilled', 'updateMany must never itself throw — it reports 0 rows instead');
+      const deleteCount = deleteResult.status === 'fulfilled' ? deleteResult.value.count : -1;
+      const holdCount = holdResult.status === 'fulfilled' ? holdResult.value.count : -1;
+
+      if (deleteCount === 1) {
+        labDeleteWon++;
+        assert.equal(finalRow, null, 'a delete that reports count=1 must actually remove the row');
+        assert.equal(holdCount, 0, 'the concurrent hold must affect zero rows once its target is gone — never resurrect it');
+      } else {
+        labHoldWon++;
+        assert.equal(deleteCount, 0, 'a delete that did not win must affect exactly zero rows');
+        assert.ok(finalRow, 'a row placed under legal hold before deletion must never disappear');
+        assert.equal(finalRow!.legalHold, true, 'the surviving row must actually carry legalHold=true');
+        assert.equal(holdCount, 1, 'the hold must have committed for the row to survive');
+      }
+
+      assert.ok(!(deleteCount === 1 && finalRow !== null), 'a "committed" delete must never leave the row behind');
+      assert.ok(!(finalRow?.legalHold === true && deleteCount === 1), 'a legalHold=true row must never be the one deleted');
+    }
+    assert.equal(labDeleteWon + labHoldWon, ITERATIONS);
+  });
+  console.log(`      (delete won ${labDeleteWon}/${ITERATIONS}, legal hold won ${labHoldWon}/${ITERATIONS})`);
+
+  await test('FORCED interleaving: a hold committing while the delete is already in flight and blocked on the row lock still wins', async () => {
+    // The timing race above cannot be made to produce a hold win on a fast
+    // loopback connection — the DELETE consistently reaches the row first, so
+    // it only ever exercises one of the two interleavings. This test forces
+    // the other one at the lock level, which is also the strictly harder case:
+    // the DELETE has already been issued and is *waiting* on the row lock when
+    // the hold commits.
+    //
+    // Under READ COMMITTED, the blocked DELETE re-evaluates its WHERE clause
+    // against the updated row version once the lock is released (EvalPlanQual).
+    // `legalHold` is true by then, so it matches nothing. If the gate were a
+    // read-then-delete instead of a predicate, the delete would already have
+    // been authorized by its stale read and would destroy the held row here.
+    const attachment = await prisma.labOrderAttachment.create({
+      data: {
+        clinicId: clinicA2.id, labWorkOrderId: labOrder.id, fileName: 'forced.pdf', originalName: 'forced.pdf',
+        fileSize: 10, mimeType: 'application/pdf', filePath: `verify/${clinicA2.id}/forced.pdf`,
+        uploadedById: ownerUser.id, legalHold: false,
+      },
+    });
+
+    let deletePromise: Promise<{ count: number }> | null = null;
+    await prisma.$transaction(async (tx) => {
+      // Take the row lock and set the hold — not yet committed.
+      const held = await tx.labOrderAttachment.updateMany({
+        where: { id: attachment.id, labWorkOrderId: labOrder.id, clinicId: clinicA2.id },
+        data: { legalHold: true, legalHoldReason: 'forced interleaving hold' },
+      });
+      assert.equal(held.count, 1, 'the hold must have matched its row inside the transaction');
+
+      // Issue the delete on a different connection. It matched `legalHold:
+      // false` on the pre-update snapshot, so it now blocks on the row lock.
+      deletePromise = prisma.labOrderAttachment.deleteMany({
+        where: { id: attachment.id, labWorkOrderId: labOrder.id, clinicId: clinicA2.id, legalHold: false },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+
+    const removed = await deletePromise!;
+    assert.equal(removed.count, 0, 'the blocked delete must re-check the predicate after the hold commits and match nothing');
+    const finalRow = await prisma.labOrderAttachment.findUnique({ where: { id: attachment.id } });
+    assert.ok(finalRow, 'the held row must still exist — this is the exact case R-079 was about');
+    assert.equal(finalRow!.legalHold, true);
+  });
+
+  await test('a committed lab-attachment hold is unconditionally undeletable through the route predicate', async () => {
+    const held = await prisma.labOrderAttachment.create({
+      data: {
+        clinicId: clinicA2.id, labWorkOrderId: labOrder.id, fileName: 'held-lab.pdf', originalName: 'held-lab.pdf',
+        fileSize: 10, mimeType: 'application/pdf', filePath: `verify/${clinicA2.id}/held-lab.pdf`,
+        uploadedById: ownerUser.id, legalHold: true, legalHoldReason: 'CONFIDENTIAL: lab exhibit under litigation hold',
+      },
+    });
+    const removed = await prisma.labOrderAttachment.deleteMany({
+      where: { id: held.id, labWorkOrderId: labOrder.id, clinicId: clinicA2.id, legalHold: false },
+    });
+    assert.equal(removed.count, 0, 'the route predicate must refuse a held row');
+    assert.ok(await prisma.labOrderAttachment.findUnique({ where: { id: held.id } }), 'the held row must still exist');
+  });
+
+  await test('a cross-clinic delete of a lab attachment matches nothing even with the correct attachment id', async () => {
+    const target = await prisma.labOrderAttachment.create({
+      data: {
+        clinicId: clinicA2.id, labWorkOrderId: labOrder.id, fileName: 'scoped-lab.pdf', originalName: 'scoped-lab.pdf',
+        fileSize: 10, mimeType: 'application/pdf', filePath: `verify/${clinicA2.id}/scoped-lab.pdf`,
+        uploadedById: ownerUser.id,
+      },
+    });
+    const wrongClinic = await prisma.labOrderAttachment.deleteMany({
+      where: { id: target.id, labWorkOrderId: labOrder.id, clinicId: clinicB1.id, legalHold: false },
+    });
+    assert.equal(wrongClinic.count, 0, 'another clinic id must never match, even with a valid attachment id');
+    assert.ok(await prisma.labOrderAttachment.findUnique({ where: { id: target.id } }), 'the row must survive a foreign-tenant attempt');
+  });
+
+  await test('lab-attachment legal-hold audit entries carry no file name and no reason text', async () => {
+    const held = await prisma.labOrderAttachment.findFirstOrThrow({
+      where: { labWorkOrderId: labOrder.id, legalHold: true, fileName: 'held-lab.pdf' },
+    });
+    await writeAuditLog({
+      organizationId: orgA.id,
+      clinicId: clinicA2.id,
+      actorUserId: ownerUser.id,
+      actorRole: 'RECEPTIONIST',
+      action: 'lab_order_attachment_delete_blocked_legal_hold',
+      entityType: 'lab_order_attachment',
+      entityId: held.id,
+      description: 'Lab order attachment deletion rejected — under legal hold',
+      metadata: { labWorkOrderId: labOrder.id },
+    });
+    const row = await prisma.auditLog.findFirstOrThrow({
+      where: { action: 'lab_order_attachment_delete_blocked_legal_hold', entityId: held.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    const payload = `${row.description ?? ''} ${JSON.stringify(row.metadata ?? {})}`;
+    assert.ok(!payload.includes('held-lab.pdf'), 'audit payload must never contain the attachment file name');
+    assert.ok(!payload.toLowerCase().includes('confidential'), 'audit payload must never contain the legal-hold reason text');
+    assert.equal((row.metadata as any)?.labWorkOrderId, labOrder.id, 'the stable reference must still be present');
+  });
+
+  await prisma.labOrderAttachment.deleteMany({ where: { labWorkOrderId: labOrder.id } });
+  await prisma.labWorkOrder.deleteMany({ where: { id: labOrder.id } });
+  await prisma.laboratory.deleteMany({ where: { id: laboratory.id } });
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
   await prisma.auditLog.deleteMany({ where: { organizationId: { in: [orgA.id, orgB.id] } } });
   await prisma.imagingStudy.deleteMany({ where: { clinicId: { in: [clinicA1.id, clinicA2.id, clinicB1.id] } } });

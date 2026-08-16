@@ -8,7 +8,7 @@ import {
   deleteStoredObjectWithEvidence,
   isReconciliationSafe,
 } from '../services/storageObjectDeletion.js';
-import { extractRequestMeta } from '../utils/auditLog.js';
+import { extractRequestMeta, writeAuditLog } from '../utils/auditLog.js';
 import { safeErrorFields } from '../utils/safeError.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { logActivity } from '../utils/activity.js';
@@ -27,6 +27,29 @@ const router = express.Router();
 const LAB_ORDER_MANAGE_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST', 'ASSISTANT'] as const;
 const LAB_ORDER_READ_ROLES = [...LAB_ORDER_MANAGE_ROLES, 'BILLING'] as const;
 const LAB_ORDER_DELETE_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'] as const;
+
+// ── KVKK legal-hold response redaction (docs/compliance/53 §16B, R-079) ────
+// Deliberately a local copy rather than an import from routes/attachments.ts:
+// routes/imaging.ts already established that each domain owns its own copy of
+// this two-line contract (see its roleCanSeeLegalHoldReason /
+// redactStudyLegalHoldReason), and a route→route import would be the first
+// cross-domain route dependency in the repository. The rule itself is
+// identical and must stay identical: legalHold (boolean) is safe for every
+// role that may already see the attachment; legalHoldReason is free text and
+// must only ever reach OWNER/ORG_ADMIN — the same roles the legal-hold PATCH
+// route below is gated to.
+export function roleCanSeeLegalHoldReason(role: string): boolean {
+  return role === 'OWNER' || role === 'ORG_ADMIN';
+}
+
+function canSeeLegalHoldReason(req: AuthRequest): boolean {
+  return roleCanSeeLegalHoldReason(req.user!.role);
+}
+
+export function redactLabAttachmentLegalHoldReason<T extends { legalHoldReason?: string | null }>(row: T, allowed: boolean): T {
+  if (allowed) return row;
+  return { ...row, legalHoldReason: null };
+}
 
 const labOrderInclude = {
   patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
@@ -111,7 +134,14 @@ router.get('/lab-orders/:id', authorize([...LAB_ORDER_READ_ROLES]), async (req: 
     });
     if (!order) return res.status(404).json({ error: 'Lab work order not found' });
 
-    res.json(withOverdue(order));
+    // The nested `attachments` include returns every LabOrderAttachment scalar
+    // (Prisma `include` cannot restrict them), so this response is one of the
+    // three that must be passed through the role-gated redaction helper.
+    const canSeeReason = canSeeLegalHoldReason(req);
+    res.json(withOverdue({
+      ...order,
+      attachments: order.attachments.map((a) => redactLabAttachmentLegalHoldReason(a, canSeeReason)),
+    }));
   } catch {
     res.status(500).json({ error: 'Failed to fetch lab work order' });
   }
@@ -384,7 +414,7 @@ router.post(
         action: 'updated', description: `Lab işine dosya eklendi: ${req.file.originalname}`,
       });
 
-      res.status(201).json(attachment);
+      res.status(201).json(redactLabAttachmentLegalHoldReason(attachment, canSeeLegalHoldReason(req)));
     } catch {
       // Depoya yazıldıktan sonra DB kaydı başarısız olduysa dosyayı geri sil.
       // F4-3: a failed rollback leaves an object with no DB row at all — the
@@ -437,7 +467,8 @@ router.get('/lab-orders/:id/attachments', authorize([...LAB_ORDER_READ_ROLES]), 
       include: { uploadedBy: { select: { firstName: true, lastName: true } } },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(attachments);
+    const canSeeReason = canSeeLegalHoldReason(req);
+    res.json(attachments.map((a) => redactLabAttachmentLegalHoldReason(a, canSeeReason)));
   } catch {
     res.status(500).json({ error: 'Failed to fetch attachments' });
   }
@@ -507,7 +538,100 @@ router.get('/lab-orders/:id/attachments/:attId/preview', authorize([...LAB_ORDER
   }
 });
 
+// PATCH /api/lab-orders/:id/attachments/:attId/legal-hold
+// KVKK lifecycle (docs/compliance/53 §16B, R-079): sets/clears legalHold on a
+// single LabOrderAttachment. Restricted to OWNER/ORG_ADMIN — the same, and
+// only, roles the PatientAttachment legal-hold route accepts; no new role is
+// introduced. Note this is deliberately NARROWER than LAB_ORDER_MANAGE_ROLES,
+// which governs every other write on this router: placing/releasing a hold is
+// a legal act, not lab coordination. Requires a reason (min 3 chars) in BOTH
+// directions and audits both, because releasing a hold re-opens the row to
+// permanent deletion and is exactly as consequential as placing one.
+router.patch('/lab-orders/:id/attachments/:attId/legal-hold', authorize(['OWNER', 'ORG_ADMIN']), async (req: AuthRequest, res: Response) => {
+  const id = getParam(req, 'id');
+  const attId = String(req.params.attId);
+  const { legalHold, reason } = req.body as { legalHold?: boolean; reason?: string };
+
+  if (typeof legalHold !== 'boolean') {
+    return res.status(400).json({ error: 'legalHold must be a boolean' });
+  }
+  if (!reason || String(reason).trim().length < 3) {
+    return res.status(400).json({
+      error: `A reason is required (min 3 characters) to ${legalHold ? 'place' : 'release'} a legal hold.`,
+    });
+  }
+
+  try {
+    // Same ownership chain as every other route on this router: accessible
+    // clinic ids -> LabWorkOrder -> the order's OWN clinicId. req.user.clinicId
+    // is never the source of truth.
+    const accessibleIds = await getAccessibleClinicIds(req.user!);
+    if (accessibleIds.length === 0) return res.status(403).json({ error: 'No clinic access' });
+
+    const order = await prisma.labWorkOrder.findFirst({ where: { id, clinicId: { in: accessibleIds }, deletedAt: null } });
+    if (!order) return res.status(404).json({ error: 'Lab work order not found' });
+
+    const existing = await prisma.labOrderAttachment.findFirst({
+      where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId },
+      select: { id: true, legalHold: true },
+    });
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+
+    const trimmedReason = String(reason).trim().slice(0, 500);
+
+    // updateMany scoped by the full ownership predicate rather than
+    // `update({ where: { id } })`: the write stays inside the same proof of
+    // ownership the read used, and it composes correctly with the DELETE
+    // route's atomic gate — whichever single statement Postgres commits first
+    // wins deterministically. If the row was deleted in between, count is 0
+    // and nothing is silently resurrected.
+    const updated = await prisma.labOrderAttachment.updateMany({
+      where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId },
+      data: { legalHold, legalHoldReason: trimmedReason },
+    });
+    if (updated.count === 0) return res.status(404).json({ error: 'Not found' });
+
+    await writeAuditLog({
+      organizationId: req.user!.organizationId,
+      clinicId: order.clinicId,
+      actorUserId: req.user!.id,
+      actorRole: req.user!.role,
+      action: legalHold ? 'lab_order_attachment_legal_hold_set' : 'lab_order_attachment_legal_hold_released',
+      entityType: 'lab_order_attachment',
+      entityId: attId,
+      // No file name and no free-text reason in the audit trail — the reason is
+      // retained on the row itself (legalHoldReason); the audit record only
+      // needs the stable references and the before/after state
+      // (docs/compliance/53 P1 — no PII in audit log).
+      description: `Lab order attachment legal hold ${legalHold ? 'set' : 'released'}`,
+      metadata: { labWorkOrderId: id, previousLegalHold: existing.legalHold, newLegalHold: legalHold },
+      ...extractRequestMeta(req),
+    });
+
+    res.json(redactLabAttachmentLegalHoldReason(
+      { id: attId, legalHold, legalHoldReason: trimmedReason },
+      canSeeLegalHoldReason(req),
+    ));
+  } catch (err) {
+    console.error('[labOrders] legal-hold error:', safeErrorFields(err));
+    res.status(500).json({ error: 'Failed to update legal hold' });
+  }
+});
+
 // DELETE /api/lab-orders/:id/attachments/:attId
+// KVKK lifecycle (docs/compliance/53 §16B, R-079): a legalHold=true attachment
+// can never be deleted through this route, which is the only path in the
+// codebase that deletes a LabOrderAttachment row or its stored object.
+//
+// Atomicity (closes the TOCTOU window R-079 recorded): the authorization
+// decision is the single conditional `deleteMany` below, whose WHERE clause
+// carries `legalHold: false` — NOT the pre-read above it. Postgres evaluates
+// that predicate and performs the delete inside one statement, so a concurrent
+// legal-hold PATCH either (a) commits first, the row no longer matches, the
+// deleteMany affects 0 rows and nothing — neither the row nor the object — is
+// deleted; or (b) loses, in which case its own scoped `updateMany` affects 0
+// rows. A stale pre-read can therefore never authorize a delete. This is the
+// same contract PR #163 established for PatientAttachment.
 router.delete('/lab-orders/:id/attachments/:attId', authorize([...LAB_ORDER_MANAGE_ROLES]), async (req: AuthRequest, res: Response) => {
   const id = getParam(req, 'id');
   const attId = String(req.params.attId);
@@ -528,16 +652,54 @@ router.delete('/lab-orders/:id/attachments/:attId', authorize([...LAB_ORDER_MANA
     // past that proof and would act on a row that changed underneath it; the
     // conditional deleteMany keeps the authorization decision and the write in
     // the same statement, matching the patient-attachment route's precedent.
+    //
+    // F4-3/R-079: `legalHold: false` is part of that same predicate — it is the
+    // gate, not a check performed near it. The pre-read above is metadata only
+    // (filePath for the storage deletion, originalName for the activity log).
     const removed = await prisma.labOrderAttachment.deleteMany({
-      where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId },
+      where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId, legalHold: false },
     });
-    if (removed.count === 0) return res.status(404).json({ error: 'Not found' });
 
-    // NOTE (F4-3, deliberately NOT changed here): LabOrderAttachment has no
-    // legalHold column, so unlike PatientAttachment this route has no
-    // legal-hold gate to enforce. Adding one is an additive schema change and
-    // is therefore reported to the program owner rather than made under this
-    // task's no-migration constraint — see docs/compliance/53.
+    if (removed.count === 0) {
+      // Three distinguishable causes, resolved WITHOUT widening tenant scope —
+      // the re-read below carries the identical ownership predicate:
+      //   * row gone (deleted concurrently)                      -> 404
+      //   * row present and held (incl. a hold that committed
+      //     after the pre-read — the TOCTOU case)                -> 409
+      //   * ownership/scope mismatch                             -> already
+      //     rejected above by the order lookup / pre-read, which never leave
+      //     this branch reachable for another clinic's row.
+      const stillThere = await prisma.labOrderAttachment.findFirst({
+        where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId },
+      });
+      if (!stillThere) return res.status(404).json({ error: 'Not found' });
+
+      const canSeeReason = canSeeLegalHoldReason(req);
+      await writeAuditLog({
+        organizationId: req.user!.organizationId,
+        clinicId: order.clinicId,
+        actorUserId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'lab_order_attachment_delete_blocked_legal_hold',
+        entityType: 'lab_order_attachment',
+        entityId: attId,
+        // entityId + labWorkOrderId are sufficient stable references; no file
+        // name and no reason text (docs/compliance/53 P1 — no PII in audit log).
+        description: 'Lab order attachment deletion rejected — under legal hold',
+        metadata: { labWorkOrderId: id },
+        ...extractRequestMeta(req),
+      });
+      return res.status(409).json({
+        error: 'ATTACHMENT_LEGAL_HOLD',
+        message: 'This attachment is under legal hold and cannot be deleted.',
+        ...(canSeeReason ? { legalHoldReason: stillThere.legalHoldReason } : {}),
+      });
+    }
+
+    // Reached only once the DB row is confirmed gone — i.e. the legal-hold gate
+    // above authorized the deletion. Physical storage deletion is never
+    // attempted on the blocked path, so no storage-deletion evidence is written
+    // claiming an attempt that did not happen.
     const storageDeletion = await deleteStoredObjectWithEvidence({
       organizationId: req.user!.organizationId,
       clinicId: order.clinicId,

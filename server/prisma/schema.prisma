@@ -2739,7 +2739,18 @@ model LabOrderAttachment {
   uploadedBy     User         @relation("LabOrderAttachmentUploader", fields: [uploadedById], references: [id])
   createdAt      DateTime     @default(now())
 
+  /// KVKK lifecycle (docs/compliance/53 §16B, R-079): when true, blocks the
+  /// physical-delete path for this attachment — the `legalHold: false`
+  /// predicate in the DELETE route's conditional `deleteMany` IS the
+  /// authorization decision, so a hold that commits first structurally
+  /// prevents both the DB delete and the storage deletion that follows it.
+  /// Set only via the legal-hold PATCH endpoint (OWNER/ORG_ADMIN) — no
+  /// automatic trigger exists, exactly as on PatientAttachment.
+  legalHold       Boolean @default(false)
+  legalHoldReason String?
+
   @@index([clinicId, labWorkOrderId])
+  @@index([clinicId, legalHold])
 }
 
 // ─── Imaging / Device Integration Foundation (Phase 1) ─────────────────────
