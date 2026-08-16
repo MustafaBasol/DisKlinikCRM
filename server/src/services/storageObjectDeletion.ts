@@ -35,10 +35,35 @@
  * the accepted contracts already in the repository:
  *   - `fileStorage.deleteFile` / `fileExists` for the storage operation and the
  *     "already gone?" recheck (same semantics as `deleteStorageObjectIdempotent`),
- *   - `utils/auditLog.writeAuditLog` as the durable evidence ledger,
- *   - `services/operationalEventService.recordOperationalEvent` as the
- *     operator-visible failure signal that survives the DB row's deletion and
- *     makes the leaked object reconcilable.
+ *   - `utils/auditLog.writeAuditLogInTx` as the durable evidence ledger,
+ *   - `services/operationalEventService.recordOperationalEvent` as SECONDARY
+ *     operator alerting only.
+ *
+ * THE DURABILITY INVARIANT (F4-3-R1)
+ * ──────────────────────────────────
+ * The first cut of this module used `writeAuditLog` and `recordOperationalEvent`
+ * for its evidence. Both are documented fire-and-forget writers that SWALLOW
+ * their own persistence errors, so this sequence was still reachable:
+ *
+ *     DB row deleted -> storage delete fails -> audit write fails (swallowed)
+ *     -> operational event write fails (swallowed) -> caller sees `failed`
+ *     -> object still exists, row is gone, nothing names the object
+ *
+ * — i.e. exactly the unreconcilable orphan this module claims to close, with a
+ * result value that made it look tracked. One best-effort writer can never be
+ * evidence that another best-effort writer succeeded.
+ *
+ * So once the caller has already deleted the persisted row, ONE of these must
+ * hold when this function returns:
+ *
+ *   A. physical object deletion is terminally successful (`deleted` /
+ *      `already_absent`) — nothing leaked, so nothing needs reconciling; or
+ *   B. a durable, non-swallowing evidence record carrying the
+ *      reconciliation-safe object reference has been COMMITTED.
+ *
+ * There is no third state. When neither holds, the outcome is reported as
+ * `evidence_persistence_failed` — a value no existing caller can mistake for
+ * the tracked `failed` — and the condition is escalated loudly.
  *
  * WHAT IT DELIBERATELY DOES NOT DO
  * ────────────────────────────────
@@ -60,8 +85,9 @@
 
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import prisma from '../db.js';
 import { deleteFile, fileExists, isSafeStorageKey } from './fileStorage.js';
-import { writeAuditLog } from '../utils/auditLog.js';
+import { writeAuditLogInTx, type AuditLogInput } from '../utils/auditLog.js';
 import { recordOperationalEvent } from './operationalEventService.js';
 import { safeErrorFields } from '../utils/safeError.js';
 
@@ -69,20 +95,37 @@ import { safeErrorFields } from '../utils/safeError.js';
  * `deleted`                  — the storage delete call completed without error.
  * `already_absent`           — the call failed but the object is provably gone;
  *                              treated as terminal success, never retried.
- * `failed`                   — the object may still exist. Durable evidence is
- *                              written so it can be reconciled later.
+ * `failed`                   — the object may still exist, AND durable evidence
+ *                              naming it was committed, so it is reconcilable.
  * `rejected_tenant_mismatch` — fail-closed: the persisted key does not belong
- *                              to the owning clinic. NOTHING is deleted.
+ *                              to the owning clinic. NOTHING is deleted, and
+ *                              the refusal is durably evidenced.
  * `rejected_unsafe_key`      — fail-closed: the persisted key is empty or has a
  *                              form this contract refuses to act on. NOTHING is
- *                              deleted.
+ *                              deleted, and the refusal is durably evidenced.
+ * `evidence_persistence_failed`
+ *                            — the object was NOT terminally deleted AND the
+ *                              durable evidence write did not commit. The
+ *                              object may exist with nothing naming it. This is
+ *                              the forbidden third state: it is surfaced under
+ *                              its own value precisely so it can never be read
+ *                              as one of the evidenced outcomes above. The
+ *                              underlying storage-side truth stays available on
+ *                              `storageOutcome`.
  */
 export type StorageDeletionOutcome =
   | 'deleted'
   | 'already_absent'
   | 'failed'
   | 'rejected_tenant_mismatch'
-  | 'rejected_unsafe_key';
+  | 'rejected_unsafe_key'
+  | 'evidence_persistence_failed';
+
+/** Storage-side outcomes, i.e. everything except the evidence-layer verdict. */
+export type StorageSideOutcome = Exclude<StorageDeletionOutcome, 'evidence_persistence_failed'>;
+
+/** Whether the authoritative, non-swallowing evidence write committed. */
+export type StorageDeletionEvidenceState = 'persisted' | 'persistence_failed';
 
 /**
  * `tenant_scoped`   — the F4-1A key contract: `<clinicId>/<opaqueId><ext>`.
@@ -125,7 +168,16 @@ export interface StorageObjectDeletionRequest {
 }
 
 export interface StorageObjectDeletionResult {
+  /**
+   * The caller-facing verdict. Equals `storageOutcome`, EXCEPT when the
+   * durability invariant was violated, in which case it is
+   * `evidence_persistence_failed`.
+   */
   outcome: StorageDeletionOutcome;
+  /** What actually happened to the bytes — never masked by the evidence layer. */
+  storageOutcome: StorageSideOutcome;
+  /** Whether the authoritative evidence record committed. */
+  evidence: StorageDeletionEvidenceState;
   keyForm: StorageKeyForm;
   requestedAt: Date;
   executedAt: Date;
@@ -136,6 +188,18 @@ export interface StorageObjectDeletionResult {
 /** A deletion outcome that needs no further reconciliation. */
 export function isTerminalSuccess(outcome: StorageDeletionOutcome): boolean {
   return outcome === 'deleted' || outcome === 'already_absent';
+}
+
+/**
+ * The F4-3-R1 invariant, as a predicate callers can branch on: the bytes are
+ * provably gone (A), or a durable record naming the object was committed (B).
+ *
+ * A caller that has ALREADY deleted the persisted row must not report an
+ * unqualified success when this is false — at that point the object may exist
+ * with nothing in the system able to name it.
+ */
+export function isReconciliationSafe(result: StorageObjectDeletionResult): boolean {
+  return isTerminalSuccess(result.storageOutcome) || result.evidence === 'persisted';
 }
 
 /**
@@ -206,7 +270,7 @@ function describeObject(storageKey: string, keyForm: StorageKeyForm): Record<str
 async function executeDelete(
   storageKey: string,
   keyForm: StorageKeyForm,
-): Promise<{ outcome: StorageDeletionOutcome; failureCode?: string }> {
+): Promise<{ outcome: StorageSideOutcome; failureCode?: string }> {
   try {
     await deleteFile(storageKey);
     return { outcome: 'deleted' };
@@ -229,19 +293,51 @@ async function executeDelete(
 }
 
 /**
+ * Commits the authoritative evidence record.
+ *
+ * Deliberately NOT `writeAuditLog`: that helper documents itself as
+ * fire-and-forget and swallows its own failures, which is right for ordinary
+ * events but cannot back a durability claim. `writeAuditLogInTx` is the
+ * repository's existing non-swallowing audit writer (added for the security-
+ * critical bulk-export events); its signature accepts any
+ * `Pick<PrismaClient, 'auditLog'>`, so the global client satisfies it directly
+ * and no transaction, table, migration or new subsystem is needed here — this
+ * module has no other write to be atomic with.
+ *
+ * The throw is caught HERE rather than propagated so the failure can be
+ * observed and reported, which is the opposite of swallowing it: the return
+ * value decides whether the durability invariant held.
+ */
+async function persistDeletionEvidence(input: AuditLogInput): Promise<boolean> {
+  try {
+    await writeAuditLogInTx(prisma, input);
+    return true;
+  } catch (err) {
+    console.error(
+      '[storage-object-deletion] evidence persistence FAILED',
+      safeErrorFields(err),
+    );
+    return false;
+  }
+}
+
+/**
  * Deletes a tenant-owned storage object and writes durable evidence for the
  * attempt, whatever its outcome.
  *
  * Evidence is written on EVERY path (including the fail-closed rejections and
  * the plain success), so the audit trail answers "was this object's byte
- * removal actually carried out?" without inference. On a non-terminal outcome
- * an `error`-severity operational event is recorded as well: it is the only
- * artefact that still names the object after the owning row is gone, and it is
- * therefore the reconciliation input for a leaked object.
+ * removal actually carried out?" without inference. The audit record is the
+ * AUTHORITATIVE one and is written through the non-swallowing writer; after the
+ * owning row is gone it is the only artefact that still names the object, and
+ * therefore the reconciliation input for a leaked object. The operational event
+ * is SECONDARY alerting only and is never treated as evidence that the audit
+ * record committed.
  *
  * Never throws — a caller's flow must not break because evidence could not be
- * written — but the outcome is always returned so the caller can report it
- * instead of claiming an unqualified success.
+ * written — but a violated durability invariant is reported as
+ * `evidence_persistence_failed` and escalated, so silence is not one of the
+ * possible results.
  */
 export async function deleteStoredObjectWithEvidence(
   request: StorageObjectDeletionRequest,
@@ -249,7 +345,7 @@ export async function deleteStoredObjectWithEvidence(
   const requestedAt = request.requestedAt ?? new Date();
   const keyForm = classifyStorageKey(request.storageKey, request.clinicId);
 
-  let outcome: StorageDeletionOutcome;
+  let storageOutcome: StorageSideOutcome;
   let failureCode: string | undefined;
 
   if (keyForm === 'unrecognized') {
@@ -257,11 +353,11 @@ export async function deleteStoredObjectWithEvidence(
     // deleting something — the deletion is refused and the refusal evidenced.
     const safeKey = typeof request.storageKey === 'string' ? request.storageKey : '';
     const looksTenantScoped = safeKey.length > 0 && isSafeStorageKey(safeKey);
-    outcome = looksTenantScoped ? 'rejected_tenant_mismatch' : 'rejected_unsafe_key';
+    storageOutcome = looksTenantScoped ? 'rejected_tenant_mismatch' : 'rejected_unsafe_key';
     failureCode = looksTenantScoped ? 'STORAGE_KEY_TENANT_MISMATCH' : 'STORAGE_KEY_UNSAFE';
   } else {
     const executed = await executeDelete(request.storageKey, keyForm);
-    outcome = executed.outcome;
+    storageOutcome = executed.outcome;
     failureCode = executed.failureCode;
   }
 
@@ -273,39 +369,81 @@ export async function deleteStoredObjectWithEvidence(
 
   const evidence: Record<string, unknown> = {
     ...objectRef,
-    outcome,
+    outcome: storageOutcome,
     source: request.source,
     requestedAt: requestedAt.toISOString(),
     executedAt: executedAt.toISOString(),
     ...(failureCode ? { failureCode } : {}),
   };
 
-  await writeAuditLog({
+  const persisted = await persistDeletionEvidence({
     organizationId: request.organizationId,
     clinicId: request.clinicId,
     actorUserId: request.actorUserId ?? null,
     actorRole: request.actorRole ?? null,
-    action: isTerminalSuccess(outcome) ? 'storage_object_deleted' : 'storage_object_delete_failed',
+    action: isTerminalSuccess(storageOutcome)
+      ? 'storage_object_deleted'
+      : 'storage_object_delete_failed',
     entityType: request.entityType,
     entityId: request.entityId,
     // Fixed text. Never the file name, the patient name or any row content —
     // entityType + entityId are sufficient references (docs/compliance/53 P1).
-    description: `Physical storage object deletion: ${outcome}`,
+    description: `Physical storage object deletion: ${storageOutcome}`,
     metadata: evidence,
     ipAddress: request.ipAddress ?? null,
     userAgent: request.userAgent ?? null,
   });
 
-  if (!isTerminalSuccess(outcome)) {
+  // A. bytes provably gone, or B. a durable record naming the object committed.
+  const reconciliationSafe = isTerminalSuccess(storageOutcome) || persisted;
+  const outcome: StorageDeletionOutcome = reconciliationSafe
+    ? storageOutcome
+    : 'evidence_persistence_failed';
+
+  if (!isTerminalSuccess(storageOutcome)) {
+    // Secondary alerting. Best-effort by contract, so it is attempted AFTER the
+    // authoritative write and its result is never read back as proof of it.
     await recordOperationalEvent({
       organizationId: request.organizationId,
       clinicId: request.clinicId,
-      severity: 'error',
+      severity: reconciliationSafe ? 'error' : 'critical',
       source: 'system',
-      message: 'Storage object deletion did not complete — the object may still exist',
-      metadata: { entityType: request.entityType, entityId: request.entityId, ...evidence },
+      message: reconciliationSafe
+        ? 'Storage object deletion did not complete — the object may still exist'
+        : 'Storage object deletion did not complete AND its durable evidence record could not be written — the object may exist with no reference remaining',
+      metadata: {
+        entityType: request.entityType,
+        entityId: request.entityId,
+        ...evidence,
+        evidencePersisted: persisted,
+      },
     });
   }
 
-  return { outcome, keyForm, requestedAt, executedAt, ...(failureCode ? { failureCode } : {}) };
+  if (!reconciliationSafe) {
+    // Last line of defence. Both DB writers are unavailable or failing, so the
+    // process log is the only remaining place the object reference can land.
+    // It carries the same reconciliation-safe reference as the audit record
+    // (raw key only when the F4-1A contract proves it is opaque, digest
+    // otherwise), so escalating never becomes a PHI leak.
+    console.error(
+      '[storage-object-deletion] UNEVIDENCED ORPHAN RISK — storage object may still exist with no durable reference',
+      {
+        entityType: request.entityType,
+        entityId: request.entityId,
+        clinicId: request.clinicId,
+        ...evidence,
+      },
+    );
+  }
+
+  return {
+    outcome,
+    storageOutcome,
+    evidence: persisted ? 'persisted' : 'persistence_failed',
+    keyForm,
+    requestedAt,
+    executedAt,
+    ...(failureCode ? { failureCode } : {}),
+  };
 }

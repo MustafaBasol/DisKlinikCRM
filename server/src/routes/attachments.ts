@@ -13,7 +13,10 @@ import {
   openFileStream,
   saveFile,
 } from '../services/fileStorage.js';
-import { deleteStoredObjectWithEvidence } from '../services/storageObjectDeletion.js';
+import {
+  deleteStoredObjectWithEvidence,
+  isReconciliationSafe,
+} from '../services/storageObjectDeletion.js';
 
 const router = express.Router();
 
@@ -183,6 +186,13 @@ router.post(
       // no reverse-orphan detection exists to find (orphanFileInspection.ts
       // only walks DB rows). The evidence write below is the only record that
       // such an object was ever created, so it is what makes it reconcilable.
+      //
+      // F4-3-R1: the rollback outcome is inspected rather than discarded. A
+      // rollback whose storage delete failed AND whose evidence did not commit
+      // leaves an object no query can reach, so it is escalated here instead of
+      // vanishing into a `.catch(() => {})`. The response below stays a 500
+      // either way — the upload genuinely failed — so this only affects what is
+      // recorded, never what the client is told about someone else's data.
       if (storageKey && rollbackClinicId) {
         await deleteStoredObjectWithEvidence({
           organizationId: req.user!.organizationId,
@@ -194,7 +204,20 @@ router.post(
           actorUserId: req.user!.id,
           actorRole: req.user!.role,
           ...extractRequestMeta(req),
-        }).catch(() => {});
+        })
+          .then((result) => {
+            if (!isReconciliationSafe(result)) {
+              console.error(
+                '[attachments] upload rollback left an unevidenced storage object',
+                { patientId, outcome: result.outcome, keyForm: result.keyForm },
+              );
+            }
+          })
+          .catch((rollbackErr) => {
+            // Documented as never throwing; if that ever changes, the failure
+            // must still not be swallowed on the path that creates orphans.
+            console.error('[attachments] upload rollback failed', safeErrorFields(rollbackErr));
+          });
       }
       console.error('[attachments] upload error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to upload attachment' });
@@ -492,10 +515,27 @@ router.delete(
         },
       });
 
-      // The DB row is gone either way, so this stays a 200 — reporting failure
-      // would wrongly imply nothing happened. `storageDeletion` is additive and
-      // exists so a caller is never told the bytes are gone when they may not
-      // be (KVKK: an erasure claim must match what was actually carried out).
+      // The DB row is gone either way, so a deletion that is merely EVIDENCED
+      // as failed still returns 200 — reporting failure would wrongly imply
+      // nothing happened, and the leak is tracked. `storageDeletion` is
+      // additive and exists so a caller is never told the bytes are gone when
+      // they may not be (KVKK: an erasure claim must match what was actually
+      // carried out).
+      //
+      // F4-3-R1: but when the object was NOT terminally deleted AND its durable
+      // evidence did not commit, there is no tracked leak — the row is gone and
+      // nothing names the object. That must not be dressed up as success, so it
+      // is reported as a server error that states the partial state plainly.
+      // No storage key, file name or other object internals are exposed.
+      if (!isReconciliationSafe(storageDeletion)) {
+        return res.status(500).json({
+          error: 'Attachment record was deleted but its file removal could not be confirmed or recorded.',
+          code: 'STORAGE_DELETE_UNEVIDENCED',
+          recordDeleted: true,
+          storageDeletion: storageDeletion.outcome,
+        });
+      }
+
       res.json({ success: true, storageDeletion: storageDeletion.outcome });
     } catch (err: any) {
       console.error('[attachments] delete error:', safeErrorFields(err));

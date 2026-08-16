@@ -31,6 +31,7 @@ import prisma from '../db.js';
 import {
   classifyStorageKey,
   deleteStoredObjectWithEvidence,
+  isReconciliationSafe,
   isTerminalSuccess,
 } from '../services/storageObjectDeletion.js';
 
@@ -75,19 +76,62 @@ function fixtureExists(key: string): boolean {
   return fs.existsSync(path.join(UPLOAD_ROOT, key));
 }
 
+/**
+ * A directory sitting at the key's path: a genuine, provider-independent unlink
+ * failure whose target is still provably present afterwards — the real
+ * "delete threw AND the object still exists" case, not a stubbed one.
+ */
+function writeUndeletableFixture(clinicId: string): string {
+  const key = `${clinicId}/${randomUUID()}-undeletable`;
+  fs.mkdirSync(path.join(UPLOAD_ROOT, key), { recursive: true });
+  fs.writeFileSync(path.join(UPLOAD_ROOT, key, 'child.bin'), 'x');
+  return key;
+}
+
 // ── Evidence capture ───────────────────────────────────────────────────────
 interface CapturedRow { [k: string]: any }
 let audits: CapturedRow[] = [];
 let events: CapturedRow[] = [];
 
+/**
+ * Injected persistence failure (F4-3-R1).
+ *
+ * The durability invariant cannot be proved by reading the source — the whole
+ * defect it closes was that a write which *looks* durable silently wasn't. So
+ * the failure is injected at the Prisma delegate, the same layer a real
+ * outage/constraint violation would fail at, and the observable result of the
+ * public function is asserted.
+ */
+const evidenceFailure = { audit: false, event: false };
+
 function installEvidenceCapture() {
-  (prisma as any).auditLog = { create: async ({ data }: { data: CapturedRow }) => { audits.push(data); return data; } };
-  (prisma as any).operationalEvent = { create: async ({ data }: { data: CapturedRow }) => { events.push(data); return data; } };
+  (prisma as any).auditLog = {
+    create: async ({ data }: { data: CapturedRow }) => {
+      if (evidenceFailure.audit) throw new Error('injected audit persistence failure');
+      audits.push(data);
+      return data;
+    },
+  };
+  (prisma as any).operationalEvent = {
+    create: async ({ data }: { data: CapturedRow }) => {
+      if (evidenceFailure.event) throw new Error('injected operational-event persistence failure');
+      events.push(data);
+      return data;
+    },
+  };
 }
 
 function resetEvidence() {
   audits = [];
   events = [];
+  evidenceFailure.audit = false;
+  evidenceFailure.event = false;
+}
+
+/** Fail BOTH writers — the exact review scenario: nothing durable survives. */
+function failAllEvidencePersistence() {
+  evidenceFailure.audit = true;
+  evidenceFailure.event = true;
 }
 
 type ConsoleMethod = 'log' | 'info' | 'error' | 'warn' | 'debug';
@@ -401,7 +445,246 @@ async function main() {
   });
 
   // ═══════════════════════════════════════════════════════════════════════
-  section('7. No retention-driven or review-driven physical deletion path exists (deletion stays blocked)');
+  section('7. Durability invariant (F4-3-R1) — an unevidenced orphan is never reported as tracked');
+
+  await test('7.1 storage delete succeeds + evidence writer succeeds -> deleted, evidence persisted', async () => {
+    resetEvidence();
+    const key = writeFixtureObject(CLINIC_A, `${randomUUID()}.bin`);
+
+    const result = await deleteStoredObjectWithEvidence(
+      baseRequest({ storageKey: key, entityId: 'attachment-inv-ok' }),
+    );
+
+    assert.equal(result.outcome, 'deleted');
+    assert.equal(result.storageOutcome, 'deleted');
+    assert.equal(result.evidence, 'persisted');
+    assert.equal(isReconciliationSafe(result), true, 'invariant A holds — the bytes are provably gone');
+    assert.equal(fixtureExists(key), false);
+    assert.equal(audits.length, 1, 'the success is durably evidenced');
+  });
+
+  await test('7.2 storage delete fails + durable evidence succeeds -> a reconcilable, tracked failure', async () => {
+    resetEvidence();
+    const key = writeUndeletableFixture(CLINIC_A);
+
+    const { restore } = captureConsole();
+    let result;
+    try {
+      result = await deleteStoredObjectWithEvidence(
+        baseRequest({ storageKey: key, entityId: 'attachment-inv-tracked' }),
+      );
+    } finally {
+      restore();
+    }
+
+    assert.equal(result.outcome, 'failed', 'the tracked-failure value is still reported when evidence committed');
+    assert.equal(result.storageOutcome, 'failed');
+    assert.equal(result.evidence, 'persisted');
+    assert.equal(isReconciliationSafe(result), true, 'invariant B holds — a durable record names the object');
+    assert.ok(fixtureExists(key), 'the object is still there — that is what makes evidence necessary');
+    assert.equal(audits.length, 1, 'exactly one durable evidence row');
+    const meta = audits[0]!.metadata as Record<string, unknown>;
+    assert.equal(
+      meta.storageKey, key,
+      'the committed record must carry the object reference — it is the only remaining copy',
+    );
+  });
+
+  await test('7.3 storage delete fails + evidence persistence fails -> NOT reported as a tracked failure', async () => {
+    resetEvidence();
+    const key = writeUndeletableFixture(CLINIC_A);
+    failAllEvidencePersistence();
+
+    const { calls, restore } = captureConsole();
+    let result;
+    try {
+      result = await deleteStoredObjectWithEvidence(
+        baseRequest({ storageKey: key, entityId: 'attachment-inv-unevidenced' }),
+      );
+    } finally {
+      restore();
+    }
+
+    // The exact defect the architecture review found: this used to return
+    // `failed`, which reads as "leak tracked" when nothing was tracked at all.
+    assert.notEqual(result.outcome, 'failed', 'an unevidenced orphan must not masquerade as a tracked failure');
+    assert.equal(result.outcome, 'evidence_persistence_failed');
+    assert.equal(result.storageOutcome, 'failed', 'the storage-side truth stays visible');
+    assert.equal(result.evidence, 'persistence_failed');
+    assert.equal(isReconciliationSafe(result), false, 'neither invariant A nor B holds');
+    assert.equal(isTerminalSuccess(result.outcome), false, 'and it is certainly not a success');
+    assert.ok(fixtureExists(key), 'the object still exists');
+    assert.equal(audits.length, 0, 'nothing was persisted — that is the premise of this test');
+    assert.equal(events.length, 0, 'the secondary writer failed too, as in the reviewed scenario');
+
+    // Loud escalation is the last line of defence when both DB writers are down.
+    const logged = JSON.stringify(calls);
+    assert.ok(logged.includes('UNEVIDENCED ORPHAN RISK'), 'the condition must be escalated, not returned quietly');
+    assert.ok(logged.includes(key), 'the escalation must still name the object so it can be reconciled by hand');
+  });
+
+  await test('7.4 an evidence-write failure on a SUCCESSFUL deletion is not an orphan (invariant A alone suffices)', async () => {
+    resetEvidence();
+    const key = writeFixtureObject(CLINIC_A, `${randomUUID()}.bin`);
+    failAllEvidencePersistence();
+
+    const { calls, restore } = captureConsole();
+    let result;
+    try {
+      result = await deleteStoredObjectWithEvidence(
+        baseRequest({ storageKey: key, entityId: 'attachment-inv-success-noevidence' }),
+      );
+    } finally {
+      restore();
+    }
+
+    assert.equal(result.outcome, 'deleted', 'the bytes are gone; there is nothing left to reconcile');
+    assert.equal(result.evidence, 'persistence_failed', 'the evidence gap is still reported honestly');
+    assert.equal(isReconciliationSafe(result), true);
+    assert.equal(fixtureExists(key), false);
+    assert.ok(
+      !JSON.stringify(calls).includes('UNEVIDENCED ORPHAN RISK'),
+      'no false orphan alarm when nothing leaked — a noisy invariant gets ignored',
+    );
+  });
+
+  await test('7.5 tenant-mismatch refusal + evidence persistence failure -> still refused, and surfaced', async () => {
+    resetEvidence();
+    const victim = writeFixtureObject(CLINIC_B, `${randomUUID()}.bin`);
+    failAllEvidencePersistence();
+
+    const { calls, restore } = captureConsole();
+    let result;
+    try {
+      result = await deleteStoredObjectWithEvidence(
+        baseRequest({ storageKey: victim, entityId: 'attachment-inv-crosstenant' }),
+      );
+    } finally {
+      restore();
+    }
+
+    assert.ok(fixtureExists(victim), 'clinic B\'s object must survive — a broken audit log never widens a deletion');
+    assert.equal(result.storageOutcome, 'rejected_tenant_mismatch', 'the refusal itself is unchanged');
+    assert.equal(result.failureCode, 'STORAGE_KEY_TENANT_MISMATCH');
+    assert.equal(result.outcome, 'evidence_persistence_failed', 'but an unrecorded refusal is not a quiet one');
+    assert.equal(isReconciliationSafe(result), false);
+    assert.ok(JSON.stringify(calls).includes('UNEVIDENCED ORPHAN RISK'), 'the unrecorded refusal is escalated');
+  });
+
+  await test('7.6 upload-rollback failure + evidence persistence failure cannot disappear silently', async () => {
+    resetEvidence();
+    const key = writeUndeletableFixture(CLINIC_A);
+    failAllEvidencePersistence();
+
+    const { calls, restore } = captureConsole();
+    let result;
+    try {
+      result = await deleteStoredObjectWithEvidence(
+        baseRequest({ storageKey: key, entityId: 'attachment-inv-rollback', source: 'upload_rollback' }),
+      );
+    } finally {
+      restore();
+    }
+
+    // This is the worst case in the codebase: a rollback orphan has no DB row
+    // at all, so if the evidence write is also lost nothing anywhere refers to
+    // the object.
+    assert.equal(result.outcome, 'evidence_persistence_failed');
+    assert.equal(isReconciliationSafe(result), false);
+    const logged = JSON.stringify(calls);
+    assert.ok(logged.includes('UNEVIDENCED ORPHAN RISK'));
+    assert.ok(logged.includes('upload_rollback'), 'the escalation records which path created the orphan');
+    assert.ok(logged.includes(key), 'and names the object');
+  });
+
+  await test('7.7 no PHI or raw legacy path leaks through the new escalation path', async () => {
+    resetEvidence();
+    const SENSITIVE_LEGACY = '/var/lib/noramedi/uploads/Ayse_Yilmaz_12345678901_panoramik.pdf';
+    failAllEvidencePersistence();
+
+    const { calls, restore } = captureConsole();
+    let result;
+    try {
+      result = await deleteStoredObjectWithEvidence(
+        baseRequest({ storageKey: SENSITIVE_LEGACY, entityId: 'attachment-inv-legacy-phi' }),
+      );
+    } finally {
+      restore();
+    }
+
+    assert.equal(result.keyForm, 'legacy_absolute');
+    const logged = JSON.stringify(calls);
+    assert.ok(!logged.includes('Ayse_Yilmaz'), 'a patient name must never reach the log, escalation included');
+    assert.ok(!logged.includes('12345678901'), 'a TCKN-shaped value must never reach the log');
+    assert.ok(!logged.includes(SENSITIVE_LEGACY), 'the raw legacy path must never reach the log');
+    assert.ok(!logged.includes('panoramik.pdf'), 'nor the file name alone');
+    if (!isReconciliationSafe(result)) {
+      const digest = createHash('sha256').update(SENSITIVE_LEGACY).digest('hex');
+      assert.ok(logged.includes(digest), 'the escalation still carries a correlatable digest instead');
+    }
+  });
+
+  await test('7.8 evidence persistence failure never throws into the caller flow', async () => {
+    resetEvidence();
+    const key = writeUndeletableFixture(CLINIC_A);
+    failAllEvidencePersistence();
+
+    const { restore } = captureConsole();
+    try {
+      // A throw here would abort the route AFTER the DB row was already
+      // deleted, converting a reportable partial state into a 500 with no
+      // response contract at all.
+      await assert.doesNotReject(() =>
+        deleteStoredObjectWithEvidence(
+          baseRequest({ storageKey: key, entityId: 'attachment-inv-nothrow' }),
+        ),
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  await test('7.9 the authoritative evidence write uses the non-swallowing audit writer', () => {
+    const src = readSrc('../services/storageObjectDeletion.ts');
+    assert.ok(
+      callsFunction(src, 'writeAuditLogInTx'),
+      'evidence must go through writeAuditLogInTx — the repository\'s non-swallowing audit writer',
+    );
+    assert.ok(
+      !callsFunction(src, 'writeAuditLog'),
+      'writeAuditLog swallows its own persistence errors and cannot back a durability claim',
+    );
+    // recordOperationalEvent stays, but only as secondary alerting.
+    assert.ok(
+      callsFunction(src, 'recordOperationalEvent'),
+      'operational alerting is retained alongside the authoritative write',
+    );
+    const auditIdx = src.indexOf('persistDeletionEvidence({');
+    const eventIdx = src.indexOf('recordOperationalEvent({');
+    assert.ok(auditIdx > 0 && eventIdx > auditIdx,
+      'the authoritative write must be attempted before the best-effort one, never derived from it');
+  });
+
+  await test('7.10 both delete routes refuse to report success when the invariant is violated', () => {
+    for (const file of ['../routes/attachments.ts', '../routes/labOrders.ts']) {
+      const src = readSrc(file);
+      assert.ok(callsFunction(src, 'isReconciliationSafe'), `${file} must branch on the durability invariant`);
+      const guardIdx = src.indexOf('if (!isReconciliationSafe(storageDeletion))');
+      assert.ok(guardIdx > 0, `${file} must guard its success response on the deletion result`);
+      const successIdx = src.indexOf('res.json({ success: true, storageDeletion:');
+      assert.ok(successIdx > guardIdx, `${file} must evaluate the guard BEFORE returning success`);
+      const guardBlock = src.slice(guardIdx, successIdx);
+      assert.ok(guardBlock.includes('status(500)'), `${file} must not answer 200 for an unevidenced orphan`);
+      assert.ok(guardBlock.includes('recordDeleted: true'), `${file} must state the partial state truthfully`);
+      assert.ok(
+        !/storageKey|filePath|originalName/.test(guardBlock),
+        `${file} must not expose storage internals or file names in the error body`,
+      );
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  section('8. No retention-driven or review-driven physical deletion path exists (deletion stays blocked)');
 
   await test('the deletion-review path is dry-run only — no live execute endpoint exists', () => {
     const src = readSrc('../routes/patientPrivacy.ts');
@@ -445,7 +728,7 @@ async function main() {
   });
 
   // ═══════════════════════════════════════════════════════════════════════
-  section('8. Every physical-delete call site derives object identity from a tenant-scoped record');
+  section('9. Every physical-delete call site derives object identity from a tenant-scoped record');
 
   await test('attachments.ts and labOrders.ts no longer call deleteFile directly', () => {
     for (const rel of ['../routes/attachments.ts', '../routes/labOrders.ts']) {
