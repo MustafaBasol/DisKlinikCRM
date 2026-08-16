@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertTriangle, ArrowLeft, Info } from 'lucide-react';
 import PublicThemeToggle from '../../components/landing/PublicThemeToggle';
 import axios from 'axios';
+import { getSafeHttpUrl } from '../../utils/safeUrl';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -29,6 +30,28 @@ interface PageData {
   clinic: { name: string; legalName?: string | null };
   legalProfile: LegalProfile;
 }
+
+/**
+ * Renders the clinic website as a link only when the stored value is an
+ * absolute http(s) URL (F3-SEC-004 / R-076).
+ *
+ * This page is unauthenticated, and the value is typed by a clinic user. Rows
+ * written before write-time validation existed can still hold a `javascript:`
+ * or `data:` URL, and the public API only nulls those out on responses served
+ * after that fix ships — a cached response, or a client talking to an older
+ * server, can still deliver one. So the sink decides for itself: unsafe values
+ * are shown as inert text (React keeps them escaped) and never become an href.
+ */
+const WebsiteCell: React.FC<{ value: string }> = ({ value }) => {
+  const href = getSafeHttpUrl(value);
+  return (
+    <span data-testid="legal-profile-website">
+      {href
+        ? <a href={href} target="_blank" rel="noopener noreferrer" className="underline">{value}</a>
+        : value}
+    </span>
+  );
+};
 
 const ClinicKvkkPublicPage: React.FC = () => {
   const { clinicSlug } = useParams<{ clinicSlug: string }>();
@@ -113,7 +136,7 @@ const ClinicKvkkPublicPage: React.FC = () => {
                           <tr><th scope="row">{t('clinicKvkk.fields.kepEmail')}</th><td>{data.legalProfile.kepEmail}</td></tr>
                         )}
                         {data.legalProfile.website && (
-                          <tr><th scope="row">{t('clinicKvkk.fields.website')}</th><td><a href={data.legalProfile.website} target="_blank" rel="noopener noreferrer" className="underline">{data.legalProfile.website}</a></td></tr>
+                          <tr><th scope="row">{t('clinicKvkk.fields.website')}</th><td><WebsiteCell value={data.legalProfile.website} /></td></tr>
                         )}
                         {data.legalProfile.dataProtectionContact && (
                           <tr><th scope="row">{t('clinicKvkk.fields.dataProtectionContact')}</th><td>{data.legalProfile.dataProtectionContact}</td></tr>
