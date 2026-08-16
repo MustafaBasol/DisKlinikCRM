@@ -6,6 +6,11 @@ test, CI or deployment script was changed by this task.
 
 This document records the production verification that transitions **`R-079`
 only** from `CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT` to **`CLOSED`**.
+**Record status: this document is carried by PR #432, which is `DRAFT` and
+`NOT MERGED` — it is a proposed record awaiting merge into authoritative
+`main`.** That is a separate fact from the status of the underlying `R-079`
+implementation (PR #431), which *is* merged, deployed and production-verified;
+see §4 for the two lifecycles stated separately.
 It closes nothing else. `R-080` stays `OPEN`; `R-030` / `R-030-DB` /
 `R-030-FILES` stay `OPEN`; `FIRST_CUSTOMER_RECOVERY_GATE` is unchanged
 (`NOT_SATISFIED`, blocked by `R-030-DB`); the `F4` phase is **not** complete.
@@ -117,10 +122,37 @@ failure: the field records the reason for the last legal-hold transition in
 either direction, and both directions are separately audited. No statement
 anywhere in this repository may claim the field was cleared or set to `null`.
 
-## 4. Lifecycle
+## 4. Lifecycle — two of them, kept separate
 
-**agent completed: YES · tests passed: YES · PR opened: YES · merged: YES ·
-deployed: YES · production verified: YES · `R-079`: `CLOSED`.**
+These are **two different lifecycles** and must never be collapsed into one
+list. The first belongs to the *fix*; the second belongs to *this document*.
+
+### 4.1 IMPLEMENTATION LIFECYCLE — PR #431
+
+- agent completed: **YES**
+- tests passed: **YES**
+- PR opened: **YES**
+- merged: **YES**
+- deployed: **YES**
+- production verified: **YES**
+- → **the `R-079` closure criteria are satisfied**
+
+### 4.2 CLOSURE-RECORD LIFECYCLE — `F4-3-R079-CLOSE` / PR #432
+
+- agent completed: **YES**
+- docs validation: **PASS**
+- PR opened: **YES**
+- PR state: **DRAFT**
+- merged: **NO**
+- deployment: **N/A (documentation-only)**
+- production mutation: **NONE**
+
+`R-079` is represented as **`CLOSED`** in this proposed documentation because
+its underlying implementation has already been merged, deployed and
+production-verified (§4.1). **PR #432 is the documentation record itself, and
+it is still awaiting merge into authoritative `main`.** Nothing in this
+document may be read as a claim that the closure *record* is merged or
+deployed.
 
 ## 5. What this record does NOT establish
 

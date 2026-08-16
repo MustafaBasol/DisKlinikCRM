@@ -543,6 +543,16 @@ rather than a manual step.
 
 ### Production verification (2026-08-16, `F4-3-R079-CLOSE`) — `R-079` `CLOSED`
 
+> **Two lifecycles, kept separate.** **Implementation — PR #431:** agent
+> completed `YES`, tests passed `YES`, PR opened `YES`, **merged `YES`**,
+> **deployed `YES`**, **production verified `YES`** → the `R-079` closure
+> criteria are satisfied, which is what licences the `CLOSED` state below.
+> **Closure record — `F4-3-R079-CLOSE` / PR #432 (this text):** agent completed
+> `YES`, docs validation `PASS`, PR opened `YES`, **PR state `DRAFT`**,
+> **merged `NO`**, deployment `N/A (documentation-only)`, production mutation
+> `NONE` — this documentation record is still awaiting merge into authoritative
+> `main`. The *fix* is live; the *document* is proposed.
+
 The lab-attachment legal-hold lifecycle is **production verified**. PR #431 is
 merged, the migration `20260816130000_add_lab_order_attachment_legal_hold` and
 the application are deployed to `disklinik-prod-01` at release
