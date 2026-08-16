@@ -367,7 +367,11 @@ Section 7 of that suite injects persistence failure at the Prisma delegate to
 prove the durability invariant behaviourally rather than by source inspection.
 
 > **Update (2026-08-16, F4-3-R2):** gap 1 above — `LabOrderAttachment` has no
-> `legalHold` field — is **closed**; see Section 16B. Gaps 2, 3 and 4 (`R-080`,
+> `legalHold` field — is **remediated in code and proved by tests**, and its
+> risk row (`R-079`) is `CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT`, **not
+> `CLOSED`**: PR #431 is a draft and the change is unmerged, undeployed and
+> unverified in production. Until then this document does not claim the gap is
+> closed in any running environment. See Section 16B. Gaps 2, 3 and 4 (`R-080`,
 > reverse-orphan detection, provider object-lock) remain **open** and are
 > untouched by that round.
 
@@ -541,8 +545,8 @@ rather than a manual step.
 
 - It adds **no UI**. A hold is placed and released through the API only; the
   frontend legal-hold control that exists for patient attachments has no lab
-  equivalent yet. That is a product decision and does not affect the closure of
-  `R-079` — the gate is server-side and unconditional.
+  equivalent yet. That is a product decision and does not affect the proposed
+  closure of `R-079` — the gate is server-side and unconditional.
 - It sets **no retention period**, opens **no new deletion path**, and enables
   **no provider object-lock**.
 - `R-080` (durable deletion intent and automatic retry) and reverse-orphan
