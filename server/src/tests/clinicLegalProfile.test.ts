@@ -41,6 +41,19 @@
  *   28. POST /publish does not expose organizationId in response
  *   29. Unpublished profile returns 404 from public endpoint (no info leak)
  *
+ *   Website URL scheme hardening (F3-SEC-004 / R-076):
+ *   30. Accepts https, http, null, omitted, and the empty string
+ *   31. Rejects javascript:, data:, vbscript:, file:, ftp:, blob:
+ *   32. Rejects protocol-relative, relative, and malformed values
+ *   33. Rejects scheme obfuscated with embedded control characters
+ *   34. Validation error names the website field
+ *   35. Existing 300-character maximum is preserved
+ *   36. Both write paths validate through the same shared schema
+ *   37. Public API nulls an unsafe legacy website instead of serving it
+ *   38. Public API passes a legitimate http/https website through unchanged
+ *   39. Authenticated read is NOT scrubbed, so an admin can see and fix a bad value
+ *   40. SECURITY PROPERTY: the protocol allowlist is exactly http/https
+ *
  * Run with: cd server && npx tsx src/tests/clinicLegalProfile.test.ts
  * No external test framework — uses node:assert/strict.
  */
@@ -69,13 +82,18 @@ function section(title: string) {
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import {
   LEGAL_PROFILE_ROLES,
   SAFE_SELECT,
+  legalProfileSchema,
   validatePublishFields,
 } from '../routes/clinicLegalProfile.js';
 
-import { PUBLIC_PROFILE_SELECT } from '../routes/publicClinicKvkk.js';
+import { PUBLIC_PROFILE_SELECT, toPublicLegalProfile } from '../routes/publicClinicKvkk.js';
+import { SAFE_URL_PROTOCOLS, isSafeHttpUrl } from '../utils/safeUrl.js';
 
 // ── 1-7. Permission checks ────────────────────────────────────────────────────
 
@@ -338,6 +356,162 @@ await test('Unpublished profile returns 404 from public endpoint (no info leak)'
   assert.equal(publicEndpointStatus(false, false), 404);
   // Published → 200
   assert.equal(publicEndpointStatus(true, true), 200);
+});
+
+// ── 30-40. F3-SEC-004 / R-076: website URL scheme hardening ───────────────────
+
+section('30-40. Website URL scheme hardening (F3-SEC-004 / R-076)');
+
+// These exercise the REAL exported schema, not a re-implementation, because the
+// whole point of the fix is that both write paths share one schema object.
+function parseWebsite(body: Record<string, unknown>) {
+  return legalProfileSchema.safeParse(body);
+}
+
+await test('Accepts https, http, null, omitted, and the empty string', () => {
+  const accepted: Array<[string, Record<string, unknown>]> = [
+    ['https URL', { website: 'https://clinic.example' }],
+    ['http URL', { website: 'http://clinic.example' }],
+    ['https URL with path/query', { website: 'https://clinic.example/kvkk?v=2' }],
+    ['null', { website: null }],
+    ['omitted', {}],
+    // '' must stay valid: the settings form initialises every text field to ''
+    // and submits the whole object, so rejecting it would break saving for any
+    // clinic that simply leaves the website blank.
+    ['empty string', { website: '' }],
+    // Whitespace-only counts as blank too, matching how validatePublishFields
+    // treats required fields. It was accepted before this fix, it never reaches
+    // an href, and rejecting it would only break a save for someone who typed a
+    // stray space into an optional field.
+    ['whitespace-only', { website: '   ' }],
+  ];
+  for (const [label, body] of accepted) {
+    assert.ok(parseWebsite(body).success, `${label} must be accepted`);
+  }
+});
+
+await test('Rejects javascript:, data:, vbscript:, file:, ftp:, blob:', () => {
+  const rejected = [
+    'javascript:alert(1)',
+    'JaVaScRiPt:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'vbscript:msgbox(1)',
+    'file:///etc/passwd',
+    'ftp://evil.example/x',
+    'blob:https://evil.example/1234',
+  ];
+  for (const value of rejected) {
+    assert.ok(!parseWebsite({ website: value }).success, `${value} must be rejected`);
+  }
+});
+
+await test('Rejects protocol-relative, relative, and malformed values', () => {
+  const rejected = [
+    '//evil.example',
+    '/relative',
+    'relative/path',
+    'clinic.example',        // scheme-less host is not an absolute URL
+    'https://',              // no host
+    'not a url at all',
+  ];
+  for (const value of rejected) {
+    assert.ok(!parseWebsite({ website: value }).success, `${value} must be rejected`);
+  }
+});
+
+await test('Rejects scheme obfuscated with embedded control characters', () => {
+  // `java\tscript:alert(1)` is executed by browsers but slips past a naive
+  // startsWith('javascript:') check. URL parsing strips the tab first, so the
+  // scheme is normalised to javascript: and caught.
+  for (const value of ['java\tscript:alert(1)', 'java\nscript:alert(1)', ' javascript:alert(1)']) {
+    assert.ok(!parseWebsite({ website: value }).success, `${JSON.stringify(value)} must be rejected`);
+  }
+});
+
+await test('Validation error names the website field', () => {
+  const result = parseWebsite({ website: 'javascript:alert(1)' });
+  assert.ok(!result.success);
+  assert.ok(
+    result.error.flatten().fieldErrors.website,
+    'the 400 response must attribute the error to website',
+  );
+});
+
+await test('Existing 300-character maximum is preserved', () => {
+  const host = 'a'.repeat(300 - 'https://x.example/'.length);
+  const exactly300 = `https://x.example/${host}`;
+  assert.equal(exactly300.length, 300);
+  assert.ok(parseWebsite({ website: exactly300 }).success, '300 chars must still be accepted');
+  assert.ok(!parseWebsite({ website: `${exactly300}a` }).success, '301 chars must be rejected');
+});
+
+await test('Both write paths validate through the same shared schema', () => {
+  // Static scan of the route source: PUT and POST /publish must each parse
+  // req.body with legalProfileSchema before any upsert, and there must be no
+  // third write path that skips it.
+  const routeSource = readFileSync(
+    fileURLToPath(new URL('../routes/clinicLegalProfile.ts', import.meta.url)),
+    'utf8',
+  );
+  const occurrences = (needle: string) => routeSource.split(needle).length - 1;
+
+  assert.equal(
+    occurrences('legalProfileSchema.safeParse(req.body)'), 2,
+    'exactly two request-body parses expected (PUT + POST /publish)',
+  );
+  assert.equal(
+    occurrences('prisma.clinicLegalProfile.upsert('), 2,
+    'exactly two upsert write paths expected (PUT + POST /publish)',
+  );
+  assert.equal(
+    occurrences('prisma.clinicLegalProfile.create('), 0,
+    'a bare create() would be a write path bypassing the shared schema',
+  );
+
+  // The one remaining update() flips the publish flag only — it must not carry
+  // any client-supplied field.
+  const updateIndex = routeSource.indexOf('prisma.clinicLegalProfile.update(');
+  assert.ok(updateIndex > -1, 'expected the publish-flag update to exist');
+  assert.equal(
+    occurrences('prisma.clinicLegalProfile.update('), 1,
+    'exactly one update() write path expected (the publish flag)',
+  );
+  const updateCall = routeSource.slice(updateIndex, updateIndex + 200);
+  assert.ok(updateCall.includes('isPublished: true'), 'publish update must set isPublished');
+  assert.ok(!updateCall.includes('website'), 'publish update must not write website');
+});
+
+await test('Public API nulls an unsafe legacy website instead of serving it', () => {
+  // Write-time validation cannot reach rows written before this fix, so the
+  // unauthenticated boundary scrubs on read. The row itself is untouched.
+  const legacy = { dataControllerTitle: 'X', website: 'javascript:alert(1)' };
+  const served = toPublicLegalProfile(legacy);
+  assert.equal(served.website, null, 'unsafe legacy value must not cross the public boundary');
+  assert.equal(legacy.website, 'javascript:alert(1)', 'the source object must not be mutated');
+  assert.equal(served.dataControllerTitle, 'X', 'other fields must pass through unchanged');
+});
+
+await test('Public API passes a legitimate http/https website through unchanged', () => {
+  assert.equal(toPublicLegalProfile({ website: 'https://clinic.example' }).website, 'https://clinic.example');
+  assert.equal(toPublicLegalProfile({ website: 'http://clinic.example' }).website, 'http://clinic.example');
+  assert.equal(toPublicLegalProfile({ website: null }).website, null);
+  assert.equal(toPublicLegalProfile({ website: '' }).website, null);
+});
+
+await test('Authenticated read is NOT scrubbed, so an admin can see and fix a bad value', () => {
+  // Suppressing it in the settings form would leave the clinic unable to
+  // correct the row it owns.
+  assert.ok(SAFE_SELECT.website, 'SAFE_SELECT must still return the raw stored website');
+});
+
+await test('SECURITY PROPERTY: the protocol allowlist is exactly http/https', () => {
+  // Mutation guard. Widening SAFE_URL_PROTOCOLS, or replacing isSafeHttpUrl
+  // with unconditional acceptance, must break a test rather than silently
+  // re-opening R-076. This pins the allowlist itself; the rejection cases above
+  // fail if the guard is short-circuited.
+  assert.deepEqual([...SAFE_URL_PROTOCOLS], ['http:', 'https:']);
+  assert.ok(!isSafeHttpUrl('javascript:alert(1)'));
+  assert.ok(isSafeHttpUrl('https://clinic.example'));
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

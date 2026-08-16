@@ -11,6 +11,8 @@
  *   - Cross-organization access denied via resolveEffectiveClinicId.
  *   - PUT is blocked when profile is already published to prevent accidental unpublish.
  *   - Publish accepts optional body to save and publish atomically in one step.
+ *   - `website` is scheme-restricted to absolute http(s) — it is rendered as an
+ *     href on the unauthenticated public KVKK page (F3-SEC-004 / R-076).
  */
 
 import express, { Response } from 'express';
@@ -18,10 +20,30 @@ import { z } from 'zod';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { resolveEffectiveClinicId } from '../utils/clinicScope.js';
+import { isSafeHttpUrl } from '../utils/safeUrl.js';
 
 const router = express.Router();
 
 export const LEGAL_PROFILE_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'];
+
+/**
+ * `website` accepts an absolute http(s) URL, or nothing at all.
+ *
+ * The empty string stays valid on purpose: the KVKK settings form
+ * (src/components/settings/ClinicKvkkSection.tsx) initialises every text field
+ * to '' and submits the whole object, so rejecting '' would break saving for
+ * every clinic that simply leaves the field blank. Anything non-blank must
+ * survive URL parsing with an http/https scheme — see utils/safeUrl.ts for why
+ * that check is a parse and not a regex.
+ *
+ * Exported for the F3-SEC-004 regression tests.
+ */
+export const websiteSchema = z
+  .string()
+  .max(300)
+  .refine((value) => value.trim() === '' || isSafeHttpUrl(value), {
+    message: 'Website must be an absolute http:// or https:// URL',
+  });
 
 export const legalProfileSchema = z.object({
   dataControllerTitle: z.string().max(200).optional().nullable(),
@@ -34,7 +56,7 @@ export const legalProfileSchema = z.object({
   email: z.string().email().max(200).optional().nullable().or(z.literal('')),
   privacyRequestEmail: z.string().email().max(200).optional().nullable().or(z.literal('')),
   kepEmail: z.string().max(200).optional().nullable(),
-  website: z.string().max(300).optional().nullable(),
+  website: websiteSchema.optional().nullable(),
   dataProtectionContact: z.string().max(200).optional().nullable(),
   privacyNoticeText: z.string().max(50000).optional().nullable(),
   channelDisclosureText: z.string().max(10000).optional().nullable(),
