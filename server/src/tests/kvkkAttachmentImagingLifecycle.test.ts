@@ -1291,6 +1291,35 @@ await test('imaging.ts study legal-hold PATCH route authorizes only OWNER/ORG_AD
   assert.ok(block.includes("authorize(['OWNER', 'ORG_ADMIN'])"));
 });
 
+await test('labOrders.ts attachment legal-hold PATCH route authorizes only OWNER/ORG_ADMIN (R-079)', () => {
+  const src = fs.readFileSync(path.resolve(import.meta.dirname, '../routes/labOrders.ts'), 'utf8');
+  const routeStart = src.indexOf("'/lab-orders/:id/attachments/:attId/legal-hold'");
+  assert.ok(routeStart > -1, 'lab-order attachment legal-hold route must exist (R-079)');
+  const block = src.slice(routeStart, routeStart + 200);
+  assert.ok(
+    block.includes("authorize(['OWNER', 'ORG_ADMIN'])"),
+    'the hold must be narrower than LAB_ORDER_MANAGE_ROLES — no new role may be invented for it',
+  );
+});
+
+await test('every attachment model that has a physical-delete path carries a legalHold column (R-079 closure)', () => {
+  const schemaSrc = fs.readFileSync(path.resolve(import.meta.dirname, '../../prisma/schema.prisma'), 'utf8');
+  for (const model of ['PatientAttachment', 'LabOrderAttachment']) {
+    const start = schemaSrc.indexOf(`model ${model} {`);
+    assert.ok(start > -1, `${model} must exist in the schema`);
+    const block = schemaSrc.slice(start, schemaSrc.indexOf('\n}\n', start));
+    assert.ok(
+      /\n\s*legalHold\s+Boolean\s+@default\(false\)/.test(block),
+      `${model} must carry legalHold Boolean @default(false) — a delete path without one has no gate`,
+    );
+    assert.ok(/\n\s*legalHoldReason\s+String\?/.test(block), `${model} must carry legalHoldReason String?`);
+    assert.ok(
+      block.includes('@@index([clinicId, legalHold])'),
+      `${model} must index [clinicId, legalHold] like the accepted PatientAttachment/ImagingStudy shape`,
+    );
+  }
+});
+
 await test('imaging images have no independent legal-hold field — they inherit their study\'s hold', () => {
   const schemaSrc = fs.readFileSync(path.resolve(import.meta.dirname, '../../prisma/schema.prisma'), 'utf8');
   const imageModelStart = schemaSrc.indexOf('model ImagingImage ');

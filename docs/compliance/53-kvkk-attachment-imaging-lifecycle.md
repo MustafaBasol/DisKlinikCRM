@@ -53,6 +53,7 @@ Prior KVKK remediation work (`ClinicLegalProfile`, `ChannelConsentLog`, `PublicB
 ### 4.2 Legal hold
 
 - `PatientAttachment.legalHold` (`Boolean @default(false)`) + `legalHoldReason` (`String?`).
+- `LabOrderAttachment.legalHold` + `legalHoldReason` — **added later, by F4-3-R2 (2026-08-16, `R-079`); not part of this PR.** Same shape, same `OWNER`/`ORG_ADMIN` gate, its own domain endpoint `PATCH /api/lab-orders/:id/attachments/:attId/legal-hold`. Unlike the two below, this one also gates a *physical delete* path — see Section 16B.
 - `ImagingStudy.legalHold` + `legalHoldReason`. **`ImagingImage` has no field of its own** — every image inherits its parent study's hold, checked via a join (`ImagingImage.study.legalHold`) everywhere a legal-hold check is needed (anonymization, deletion-review inventory, orphan-check reporting).
 - New PATCH endpoints, both restricted to `OWNER`/`ORG_ADMIN` only (narrower than the general `PRIVACY_MANAGE_ROLES`, which also includes `CLINIC_MANAGER`):
   - `PATCH /api/patients/:patientId/attachments/:id/legal-hold` (`server/src/routes/attachments.ts`)
@@ -360,10 +361,192 @@ whole of the claim.
 4. **Provider object-lock / immutability is not active** and is not claimed to be.
    That belongs to the future object-storage provider lane.
 
-Verified by `npm run test:storage-deletion-evidence` (33 assertions, disposable
+Verified by `npm run test:storage-deletion-evidence` (34 assertions, disposable
 fixture files only — no real patient attachment or imaging object is touched).
 Section 7 of that suite injects persistence failure at the Prisma delegate to
 prove the durability invariant behaviourally rather than by source inspection.
+
+> **Update (2026-08-16, F4-3-R2):** gap 1 above — `LabOrderAttachment` has no
+> `legalHold` field — is **closed**; see Section 16B. Gaps 2, 3 and 4 (`R-080`,
+> reverse-orphan detection, provider object-lock) remain **open** and are
+> untouched by that round.
+
+## 16B. F4-3-R2 amendment (2026-08-16) — the lab-attachment legal-hold gate (R-079)
+
+### What was actually wrong
+
+F4-3 made the lab-order attachment deletion **tenant-scoped and provable**. It
+did not make it **preventable**. `LabOrderAttachment` carried no `legalHold`
+column, so `DELETE /api/lab-orders/:id/attachments/:attId` was the one physical
+attachment-delete path in the codebase with no legal-hold gate of any kind. The
+concrete consequence: a lab attachment retained as a litigation or audit exhibit
+— an intraoral photograph sent to a technician, say — could be permanently
+destroyed by any holder of `LAB_ORDER_MANAGE_ROLES` (including `RECEPTIONIST`
+and `ASSISTANT`) while the equivalent patient attachment was protected. Under
+KVKK this is the failure legal hold exists to prevent: special-category health
+data erased while a legal obligation to retain it is in force.
+
+### The schema delta — exactly two columns and one index
+
+```prisma
+legalHold       Boolean @default(false)
+legalHoldReason String?
+@@index([clinicId, legalHold])
+```
+
+Byte-for-byte the `PatientAttachment` / `ImagingStudy` shape already accepted in
+`20260715145843_add_kvkk_attachment_imaging_lifecycle`. Deliberately **not**
+added: `legalHoldAt` / `legalHoldById` (not part of the accepted contract — the
+actor and timestamp live on the `AuditLog` row), `storageVerifiedMissingAt` (an
+orphan-inspection field; `orphanFileInspection.ts` walks `patientAttachment` and
+`imagingImage` only and never touches `labOrderAttachment`), and anything to do
+with retention periods, lifecycle enums or deletion-intent tables.
+
+### The invariant: the gate is a predicate, not a check
+
+```ts
+prisma.labOrderAttachment.deleteMany({
+  where: { id: attId, labWorkOrderId: id, clinicId: order.clinicId, legalHold: false },
+})
+```
+
+The route still performs a pre-read, but only for metadata it cannot recover
+after the row is gone (`filePath` for the storage deletion, `originalName` for
+the activity log). That read authorizes nothing. Postgres evaluates the
+predicate and performs the delete inside a single statement, so a concurrent
+legal-hold PATCH either commits first — the row no longer matches, zero rows are
+affected, and **neither the row nor the object is touched** — or loses, in which
+case its own scoped `updateMany` affects zero rows and cannot resurrect a
+deleted row. There is no window in which a committed `legalHold = true` row is
+still deleted.
+
+`count === 0` has three possible causes, and the route distinguishes them
+**without widening tenant scope** — the disambiguating re-read carries the
+identical ownership predicate:
+
+| Cause | Response |
+|---|---|
+| Row deleted concurrently | `404` |
+| Row present and under legal hold (including a hold that committed after the pre-read) | `409 ATTACHMENT_LEGAL_HOLD` + audit |
+| Ownership/scope mismatch | unreachable — the work-order lookup and pre-read already rejected it |
+
+On the blocked path there is **no DB delete, no physical storage deletion, and
+no storage-deletion evidence record claiming an attempt that never happened**.
+An erasure claim the system cannot substantiate is a KVKK problem; so is a
+recorded attempt that did not occur.
+
+### Tenant ownership
+
+Unchanged from F4-3: `accessible clinic ids → LabWorkOrder → order.clinicId →
+LabOrderAttachment`. `req.user.clinicId` is not the source of truth anywhere on
+this route, and no mutation is ever issued against a bare attachment id.
+
+### Hold administration — reused precedent, no new framework
+
+No cross-domain legal-hold mechanism exists in this repository, and none was
+created. `attachments.ts` and `imaging.ts` each own a separate per-domain PATCH
+endpoint; the same precedent is followed here:
+
+- `PATCH /api/lab-orders/:id/attachments/:attId/legal-hold`
+- `authorize(['OWNER', 'ORG_ADMIN'])` — taken from the accepted
+  `PatientAttachment` contract; **no new role was invented**. This is
+  deliberately narrower than the `LAB_ORDER_MANAGE_ROLES` set governing every
+  other write on that router: placing or releasing a hold is a legal act, not
+  lab coordination.
+- `{ legalHold: boolean, reason: string }`, reason min 3 chars, required in
+  **both** directions — releasing re-opens the row to permanent deletion and is
+  exactly as consequential as placing.
+- The write is a scoped `updateMany` carrying the full ownership predicate, so
+  it composes deterministically with the delete gate.
+- `legalHoldReason` is redacted to `null` for every role except
+  `OWNER`/`ORG_ADMIN` on all three read paths that return lab attachments
+  (`GET /lab-orders/:id`'s nested `attachments`, `GET .../attachments`,
+  `POST .../attachments`) and on the `409` body. The `legalHold` boolean itself
+  is never redacted — any role that may see the attachment may know a hold
+  exists.
+
+The redaction helpers are a local copy rather than an import from
+`routes/attachments.ts`, matching what `routes/imaging.ts` already does: a
+route→route import would be the first cross-domain route dependency in the
+repository, and the modular-monolith boundary is worth more than two saved
+lines.
+
+### Audit and PHI
+
+New actions: `lab_order_attachment_legal_hold_set`, `_released`, and
+`_delete_blocked_legal_hold`, all `entityType: 'lab_order_attachment'`. None
+carries a file name, patient name, TCKN, phone, email, DICOM metadata or the
+free-text reason — only `entityId`, `labWorkOrderId` and the before/after
+boolean. The reason text is retained on the row itself, where it is reachable
+only by the roles allowed to see it.
+
+**Backups are unaffected and remain a separate question.** Nothing in this
+amendment changes backup retention, and a legal hold on a primary row says
+nothing about pgBackRest repositories, `pg_dump` artifacts or `FileBackupRun`
+copies. The Section 16A statement that primary object deletion is not backup
+deletion applies unchanged and in both directions.
+
+### Migration and rollback
+
+`server/prisma/migrations/20260816130000_add_lab_order_attachment_legal_hold/` —
+expand-only (`ALTER TABLE ... ADD COLUMN` ×2, `CREATE INDEX` ×1). Existing rows
+take the column default `legalHold = false`, i.e. every attachment stays exactly
+as deletable as it is today. That is the only safe default: a legal hold is an
+affirmative legal act recorded by an `OWNER`/`ORG_ADMIN` with a reason, and
+back-filling one onto historical rows would fabricate a legal position nobody
+took.
+
+Validated on a disposable PostgreSQL 16 instance: `prisma migrate deploy` exit
+0, 75 migrations applied, `unfinished = 0`, `rolled_back = 0`, `migrate status`
+reports "Database schema is up to date!", `information_schema` confirms
+`legalHold boolean NOT NULL DEFAULT false` / `legalHoldReason text NULL` /
+`LabOrderAttachment_clinicId_legalHold_idx`, and `prisma migrate diff
+--from-config-datasource` reports **no residual difference relating to
+`LabOrderAttachment` or `legalHold`**.
+
+**Rollback: application first.** Revert the application commit and leave the
+additive migration in place — the columns are inert to code that never reads
+them, and the database need not be touched at all. Dropping the columns in
+production is **not** the immediate rollback path; if they must ever be
+physically removed, the destructive-rollback procedure in Section 14 (reviewed
+reverse SQL, maintenance window, fresh verified backup, `information_schema`
+verification, and only then `migrate resolve --rolled-back`) applies in full.
+
+### How it is proved
+
+Behaviourally, not by source inspection:
+
+- `npm run test:lab-attachment-legal-hold` — 21 assertions driving the real
+  Express route chain against real disposable objects on disk. Covers: a
+  non-held delete still succeeds end to end; a held attachment keeps its row,
+  keeps its bytes, and never reaches the storage-deletion service; a
+  cross-clinic user is refused; reason visibility per role; both hold
+  directions audited PII-free; and a **TOCTOU hook** that commits a hold in the
+  window between the metadata pre-read and the atomic `deleteMany`.
+- `scripts/verify-attachment-legal-hold-lifecycle.ts` Section 6 (34 assertions
+  total, real Postgres) — a 20-trial concurrent race plus a **forced lock
+  interleaving**: the DELETE is issued and blocks on the row lock, the hold
+  then commits, and under READ COMMITTED the DELETE re-evaluates its predicate
+  against the new row version and matches zero rows. A read-then-delete
+  implementation would destroy the held row at exactly that point.
+- `storageDeletionEvidence.test.ts` Section 9 and
+  `kvkkAttachmentImagingLifecycle.test.ts` Section 59 pin the gate structurally
+  so it cannot be quietly separated from the write, and assert that **every**
+  attachment model with a physical-delete path carries a `legalHold` column.
+
+The new suite is wired into `server:test:non-disposable`, so it is a CI gate
+rather than a manual step.
+
+### What this amendment does NOT do
+
+- It adds **no UI**. A hold is placed and released through the API only; the
+  frontend legal-hold control that exists for patient attachments has no lab
+  equivalent yet. That is a product decision and does not affect the closure of
+  `R-079` — the gate is server-side and unconditional.
+- It sets **no retention period**, opens **no new deletion path**, and enables
+  **no provider object-lock**.
+- `R-080` (durable deletion intent and automatic retry) and reverse-orphan
+  detection remain **open**, unchanged.
 
 ## 17. Assumptions made (conservative, documented, reviewable)
 
