@@ -230,6 +230,27 @@ if [[ "$REPO_NUM" -ne 1 ]]; then
     }
     REPO_LOCAL_PATH="$_rpath"
   fi
+
+  # Encryption gate for every repository except repo1. This is the ONE
+  # prohibition the program states absolutely — "encryption is REQUIRED before
+  # any byte leaves this host" — and until now nothing on the write path
+  # enforced it. noramedi-pgbackrest-preflight.sh validates it, but preflight
+  # is a separate operator step ordered by prose in runbook §16.5, not a gate:
+  # `--repo 2` invoked without it wrote a physical copy of every table,
+  # including special-category health data under KVKK Art. 6, in plaintext to
+  # infrastructure this program does not operate. The status writer's
+  # REPO2_PLAINTEXT verdict is the only other backstop and it lands AFTER the
+  # bytes are gone, which is exactly one config line too late.
+  #
+  # Scoped to REPO_NUM != 1 deliberately: it sits inside the existing branch,
+  # so the repo1 path that runs in production today is byte-for-byte unchanged.
+  # The passphrase is never read, compared, or printed here — only the cipher
+  # TYPE is inspected.
+  _rcipher="$(repo_conf_value "repo${REPO_NUM}-cipher-type" || true)"
+  if [[ "$_rcipher" != "aes-256-cbc" ]]; then
+    fail "repo${REPO_NUM}-cipher-type is '${_rcipher:-unset}', not aes-256-cbc — refusing to write a physical copy of every table, including special-category health data, in plaintext to infrastructure this program does not operate. pgBackRest was NOT invoked. Fix the repository config and re-run scripts/noramedi-pgbackrest-preflight.sh before retrying."
+    exit "$PRECONDITION_EXIT_CODE"
+  fi
 fi
 
 if [[ "$REPO_IS_LOCAL" == true ]]; then

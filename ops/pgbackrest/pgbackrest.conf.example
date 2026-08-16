@@ -197,6 +197,14 @@ pg1-user=postgres
 ;   repo2-s3-key-secret=<REPLACE>
 ;   repo2-cipher-type=aes-256-cbc
 ;   repo2-cipher-pass=<REPLACE — distinct from repo1>
+;   repo2-retention-full=7
+;   repo2-retention-archive=7
+;
+; Both retention keys are REQUIRED on either shape, and the preflight now
+; refuses a repo2 without them. They were previously present on the SSH block
+; and missing here — an asymmetry with no reason behind it, and the more
+; dangerous half to omit: object storage bills for what it keeps and nothing
+; on this host would ever have expired it.
 ;
 ; ⚠ BEFORE ENABLING ANY repo2 LINE, VERIFY AGAINST THE INSTALLED BINARY:
 ;   1. Does this build support multiple repositories at all?  (`pgbackrest

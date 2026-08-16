@@ -850,7 +850,17 @@ sudo install -d -o pgbackrest -g pgbackrest -m 0750 /var/lib/pgbackrest
 #      a reused one. Escrow both, plus ENCRYPTION_KEY, OUTSIDE the failure
 #      domain of both hosts (§15). An off-host encrypted copy whose only key
 #      lived on the destroyed host is not a backup.
-#      Append to /etc/pgbackrest/pgbackrest.conf (mode 0600):
+#      ⚠ ON THE SECONDARY, declare the repository under the SAME INDEX the
+#      primary uses for it — repo2-path, NOT repo1-path. In repo-host mode the
+#      remote inherits the primary's option set, so a secondary that calls its
+#      own repository repo1 collides with the repo2-path passed down:
+#        ERROR: [032]: local repo1 and repo2 paths are both
+#                      '/var/lib/pgbackrest' but must be different
+#      That message names PATHS, not indexes, so it reads as a directory
+#      mistake and sends you to change a path that is already correct.
+#      Established by F4-FCR-003 Gate 0; see §22.4.
+#
+#      Append to /etc/pgbackrest/pgbackrest.conf (mode 0600) ON PRODUCTION:
 #        repo2-host=<BACKUP_HOST>
 #        repo2-host-user=pgbackrest
 #        repo2-path=/var/lib/pgbackrest
@@ -859,10 +869,19 @@ sudo install -d -o pgbackrest -g pgbackrest -m 0750 /var/lib/pgbackrest
 #        repo2-retention-full=7
 #        repo2-retention-archive=7
 
-# 9. Validate BEFORE moving data. Preflight now checks repo2 encryption.
+# 9. Validate BEFORE moving data. Preflight now checks repo2 encryption AND
+#    that repo2 carries retention keys.
+#    ⚠ CORRECTED 2026-08-16 by F4-FCR-003 Gate 0. The two commands below
+#    previously carried `--repo=2`, which pgBackRest 2.59.0 REJECTS outright:
+#      ERROR: [031]: option 'repo' not valid for command 'check'
+#    `stanza-create` and `check` are inherently all-repository operations and
+#    take no --repo. Both were invalid as published, so the sequence failed at
+#    this step. `--repo` IS valid for backup / restore / info / expire /
+#    verify, which is why the backup wrapper and the restore drill are
+#    unaffected. See §22.4.
 sudo bash scripts/noramedi-pgbackrest-preflight.sh
-sudo -u postgres pgbackrest --stanza=noramedi --repo=2 stanza-create
-sudo -u postgres pgbackrest --stanza=noramedi --repo=2 check
+sudo -u postgres pgbackrest --stanza=noramedi stanza-create
+sudo -u postgres pgbackrest --stanza=noramedi check
 
 # 10-12. First off-host backup, WAL continuity, repository health.
 sudo /usr/local/sbin/noramedi-pgbackrest-backup.sh --repo 2 --type full
@@ -1674,3 +1693,414 @@ remains an open program-owner decision.
 `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`, because `R-030` blocks it. The
 PITR and restore-usability half of that gate is now satisfied on evidence;
 the off-host durability half is not, and the gate is the conjunction.
+
+---
+
+# F4-FCR-003 — R-030-DB off-host activation packet
+
+**Task:** `F4-FCR-003` · **Phase:** F4 · **Risk:** `R-030-DB` (`OPEN`)
+**Baseline:** `origin/main` @ `c0567ef`.
+**Status:** `AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`.
+**Activation status:** `PREPARED_NOT_EXECUTED`.
+
+## 22. Why this section exists
+
+§16.5 already gave the activation *sequence*. What it did not give was a way to
+run it without improvising: no checkpoint boundaries, no before/after hashes,
+no defined evidence to bring back, and two commands that do not work. This
+section is the executable form.
+
+**Nothing here has been executed.** No production system was accessed by the
+task that wrote it. The seven §16.2 prerequisites remain unmet and the
+secondary Türkiye VPS remains `NOT PROCURED`, so **CHECKPOINT 2 onward cannot
+begin** regardless of how ready the repository is.
+
+Read §22.4 first. It is short, and it is the part that changes what you type.
+
+### 22.1 What the repository now guarantees that it did not before
+
+| Guarantee | Where | Failure it removes |
+|---|---|---|
+| A plaintext repo2 backup is refused on the WRITE path | `noramedi-pgbackrest-backup.sh` | Only preflight enforced encryption, and preflight is a separate step ordered by prose. `--repo 2` without it shipped cleartext PHI off-host. |
+| repo2 must carry retention keys | `noramedi-pgbackrest-preflight.sh` | An off-host repository growing without bound on infrastructure we neither monitor nor control. |
+| The drill and the status writer derive the repo2 target identically | `noramedi-pgbackrest-restore-drill.sh`, `noramedi-pgbackrest-status.sh` | A **passing** repo2 restore leaving `offHost` at `unproven` forever, with no diagnostic. |
+| A repo3+ drill cannot earn a repo2 proof | `noramedi-pgbackrest-restore-drill.sh` | An off-host claim from a restore that never touched repo2. |
+| Refusal reasons are distinct | `noramedi-pgbackrest-status.sh` | A target mismatch reported as proof *staleness*, sending you after the wrong problem. |
+| `--pitr-run-id` requires the sentinel to be stated | `noramedi-pgbackrest-restore-drill.sh` | `marker A = 0` misread as a PITR undershoot. This already cost one full restore. |
+
+### 22.2 Ordering constraints that are not negotiable
+
+1. **§16.2's seven prerequisites before any byte leaves the host.** Item 3 in
+   particular — `docs/compliance/62-kvkk-subprocessor-register.md` §1 **and**
+   §6 must be corrected *before* a repo2 exists, not after.
+2. **Gate 0 before production points at anything remote** (§22.4).
+3. **Escrow both passphrases before `stanza-create`** (§15). The repo2
+   passphrase is fixed at `stanza-create` and cannot be rotated in place.
+4. **Armed stop:** if E1–E5 cannot be obtained, stop and escalate.
+
+### 22.3 Evidence hygiene for everything below
+
+Paste back **outputs**, never secrets. No `*-cipher-pass` value, no private
+key, no `ENCRYPTION_KEY`, no patient row. Record variable **names** and file
+**modes**, not values. Every command in CHECKPOINT 0 and 1 is read-only.
+
+---
+
+## 22.4 CHECKPOINT 3 (Gate 0) — ALREADY EXECUTED, and what it found
+
+**This is the one checkpoint that is already done, and it is out of numeric
+order deliberately: it changes the commands you will type in CHECKPOINT 6.**
+
+`GATE 0 = PASS`, executed locally against pgBackRest **2.59.0** /
+PostgreSQL 16.15, run id `20260816T135232Z-26650`, smoke mode.
+Harness: `scripts/noramedi-gate0-repo2-unreachability.sh`.
+Evidence: `docs/program/evidence/F4-FCR-003_gate0_repo2_unreachability.json`.
+
+Reproduce with:
+
+```bash
+bash scripts/noramedi-gate0-repo2-unreachability.sh --mode smoke \
+     --summary-file /tmp/gate0.json
+```
+
+### The answer §16.5 was waiting for
+
+**`archive-push` FAILS THE COMMAND when one of two repositories is
+unreachable.** It does *not* return success having written repo1 only.
+
+| Measure | Baseline → Outage → Recovery |
+|---|---|
+| `archivedCount` | 8 → **8 (frozen)** → 9 |
+| `failedCount` | 0 → **6** → stops rising |
+| `readyCount` | 0 → 1 → **0** |
+| `walBytes` | 50,332,019 → **67,109,235** |
+| postgres | **running throughout** |
+| acknowledged commits lost | **0** |
+
+This is the **safe** outcome. PostgreSQL never marks a segment archived that
+did not reach repo2, so it cannot recycle it, so the off-host chain cannot
+develop a silent hole. The risk is therefore **disk growth**, which is
+observable, rather than undetectable data loss, which is not.
+
+### The finding nobody had written down
+
+**An unreachable repo2 halts WAL archiving to repo1 as well.** `archivedCount`
+did not advance *at all* during the outage, despite continuous write load and
+a perfectly healthy local repo1 — because `archive_command` fails as a unit.
+
+A repo2 outage is therefore not "the off-host copy falls behind". It suspends
+the **entire** archive chain, and repo1's PITR resolution degrades for the
+duration. Plan the maintenance window accordingly, and treat a repo2 alert as
+affecting local recovery too.
+
+### Two commands in §16.5 were wrong, and Gate 0 is how we know
+
+- `pgbackrest --stanza=noramedi --repo=2 stanza-create` — **rejected**
+- `pgbackrest --stanza=noramedi --repo=2 check` — **rejected**
+  (`ERROR: [031]: option 'repo' not valid for command 'check'`)
+
+Both are inherently all-repository operations and take no `--repo`. `--repo`
+**is** valid for `backup`, `restore`, `info`, `expire` and `verify`, so the
+backup wrapper and the restore drill were never affected. §16.5 is corrected.
+
+Also corrected: on the **secondary**, declare the repository as `repo2-path`,
+not `repo1-path`. The remote inherits the primary's option set, and the
+collision reports as `local repo1 and repo2 paths are both '…'` — a message
+that names paths rather than indexes and sends you to fix a correct directory.
+
+### What Gate 0 did NOT establish
+
+- **Time to `pg_wal` exhaustion**, and therefore **monitoring sufficiency.**
+  Smoke mode does not run to a full disk. There is **no `pg_wal`-size check
+  and no `archive_status/*.ready` counter anywhere in this repository**; the
+  only backpressure signals are archived-WAL age > 120 min and filesystem
+  > 90%. Whether either trips in time has never been computed. Run
+  `--mode full` on a scratch host, or accept this as an open risk and say so.
+- Anything about **production's** pgBackRest build. These semantics are
+  `OBSERVED_LOCAL_ONLY` until CHECKPOINT 1 confirms version parity with 2.59.0.
+- Anything about **durability**. A severed container network models
+  unreachability and is no model of an independent failure domain.
+
+---
+
+## 22.5 CHECKPOINT 0 — release identity (local, read-only)
+
+```bash
+git fetch origin --prune
+git rev-parse origin/main
+git log -1 --oneline origin/main
+```
+
+Record the SHA. The production procedure must later pin the release actually
+deployed, not the one that happened to be `main` when you started.
+
+## 22.6 CHECKPOINT 1 — production preflight (READ-ONLY, no mutation)
+
+Run as the operator on `disklinik-prod-01`. Nothing here changes state.
+
+```bash
+# ── Host ────────────────────────────────────────────────────────────────
+lsb_release -a; uname -r; date -u; timedatectl | sed -n '1,6p'
+
+# ── Versions — the pgBackRest one is load-bearing (see §22.4) ───────────
+pgbackrest version
+psql --version
+sudo -u postgres psql -Atc "select version();"
+
+# ── PITR / archiving state ──────────────────────────────────────────────
+sudo -u postgres psql -Atc "show archive_mode;"
+sudo -u postgres psql -Atc "show archive_command;"
+sudo -u postgres psql -Atc "show archive_timeout;"
+sudo -u postgres psql -Atc "show data_directory;"
+sudo -u postgres psql -Atc \
+  "select archived_count, failed_count, last_archived_wal, last_archived_time,
+          last_failed_wal, last_failed_time from pg_stat_archiver;"
+
+# ── repo1 today ─────────────────────────────────────────────────────────
+sudo -u postgres pgbackrest --stanza=noramedi info
+sudo -u postgres pgbackrest --stanza=noramedi check     # NO --repo (§22.4)
+
+# ── Capacity — the denominator for time-to-exhaustion ───────────────────
+df -B1 /var/lib/pgbackrest /var/lib/postgresql
+sudo -u postgres psql -Atc "show data_directory;"
+# then, against that path:
+#   du -sb <PGDATA>/pg_wal
+#   ls -1 <PGDATA>/pg_wal/archive_status | wc -l
+
+# ── Process health and pg_dump fallback ─────────────────────────────────
+systemctl is-active postgresql; pm2 list
+ls -l /root/noramedi-backups | tail -5
+```
+
+**Paste back:** the two version strings, `archive_*` settings, the
+`pg_stat_archiver` row, `df` output, and the `pg_wal` byte count.
+
+**Gate:** if `pgbackrest version` is **not 2.59.0**, say so explicitly —
+§22.4's semantics were established on 2.59.0 and do not automatically transfer.
+
+## 22.7 CHECKPOINT 2 — secondary host evidence (`OPERATOR EVIDENCE REQUIRED`)
+
+Nothing in this repository can establish any of these. All are currently unmet.
+
+| ID | Evidence | Acceptable form |
+|---|---|---|
+| E1 | Contractual country statement for **this instance** | Invoice / order confirmation / control-panel region field, as PDF or screenshot. Marketing copy is not evidence. |
+| E2 | Named facility / city | Provider's own designation |
+| E3 | Independent network corroboration | IP geolocation **plus** RIPE/WHOIS `country: TR`. Geolocation alone is inference. |
+| E4 | Written no-migration / no-replication commitment covering **backups** | Contract clause or written support statement |
+| E5 | **Backup/snapshot storage region** stated as Türkiye | Explicit; snapshots are a separate location from the volume, and this is the item most often skipped |
+| I1–I4 | Provider account, facility/region, hypervisor, netblock — each **differing** from `disklinik-prod-01` | Durable artifacts kept with the evidence pack |
+| I5 | `repo2-host` resolves to an address **not bound on production**, checked from a third vantage point | The status writer compares hostnames as **strings**; it cannot detect a remote-looking name that resolves home |
+
+A hostname is not residency evidence and is not independence evidence. Neither
+is a bucket name. Both are naming, and naming is not a fact about geography.
+
+## 22.8 CHECKPOINT 4 — repo2 secret preparation
+
+```bash
+# Generate. Never echo, never log, never paste into an evidence file.
+umask 077
+head -c 32 /dev/urandom | base64 > /root/.repo2-pass.tmp
+
+# Verify DISTINCTNESS by hash only (preflight enforces this too).
+sha256sum /root/.repo2-pass.tmp | cut -c1-16     # compare to repo1's hash, not its value
+chmod 0600 /root/.repo2-pass.tmp; ls -l /root/.repo2-pass.tmp
+```
+
+**Escrow BOTH passphrases plus `ENCRYPTION_KEY` outside the failure domain of
+BOTH hosts, and do it BEFORE `stanza-create`.** The passphrase is fixed at
+`stanza-create` and cannot be rotated in place. An off-host encrypted copy
+whose only key lived on the destroyed host is not a backup.
+
+**Record:** variable names, escrow location, file mode. **Never values.**
+
+## 22.9 CHECKPOINT 5 — connectivity preflight (non-destructive)
+
+```bash
+# Reachability and one-way trust. BatchMode so it cannot sit on a prompt.
+sudo -u postgres ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+     pgbackrest@BACKUP_HOST true && echo SSH_OK
+
+# known_hosts MUST be pre-populated. The status unit runs under
+# ProtectSystem=strict with the postgres home read-only, so a first connection
+# that needs to APPEND known_hosts fails, `check` errors, and checkStatus pins
+# to "failed" — a permanent FALSE RED on a healthy cluster.
+sudo -u postgres ssh-keyscan -H BACKUP_HOST >> ~postgres/.ssh/known_hosts
+sudo -u postgres ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+     pgbackrest@BACKUP_HOST 'pgbackrest version'   # must match production
+
+# Prove the target is NOT this host.
+hostname -f; hostname -I
+getent hosts BACKUP_HOST
+sudo -u postgres ssh pgbackrest@BACKUP_HOST 'hostname -f; hostname -I'
+
+# The backup host must NOT be able to reach production (one-way trust).
+# Run from the BACKUP host; it must fail to open a connection to production:
+#   timeout 5 bash -c "cat < /dev/null > /dev/tcp/PROD_HOST/22" && echo REACHABLE_BAD || echo UNREACHABLE_GOOD
+```
+
+**Gate:** `UNREACHABLE_GOOD`, version parity, and two clearly different hosts.
+
+## 22.10 CHECKPOINT 6 — configuration activation (bounded mutation)
+
+```bash
+sudo cp -a /etc/pgbackrest/pgbackrest.conf /etc/pgbackrest/pgbackrest.conf.bak
+sudo sha256sum /etc/pgbackrest/pgbackrest.conf        # BEFORE hash — record it
+
+# Append the repo2 block from §16.5. On the SECONDARY use repo2-path (§22.4).
+sudoedit /etc/pgbackrest/pgbackrest.conf
+sudo chmod 0600 /etc/pgbackrest/pgbackrest.conf
+
+sudo sha256sum /etc/pgbackrest/pgbackrest.conf        # AFTER hash — record it
+sudo bash scripts/noramedi-pgbackrest-preflight.sh    # encryption + retention
+```
+
+**Effect on repo1: none.** No PostgreSQL reload or restart is required — this
+changes pgBackRest configuration only, not `postgresql.conf`. `archive_command`
+is unchanged. The `pg_dump` chain is untouched.
+
+## 22.11 CHECKPOINT 7 — stanza and first repo2 backup
+
+```bash
+sudo -u postgres pgbackrest --stanza=noramedi stanza-create   # NO --repo (§22.4)
+sudo -u postgres pgbackrest --stanza=noramedi check           # NO --repo (§22.4)
+
+sudo /usr/local/sbin/noramedi-pgbackrest-backup.sh --repo 2 --type full
+sudo -u postgres pgbackrest --stanza=noramedi --repo=2 info
+sudo -u postgres pgbackrest --stanza=noramedi --repo=2 verify   # integrity, NOT a restore test
+```
+
+**Collect:** backup label, timestamp, repo2 backup count, encryption state,
+repository identity.
+
+## 22.12 CHECKPOINT 8 — WAL continuity
+
+```bash
+sudo -u postgres psql -Atc "select pg_switch_wal();"
+sleep 30
+sudo -u postgres psql -Atc \
+  "select archived_count, failed_count, last_archived_wal, last_archived_time,
+          last_failed_wal, last_failed_time from pg_stat_archiver;"
+sudo bash scripts/noramedi-pgbackrest-status.sh --stdout   # expect offHost="unproven"
+```
+
+`unproven` is the **correct** reading here. Configuration is not proof.
+
+## 22.13 CHECKPOINT 9 — controlled marker pair
+
+Follow §21.3 exactly. Markers are non-clinical, written under a sentinel
+organization that belongs to no clinic and no patient.
+
+**The drill now REFUSES to run a verified restore unless you state the
+sentinel** — pass the same literal the marker writer used:
+
+```bash
+export NORAMEDI_PITR_MARKER_ORG=<the literal the marker writer used>
+```
+
+This is the fix for the mismatch that cost a full restore on attempt 4, where
+a wrong sentinel showed up as `marker A = 0` and read as a PITR undershoot.
+
+## 22.14 CHECKPOINT 10 — restore drill sourced from repo2
+
+```bash
+sudo NORAMEDI_PITR_MARKER_ORG=SENTINEL \
+     bash scripts/noramedi-pgbackrest-restore-drill.sh \
+     --repo 2 --record --stanza noramedi \
+     --set BACKUP_LABEL --target 'TS+00' \
+     --pitr-run-id RUN_ID --marker-seg WAL --marker-b-at 'TS+00'
+
+sudo bash scripts/noramedi-pgbackrest-status.sh --stdout   # only NOW may it read "yes"
+```
+
+A repo1 restore does not prove R-030-DB. The drill enforces this itself: it
+refuses to write an off-host proof marker from `repo < 2`.
+
+**If `offHost` still reads `unproven` after a passing drill, read the reason
+code — it is now specific:** `RESTORE_PROOF_TARGET_MISMATCH` means the drill
+and the status writer disagree about the repo2 target, **not** that the proof
+is stale.
+
+## 22.15 CHECKPOINT 11 — post-drill health
+
+```bash
+systemctl is-active postgresql; pm2 list
+sudo -u postgres psql -Atc "select count(*) from pg_stat_activity;"
+sudo -u postgres psql -Atc "select archived_count, failed_count from pg_stat_archiver;"
+sudo -u postgres pgbackrest --stanza=noramedi info
+sudo bash scripts/noramedi-opscheck.sh
+ls -l /root/noramedi-backups | tail -3        # pg_dump fallback still present
+df -B1 /var/lib/pgbackrest /var/lib/postgresql
+ps -ef | grep -c '[p]ostgres.*drill'          # expect 0 — no temporary cluster
+```
+
+Then **turn the control on**, which is the step most easily forgotten:
+
+```
+NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=true
+```
+
+Left at `false`, the one check that would tell you the off-host copy stopped
+working is disabled.
+
+## 22.16 CHECKPOINT 12 — evidence to bring back
+
+Sufficient to let architecture review decide independently:
+
+1. CHECKPOINT 1 preflight outputs, including the **pgBackRest version**.
+2. CHECKPOINT 2 E1–E5 and I1–I5 artifacts.
+3. Config before/after **hashes** (never the file).
+4. Preflight output (encryption + retention `ok` lines).
+5. `--repo=2 info`: label, timestamp, count, cipher.
+6. `pg_stat_archiver` before and after CHECKPOINT 8.
+7. `pitr-drill-result.json` — `result`, `r032Eligible`, `repo`,
+   `pitrVerification`, `smoke.*`, measured **RPO** and **RTO**.
+8. `pitr-status.json` — `offHost`, `tier`, `offHostReason`, `repo2BackupCount`,
+   `repo2LastBackupAgeMinutes`.
+9. CHECKPOINT 11 health outputs, including the `0` for a residual cluster.
+10. Confirmation that `NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=true` and that a
+    repo2 cron entry exists — a one-off backup plus a 30-day proof is not
+    durability.
+
+**Redact:** every passphrase, key, and patient row. Counts and timestamps only.
+
+## 22.17 Rollback
+
+| Change | Rollback | Notes |
+|---|---|---|
+| repo2 config block | `sudo cp -a /etc/pgbackrest/pgbackrest.conf.bak /etc/pgbackrest/pgbackrest.conf` then `pgbackrest --stanza=noramedi check` | Verify against the BEFORE hash from CHECKPOINT 6 |
+| repo2 cron entry | Remove the repo2 line from `/etc/cron.d/noramedi-pgbackrest` | The wrapper defaults to `--repo 1`, so this alone stops all off-host activity |
+| repo2 data | On the backup host, remove the repository directory contents | Destroys backups only. **Production data is untouched.** |
+| opscheck off-host requirement | `NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=false` | Stops the alert; does not stop archiving |
+| Off-host proof marker | `rm -f /var/lib/noramedi/pitr-offhost-proof.json` | `offHost` decays to `unproven`, which is the honest reading once repo2 is gone |
+
+**No PostgreSQL reload or restart is required to roll back, because none was
+required to activate.** `archive_mode`, `archive_command` and `wal_level` are
+not touched by any step in §22 — they were activated by F4-FCR-002 and are
+rolled back by §17, separately and independently.
+
+**After rollback, `repo1` and the 03:15 `pg_dump` chain are exactly as they
+were.** Neither was modified or depended upon at any point above.
+
+⚠ **One thing rollback does not undo:** per §22.4, while repo2 was configured
+and unreachable, WAL archiving to **repo1** was also suspended. After removing
+repo2, confirm the backlog drains — `readyCount` returns to 0 and
+`archived_count` advances — before calling the rollback complete.
+
+## 22.18 Lifecycle — read this before recording anything
+
+| Lifecycle | This repository task | `R-030-DB` |
+|---|---|---|
+| Agent completed | YES | N/A |
+| Tests passed | YES | N/A |
+| PR opened | YES (draft) | N/A |
+| Merged | **NO** | prerequisite |
+| Deployed | **NO** | prerequisite |
+| Production verified | **NO** | **NO** |
+| Closed | — | **NO** |
+
+`R-030` `OPEN` · `R-030-DB` `OPEN` · `R-030-FILES` `OPEN` ·
+`FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`.
+
+Repository readiness is not production recovery readiness, and Gate 0 passing
+locally is not repo2 working in Türkiye.

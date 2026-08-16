@@ -360,29 +360,41 @@ if [[ -n "$REPO2_HOST" || -n "$REPO2_TYPE" || -n "$REPO2_PATH" ]]; then
       # the whole snippet would fail — silently yielding 0 and making the
       # off-host state permanently unprovable. An IIFE gives a real function
       # scope to return from.
-      _proof_epoch="$(node -e '
+      # Emits "<epoch> <reason>". The reason is why the proof was REFUSED, and
+      # it is reported verbatim below. A single collapsed reason was actively
+      # misleading: a proof rejected for a target mismatch is neither stale nor
+      # future-dated, and labelling it `RESTORE_PROOF_STALE_OR_FUTURE` pointed
+      # the operator at proof ageing while the real cause was that the drill
+      # and this writer had derived the repo2 target differently. Every refusal
+      # still yields epoch 0, so the fail-closed behaviour is unchanged.
+      _proof_eval="$(node -e '
         const fs = require("fs");
-        const epoch = (() => {
+        const out = (() => {
           try {
             const d = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
             // Every field is checked: a proof from repo1 (the LOCAL
             // repository) or from a failed drill must never count.
-            if (d && d.result === "passed" && Number(d.repo) >= 2 && typeof d.finishedAt === "string") {
-              // The proof must have been earned against the CURRENTLY
-              // configured target. argv[2] is that target; a proof written
-              // before this binding existed carries "unknown" and is refused,
-              // which is the correct direction to fail.
-              const want = process.argv[2] || "";
-              if (want !== "" && d.target !== want) return 0;
-              const t = Date.parse(d.finishedAt);
-              if (Number.isFinite(t)) return Math.floor(t / 1000);
-            }
+            if (!d || typeof d !== "object") return [0, "RESTORE_PROOF_UNREADABLE"];
+            if (d.result !== "passed") return [0, "RESTORE_PROOF_NOT_PASSED"];
+            if (!(Number(d.repo) >= 2)) return [0, "RESTORE_PROOF_NOT_FROM_REPO2"];
+            if (typeof d.finishedAt !== "string") return [0, "RESTORE_PROOF_UNREADABLE"];
+            // The proof must have been earned against the CURRENTLY
+            // configured target. argv[2] is that target; a proof written
+            // before this binding existed carries "unknown" and is refused,
+            // which is the correct direction to fail.
+            const want = process.argv[2] || "";
+            if (want !== "" && d.target !== want) return [0, "RESTORE_PROOF_TARGET_MISMATCH"];
+            const t = Date.parse(d.finishedAt);
+            if (!Number.isFinite(t)) return [0, "RESTORE_PROOF_UNREADABLE"];
+            return [Math.floor(t / 1000), ""];
           } catch { /* missing, unreadable, or malformed => no proof */ }
-          return 0;
+          return [0, "RESTORE_PROOF_UNREADABLE"];
         })();
-        process.stdout.write(String(epoch));
-      ' "$OFFHOST_PROOF" "$CURRENT_TARGET" 2>/dev/null || echo 0)"
-      [[ "$_proof_epoch" =~ ^[0-9]+$ ]] || _proof_epoch=0
+        process.stdout.write(out[0] + " " + out[1]);
+      ' "$OFFHOST_PROOF" "$CURRENT_TARGET" 2>/dev/null || echo "0 RESTORE_PROOF_UNREADABLE")"
+      _proof_epoch="${_proof_eval%% *}"
+      _proof_reason="${_proof_eval#* }"
+      [[ "$_proof_epoch" =~ ^[0-9]+$ ]] || { _proof_epoch=0; _proof_reason="RESTORE_PROOF_UNREADABLE"; }
       if [[ "$_proof_epoch" -gt 0 ]] \
          && [[ $(( NOW_EPOCH - _proof_epoch )) -le $(( PROOF_MAX_AGE_HOURS * 3600 )) ]] \
          && [[ "$_proof_epoch" -le "$NOW_EPOCH" ]]; then
@@ -390,7 +402,9 @@ if [[ -n "$REPO2_HOST" || -n "$REPO2_TYPE" || -n "$REPO2_PATH" ]]; then
         OFFHOST_TIER="T2"
         OFFHOST_REASON="RESTORE_PROVEN_FROM_REPO2"
       else
-        OFFHOST_REASON="RESTORE_PROOF_STALE_OR_FUTURE"
+        # Empty reason means the proof itself was well-formed and accepted on
+        # every content check, so the only remaining refusal is its age.
+        OFFHOST_REASON="${_proof_reason:-RESTORE_PROOF_STALE_OR_FUTURE}"
       fi
     fi
   fi

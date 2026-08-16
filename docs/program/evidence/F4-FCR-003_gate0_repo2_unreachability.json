@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "taskId": "F4-FCR-003",
+  "taskTitle": "R-030-DB off-host recovery activation preparation — Gate 0 repo2 unreachability semantics",
+  "phase": "F4",
+  "parentTaskId": "F4-2",
+  "taskType": "repository-implementation-and-local-experiment",
+  "baselineCommit": "c0567efc20d808e3fd0ecedfae167e808ee2e5d7",
+  "baselineCommitDescription": "Merge pull request #432 from MustafaBasol/docs/f4-3-r079-production-closure",
+  "worktree": "E:/Ek Gelir/Siteler/DisKlinikCRM-git",
+  "branch": "feature/f4-fcr-003-r030-db-recovery-readiness",
+  "evidenceClass": "OBSERVED_LOCAL_ONLY",
+  "gate0": {
+    "harness": "scripts/noramedi-gate0-repo2-unreachability.sh",
+    "runId": "20260816T135232Z-26650",
+    "mode": "smoke",
+    "outcome": "PASS",
+    "executedAt": "2026-08-16T13:52:32Z",
+    "build": {
+      "pgbackrestVersion": "pgBackRest 2.59.0",
+      "postgresVersion": "postgres (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)",
+      "dockerServerVersion": "29.6.2",
+      "dockerOsArch": "linux/amd64"
+    },
+    "topology": {
+      "networkInternal": true,
+      "repo2Transport": "ssh-repo-host",
+      "sharedFilesystemBytes": 2147483648,
+      "archiveMode": "on",
+      "archiveAsync": false,
+      "archiveCommand": "pgbackrest --stanza=noramedi archive-push %p"
+    },
+    "outage": {
+      "injectionMode": "M1_BLACKHOLE",
+      "startedAt": "2026-08-16T13:54:06Z",
+      "endedAt": "2026-08-16T13:57:07Z",
+      "durationSeconds": 180,
+      "archivePushFailureMode": "FAILS_COMMAND",
+      "archivedCountAdvancedDuringOutage": false,
+      "archivedCountFirst": 8,
+      "archivedCountLast": 8,
+      "failedCountLast": 6,
+      "readyCountLast": 1,
+      "walBytesBaseline": 50332019,
+      "walBytesPeak": 67109235,
+      "postgresState": "running"
+    },
+    "recovery": {
+      "startedAt": "2026-08-16T13:57:09Z",
+      "readyCountAfter": 0,
+      "archivedCountAfter": 9,
+      "repo2CheckExitCode": 0,
+      "backlogFullyDrained": true,
+      "acknowledgedCommitsLost": 0
+    },
+    "sampleCount": 77,
+    "sampleIntervalSeconds": 5,
+    "syntheticDataOnly": true,
+    "productionAccessed": false,
+    "phiPresent": false
+  },
+  "findings": [
+    {
+      "id": "G0-F1",
+      "severity": "INFORMATIONAL_LOAD_BEARING",
+      "statement": "On pgBackRest 2.59.0, archive-push FAILS THE COMMAND when one of two configured repositories is unreachable. It does not return success having written only the reachable repository.",
+      "consequence": "The catastrophic silent-hole outcome does not occur on this build: PostgreSQL does not mark a segment archived that never reached repo2, so it cannot recycle it. WAL is retained instead, which converts the risk from undetectable data loss into observable disk growth.",
+      "evidence": "archivedCount frozen at 8 across the whole outage window while failedCount rose to 6 and readyCount rose to 1."
+    },
+    {
+      "id": "G0-F2",
+      "severity": "HIGH_OPERATIONAL",
+      "statement": "Because archive_command fails as a whole, an unreachable repo2 halts WAL archiving to repo1 as well. Nothing was archived anywhere during the outage.",
+      "consequence": "A repo2 outage is not merely 'the off-host copy falls behind'. It stops the LOCAL archive chain too, so PITR resolution degrades for repo1 for the duration. No repository document states this today.",
+      "evidence": "archivedCount did not advance at all (8 -> 8) despite continuous synthetic write load and a healthy, reachable repo1."
+    },
+    {
+      "id": "G0-F3",
+      "severity": "BLOCKER_IF_UNFIXED",
+      "statement": "Runbook 16.5 step 9 publishes 'pgbackrest --stanza=noramedi --repo=2 stanza-create' and 'pgbackrest --stanza=noramedi --repo=2 check'. pgBackRest 2.59.0 rejects --repo for BOTH commands: ERROR [031] option 'repo' not valid for command 'check'.",
+      "consequence": "The published activation sequence fails at step 9. --repo IS valid for backup, restore, info, expire and verify, so the backup wrapper and restore drill are unaffected; only the runbook was wrong.",
+      "evidence": "Empirically tested per command against pgBackRest 2.59.0; check and stanza-create rejected, backup/restore/info/expire/verify accepted."
+    },
+    {
+      "id": "G0-F4",
+      "severity": "BLOCKER_IF_UNFIXED",
+      "statement": "The repo2 HOST must declare the repository under the same index the primary uses for it (repo2-path), not repo1-path. In repo-host mode the remote inherits the primary's option set.",
+      "consequence": "Declaring it as repo1 on the secondary produces ERROR [032] 'local repo1 and repo2 paths are both /var/lib/pgbackrest but must be different'. The message names paths rather than indexes, so it reads as a directory mistake and sends the operator to change a path that is already correct. Runbook 16.5 never states which index the secondary must use.",
+      "evidence": "Reproduced during Gate 0 bring-up; resolved by declaring repo2-* on the secondary."
+    }
+  ],
+  "notMeasuredBySmokeMode": [
+    "Time to pg_wal disk exhaustion under production-like headroom.",
+    "Whether existing opscheck thresholds trip before exhaustion (monitoring sufficiency).",
+    "M2 (connection refused) and M3 (name resolution failure) injection modes.",
+    "Behaviour of an idle cluster driven only by archive_timeout forced switches."
+  ],
+  "acceptanceCriteria": [
+    "Gate 0 is reproducible from the repository rather than described in prose.",
+    "The archive-push multi-repository failure mode is determined from observation, not assumed.",
+    "The experiment cannot reach production: the measurement network is --internal.",
+    "Synthetic data only; no PHI, no real schema, no Prisma migration.",
+    "Cleanup is verified, and an unverified cleanup is reported as an incident."
+  ],
+  "unresolvedItems": [
+    "Production's installed pgBackRest version is not recorded anywhere in this repository; until an operator confirms parity with 2.59.0, these semantics are OBSERVED_LOCAL_ONLY and do not transfer.",
+    "Production free-space headroom on the shared filesystem at activation time is an operator read.",
+    "Monitoring sufficiency is unanswered: there is no pg_wal-size and no archive_status .ready-count check anywhere in the repository, and smoke mode does not run to exhaustion."
+  ],
+  "explicitNonClaims": [
+    "Does not close R-030, R-030-DB or R-030-FILES.",
+    "Does not satisfy FIRST_CUSTOMER_RECOVERY_GATE.",
+    "Does not authorize runbook 16.5, archive_mode changes, or any production mutation.",
+    "Does not prove off-host durability: a severed container network models unreachability and is no model at all of an independent failure domain.",
+    "WAL growth here is synthetic and accelerated; production rates are not reproduced.",
+    "No production system was accessed and no production evidence was produced."
+  ],
+  "securityImpact": "Adds a fail-closed encryption gate to the backup write path for every repository except repo1, preventing a plaintext off-host copy of special-category health data. No new surface, no new credential, no new endpoint.",
+  "tenantIsolationImpact": "None. No tenant-scoped code path is touched.",
+  "kvkkImpact": "Reduces the risk of an unencrypted physical copy of health data leaving the production host under KVKK Art. 6. The seven runbook 16.2 legal prerequisites remain unmet and are unaffected by this task.",
+  "r030Status": "OPEN",
+  "r030DbStatus": "OPEN",
+  "firstCustomerRecoveryGate": "NOT_SATISFIED"
+}

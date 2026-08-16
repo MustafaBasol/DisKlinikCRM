@@ -481,6 +481,68 @@ run bash "$STATUS" --stdout --no-check
   && pass "a proof with no target binding is refused (fails toward unproven, never toward yes)" \
   || fail "expected unproven for an unbound proof ($OUT)"
 
+# 13. Refusal reasons are DISTINCT. A target mismatch is neither stale nor
+#     future-dated, and reporting it as one sent the operator after proof
+#     ageing while the real cause was that the drill and this writer derived
+#     the repo2 target differently. Every refusal still yields "unproven".
+printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","target":"some-other-host.example","runId":"t","finishedAt":"%s"}\n' \
+  "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s19" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$OUT" == *"RESTORE_PROOF_TARGET_MISMATCH"* ]] \
+  && pass "a target-mismatched proof reports RESTORE_PROOF_TARGET_MISMATCH, not a staleness reason" \
+  || fail "target mismatch is still reported as staleness ($OUT)"
+
+printf '{"schemaVersion":1,"result":"passed","repo":1,"stanza":"noramedi","target":"backup.example.tr","runId":"t","finishedAt":"%s"}\n' \
+  "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s20" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$OUT" == *"RESTORE_PROOF_NOT_FROM_REPO2"* ]] && [[ "$(offhost_of "$OUT")" == "unproven" ]] \
+  && pass "a proof from repo1 reports RESTORE_PROOF_NOT_FROM_REPO2 and stays unproven" \
+  || fail "expected a repo1-sourced proof to be named as such ($OUT)"
+
+# 14. THE DRILL/STATUS HANDOFF. Tests 10-12 hand-write the proof, so they
+#     validate this writer's comparison and never the drill's extraction —
+#     which is precisely where the two disagreed. An SSH repo2 legitimately
+#     carries BOTH repo2-host and repo2-path, and pgBackRest attaches no
+#     meaning to their order; the drill took the first key in FILE ORDER while
+#     this writer applies host -> s3-endpoint -> path. Writing them in the
+#     other order therefore made a PASSING off-host drill produce a proof this
+#     writer discarded, leaving offHost stuck at "unproven" with no diagnostic.
+CONF_ORDER="$WORK/pgbackrest-key-order.conf"
+cp "$CONF" "$CONF_ORDER"
+printf 'repo2-path=/var/lib/pgbackrest\nrepo2-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\n' >> "$CONF_ORDER"
+
+# The contract the drill must satisfy: the HOST wins regardless of key order.
+printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","target":"backup.example.tr","runId":"t","finishedAt":"%s"}\n' \
+  "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_ORDER" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s21" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$(offhost_of "$OUT")" == "yes" ]] \
+  && pass "with repo2-path listed BEFORE repo2-host, the host is still the bound target" \
+  || fail "key order changed the target this writer derives ($OUT)"
+
+# And the value the OLD drill would have recorded (the path, first in file
+# order) must be refused — otherwise the two could disagree undetected.
+printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","target":"/var/lib/pgbackrest","runId":"t","finishedAt":"%s"}\n' \
+  "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_ORDER" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s22" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$OUT" == *"RESTORE_PROOF_TARGET_MISMATCH"* ]] \
+  && pass "the first-key-in-file-order value the old drill recorded is refused and named" \
+  || fail "a path-derived proof was accepted against a host-derived target ($OUT)"
+
+# Static guard: the drill must derive its proof target the same way. A
+# behavioural test cannot reach that code without a live cluster, so the
+# regression is pinned at the source. Both halves matter — per-key lookup
+# (not one alternation) and keyed on the repo actually restored from.
+grep -q "repo\${REPO_NUM}-host" "$DRILL" \
+  && pass "the drill derives its proof target per-key, keyed on the repo it restored from" \
+  || fail "the drill no longer keys its proof target on REPO_NUM — the repo3-earns-repo2-proof false green is back"
+grep -qE "repo2-\(host\|s3-endpoint\|path\)" "$DRILL" \
+  && fail "the drill has reverted to a single first-match-in-file-order alternation for the proof target" \
+  || pass "the drill does not take whichever repo2 key appears first in file order"
+
 # ════════════════════════════════════════════════════════════════════════
 section "Status writer: repo2 backup freshness is reported SEPARATELY from repo1"
 # `pgbackrest info` returns every repository in one flat backup[]. Reporting a
@@ -1241,7 +1303,79 @@ run bash "$PREFLIGHT"
   && pass "the off-host authorization warning is still emitted alongside the new checks" \
   || fail "the R-030 authorization warning was lost ($OUT)"
 
+# Retention. pgBackRest expires nothing it was not told to expire, and repo2
+# lives where this program has no disk check, no monitoring and no ability to
+# free space during an incident. The SSH template block carried both keys, the
+# S3 block did not, and nothing failed when they were absent.
+printf '[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\nrepo2-cipher-pass=%s-distinct\n' "$CANARY" "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"repo2-retention-full is not set"* ]] \
+  && pass "a repo2 with no retention bound is a preflight failure" \
+  || fail "missing repo2 retention was not reported ($OUT)"
+[[ "$OUT" == *"repo2-retention-archive is not set"* ]] \
+  && pass "both retention keys are checked, not just the first" \
+  || fail "repo2-retention-archive was not checked ($OUT)"
+
+printf '[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\nrepo2-cipher-pass=%s-distinct\nrepo2-retention-full=7\nrepo2-retention-archive=7\n' "$CANARY" "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"repo2-retention-full=7"* ]] && [[ "$OUT" != *"is not set"* ]] \
+  && pass "a fully configured repo2 passes the retention checks" \
+  || fail "a valid repo2 retention config was rejected ($OUT)"
+[[ "$OUT" != *"$CANARY"* ]] \
+  && pass "the retention checks never print either passphrase" \
+  || fail "CANARY LEAKED while validating retention"
+
 rm -f "$FAKEBIN/id"
+
+# ════════════════════════════════════════════════════════════════════════
+section "Backup wrapper: encryption is enforced on the WRITE path, not only in preflight"
+# "Encryption is REQUIRED before any byte leaves this host" is the one
+# prohibition this program states absolutely, and until now only preflight
+# enforced it — a separate operator step ordered by prose in runbook §16.5,
+# not a gate. `--repo 2` invoked without it wrote a physical copy of every
+# table, including special-category health data under KVKK Art. 6, in
+# plaintext to infrastructure this program does not operate. The status
+# writer's REPO2_PLAINTEXT verdict lands only AFTER the bytes are gone.
+CONF_PLAIN2="$WORK/pgbackrest-plain2.conf"
+printf '[global]\nrepo1-path=%s\nrepo2-host=backup.example.tr\nrepo2-cipher-type=none\n' "$WORK/repo" > "$CONF_PLAIN2"
+# --dry-run because the wrapper requires root before any config check; dry-run
+# is the only path that reaches the gate unprivileged. It is also the stronger
+# assertion: the gate must fire BEFORE the command is composed, so not even a
+# "would run" line may be printed for a plaintext off-host repository.
+: > "$WORK/pgbackrest.log"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_PLAIN2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo")
+run bash "$BACKUP" --repo 2 --type full --dry-run
+[[ "$CODE" -eq 3 ]] \
+  && pass "a plaintext repo2 backup exits 3 (precondition) instead of shipping cleartext PHI" \
+  || fail "expected exit 3 for a plaintext repo2, got $CODE ($OUT)"
+[[ "$OUT" == *"pgBackRest was NOT invoked"* ]] \
+  && pass "the refusal states that nothing was invoked, so the operator knows no byte left" \
+  || fail "the plaintext refusal does not say whether data moved ($OUT)"
+[[ "$OUT" != *"would run"* ]] \
+  && pass "the gate fires before the pgbackrest command is composed, not after" \
+  || fail "a plaintext repo2 still reached command construction ($OUT)"
+[[ ! -s "$WORK/pgbackrest.log" ]] \
+  && pass "no pgbackrest invocation was recorded for the refused plaintext repo2" \
+  || fail "pgbackrest ran despite the plaintext refusal ($(cat "$WORK/pgbackrest.log"))"
+
+CONF_ENC2="$WORK/pgbackrest-enc2.conf"
+printf '[global]\nrepo1-path=%s\nrepo2-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\n' "$WORK/repo" > "$CONF_ENC2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_ENC2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo")
+run bash "$BACKUP" --repo 2 --type full --dry-run
+[[ "$CODE" -eq 0 ]] \
+  && pass "an encrypted repo2 is not blocked by the new gate" \
+  || fail "the cipher gate rejected a correctly encrypted repo2, got $CODE ($OUT)"
+
+# The default production path must be untouched: repo1 has never carried a
+# cipher requirement in this wrapper and acquiring one here would break every
+# host running today.
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_PLAIN2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo")
+run bash "$BACKUP" --type full --dry-run
+[[ "$CODE" -eq 0 ]] \
+  && pass "the repo1 path is byte-for-byte unaffected by the repo2 cipher gate" \
+  || fail "the cipher gate leaked onto the default repo1 path, got $CODE ($OUT)"
 
 # ════════════════════════════════════════════════════════════════════════
 section "Restore drill (behaviour): PITR marker CLI validation fails closed"
@@ -1276,9 +1410,36 @@ EXTRA_ENV=(); run bash "$DRILL" --target '2026-08-15 12:59:26'
 # values, so fractional seconds are the normal case, not an edge case — the
 # first real run produced 12:59:26.405500+00. An argument validator that
 # rejected it would have failed the drill before pgbackrest was ever called.
-EXTRA_ENV=(); run bash "$DRILL" --target '2026-08-15 12:59:26.405500+00' --pitr-run-id F4-FCR-002A-20260815-01
+# NORAMEDI_PITR_MARKER_ORG is now mandatory alongside --pitr-run-id (see the
+# section below), so it is supplied here to keep this assertion about --target
+# parsing rather than about the sentinel.
+EXTRA_ENV=(NORAMEDI_PITR_MARKER_ORG=__noramedi_pitr_drill__); run bash "$DRILL" --target '2026-08-15 12:59:26.405500+00' --pitr-run-id F4-FCR-002A-20260815-01
 [[ "$CODE" -ne 2 ]] && pass "a fractional-second target with an explicit offset is accepted" || fail "the real derived target was rejected at argument validation ($OUT)"
 [[ "$OUT" != *"Invalid --target"* ]] && pass "no spurious --target rejection for microsecond precision" || fail "microseconds are rejected ($OUT)"
+
+# ════════════════════════════════════════════════════════════════════════
+section "Restore drill: the marker sentinel must be stated on a verified run"
+# The marker WRITER is an operator-side program that is not in this repository,
+# so the two agree on this literal only by convention. When they diverged, the
+# drill queried __noramedi_pitr_drill__ while the markers had been written
+# under noramedi-f4-pitr-sentinel; that reads as marker A = 0, which the drill
+# reports as an undershoot. A full restore was spent before anyone suspected a
+# name mismatch. Runbook §21.7 prescribed exactly this fix.
+EXTRA_ENV=(); run bash "$DRILL" --target '2026-08-15 12:59:26.405500+00' --pitr-run-id F4-FCR-002A-20260815-01
+[[ "$CODE" -eq 2 ]] \
+  && pass "--pitr-run-id without NORAMEDI_PITR_MARKER_ORG exits 2 instead of silently defaulting" \
+  || fail "expected exit 2 for an unstated sentinel, got $CODE ($OUT)"
+[[ "$OUT" == *"NORAMEDI_PITR_MARKER_ORG"* ]] && [[ "$OUT" == *"marker A=0"* ]] \
+  && pass "the refusal names the variable AND the false undershoot it prevents" \
+  || fail "the sentinel refusal is not self-explaining ($OUT)"
+
+# The default must survive for unverified triage restores, which read no marker
+# at all. If the requirement leaked onto the general path it would break
+# ordinary recovery work during an incident.
+EXTRA_ENV=(); run bash "$DRILL" --target '2026-08-15 12:59:26'
+[[ "$OUT" != *"NORAMEDI_PITR_MARKER_ORG"* ]] \
+  && pass "an unverified triage restore still runs without the sentinel" \
+  || fail "the sentinel requirement leaked outside verified runs ($OUT)"
 
 # ════════════════════════════════════════════════════════════════════════
 section "Summary"

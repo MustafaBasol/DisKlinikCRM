@@ -305,6 +305,24 @@ ASSUMED_DB_MB="${NORAMEDI_PITR_DRILL_ASSUMED_DB_MB:-2048}"
 # Sentinel tenant used by the controlled PITR marker procedure. It is a literal
 # that belongs to no organization: OperationalEvent.organizationId carries no
 # foreign key, so the marker rows are attached to no clinic and no patient.
+#
+# A VERIFIED run must state it explicitly. The marker WRITER is an operator-side
+# program that is deliberately not in this repository, so the two programs agree
+# on this literal only by convention — and when they did not, the drill queried
+# `__noramedi_pitr_drill__` while the markers had been written under
+# `noramedi-f4-pitr-sentinel`. That presents as marker A = 0, which the
+# verification block below reports as "recovery undershot the target or the
+# marker was never archived": a confidently wrong diagnosis that sends the
+# operator after PITR tuning, and it cost a full restore on the fourth attempt
+# before anyone suspected a name mismatch.
+#
+# Defaulting is kept for unverified triage restores, which never read a marker.
+# Requiring the literal once per verified run is what makes the divergence
+# impossible to have silently. Runbook §21.7.
+if [[ -n "$PITR_RUN_ID" ]] && [[ -z "${NORAMEDI_PITR_MARKER_ORG:-}" ]]; then
+  echo "--pitr-run-id requires NORAMEDI_PITR_MARKER_ORG to be set explicitly (the marker writer is a separate program; a silent default mismatch reads as marker A=0, i.e. an undershoot that did not happen). Pass the same sentinel organizationId the marker procedure wrote, e.g. NORAMEDI_PITR_MARKER_ORG=__noramedi_pitr_drill__" >&2
+  exit "$USAGE_ERROR_EXIT_CODE"
+fi
 PITR_MARKER_ORG="${NORAMEDI_PITR_MARKER_ORG:-__noramedi_pitr_drill__}"
 PITR_MARKER_TASK="${NORAMEDI_PITR_MARKER_TASK:-F4-FCR-002A}"
 
@@ -1300,8 +1318,35 @@ if [[ "$DO_RECORD" == true ]]; then
       # discards a proof that does not match. Without the binding, a 29-day-old
       # proof would keep a brand-new, never-restored-from destination showing a
       # green "off-host" tick.
-      PROOF_TARGET="$(grep -oE '^[[:space:]]*repo2-(host|s3-endpoint|path)[[:space:]]*=[[:space:]]*[^[:space:]]+' "${NORAMEDI_PGBACKREST_CONF:-/etc/pgbackrest/pgbackrest.conf}" 2>/dev/null \
-        | sed -E 's/.*=[[:space:]]*//' | head -n1 || true)"
+      # Extracted with the SAME per-key precedence the status writer applies
+      # (host -> s3-endpoint -> path; noramedi-pgbackrest-status.sh). The two
+      # MUST agree: the status writer discards a proof whose `target` is not
+      # byte-identical to the target it derives, so any divergence silently
+      # downgrades a PASSING off-host drill back to "unproven".
+      #
+      # A single alternation with `head -n1` took whichever key appeared FIRST
+      # IN FILE ORDER instead. An SSH repo legitimately carries both
+      # repo2-host and repo2-path, and pgBackRest attaches no meaning to their
+      # order — so writing repo2-path above repo2-host made the drill record
+      # the path while the status writer looked for the host. The drill passes,
+      # the proof is written, and offHost stays "unproven" forever with no
+      # diagnostic anywhere. Runbook §16.5's snippet happens to list the host
+      # first, so following it literally worked; nothing enforced it.
+      #
+      # Keyed on REPO_NUM rather than a hardcoded repo2 for a second reason: a
+      # --repo 3 drill previously recorded repo2's target, which the status
+      # writer would then MATCH — earning a repo2 off-host claim from a restore
+      # that never touched repo2. Now a repo3 proof carries repo3's target and
+      # is refused, which is the correct direction to fail.
+      _proof_conf="${NORAMEDI_PGBACKREST_CONF:-/etc/pgbackrest/pgbackrest.conf}"
+      proof_conf_value() {
+        grep -oE "^[[:space:]]*${1}[[:space:]]*=[[:space:]]*[^[:space:]]+" "$_proof_conf" 2>/dev/null \
+          | sed -E 's/.*=[[:space:]]*//' | head -n1
+      }
+      _pt_host="$(proof_conf_value "repo${REPO_NUM}-host" || true)"
+      _pt_s3="$(proof_conf_value "repo${REPO_NUM}-s3-endpoint" || true)"
+      _pt_path="$(proof_conf_value "repo${REPO_NUM}-path" || true)"
+      PROOF_TARGET="${_pt_host:-${_pt_s3:-${_pt_path:-}}}"
       TMP_PROOF="$(mktemp "${PROOF_DIR}/.pitr-proof.XXXXXX")"
       printf '{\n  "schemaVersion": 1,\n  "result": "passed",\n  "repo": %s,\n  "stanza": "%s",\n  "target": "%s",\n  "runId": "%s",\n  "finishedAt": "%s"\n}\n' \
         "$REPO_NUM" "$STANZA" "${PROOF_TARGET:-unknown}" "$RUN_ID" "$(date -u -d "@$FINISH_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')" > "$TMP_PROOF"
