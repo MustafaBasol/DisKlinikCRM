@@ -584,7 +584,7 @@ runs it, which is why the CI figures are two higher and carry no skip:
 **Superseded by R2 (§R2 below).** R2 added ten assertions to the pgBackRest
 suite, so the figures above are the R1 record and are correct history:
 
-| Suite | Local (Windows) | CI (`ubuntu-latest`) |
+| Suite | Local (Windows) | CI (`ubuntu-latest`, run `31966176391`) |
 |---|---|---|
 | opscheck | 178 / 0 | 178 / 0 |
 | pgBackRest | **239** / 0 / 1 skipped | **241 / 0** |
@@ -593,6 +593,23 @@ suite, so the figures above are the R1 record and are correct history:
 
 The "CI is two higher and carries no skip" relationship is unchanged — the skip
 is still the same Windows-only `/proc/meminfo` positive control.
+
+**CI on `4308579`: all 13 required checks green** — but only after one rerun,
+and the reason is recorded here rather than waved away. Layer 3 failed once on:
+
+```
+FAIL CHARACTERIZATION: a numeric valid OTP is accepted via String() coercion
+  Expected values to be strictly equal:  401 !== 200
+```
+
+That is the known leading-zero flake in `platformAdminLoginTotpGate.test.ts`:
+the fixture occasionally generates a TOTP beginning with `0`, which loses its
+leading digit through the numeric round-trip and arrives as a five-digit code.
+**It was proven to be a flake rather than asserted to be one** — `gh run rerun
+--failed` re-ran only that job against a byte-identical tree and it passed. The
+R2 diff also contains no TypeScript and no `server/` source change, so it cannot
+reach that test. The flake itself remains **unfixed and untracked by R2**; it is
+not in this task's scope.
 
 CI on `02ef208`: **all 13 required checks green**, including the Layer 1 job
 that was red on `826aec1`. The two lines that matter, from that job's log:
