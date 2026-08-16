@@ -1,6 +1,6 @@
 # F4 — Storage and Backup Foundation
 
-Faz durumu: `TODO` · Son güncelleme: 2026-08-15 (F4-FCR-002A-CLOSE — kontrollü üretim PITR tatbikatı **`PASS`**; `R-031`/`R-032` `CLOSED`, **`R-030` `OPEN`**, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`)
+Faz durumu: `TODO` · Son güncelleme: 2026-08-16 (F4-2 — program sahibi `R-030-DB`/`R-030-FILES` ayrımını **onayladı**; saha dışı depo tarafı hazırlığı tamamlandı; **`R-030` / `R-030-DB` `OPEN`**, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` — kalan blokaj tedarik ve hukuk)
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
 
@@ -51,6 +51,85 @@ Yedekleme mekanizmasının kendisi, hedefi, şifrelemesi, zamanlaması ve PITR d
 
 Bayat **olmayan** (düzeltilmemeli): versiyonlama, object-lock/değişmezlik, yaşam döngüsü/saklama, bucket-config doğrulaması, PITR ve yedek baytlarının uygulama katmanı şifrelemesi — bunlar gerçekten uygulanmamıştır.
 
+
+
+## F4-2 — İlk müşteri saha dışı kurtarma: risk ayrımı + depo tarafı hazırlığı
+
+`F4-2_STATUS = AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
+
+Baseline `origin/main` @ `041283b963c3e1486b81903afd11968f86d7576d`, temiz çalışma ağacı.
+**Üretimde hiçbir mutasyon yapılmamıştır:** `repo2` oluşturulmadı, kimlik bilgisi üretilmedi,
+tatbikat çalıştırılmadı, saha dışı kanıt marker'ı yazılmadı, **hiçbir bayt host dışına çıkmadı**,
+şema değişmedi, migration yok.
+
+### Ne yapıldı
+
+**1. Program sahibi kararı — `R-030` ayrımı ONAYLANDI.** Runbook §16.1'in aylardır
+"program sahibinin kararı ve yapılmadı" olarak duran önerisi kabul edildi.
+`RISK_REGISTER.md`'ye `R-030-DB` ve `R-030-FILES` satırları eklendi. `R-030`
+**kapatılmadı, indirilmedi, yeniden numaralandırılmadı veya silinmedi** — şemsiye
+satır olarak `OPEN` kalır, yalnızca her iki yarım kapandığında kapanabilir, ve
+mevcut tüm `R-030` referansları geçerliliğini korur. `FIRST_CUSTOMER_RECOVERY_GATE`
+bundan böyle **yalnızca `R-030-DB`**'ye bağlıdır.
+
+Gerekçe yeniden üretilmedi, onaylandı: PostgreSQL birincili `disklinik-prod-01`'de
+olduğu için ikincil bir Türkiye VPS'i **o veri sınıfı için** gerçekten bağımsız bir
+arıza alanıdır. Görüntüleme birincilinin nereye konacağı ise henüz karar değildir ve
+ilk kliniğin veritabanı kurtarımını bloke etmemelidir. Ayrım yeni risk yaratmaz;
+runbook §16.1'in uyardığı tek bir küresel "off-host ✓" iddiasının **yanlış beyan**
+olmasını engeller.
+
+**2. Sürdürülebilir işletim boşlukları kapatıldı (yalnızca ekleyici).** Kanıt/doğrulama
+katmanı zaten hazırdı (`--repo N` ile restore, hedefe bağlı kanıt marker'ı, üç
+durumlu `offHost`, 11 düşmanca test). Eksik olan, saha dışı bir deponun **sürekli
+işletilmesi**ydi:
+
+| Boşluk | Sonuç | Çözüm |
+|---|---|---|
+| Yedek sarmalayıcısında `--repo` yok | repo2'ye **zamanlanmış yedek alınamıyordu**; `expire` yanlış repoya uygulanıyordu | `--repo N` (varsayılan `1`; `N != 1` olmadıkça pgBackRest'e `--repo` **geçilmez**, böylece repo1 yolu birebir korunur ve yeni bir sürüm bağımlılığı doğmaz) |
+| Ön koşullar yalnızca yerel dosya sistemi | Uzak/S3 repo2 için `df` ve dizin testi **yanlış diski ölçüyordu** | Uzak repo için atlanır; **yerel-yol** repo2'de disk abort korunur |
+| Preflight repo2'yi doğrulamıyordu | Şifresiz veya parolasız bir repo2 preflight'tan **geçiyordu** | repo2 şifreleme + repo1'den **farklı** parola doğrulaması (hash ile karşılaştırılır, parola asla yazdırılmaz) |
+| Yedek tazeliği repo başına değildi | **Gerçek bir yanlış-yeşil** | `repo2BackupCount` / `repo2LastBackupAgeMinutes` ayrı yayımlanır |
+| opscheck aç kalan repo2'yi görmüyordu | Aynı yanlış-yeşil alarma dönüşmüyordu | Boş veya bayat repo2 artık pitr bitini (128) set eder |
+
+**Kapatılan yanlış-yeşil, somut olarak:** operatör repo2'yi kurar, elle bir yedek alır,
+tatbikatı `--repo 2 --record` ile geçer → `offHost="yes"`. Ardından hiçbir şey repo2'ye
+yazmaz. Kanıt marker'ı **30 gün** geçerlidir ve `lastBackupAt` tüm repoların en
+yenisiydi, dolayısıyla repo1'in gecelik yedekleri figürü taze tutardı. Sonuç: bir ay
+boyunca **kanıtlanmış ve sağlıklı** görünen, fiilen bayatlayan bir saha dışı kopya.
+R-030 bir *dayanıklılık* riskidir; bu zeminde kapatmak §12.3'ün önlemek için
+kurulduğu hatanın aynısı olurdu.
+
+### Kapatılmayanlar — açıkça
+
+`R-030`, `R-030-DB` ve `R-030-FILES` `OPEN` kalır. `FIRST_CUSTOMER_RECOVERY_GATE =
+NOT_SATISFIED`. **Kalan blokaj kod değildir:** ikincil Türkiye VPS'i **TEDARİK
+EDİLMEMİŞ** ve runbook §16.2'nin yedi ön koşulu (KVKK Md. 6 sağlık verisi DPA, E1–E5
+yerleşim kanıtı — **E5 dahil**, subprocessor register §1/§6, sözleşmesel destek-erişimi
+yanıtları, üç at-rest şifreleme satırı, Türkiye kapsamlı replikasyon, dört rolün ayrımı)
+**tamamı karşılanmamıştır**. Aktivasyon sırası runbook **§16.5**'e yazıldı ve
+**çalıştırılmadı**; §16.5'in Gate 0'ı (erişilemez bir repo2'nin `archive-push`'ı durdurup
+`pg_wal`'ı doldurup doldurmadığının **scratch host'ta** tespiti) bir üretim-kesintisi
+riskidir ve atlanamaz.
+
+`R-031`/`R-032` bu görevce **değerlendirilmemiştir** ve 2026-08-15'teki hâlleriyle
+`CLOSED` kalır. `repo1` ve `pg_dump` yedeği **kaldırılmamıştır**; geri alma, repo2
+cron satırını silmektir — sarmalayıcı `--repo 1`'e döner, hiçbir betik geri alınmaz.
+
+### Testler
+
+```
+npm run test:shell                     -> exit 0 · 397 passed / 0 failed
+  test:shell:opscheck                  -> 150 passed / 0 failed
+  test:shell:pgbackrest                -> 197 passed / 0 failed
+  test:shell:pitr-app-smoke            ->  50 passed / 0 failed
+npm run test:pitr-status-contract      -> exit 0 ·  16 passed / 0 failed
+npm run test:platform-recovery-safety  -> exit 0 ·  60 passed / 0 failed
+npx tsc --noEmit -p server/tsconfig.json -> exit 0
+git diff --check                       -> exit 0
+```
+
+Migration required: **NO** · Migration created: **NO** · Production migration: **NO**
 
 
 ## F4-FCR-002A — İzole restore/PITR tatbikatı: YALNIZCA ÖN KONTROL (PRE-FLIGHT)

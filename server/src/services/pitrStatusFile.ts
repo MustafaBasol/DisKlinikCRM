@@ -101,6 +101,19 @@ export interface PitrRepoStatus {
   lastBackupAgeMinutes?: number;
   lastBackupType?: string;
   backupCount?: number;
+  /**
+   * repo2 (off-host) backup freshness, reported SEPARATELY from repo1.
+   *
+   * Present only when a repo2 is configured at all. `repo2BackupCount === 0`
+   * with a repo2 configured is the dangerous state these fields exist to make
+   * visible: a second repository that exists, is archived to, and has never
+   * received a base backup — so it cannot restore. The repo1 fields above
+   * stay green throughout, which is exactly why a single aggregate figure
+   * could not express this.
+   */
+  repo2LastBackupAt?: string;
+  repo2LastBackupAgeMinutes?: number;
+  repo2BackupCount?: number;
   walMin?: string;
   walMax?: string;
   /**
@@ -289,6 +302,12 @@ export function parsePitrStatusDocument(
   if (lastBackupType !== undefined) repo.lastBackupType = lastBackupType;
   const backupCount = uint(r.backupCount);
   if (backupCount !== undefined) repo.backupCount = backupCount;
+  const repo2LastBackupAt = isoString(r.repo2LastBackupAt);
+  if (repo2LastBackupAt !== undefined) repo.repo2LastBackupAt = repo2LastBackupAt;
+  const repo2LastBackupAgeMinutes = uint(r.repo2LastBackupAgeMinutes);
+  if (repo2LastBackupAgeMinutes !== undefined) repo.repo2LastBackupAgeMinutes = repo2LastBackupAgeMinutes;
+  const repo2BackupCount = uint(r.repo2BackupCount);
+  if (repo2BackupCount !== undefined) repo.repo2BackupCount = repo2BackupCount;
   const walMin = safeToken(r.walMin, 40);
   if (walMin !== undefined) repo.walMin = walMin;
   const walMax = safeToken(r.walMax, 40);

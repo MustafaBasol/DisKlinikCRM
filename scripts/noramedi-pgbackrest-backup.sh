@@ -26,7 +26,8 @@
 #
 # Usage:
 #   noramedi-pgbackrest-backup.sh [--type full|diff|incr] [--verify]
-#                                 [--stanza NAME] [--dry-run] [-h|--help]
+#                                 [--stanza NAME] [--repo N] [--dry-run]
+#                                 [-h|--help]
 #
 # Options:
 #   --type X     Backup type. Default: full.
@@ -39,11 +40,22 @@
 #                mechanism that checks repository integrity; nothing in the
 #                pre-existing pg_dump tier has an equivalent.
 #   --stanza N   Default: noramedi
+#   --repo N     Repository to back up TO (1-4). Default: 1 (local).
+#                pgBackRest's backup/verify/expire commands operate on ONE
+#                repository. Without this flag every run targets the default
+#                repository, so an off-host repo2 would be configured,
+#                archived to by archive-push, and never receive a base backup
+#                — a repository that looks alive and cannot restore. See
+#                F4_RECOVERY_OPERATIONS.md §16.
+#                ⚠ --repo 1 is byte-for-byte the previous behaviour: the flag
+#                is appended to the pgBackRest command ONLY when N != 1, so a
+#                build without multi-repo support is unaffected by default.
 #   --dry-run    Run every precondition, print the exact pgBackRest command,
 #                invoke nothing. Safe to run on production at any time.
 #
 # Environment (optional; defaults shown):
-#   NORAMEDI_PGBACKREST_REPO_PATH    /var/lib/pgbackrest
+#   NORAMEDI_PGBACKREST_REPO_PATH    /var/lib/pgbackrest   (repo1 only)
+#   NORAMEDI_PGBACKREST_CONF         /etc/pgbackrest/pgbackrest.conf
 #   NORAMEDI_PGBACKREST_MIN_FREE_MB  10240   abort floor, MiB
 #   NORAMEDI_PG_SUPERUSER            postgres
 #   NORAMEDI_PGBACKREST_EXPIRE       true    run expire after a successful backup
@@ -74,12 +86,14 @@ BACKUP_TYPE="full"
 STANZA="noramedi"
 DRY_RUN=false
 DO_VERIFY=false
+REPO_NUM=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --type)    BACKUP_TYPE="${2:-}"; shift 2 ;;
     --verify)  DO_VERIFY=true; shift ;;
     --stanza)  STANZA="${2:-}"; shift 2 ;;
+    --repo)    REPO_NUM="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
     -h|--help) usage ;;
     *) echo "Unknown option: $1" >&2; echo "Run with --help for usage." >&2; exit "$USAGE_ERROR_EXIT_CODE" ;;
@@ -93,8 +107,15 @@ esac
 if [[ ! "$STANZA" =~ ^[a-z0-9][a-z0-9_]{0,31}$ ]]; then
   echo "Invalid --stanza '$STANZA'" >&2; exit "$USAGE_ERROR_EXIT_CODE"
 fi
+# Range mirrors the restore drill's --repo validation. pgBackRest supports
+# repo1-repo4; anything else is a typo, and a typo that silently fell back to
+# repo1 would take a LOCAL backup while the operator believed it was off-host.
+if [[ ! "$REPO_NUM" =~ ^[1-4]$ ]]; then
+  echo "Invalid --repo '$REPO_NUM' (expected 1-4)" >&2; exit "$USAGE_ERROR_EXIT_CODE"
+fi
 
 REPO_PATH="${NORAMEDI_PGBACKREST_REPO_PATH:-/var/lib/pgbackrest}"
+PGBACKREST_CONF="${NORAMEDI_PGBACKREST_CONF:-/etc/pgbackrest/pgbackrest.conf}"
 MIN_FREE_MB="${NORAMEDI_PGBACKREST_MIN_FREE_MB:-10240}"
 PG_SUPERUSER="${NORAMEDI_PG_SUPERUSER:-postgres}"
 RUN_EXPIRE="${NORAMEDI_PGBACKREST_EXPIRE:-true}"
@@ -171,48 +192,107 @@ as_pg() {
 
 # ── preconditions ────────────────────────────────────────────────────────
 command -v pgbackrest >/dev/null 2>&1 || { fail "pgbackrest is not installed"; exit "$PRECONDITION_EXIT_CODE"; }
-[[ -d "$REPO_PATH" ]] || { fail "repo path '$REPO_PATH' does not exist"; exit "$PRECONDITION_EXIT_CODE"; }
 
-# Filesystem check, not `info`'s exit status: `pgbackrest info` is
-# informational and exits 0 for a stanza that does not exist, reporting the
-# absence in its JSON body. `stanza-create` builds these two directories, so
-# their presence is the version-independent signal. See the longer note in
-# noramedi-pgbackrest-preflight.sh.
-if [[ ! -d "$REPO_PATH/archive/$STANZA" ]] || [[ ! -d "$REPO_PATH/backup/$STANZA" ]]; then
-  fail "stanza '$STANZA' does not exist under '$REPO_PATH' — run stanza-create first, and never enable archive_mode before it exists"
-  exit "$PRECONDITION_EXIT_CODE"
+# Read one `repoN-<key>` out of the config. Same shape as the status writer's
+# reader: first match wins, inline comments and surrounding whitespace dropped.
+repo_conf_value() {
+  grep -oE "^[[:space:]]*$1[[:space:]]*=[[:space:]]*[^[:space:]#;]+" "$PGBACKREST_CONF" 2>/dev/null \
+    | sed -E 's/.*=[[:space:]]*//' | head -n1
+}
+
+# ── is the TARGET repository local to this host? ─────────────────────────
+# This decides which preconditions are meaningful, and nothing else. It is
+# deliberately NOT an off-host judgement: `repo2-path=/mnt/other-disk` is
+# local by this test AND not off-host, while a remote-looking host that
+# resolves back here is remote by this test AND still not off-host. The
+# off-host determination lives in noramedi-pgbackrest-status.sh, which is the
+# only component allowed to make that claim. See §12.3 of the runbook.
+#
+# repo1 keeps using NORAMEDI_PGBACKREST_REPO_PATH verbatim so the default path
+# through this script is unchanged, including for hosts with no config file.
+REPO_IS_LOCAL=true
+REPO_LOCAL_PATH="$REPO_PATH"
+if [[ "$REPO_NUM" -ne 1 ]]; then
+  _rtype="$(repo_conf_value "repo${REPO_NUM}-type" || true)"
+  _rhost="$(repo_conf_value "repo${REPO_NUM}-host" || true)"
+  _rsftp="$(repo_conf_value "repo${REPO_NUM}-sftp-host" || true)"
+  _rpath="$(repo_conf_value "repo${REPO_NUM}-path" || true)"
+  if [[ -n "$_rhost" ]] || [[ -n "$_rsftp" ]] \
+     || { [[ -n "$_rtype" ]] && [[ "$_rtype" != "posix" ]]; }; then
+    REPO_IS_LOCAL=false
+  else
+    # A repoN with neither a host nor a non-posix type nor a path is not
+    # configured at all. Failing here beats letting pgBackRest fall back to
+    # some default and reporting success for a repository that does not exist.
+    [[ -n "$_rpath" ]] || {
+      fail "repo${REPO_NUM} is not configured in '$PGBACKREST_CONF' (no repo${REPO_NUM}-host, repo${REPO_NUM}-sftp-host, repo${REPO_NUM}-type or repo${REPO_NUM}-path)"
+      exit "$PRECONDITION_EXIT_CODE"
+    }
+    REPO_LOCAL_PATH="$_rpath"
+  fi
 fi
 
-# ── DISK-EXHAUSTION ABORT (freeze-exception requirement) ─────────────────
-FREE_MB="$(df -Pm "$REPO_PATH" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
-if [[ ! "$FREE_MB" =~ ^[0-9]+$ ]]; then
-  # Unreadable free space fails CLOSED. "We could not measure the disk" must
-  # never be treated as "the disk is fine".
-  fail "could not determine free space on '$REPO_PATH' — aborting rather than assuming it is safe"
-  exit "$DISK_ABORT_EXIT_CODE"
+if [[ "$REPO_IS_LOCAL" == true ]]; then
+  [[ -d "$REPO_LOCAL_PATH" ]] || { fail "repo path '$REPO_LOCAL_PATH' does not exist"; exit "$PRECONDITION_EXIT_CODE"; }
+
+  # Filesystem check, not `info`'s exit status: `pgbackrest info` is
+  # informational and exits 0 for a stanza that does not exist, reporting the
+  # absence in its JSON body. `stanza-create` builds these two directories, so
+  # their presence is the version-independent signal. See the longer note in
+  # noramedi-pgbackrest-preflight.sh.
+  if [[ ! -d "$REPO_LOCAL_PATH/archive/$STANZA" ]] || [[ ! -d "$REPO_LOCAL_PATH/backup/$STANZA" ]]; then
+    fail "stanza '$STANZA' does not exist under '$REPO_LOCAL_PATH' — run stanza-create first, and never enable archive_mode before it exists"
+    exit "$PRECONDITION_EXIT_CODE"
+  fi
+
+  # ── DISK-EXHAUSTION ABORT (freeze-exception requirement) ───────────────
+  FREE_MB="$(df -Pm "$REPO_LOCAL_PATH" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
+  if [[ ! "$FREE_MB" =~ ^[0-9]+$ ]]; then
+    # Unreadable free space fails CLOSED. "We could not measure the disk" must
+    # never be treated as "the disk is fine".
+    fail "could not determine free space on '$REPO_LOCAL_PATH' — aborting rather than assuming it is safe"
+    exit "$DISK_ABORT_EXIT_CODE"
+  fi
+  if [[ "$FREE_MB" -lt "$MIN_FREE_MB" ]]; then
+    fail "ABORT: ${FREE_MB} MB free on '$REPO_LOCAL_PATH', floor is ${MIN_FREE_MB} MB. pgBackRest was NOT invoked."
+    fail "  A full filesystem breaks archive_command, which grows pg_wal, which stops PostgreSQL."
+    fail "  Free space or lower retention (repo${REPO_NUM}-retention-full / repo${REPO_NUM}-retention-archive), then re-run."
+    exit "$DISK_ABORT_EXIT_CODE"
+  fi
+  log "free space OK: ${FREE_MB} MB (floor ${MIN_FREE_MB} MB)"
+else
+  # The abort exists to stop THIS host's filesystem from filling. A remote or
+  # object-store repository does not consume it, and `df` on the local repo
+  # path would measure a disk the backup is not being written to — a check
+  # that reads as reassurance while measuring the wrong thing. pgBackRest
+  # fails closed on a full or unreachable remote repository, and the stanza
+  # existence check there is `pgbackrest check`'s job, not a directory test we
+  # cannot perform across the transport.
+  log "repo${REPO_NUM} is remote — skipping the local stanza-directory and free-space preconditions (they measure this host, not the target)"
+  log "repo${REPO_NUM} reachability and stanza existence are enforced by pgBackRest itself, which fails closed"
 fi
-if [[ "$FREE_MB" -lt "$MIN_FREE_MB" ]]; then
-  fail "ABORT: ${FREE_MB} MB free on '$REPO_PATH', floor is ${MIN_FREE_MB} MB. pgBackRest was NOT invoked."
-  fail "  A full filesystem breaks archive_command, which grows pg_wal, which stops PostgreSQL."
-  fail "  Free space or lower retention (repo1-retention-full / repo1-retention-archive), then re-run."
-  exit "$DISK_ABORT_EXIT_CODE"
-fi
-log "free space OK: ${FREE_MB} MB (floor ${MIN_FREE_MB} MB)"
 
 # ── build the command ────────────────────────────────────────────────────
+# --repo is appended ONLY for N != 1. pgBackRest gained multi-repository
+# support in 2.33, and passing --repo=1 to an older build is an option-invalid
+# error, not a no-op. Since repo1 is the only repository this program has ever
+# run in production, the default path must not acquire a new version
+# dependency to gain a capability it does not use.
 Q_STANZA="$(printf '%q' "$STANZA")"
+REPO_ARG=""
+[[ "$REPO_NUM" -ne 1 ]] && REPO_ARG=" --repo=${REPO_NUM}"
 if [[ "$DO_VERIFY" == true ]]; then
-  PGBR_CMD="pgbackrest --stanza=${Q_STANZA} verify"
-  ACTION="verify"
+  PGBR_CMD="pgbackrest --stanza=${Q_STANZA}${REPO_ARG} verify"
+  ACTION="verify(repo${REPO_NUM})"
 else
-  PGBR_CMD="pgbackrest --stanza=${Q_STANZA} --type=${BACKUP_TYPE} backup"
-  ACTION="backup(${BACKUP_TYPE})"
+  PGBR_CMD="pgbackrest --stanza=${Q_STANZA}${REPO_ARG} --type=${BACKUP_TYPE} backup"
+  ACTION="backup(${BACKUP_TYPE},repo${REPO_NUM})"
 fi
 
 if [[ "$DRY_RUN" == true ]]; then
   log "DRY-RUN: would run as ${PG_SUPERUSER}: ${PGBR_CMD}"
   [[ "$DO_VERIFY" != true ]] && [[ "$RUN_EXPIRE" == "true" ]] && \
-    log "DRY-RUN: would then run as ${PG_SUPERUSER}: pgbackrest --stanza=${Q_STANZA} expire"
+    log "DRY-RUN: would then run as ${PG_SUPERUSER}: pgbackrest --stanza=${Q_STANZA}${REPO_ARG} expire"
   log "DRY-RUN: nothing was invoked"
   exit 0
 fi
@@ -234,7 +314,7 @@ log "${ACTION} completed in ${DURATION}s"
 # explicitly costs nothing and removes the dependence on a default we have
 # not verified against the installed binary.
 if [[ "$DO_VERIFY" != true ]] && [[ "$RUN_EXPIRE" == "true" ]]; then
-  if ! as_pg "pgbackrest --stanza=${Q_STANZA} expire"; then
+  if ! as_pg "pgbackrest --stanza=${Q_STANZA}${REPO_ARG} expire"; then
     # A failed expire is a retention problem, not a backup problem. The
     # backup above succeeded and is restorable; saying otherwise would be a
     # false negative that erodes trust in the alert.
