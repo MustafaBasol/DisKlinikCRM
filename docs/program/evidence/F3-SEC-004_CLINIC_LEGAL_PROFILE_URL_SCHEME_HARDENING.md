@@ -2,6 +2,8 @@
 
 **Status: `AGENT_COMPLETED` / `TESTS_PASSED` / `PR_OPENED` (Draft) — not merged, not deployed, not production-verified. `R-076` stays `OPEN`.**
 
+> **Revision — F3-SEC-004-R1 (2026-08-16), evidence precision correction, same branch and same PR (#434).** Architecture review found the earlier §8 claim that the SQL scan "can only under-report" to be **too strong and false**: the shipped helper trims before parsing while the SQL rejects tab/CR/LF anywhere in the value, so the approximation can **over-report as well as under-report**. §8 has been rewritten accordingly, and it is now stated explicitly that the scan is informational and **not a security-closure prerequisite for R-076**. **No runtime code, schema or migration change; `R-076` status unchanged.**
+
 ## 1. Task identity and phase
 
 | Field | Value |
@@ -176,9 +178,25 @@ Invocation on the production host:
 psql "$DATABASE_URL" -At -f /tmp/r076_scan.sql
 ```
 
-**Fidelity caveat, stated honestly.** SQL has no WHATWG URL parser, so this is a close approximation of the shipped `isSafeHttpUrl`, not the same function. It was checked against the full test-vector set and agrees on every one of them (`https://…`, `http://…`, leading-whitespace variants, and `https://` with no host, `javascript:`, `JaVaScRiPt:`, tab-obfuscated `java\tscript:`, `data:`, `vbscript:`, `file:`, `ftp:`, `blob:`, `//evil.example`, `/relative`, bare `clinic.example`, free text). The `[\t\n\r]` clause exists precisely because the URL parser strips those characters and a naive scheme regex would otherwise mis-classify an obfuscated value as safe. Residual divergence is confined to exotic inputs (e.g. a space inside the authority), where the SQL may count a value as accepted that the shipped guard rejects — i.e. it can **under-report**, never silently clear a `javascript:` row. The counts are intended to decide *whether* a remediation task is needed; that task would classify exactly, using the shipped helper.
+### Fidelity — what this query is, and what it is not
 
-**Expected result: `potentially_unsafe = 0`.** If it is greater than zero, open a separate controlled remediation task — do not fix rows from within F3-SEC-004.
+SQL has no WHATWG URL parser. This query is therefore a **conservative operational approximation** of the shipped `isSafeHttpUrl`, **not a semantically identical reimplementation of it**. Its result is **informational**.
+
+- **It correctly detects every currently enumerated dangerous regression vector.** `javascript:`, `JaVaScRiPt:`, tab/CR/LF-obfuscated `java\tscript:`, `data:`, `vbscript:`, `file:`, `ftp:`, `blob:`, protocol-relative `//evil.example`, relative `/relative` and `relative/path`, and malformed values (`https://` with no host, bare `clinic.example`, free text) were each checked against this query's classification logic, and each one lands in `potentially_unsafe`. The `[\t\n\r]` clause exists precisely because the URL parser strips those characters, so a naive scheme regex would otherwise mis-classify an obfuscated value as safe.
+- **Both false positives and false negatives are possible for exotic inputs.** The shipped helper applies `String.trim()` *before* parsing, whereas this query rejects any value containing a tab/CR/LF **anywhere** in the string. A value whose only such character is surrounding whitespace — e.g. `"https://example.com\n"` — is therefore **accepted by the runtime guard but counted here as `potentially_unsafe`** (over-reporting). Conversely, inputs the WHATWG parser rejects but this regex tolerates (e.g. a space inside the authority) can be counted as accepted (under-reporting).
+- **`potentially_unsafe = 0` does not prove that the database contains no value the runtime helper would reject.** It is a useful operational signal, not a proof. Exact classification requires running the shipped helper itself, which is the job of a remediation task, not of this scan.
+
+### The scan is not a security-closure prerequisite for R-076
+
+R-076's runtime safety rests on the three code layers, not on the state of the data:
+
+1. write-time `http`/`https` allowlist (§6, Layer 1);
+2. unauthenticated public-API suppression of unsafe legacy values (§6, Layer 2);
+3. frontend render-time `href` guard (§6, Layer 3).
+
+Consequently **an existing legacy unsafe row does not keep the XSS vector exploitable once both backend and frontend are deployed** — it is nulled at the public boundary and, if it reaches the page at all, rendered as inert text with no anchor. The scan is kept because it is the cheap way to decide *whether a separate data-hygiene / remediation task is warranted*, not because R-076's remediation depends on its output.
+
+**If `potentially_unsafe > 0`: do not mutate production data.** Open a separate controlled remediation task, which will classify the affected rows exactly using the shipped helper rather than this regex. Do not fix rows from within F3-SEC-004.
 
 ## 9. Files changed
 
@@ -264,7 +282,7 @@ Repository revert of the branch/PR. **No DB rollback, no migration to reverse, n
 
 1. Review and merge the Draft PR (`fix(security): restrict clinic legal-profile website URLs (R-076)`).
 2. Deploy **frontend and backend together**; the frontend half is what makes existing unsafe values non-clickable.
-3. Run the §8 read-only scan on production and record the three integers here.
-4. Production-verify: a published clinic's KVKK page still links a legitimate `https` website; a `javascript:` write is rejected with 400.
-5. Only then may architecture review consider `R-076` for closure — by a task other than F3-SEC-004.
-6. If `potentially_unsafe > 0`, open a separate controlled remediation task for those rows.
+3. Production-verify: a published clinic's KVKK page still links a legitimate `https` website; a `javascript:` write is rejected with 400.
+4. Only then may architecture review consider `R-076` for closure — by a task other than F3-SEC-004. The scan below is **not** a precondition for that consideration.
+5. Run the §8 read-only scan on production when convenient and record the three integers here. It is a **data-hygiene** signal, informational only.
+6. If `potentially_unsafe > 0`, open a separate controlled remediation task for those rows — do not mutate production data.
