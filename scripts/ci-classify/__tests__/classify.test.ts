@@ -179,6 +179,51 @@ test('docs mixed with a single unrelated file is not docs-only', () => {
   assertEqual(r.docsOnly, false, 'one non-docs file disqualifies docs-only even among many docs files');
 });
 
+test('recovery/backup/PITR paths keep the full deep gate (R-030-DB protection)', () => {
+  // These paths carry the entire off-host recovery surface: the pgBackRest
+  // wrapper, preflight, status writer, restore drill and the Gate 0 harness.
+  // They are gated today ONLY because no CATEGORY_RULE matches them, so they
+  // fall through to UNKNOWN -> FULL_DEEP_GATE. That is correct behaviour
+  // arrived at by accident, and nothing asserted it.
+  //
+  // Without this test, the first plausible-looking cost-reduction rule --
+  // `ops/**` or `scripts/**` mapped to DOCS or ARCHITECTURE_BOUNDARY, both of
+  // which carry NO_FLAGS -- would silently delete the recovery deep gate, and
+  // no test would turn red. Layer 2 holds every recovery/PITR unit test, so
+  // runBackendGeneral is the flag that actually matters here.
+  const recoveryPaths = [
+    'ops/pgbackrest/pgbackrest.conf.example',
+    'ops/pgbackrest/postgresql-pitr.conf.example',
+    'ops/systemd/noramedi-pgbackrest-status.timer',
+    'scripts/noramedi-pgbackrest-backup.sh',
+    'scripts/noramedi-pgbackrest-preflight.sh',
+    'scripts/noramedi-pgbackrest-status.sh',
+    'scripts/noramedi-pgbackrest-restore-drill.sh',
+    'scripts/noramedi-gate0-repo2-unreachability.sh',
+    'scripts/noramedi-pitr-app-smoke.mjs',
+    'scripts/backup-restore-rehearsal.sh',
+  ];
+  for (const p of recoveryPaths) {
+    const r = classify([p]);
+    assertEqual(r.docsOnly, false, `${p} must never be treated as docs-only`);
+    assertEqual(
+      r.flags.runBackendGeneral,
+      true,
+      `${p} must still select Layer 2, which runs every recovery/PITR test`,
+    );
+  }
+
+  // And as a set, so a future rule cannot pass the per-file check while
+  // narrowing the combined selection.
+  const all = classify(recoveryPaths);
+  assertEqual(all.docsOnly, false, 'a recovery-only changeset is not docs-only');
+  assertEqual(
+    all.flags.runBackendGeneral,
+    true,
+    'a recovery-only changeset still selects the backend suite',
+  );
+});
+
 test('every category is reachable (CATEGORY_RULES completeness spot-check)', () => {
   const samples: Array<[string, Category]> = [
     ['docs/README.md', 'DOCS'],
