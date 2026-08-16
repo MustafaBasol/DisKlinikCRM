@@ -693,6 +693,18 @@ fails at restore. That is the worst available failure mode for a backup.
 
 ### 16.1 R-030 splits in two, and only one half is closable here
 
+> **[RATIFIED 2026-08-16 by the program owner, recorded by F4-2.]** The split
+> proposed in this section is **approved**. `R-030-DB` and `R-030-FILES` now
+> exist as rows in `RISK_REGISTER.md`. `R-030` itself was **not** closed,
+> downgraded, renumbered or deleted — it remains `OPEN` as the umbrella row
+> and can close only when both halves do, so every existing reference to
+> `R-030` stays valid. `FIRST_CUSTOMER_RECOVERY_GATE` is henceforth gated on
+> **`R-030-DB` alone**. The reasoning below is unchanged; this note records
+> that a decision was taken on it, and nothing more. The split creates no new
+> risk — it makes one existing risk honestly trackable, which is what stops a
+> single global "off-host ✓" from being the false claim this section warns
+> about.
+
 Independence is decided by where the **primary** lives:
 
 - **`R-030-DB`** — the PostgreSQL primary lives on `disklinik-prod-01`, so a
@@ -783,6 +795,114 @@ Three retention concepts stay distinct and must not be conflated:
 | `pg_dump` fallback retention | 7 days | Enforced by the production script (§11.1) |
 | pgBackRest operational recovery retention | proposed `repo1-retention-full=7`, `repo1-retention-archive=7` | **PROPOSED, NOT APPROVED** |
 | Legal retention | — | **Undetermined.** KVKK-HIGH-003 is awaiting legal review; every retention cell in the DPA's Annex B is `TO BE VERIFIED`. |
+
+### 16.5 repo2 activation sequence — NOT EXECUTED
+
+**Added 2026-08-16 by F4-2.** Every step is an operator action on production.
+Nothing here has been run, and this section authorizes nothing: §16.2's seven
+prerequisites are still unmet and the secondary VPS is still not procured.
+It exists so that activation day is a sequence to follow rather than a design
+exercise, and so the order of operations is decided while nobody is under
+incident pressure.
+
+**What the repository already provides**, so none of it needs writing later:
+
+| Capability | Where |
+|---|---|
+| repo2 config shapes (SSH / S3), with binary caveats | `ops/pgbackrest/pgbackrest.conf.example` §stage 2 |
+| Backup/expire targeting a specific repository | `noramedi-pgbackrest-backup.sh --repo N` |
+| repo2 encryption + distinct-passphrase validation | `noramedi-pgbackrest-preflight.sh` |
+| Per-repository backup freshness | `noramedi-pgbackrest-status.sh` → `repo2BackupCount`, `repo2LastBackupAgeMinutes` |
+| Alert on a starving or empty repo2 | `noramedi-opscheck.sh` pitr check |
+| Restore **from** repo2 + off-host proof marker | `noramedi-pgbackrest-restore-drill.sh --repo 2 --record` |
+| Tri-state off-host reporting that cannot self-certify | §12.3 |
+
+#### Gate 0 — scratch host first. Not optional.
+
+An unreachable repo2 can stall `archive-push`, grow `pg_wal`, and shut
+PostgreSQL down. That is a production outage, not a documentation nicety, and
+it is the single most likely way this activation takes production down.
+Establish the failure semantics on a throwaway host **before** production
+points at anything remote.
+
+```bash
+pgbackrest version                       # multi-repo needs >= 2.33
+pgbackrest help backup | grep -- --repo  # confirm the option exists on THIS build
+# Then, on the scratch host: configure a repo2, make it unreachable, and
+# observe whether archive-push fails the command or merely warns, and what
+# happens to pg_wal over an hour under write load.
+```
+
+#### Steps
+
+```bash
+# 1-4. Provider, network, account, repository directory (on the NEW host).
+#      Prerequisite: E1-E5 in hand, DPA signed, register updated (§16.2).
+#      Firewall: allow ONLY the production host -> backup host :22.
+#      One-way trust: the backup host must not be able to reach production.
+sudo adduser --system --group --home /var/lib/pgbackrest pgbackrest
+sudo install -d -o pgbackrest -g pgbackrest -m 0750 /var/lib/pgbackrest
+#      Install pgBackRest on the backup host and VERSION-MATCH it to production
+#      (repo-host mode requires it on both sides unless repo-type=sftp is used).
+
+# 5-8. Encryption, config, secrets (on PRODUCTION).
+#      Generate a repo2 passphrase DISTINCT from repo1 -- preflight now rejects
+#      a reused one. Escrow both, plus ENCRYPTION_KEY, OUTSIDE the failure
+#      domain of both hosts (§15). An off-host encrypted copy whose only key
+#      lived on the destroyed host is not a backup.
+#      Append to /etc/pgbackrest/pgbackrest.conf (mode 0600):
+#        repo2-host=<BACKUP_HOST>
+#        repo2-host-user=pgbackrest
+#        repo2-path=/var/lib/pgbackrest
+#        repo2-cipher-type=aes-256-cbc
+#        repo2-cipher-pass=<distinct from repo1, escrowed>
+#        repo2-retention-full=7
+#        repo2-retention-archive=7
+
+# 9. Validate BEFORE moving data. Preflight now checks repo2 encryption.
+sudo bash scripts/noramedi-pgbackrest-preflight.sh
+sudo -u postgres pgbackrest --stanza=noramedi --repo=2 stanza-create
+sudo -u postgres pgbackrest --stanza=noramedi --repo=2 check
+
+# 10-12. First off-host backup, WAL continuity, repository health.
+sudo /usr/local/sbin/noramedi-pgbackrest-backup.sh --repo 2 --type full
+sudo -u postgres pgbackrest --stanza=noramedi --repo=2 info
+sudo -u postgres psql -Atc "SELECT archived_count, last_failed_wal FROM pg_stat_archiver;"
+sudo -u postgres pgbackrest --stanza=noramedi --repo=2 verify   # integrity, NOT a restore test
+sudo bash scripts/noramedi-pgbackrest-status.sh --stdout        # expect offHost="unproven"
+
+# 13-16. Controlled restore FROM repo2, smokes, cleanup.
+#        Follow the §21.3 marker procedure first. Application and
+#        tenant-isolation smokes run inside the drill; cleanup is verified.
+sudo bash scripts/noramedi-pgbackrest-restore-drill.sh --repo 2 --record \
+     --stanza noramedi --set <BACKUP_LABEL> --marker-seg <WAL> --marker-b-at <TS>
+sudo bash scripts/noramedi-pgbackrest-status.sh --stdout        # only NOW may it read "yes"
+
+# 17. Schedule it. A one-off backup plus a proof marker is NOT durability:
+#     the marker stays valid 30 days, so without this the off-host copy would
+#     age silently behind a green tick. opscheck now fails on exactly that,
+#     which is the check that turns a forgotten schedule into an alert.
+#     Add a repo2 entry to /etc/cron.d/noramedi-pgbackrest.
+```
+
+#### 17. Proof that primary-host loss would not destroy repo2
+
+Record as durable artifacts, and keep them with the evidence pack: the repo2
+host's provider account, facility/region, hypervisor, and the RIPE/WHOIS
+`country: TR` for its allocated netblock — each **differing** from
+`disklinik-prod-01`. Configuration alone is never this proof; the status
+writer already rejects a local path, a self-hostname, a loopback endpoint and
+any plaintext repository, but rejecting the obvious impostors is not the same
+as evidencing independence. §16.2 item 7 governs how the relationship is
+classified.
+
+#### 18. Rollback
+
+Comment out every `repo2-*` key, then `pgbackrest --stanza=noramedi check`.
+`repo1` (local, AES-256-CBC) and the `pg_dump` fallback are untouched by all
+of the above and remain the working recovery path throughout. The backup
+wrapper defaults to `--repo 1`, so removing the repo2 cron entry is sufficient
+to stop all off-host activity; no script needs reverting.
 
 ## 17. Rollback
 

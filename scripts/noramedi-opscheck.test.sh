@@ -252,6 +252,9 @@ reset_pitr_status_fields() {
   PS_R_BACKUP_AGE_MIN=480
   PS_R_OFFHOST=yes
   PS_R_TIER=T2
+  # Extra repo fields, injected verbatim. Empty by default so every existing
+  # scenario keeps emitting the single-repository document it emitted before.
+  PS_R_REPO2_EXTRA=""
 }
 
 write_pitr_status() {
@@ -260,7 +263,7 @@ write_pitr_status() {
   "schemaVersion": $PS_SCHEMA_VERSION,
   "generatedAt": "$(iso_age "$PS_GENERATED_AGE_H")",
   "archive": { "mode": "$PS_A_MODE", "commandOk": $PS_A_COMMAND_OK, "walLevel": "replica", "timeoutSeconds": 300, "failedCount": $PS_A_FAILED, "archivedCount": 128, "lastArchivedAgeMinutes": $PS_A_WAL_AGE_MIN },
-  "repo": { "installed": true, "stanza": "noramedi", "statusOk": $PS_R_STATUS_OK, "cipherType": "$PS_R_CIPHER", "checkStatus": "$PS_R_CHECK", "checkAgeMinutes": $PS_R_CHECK_AGE_MIN, "lastBackupAgeMinutes": $PS_R_BACKUP_AGE_MIN, "lastBackupType": "full", "backupCount": 7, "offHost": "$PS_R_OFFHOST", "tier": "$PS_R_TIER", "offHostReason": "RESTORE_PROVEN_FROM_REPO2" }
+  "repo": { "installed": true, "stanza": "noramedi", "statusOk": $PS_R_STATUS_OK, "cipherType": "$PS_R_CIPHER", "checkStatus": "$PS_R_CHECK", "checkAgeMinutes": $PS_R_CHECK_AGE_MIN, "lastBackupAgeMinutes": $PS_R_BACKUP_AGE_MIN, "lastBackupType": "full", "backupCount": 7, "offHost": "$PS_R_OFFHOST", "tier": "$PS_R_TIER", "offHostReason": "RESTORE_PROVEN_FROM_REPO2"$PS_R_REPO2_EXTRA }
 }
 EOF
 }
@@ -895,6 +898,60 @@ write_pitr_status
 EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=)
 run_pitr
 [[ "$CODE" -eq 0 ]] && pass "an empty NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST falls back to the fail-closed default" || fail "expected the default to apply, got $CODE ($OUT)"
+
+section "PITR: a proven off-host repository must still be RECEIVING backups"
+# The failure this guards: the proof marker behind offHost="yes" stays valid
+# for 30 days, and the repo1 backup age stays fresh because repo1 keeps being
+# backed up. A repo2 that stopped receiving backups the day after its drill
+# would therefore report a proven, healthy off-host repository for a month.
+# "A restore worked once" is not "a restore would work now".
+new_scenario_dirs
+PS_R_OFFHOST=yes
+PS_R_TIER=T2
+PS_R_REPO2_EXTRA=', "repo2BackupCount": 0'
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] \
+  && pass "pitr bit (128) set when a configured repo2 holds ZERO backups — it receives WAL and cannot restore" \
+  || fail "expected bit 128 for an empty repo2, got $CODE ($OUT)"
+[[ "$OUT" == *"base backup is required"* ]] \
+  && pass "the message names the remedy rather than only the symptom" \
+  || fail "expected the base-backup remedy in the message ($OUT)"
+
+new_scenario_dirs
+PS_R_OFFHOST=yes
+PS_R_REPO2_EXTRA=', "repo2BackupCount": 3, "repo2LastBackupAgeMinutes": 20160'
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] \
+  && pass "pitr bit (128) set when the off-host backup is stale even though offHost='yes' and repo1 is fresh" \
+  || fail "expected bit 128 for a stale repo2, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_R_OFFHOST=yes
+PS_R_REPO2_EXTRA=', "repo2BackupCount": 3, "repo2LastBackupAgeMinutes": 120'
+write_pitr_status
+run_pitr
+[[ "$CODE" -eq 0 ]] \
+  && pass "a proven repo2 that is also fresh passes" \
+  || fail "expected exit 0 for a fresh, proven repo2, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_R_OFFHOST=yes
+PS_R_REPO2_EXTRA=', "repo2BackupCount": 3'
+write_pitr_status
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] \
+  && pass "a repo2 with backups but no readable age fails closed rather than being assumed fresh" \
+  || fail "expected bit 128 for an unmeasurable repo2 age, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_R_OFFHOST=yes
+write_pitr_status
+run_pitr
+[[ "$CODE" -eq 0 ]] \
+  && pass "a document with no repo2 fields at all is unaffected (single-repo hosts keep passing)" \
+  || fail "expected exit 0 when no repo2 is reported, got $CODE ($OUT)"
 
 section "PITR: malformed tuning values exit 64 rather than being ignored"
 for badvar in NORAMEDI_OPSCHECK_PITR_MAX_WAL_AGE_MINUTES NORAMEDI_OPSCHECK_PITR_STATUS_MAX_AGE_HOURS NORAMEDI_OPSCHECK_PITR_MAX_BACKUP_AGE_HOURS NORAMEDI_OPSCHECK_PITR_CHECK_MAX_AGE_HOURS; do

@@ -72,6 +72,26 @@ MAILTO=root
 # either check.
 0 2 * * 0   root  /usr/local/sbin/noramedi-pgbackrest-backup.sh --verify
 
+# ── OFF-HOST (repo2) — COMMENTED OUT AND NOT AUTHORIZED ──────────────────
+# Enable ONLY after the repo2 activation sequence in
+# F4_RECOVERY_OPERATIONS.md §16.5 has been completed, which itself requires
+# the seven §16.2 prerequisites and a procured secondary VPS.
+#
+# WHY THIS ENTRY MUST EXIST AND NOT BE SKIPPED: `pgbackrest backup` writes to
+# ONE repository. archive-push feeds WAL to every configured repository
+# automatically, so a repo2 with no scheduled backup still LOOKS alive — it
+# accumulates WAL forever on top of a base backup it never received, and
+# cannot restore. A single manual backup plus a passing drill is not
+# durability either: the off-host proof marker stays valid for 30 days, so
+# without a schedule the off-host copy ages out silently behind a green tick.
+# opscheck now fails the pitr check on exactly that state (an empty or stale
+# repo2), which is what turns a forgotten schedule into an alert instead of a
+# discovery during an incident.
+#
+# Staggered an hour after the repo1 full so the two never contend for the
+# stanza lock — the wrapper would exit 5 (lock held) and skip the run.
+#30 3 * * *  root  /usr/local/sbin/noramedi-pgbackrest-backup.sh --repo 2 --type full
+
 # Weekly PITR restore drill, Sunday 03:45 — COMMENTED OUT until the first
 # manual drill has been run and reviewed by a human.
 #

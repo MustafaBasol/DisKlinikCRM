@@ -254,6 +254,29 @@ async function main() {
     assert.equal(status.available, true, `reader rejected the writer output: ${JSON.stringify(status)}`);
   });
 
+  await test('the reader carries repo2 (off-host) backup freshness through, separately from repo1', () => {
+    // These fields exist because a single aggregate backup age cannot express
+    // "repo1 is fresh AND the off-host copy is starving" — the state that
+    // would otherwise sit behind a 30-day-valid offHost='yes' proof marker.
+    const doc = JSON.parse(healthyDocument()) as Record<string, unknown>;
+    const repo = doc.repo as Record<string, unknown>;
+    repo.repo2BackupCount = 3;
+    repo.repo2LastBackupAgeMinutes = 20160;
+    repo.repo2LastBackupAt = new Date(Date.now() - 20160 * 60000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+    const status = parsePitrStatusDocument(JSON.stringify(doc), new Date(), '/test/pitr-status.json');
+    assert.equal(status.available, true, `reader rejected a document carrying repo2 fields: ${JSON.stringify(status)}`);
+    assert.equal(status.repo?.repo2BackupCount, 3, 'repo2BackupCount was dropped by the reader');
+    assert.equal(status.repo?.repo2LastBackupAgeMinutes, 20160, 'repo2LastBackupAgeMinutes was dropped by the reader');
+    assert.equal(status.repo?.lastBackupAgeMinutes, 570, 'the repo1 age must be unaffected by the repo2 fields');
+  });
+
+  await test('a document with no repo2 fields still parses (single-repository hosts)', () => {
+    const status = parsePitrStatusDocument(healthyDocument(), new Date(), '/test/pitr-status.json');
+    assert.equal(status.available, true, 'reader rejected a single-repository document');
+    assert.equal(status.repo?.repo2BackupCount, undefined, 'repo2BackupCount must be absent, not defaulted to 0');
+  });
+
   await test('with nothing configured, the reader reports pitrActive = false', () => {
     const status = parsePitrStatusDocument(written.stdout, new Date(), '/test/pitr-status.json');
     assert.equal(status.available, true);

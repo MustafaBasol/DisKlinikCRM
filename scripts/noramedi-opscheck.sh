@@ -1190,6 +1190,35 @@ check_pitr() {
     echo "[opscheck] $(timestamp) $label check: WARNING — repository off-host state is '$(safe_token "$offhost")' (tier $(safe_token "$tier")); accepted because NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=false. RPO is improved; host-loss durability is NOT." >&2
   fi
 
+  # 9. The off-host repository must be RECEIVING BACKUPS, not merely proven
+  #    once. Check 7 above measures repo1; a starving repo2 leaves it green.
+  #
+  #    This is the failure this check exists for: the proof marker behind
+  #    offHost="yes" stays valid for 30 days, so a repo2 that stopped
+  #    receiving backups the day after its drill would report a proven,
+  #    healthy off-host repository for a month. "A restore worked once" is
+  #    not "a restore would work now" — the newest thing recoverable from
+  #    repo2 is whatever it last received. Reuses the same backup-age
+  #    threshold as repo1 rather than inventing a second knob.
+  if repo2_count="$(json_uint "$body" repo2BackupCount 2>/dev/null)"; then
+    if [[ "$repo2_count" -eq 0 ]]; then
+      echo "[opscheck] $(timestamp) $label check: FAIL — a repo2 is configured but holds ZERO backups. It receives WAL and cannot restore: a base backup is required before any recovery from it is possible. Run noramedi-pgbackrest-backup.sh --repo 2." >&2
+      return 1
+    fi
+    if repo2_age="$(json_uint "$body" repo2LastBackupAgeMinutes 2>/dev/null)"; then
+      if [[ "$repo2_age" -gt $(( PITR_MAX_BACKUP_AGE_HOURS * 60 )) ]]; then
+        echo "[opscheck] $(timestamp) $label check: FAIL — newest repo2 (off-host) backup is $(( repo2_age / 60 ))h old (max ${PITR_MAX_BACKUP_AGE_HOURS}h). The local repository may be current; the off-host copy is not, and only the off-host copy survives loss of this host." >&2
+        return 1
+      fi
+    else
+      # Configured, non-empty, but no readable age. Fails closed for the same
+      # reason every other age in this script does: an unmeasurable backup
+      # must never be treated as a fresh one.
+      echo "[opscheck] $(timestamp) $label check: FAIL — a repo2 is configured with ${repo2_count} backup(s) but 'repo.repo2LastBackupAgeMinutes' is missing or unreadable; refusing to assume it is fresh" >&2
+      return 1
+    fi
+  fi
+
   echo "[opscheck] $(timestamp) $label check: OK — archive_mode=$(safe_token "$mode"), newest WAL fresh, repo encrypted, check ok, off-host=$(safe_token "$offhost")"
   return 0
 }

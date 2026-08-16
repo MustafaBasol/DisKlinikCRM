@@ -481,6 +481,70 @@ run bash "$STATUS" --stdout --no-check
   && pass "a proof with no target binding is refused (fails toward unproven, never toward yes)" \
   || fail "expected unproven for an unbound proof ($OUT)"
 
+# ════════════════════════════════════════════════════════════════════════
+section "Status writer: repo2 backup freshness is reported SEPARATELY from repo1"
+# `pgbackrest info` returns every repository in one flat backup[]. Reporting a
+# single aggregate age was correct while repo1 was the only repository and
+# becomes a FALSE GREEN once repo2 exists: repo1 keeps backing up nightly, the
+# aggregate stays young, and a repo2 that receives nothing still reads as
+# healthy. The proof marker behind offHost="yes" lasts 30 days, so that state
+# could persist for a month. These fields exist to make it visible.
+num_of() { grep -o "\"$2\": [0-9-]*" <<<"$1" | head -n1 | sed 's/.*: //'; }
+
+_NOW_EPOCH="$(date -u +%s)"
+_FRESH=$(( _NOW_EPOCH - 600 ))          # 10 minutes ago
+_STALE=$(( _NOW_EPOCH - 10 * 86400 ))   # 10 days ago
+
+# repo1 fresh, repo2 ten days stale — the exact shape of the false green.
+INFO_MULTIREPO="$(printf '[{"name":"noramedi","cipher":"aes-256-cbc","status":{"code":0,"message":"ok"},"backup":[{"label":"20260815-023000F","type":"full","database":{"id":1,"repo-key":1},"timestamp":{"start":%d,"stop":%d}},{"label":"20260805-023000F","type":"full","database":{"id":1,"repo-key":2},"timestamp":{"start":%d,"stop":%d}}],"archive":[{"id":"16-1","min":"000000010000000000000002","max":"0000000100000000000000A7"}]}]' \
+  "$_FRESH" "$_FRESH" "$_STALE" "$_STALE")"
+
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s20" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_MULTIREPO")
+run bash "$STATUS" --stdout --no-check
+[[ "$(num_of "$OUT" backupCount)" == "1" ]] \
+  && pass "backupCount counts repo1 ONLY (it no longer blends repositories)" \
+  || fail "expected repo1 backupCount=1, got '$(num_of "$OUT" backupCount)' ($OUT)"
+[[ "$(num_of "$OUT" repo2BackupCount)" == "1" ]] \
+  && pass "repo2BackupCount is reported separately" \
+  || fail "expected repo2BackupCount=1, got '$(num_of "$OUT" repo2BackupCount)' ($OUT)"
+_R2AGE="$(num_of "$OUT" repo2LastBackupAgeMinutes)"
+[[ "$_R2AGE" =~ ^[0-9]+$ ]] && [[ "$_R2AGE" -gt 10000 ]] \
+  && pass "repo2LastBackupAgeMinutes reports the STALE off-host age (${_R2AGE}m), not the fresh repo1 one" \
+  || fail "expected a large repo2 age, got '$_R2AGE' ($OUT)"
+_R1AGE="$(num_of "$OUT" lastBackupAgeMinutes)"
+[[ "$_R1AGE" =~ ^[0-9]+$ ]] && [[ "$_R1AGE" -lt 60 ]] \
+  && pass "lastBackupAgeMinutes still reports repo1 as fresh (${_R1AGE}m) — the two ages are independent" \
+  || fail "expected a small repo1 age, got '$_R1AGE' ($OUT)"
+
+# Configured but EMPTY: a repo2 that exists, receives WAL, and has never had a
+# base backup cannot restore. It must be distinguishable from "no repo2".
+INFO_REPO2_EMPTY="$(printf '[{"name":"noramedi","cipher":"aes-256-cbc","status":{"code":0,"message":"ok"},"backup":[{"label":"20260815-023000F","type":"full","database":{"id":1,"repo-key":1},"timestamp":{"start":%d,"stop":%d}}],"archive":[{"id":"16-1","min":"000000010000000000000002","max":"0000000100000000000000A7"}]}]' \
+  "$_FRESH" "$_FRESH")"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s21" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_REPO2_EMPTY")
+run bash "$STATUS" --stdout --no-check
+[[ "$(num_of "$OUT" repo2BackupCount)" == "0" ]] \
+  && pass "a configured repo2 holding zero backups reports repo2BackupCount=0 (it archives WAL and cannot restore)" \
+  || fail "expected repo2BackupCount=0, got '$(num_of "$OUT" repo2BackupCount)' ($OUT)"
+
+# Back-compat 1: no repo2 configured -> the repo2 fields are absent entirely,
+# so a single-repo host publishes exactly the document it published before.
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s22" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$OUT" != *"repo2BackupCount"* ]] \
+  && pass "no repo2 configured -> no repo2 fields emitted (unchanged document for a single-repo host)" \
+  || fail "repo2 fields leaked into a single-repo document ($OUT)"
+[[ "$(num_of "$OUT" backupCount)" == "1" ]] \
+  && pass "the single-repo backupCount is unchanged" \
+  || fail "expected backupCount=1, got '$(num_of "$OUT" backupCount)' ($OUT)"
+
+# Back-compat 2: entries with NO repo-key at all (single-repo or older
+# pgBackRest builds) must all count as repo1 rather than vanishing.
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF5" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s23" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$(num_of "$OUT" backupCount)" == "1" ]] \
+  && pass "backup entries carrying no repo-key are attributed to repo1, not dropped" \
+  || fail "expected backupCount=1 for untagged entries, got '$(num_of "$OUT" backupCount)' ($OUT)"
+
 section "Status writer: emitted objects are verified flat before publishing"
 # The writer checks its OWN output against the consumer's flat-object rule
 # rather than merely asserting flatness in a comment. A brace arriving inside
@@ -556,6 +620,68 @@ EXTRA_ENV=(); run bash "$BACKUP" --type bogus
 [[ "$CODE" -eq 2 ]] && pass "an invalid --type exits 2" || fail "expected exit 2, got $CODE"
 EXTRA_ENV=(); run bash "$BACKUP" --stanza "../../etc"
 [[ "$CODE" -eq 2 ]] && pass "a path-traversal stanza name exits 2" || fail "expected exit 2, got $CODE"
+EXTRA_ENV=(); run bash "$BACKUP" --repo 9
+[[ "$CODE" -eq 2 ]] && pass "an out-of-range --repo exits 2 (a typo must never silently fall back to the LOCAL repo1)" || fail "expected exit 2, got $CODE"
+EXTRA_ENV=(); run bash "$BACKUP" --repo two
+[[ "$CODE" -eq 2 ]] && pass "a non-numeric --repo exits 2" || fail "expected exit 2, got $CODE"
+
+# ════════════════════════════════════════════════════════════════════════
+section "Backup wrapper: --repo targets a specific repository"
+# Without this, `pgbackrest backup` always writes to the default repository,
+# so an off-host repo2 would receive WAL via archive-push and never a base
+# backup — a repository that looks alive and cannot restore. R-030 / §16.
+
+# repo1 must be byte-for-byte the previous behaviour: NO --repo is passed, so
+# a build predating multi-repo support (< 2.33) is unaffected by default.
+EXTRA_ENV=(NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" NORAMEDI_PGBACKREST_MIN_FREE_MB=1000 FAKE_FREE_MB=65000)
+run bash "$BACKUP" --dry-run
+[[ "$CODE" -eq 0 ]] && [[ "$OUT" != *"--repo="* ]] \
+  && pass "the default run passes NO --repo (no new pgBackRest version dependency for repo1)" \
+  || fail "expected exit 0 and no --repo= in the command ($OUT)"
+
+EXTRA_ENV=(NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" NORAMEDI_PGBACKREST_MIN_FREE_MB=1000 FAKE_FREE_MB=65000)
+run bash "$BACKUP" --repo 1 --dry-run
+[[ "$CODE" -eq 0 ]] && [[ "$OUT" != *"--repo="* ]] \
+  && pass "an explicit --repo 1 is also emitted without --repo= (identical to the default path)" \
+  || fail "expected exit 0 and no --repo= ($OUT)"
+
+# A repo2 that is not configured at all must fail closed. Falling through to
+# pgBackRest's default repository would take a LOCAL backup while the operator
+# believed an off-host one had been taken — the exact false claim R-030 is about.
+CONF_NOREPO2="$WORK/pgbackrest-norepo2.conf"
+printf '[global]\nrepo1-path=%s\nrepo1-cipher-type=aes-256-cbc\n' "$WORK/repo" > "$CONF_NOREPO2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_NOREPO2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_FREE_MB=65000)
+run bash "$BACKUP" --repo 2 --dry-run
+[[ "$CODE" -eq 3 ]] && pass "--repo 2 with no repo2 in the config is a precondition failure, not a silent repo1 backup" || fail "expected exit 3, got $CODE ($OUT)"
+
+# A REMOTE repo2 must skip the local filesystem preconditions. Proven by
+# making both of them impossible to satisfy: the local repo path does not
+# exist and free space is far under the floor. A run that still succeeds can
+# only have skipped them.
+CONF_REMOTE2="$WORK/pgbackrest-remote2.conf"
+printf '[global]\nrepo1-path=%s\nrepo2-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\n' "$WORK/repo" > "$CONF_REMOTE2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_REMOTE2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/no-such-repo" NORAMEDI_PGBACKREST_MIN_FREE_MB=999999 FAKE_FREE_MB=10)
+run bash "$BACKUP" --repo 2 --dry-run
+[[ "$CODE" -eq 0 ]] && pass "a remote repo2 skips the local stanza-directory and free-space checks (they measure this host, not the target)" || fail "expected exit 0, got $CODE ($OUT)"
+[[ "$OUT" == *"--repo=2"* ]] && pass "the pgBackRest command carries --repo=2" || fail "missing --repo=2 ($OUT)"
+[[ "$OUT" == *"expire"* ]] && [[ "$OUT" == *"--repo=2 expire"* ]] \
+  && pass "expire also carries --repo=2 (retention must be applied to the repository actually written)" \
+  || fail "expire missing --repo=2 — retention would be enforced on the wrong repository ($OUT)"
+
+# An S3 repo2 is remote by the same rule, via repo2-type rather than a host.
+CONF_S32="$WORK/pgbackrest-s32.conf"
+printf '[global]\nrepo1-path=%s\nrepo2-type=s3\nrepo2-s3-bucket=b\nrepo2-cipher-type=aes-256-cbc\n' "$WORK/repo" > "$CONF_S32"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_S32" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/no-such-repo" NORAMEDI_PGBACKREST_MIN_FREE_MB=999999 FAKE_FREE_MB=10)
+run bash "$BACKUP" --repo 2 --dry-run
+[[ "$CODE" -eq 0 ]] && [[ "$OUT" == *"--repo=2"* ]] && pass "an S3 repo2 is treated as remote via repo2-type" || fail "expected exit 0 with --repo=2, got $CODE ($OUT)"
+
+# A repo2 that is a LOCAL PATH still gets the disk abort. It is not off-host,
+# but it does consume this filesystem, which is what the abort protects.
+CONF_LOCAL2="$WORK/pgbackrest-local2.conf"
+printf '[global]\nrepo1-path=%s\nrepo2-path=%s\nrepo2-cipher-type=aes-256-cbc\n' "$WORK/repo" "$WORK/repo" > "$CONF_LOCAL2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_LOCAL2" NORAMEDI_PGBACKREST_MIN_FREE_MB=999999 FAKE_FREE_MB=500)
+run bash "$BACKUP" --repo 2 --dry-run
+[[ "$CODE" -eq 4 ]] && pass "a local-path repo2 still triggers the disk-exhaustion abort (it shares this filesystem)" || fail "expected exit 4, got $CODE ($OUT)"
 
 # ════════════════════════════════════════════════════════════════════════
 section "Restore drill: refuses unsafe targets"
@@ -1047,6 +1173,75 @@ EXTRA_ENV=(); run bash "$PREFLIGHT" --stanza "BAD NAME"
 [[ "$CODE" -eq 2 ]] && pass "an invalid stanza name exits 2" || fail "expected exit 2, got $CODE"
 EXTRA_ENV=(NORAMEDI_PGBACKREST_MIN_FREE_MB=nope); run bash "$PREFLIGHT"
 [[ "$CODE" -eq 2 ]] && pass "a malformed free-space floor exits 2 (fail closed)" || fail "expected exit 2, got $CODE"
+
+# ════════════════════════════════════════════════════════════════════════
+section "Preflight: repo2 encryption is validated BEFORE any byte leaves the host"
+# The status writer already refuses to call a plaintext repo2 off-host, but it
+# discovers that AFTER the bytes are written. Preflight runs before, which is
+# the only point at which the mistake is still cheap. repo2 is held to a
+# STRICTER standard than repo1 for a concrete reason: repo1 never leaves
+# infrastructure this program operates, and repo2 exists precisely to.
+#
+# Preflight refuses to run as non-root before it reaches any config check, so
+# `id` is faked for this section only. Faking `id -u` rather than the config
+# checks themselves keeps the assertions on the real code path. Removed again
+# at the end of the section so nothing later inherits a root-looking shell.
+cat > "$FAKEBIN/id" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "-u" ]] && { echo 0; exit 0; }
+exec /usr/bin/id "$@"
+EOF
+chmod +x "$FAKEBIN/id"
+
+# Section 4 (pgbackrest.conf) is only reached once section 3 resolves a
+# drop-in target, so the harness supplies a real postgresql.conf with an
+# active include_dir and a real data directory. Without them preflight exits
+# AMBIGUOUS long before it reads a single repo2 key.
+PGCONF_DIR="$WORK/pgconf"
+PGCONF_FILE="$PGCONF_DIR/postgresql.conf"
+PGDATA_FAKE="$WORK/pgdata"
+mkdir -p "$PGCONF_DIR/conf.d" "$PGDATA_FAKE"
+printf "include_dir = 'conf.d'\n" > "$PGCONF_FILE"
+
+PF2="$WORK/pgbackrest-pf2.conf"
+
+printf '[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-host=backup.example.tr\nrepo2-cipher-type=none\n' "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"repo2-cipher-type is 'none'"* ]] \
+  && pass "a PLAINTEXT repo2 is a preflight failure, not merely a warning" \
+  || fail "plaintext repo2 was not reported ($OUT)"
+
+printf '[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\n' "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"repo2-cipher-pass is not set"* ]] \
+  && pass "an encrypted repo2 with no passphrase is caught before stanza-create fails on the remote host" \
+  || fail "missing repo2 passphrase was not reported ($OUT)"
+
+# Reusing one passphrase for both repositories means a single compromise opens
+# the local AND the off-host copy — and defeats the point of escrowing two.
+printf '[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\nrepo2-cipher-pass=%s\n' "$CANARY" "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"IDENTICAL to repo1-cipher-pass"* ]] \
+  && pass "a repo2 passphrase identical to repo1's is rejected" \
+  || fail "identical passphrases were not reported ($OUT)"
+[[ "$OUT" != *"$CANARY"* ]] \
+  && pass "the identical-passphrase comparison never prints either passphrase (compared by hash)" \
+  || fail "CANARY LEAKED while comparing passphrases"
+
+printf '[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\nrepo2-cipher-pass=%s-distinct\n' "$CANARY" "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"repo2-cipher-pass is set"* ]] && [[ "$OUT" != *"IDENTICAL"* ]] \
+  && pass "a correctly configured, distinctly-keyed repo2 passes the encryption checks" \
+  || fail "a valid repo2 was rejected ($OUT)"
+[[ "$OUT" == *"Off-host activation is a SEPARATE authorization"* ]] \
+  && pass "the off-host authorization warning is still emitted alongside the new checks" \
+  || fail "the R-030 authorization warning was lost ($OUT)"
+
+rm -f "$FAKEBIN/id"
 
 # ════════════════════════════════════════════════════════════════════════
 section "Restore drill (behaviour): PITR marker CLI validation fails closed"

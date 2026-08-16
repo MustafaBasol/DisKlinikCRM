@@ -381,6 +381,48 @@ else
   # activating one is outside the drafted freeze exception.
   if grep -qE '^[[:space:]]*repo2-' "$PGBACKREST_CONF" 2>/dev/null; then
     warn "repo2-* options are present. Off-host activation is a SEPARATE authorization (R-030, F4_RECOVERY_OPERATIONS.md §7.2) and requires verifying, on a scratch host first, whether an unreachable repo2 stalls archive-push and fills pg_wal."
+
+    # Encryption is fail-closed for repo2 for a STRICTER reason than for
+    # repo1. repo1's bytes never leave a host we control; repo2's bytes are
+    # written to infrastructure operated by someone else, which is the entire
+    # point of it. A plaintext repo2 would place özel nitelikli sağlık verisi
+    # on a third party's disk in the clear.
+    #
+    # This is defence in depth, not the only gate: the status writer already
+    # refuses to report a plaintext repo2 as off-host (REPO2_PLAINTEXT). But
+    # that refusal is discovered AFTER the bytes have been written. Preflight
+    # runs BEFORE, which is the only point at which the mistake is still
+    # cheap. NEVER print the passphrase; only whether it is set.
+    REPO2_CIPHER_TYPE="$(grep -oE '^[[:space:]]*repo2-cipher-type[[:space:]]*=[[:space:]]*[A-Za-z0-9-]+' "$PGBACKREST_CONF" 2>/dev/null | sed -E 's/.*=[[:space:]]*//' | head -n1 || true)"
+    case "$REPO2_CIPHER_TYPE" in
+      aes-256-cbc)
+        ok "repo2-cipher-type=aes-256-cbc"
+        if grep -qE '^[[:space:]]*repo2-cipher-pass[[:space:]]*=[[:space:]]*.+' "$PGBACKREST_CONF" 2>/dev/null; then
+          if grep -qE '^[[:space:]]*repo2-cipher-pass[[:space:]]*=[[:space:]]*<REPLACE' "$PGBACKREST_CONF" 2>/dev/null; then
+            bad "repo2-cipher-pass is still the '<REPLACE ...>' placeholder from the template"
+          else
+            ok "repo2-cipher-pass is set (value never read, printed, or logged by this script)"
+            # Distinctness is required by the template and by key-escrow
+            # design: one compromised passphrase must not open both copies.
+            # Compared by hash so neither value is ever held or printed.
+            _r1p="$(grep -oE '^[[:space:]]*repo1-cipher-pass[[:space:]]*=[[:space:]]*.+' "$PGBACKREST_CONF" 2>/dev/null | sed -E 's/.*=[[:space:]]*//' | head -n1 | sha256sum | cut -d' ' -f1 || true)"
+            _r2p="$(grep -oE '^[[:space:]]*repo2-cipher-pass[[:space:]]*=[[:space:]]*.+' "$PGBACKREST_CONF" 2>/dev/null | sed -E 's/.*=[[:space:]]*//' | head -n1 | sha256sum | cut -d' ' -f1 || true)"
+            if [[ -n "$_r1p" ]] && [[ "$_r1p" == "$_r2p" ]]; then
+              bad "repo2-cipher-pass is IDENTICAL to repo1-cipher-pass — one compromised passphrase would open both the local and the off-host copy; they must be distinct and separately escrowed"
+            fi
+            unset _r1p _r2p
+          fi
+        else
+          bad "repo2-cipher-type is aes-256-cbc but repo2-cipher-pass is not set — stanza-create for repo2 will fail"
+        fi
+        ;;
+      none|"")
+        bad "repo2-cipher-type is '${REPO2_CIPHER_TYPE:-unset}'. Encryption is REQUIRED before any byte leaves this host: repo2 places a physical copy of every table, including special-category health data, on infrastructure this program does not operate. Set repo2-cipher-type=aes-256-cbc."
+        ;;
+      *)
+        ambiguous "unrecognized repo2-cipher-type '$REPO2_CIPHER_TYPE'"
+        ;;
+    esac
   fi
 fi
 

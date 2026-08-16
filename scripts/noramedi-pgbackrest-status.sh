@@ -291,8 +291,16 @@ REPO2_PATH="$(repo_conf_value 'repo2-path' || true)"
 REPO2_S3_ENDPOINT="$(repo_conf_value 'repo2-s3-endpoint' || true)"
 REPO2_CIPHER_TYPE="$(repo_conf_value 'repo2-cipher-type' || true)"
 
+# Whether a repo2 exists AT ALL — deliberately the same test the block below
+# uses to begin classifying one. It gates the repo2 backup-age fields, and is
+# NOT an off-host claim: a configured repo2 may still be a local path, this
+# host, or plaintext. Those verdicts are the classifier's job, immediately
+# below; this flag only answers "is there a second repository to report on".
+REPO2_CONFIGURED=false
+
 # A repo1 that is on the same filesystem as PGDATA is, by definition, T0/T1.
 if [[ -n "$REPO2_HOST" || -n "$REPO2_TYPE" || -n "$REPO2_PATH" ]]; then
+  REPO2_CONFIGURED=true
   OFFHOST_TIER="T1"
   OFFHOST_REASON="REPO2_NOT_INDEPENDENT"
 
@@ -399,6 +407,7 @@ DOC="$(
   R_INSTALLED="$PGBR_INSTALLED" R_VERSION="${PGBR_VERSION:-}" R_STANZA="$STANZA" \
   R_CIPHER="${CIPHER_TYPE:-none}" R_CHECK="$CHECK_STATUS" R_CHECKAT="${CHECK_AT:-}" \
   R_OFFHOST="$OFFHOST" R_TIER="$OFFHOST_TIER" R_REASON="$OFFHOST_REASON" \
+  R_REPO2_CONFIGURED="$REPO2_CONFIGURED" \
   node -e '
     let raw = "";
     process.stdin.on("data", c => raw += c);
@@ -465,25 +474,63 @@ DOC="$(
         }
         if (typeof s?.cipher === "string") repo.cipherType = s.cipher;
 
-        if (Array.isArray(s?.backup) && s.backup.length > 0) {
+        // ── PER-REPOSITORY, not aggregate ──────────────────────────────
+        // `pgbackrest info` reports EVERY configured repository in one flat
+        // backup[]. Taking max() across the whole array was correct while
+        // repo1 was the only repository and becomes a false green the moment
+        // a repo2 exists: the fresh nightly backups of repo1 keep the
+        // aggregate young while repo2 receives nothing, and the document
+        // reports a healthy backup age for a repository that is starving.
+        // (No apostrophes in this block: single-quoted shell string.)
+        //
+        // Multi-repo builds tag each entry with database["repo-key"]. When
+        // that tag is absent (single-repo build, or an older pgBackRest)
+        // every entry belongs to repo1, which makes the repo1 figures below
+        // byte-for-byte what this script published before.
+        const repoKeyOf = b => {
+          const k = b?.database?.["repo-key"];
+          return (typeof k === "number") ? k : undefined;
+        };
+        const backupsFor = key => (Array.isArray(s?.backup) ? s.backup : [])
+          .filter(b => { const k = repoKeyOf(b); return k === undefined ? key === 1 : k === key; });
+        const newestOf = list => {
           // max() over every entry rather than indexing [-1]: ordering of
           // backup[] is not guaranteed by any documented contract.
           let newest = null;
-          for (const b of s.backup) {
+          for (const b of list) {
             const stop = b?.timestamp?.stop;
             if (typeof stop === "number" && (newest === null || stop > newest.stop)) {
               newest = { stop, type: b.type, label: b.label };
             }
           }
-          if (newest) {
-            const at = new Date(newest.stop * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
-            put(repo, "lastBackupAt", at);
-            put(repo, "lastBackupAgeMinutes", ageMin(at));
-            put(repo, "lastBackupType", typeof newest.type === "string" ? newest.type : undefined);
+          return newest;
+        };
+
+        const repo1Backups = backupsFor(1);
+        const newest1 = newestOf(repo1Backups);
+        if (newest1) {
+          const at = new Date(newest1.stop * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
+          put(repo, "lastBackupAt", at);
+          put(repo, "lastBackupAgeMinutes", ageMin(at));
+          put(repo, "lastBackupType", typeof newest1.type === "string" ? newest1.type : undefined);
+        }
+        repo.backupCount = repo1Backups.length;
+
+        // repo2 figures are emitted ONLY when a repo2 is configured, so a
+        // single-repo host publishes exactly the document it published
+        // before. Emitted even when the count is zero — "configured and
+        // empty" is precisely the state that must be distinguishable from
+        // "not configured", and it is the state an operator lands in after
+        // adding repo2 and forgetting to back up to it.
+        if (E.R_REPO2_CONFIGURED === "true") {
+          const repo2Backups = backupsFor(2);
+          const newest2 = newestOf(repo2Backups);
+          if (newest2) {
+            const at2 = new Date(newest2.stop * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
+            put(repo, "repo2LastBackupAt", at2);
+            put(repo, "repo2LastBackupAgeMinutes", ageMin(at2));
           }
-          repo.backupCount = s.backup.length;
-        } else {
-          repo.backupCount = 0;
+          repo.repo2BackupCount = repo2Backups.length;
         }
 
         if (Array.isArray(s?.archive) && s.archive.length > 0) {
