@@ -366,14 +366,14 @@ fixture files only — no real patient attachment or imaging object is touched).
 Section 7 of that suite injects persistence failure at the Prisma delegate to
 prove the durability invariant behaviourally rather than by source inspection.
 
-> **Update (2026-08-16, F4-3-R2):** gap 1 above — `LabOrderAttachment` has no
-> `legalHold` field — is **remediated in code and proved by tests**, and its
-> risk row (`R-079`) is `CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT`, **not
-> `CLOSED`**: PR #431 is a draft and the change is unmerged, undeployed and
-> unverified in production. Until then this document does not claim the gap is
-> closed in any running environment. See Section 16B. Gaps 2, 3 and 4 (`R-080`,
-> reverse-orphan detection, provider object-lock) remain **open** and are
-> untouched by that round.
+> **Update (2026-08-16, F4-3-R2, then F4-3-R079-CLOSE):** gap 1 above —
+> `LabOrderAttachment` has no `legalHold` field — is **remediated in code,
+> proved by tests, merged (PR #431), deployed and verified in production**. Its
+> risk row (`R-079`) is now **`CLOSED`**; the production release carrying the
+> gate is `b370b0181fa2f84e24f0f80560425da81f60dcb2` and the lifecycle is
+> verified end to end on the production host — see Section 16B, "Production
+> verification". Gaps 2, 3 and 4 (`R-080`, reverse-orphan detection, provider
+> object-lock) remain **open** and are untouched by either round.
 
 ## 16B. F4-3-R2 amendment (2026-08-16) — the lab-attachment legal-hold gate (R-079)
 
@@ -541,12 +541,59 @@ Behaviourally, not by source inspection:
 The new suite is wired into `server:test:non-disposable`, so it is a CI gate
 rather than a manual step.
 
+### Production verification (2026-08-16, `F4-3-R079-CLOSE`) — `R-079` `CLOSED`
+
+The lab-attachment legal-hold lifecycle is **production verified**. PR #431 is
+merged, the migration `20260816130000_add_lab_order_attachment_legal_hold` and
+the application are deployed to `disklinik-prod-01` at release
+`b370b0181fa2f84e24f0f80560425da81f60dcb2`, `prisma migrate status` reports
+**75 migrations found; database schema is up to date**, and the production
+schema carries `legalHold boolean NOT NULL DEFAULT false`, `legalHoldReason
+text NULL` and the index `LabOrderAttachment_clinicId_legalHold_idx` on
+`("clinicId", "legalHold")`.
+
+Verification ran against the demo clinic `gebzedisdunyasi`
+(`5211acf4-6a1c-49ec-a23b-a677b89133ea`) — **currently a demo clinic; no real
+customer is live and no real customer data was used.** The actor was user
+`0a711de6-d860-4198-be2c-ffbe8195d581`, stored role `admin` with
+`canAccessAllClinics: true`, which the central role normalization resolves to
+canonical **`OWNER`** — the same `OWNER`/`ORG_ADMIN` gate documented above.
+Subject: lab work order `ebd3ca0c-5502-4464-b34b-735ecedf2b5d`, lab attachment
+`d2394a45-6d03-48db-a736-d1ac5179d7d5`, initial `legalHold=false`. Production
+storage mode during the run was `remoteStorageEnabled=false`.
+
+| Step | Result | Evidence |
+|---|---|---|
+| **Hold set** | `PASS` | `PATCH .../legal-hold` `legalHold=true`, `reason="F4-3 R-079 production verification"` → HTTP `200`, `legalHold=true`; DB `legalHold=true`, `legalHoldReason="F4-3 R-079 production verification"` |
+| **Delete blocked** | `PASS` | `DELETE /api/lab-orders/ebd3ca0c-…/attachments/d2394a45-…` → HTTP `409`, `{"error": "ATTACHMENT_LEGAL_HOLD", "message": "This attachment is under legal hold and cannot be deleted."}` |
+| **DB row preserved** | `PASS` | after the blocked DELETE the row still existed, `legalHold=true`, `legalHoldReason` still persisted |
+| **Physical object preserved** | `PASS` | `filePath 5211acf4-6a1c-49ec-a23b-a677b89133ea/1783356895177-5rowfgf37dr.png`; via the application storage abstraction `fileExists=true`, `fileSize=525254`, `exit_code=0` |
+| **Audit evidence** | `PASS` | `lab_order_attachment_legal_hold_set` (`newLegalHold=true`, `previousLegalHold=false`) and `lab_order_attachment_delete_blocked_legal_hold`, both `actorUserId 0a711de6-…`, `actorRole admin`, `labWorkOrderId ebd3ca0c-…` |
+| **Hold released** | `PASS` | `PATCH .../legal-hold` `legalHold=false`, `reason="F4-3 R-079 production verification cleanup"` → HTTP `200`, `legalHold=false`; audit `lab_order_attachment_legal_hold_released` (`newLegalHold=false`, `previousLegalHold=true`); final object `fileExists=true`, `fileSize=525254`, `exit_code=0` |
+
+**Nuance to preserve, not to round off: releasing a hold does not null
+`legalHoldReason`.** After release the field still held the *release* reason,
+`"F4-3 R-079 production verification cleanup"`. That is the accepted current
+behaviour for this closure and is **not** an `R-079` failure — the column
+records the reason given for the most recent legal-hold transition in either
+direction, and both directions carry their own audit row. No claim is made
+anywhere that the field is cleared or set to `null` on release.
+
+The KVKK reading is the one Section 16B opened with: special-category health
+data under a retention obligation is now provably undeletable through the lab
+route, in production, with the block, the preservation and the release all
+carried on the audit trail. **Nothing beyond that is claimed.** There is still
+no hard delete, no provider object-lock or immutability, no durable delete
+queue, no automatic retry, and no reverse-orphan scan; `R-080` remains open;
+and §16A applies unchanged — none of this touches backups.
+
 ### What this amendment does NOT do
 
 - It adds **no UI**. A hold is placed and released through the API only; the
   frontend legal-hold control that exists for patient attachments has no lab
-  equivalent yet. That is a product decision and does not affect the proposed
-  closure of `R-079` — the gate is server-side and unconditional.
+  equivalent yet. That is a product decision and does not affect the closure of
+  `R-079` — the gate is server-side and unconditional, and was verified in
+  production through the API.
 - It sets **no retention period**, opens **no new deletion path**, and enables
   **no provider object-lock**.
 - `R-080` (durable deletion intent and automatic retry) and reverse-orphan
