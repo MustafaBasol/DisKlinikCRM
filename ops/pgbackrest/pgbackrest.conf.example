@@ -171,34 +171,100 @@ pg1-user=postgres
 ; data (KVKK Art. 6), Türkiye residency evidence E1-E5, and subprocessor
 ; register updates. See F4_RECOVERY_OPERATIONS.md §7.2.
 ;
-; Option 1 (RECOMMENDED — repo host over SSH). Chosen over S3 on procurement
-; evidence, not elegance: Türkiye IaaS is recorded as market-available, while
+; ⚠ TOPOLOGY DECIDED 2026-08-16 — F4-FCR-003-R2, runbook §22.4b.
+; SELECTED TOPOLOGY = C: an off-host repo2 with NO REPOSITORY HOST, written by
+; the production primary.
+;
+; The former "Option 1 (RECOMMENDED — repo host over SSH)" shape — repo2-host /
+; repo2-host-user — HAS BEEN REMOVED FROM THIS FILE, because it is the one shape
+; production's pgBackRest 2.50 refuses to back up from the primary:
+;
+;   ERROR: [072]: backup command must be run on the repository host
+;
+; That error is raised by repoIsLocalVerify(), whose entire test is whether
+; repoN-host is SET. It has nothing to do with --repo=2 and nothing to do with
+; running backup on the primary. Remove the repository host and it cannot fire.
+; Running the backup on the secondary instead would require repo-host ->
+; production SSH, which §16.5 forbids and §22.9 tests for the absence of.
+;
+; DO NOT REINTRODUCE repo2-host. Both shapes below were verified end to end on a
+; pinned pgBackRest 2.50 (backup, info, verify and a full restore, all invoked on
+; the PostgreSQL host), with the repo-host shape refused as a negative control.
+; scripts/noramedi-gate0-repo2-topology.sh reproduces it, and the pgBackRest
+; shell suite asserts this file publishes no active repo2-host line.
+;
+; ── Shape C1 — SFTP (PROCUREMENT-READY). A plain Türkiye VPS. No pgBackRest on
+; the far side, so no version parity to maintain and no remote protocol exposed.
+; Preferred today only because Türkiye IaaS is recorded as market-available and
 ; no Türkiye-resident S3-compatible provider is evidenced anywhere in this
 ; repository.
 ;
-;   repo2-host=<REPLACE>
-;   repo2-host-user=postgres
+;   repo2-type=sftp
 ;   repo2-path=/var/lib/pgbackrest
+;   repo2-sftp-host=<REPLACE>
+;   repo2-sftp-host-user=pgbackrest
+;   repo2-sftp-private-key-file=/var/lib/postgresql/.ssh/repo2
+;   repo2-sftp-public-key-file=/var/lib/postgresql/.ssh/repo2.pub
+;   repo2-sftp-host-key-hash-type=sha256
+;   repo2-sftp-host-fingerprint=<REPLACE — pin it; never host-key-check-type=none>
 ;   repo2-cipher-type=aes-256-cbc
 ;   repo2-cipher-pass=<REPLACE — distinct from repo1>
 ;   repo2-retention-full=7
 ;   repo2-retention-archive=7
+;   repo2-bundle=y
 ;
-; Option 3 (promote to primary the moment a named Türkiye S3-compatible
-; provider clears E1-E5 and counsel — it is better on every axis except
-; procurement evidence):
+;   ⚠ SFTP cost, measured not assumed: the Debian libssh2 build may offer only
+;   the SHA-1 `ssh-rsa` signature algorithm, so the endpoint's sshd may need
+;   `PubkeyAcceptedAlgorithms +ssh-rsa` and the keypair must be PEM
+;   (`ssh-keygen -m PEM -t rsa`). Without it: `ERROR [101]: public key
+;   authentication failed: libssh2 error [-18]`. That weakens the SECONDARY's
+;   auth posture — never production's — and it is build-dependent, so verify at
+;   CHECKPOINT 5 rather than assuming either way.
+;
+; ── Shape C2 — S3 (PROMOTE ON CLEARANCE). Better than C1 on immutability and on
+; not needing ssh-rsa at all. Promote the moment a named Türkiye S3-compatible
+; provider clears E1-E5 and counsel.
 ;
 ;   repo2-type=s3
+;   repo2-path=/noramedi
 ;   repo2-s3-bucket=<REPLACE>
-;   repo2-s3-endpoint=<REPLACE — https:// only>
+;   repo2-s3-endpoint=<REPLACE — host[:port], NOT a https:// URL>
 ;   repo2-s3-region=<REPLACE>
-;   repo2-s3-uri-style=host
+;   repo2-s3-uri-style=path
 ;   repo2-s3-key=<REPLACE>
 ;   repo2-s3-key-secret=<REPLACE>
+;   repo2-storage-verify-tls=y
+;   repo2-storage-ca-file=<REPLACE — only if the endpoint uses a private CA>
 ;   repo2-cipher-type=aes-256-cbc
 ;   repo2-cipher-pass=<REPLACE — distinct from repo1>
 ;   repo2-retention-full=7
 ;   repo2-retention-archive=7
+;   repo2-bundle=y
+;
+;   uri-style: pgBackRest defaults to `host` (bucket.endpoint). Most non-AWS
+;   S3-compatible endpoints need `path`. Getting this wrong presents as a DNS or
+;   certificate failure, not as a config error.
+;
+;   ⚠ Two bucket lifecycle rules are effectively MANDATORY, because pgBackRest
+;   never issues AbortMultipartUpload and is entirely version-unaware:
+;     - abort incomplete multipart uploads (orphaned parts are billed but are
+;       invisible to ListObjects, so they never show up in a size check);
+;     - expire noncurrent versions on a versioned bucket (pgBackRest's deletes
+;       only create delete-markers, so storage grows without bound while
+;       `expire` reports success).
+;
+;   ⚠ Do NOT enforce immutability by revoking the credential's delete right.
+;   `backup` runs `expire` automatically and `expire-auto` is GLOBAL, not
+;   per-repository — so a WORM/object-locked repo2 fails the backup command
+;   itself, at the expire stage, after the data has already been written. Use a
+;   provider-side retention policy instead.
+;
+; ── Both shapes: repo2-bundle=y is not cosmetic. Object and file names are NOT
+; encrypted, so without bundling the repository leaks PostgreSQL relation paths
+; and per-relation sizes (base/<db-oid>/<relfilenode>) to whoever can list the
+; storage. Bundling collapses those into opaque bundle/<n> objects. Contents are
+; encrypted either way; this is about metadata. Requires >= 2.41 — preflight
+; verifies and comments it out on older builds.
 ;
 ; Both retention keys are REQUIRED on either shape, and the preflight now
 ; refuses a repo2 without them. They were previously present on the SSH block
@@ -210,13 +276,20 @@ pg1-user=postgres
 ;   1. Does this build support multiple repositories at all?  (`pgbackrest
 ;      version`; multi-repo is not present in older builds, and Ubuntu's
 ;      distro package may lag PGDG.)
-;   2. Does an UNREACHABLE repo2 stall archive-push and let pg_wal grow until
-;      the cluster shuts down?  This is a PRODUCTION-OUTAGE risk, not a
-;      documentation nicety. Establish the failure semantics on a scratch
-;      host before pointing production at a remote repo.
-;   3. Does this build support repo-type=sftp (no pgBackRest needed on the far
-;      side)? If not, repo-host mode requires pgBackRest installed and
-;      version-matched on BOTH hosts.
+;   2. ANSWERED (F4-FCR-003 Gate 0, runbook §22.4/§22.4a). An unreachable repo2
+;      FAILS archive-push as a whole — including archiving to repo1 — so
+;      archived_count freezes, failed_count rises, the .ready backlog and pg_wal
+;      grow, and PostgreSQL keeps accepting writes. Identical on 2.50 and
+;      2.59.0. The risk is observable disk growth, not silent data loss, which
+;      is exactly what the WAL-backlog monitoring in §22.4a exists to catch.
+;      There is NO per-repo "best effort" option: archive-push throws if any
+;      repo errored, by design, so PostgreSQL does not recycle the segment.
+;   3. ANSWERED (F4-FCR-003-R2, runbook §22.4b). 2.50 supports repo-type=sftp
+;      AND repo-type=s3, and both were verified end to end from the PostgreSQL
+;      host on a pinned 2.50. Neither needs pgBackRest on the far side.
+;   4. Does the repo2 block contain repo2-host?  It MUST NOT. That single key is
+;      what raises ERROR [072] on 2.50 and is the whole reason this file no
+;      longer publishes a repo-host shape. See §22.4b.
 ;
 ; ⚠ A SECOND repo PATH ON THIS SAME HOST IS NOT OFF-HOST. Neither is a second
 ; mount, a bind mount, a loopback S3 endpoint, or a remote-looking hostname

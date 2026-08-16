@@ -245,12 +245,12 @@
 #     are waiting to be archived. This is the DIRECT backlog signal: it rises
 #     the moment archive-push stops succeeding and falls as the backlog
 #     drains. Suggested starting value 32 (≈512 MiB at the 16 MiB default
-#     segment size); see runbook §16.5 for the derivation and confirm it
+#     segment size); see runbook §22.4a for the derivation and confirm it
 #     against the host's measured WAL rate before activation.
 #   NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES         default: 0 (0 = off)
 #     — max total bytes in pg_wal. Deliberately has NO non-zero default: the
 #     safe value is a function of free space on the PGDATA filesystem, which
-#     is a per-host fact this repository cannot know. §16.5 requires the
+#     is a per-host fact this repository cannot know. §22.4a requires the
 #     operator to set it from a measured `df` before repo2 activation.
 #   NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG   default: false
 #     — the activation gate. Set to exactly "true" when repo2 goes live. It
@@ -493,7 +493,7 @@ fi
 # mistaken for a transient alert.
 if [[ "$PITR_REQUIRE_WAL_BACKLOG" == "true" ]]; then
   if [[ "$PITR_MAX_WAL_READY_COUNT" -eq 0 ]] || [[ "$PITR_MAX_WAL_BYTES" -eq 0 ]]; then
-    echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true but NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT='$PITR_MAX_WAL_READY_COUNT' and/or NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES='$PITR_MAX_WAL_BYTES' is 0 (not evaluated). An unreachable repo2 suspends the ENTIRE archive chain and the failure arrives as pg_wal growth; set both from this host's measured capacity before activating repo2 (runbook 16.5)." >&2
+    echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true but NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT='$PITR_MAX_WAL_READY_COUNT' and/or NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES='$PITR_MAX_WAL_BYTES' is 0 (not evaluated). An unreachable repo2 suspends the ENTIRE archive chain and the failure arrives as pg_wal growth; set both from this host's measured capacity before activating repo2 (runbook 22.4a)." >&2
     exit "$CONFIG_ERROR_EXIT_CODE"
   fi
 fi

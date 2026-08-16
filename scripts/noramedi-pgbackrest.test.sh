@@ -148,6 +148,13 @@ for a in "\$@"; do
   esac
 done
 case "\$*" in
+  # The wrapper always ends the backup/expire command with the subcommand word,
+  # so anchor on that rather than on a bare *backup* — repository paths such as
+  # /root/noramedi-backups would otherwise match and silently swallow a run.
+  *" backup")
+    [[ -n "\${FAKE_BACKUP_STDERR:-}" ]] && echo "\${FAKE_BACKUP_STDERR}" >&2
+    exit "\${FAKE_BACKUP_RC:-0}" ;;
+  *" expire") exit "\${FAKE_EXPIRE_RC:-0}" ;;
   *info*) printf '%s' "\${FAKE_INFO_JSON:-[]}"; exit "\${FAKE_INFO_RC:-0}" ;;
   *check*) exit "\${FAKE_CHECK_RC:-0}" ;;
   *restore*) exit "\${FAKE_RESTORE_RC:-0}" ;;
@@ -823,6 +830,118 @@ printf '[global]\nrepo1-path=%s\nrepo2-path=%s\nrepo2-cipher-type=aes-256-cbc\n'
 EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_LOCAL2" NORAMEDI_PGBACKREST_MIN_FREE_MB=999999 FAKE_FREE_MB=500)
 run bash "$BACKUP" --repo 2 --dry-run
 [[ "$CODE" -eq 4 ]] && pass "a local-path repo2 still triggers the disk-exhaustion abort (it shares this filesystem)" || fail "expected exit 4, got $CODE ($OUT)"
+
+# ════════════════════════════════════════════════════════════════════════
+section "repo2 topology: ERROR [072] must surface, not be masked (F4-FCR-003-R2)"
+
+# Production runs pgBackRest 2.50, where `backup --repo=2` is REFUSED on the
+# PostgreSQL host when repo2-host is set:
+#   ERROR: [072]: backup command must be run on the repository host
+# The runbook now publishes the no-repo-host shape (§22.4b) precisely so this
+# cannot happen. But if a repo2-host ever creeps back into the config, the
+# operator must SEE the refusal. The wrapper must not swallow it, must not
+# report success, and must not silently fall back to repo1.
+CONF_072="$WORK/pgbackrest-072.conf"
+printf '[global]\nrepo1-path=%s\nrepo2-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\n' \
+  "$WORK/repo" > "$CONF_072"
+ERR_072='ERROR: [072]: backup command must be run on the repository host'
+
+# These assertions need the REAL invocation path, not --dry-run, because the
+# behaviour under test is what the wrapper does with pgBackRest's exit status.
+# That path requires root in order to delegate to the postgres OS user, so `id`
+# is faked for this section only and removed immediately afterwards — a global
+# fake would silently disable the root check in every later test.
+cat > "$FAKEBIN/id" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == "-u" ]] && { echo 0; exit 0; }
+exec /usr/bin/id "$@"
+EOF
+chmod +x "$FAKEBIN/id"
+
+# The wrapper also refuses to run without an overlap guard, and flock is absent
+# on Git Bash. Faking it keeps this section deterministic on both platforms;
+# the overlap guard has its own coverage and is not what these assertions test.
+# Removed together with `id` at the end of the section.
+cat > "$FAKEBIN/flock" <<'FLOCKEOF'
+#!/usr/bin/env bash
+exit 0
+FLOCKEOF
+chmod +x "$FAKEBIN/flock"
+mkdir -p "$WORK/lockdir"
+LOCK_072="$WORK/lockdir/pgbackrest.lock"
+
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_072" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" \
+           NORAMEDI_PGBACKREST_LOCK_FILE="$LOCK_072" \
+           FAKE_FREE_MB=65000 FAKE_BACKUP_RC=72 FAKE_BACKUP_STDERR="$ERR_072")
+run bash "$BACKUP" --repo 2 --type full
+[[ "$CODE" -eq 1 ]] \
+  && pass "a repo2 backup refused with ERROR [072] exits non-zero (the refusal is not swallowed)" \
+  || fail "expected exit 1 on a 072 refusal, got $CODE ($OUT)"
+[[ "$OUT" == *"072"* ]] \
+  && pass "the ERROR [072] text reaches the operator's output verbatim" \
+  || fail "the 072 refusal was masked — an operator would not learn why repo2 failed ($OUT)"
+[[ "$OUT" != *"completed in"* ]] \
+  && pass "a refused repo2 backup is never reported as completed" \
+  || fail "a refused backup reported completion ($OUT)"
+
+# NON-VACUOUS CONTROL. The same config and the same wrapper, with the refusal
+# removed, must succeed — otherwise the three assertions above would also pass
+# on a wrapper that simply always fails, and would prove nothing.
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_072" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" \
+           NORAMEDI_PGBACKREST_LOCK_FILE="$LOCK_072" \
+           FAKE_FREE_MB=65000 FAKE_BACKUP_RC=0)
+run bash "$BACKUP" --repo 2 --type full
+[[ "$CODE" -eq 0 ]] \
+  && pass "control: the identical invocation succeeds when pgBackRest does not refuse (the 072 assertions are non-vacuous)" \
+  || fail "control failed — the 072 assertions above cannot be trusted (exit $CODE: $OUT)"
+
+# A refused repo2 must NOT be retried against repo1. Writing repo1 and calling
+# it done would report a green off-host backup that never left the host.
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_072" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" \
+           NORAMEDI_PGBACKREST_LOCK_FILE="$LOCK_072" \
+           FAKE_FREE_MB=65000 FAKE_BACKUP_RC=72 FAKE_BACKUP_STDERR="$ERR_072")
+: > "$WORK/pgbackrest.log"
+run bash "$BACKUP" --repo 2 --type full
+if grep -q -- '--repo=2' "$WORK/pgbackrest.log" \
+   && ! grep -E 'pgbackrest --stanza=[^ ]+ --type=[a-z]+ backup$' "$WORK/pgbackrest.log" >/dev/null; then
+  pass "a refused repo2 backup is not retried against repo1 (no repo-less backup invocation follows)"
+else
+  fail "a repo1 fallback was attempted after a repo2 refusal: $(cat "$WORK/pgbackrest.log")"
+fi
+
+# Root is required only by the real invocation path above; restore the genuine
+# `id` before the shape checks so nothing downstream inherits the bypass.
+rm -f "$FAKEBIN/id" "$FAKEBIN/flock"
+
+# The published shapes must be usable on 2.50, which means no repo2-host. Both
+# no-repo-host transports were verified end to end on a pinned 2.50 by
+# scripts/noramedi-gate0-repo2-topology.sh; here we only assert the wrapper
+# drives them without reintroducing a repository host.
+for shape_conf in \
+  "s3:repo2-type=s3\nrepo2-s3-bucket=b\nrepo2-s3-endpoint=obj.example.tr\nrepo2-s3-uri-style=path" \
+  "sftp:repo2-type=sftp\nrepo2-sftp-host=backup.example.tr\nrepo2-sftp-host-user=pgbackrest"
+do
+  shape="${shape_conf%%:*}"
+  body="${shape_conf#*:}"
+  CONF_SHAPE="$WORK/pgbackrest-${shape}-topology.conf"
+  # shellcheck disable=SC2059
+  printf "[global]\nrepo1-path=%s\n${body}\nrepo2-cipher-type=aes-256-cbc\n" "$WORK/repo" > "$CONF_SHAPE"
+  [[ "$(grep -c '^repo2-host' "$CONF_SHAPE")" -eq 0 ]] \
+    && pass "the ${shape} repo2 shape declares no repo2-host (the ERROR [072] trigger)" \
+    || fail "the ${shape} shape reintroduced repo2-host"
+  EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_SHAPE" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/no-such-repo" \
+             NORAMEDI_PGBACKREST_MIN_FREE_MB=999999 FAKE_FREE_MB=10)
+  run bash "$BACKUP" --repo 2 --dry-run
+  [[ "$CODE" -eq 0 ]] && [[ "$OUT" == *"--repo=2"* ]] \
+    && pass "the wrapper drives a ${shape} repo2 from this host without local-disk preconditions" \
+    || fail "expected exit 0 with --repo=2 for the ${shape} shape, got $CODE ($OUT)"
+done
+
+# The published config example must not publish the shape production refuses.
+CONF_EXAMPLE="$SCRIPT_DIR/../ops/pgbackrest/pgbackrest.conf.example"
+[[ "$(grep -cE '^[[:space:]]*repo2-host[[:space:]]*=' "$CONF_EXAMPLE")" -eq 0 ]] \
+  && pass "pgbackrest.conf.example publishes no active repo2-host line (§22.4b removed the repo-host shape)" \
+  || fail "pgbackrest.conf.example still publishes an active repo2-host — that shape is refused on production's 2.50"
 
 # ════════════════════════════════════════════════════════════════════════
 section "Restore drill: refuses unsafe targets"

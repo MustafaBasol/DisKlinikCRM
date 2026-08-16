@@ -90,6 +90,14 @@ MAILTO=root
 #
 # Staggered an hour after the repo1 full so the two never contend for the
 # stanza lock — the wrapper would exit 5 (lock held) and skip the run.
+#
+# RUN ON: production-primary. This entry belongs on the PostgreSQL host and
+# nowhere else. Under the topology selected by F4-FCR-003-R2 (runbook §22.4b)
+# repo2 has NO repository host, so the primary drives the backup itself and
+# pgBackRest 2.50 accepts it. Had the repo-host shape been chosen instead, this
+# line would have had to move to the secondary — and `backup --repo=2` here
+# would fail with ERROR [072]. If this entry ever starts failing that way, the
+# cause is a repo2-host key in /etc/pgbackrest/pgbackrest.conf, not this cron.
 #30 3 * * *  root  /usr/local/sbin/noramedi-pgbackrest-backup.sh --repo 2 --type full
 
 # Weekly PITR restore drill, Sunday 03:45 — COMMENTED OUT until the first

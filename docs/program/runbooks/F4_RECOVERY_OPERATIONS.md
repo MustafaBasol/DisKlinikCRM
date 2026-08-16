@@ -835,39 +835,55 @@ pgbackrest help backup | grep -- --repo  # confirm the option exists on THIS bui
 
 #### Steps
 
-```bash
+# ⚠ REWRITTEN 2026-08-16 by F4-FCR-003-R2. This sequence previously configured
+#   repo2-host / repo2-host-user, which is the ONE shape production's pgBackRest
+#   2.50 refuses to back up from the primary (ERROR [072]). Topology C removes
+#   the repository host entirely. See §22.4b.
+
+# RUN ON: repo2-host
 # 1-4. Provider, network, account, repository directory (on the NEW host).
 #      Prerequisite: E1-E5 in hand, DPA signed, register updated (§16.2).
-#      Firewall: allow ONLY the production host -> backup host :22.
+#      Firewall: allow ONLY the production host -> backup host :22 (SFTP shape)
+#      or nothing inbound at all (S3 shape — production egresses to :443).
 #      One-way trust: the backup host must not be able to reach production.
 sudo adduser --system --group --home /var/lib/pgbackrest pgbackrest
 sudo install -d -o pgbackrest -g pgbackrest -m 0750 /var/lib/pgbackrest
-#      Install pgBackRest on the backup host and VERSION-MATCH it to production
-#      (repo-host mode requires it on both sides unless repo-type=sftp is used).
+#      DO NOT install pgBackRest on the backup host. Under topology C it is a
+#      dumb storage endpoint: no pgBackRest, therefore no version parity to
+#      maintain, no remote protocol exposed, and no repo-host option set.
+#      SFTP shape only: the Debian libssh2 build may negotiate only the SHA-1
+#      `ssh-rsa` signature algorithm, so the endpoint's sshd may need
+#      `PubkeyAcceptedAlgorithms +ssh-rsa`, and the keypair must be PEM
+#      (`ssh-keygen -m PEM -t rsa`). Verify at CHECKPOINT 5, and prefer the S3
+#      shape if a Türkiye-resident provider clears E1-E5.
 
-# 5-8. Encryption, config, secrets (on PRODUCTION).
+# RUN ON: production-primary
+# 5-8. Encryption, config, secrets.
 #      Generate a repo2 passphrase DISTINCT from repo1 -- preflight now rejects
 #      a reused one. Escrow both, plus ENCRYPTION_KEY, OUTSIDE the failure
 #      domain of both hosts (§15). An off-host encrypted copy whose only key
-#      lived on the destroyed host is not a backup.
-#      ⚠ ON THE SECONDARY, declare the repository under the SAME INDEX the
-#      primary uses for it — repo2-path, NOT repo1-path. In repo-host mode the
-#      remote inherits the primary's option set, so a secondary that calls its
-#      own repository repo1 collides with the repo2-path passed down:
-#        ERROR: [032]: local repo1 and repo2 paths are both
-#                      '/var/lib/pgbackrest' but must be different
-#      That message names PATHS, not indexes, so it reads as a directory
-#      mistake and sends you to change a path that is already correct.
-#      Established by F4-FCR-003 Gate 0; see §22.4.
+#      lived on the destroyed host is not a backup. The passphrase is fixed at
+#      stanza-create and CANNOT be rotated in place -- escrow it before, not
+#      after.
+#      ⚠ The ERROR [032] index collision documented here previously applied to
+#      the secondary's own config file. Topology C gives the secondary no
+#      config file at all, so that trap no longer exists.
 #
-#      Append to /etc/pgbackrest/pgbackrest.conf (mode 0600) ON PRODUCTION:
-#        repo2-host=<BACKUP_HOST>
-#        repo2-host-user=pgbackrest
+#      Append to /etc/pgbackrest/pgbackrest.conf (mode 0600):
+#        # NO repo2-host / repo2-host-user -- that is the ERROR [072] shape.
+#        repo2-type=sftp                     # or s3; see §22.4b
 #        repo2-path=/var/lib/pgbackrest
+#        repo2-sftp-host=<BACKUP_HOST>
+#        repo2-sftp-host-user=pgbackrest
+#        repo2-sftp-private-key-file=/var/lib/postgresql/.ssh/repo2
+#        repo2-sftp-public-key-file=/var/lib/postgresql/.ssh/repo2.pub
+#        repo2-sftp-host-key-hash-type=sha256
+#        repo2-sftp-host-fingerprint=<pinned; do NOT use host-key-check-type=none>
 #        repo2-cipher-type=aes-256-cbc
 #        repo2-cipher-pass=<distinct from repo1, escrowed>
 #        repo2-retention-full=7
 #        repo2-retention-archive=7
+#        repo2-bundle=y                      # requires >= 2.41; preflight verifies
 
 # 9. Validate BEFORE moving data. Preflight now checks repo2 encryption AND
 #    that repo2 carries retention keys.
@@ -879,17 +895,23 @@ sudo install -d -o pgbackrest -g pgbackrest -m 0750 /var/lib/pgbackrest
 #    this step. `--repo` IS valid for backup / restore / info / expire /
 #    verify, which is why the backup wrapper and the restore drill are
 #    unaffected. See §22.4.
+# RUN ON: production-primary
 sudo bash scripts/noramedi-pgbackrest-preflight.sh
 sudo -u postgres pgbackrest --stanza=noramedi stanza-create
 sudo -u postgres pgbackrest --stanza=noramedi check
 
+# RUN ON: production-primary
 # 10-12. First off-host backup, WAL continuity, repository health.
+#        ⚠ CORRECTED 2026-08-16 by F4-FCR-003-R2. This step is what ERROR [072]
+#        blocked. It succeeds on 2.50 because topology C configures no
+#        repo2-host; it would still fail if a repo2-host key were present.
 sudo /usr/local/sbin/noramedi-pgbackrest-backup.sh --repo 2 --type full
 sudo -u postgres pgbackrest --stanza=noramedi --repo=2 info
 sudo -u postgres psql -Atc "SELECT archived_count, last_failed_wal FROM pg_stat_archiver;"
 sudo -u postgres pgbackrest --stanza=noramedi --repo=2 verify   # integrity, NOT a restore test
 sudo bash scripts/noramedi-pgbackrest-status.sh --stdout        # expect offHost="unproven"
 
+# RUN ON: production-primary
 # 13-16. Controlled restore FROM repo2, smokes, cleanup.
 #        Follow the §21.3 marker procedure first. Application and
 #        tenant-isolation smokes run inside the drill; cleanup is verified.
@@ -897,6 +919,7 @@ sudo bash scripts/noramedi-pgbackrest-restore-drill.sh --repo 2 --record \
      --stanza noramedi --set <BACKUP_LABEL> --marker-seg <WAL> --marker-b-at <TS>
 sudo bash scripts/noramedi-pgbackrest-status.sh --stdout        # only NOW may it read "yes"
 
+# RUN ON: production-primary
 # 17. Schedule it. A one-off backup plus a proof marker is NOT durability:
 #     the marker stays valid 30 days, so without this the off-host copy would
 #     age silently behind a green tick. opscheck now fails on exactly that,
@@ -1919,12 +1942,8 @@ the **repo-host → production** direction — precisely the direction §16.5
 forbids ("the backup host must not be able to reach production"), and the
 direction the one-way trust in §22.9 deliberately does not create.
 
-So on production's current build, **§22.11 as written cannot work**:
-`noramedi-pgbackrest-backup.sh --repo 2` runs on the primary. Either
-pgBackRest is upgraded first (a separate, sequenced change that is not
-authorized here), or the one-way trust model is revisited (which is a security
-decision, not a runbook edit). **Do not attempt CHECKPOINT 7 on 2.50 without
-resolving this first.**
+**F4-FCR-003-R2 resolved this. The condition is narrower than it looked, and
+the fix costs neither an upgrade nor a change to the trust model — see §22.4b.**
 
 ### Thresholds — how to choose them, and why there is no default byte figure
 
@@ -2009,10 +2028,144 @@ Deploy `noramedi-pgbackrest-status.sh` **before** setting any limit.
 - **repo2 RESTORABILITY on 2.50.** No repo2 base backup could be taken on that
   build in this harness (see `ERROR [072]` above), so the 2.50 run is capped at
   `PASS_ARCHIVE_SEMANTICS_ONLY` and claims the archive-push semantics only.
+  **Superseded for the selected topology by §22.4b**, which took a full repo2
+  base backup and restored it on 2.50 — but only for a repo2 with **no
+  repository host**. The `repo2-host` shape remains unrestorable on 2.50.
 - **Anything about production.** Every Gate 0 result remains
   `OBSERVED_LOCAL_ONLY`. A pinned local build is version parity, not production
   verification: production's filesystem, WAL rate, network and load are not
   reproduced here.
+
+---
+
+## 22.4b F4-FCR-003-R2 — repo2 topology decision
+
+**`SELECTED TOPOLOGY = C` — an off-host repo2 with NO repository host, written
+by the production primary.**
+
+### The condition is `repo2-host`, not `--repo=2`
+
+`ERROR [072]` is `HostInvalidError`. In 2.50 it is raised by
+`repoIsLocalVerify()` in `src/protocol/helper.c`, called as the first statement
+of `cmdBackup()`. The whole test is:
+
+```c
+FUNCTION_LOG_RETURN(BOOL, !cfgOptionIdxTest(cfgOptRepoHost, repoIdx));
+```
+
+It fires **only when `repoN-host` is configured**. A repository that has no
+repository host — an object store, or an SFTP endpoint — is "local" by this
+definition, so the check passes and the backup runs on the primary. `backup`
+and `expire` were the only two commands ever carrying it; `info`, `verify` and
+`restore` never did.
+
+That reframes the blocker. It was never "2.50 cannot back up to repo2" or
+"backup cannot run on the primary". It was **"2.50 cannot back up to a repo2
+that has a repository host"** — and the runbook only ever had a repository host
+because §16 chose the SSH shape on procurement evidence, not on technical need.
+
+### What was actually run
+
+Disposable Docker, PostgreSQL 16.14, pgBackRest pinned to **2.50** through
+`apt-archive.postgresql.org` and re-verified against the running binary.
+Synthetic data only; no production contact. Every command below was invoked
+**on the PostgreSQL host**.
+
+| Experiment | repo2 shape | `backup --repo=2` on the primary |
+|---|---|---|
+| R1 (§22.4a) | `repo2-host` over SSH | **REFUSED — `ERROR [072]`** |
+| **R2-E3** | `repo2-type=s3` | **completed successfully (exit 0)** |
+| **R2-E4** | `repo2-type=sftp` | **completed successfully (exit 0)** |
+
+Both R2 shapes then completed `info --repo=2` (`status: ok`,
+`cipher: aes-256-cbc`), `verify --repo=2` (exit 0), and a full
+`restore --repo=2` into a scratch path (exit 0, 970–971 files) — so unlike the
+2.50 arm of §22.4a, **repo2 restorability is no longer untested on 2.50.**
+
+**Confidentiality, measured rather than asserted.** 3 000 rows carrying a
+synthetic PHI marker were written, checkpointed and backed up. The marker
+appears **6 000 times in PGDATA** — PHI is not encrypted at rest on the primary
+— and **0 times** across all 1 001 stored repo2 objects (9 919 680 bytes), both
+raw and after decompressing every object. Repository objects carry the OpenSSL
+`Salted__` envelope. With the passphrase supplied via the environment but
+wrong, `info --repo=2` fails with `[FormatError] unable to load info file`;
+with the correct passphrase from the config it reports `status: ok`. **The
+storage operator holds ciphertext only.**
+
+### Why not A, and why not B
+
+**Option A — repository-host-driven backup. REJECTED.** It is the one option
+that gives a PHI database host a new **inbound** trust relationship, and it
+does so *on top of* the outbound path it cannot remove: `archive_command` runs
+on the primary by definition, so production→repo-host SSH is still required for
+WAL. A therefore makes trust **mutual**, not reversed, and its exposure is a
+strict superset of every alternative. It contradicts two published, armed gates
+— §16.5 ("the backup host must not be able to reach production") and §22.9's
+`UNREACHABLE_GOOD` — which would have to be deleted, not adjusted. It also
+moves the backup off `noramedi-pgbackrest-backup.sh`, so the fail-closed
+encryption gate that refuses to write an unencrypted repo2 stops being enforced
+by code. And it is not even established to work: §22.4a's harness *did* retry
+the backup from the repository host on 2.50 and that retry **also failed**
+(`ERROR_072_THEN_REPO_HOST_BACKUP_ALSO_FAILED`).
+
+**Option B — upgrade pgBackRest first. REJECTED as unnecessary, not as
+unsound.** The capability is real and the minimum version is exact: the check
+was deleted in **2.55.0** (2025-04-21, PR 2512, "Allow backup command to
+operate on remote repositories"); `repoIsLocalVerify` is present through 2.54.2
+and absent from 2.55.0 onward. Upstream CI now runs primary-invoked `backup`
+against a genuine SSH repo host. The upgrade is also low-risk in itself —
+`REPOSITORY_FORMAT` is `5` at every tag from 2.50 to 2.59.0, so repo1 stays
+readable with no re-init and no `stanza-upgrade`.
+
+But B buys **primary-driven backup against a repository host**, and R2 proves
+the primary can already drive repo2 on 2.50 whenever repo2 has no repository
+host. B pays a package upgrade on a live PHI database host — plus 2.59.0's new
+restriction that only `restore` may run as root by default (which would break
+the existing root-invoked cron wrapper), a possible `/etc/pgbackrest.conf`
+dpkg conffile prompt, and a standing requirement that both hosts be upgraded in
+the same window forever after — to obtain a capability already in hand.
+
+**Upgrading remains a legitimate future option.** It is simply not a
+prerequisite for R-030-DB, and it should not be sequenced in front of it.
+
+### Transport: two proven shapes, one architecture
+
+The decision fixes the **topology** — where `backup` runs and which way trust
+flows. It does not fix the transport, and both proven shapes satisfy it:
+
+| | `repo2-type=s3` | `repo2-type=sftp` |
+|---|---|---|
+| Works on 2.50, primary-driven | yes (R2-E3) | yes (R2-E4) |
+| pgBackRest on the secondary | none | **none** |
+| Version parity burden | none | none |
+| Türkiye residency evidence | hardest — a new vendor class, and **no Türkiye-resident S3-compatible provider is evidenced as procurable** anywhere in this repository | E1–E5 on a plain TR VPS, which §16 records as market-available |
+| Native object-lock / immutability | yes | no |
+| Known operational cost | none found | the Debian libssh2 build offers only the SHA-1 `ssh-rsa` signature algorithm, so the endpoint's sshd must re-enable `PubkeyAcceptedAlgorithms +ssh-rsa`, and the keypair must be PEM (`ssh-keygen -m PEM -t rsa`) |
+
+**`repo2-type=sftp` on a Türkiye VPS is the procurement-ready shape** — it is
+the only one whose residency evidence can be assembled from a provider this
+program has already recorded as available. **`repo2-type=s3` is better on
+immutability and should be promoted the moment a Türkiye-resident
+S3-compatible provider clears E1–E5.** Neither is authorized here; §16.2's
+seven prerequisites are unmet for both.
+
+> **`ssh-rsa` is a real cost, not a footnote.** Re-enabling a SHA-1 signature
+> algorithm on the backup endpoint's sshd weakens that host's authentication
+> posture. It applies to the **secondary**, never to production, and it is
+> build-dependent — production's own libssh2 may already negotiate `rsa-sha2`.
+> **Verify it on the secondary before committing to SFTP**, and prefer S3 if a
+> Türkiye provider clears.
+
+### What this does NOT do
+
+It does not close `R-030-DB`, satisfy `FIRST_CUSTOMER_RECOVERY_GATE`, authorize
+§16.5, or touch production. The secondary Türkiye VPS is still **NOT
+PROCURED**, §16.2's seven prerequisites are still unmet, and no repo2-sourced
+restore drill has run. Every R2 result is `OBSERVED_LOCAL_ONLY`. What it
+removes is the **last unresolved technical topology question** — nothing more.
+
+Full data: `evidence/F4-FCR-003-R2_repo2_topology.json`. Reproduce with
+`scripts/noramedi-gate0-repo2-topology.sh`.
 
 ---
 
@@ -2119,43 +2272,101 @@ whose only key lived on the destroyed host is not a backup.
 
 ## 22.9 CHECKPOINT 5 — connectivity preflight (non-destructive)
 
+**Topology C (§22.4b): repo2 has NO repository host.** The secondary is a dumb
+storage endpoint, so there is **no pgBackRest on it and no version parity to
+check**. The one-way trust rule is unchanged and still gates this checkpoint.
+
+**SFTP transport.**
+
 ```bash
+# RUN ON: production-primary
 # Reachability and one-way trust. BatchMode so it cannot sit on a prompt.
 sudo -u postgres ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
      pgbackrest@BACKUP_HOST true && echo SSH_OK
 
+# RUN ON: production-primary
 # known_hosts MUST be pre-populated. The status unit runs under
 # ProtectSystem=strict with the postgres home read-only, so a first connection
 # that needs to APPEND known_hosts fails, `check` errors, and checkStatus pins
 # to "failed" — a permanent FALSE RED on a healthy cluster.
 sudo -u postgres ssh-keyscan -H BACKUP_HOST >> ~postgres/.ssh/known_hosts
-sudo -u postgres ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-     pgbackrest@BACKUP_HOST 'pgbackrest version'   # must match production
 
+# RUN ON: production-primary
+# The secondary must NOT have pgBackRest. Under topology C it is storage only;
+# a pgBackRest there is a sign the repo-host shape crept back in.
+sudo -u postgres ssh pgbackrest@BACKUP_HOST 'command -v pgbackrest || echo NO_PGBACKREST_GOOD'
+
+# RUN ON: production-primary
+# libssh2 in the Debian pgBackRest build may offer only the SHA-1 `ssh-rsa`
+# signature algorithm. Confirm the endpoint accepts the keypair BEFORE
+# CHECKPOINT 7, and record which algorithm was negotiated (§22.4b).
+sudo -u postgres ssh -v -o BatchMode=yes pgbackrest@BACKUP_HOST true 2>&1 \
+  | grep -iE 'server accepts key|signature algorithm|Authenticated'
+
+# RUN ON: production-primary
 # Prove the target is NOT this host.
 hostname -f; hostname -I
 getent hosts BACKUP_HOST
 sudo -u postgres ssh pgbackrest@BACKUP_HOST 'hostname -f; hostname -I'
-
-# The backup host must NOT be able to reach production (one-way trust).
-# Run from the BACKUP host; it must fail to open a connection to production:
-#   timeout 5 bash -c "cat < /dev/null > /dev/tcp/PROD_HOST/22" && echo REACHABLE_BAD || echo UNREACHABLE_GOOD
 ```
 
-**Gate:** `UNREACHABLE_GOOD`, version parity, and two clearly different hosts.
+**S3 transport.**
+
+```bash
+# RUN ON: production-primary
+# Endpoint reachability and TLS. No SSH exists in this shape at all.
+getent hosts REPO2_S3_ENDPOINT
+curl -sS -o /dev/null -w '%{http_code} %{remote_ip}\n' https://REPO2_S3_ENDPOINT
+
+# RUN ON: production-primary
+# Record the certificate chain and the resolved address — both are residency
+# evidence (E3), and neither a hostname nor a bucket name is evidence on its own.
+openssl s_client -connect REPO2_S3_ENDPOINT:443 -servername REPO2_S3_ENDPOINT \
+  </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer -dates
+```
+
+**One-way trust — both transports.**
+
+```bash
+# RUN ON: repo2-host
+# The backup host must NOT be able to reach production. This must FAIL.
+timeout 5 bash -c "cat < /dev/null > /dev/tcp/PROD_HOST/22" \
+  && echo REACHABLE_BAD || echo UNREACHABLE_GOOD
+```
+
+**Gate:** `UNREACHABLE_GOOD`, two clearly different hosts, and — for SFTP —
+`NO_PGBACKREST_GOOD` plus a successful key negotiation.
+
+> Under the rejected Option A this gate would have had to be **deleted**, since
+> Option A requires exactly the reachability this asserts is absent. Topology C
+> preserves it, which is a large part of why it was selected (§22.4b).
 
 ## 22.10 CHECKPOINT 6 — configuration activation (bounded mutation)
 
+**Every command in this checkpoint runs on production.** Under topology C the
+secondary holds no pgBackRest and no pgBackRest configuration, so there is no
+second config file to edit and no second hash to record.
+
 ```bash
+# RUN ON: production-primary
 sudo cp -a /etc/pgbackrest/pgbackrest.conf /etc/pgbackrest/pgbackrest.conf.bak
 sudo sha256sum /etc/pgbackrest/pgbackrest.conf        # BEFORE hash — record it
 
-# Append the repo2 block from §16.5. On the SECONDARY use repo2-path (§22.4).
+# RUN ON: production-primary
+# Append the repo2 block from §16.5 — the NO-repository-host shape (§22.4b).
+# There must be no repo2-host key; that key is what raises ERROR [072] on 2.50.
 sudoedit /etc/pgbackrest/pgbackrest.conf
 sudo chmod 0600 /etc/pgbackrest/pgbackrest.conf
 
+# RUN ON: production-primary
 sudo sha256sum /etc/pgbackrest/pgbackrest.conf        # AFTER hash — record it
 sudo bash scripts/noramedi-pgbackrest-preflight.sh    # encryption + retention
+
+# RUN ON: production-primary
+# Fail-closed assertion: repo2 must NOT carry a repository host.
+grep -q '^[[:space:]]*repo2-host' /etc/pgbackrest/pgbackrest.conf \
+  && echo 'REPO2_HOST_PRESENT_BAD — this is the ERROR [072] shape (§22.4b)' \
+  || echo 'NO_REPO2_HOST_GOOD'
 ```
 
 **Effect on repo1: none.** No PostgreSQL reload or restart is required — this
@@ -2167,9 +2378,21 @@ current `noramedi-pgbackrest-status.sh` first, then add to the opscheck
 environment file, in the SAME change that adds the repo2 block:
 
 ```bash
+# RUN ON: production-primary   (/etc/noramedi/opscheck.env)
 NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true
 NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT=32
-NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES=<25% of `df -B1 <PGDATA>` available>
+NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES=4294967296
+```
+
+**4294967296 is 4 GiB, and it is the accepted first-customer activation value.**
+Verify rather than re-derive it — the earlier "25% of available bytes" wording
+was a convention, not a measurement, and it was rejected as too permissive:
+
+```bash
+# RUN ON: production-primary
+# 4 GiB must still be a small fraction of what is actually free. Record the
+# output; if 4294967296 is not <= 25% of available, LOWER it and record why.
+df -B1 --output=avail /var/lib/postgresql/16/main | tail -1
 ```
 
 With `REQUIRE_WAL_BACKLOG=true` and either limit unset, opscheck **refuses to
@@ -2179,20 +2402,27 @@ monitor cannot see WAL accumulating. Derivation of both figures: §22.4a.
 
 ## 22.11 CHECKPOINT 7 — stanza and first repo2 backup
 
-> **BLOCKED ON PRODUCTION'S BUILD (F4-FCR-003-R1).** Production runs pgBackRest
-> **2.50**, and 2.50 refuses `backup --repo=2` on the PostgreSQL host with
-> `ERROR: [072]: backup command must be run on the repository host`. The
-> command below runs on the primary, so on 2.50 it fails. The alternative —
-> initiating the backup on the repository host — needs SSH trust in the
-> repo-host → production direction, which §16.5 forbids. Resolve this in
-> §22.4a before attempting this checkpoint. `stanza-create` and `check` are
-> unaffected and pass on 2.50.
+> **UNBLOCKED BY F4-FCR-003-R2 (§22.4b).** The R1 blocker was `repo2-host`, not
+> `--repo=2`, and not "backup on the primary". Under topology C repo2 has **no
+> repository host**, so `ERROR [072]` cannot arise and every command below runs
+> on the primary on production's current **2.50** — verified end to end on a
+> pinned 2.50 build for both the `s3` and `sftp` shapes, including `info`,
+> `verify` and a full `restore`. **CHECKPOINT 6's `NO_REPO2_HOST_GOOD`
+> assertion is the precondition for this checkpoint.**
 
 ```bash
+# RUN ON: production-primary
 sudo -u postgres pgbackrest --stanza=noramedi stanza-create   # NO --repo (§22.4)
+
+# RUN ON: production-primary
+# `check` does NOT accept --repo on 2.50 (ERROR [031]); it checks ALL repos and
+# reports each one separately. Expect one repo1 line and one repo2 line.
 sudo -u postgres pgbackrest --stanza=noramedi check           # NO --repo (§22.4)
 
+# RUN ON: production-primary
 sudo /usr/local/sbin/noramedi-pgbackrest-backup.sh --repo 2 --type full
+
+# RUN ON: production-primary
 sudo -u postgres pgbackrest --stanza=noramedi --repo=2 info
 sudo -u postgres pgbackrest --stanza=noramedi --repo=2 verify   # integrity, NOT a restore test
 ```
@@ -2200,14 +2430,33 @@ sudo -u postgres pgbackrest --stanza=noramedi --repo=2 verify   # integrity, NOT
 **Collect:** backup label, timestamp, repo2 backup count, encryption state,
 repository identity.
 
+**Gate:** `backup` exits 0, `info --repo=2` reports `status: ok` **and**
+`cipher: aes-256-cbc`, and `check` names repo1 and repo2 separately. An
+`ERROR [072]` here means a `repo2-host` key is present — go back to
+CHECKPOINT 6, do not initiate the backup on the secondary.
+
+> **Expire runs automatically after backup, and `expire-auto` is global rather
+> than per-repository.** A repo2 whose credential cannot delete — a WORM or
+> object-locked bucket — therefore fails the `backup` command itself, at the
+> expire stage, after the data has already been written. Immutability must come
+> from a provider-side lifecycle/retention policy, **not** from revoking
+> pgBackRest's delete permission.
+
 ## 22.12 CHECKPOINT 8 — WAL continuity
 
+**Topology-neutral.** These commands are correct as written for any repo2 shape
+and are unaffected by the §22.4b decision — `archive_command` always runs on the
+primary.
+
 ```bash
+# RUN ON: production-primary
 sudo -u postgres psql -Atc "select pg_switch_wal();"
 sleep 30
+# RUN ON: production-primary
 sudo -u postgres psql -Atc \
   "select archived_count, failed_count, last_archived_wal, last_archived_time,
           last_failed_wal, last_failed_time from pg_stat_archiver;"
+# RUN ON: production-primary
 sudo bash scripts/noramedi-pgbackrest-status.sh --stdout   # expect offHost="unproven"
 ```
 
@@ -2230,13 +2479,22 @@ a wrong sentinel showed up as `marker A = 0` and read as a PITR undershoot.
 
 ## 22.14 CHECKPOINT 10 — restore drill sourced from repo2
 
+**The drill is pinned to the primary by construction** — it resolves
+production's PGDATA and refuses to run if it cannot — so it runs here under
+every topology. That is not a limitation of topology C: `restore`, `info` and
+`verify` were never host-restricted in any pgBackRest version, so a repo2 with
+no repository host can also be rehearsed from a disposable box that holds only
+the config, the credential and the passphrase.
+
 ```bash
+# RUN ON: production-primary
 sudo NORAMEDI_PITR_MARKER_ORG=SENTINEL \
      bash scripts/noramedi-pgbackrest-restore-drill.sh \
      --repo 2 --record --stanza noramedi \
      --set BACKUP_LABEL --target 'TS+00' \
      --pitr-run-id RUN_ID --marker-seg WAL --marker-b-at 'TS+00'
 
+# RUN ON: production-primary
 sudo bash scripts/noramedi-pgbackrest-status.sh --stdout   # only NOW may it read "yes"
 ```
 
@@ -2293,13 +2551,20 @@ Sufficient to let architecture review decide independently:
 
 ## 22.17 Rollback
 
-| Change | Rollback | Notes |
-|---|---|---|
-| repo2 config block | `sudo cp -a /etc/pgbackrest/pgbackrest.conf.bak /etc/pgbackrest/pgbackrest.conf` then `pgbackrest --stanza=noramedi check` | Verify against the BEFORE hash from CHECKPOINT 6 |
-| repo2 cron entry | Remove the repo2 line from `/etc/cron.d/noramedi-pgbackrest` | The wrapper defaults to `--repo 1`, so this alone stops all off-host activity |
-| repo2 data | On the backup host, remove the repository directory contents | Destroys backups only. **Production data is untouched.** |
-| opscheck off-host requirement | `NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=false` | Stops the alert; does not stop archiving |
-| Off-host proof marker | `rm -f /var/lib/noramedi/pitr-offhost-proof.json` | `offHost` decays to `unproven`, which is the honest reading once repo2 is gone |
+| RUN ON | Change | Rollback | Notes |
+|---|---|---|---|
+| production-primary | repo2 config block | `sudo cp -a /etc/pgbackrest/pgbackrest.conf.bak /etc/pgbackrest/pgbackrest.conf` then `pgbackrest --stanza=noramedi check` | Verify against the BEFORE hash from CHECKPOINT 6 |
+| production-primary | repo2 cron entry | Remove the repo2 line from `/etc/cron.d/noramedi-pgbackrest` | The wrapper defaults to `--repo 1`, so this alone stops all off-host activity. **True under topology C because the schedule lives on the primary**; it would NOT have been true under the rejected Option A, where the schedule lives on the secondary |
+| production-primary | repo2 credential | SFTP: `rm -f` the private key named by `repo2-sftp-private-key-file`, and remove the key from the endpoint's `authorized_keys`. S3: revoke the access key at the provider | Removing the config block alone leaves a live credential on disk |
+| repo2-host | repo2 data | On the backup host, remove the repository directory contents | Destroys backups only. **Production data is untouched.** |
+| production-primary | opscheck off-host requirement | `NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=false` | Stops the alert; does not stop archiving |
+| production-primary | opscheck WAL backlog gate | Unset the three `…_WAL_…` variables from CHECKPOINT 6 | With `REQUIRE_WAL_BACKLOG=true` and either limit unset, opscheck refuses to start (exit 64) |
+| production-primary | Off-host proof marker | `rm -f /var/lib/noramedi/pitr-offhost-proof.json` | `offHost` decays to `unproven`, which is the honest reading once repo2 is gone |
+
+**Nothing on the secondary needs to be undone beyond deleting data.** Topology C
+installs no software and no configuration there, so there is no package to
+remove, no service to stop, and — unlike the rejected Option A — no inbound
+trust on production to revoke.
 
 **No PostgreSQL reload or restart is required to roll back, because none was
 required to activate.** `archive_mode`, `archive_command` and `wal_level` are
@@ -2313,6 +2578,18 @@ were.** Neither was modified or depended upon at any point above.
 and unreachable, WAL archiving to **repo1** was also suspended. After removing
 repo2, confirm the backlog drains — `readyCount` returns to 0 and
 `archived_count` advances — before calling the rollback complete.
+
+```bash
+# RUN ON: production-primary
+# Backlog drain verification — REQUIRED before the rollback may be called done.
+sudo -u postgres psql -Atc \
+  "select (select count(*) from pg_ls_dir('pg_wal/archive_status') f where f like '%.ready') as ready_count,
+          (select coalesce(sum(size),0)::bigint from pg_ls_waldir()) as wal_bytes;"
+sudo -u postgres psql -Atc "select archived_count, failed_count from pg_stat_archiver;"
+```
+
+**Gate:** `ready_count = 0`, `wal_bytes` well under `4294967296`, and
+`archived_count` advancing between two readings.
 
 ## 22.18 Lifecycle — read this before recording anything
 

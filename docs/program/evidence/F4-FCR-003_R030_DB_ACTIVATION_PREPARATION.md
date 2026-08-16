@@ -581,6 +581,19 @@ runs it, which is why the CI figures are two higher and carry no skip:
 | PITR app smoke | 50 / 0 | 50 / 0 |
 | **`npm run test:shell`** | **457 / 0 / 1** | **459 / 0 / 0** |
 
+**Superseded by R2 (§R2 below).** R2 added ten assertions to the pgBackRest
+suite, so the figures above are the R1 record and are correct history:
+
+| Suite | Local (Windows) | CI (`ubuntu-latest`) |
+|---|---|---|
+| opscheck | 178 / 0 | 178 / 0 |
+| pgBackRest | **239** / 0 / 1 skipped | **241 / 0** |
+| PITR app smoke | 50 / 0 | 50 / 0 |
+| **`npm run test:shell`** | **467 / 0 / 1** | **469 / 0 / 0** |
+
+The "CI is two higher and carries no skip" relationship is unchanged — the skip
+is still the same Windows-only `/proc/meminfo` positive control.
+
 CI on `02ef208`: **all 13 required checks green**, including the Layer 1 job
 that was red on `826aec1`. The two lines that matter, from that job's log:
 
@@ -622,3 +635,149 @@ ok - guard_no_silent_rm detects the defect even when the haystack is far larger 
 `R-030` `OPEN` · `R-030-DB` `OPEN` · `R-030-FILES` `OPEN` · `R-080` `OPEN` ·
 `R-079` `CLOSED` · `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` ·
 F4 `TODO`.
+
+---
+
+# R2 — repo2 backup topology decision
+
+`F4-FCR-003-R2` · reviewed head `6d0d9da` · same branch, same draft PR #433 ·
+`OBSERVED_LOCAL_ONLY` · no production access, no production mutation, no
+`repo2` created, no pgBackRest upgraded, no byte moved off-host.
+
+```
+SELECTED TOPOLOGY = C
+```
+
+An off-host `repo2` with **no repository host**, written by the production
+primary.
+
+## R2.1 The blocker was `repo2-host`, not `--repo=2`
+
+`ERROR [072]` is `HostInvalidError`. It is raised by `repoIsLocalVerify()` in
+`src/protocol/helper.c`, called as the first statement of `cmdBackup()`, and
+the whole test is:
+
+```c
+FUNCTION_LOG_RETURN(BOOL, !cfgOptionIdxTest(cfgOptRepoHost, repoIdx));
+```
+
+It fires **only when `repoN-host` is set**. `backup` and `expire` were the only
+two commands that ever carried it; `info`, `verify` and `restore` never did.
+
+So the blocker was never "2.50 cannot back up to repo2" and never "backup
+cannot run on the primary". It was **"2.50 cannot back up to a repo2 that has a
+repository host"** — and the runbook only had a repository host because §16
+chose the SSH shape on *procurement evidence*, not on technical need.
+
+## R2.2 What was actually run
+
+`scripts/noramedi-gate0-repo2-topology.sh`, run `20260816T174036Z-89155`.
+Disposable Docker, PostgreSQL 16.14, pgBackRest pinned to **2.50** through
+`apt-archive.postgresql.org` and re-verified against the running binary.
+Synthetic data only. **Every command invoked on the PostgreSQL host.**
+
+| Shape | Role | `backup --repo=2` | `info` | `verify` | `restore` |
+|---|---|---|---|---|---|
+| `repo2-host` | **negative control** | **REFUSED, exit 72** | — | — | — |
+| `repo2-type=s3` | candidate | **0** | 0 | 0 | **0** |
+| `repo2-type=sftp` | candidate | **0** | 0 | 0 | **0** |
+
+The negative control is what makes this non-vacuous. Without it the harness
+could only ever confirm, and a harness that cannot fail proves nothing — the
+lesson of R1-F1, where a guard reported CLEAN on precisely the input containing
+the defect. It also closes R1's open item: **repo2 restorability on 2.50 is no
+longer untested**, for no-repo-host shapes.
+
+## R2.3 Confidentiality, measured rather than asserted
+
+3 000 rows carrying a synthetic PHI marker were written, checkpointed and
+backed up.
+
+| Location | Marker occurrences |
+|---|---|
+| live database | 3 000 rows |
+| **PGDATA on disk** | **6 000** — PHI is *not* encrypted at rest on the primary |
+| **all stored repo2 objects** | **0** raw, **0** after decompressing every object |
+
+Repository objects carry the OpenSSL `Salted__` envelope. With the passphrase
+supplied via `PGBACKREST_REPO2_CIPHER_PASS` but wrong, `info --repo=2` fails
+with `[FormatError] unable to load info file`; with the correct passphrase from
+the config it reports `status: ok`, `cipher: aes-256-cbc`. **The storage
+operator holds ciphertext only.**
+
+What is **not** encrypted is object and file **names**. Without
+`repo2-bundle=y` the repository leaks PostgreSQL relation paths and
+per-relation sizes, plus stanza name, backup labels and schedule. That is why
+`repo2-bundle=y` is published in both config shapes.
+
+## R2.4 Why not A, and why not B
+
+**A — repository-host-driven. REJECTED.** It is the only option that gives a
+PHI database host a new **inbound** trust relationship, and it does so *on top
+of* the outbound path it cannot remove: `archive_command` runs on the primary
+by definition, so production→repo-host SSH is still required for WAL. A
+therefore makes trust **mutual**, not reversed. It contradicts two published,
+armed gates — §16.5 ("the backup host must not be able to reach production")
+and §22.9's `UNREACHABLE_GOOD` — which would have to be deleted, not adjusted.
+It moves the backup off `noramedi-pgbackrest-backup.sh`, so the fail-closed
+encryption gate stops being enforced by code. And R1's harness already retried
+the backup from the repository host on 2.50: that retry **also failed**
+(`ERROR_072_THEN_REPO_HOST_BACKUP_ALSO_FAILED`).
+
+**B — upgrade first. REJECTED as unnecessary, not as unsound.** The capability
+is real and the minimum version exact: the check was deleted in **2.55.0**
+(2025-04-21, PR 2512), present through 2.54.2 and absent from 2.55.0 onward.
+The upgrade is also low-risk in itself — `REPOSITORY_FORMAT` is `5` at every
+tag from 2.50 to 2.59.0, so repo1 stays readable with no re-init. But B buys
+**primary-driven backup against a repository host**, and R2 shows the primary
+already drives repo2 on 2.50 whenever repo2 has none. B would pay a package
+upgrade on a live PHI database host — plus 2.59.0's restriction that only
+`restore` may run as root by default, which would break the existing
+root-invoked cron wrapper — for a capability already in hand.
+
+Upgrading remains legitimate later. It is simply not a prerequisite for
+`R-030-DB`, and should not be sequenced in front of it.
+
+## R2.5 Transport is a procurement variable
+
+The decision fixes the **topology** — where `backup` runs and which way trust
+flows. Both proven shapes satisfy it.
+
+| | `repo2-type=sftp` | `repo2-type=s3` |
+|---|---|---|
+| Status | **PROCUREMENT-READY** | **PROMOTE ON CLEARANCE** |
+| Secondary runs | `sshd` only, **no pgBackRest** | nothing of ours |
+| Version parity burden | none | none |
+| Residency evidence | E1–E5 on a plain TR VPS, which §16 records as market-available | hardest — a new vendor class, and **no Türkiye-resident S3-compatible provider is evidenced as procurable** anywhere here |
+| Immutability | no native object-lock | yes |
+| Known cost | libssh2 may offer only SHA-1 `ssh-rsa`, so the endpoint's sshd may need `PubkeyAcceptedAlgorithms +ssh-rsa` and the keypair must be PEM | two bucket lifecycle rules are effectively mandatory (abort incomplete multipart uploads; expire noncurrent versions) |
+
+The `ssh-rsa` cost applies to the **secondary's** authentication posture, never
+to production, and it is build-dependent — production's own libssh2 may already
+negotiate `rsa-sha2`. **Verify at CHECKPOINT 5 rather than assuming either
+way**, and prefer S3 if a Türkiye provider clears.
+
+⚠ **Do not enforce immutability by revoking the credential's delete right.**
+`backup` runs `expire` automatically and `expire-auto` is **global**, not
+per-repository, so a WORM or object-locked repo2 fails the `backup` command
+itself, at the expire stage, after the data has already been written.
+
+## R2.6 What R2 does NOT do
+
+- Does **not** close `R-030`, `R-030-DB` or `R-030-FILES`.
+- Does **not** satisfy `FIRST_CUSTOMER_RECOVERY_GATE`.
+- Does **not** authorize §16.5, §22, or any production configuration change.
+- Does **not** procure, provision, or select a vendor.
+- Does **not** upgrade production pgBackRest, and does not recommend doing so
+  before `R-030-DB`.
+- Does **not** prove failure-domain independence. Containers on one docker
+  network are no model of an independent Türkiye host.
+- Does **not** establish Türkiye residency for anything. A hostname is not
+  residency evidence and neither is a bucket name.
+- Does **not** measure production RPO or RTO.
+
+What it removes is the **last unresolved technical topology question**.
+
+`R-030` `OPEN` · `R-030-DB` `OPEN` · `R-030-FILES` `OPEN` · `R-080` `OPEN` ·
+`R-079` `CLOSED` · `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` ·
+F4 `TODO` · `F4_TRANSITION_AUTHORIZED = NO` · `MIGRATION_REQUIRED = NO`.
