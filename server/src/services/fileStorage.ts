@@ -565,14 +565,36 @@ export async function saveFileFromPath(key: string, tempFilePath: string, conten
   }
 }
 
-/** Dosyayı siler; yoksa sessizce döner (idempotent). */
+/**
+ * Dosyayı siler; yoksa sessizce döner (idempotent).
+ *
+ * F4-3 correction: the local branch previously swallowed EVERY unlink error,
+ * not just "the file is already gone". A real failure — EPERM/EACCES on a
+ * locked or wrongly-owned file, EBUSY, EROFS, an I/O error — was therefore
+ * indistinguishable from a successful deletion, so every caller (including the
+ * KVKK erasure paths) reported the bytes as removed when they were still on
+ * disk. Only ENOENT is idempotent-by-definition; anything else is now raised so
+ * the caller can retain recoverable evidence instead of claiming a success it
+ * cannot back up. Remote mode already behaved this way — DeleteObjectCommand's
+ * rejection has always propagated — so this only aligns the two modes.
+ *
+ * Existing callers are unaffected in the success case, and every one of them
+ * either already wraps this in `.catch(...)` or (privacy/clinicBulkExportPackage,
+ * services/storageObjectDeletion) treats a raised error as "verify, then retain
+ * and retry" — which is the behaviour this change makes reachable locally.
+ */
 export async function deleteFile(ref: string): Promise<void> {
   if (!path.isAbsolute(ref) && isRemoteStorageEnabled()) {
     await getS3().send(new DeleteObjectCommand({ Bucket: bucket(), Key: ref }));
     return;
   }
   const localPath = resolveLocalPath(ref);
-  await fs.promises.unlink(localPath).catch(() => {});
+  try {
+    await fs.promises.unlink(localPath);
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return;
+    throw err;
+  }
 }
 
 /**

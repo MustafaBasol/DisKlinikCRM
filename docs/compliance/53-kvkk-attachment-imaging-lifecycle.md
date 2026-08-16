@@ -244,6 +244,88 @@ cd server && npx prisma migrate resolve --rolled-back 20260715145843_add_kvkk_at
 5. **Legal-hold trigger conditions/authority** — who (beyond the coded `OWNER`/`ORG_ADMIN` role restriction) has the legal authority to place a hold, under what circumstances (litigation, regulatory inquiry, etc.), and whether any external/legal-team notification should accompany it. This PR only implements the *mechanism* (the field + a role-gated PATCH endpoint + audit log); no automatic trigger, workflow, or notification exists.
 6. **NEW — lifecycle-category enum + workflow-bound execute endpoint (follow-up from PR #160 review).** Live deletion of `PatientAttachment` rows requires a future PR that adds (a) a category enum genuinely distinguishing administrative documents from anything clinically/legally sensitive, and (b) an execute endpoint bound to an explicit, approved `PatientPrivacyRequest` (not a bare `{ confirm, reason }`), with an atomic DB+storage delete guarantee. Until that ships, `unclassifiedRetained` attachments are retained indefinitely with no automated deletion path.
 
+## 16A. F4-3 amendment (2026-08-16) — physical-deletion evidence, idempotency and the tenant boundary
+
+> **What this amendment does NOT do.** It sets no retention period, approves no
+> deletion, adds no live-delete endpoint and enables no provider object-lock. Every
+> item in Section 16 remains open and undecided. The `deletion-review/execute`
+> endpoint still does not exist; the retention policy is still `COUNSEL_REVIEW_REQUIRED`.
+> This amendment only makes the deletions that **already** happen safe, tenant-bounded
+> and provable.
+
+### The defect it closes
+
+The two paths that physically delete patient-uploaded bytes —
+`DELETE /api/patients/:patientId/attachments/:id` and
+`DELETE /api/lab-orders/:id/attachments/:attId` — deleted the DB row first
+(correctly: for attachments that DB delete is the atomic legal-hold gate) and
+then called `deleteFile(row.filePath)` with the error swallowed. Because the
+deleted row was the **only** place the storage key was persisted, a failed
+storage deletion produced a permanently unreconcilable orphan: the object
+remained, nothing could name it again, no alert fired, and the caller was told
+the deletion succeeded. Under KVKK that is an erasure claim the system cannot
+substantiate — the worse half of the failure, because a silent partial erasure
+looks identical to a complete one.
+
+A second, wider defect was found while proving the first: `fileStorage.deleteFile`
+swallowed **every** local-mode `unlink` error, not just "the file is already
+gone". `EPERM`, `EACCES`, `EBUSY`, `EROFS` and I/O errors were all reported to
+every caller as successful deletion. Only `ENOENT` is idempotent by definition;
+the rest are now raised.
+
+### The contract now in force
+
+All physical object deletion for these domains goes through
+`server/src/services/storageObjectDeletion.ts`
+(`deleteStoredObjectWithEvidence`), which reuses the accepted repository
+contracts rather than adding a parallel system — `writeAuditLog` as the evidence
+ledger, `recordOperationalEvent` as the operator signal, and the same
+idempotency semantics already used for export artifacts. It:
+
+| Property | Behaviour |
+|---|---|
+| Tenant boundary | The object key must be prefixed by the owning clinic's id (the F4-1A key contract). A safe-form key belonging to another clinic is **refused** — outcome `rejected_tenant_mismatch`, nothing deleted. Object identity always comes from the tenant-scoped persisted row, never from the request. |
+| Fail closed | An empty, traversal, UNC, drive-relative or control-character key is refused (`rejected_unsafe_key`). An unverifiable identity is never resolved by deleting something. |
+| Idempotency | "Already gone" is a terminal success, never an endless retry. A raised error triggers an existence recheck; only a **tenant-scoped** key may be upgraded to `already_absent`, because `fileExists()` returns `false` for a legacy absolute path and would otherwise fabricate a success. |
+| Evidence | Every outcome (including refusals) writes an `AuditLog` row: clinic, organization, entity type/id, action, `requestedAt`, `executedAt`, outcome, failure code, actor. |
+| Escalation | A non-terminal outcome additionally records an `error`-severity `OperationalEvent`. This is the artefact that still names the object after the row is gone — the reconciliation input for a leaked object. |
+| No new PHI sink | A tenant-scoped key is server-generated and opaque, so it is recorded verbatim. A **legacy absolute path may embed the original file name** (routinely a patient's name in a dental clinic), so only a SHA-256 digest of it is stored. No file name, patient name, TCKN, phone, email or DICOM metadata is ever written to prove a deletion. |
+
+The lab-order attachment DB delete was also narrowed from an id-only
+`delete({ where: { id } })` to a conditional `deleteMany` scoped by
+`labWorkOrderId` + the order's own `clinicId`, matching the patient-attachment
+route's precedent.
+
+### Primary object deletion is NOT backup deletion
+
+Deleting a primary object removes it from primary storage only. It does **not**
+remove it from pgBackRest repositories, `pg_dump` artifacts, `FileBackupRun`
+copies, or any snapshot taken before the deletion — those copies are immutable
+by design and expire on their own retention schedules, which are a separate,
+undecided policy question (Section 16 item 4, unchanged). No statement in this
+amendment may be quoted as evidence that a subject's data has been erased
+everywhere. It has been erased from the primary object store, and that is the
+whole of the claim.
+
+### Gaps this amendment records rather than closes
+
+1. **`LabOrderAttachment` has no `legalHold` field**, so its delete route has no
+   legal-hold gate at all — the only one of the three attachment-delete paths
+   without one. Closing it is an additive schema change and was therefore
+   **deliberately not made** under F4-3's no-migration constraint. Tracked as
+   `R-079`; the proposed minimal migration mirrors `PatientAttachment` exactly.
+2. **No durable deletion intent / automatic retry.** A failed deletion is now
+   evidenced and alerted, but retrying it is an operator action; a
+   deletion-intent table and worker would require a migration. Tracked as `R-080`.
+3. **Reverse-orphan detection (object present, no DB row) still does not exist.**
+   `inspectOrphans()` walks DB rows only. F4-3 makes *new* instances visible by
+   evidencing the upload-rollback path; it does not find historical ones.
+4. **Provider object-lock / immutability is not active** and is not claimed to be.
+   That belongs to the future object-storage provider lane.
+
+Verified by `npm run test:storage-deletion-evidence` (23 assertions, disposable
+fixture files only — no real patient attachment or imaging object is touched).
+
 ## 17. Assumptions made (conservative, documented, reviewable)
 
 - `PatientPrivacyPanel.tsx` had no i18n at all before this PR (all strings hardcoded Turkish). Rather than leaving that pre-existing gap unaddressed OR doing a large out-of-scope full-component i18n migration, this revision adds a new `patientPrivacy` i18n namespace (tr/en/fr/de) and wires it up for **every string this PR introduces or changed** (export-package/deletion-review UI, partial-failure warnings) — confirmed by an automated key-parity test across all four locale files (Section 12). Any pre-existing, unrelated strings in that component that this PR did not touch remain as they were before — a full migration of that unrelated legacy text is out of scope for this fix-focused PR and is a separate follow-up if desired.

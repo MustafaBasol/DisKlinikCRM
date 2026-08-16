@@ -297,9 +297,22 @@ async function main() {
   await test('failed upload after saveFile deletes the stored file', () => {
     const uploadRouteMatch = labOrdersRouteSrc.match(/router\.post\(\s*'\/lab-orders\/:id\/attachments'[\s\S]*?(?=router\.get\('\/lab-orders\/:id\/attachments')/);
     const uploadRouteSrc = uploadRouteMatch![0];
+    // F4-3: the rollback still removes the already-persisted object, but now
+    // through services/storageObjectDeletion.deleteStoredObjectWithEvidence
+    // instead of a bare deleteFile whose failure was swallowed entirely — a
+    // failed rollback leaves an object with no DB row at all, and the evidence
+    // write is the only thing that makes it findable afterwards.
     assert.ok(
-      /if \(storageKey\) await deleteFile\(storageKey\)/.test(uploadRouteSrc),
+      /if \(storageKey && rollbackClinicId\) \{[\s\S]*?deleteStoredObjectWithEvidence\(\{/.test(uploadRouteSrc),
       'catch path must delete the already-persisted file when the DB insert fails',
+    );
+    assert.ok(
+      /source: 'upload_rollback'/.test(uploadRouteSrc),
+      'the rollback deletion must be evidenced as an upload rollback, distinguishable from a record deletion',
+    );
+    assert.ok(
+      /clinicId: rollbackClinicId/.test(uploadRouteSrc),
+      'the rollback must attribute the object to the lab order\'s own clinic, never req.user.clinicId',
     );
   });
 

@@ -1125,7 +1125,16 @@ function getDeleteRouteBlock(): string {
     routeStart = src.indexOf(anchor, routeStart + 1);
   }
   assert.ok(routeStart > -1, 'attachment DELETE route must exist');
-  return src.slice(routeStart, routeStart + 3500);
+  // Slice to the end of the file rather than a fixed character budget: this
+  // DELETE route is the last route in attachments.ts (only `export default
+  // router;` follows), and the previous 3500-character window silently cut the
+  // route short once F4-3 added the storage-deletion evidence call, turning a
+  // real assertion into a false negative. The invariant is pinned below.
+  assert.ok(
+    !src.slice(routeStart).includes('router.'),
+    'this helper assumes the DELETE route is the last route in attachments.ts — add an end anchor if that changes',
+  );
+  return src.slice(routeStart);
 }
 
 await test('DELETE route\'s authorization decision is a single conditional deleteMany with legalHold: false, not a separate read-then-delete', () => {
@@ -1138,13 +1147,44 @@ await test('DELETE route\'s authorization decision is a single conditional delet
   assert.ok(!block.includes('prisma.patientAttachment.delete({ where: { id } })'), 'the old single-row delete-after-read-check must be gone — it had a TOCTOU window');
 });
 
+// F4-3 update: the physical deletion is no longer a bare
+// `deleteFile(attachment.filePath)` — it goes through
+// services/storageObjectDeletion.deleteStoredObjectWithEvidence, which adds
+// idempotency, a fail-closed tenant/key check and durable evidence. The
+// property these assertions protect is unchanged (the legal-hold count check
+// must precede any physical storage deletion); only the anchor moved.
+const PHYSICAL_DELETE_ANCHOR = 'deleteStoredObjectWithEvidence(';
+
 await test('DELETE route inspects deleteMany\'s affected-row count before touching physical storage', () => {
   const block = getDeleteRouteBlock();
   const countCheckIdx = block.indexOf('result.count === 0');
-  const deleteFileIdx = block.indexOf('deleteFile(attachment.filePath)');
+  const deleteFileIdx = block.indexOf(PHYSICAL_DELETE_ANCHOR);
   assert.ok(countCheckIdx > -1, 'route must branch on the deleteMany result count');
   assert.ok(deleteFileIdx > -1, 'non-held path must still remove the physical file');
   assert.ok(countCheckIdx < deleteFileIdx, 'the count===0 branch must be checked before any physical storage deletion');
+});
+
+await test('the physical deletion goes through the evidence-producing storage-deletion contract, not a bare deleteFile', () => {
+  const src = readAttachmentsSrc();
+  assert.ok(
+    src.includes("from '../services/storageObjectDeletion.js'"),
+    'attachments.ts must import the shared storage-deletion contract',
+  );
+  // Comment lines are excluded: this file's own prose still (accurately)
+  // records that the DELETE route was once the codebase's only deleteFile call
+  // site, and a naive substring scan would flag that sentence as a call site.
+  const liveCallSites = src
+    .split('\n')
+    .filter((line) => {
+      const t = line.trim();
+      return !(t.startsWith('//') || t.startsWith('*') || t.startsWith('/*'));
+    })
+    .filter((line) => /\bdeleteFile\s*\(/.test(line));
+  assert.deepEqual(
+    liveCallSites,
+    [],
+    'no bare deleteFile() call may remain in attachments.ts — a swallowed storage failure after the DB row is gone leaves an unreconcilable orphan (F4-3)',
+  );
 });
 
 await test('the count===0 (blocked) branch never reaches physical delete or the DB delete call', () => {
@@ -1154,6 +1194,10 @@ await test('the count===0 (blocked) branch never reaches physical delete or the 
   assert.ok(branchStart > -1 && branchEnd > branchStart);
   const branch = block.slice(branchStart, branchEnd);
   assert.ok(!branch.includes('deleteFile('), 'the blocked branch must never call physical storage deletion');
+  assert.ok(
+    !branch.includes(PHYSICAL_DELETE_ANCHOR),
+    'the blocked branch must never call the storage-deletion contract either (F4-3)',
+  );
   assert.ok(!branch.includes('prisma.patientAttachment.delete'), 'the blocked branch must never call any DB delete');
 });
 
@@ -1209,8 +1253,16 @@ await test('DELETE route uses the attachment\'s own resolved clinicId for storag
 await test('non-held attachment DELETE still deletes the DB row and physical file (unchanged behavior)', () => {
   const block = getDeleteRouteBlock();
   const afterCountCheck = block.slice(block.indexOf('// The DB row is confirmed gone'));
-  assert.ok(afterCountCheck.includes('deleteFile(attachment.filePath)'), 'non-held delete must still remove the physical file');
-  assert.ok(afterCountCheck.includes("res.json({ success: true })"), 'non-held delete must still report success');
+  assert.ok(afterCountCheck.includes(PHYSICAL_DELETE_ANCHOR), 'non-held delete must still remove the physical file');
+  assert.ok(
+    afterCountCheck.includes('storageKey: attachment.filePath'),
+    'the object identity must come from the persisted row, never from the request (F4-3 tenant isolation)',
+  );
+  assert.ok(
+    afterCountCheck.includes('clinicId: attachment.clinicId'),
+    'the deletion must be attributed to the row\'s own clinic, not the acting user\'s default clinic',
+  );
+  assert.ok(afterCountCheck.includes('res.json({ success: true'), 'non-held delete must still report success');
 });
 
 await test('GET attachment list and POST upload responses are redacted through the same role-gated helper', () => {
