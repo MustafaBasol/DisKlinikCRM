@@ -423,6 +423,26 @@ else
         ambiguous "unrecognized repo2-cipher-type '$REPO2_CIPHER_TYPE'"
         ;;
     esac
+
+    # Retention. Configured by convention only until now: the SSH template
+    # block carries both keys, the S3 block did not, and no code path failed
+    # when they were absent. pgBackRest does not expire what it is not told to
+    # expire, so a repo2 activated without them grows without bound — on
+    # infrastructure this program does not operate, does not monitor for disk,
+    # and cannot free space on during an incident. repo1 is covered by the
+    # local disk check; repo2 has no equivalent, which is precisely why the
+    # config must carry the bound instead.
+    for _rk in repo2-retention-full repo2-retention-archive; do
+      _rv="$(grep -oE "^[[:space:]]*${_rk}[[:space:]]*=[[:space:]]*[0-9]+" "$PGBACKREST_CONF" 2>/dev/null | sed -E 's/.*=[[:space:]]*//' | head -n1 || true)"
+      if [[ -z "$_rv" ]]; then
+        bad "${_rk} is not set. An off-host repository with no retention bound grows without limit on infrastructure this program neither monitors nor controls; pgBackRest expires nothing it was not configured to expire."
+      elif [[ "$_rv" -lt 1 ]]; then
+        bad "${_rk}=${_rv} is not a usable retention count (expected >= 1)"
+      else
+        ok "${_rk}=${_rv}"
+      fi
+    done
+    unset _rk _rv
   fi
 fi
 

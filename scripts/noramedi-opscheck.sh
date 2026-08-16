@@ -221,6 +221,44 @@
 #     exactly "false" to accept that knowingly during the stage-1 pilot; the
 #     check then emits a WARNING and passes.
 #
+#   ── WAL BACKLOG (F4-FCR-003-R1, additive; needed BEFORE repo2) ──────
+#   Gate 0 established that an unreachable repo2 does not degrade gracefully:
+#   `archive-push` fails as a whole, so the LOCAL archive chain stops too and
+#   PostgreSQL retains every segment. The failure therefore arrives as DISK
+#   growth, and nothing here measured disk growth attributable to WAL:
+#   `lastArchivedAgeMinutes` measures time, not volume, and the `disk` check
+#   measures `/` as a percentage — by the time it trips, the operator is told
+#   "disk", not "your archive stopped", and the backlog has usually been
+#   dangerous for a while. These two limits close that gap.
+#
+#   BOTH DEFAULT TO 0, MEANING NOT EVALUATED. That is deliberate and is the
+#   backward-compatibility contract: production today runs a single repo1 and
+#   a status writer that may predate these fields, and inventing an absolute
+#   byte or segment limit for a host whose WAL rate has never been measured
+#   would manufacture false alerts. Where a limit IS configured, a MISSING
+#   measurement is a FAILURE, never a pass — enabling a check and then being
+#   unable to take its measurement is exactly the state that must not read
+#   green.
+#
+#   NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT   default: 0 (0 = off)
+#     — max `.ready` markers in pg_wal/archive_status, i.e. how many segments
+#     are waiting to be archived. This is the DIRECT backlog signal: it rises
+#     the moment archive-push stops succeeding and falls as the backlog
+#     drains. Suggested starting value 32 (≈512 MiB at the 16 MiB default
+#     segment size); see runbook §22.4a for the derivation and confirm it
+#     against the host's measured WAL rate before activation.
+#   NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES         default: 0 (0 = off)
+#     — max total bytes in pg_wal. Deliberately has NO non-zero default: the
+#     safe value is a function of free space on the PGDATA filesystem, which
+#     is a per-host fact this repository cannot know. §22.4a requires the
+#     operator to set it from a measured `df` before repo2 activation.
+#   NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG   default: false
+#     — the activation gate. Set to exactly "true" when repo2 goes live. It
+#     makes both limits mandatory (a startup configuration error otherwise)
+#     and makes both measurements mandatory in the document. The invariant it
+#     enforces is that repo2 activation cannot proceed with no way to observe
+#     WAL backlog accumulation.
+#
 #   NORAMEDI_OPSCHECK_SUPPRESS_PING            comma-separated check names
 #                                               (pm2,disk,backup,filebackup,
 #                                               drill,pitr) to skip pinging for —
@@ -369,6 +407,13 @@ PITR_CHECK_MAX_AGE_HOURS="${NORAMEDI_OPSCHECK_PITR_CHECK_MAX_AGE_HOURS:-30}"
 # into one green light. Set to exactly "false" to accept that knowingly during
 # the stage-1 pilot, which emits a WARNING and passes.
 PITR_REQUIRE_OFFHOST="${NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST:-true}"
+# WAL backlog limits (F4-FCR-003-R1). 0 means NOT EVALUATED, and that is the
+# default for both: see the header block. A non-zero value turns the
+# corresponding assertion on, and from that point a missing measurement is a
+# failure rather than a pass.
+PITR_MAX_WAL_READY_COUNT="${NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT:-0}"
+PITR_MAX_WAL_BYTES="${NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES:-0}"
+PITR_REQUIRE_WAL_BACKLOG="${NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG:-false}"
 SUPPRESS_PING="${NORAMEDI_OPSCHECK_SUPPRESS_PING:-}"
 CURL_MAX_TIME=5
 CURL_CONNECT_TIMEOUT=3
@@ -425,6 +470,32 @@ fi
 if [[ "$PITR_REQUIRE_OFFHOST" != "true" ]] && [[ "$PITR_REQUIRE_OFFHOST" != "false" ]]; then
   echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST='$PITR_REQUIRE_OFFHOST' is not exactly 'true' or 'false'" >&2
   exit "$CONFIG_ERROR_EXIT_CODE"
+fi
+# 0 IS allowed for these two — unlike every threshold above — because 0 is how
+# "not evaluated" is expressed. A negative or non-numeric value is still fatal.
+if ! [[ "$PITR_MAX_WAL_READY_COUNT" =~ ^[0-9]+$ ]]; then
+  echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT='$PITR_MAX_WAL_READY_COUNT' is not a non-negative integer (0 disables the check)" >&2
+  exit "$CONFIG_ERROR_EXIT_CODE"
+fi
+if ! [[ "$PITR_MAX_WAL_BYTES" =~ ^[0-9]+$ ]]; then
+  echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES='$PITR_MAX_WAL_BYTES' is not a non-negative integer (0 disables the check)" >&2
+  exit "$CONFIG_ERROR_EXIT_CODE"
+fi
+if [[ "$PITR_REQUIRE_WAL_BACKLOG" != "true" ]] && [[ "$PITR_REQUIRE_WAL_BACKLOG" != "false" ]]; then
+  echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG='$PITR_REQUIRE_WAL_BACKLOG' is not exactly 'true' or 'false'" >&2
+  exit "$CONFIG_ERROR_EXIT_CODE"
+fi
+# The activation gate, enforced at STARTUP rather than at check time. Gate 0
+# showed that an unreachable repo2 stops the whole archive chain and turns the
+# outage into WAL disk growth, so switching repo2 on while the two backlog
+# limits are still 0 would activate the risk together with a monitor that
+# cannot see it. Refusing to start is louder than a failing check and cannot be
+# mistaken for a transient alert.
+if [[ "$PITR_REQUIRE_WAL_BACKLOG" == "true" ]]; then
+  if [[ "$PITR_MAX_WAL_READY_COUNT" -eq 0 ]] || [[ "$PITR_MAX_WAL_BYTES" -eq 0 ]]; then
+    echo "[opscheck] $(timestamp) FATAL: NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true but NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT='$PITR_MAX_WAL_READY_COUNT' and/or NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES='$PITR_MAX_WAL_BYTES' is 0 (not evaluated). An unreachable repo2 suspends the ENTIRE archive chain and the failure arrives as pg_wal growth; set both from this host's measured capacity before activating repo2 (runbook 22.4a)." >&2
+    exit "$CONFIG_ERROR_EXIT_CODE"
+  fi
 fi
 PITR_STATUS_SCHEMA_VERSION=1
 # Mirrors server/src/services/backupService.ts BACKUP_FILENAME_RE exactly —
@@ -1063,7 +1134,7 @@ check_drill() {
 # broken and the continuous PITR chain has a hole. Backup freshness and archive
 # freshness are independent failures and are both asserted.
 check_pitr() {
-  local label="pitr" body mode value age check_status offhost tier
+  local label="pitr" body body_archive mode value age check_status offhost tier
 
   load_pitr_status "$label" || return 1
 
@@ -1071,6 +1142,9 @@ check_pitr() {
     echo "[opscheck] $(timestamp) $label check: FAIL — 'archive' object is missing or not a flat object" >&2
     return 1
   fi
+  # `body` is reused for the repo object further down; the archive body is kept
+  # so the closing OK line can still report the backlog figure.
+  body_archive="$body"
 
   # 1. archive_mode. `off` is the CURRENT production state, so this check
   #    correctly fails until PITR is actually activated. That is not a false
@@ -1118,6 +1192,40 @@ check_pitr() {
   if [[ "$age" -gt "$PITR_MAX_WAL_AGE_MINUTES" ]]; then
     echo "[opscheck] $(timestamp) $label check: FAIL — newest archived WAL is ${age}m old (max ${PITR_MAX_WAL_AGE_MINUTES}m) — the recoverable point is falling behind the RPO target" >&2
     return 1
+  fi
+
+  # 4b. WAL BACKLOG — volume, not time (F4-FCR-003-R1).
+  #
+  #     Assertions 3 and 4 both measure the archive as a RATE or an AGE. Gate 0
+  #     showed the repo2 failure mode is neither: `archive-push` fails as a
+  #     whole, PostgreSQL retains every segment, and the cluster keeps
+  #     accepting writes. Under bulk load pg_wal can exhaust the filesystem
+  #     long before a 120-minute age threshold trips, and when the `disk` check
+  #     finally fires at 90% it names the wrong subsystem.
+  #
+  #     Both limits are off by default (0). Once a limit IS set, an absent or
+  #     unreadable measurement FAILS: the operator asked for this assertion, so
+  #     "I could not measure it" must not render as "there is no backlog" —
+  #     that is the exact silent-green this whole document exists to prevent.
+  if [[ "$PITR_REQUIRE_WAL_BACKLOG" == "true" ]] || [[ "$PITR_MAX_WAL_READY_COUNT" -gt 0 ]]; then
+    if ! value="$(json_uint "$body" readyCount)"; then
+      echo "[opscheck] $(timestamp) $label check: FAIL — 'archive.readyCount' is missing or is not a non-negative integer, but a WAL backlog limit is configured. The status writer could not count pg_wal/archive_status/*.ready; refusing to assume the backlog is empty. Deploy the F4-FCR-003-R1 noramedi-pgbackrest-status.sh, or unset NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT." >&2
+      return 1
+    fi
+    if [[ "$PITR_MAX_WAL_READY_COUNT" -gt 0 ]] && [[ "$value" -gt "$PITR_MAX_WAL_READY_COUNT" ]]; then
+      echo "[opscheck] $(timestamp) $label check: FAIL — ${value} WAL segment(s) are waiting to be archived (max ${PITR_MAX_WAL_READY_COUNT}). archive-push is not keeping up; if a repo2 is configured and unreachable this ALSO suspends archiving to repo1, and pg_wal will keep growing until the filesystem fills." >&2
+      return 1
+    fi
+  fi
+  if [[ "$PITR_REQUIRE_WAL_BACKLOG" == "true" ]] || [[ "$PITR_MAX_WAL_BYTES" -gt 0 ]]; then
+    if ! value="$(json_uint "$body" walBytes)"; then
+      echo "[opscheck] $(timestamp) $label check: FAIL — 'archive.walBytes' is missing or is not a non-negative integer, but a pg_wal size limit is configured. Refusing to assume pg_wal is small. Deploy the F4-FCR-003-R1 noramedi-pgbackrest-status.sh, or unset NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES." >&2
+      return 1
+    fi
+    if [[ "$PITR_MAX_WAL_BYTES" -gt 0 ]] && [[ "$value" -gt "$PITR_MAX_WAL_BYTES" ]]; then
+      echo "[opscheck] $(timestamp) $label check: FAIL — pg_wal holds $(( value / 1048576 )) MiB (max $(( PITR_MAX_WAL_BYTES / 1048576 )) MiB). WAL is accumulating faster than it is being archived and this filesystem also holds PGDATA." >&2
+      return 1
+    fi
   fi
 
   # ── repository ─────────────────────────────────────────────────────────
@@ -1219,7 +1327,16 @@ check_pitr() {
     fi
   fi
 
-  echo "[opscheck] $(timestamp) $label check: OK — archive_mode=$(safe_token "$mode"), newest WAL fresh, repo encrypted, check ok, off-host=$(safe_token "$offhost")"
+  # The backlog figure is reported on the OK line too, not only on failure: an
+  # operator watching an activation needs to see the number trending, and a
+  # check that only speaks when it is already too late teaches nobody the shape
+  # of normal. Omitted entirely when the writer did not measure it, so a
+  # pre-F4-FCR-003-R1 producer changes nothing about this line.
+  local backlog=""
+  if value="$(json_uint "$body_archive" readyCount 2>/dev/null)"; then
+    backlog=", waiting-to-archive=${value}"
+  fi
+  echo "[opscheck] $(timestamp) $label check: OK — archive_mode=$(safe_token "$mode"), newest WAL fresh, repo encrypted, check ok, off-host=$(safe_token "$offhost")${backlog}"
   return 0
 }
 

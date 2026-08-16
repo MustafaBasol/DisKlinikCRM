@@ -255,6 +255,10 @@ reset_pitr_status_fields() {
   # Extra repo fields, injected verbatim. Empty by default so every existing
   # scenario keeps emitting the single-repository document it emitted before.
   PS_R_REPO2_EXTRA=""
+  # Extra archive fields (F4-FCR-003-R1 WAL backlog), same pattern and the same
+  # reason: empty by default, so every scenario above still emits the pre-R1
+  # document and proves the new fields changed nothing for existing hosts.
+  PS_A_WAL_EXTRA=""
 }
 
 write_pitr_status() {
@@ -262,7 +266,7 @@ write_pitr_status() {
 {
   "schemaVersion": $PS_SCHEMA_VERSION,
   "generatedAt": "$(iso_age "$PS_GENERATED_AGE_H")",
-  "archive": { "mode": "$PS_A_MODE", "commandOk": $PS_A_COMMAND_OK, "walLevel": "replica", "timeoutSeconds": 300, "failedCount": $PS_A_FAILED, "archivedCount": 128, "lastArchivedAgeMinutes": $PS_A_WAL_AGE_MIN },
+  "archive": { "mode": "$PS_A_MODE", "commandOk": $PS_A_COMMAND_OK, "walLevel": "replica", "timeoutSeconds": 300, "failedCount": $PS_A_FAILED, "archivedCount": 128, "lastArchivedAgeMinutes": $PS_A_WAL_AGE_MIN$PS_A_WAL_EXTRA },
   "repo": { "installed": true, "stanza": "noramedi", "statusOk": $PS_R_STATUS_OK, "cipherType": "$PS_R_CIPHER", "checkStatus": "$PS_R_CHECK", "checkAgeMinutes": $PS_R_CHECK_AGE_MIN, "lastBackupAgeMinutes": $PS_R_BACKUP_AGE_MIN, "lastBackupType": "full", "backupCount": 7, "offHost": "$PS_R_OFFHOST", "tier": "$PS_R_TIER", "offHostReason": "RESTORE_PROVEN_FROM_REPO2"$PS_R_REPO2_EXTRA }
 }
 EOF
@@ -953,8 +957,146 @@ run_pitr
   && pass "a document with no repo2 fields at all is unaffected (single-repo hosts keep passing)" \
   || fail "expected exit 0 when no repo2 is reported, got $CODE ($OUT)"
 
+section "PITR: WAL backlog — the volume signal repo2 activation depends on"
+# Gate 0 (F4-FCR-003) established that an unreachable repo2 makes archive-push
+# fail as a WHOLE, which suspends archiving to repo1 too and makes PostgreSQL
+# retain every segment. The outage therefore arrives as pg_wal growth, and
+# every assertion above measures time or a rate. `disk` measures `/` as a
+# percentage and names the wrong subsystem when it finally trips.
+
+# 1. Backward compatibility, asserted first and deliberately: with the limits
+#    unset — the default — a document carrying no backlog fields is exactly as
+#    healthy as it was before this feature existed.
+new_scenario_dirs
+write_pitr_status
+run_pitr
+[[ "$CODE" -eq 0 ]] \
+  && pass "a pre-R1 document with no walBytes/readyCount passes unchanged when no limit is configured" \
+  || fail "the new fields broke an existing single-repo host, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_A_WAL_EXTRA=', "walBytes": 268435456, "readyCount": 2'
+write_pitr_status
+run_pitr
+[[ "$CODE" -eq 0 ]] \
+  && pass "a document CARRYING the backlog fields also passes when no limit is configured" \
+  || fail "expected exit 0 with no limits configured, got $CODE ($OUT)"
+[[ "$OUT" == *"waiting-to-archive=2"* ]] \
+  && pass "the OK line reports the backlog so an operator can watch it trend, not only learn of it too late" \
+  || fail "the OK line did not report the backlog ($OUT)"
+
+# 2. Over the limit.
+new_scenario_dirs
+PS_A_WAL_EXTRA=', "walBytes": 268435456, "readyCount": 40'
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT=32)
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] \
+  && pass "pitr bit (128) set when 40 segments are waiting to be archived against a limit of 32" \
+  || fail "expected bit 128 for a .ready backlog over the limit, got $CODE ($OUT)"
+[[ "$OUT" == *"waiting to be archived"* ]] \
+  && pass "the diagnostic names the backlog rather than reporting a generic disk problem" \
+  || fail "the diagnostic did not name the backlog ($OUT)"
+
+new_scenario_dirs
+PS_A_WAL_EXTRA=', "walBytes": 2147483648, "readyCount": 1'
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES=1073741824)
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] \
+  && pass "pitr bit (128) set when pg_wal holds 2 GiB against a 1 GiB limit" \
+  || fail "expected bit 128 for pg_wal over the byte limit, got $CODE ($OUT)"
+
+# 3. Under the limit — the control that keeps 2 from being vacuous.
+new_scenario_dirs
+PS_A_WAL_EXTRA=', "walBytes": 268435456, "readyCount": 2'
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT=32 NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES=1073741824)
+run_pitr
+[[ "$CODE" -eq 0 ]] \
+  && pass "a backlog inside both limits passes (the limits are not simply always-failing)" \
+  || fail "expected exit 0 for a healthy backlog, got $CODE ($OUT)"
+
+# 4. FAIL CLOSED. An operator who turned the limit on must never be told
+#    "healthy" because the measurement was unavailable — that is the same
+#    silent-green failure the whole document exists to prevent.
+new_scenario_dirs
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT=32)
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] \
+  && pass "pitr bit (128) set when a .ready limit is configured but the document carries no readyCount" \
+  || fail "an unmeasurable backlog passed while a limit was configured, got $CODE ($OUT)"
+[[ "$OUT" == *"readyCount"* ]] \
+  && pass "the diagnostic names the missing field and how to resolve it" \
+  || fail "the diagnostic did not name readyCount ($OUT)"
+
+new_scenario_dirs
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES=1073741824)
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] \
+  && pass "pitr bit (128) set when a pg_wal byte limit is configured but the document carries no walBytes" \
+  || fail "an unmeasurable pg_wal size passed while a limit was configured, got $CODE ($OUT)"
+
+# 5. The activation gate, enforced at STARTUP. Activating repo2 while the
+#    monitor cannot see WAL backlog is a configuration error, not a runtime
+#    alert, and it must be impossible to mistake for a transient failure.
+new_scenario_dirs
+PS_A_WAL_EXTRA=', "walBytes": 268435456, "readyCount": 2'
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true)
+run_pitr
+[[ "$CODE" -eq 64 ]] \
+  && pass "REQUIRE_WAL_BACKLOG=true with both limits still 0 exits 64 — repo2 cannot be activated blind" \
+  || fail "expected exit 64 for the activation gate, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_A_WAL_EXTRA=', "walBytes": 268435456, "readyCount": 2'
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT=32)
+run_pitr
+[[ "$CODE" -eq 64 ]] \
+  && pass "REQUIRE_WAL_BACKLOG=true with only ONE limit set still exits 64 (both signals are required)" \
+  || fail "expected exit 64 when only one limit is set, got $CODE ($OUT)"
+
+new_scenario_dirs
+PS_A_WAL_EXTRA=', "walBytes": 268435456, "readyCount": 2'
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT=32 NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES=1073741824)
+run_pitr
+[[ "$CODE" -eq 0 ]] \
+  && pass "REQUIRE_WAL_BACKLOG=true with both limits set and both signals present passes" \
+  || fail "expected exit 0 for a fully configured activation, got $CODE ($OUT)"
+
+new_scenario_dirs
+write_pitr_status
+EXTRA_ENV=(NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT=32 NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES=1073741824)
+run_pitr
+[[ "$((CODE & 128))" -eq 128 ]] \
+  && pass "REQUIRE_WAL_BACKLOG=true fails when the writer publishes no backlog measurement at all" \
+  || fail "activation was allowed to proceed with an unobservable backlog, got $CODE ($OUT)"
+
+# 6. Typo protection, matching REQUIRE_OFFHOST's strict enum. A value that is
+#    not exactly true/false must not silently disable the gate.
+for badvalue in TRUE 1 yes ""; do
+  new_scenario_dirs
+  write_pitr_status
+  EXTRA_ENV=("NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=$badvalue")
+  run_pitr
+  if [[ "$badvalue" == "" ]]; then
+    [[ "$CODE" -eq 0 ]] \
+      && pass "an empty NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG falls back to the default (off)" \
+      || fail "expected the default to apply for an empty value, got $CODE ($OUT)"
+  else
+    [[ "$CODE" -eq 64 ]] \
+      && pass "NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=$badvalue exits 64 rather than silently disabling the gate" \
+      || fail "expected exit 64 for REQUIRE_WAL_BACKLOG=$badvalue, got $CODE ($OUT)"
+  fi
+done
+
 section "PITR: malformed tuning values exit 64 rather than being ignored"
-for badvar in NORAMEDI_OPSCHECK_PITR_MAX_WAL_AGE_MINUTES NORAMEDI_OPSCHECK_PITR_STATUS_MAX_AGE_HOURS NORAMEDI_OPSCHECK_PITR_MAX_BACKUP_AGE_HOURS NORAMEDI_OPSCHECK_PITR_CHECK_MAX_AGE_HOURS; do
+for badvar in NORAMEDI_OPSCHECK_PITR_MAX_WAL_AGE_MINUTES NORAMEDI_OPSCHECK_PITR_STATUS_MAX_AGE_HOURS NORAMEDI_OPSCHECK_PITR_MAX_BACKUP_AGE_HOURS NORAMEDI_OPSCHECK_PITR_CHECK_MAX_AGE_HOURS NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES; do
   new_scenario_dirs
   write_pitr_status
   EXTRA_ENV=("$badvar=abc")
@@ -964,7 +1106,20 @@ for badvar in NORAMEDI_OPSCHECK_PITR_MAX_WAL_AGE_MINUTES NORAMEDI_OPSCHECK_PITR_
   write_pitr_status
   EXTRA_ENV=("$badvar=0")
   run_pitr
-  [[ "$CODE" -eq 64 ]] && pass "$badvar=0 exits 64 (fail closed)" || fail "expected exit 64 for $badvar=0, got $CODE ($OUT)"
+  case "$badvar" in
+    # The two WAL-backlog limits are the ONLY ones where 0 is a legitimate
+    # value: it is how "not evaluated" is expressed, and it is their default.
+    # Rejecting 0 here would make the feature impossible to leave switched off.
+    NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT|NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES)
+      [[ "$CODE" -eq 0 ]] && pass "$badvar=0 is accepted and means 'not evaluated' (its default)" || fail "expected exit 0 for $badvar=0, got $CODE ($OUT)" ;;
+    *)
+      [[ "$CODE" -eq 64 ]] && pass "$badvar=0 exits 64 (fail closed)" || fail "expected exit 64 for $badvar=0, got $CODE ($OUT)" ;;
+  esac
+  new_scenario_dirs
+  write_pitr_status
+  EXTRA_ENV=("$badvar=-1")
+  run_pitr
+  [[ "$CODE" -eq 64 ]] && pass "$badvar=-1 exits 64 (a negative limit is never a valid threshold)" || fail "expected exit 64 for $badvar=-1, got $CODE ($OUT)"
 done
 
 section "PITR: exit-code contract — 128 is additive and nothing moved"

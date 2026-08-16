@@ -1,8 +1,236 @@
 # F4 — Storage and Backup Foundation
 
-Faz durumu: `TODO` · Son güncelleme: 2026-08-16 (F4-2 — program sahibi `R-030-DB`/`R-030-FILES` ayrımını **onayladı**; saha dışı depo tarafı hazırlığı tamamlandı; **`R-030` / `R-030-DB` `OPEN`**, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` — kalan blokaj tedarik ve hukuk)
+Faz durumu: `TODO` · Son güncelleme: 2026-08-16 (F4-FCR-003-R2 — **repo2 yedek topolojisi kararı**: `SELECTED TOPOLOGY = C`, yani **depo host'u OLMAYAN**, üretim birincili tarafından yazılan saha dışı bir `repo2`. §22.11 blokajı **çözüldü**: `ERROR [072]`'nin koşulu `--repo=2` değil, yalnızca **`repoN-host` ayarlanmış olması**; depo host'u olmayan bir `repo2` bu kontrolü tetikleyemez. Sabitlenmiş **pgBackRest 2.50** üzerinde uçtan uca doğrulandı — `repo2-host` negatif kontrolü **reddedildi (çıkış 72)**, `s3` ve `sftp` şekilleri ise birincilde `backup`/`info`/`verify` **ve tam `restore`** işlemlerini çıkış 0 ile tamamladı; `repo2` nesnelerinde **0 düz metin PHI**. Seçenek A (depo-host sürücülü) güveni **karşılıklı** hale getirdiği ve §16.5 ile §22.9'un kapısını ihlal ettiği için, seçenek B (yükseltme) ise elde bulunan bir yeteneği canlı bir PHI host'unda paket yükseltmesiyle satın aldığı için **reddedildi** (kontrol **2.55.0**'da kaldırılmıştı). Runbook yakınsandı: CHECKPOINT 5–8, restore ve rollback akışlarındaki **her komut artık `RUN ON:` işareti taşıyor**. **`R-030-DB` `OPEN` kalır** — ikincil VPS **TEDARİK EDİLMEMİŞ**. Öncesinde F4-FCR-003-R1 — mimari inceleme düzeltmeleri: CI kırmızısının kök nedeni bir `pipefail` + `SIGPIPE` yarışı yüzünden **sessizce geçen bir muhafızdı**, pgBackRest **2.50** sürüm eşitliği yerelde koşuldu (`OBSERVED_LOCAL_ONLY — SAME SEMANTICS`), **WAL birikim izlemesi** eklendi; 2.50 üzerinde `backup --repo=2` birincilde reddediliyor — §22.11 blokajı. Öncesinde F4-FCR-003 — `R-030-DB` saha dışı aktivasyon hazırlığı: dört sessiz-hata kusuru kapatıldı, **Gate 0 yerelde çalıştırıldı ve `PASS`**, operatör aktivasyon paketi yazıldı; **`R-030` / `R-030-DB` `OPEN`**, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` — kalan blokaj tedarik ve hukuk)
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
+
+## F4-FCR-003 — `R-030-DB` saha dışı aktivasyon hazırlığı ve Gate 0
+
+`F4-FCR-003_STATUS = AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
+Aktivasyon durumu: `PREPARED_NOT_EXECUTED` · Baseline `origin/main` @ `c0567ef`
+
+> **Görev ID'si bu görevle birlikte verilmiştir.** `F4-FCR-003` daha önce bu
+> depoda **yoktu**; tracker işi ID vermeden tarif ediyordu ("F4 kurtarma
+> şeridindeki bir sonraki iş `R-030` için saha dışı depo etkinleştirmedir") ve
+> en son verilen kurtarma-şeridi ID'si `F4-2` idi. [`README.md`](../README.md)
+> kuralı gereği ID, faz dokümanı ve master tracker'da **birlikte** tanımlanır.
+> Var olan bir ID gibi sunulmamıştır.
+
+### Bu görevin YAPMADIĞI
+
+Üretime **hiçbir** erişim olmadı. İkincil Türkiye VPS'i **tedarik edilmedi**,
+`repo2` **oluşturulmadı**, üretim yapılandırması **değişmedi**, **hiçbir bayt
+host dışına çıkmadı**, yedek alınmadı, marker yazılmadı, tatbikat
+çalıştırılmadı. **Şema değişikliği ve migration YOK** (diff'te `prisma/` yolu
+ve `.sql` dosyası bulunmuyor). `R-030`, `R-030-DB`, `R-030-FILES` ve `R-080`
+**`OPEN`** kalır; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`.
+
+Tracker'ın "kalan iş tedarik, hukuk ve operatör aktivasyonudur, kod değildir"
+tespiti **doğrudur ve bu görev onu çürütmez**. Bu görev farklı bir soruya
+cevap verir: operatör o tek bakım penceresini nihayet aldığında, pencereyi
+aktivasyona mı yoksa depoyu ayıklamaya mı harcayacak? Altı kusur ikincisini
+söylüyordu.
+
+### Kapatılan dört sessiz-hata kusuru
+
+Hepsi aynı sınıftandır: hata vermek yerine **kendinden emin biçimde yanlış
+sinyal** üretirler.
+
+1. **Şifrelenmemiş `repo2` yedeği mümkündü (`P1`, KVKK md. 6).**
+   `noramedi-pgbackrest-backup.sh` içinde `cipher` kelimesi **hiç geçmiyordu**.
+   Şifrelemeyi yalnızca preflight zorluyordu — runbook §16.5'te *düzyazıyla*
+   sıralanmış ayrı bir operatör adımı, bir kapı değil. Artık yazma yolunda
+   fail-closed bir kapı var; `REPO_NUM != 1` ile sınırlı olduğundan bugünkü
+   üretim `--repo 1` yolu **bit düzeyinde değişmedi**.
+2. **Geçen bir `repo2` restore'u kalıcı olarak `offHost: unproven` üretebilirdi
+   (`P1`).** Tatbikat kanıt hedefini **dosya sırasındaki ilk** anahtardan
+   alıyordu; durum yazıcısı ise **öncelik sırası** uyguluyor (host →
+   s3-endpoint → path). SSH tipi bir `repo2` hem `repo2-host` hem `repo2-path`
+   taşır ve pgBackRest sıraya anlam yüklemez — sırayı ters yazmak, **geçen**
+   bir tatbikatın kanıtının sessizce reddedilmesine yol açıyordu. Artık ikisi
+   **inşa gereği** aynı yöntemi kullanıyor ve `REPO_NUM`'a bağlı: bir
+   `--repo 3` tatbikatı artık `repo2`'nin hedefini kaydedip sahte bir saha dışı
+   iddia kazanamaz.
+3. **Hedef uyuşmazlığı "kanıt bayat" diye raporlanıyordu (`P1`).** Ayrı sebep
+   kodları eklendi (`RESTORE_PROOF_TARGET_MISMATCH` vb.); bayatlık sebebi
+   yalnızca gerçek bayatlık için kaldı. Fail-closed davranış değişmedi.
+4. **Sentinel-organizasyon uyuşmazlığı hâlâ düzeltilmemişti (`P1`).** Runbook
+   §21.7 bunu kaydetmiş **ve çözümü yazmıştı**; hiçbir çalışma zamanı betiği
+   uygulamamıştı. Uyuşmazlık `marker A = 0` olarak görünür ve tatbikat bunu
+   "hedefin altında kalındı" diye raporlar — dördüncü denemede **tam bir
+   restore'a mal olmuştu**. Artık `--pitr-run-id`, `NORAMEDI_PITR_MARKER_ORG`
+   değişkeninin açıkça verilmesini zorunlu kılar; doğrulamasız triyaj
+   restore'ları etkilenmez.
+
+Ek olarak (`P1`): preflight artık `repo2-retention-*` anahtarlarını zorunlu
+kılar — pgBackRest kendisine söylenmeyeni silmez ve `repo2`, bu programın disk
+izlemesi de müdahale imkânı da olmayan bir altyapıda durur. S3 şablon bloğuna
+eksik olan iki anahtar eklendi.
+
+### Gate 0 — çalıştırıldı, `PASS`, ve runbook'u değiştirdi
+
+Gate 0 bugüne kadar `NOT EXECUTED` başlıklı bir bölümün içinde **dört yorum
+satırıydı** ve aynı soru üç ayrı yerde tekrarlanıp hiçbirinde yanıtlanmamıştı.
+Artık çalıştırılabilir bir koşum var:
+`scripts/noramedi-gate0-repo2-unreachability.sh`.
+
+**Cevap: `archive-push`, iki depodan biri erişilemezken KOMUTU BAŞARISIZ
+KILAR.** Yalnızca `repo1`'e yazıp başarı döndürmez — yani PostgreSQL, `repo2`'ye
+ulaşmamış bir segmenti "arşivlendi" saymaz, dolayısıyla geri dönüşüme sokamaz
+ve saha dışı zincirde **sessiz bir delik oluşamaz**. Risk, tespit edilemeyen
+veri kaybı değil, **gözlemlenebilir disk büyümesidir**. Bu güvenli sonuçtur.
+
+**Kimsenin yazmadığı bulgu:** erişilemeyen bir `repo2`, **`repo1`'e WAL
+arşivlemeyi de durdurur**. Kesinti boyunca `archivedCount` hiç ilerlemedi
+(8 → 8), çünkü `archive_command` bir bütün olarak başarısız olur. Yani bir
+`repo2` kesintisi "saha dışı kopya geriye düşer" değildir; **tüm arşiv
+zincirini** askıya alır ve `repo1`'in PITR çözünürlüğünü de düşürür.
+
+**Yayımlanmış iki komut geçersizdi.** §16.5 adım 9'daki
+`--repo=2 stanza-create` ve `--repo=2 check`, pgBackRest 2.59.0 tarafından
+reddediliyor (`ERROR: [031]: option 'repo' not valid for command 'check'`);
+ikisi de doğası gereği tüm-depo işlemleridir. `--repo`; `backup`, `restore`,
+`info`, `expire` ve `verify` için **geçerlidir**, bu yüzden yedek sarmalayıcısı
+ve restore tatbikatı etkilenmemişti — **yalnızca runbook yanlıştı** ve
+aktivasyon günü adım 9'da durulacaktı. Düzeltildi. Ayrıca ikincil host, depoyu
+birincilin kullandığı **aynı indeks** altında (`repo2-path`) tanımlamalıdır;
+aksi hâlde çıkan hata *yolları* adlandırır, *indeksleri* değil ve operatörü
+zaten doğru olan bir dizini değiştirmeye yönlendirir.
+
+**Gate 0'ın kanıtlamadığı:** izleme yeterliliği (smoke modu diski doldurana
+kadar koşmaz; depoda `pg_wal` boyutu ve `archive_status/*.ready` sayacı için
+**hiçbir kontrol yok**), üretimin pgBackRest sürümü (hiçbir yerde kayıtlı
+değil), ve **dayanıklılık** — kopmuş bir konteyner ağı erişilemezliğin modeli
+olabilir, bağımsız arıza alanının modeli değildir. Sınıflandırma:
+`OBSERVED_LOCAL_ONLY`.
+
+### Operatör aktivasyon paketi
+
+Runbook **§22**, CHECKPOINT 0–12: kapılar, yapılandırma öncesi/sonrası hash'ler,
+kanıt toplama listesi ve geri alma tablosu. §22.4 bilinçli olarak sıra dışıdır,
+çünkü sonraki adımlarda yazılacak komutları değiştirir. **CHECKPOINT 2 ve
+sonrası başlayamaz**: §16.2'nin yedi ön koşulu karşılanmamış, ikincil VPS
+`NOT PROCURED`. CHECKPOINT 0 ve 1 salt-okunurdur ve bugün çalıştırılabilir.
+
+### Testler
+
+`npm run test:shell` **416 geçti / 0 başarısız / 1 atlandı** (150 opscheck +
+**216** pgbackrest + 50 app-smoke; pgbackrest paketi 197 → 216, +19),
+`test:pitr-status-contract` **16 / 0**, `test:platform-recovery-safety`
+**60 / 0**, `npx tsc --noEmit` temiz (0 `error TS`), `git diff --check` temiz.
+Tek atlama Windows'a özgüdür (`/proc/meminfo` yok); CI `ubuntu-latest`'te
+çalıştırır.
+
+Yeni kapsam, özellikle **tatbikat → kanıt → durum zinciri**: 10–12 numaralı
+mevcut testler kanıt dosyasını elle yazdığı için tatbikatın çıkarımını hiç
+denemiyordu — kusurun tam olarak yaşadığı yer orasıydı.
+
+### Geri alma (rollback)
+
+Depo: tek commit revert. Şema yok, migration yok, veritabanında geri alınacak
+bir şey yok. İki fail-closed kapı (şifrelenmemiş `repo2`, belirtilmemiş
+sentinel) daha önce *başarılı olan* bir çağrıyı reddedebilir; ikisi de yalnızca
+zaten güvensiz olan çağrıları reddeder ve hiçbiri üretimdeki `--repo 1` yolunda
+erişilebilir değildir. Üretim tarafı geri alma: runbook §22.17.
+
+Kanıt: [evidence/F4-FCR-003_R030_DB_ACTIVATION_PREPARATION.md](../evidence/F4-FCR-003_R030_DB_ACTIVATION_PREPARATION.md) ·
+[evidence/F4-FCR-003_gate0_repo2_unreachability.json](../evidence/F4-FCR-003_gate0_repo2_unreachability.json)
+
+### F4-FCR-003-R1 — mimari inceleme düzeltmeleri (aynı dal, aynı taslak PR #433)
+
+`F4-FCR-003-R1_STATUS = AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
+İncelenen head: `826aec1286029ecfa4980b5c75b0deea13416cd4` ·
+**Üretime erişilmedi, üretimde hiçbir değişiklik yapılmadı.**
+
+**1) CI kırmızıydı — ve hatalı olan fikstür değil, muhafızın kendisiydi.**
+pgBackRest süiti `ubuntu-latest` üzerinde **217 / 1**, aynı ağaç yerelde
+**216 / 0**. Kök neden: `guard_no_silent_rm` bir *olumsuzlanmış boru hattı*
+olarak yazılmıştı ve dosya `set -o pipefail` altında çalışıyor. `grep -q`
+eşleşir eşleşmez 0 ile çıkar ve stdin'i boşaltmaz; yukarıdaki `grep -v` bir
+sonraki yazımında `SIGPIPE` alıp **141** ile çıkar; `pipefail` 141'i boru
+hattının durumu yapar; baştaki `!` bunu **başarıya**, yani "desen bulunamadı"ya
+çevirir. Yani muhafız **tam olarak kusuru içeren girdide** TEMİZ raporluyordu.
+Bu yalnızca bozuk bir fikstür değildi: restore tatbikatına `rm -rf …
+2>/dev/null || true` gerçekten geri getirilseydi aynı yarış onu da temiz
+gösterebilirdi. Düzeltme: samanlık önce değişkene alınıp doğrudan grep'lenir
+(`grep -qE … <<<"$body"`), böylece cevap yalnızca grep'in kendi çıkış
+kodudur. Aynı sağlam olmayan biçimdeki `guard_no_trust_auth`,
+`guard_no_tcp_rule` ve `guard_peer_auth_present` (ikisi HIGH `pg_hba` güvenlik
+muhafızı) da dönüştürüldü. **Hiçbir mutasyon iddiası zayıflatılmadı, silinmedi
+veya beklenen dizgisi değiştirilmedi.** Kalıcı ve boş olmayan bir kontrol
+eklendi: kusur ~1,5 MB'lık bir samanlığın 1. satırındayken eski uygulama
+**deterministik olarak** (3/3) TEMİZ der, yenisi (3/3) yakalar; aynı samanlık
+kusursuz hâlde ise yine temiz geçer — yani kontrol ayırt eder, büyük dosyaları
+toptan reddetmez.
+
+**2) pgBackRest sürüm eşitliği — `OBSERVED_LOCAL_ONLY — SAME SEMANTICS`.**
+Üretim **pgBackRest 2.50 / PostgreSQL 16.14**; ilk Gate 0 2.59.0 / 16.15
+üzerinde koşmuştu. Harness artık `--pgbackrest-version` / `--postgres-image`
+kabul eder ve sabitlenen sürümü **apt-archive.postgresql.org** üzerinden çözer;
+çözülemeyen bir sabitleme derlemeyi **başarısız kılar** (exit 3) ve **geri
+düşüş yoktur**, ayrıca sabitleme deney başlamadan çalışan ikiliye karşı yeniden
+doğrulanır. Koşu `20260816T161225Z-70901`, 77 örnek, `--internal` ağ, yalnızca
+sentetik veri: `FAILS_COMMAND`; kesinti boyunca `archivedCount` **4'te donuk**;
+`failedCount` 1 → **36**; `.ready` 1 → **12**; `pg_wal` **83,9 MB → 285,2 MB**
+(180 s); PostgreSQL ön plan yazımlarını kabul etmeye devam etti; toparlanmada
+`.ready` → **0**, `pgbackrest check` 0, **kaybedilen onaylı commit yok**.
+**Yine de bu üretim doğrulaması değildir.**
+
+**Aktarılan fark:** 2.50'de `repo2-host` yapılandırılmışken **PostgreSQL
+host'unda** çalıştırılan `backup --repo=2` reddedilir —
+`ERROR: [072]: backup command must be run on the repository host` — 2.59.0'da
+aynı komut başarılıdır. `noramedi-pgbackrest-backup.sh --repo 2` birincilde
+çalıştığı için **runbook §22.11 CHECKPOINT 7 üretimin mevcut sürümünde
+yayımlandığı hâliyle çalışamaz**; alternatif (depo host'unda başlatmak)
+**depo → üretim** yönünde SSH güveni gerektirir ve §16.5 bu yönü yasaklar.
+§22.11'e blokaj olarak, iki seçenek §22.4a'ya yazıldı; **hiçbiri burada
+yetkilendirilmemiştir ve üretime dokunulmamıştır.** `stanza-create` ve `check`
+2.50'de etkilenmez ve geçer.
+
+**3) WAL birikim izlemesi — `R-030-DB` aktivasyon blokajı, ek (additive)
+olarak kapatıldı.** Gate 0'ın kendi sonucu, bir repo2 kesintisinin **disk
+büyümesi** olarak geldiğiydi ve bunu ölçen hiçbir şey yoktu. Aynı
+`schemaVersion` 1 belgesine iki **opsiyonel** alan eklendi:
+`archive.walBytes` (`pg_ls_waldir()`) ve `archive.readyCount`
+(`pg_ls_dir('pg_wal/archive_status')`) — ikisi de **PostgreSQL'in gerçekten
+çalıştığı veri dizinine göre** çözülür; hiçbir PGDATA sabit kodlanmaz. **WAL
+içeriği okunmaz**: sorgudan yalnızca bir bayt toplamı ve bir sayaç çıkar.
+**Ölçülemeyen = YOK, asla `0` değil.** Üç yeni opscheck değişkeni, **hepsi
+varsayılan olarak kapalı**: `…_MAX_WAL_READY_COUNT` (önerilen **32**,
+türetimi §22.4a), `…_MAX_WAL_BYTES` (**bilerek varsayılansız** — güvenli değer
+PGDATA dosya sisteminin boş alanının fonksiyonudur ve `df -B1 <PGDATA>`
+ön kontrolde alınmadı) ve `…_REQUIRE_WAL_BACKLOG` (aktivasyon kapısı).
+Yapılandırılmış bir limit + eksik ölçüm = **FAIL**; `REQUIRE_WAL_BACKLOG=true`
+ve limitlerden biri hâlâ `0` ise opscheck **başlamayı reddeder** (exit **64**).
+Mevcut opscheck/dead-man zincirini ve mevcut `pitr` **bit 7 (128)**'i kullanır
+— yeni çıkış biti, yeni sağlayıcı kontrolü, yeni alt sistem **yok**;
+**Prometheus/OTel yok** (F6 gelecekteki iş olarak kalır). Bugünkü tek-repo
+üretim için **geriye dönük uyumludur** ve bu satırların her biri iddia
+edilmekle kalmayıp test edilir.
+
+**Üretim ön kontrolü kaydedildi (SALT-OKUNUR, değişiklik yok):** PostgreSQL
+16.14, pgBackRest 2.50, `archive_mode=on`, `archive_timeout=5min`,
+`pg_stat_archiver` **335 arşivlendi / 0 başarısız**, repo1 `ok` ve
+`aes-256-cbc`, `pgbackrest check` **PASS**, `process-max=2`, `archive-async` /
+`spool-path` / `archive-push-queue-max` **ayarlı değil**, kök dosya sistemi
+≈%13 dolu. `df -B1 <PGDATA>` **hâlâ eksik** ve repo2 aktivasyonundan önce
+gereklidir.
+
+**Hiçbir şey kapanmadı:** `R-030`, `R-030-DB`, `R-030-FILES`, `R-080` `OPEN`;
+repo2 **aktif değil**, üretim Gate 0 `PASS` **yok**, `offHost=yes` **yok**,
+üretim RPO/RTO **yok**, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`;
+F4 `TODO`; `F4_TRANSITION_AUTHORIZED = NO`. **Şema değişikliği YOK, migration
+YOK.**
+
+Testler: `npm run test:shell` **457 / 0 / 1 atlandı** (opscheck 150 → **178**,
+pgbackrest 216 → **229**, pitr-app-smoke 50), `test:pitr-status-contract`
+16 → **27 / 0**, `test:pitr-status-file` **39 / 0**,
+`test:platform-recovery-safety` **60 / 0**, `test:ci-classify` **23 / 0**,
+`npx tsc --noEmit` temiz, `git diff --check` temiz.
+
+Kanıt: [evidence/F4-FCR-003_R030_DB_ACTIVATION_PREPARATION.md](../evidence/F4-FCR-003_R030_DB_ACTIVATION_PREPARATION.md) §F4-FCR-003-R1 ·
+[evidence/F4-FCR-003-R1_gate0_pgbackrest_250_parity.json](../evidence/F4-FCR-003-R1_gate0_pgbackrest_250_parity.json) ·
+[runbooks/F4_RECOVERY_OPERATIONS.md](../runbooks/F4_RECOVERY_OPERATIONS.md) §22.4a
 
 ## F4-3 — Fiziksel silme güvenliği: kanıt, idempotency ve kiracı sınırı
 

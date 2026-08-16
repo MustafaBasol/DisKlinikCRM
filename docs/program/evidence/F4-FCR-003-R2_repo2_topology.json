@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "taskId": "F4-FCR-003-R2",
+  "taskTitle": "Repo2 backup topology decision and runbook convergence",
+  "phase": "F4",
+  "parentTaskId": "F4-FCR-003",
+  "priorTaskId": "F4-FCR-003-R1",
+  "taskType": "architecture-decision-and-local-experiment",
+  "branch": "feature/f4-fcr-003-r030-db-recovery-readiness",
+  "pullRequest": 433,
+  "evidenceClass": "OBSERVED_LOCAL_ONLY",
+  "productionAccessed": false,
+  "productionMutated": false,
+  "syntheticDataOnly": true,
+  "phiPresent": false,
+  "migrationRequired": false,
+
+  "question": "Which off-host repo2 topology is safely supportable on production's current pgBackRest 2.50, given that `backup --repo=2` is refused on the PostgreSQL host with ERROR [072]?",
+
+  "decision": {
+    "selectedTopology": "C",
+    "statement": "An off-host repo2 with NO repository host, written by the production primary.",
+    "rejected": {
+      "A": "Repository-host-driven backup. Requires repo-host -> production SSH, which runbook §16.5 forbids and §22.9's UNREACHABLE_GOOD gate tests for the absence of. Because archive_command runs on the primary by definition, A does not REVERSE the trust direction, it makes it MUTUAL — its exposure is a strict superset of every alternative. It also moves the backup off noramedi-pgbackrest-backup.sh, so the fail-closed repo2 encryption gate stops being enforced by code. R1's own harness retried the backup from the repository host on 2.50 and that retry ALSO failed (ERROR_072_THEN_REPO_HOST_BACKUP_ALSO_FAILED).",
+      "B": "Upgrade pgBackRest before activating repo2. Sound but unnecessary. The check was removed in 2.55.0 (2025-04-21, PR 2512), so B's premise is real and its minimum version is exact. But B buys primary-driven backup against a REPOSITORY HOST, and R2 shows the primary already drives repo2 on 2.50 whenever repo2 has no repository host. B would pay a package upgrade on a live PHI database host — plus 2.59.0's new restriction that only `restore` may run as root by default, which would break the existing root-invoked cron wrapper — to obtain a capability already in hand.",
+      "C": null
+    },
+    "decisionScope": "Topology only: where `backup` runs, and which way trust flows. The TRANSPORT is a procurement variable and both proven shapes satisfy the topology."
+  },
+
+  "rootCause": {
+    "finding": "ERROR [072] is gated solely on repoN-host being SET. It is not about --repo=2, and not about running backup on the primary.",
+    "errorCode": "072 = HostInvalidError",
+    "raisedBy": "repoIsLocalVerify(), src/protocol/helper.c, called as the first statement of cmdBackup()",
+    "predicate": "!cfgOptionIdxTest(cfgOptRepoHost, repoIdx)",
+    "commandsCarryingTheCheckIn250": ["backup", "expire"],
+    "commandsNeverCarryingIt": ["info", "verify", "restore", "check", "stanza-create", "stanza-upgrade"],
+    "consequence": "A repository with no repository host — object store or SFTP endpoint — is 'local' by this definition, so the check cannot fire and the backup runs on the primary.",
+    "removedInVersion": "2.55.0",
+    "removedBy": "PR 2512, 'Allow backup command to operate on remote repositories', released 2025-04-21",
+    "bisection": "repoIsLocalVerify present through 2.54.2, absent from 2.55.0 onward"
+  },
+
+  "experiment": {
+    "harness": "scripts/noramedi-gate0-repo2-topology.sh",
+    "runId": "20260816T174036Z-89155",
+    "pgbackrestVersionRequested": "2.50",
+    "pgbackrestVersionRunning": "pgBackRest 2.50",
+    "pinResolvedThrough": "apt-archive.postgresql.org",
+    "pinVerifiedAgainst": "the running binary, not the package name apt reported",
+    "postgresImage": "postgres:16.14-bookworm",
+    "invocationHost": "the PostgreSQL host, for every command in every shape",
+    "verdict": "TOPOLOGY_CONFIRMED",
+    "shapes": [
+      {
+        "shape": "repohost",
+        "role": "negative-control",
+        "config": "repo2-host=repo-host.invalid, repo2-host-user=pgbackrest",
+        "outcome": "REFUSED_072",
+        "expected": "REFUSED_072",
+        "controlHeld": true,
+        "backupExit": 72,
+        "why": "Without this control the harness could only ever confirm. A harness that cannot fail proves nothing — the lesson of R1-F1, where a guard reported CLEAN on precisely the input containing the defect. repo2-host points at a nonexistent host on purpose: the check is a config-time test evaluated before any connection is attempted, so an unreachable host still yields 072 rather than a network error."
+      },
+      {
+        "shape": "s3",
+        "outcome": "ALLOWED",
+        "backupExit": 0,
+        "infoExit": 0,
+        "verifyExit": 0,
+        "restoreExit": 0,
+        "storedObjects": 1001,
+        "plaintextMarkerRaw": 0,
+        "plaintextMarkerDecompressed": 0
+      },
+      {
+        "shape": "sftp",
+        "outcome": "ALLOWED",
+        "backupExit": 0,
+        "infoExit": 0,
+        "verifyExit": 0,
+        "restoreExit": 0,
+        "storedObjects": 981,
+        "plaintextMarkerRaw": 0,
+        "plaintextMarkerDecompressed": 0,
+        "secondaryHasPgbackrest": false
+      }
+    ],
+    "supersedes": "R1's 'repo2 RESTORABILITY on 2.50' open item, but ONLY for repo2 shapes with no repository host. The repo2-host shape remains unrestorable on 2.50."
+  },
+
+  "confidentiality": {
+    "method": "3000 rows carrying a synthetic PHI marker were written and checkpointed, then backed up; the repository's stored bytes were searched for the marker both raw and after attempting to decompress every object.",
+    "markerRowsInDatabase": 3000,
+    "markerOccurrencesInPgdata": 6000,
+    "markerOccurrencesInRepo2": 0,
+    "pgdataInterpretation": "PHI is NOT encrypted at rest on the primary. That is the control proving the search works.",
+    "repo2Interpretation": "The storage operator holds ciphertext only.",
+    "envelope": "Repository objects carry the OpenSSL `Salted__` AES-256-CBC envelope.",
+    "keyBinding": "With the passphrase supplied via PGBACKREST_REPO2_CIPHER_PASS but WRONG, `info --repo=2` fails with [FormatError] unable to load info file. With the correct passphrase from the config it reports status: ok, cipher: aes-256-cbc.",
+    "notEncrypted": "Object and file NAMES. Without repo2-bundle=y the repository leaks PostgreSQL relation paths and per-relation sizes (base/<db-oid>/<relfilenode>), plus stanza name, backup labels and schedule, and WAL volume. Contents are encrypted either way; this is a metadata exposure and is why repo2-bundle=y is published in the config shapes.",
+    "rotation": "The repo2 passphrase is fixed at stanza-create and CANNOT be rotated in place. It must be escrowed before stanza-create, not after."
+  },
+
+  "transports": {
+    "note": "Both satisfy the selected topology. Selection is a procurement question, and procurement is an external blocker either way.",
+    "sftp": {
+      "status": "PROCUREMENT-READY",
+      "rationale": "A plain Türkiye VPS. §16 records Türkiye IaaS as market-available, so E1-E5 can be attempted today.",
+      "secondaryRuns": "sshd only — no pgBackRest, therefore no version parity to maintain and no remote protocol exposed",
+      "knownCost": "The Debian libssh2 build may offer only the SHA-1 `ssh-rsa` signature algorithm, so the endpoint's sshd may need `PubkeyAcceptedAlgorithms +ssh-rsa`, and the keypair must be PEM. Without it the run fails with ERROR [101] libssh2 error [-18] — an AUTH failure, not a topology refusal.",
+      "costScope": "Applies to the SECONDARY's authentication posture, never to production. Build-dependent: production's own libssh2 may already negotiate rsa-sha2, so this must be VERIFIED at CHECKPOINT 5 rather than assumed in either direction."
+    },
+    "s3": {
+      "status": "PROMOTE ON CLEARANCE",
+      "rationale": "Better on immutability, and needs no ssh-rsa at all. Blocked only on evidence: no Türkiye-resident S3-compatible provider is evidenced as procurable anywhere in this repository.",
+      "uriStyle": "pgBackRest defaults to `host`; most non-AWS S3-compatible endpoints need `path`. Getting it wrong presents as a DNS or certificate failure rather than a config error.",
+      "mandatoryLifecycleRules": [
+        "abort incomplete multipart uploads — pgBackRest never issues AbortMultipartUpload, and orphaned parts are billed but invisible to ListObjects",
+        "expire noncurrent versions on a versioned bucket — pgBackRest is entirely version-unaware, so its deletes only create delete-markers and storage grows without bound while `expire` reports success"
+      ],
+      "wormWarning": "Do NOT enforce immutability by revoking the credential's delete right. `backup` runs `expire` automatically and `expire-auto` is GLOBAL rather than per-repository, so a WORM or object-locked repo2 fails the backup command itself, at the expire stage, AFTER the data has been written. Use a provider-side retention policy instead."
+    }
+  },
+
+  "walBacklogMonitoring": {
+    "acceptedActivationValues": {
+      "NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT": 32,
+      "NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES": 4294967296,
+      "NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG": true
+    },
+    "codeDefaultsUnchanged": {
+      "NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT": 0,
+      "NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES": 0,
+      "NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG": false
+    },
+    "whyDefaultsUnchanged": "These are ACTIVATION values, not defaults. Flipping a code default would alert on every existing single-repo production host and would break the R1 backward-compatibility contract asserted in noramedi-opscheck.test.sh and pitrStatusContract.test.ts.",
+    "rejectedApproach": "The earlier '25% of free disk' wording was a convention rather than a measurement and was rejected as too permissive. opscheck deliberately takes an absolute byte figure because it never sees the PGDATA filesystem; no auto-derivation may be introduced.",
+    "activationRequirement": "Before repo2 activation the operator must prove readyCount = 0 and walBytes well under 4 GiB. With REQUIRE_WAL_BACKLOG=true and either limit still 0, opscheck refuses to start (exit 64) rather than passing a check it cannot evaluate.",
+    "rollbackRequirement": "Rollback is not complete until the backlog is verified drained — readyCount back to 0 and archived_count advancing between two readings."
+  },
+
+  "archivePushCoupling": {
+    "behaviour": "archive-push pushes to ALL configured repos and throws if ANY repo errored, by design, so PostgreSQL does not recycle the segment.",
+    "consequence": "Adding repo2 puts WAL archive availability behind repo2's availability. An unreachable repo2 suspends archiving to repo1 as well.",
+    "noOptOut": "There is no per-repo 'best effort' setting in 2.50.",
+    "unchangedByThisDecision": "This coupling is created by configuring repo2 at all, not by which topology is chosen. It is identical under A, B and C, and it is what the WAL backlog monitoring exists to detect."
+  },
+
+  "explicitNonClaims": [
+    "Does not close R-030, R-030-DB or R-030-FILES.",
+    "Does not satisfy FIRST_CUSTOMER_RECOVERY_GATE.",
+    "Does not authorize runbook §16.5, §22, or any production configuration change.",
+    "Is not production verification. Every result is OBSERVED_LOCAL_ONLY on a pinned local build; production's filesystem, WAL rate, network and load are not reproduced.",
+    "Does not procure, provision, or select a vendor.",
+    "Does not upgrade production pgBackRest, and does not recommend doing so before R-030-DB.",
+    "Does not prove failure-domain independence. A container on the same docker network is no model of an independent Türkiye host.",
+    "Does not establish Türkiye residency for anything. A hostname is not residency evidence and neither is a bucket name.",
+    "Does not measure production RPO or RTO."
+  ],
+
+  "remainingExternalBlockers": [
+    "secondary Türkiye VPS NOT PROCURED",
+    "failure-domain independence not evidenced (I1-I5)",
+    "Türkiye residency evidence E1-E5 not obtained, E5 (backup/snapshot region) most often skipped",
+    "hosting DPA scoped to KVKK Art. 6 special-category health data not executed",
+    "subprocessor register §1 second hosting entry and §6 correction not made — required BEFORE any byte leaves production",
+    "repo2 credentials not provisioned",
+    "production repo2 not activated",
+    "no repo2-sourced restore drill has ever run",
+    "production RPO/RTO not measured"
+  ],
+
+  "lifecycle": {
+    "R-030": "OPEN",
+    "R-030-DB": "OPEN",
+    "R-030-FILES": "OPEN",
+    "R-079": "CLOSED",
+    "R-080": "OPEN",
+    "FIRST_CUSTOMER_RECOVERY_GATE": "NOT_SATISFIED",
+    "F4": "TODO",
+    "F4_TRANSITION_AUTHORIZED": "NO",
+    "PR433": "OPEN / DRAFT / NOT_MERGED"
+  }
+}
