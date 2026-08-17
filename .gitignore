@@ -19,3 +19,26 @@ server/.tmp/
 architecture-guardrail-report.json
 det-run1.json
 det-run2.json
+
+# ── frontend deployment artifacts (F3-PROD-004-R3) ───────────────────────
+# scripts/noramedi-frontend-deploy.sh runs INSIDE the production checkout and
+# creates these names at the deployment root: dist.next (staging build),
+# dist.next.stale-<UTC> (--clean-staging), dist.rollback-<tag>-<UTC> (the
+# preserved bundle every deploy and rollback leaves behind, deliberately never
+# deleted), and the state file that makes rollback deterministic.
+#
+# That script's own gate refuses to deploy from a non-empty
+# `git status --porcelain`. Without these four rules a SUCCESSFUL deploy dirties
+# its own checkout and blocks the next one — which is the self-blocking defect
+# F3-PROD-004-R3 fixes. Ignoring them removes nothing from that gate: a modified
+# tracked file or any other untracked path still fails it closed, and a stale
+# staging directory is still refused by the script's own staging precondition,
+# which is a filesystem check and not a git one.
+#
+# These are exact artifact names, not a wildcard over build output. `dist/`
+# above does NOT cover `dist.next`: a .gitignore pattern matches whole path
+# components, so "dist" never matches "dist.next" — it needs its own line.
+dist.next/
+dist.next.stale-*/
+dist.rollback-*/
+.noramedi-frontend-release-state
