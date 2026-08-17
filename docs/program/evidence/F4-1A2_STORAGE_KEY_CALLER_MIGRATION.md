@@ -326,8 +326,14 @@ which `runBackendGeneral = true` triggers.
 | `b2e8bfa` (F4-1A2) | `ci` | `32009526121` | **success** |
 | `b2e8bfa` (F4-1A2) | `windows-bridge-pr` | `32009525348` | **success** |
 | `a7dbb22` (F4-1A2-R1) | both | — | `cancelled` (superseded by the next push) |
-| `a3f34d3` (final) | `ci` | `32010690902` | **success** |
-| `a3f34d3` (final) | `windows-bridge-pr` | `32010690725` | **success** |
+| `a3f34d3` (R1 + docs) | `ci` | `32010690902` | **success** |
+| `a3f34d3` (R1 + docs) | `windows-bridge-pr` | `32010690725` | **success** |
+| `3ec7c81` (docs only) | `ci` | `32011810001` | **success** (13/13 jobs) |
+| `3ec7c81` (docs only) | `windows-bridge-pr` | `32011809803` | **success** |
+
+A commit cannot contain the result of its own CI run, so any documentation commit made after this
+table is by construction not listed in it — **PR #436 itself is the live status of record**. Every
+code-bearing head above is green.
 
 All 13 jobs of run `32010690902` concluded `success`, including *Layer 2: non-disposable backend tests*, *Layer 3*, *Layer 4*, *Layer 5* (frontend and legacy DB-required) and the *PR Gate* aggregator. Every lane ran because this commit's diff touches `server/package.json` and `scripts/ci-classify/**`, which adds the `CI_TOOLING` fail-safe category.
 
@@ -337,6 +343,9 @@ All 13 jobs of run `32010690902` concluded `success`, including *Layer 2: non-di
 4446  > server@1.0.0 test:clinic-bulk-export
 4636  117 passed, 0 failed
 ```
+
+Reproduced on the later head `3ec7c81` (run `32011810001`, Layer 2): the same suite runs and reports
+`117 passed, 0 failed`.
 
 The suite that previously ran in **no** CI lane now runs, and passes, in CI — not merely locally.
 
