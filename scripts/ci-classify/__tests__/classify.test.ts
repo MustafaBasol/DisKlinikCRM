@@ -7,6 +7,8 @@
  *
  * Run: npx tsx scripts/ci-classify/__tests__/classify.test.ts
  */
+import { readFileSync } from 'node:fs';
+
 import { classify, classifyFile, type Category, type DeepGateFlags } from '../classify.js';
 import { parseArgs, toGithubOutputLines, toStepSummaryMarkdown } from '../cli.js';
 
@@ -301,6 +303,92 @@ test('CLI: toStepSummaryMarkdown renders a table without throwing on any classif
   const md = toStepSummaryMarkdown(r);
   assert(md.includes('changed-path classification'), 'summary has a title');
   assert(md.includes('DOCS'), 'summary lists the DOCS category present');
+});
+
+// ─── F4-1A2-R1: affected-test CI coverage (classifier ↔ aggregate membership) ──
+//
+// Classifying a changed path correctly is only half the contract: the lane the
+// classifier selects must ACTUALLY contain the suite that covers that path.
+// PR #436 changed `server/src/tests/clinicBulkExport.test.ts` while
+// `test:clinic-bulk-export` was a member of `server:test:legacy-db-required`
+// ONLY. That change set yields `runLegacyBackend = false`, so the changed test
+// was exercised by no CI lane at all and a broken edit would have gone green.
+//
+// These tests close that class of gap end to end, not just for one suite.
+
+/** Aggregate members are `&&`-chained `npm run <script>` calls. Compared as
+ *  whole entries, never by substring — `test:imaging` is a prefix of
+ *  `test:imaging-lifecycle-facade`, so `includes()` here would silently pass. */
+function aggregateMembers(script: string | undefined): string[] {
+  return (script ?? '').split('&&').map((s) => s.trim()).filter(Boolean);
+}
+
+function serverScripts(): Record<string, string> {
+  const pkgUrl = new URL('../../../server/package.json', import.meta.url);
+  return JSON.parse(readFileSync(pkgUrl, 'utf8')).scripts ?? {};
+}
+
+/** The aggregates a classification would actually cause CI to run. */
+function selectedAggregates(flags: DeepGateFlags): string[] {
+  const selected: string[] = [];
+  if (flags.runBackendGeneral) selected.push('server:test:non-disposable');
+  if (flags.runPostgres) selected.push('server:test:disposable-db');
+  if (flags.runStorage) selected.push('server:test:storage-integration');
+  if (flags.runLegacyBackend) selected.push('server:test:legacy-db-required');
+  return selected;
+}
+
+function assertSuiteRunsFor(files: string[], suiteScript: string, label: string) {
+  const scripts = serverScripts();
+  const selected = selectedAggregates(classify(files).flags);
+  const member = `npm run ${suiteScript}`;
+  const covering = selected.filter((agg) => aggregateMembers(scripts[agg]).includes(member));
+  assert(
+    covering.length > 0,
+    `${label}: changing ${files.join(', ')} selects [${selected.join(', ') || 'no aggregate'}], ` +
+      `none of which runs ${suiteScript} — the changed test would be exercised by no CI lane`,
+  );
+}
+
+test('F4-1A2-R1: test:clinic-bulk-export is reachable from a lane selected for its own test file', () => {
+  assertSuiteRunsFor(['server/src/tests/clinicBulkExport.test.ts'], 'test:clinic-bulk-export', 'own test file');
+});
+
+test('F4-1A2-R1: test:clinic-bulk-export is reachable from a lane selected for the F4-1A2 changed-path set', () => {
+  // The exact PR #436 diff: storage service + imaging service + backend route
+  // + the three edited test files.
+  assertSuiteRunsFor(
+    [
+      'server/src/routes/labOrders.ts',
+      'server/src/services/fileStorage.ts',
+      'server/src/services/imaging/imagingIngestCore.ts',
+      'server/src/tests/clinicBulkExport.test.ts',
+      'server/src/tests/labOrders.test.ts',
+      'server/src/tests/storageKeyContract.test.ts',
+    ],
+    'test:clinic-bulk-export',
+    'F4-1A2 changed-path set',
+  );
+});
+
+test('F4-1A2-R1: the storage-key contract suites stay reachable for a storage-service change', () => {
+  // Guards the sibling suites this PR relies on, so a future aggregate edit
+  // cannot quietly orphan them the way clinicBulkExport was orphaned.
+  for (const suite of ['test:storage-key-contract', 'test:lab-orders']) {
+    assertSuiteRunsFor(['server/src/services/fileStorage.ts'], suite, 'storage-service change');
+  }
+});
+
+test('F4-1A2-R1: the coverage assertion is falsifiable (a suite in no aggregate is detected)', () => {
+  // Proves the guard above can actually fail — otherwise a typo'd script name
+  // would make every assertion vacuously true.
+  let threw = false;
+  try {
+    assertSuiteRunsFor(['server/src/services/fileStorage.ts'], 'test:this-script-does-not-exist', 'negative control');
+  } catch {
+    threw = true;
+  }
+  assert(threw, 'assertSuiteRunsFor must fail for a suite that belongs to no selected aggregate');
 });
 
 // ─── Summary ─────────────────────────────────────────────────────────────

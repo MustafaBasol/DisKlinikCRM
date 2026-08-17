@@ -251,20 +251,65 @@ Nothing was skipped silently. No suite named in the task brief was absent.
 Flags: `runBackendGeneral = true`, `runPostgres = true`, `runStorage = true`,
 `runFrontendFullSuite = false`, `runLegacyBackend = false`; `docsOnly = false`.
 
-### 7.1 Reported CI coverage gap — `test:clinic-bulk-export` will NOT run on this PR
+### 7.1 CI coverage gap — reported, then CLOSED by F4-1A2-R1 (2026-08-17, same branch, same PR)
 
-`test:clinic-bulk-export` is a member of **`server:test:legacy-db-required` only**, and this changed-file
-set sets `runLegacyBackend = false`. The `clinicBulkExport.test.ts` edit in this PR is therefore
-**not covered by any CI layer this PR triggers**. It was run locally (117/117, exit 0), but that is a
-local fact, not a CI fact, and is stated as such.
+**The gap, as originally reported.** `test:clinic-bulk-export` was a member of
+**`server:test:legacy-db-required` only**, and this changed-file set yields `runLegacyBackend = false`.
+The `clinicBulkExport.test.ts` edit in this PR was therefore covered by **no CI layer the PR
+triggered** — it passed locally 117/117, but a broken edit would have gone green in CI. This is the
+same class of gap the program recorded for `test:storage-deletion-evidence` under F4-3.
 
-This is the same class of gap the program recorded for `test:storage-deletion-evidence` under F4-3.
-**No CI wiring was changed by this task** — re-homing a suite across aggregates is outside the granted
-F4-1A2 scope and would need its own decision. Flagged here for the program owner.
+**Architecture-review finding.** A changed test for a materially related storage/export contract must
+be exercised by a lane selected for the changed paths. F4-1A2-R1 closes it.
 
-`test:lab-orders` and `test:storage-key-contract` are both members of `server:test:non-disposable`,
-which `runBackendGeneral = true` does trigger — so the two suites carrying this task's substantive new
-coverage are CI-covered.
+**Q1 — does `clinicBulkExport.test.ts` require legacy/disposable DB infrastructure? NO.** Its own
+module docstring states: *"no live database, no supertest/live Express server"*, and it names
+`publicBookingSlotRequired.test.ts` / `kvkkAttachmentImagingLifecycle.test.ts` as its convention
+siblings; the real concurrent-Postgres proof is a **separate** manual script
+(`scripts/verify-clinic-bulk-export-lifecycle.ts`, explicitly *"NOT part of `npm test`"*). Proven
+empirically, not just from prose: the suite passes **117/117, exit 0** with
+`DATABASE_URL="postgresql://nobody:nobody@127.0.0.1:1/f4_1a2_r1_does_not_exist"` — an unreachable
+database. (Merely unsetting `DATABASE_URL` would not have proven it, because `server/.env` exists and
+`db.ts` does `import 'dotenv/config'`.) It uses only node builtins, `archiver`, real OS-temp files, env
+vars, and dynamic imports; no Prisma connection is ever opened.
+
+**Q2 — can it run in `server:test:non-disposable`? YES**, and that lane is where its siblings already
+live: `test:storage-key-contract`, `test:storage-deletion-evidence` and `test:kvkk-lifecycle` sit
+adjacent in that aggregate. `test:kvkk-lifecycle` is already a member of **both** that aggregate and
+`legacy-db-required`, which is the exact dual-membership precedent followed here.
+
+**Q3 — the storage integration layer?** No. `server:test:storage-integration` is a single-member lane
+for `test:file-backup-db-integration` — real DB integration, the wrong home for a DB-free unit suite.
+
+**Q5 — architecturally correct aggregate:** `server:test:non-disposable`, whose CI job is titled
+*"zero external infra"* and is gated on `run_backend_general == 'true'` (Layer 2,
+`non-disposable-backend-tests`, `.github/workflows/ci-layers.yml:387-426`).
+
+**The fix (one line).** `npm run test:clinic-bulk-export` added to `server:test:non-disposable`,
+positioned immediately after `test:kvkk-lifecycle` among its storage/KVKK siblings (member 59 of 113).
+Its existing `legacy-db-required` membership was **kept**, mirroring `test:kvkk-lifecycle` — removing it
+would have reduced coverage in that lane. **No ci-classify mapping change was needed** and none was
+made; no CI workflow file was touched; no test was weakened or deleted.
+
+**Regression guard.** Four tests added to `scripts/ci-classify/__tests__/classify.test.ts` (run by
+`test:ci-classify` in the `tooling-typecheck-and-unit` job, which every other layer `needs`, so it
+always runs). They assert the **end-to-end** property that classification alone never proved: the
+aggregates a classification actually selects must contain the suite covering the changed path. Members
+are compared as whole `npm run <script>` entries, never by substring — `test:imaging` is a prefix of
+`test:imaging-lifecycle-facade`, so `includes()` would silently pass. One test is a deliberate negative
+control proving the assertion is falsifiable. **Falsified against the real bug:** reverting the
+one-line membership fix makes exactly the two coverage tests fail (`25 passed, 2 failed`); restoring it
+returns `27 passed, 0 failed`.
+
+**Post-fix classification.** For the pure F4-1A2 storage/export path set, `runBackendGeneral = true`
+and `runLegacyBackend` is still `false` — but `test:clinic-bulk-export` is now reachable through
+`server:test:non-disposable`, so the changed test runs. (For the R1 commit's own diff the flags are all
+`true`, because touching `server/package.json` and `scripts/ci-classify/**` adds the `CI_TOOLING`
+category, whose fail-safe runs everything. That is incidental to this commit and must not be mistaken
+for the storage-path behaviour the guard protects.)
+
+`test:lab-orders` and `test:storage-key-contract` were already members of `server:test:non-disposable`,
+which `runBackendGeneral = true` triggers.
 
 ---
 
