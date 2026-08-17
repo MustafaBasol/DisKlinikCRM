@@ -851,11 +851,14 @@ sudo install -d -o pgbackrest -g pgbackrest -m 0750 /var/lib/pgbackrest
 #      DO NOT install pgBackRest on the backup host. Under topology C it is a
 #      dumb storage endpoint: no pgBackRest, therefore no version parity to
 #      maintain, no remote protocol exposed, and no repo-host option set.
-#      SFTP shape only: the Debian libssh2 build may negotiate only the SHA-1
-#      `ssh-rsa` signature algorithm, so the endpoint's sshd may need
-#      `PubkeyAcceptedAlgorithms +ssh-rsa`, and the keypair must be PEM
-#      (`ssh-keygen -m PEM -t rsa`). Verify at CHECKPOINT 5, and prefer the S3
-#      shape if a Türkiye-resident provider clears E1-E5.
+#      SFTP shape only: authenticate with a MODERN algorithm the pinned
+#      pgBackRest/libssh2 build actually offers. Determine which at CHECKPOINT
+#      5 -- do NOT assume Ed25519 or RSA-SHA2 is available.
+#      ⛔ STOP: if modern SSH auth cannot be negotiated, that is a NO-GO.
+#      Do NOT edit the endpoint's sshd to re-enable SHA-1
+#      (`PubkeyAcceptedAlgorithms +ssh-rsa` or equivalent) -- PROHIBITED for
+#      first-customer activation (§22.4c). Escalate instead: provider/OS/
+#      package upgrade, pivot to the S3 shape, or pivot provider.
 
 # RUN ON: production-primary
 # 5-8. Encryption, config, secrets.
@@ -877,8 +880,9 @@ sudo install -d -o pgbackrest -g pgbackrest -m 0750 /var/lib/pgbackrest
 #        repo2-sftp-host-user=pgbackrest
 #        repo2-sftp-private-key-file=/var/lib/postgresql/.ssh/repo2
 #        repo2-sftp-public-key-file=/var/lib/postgresql/.ssh/repo2.pub
+#        repo2-sftp-host-key-check-type=fingerprint   # REQUIRED -- see §22.4c
 #        repo2-sftp-host-key-hash-type=sha256
-#        repo2-sftp-host-fingerprint=<pinned; do NOT use host-key-check-type=none>
+#        repo2-sftp-host-fingerprint=<64 lowercase hex chars, no colons>
 #        repo2-cipher-type=aes-256-cbc
 #        repo2-cipher-pass=<distinct from repo1, escrowed>
 #        repo2-retention-full=7
@@ -2150,7 +2154,7 @@ flows. It does not fix the transport, and both proven shapes satisfy it:
 | Version parity burden | none | none |
 | Türkiye residency evidence | hardest — a new vendor class, and **no Türkiye-resident S3-compatible provider is evidenced as procurable** anywhere in this repository | E1–E5 on a plain TR VPS, which §16 records as market-available |
 | Native object-lock / immutability | yes | no |
-| Known operational cost | none found | the Debian libssh2 build offers only the SHA-1 `ssh-rsa` signature algorithm, so the endpoint's sshd must re-enable `PubkeyAcceptedAlgorithms +ssh-rsa`, and the keypair must be PEM (`ssh-keygen -m PEM -t rsa`) |
+| Known operational cost | none found | SSH auth must be negotiated with a modern algorithm the pinned build offers, and the host key must be pinned by fingerprint (§22.4c). A 2026-08-16 local experiment saw libssh2 offer only SHA-1 `ssh-rsa`; that is a **risk to resolve at CHECKPOINT 5, not a sanctioned workaround** — re-enabling SHA-1 is prohibited |
 
 **`repo2-type=sftp` on a Türkiye VPS is the procurement-ready shape** — it is
 the only one whose residency evidence can be assembled from a provider this
@@ -2159,12 +2163,20 @@ immutability and should be promoted the moment a Türkiye-resident
 S3-compatible provider clears E1–E5.** Neither is authorized here; §16.2's
 seven prerequisites are unmet for both.
 
-> **`ssh-rsa` is a real cost, not a footnote.** Re-enabling a SHA-1 signature
-> algorithm on the backup endpoint's sshd weakens that host's authentication
-> posture. It applies to the **secondary**, never to production, and it is
-> build-dependent — production's own libssh2 may already negotiate `rsa-sha2`.
-> **Verify it on the secondary before committing to SFTP**, and prefer S3 if a
-> Türkiye provider clears.
+> ⛔ **SHA-1 `ssh-rsa` is PROHIBITED for first-customer activation, not a cost
+> to accept.** An earlier revision of this runbook instructed the operator to
+> re-enable `PubkeyAcceptedAlgorithms +ssh-rsa` on the secondary's sshd and to
+> verify it at CHECKPOINT 5. **That guidance is withdrawn (F4-FCR-004-R1).**
+> The accepted first-customer contract is **modern SSH only**. The 2026-08-16
+> observation that the Debian libssh2 build negotiated only SHA-1 `ssh-rsa` is
+> **HISTORICAL** — a local disposable-container result, and never an
+> authorization to weaken a real endpoint.
+>
+> **STOP condition: MODERN SSH AUTH CANNOT BE NEGOTIATED => NO-GO.** Do not
+> edit sshd to re-enable SHA-1. Escalate instead — provider/OS/package
+> upgrade, transport pivot to S3, or provider pivot. Determine the acceptable
+> algorithm from what the pinned pgBackRest/libssh2 build actually offers; do
+> **not** assume Ed25519 or RSA-SHA2 is available. See §22.4c.
 
 ### What this does NOT do
 
@@ -2176,6 +2188,105 @@ removes is the **last unresolved technical topology question** — nothing more.
 
 Full data: `evidence/F4-FCR-003-R2_repo2_topology.json`. Reproduce with
 `scripts/noramedi-gate0-repo2-topology.sh`.
+
+---
+
+## 22.4c SFTP host-key verification — the accepted contract
+
+**Added 2026-08-17 by F4-FCR-004-R1.** Before this section the repository had
+no single internally consistent host-key contract: the template pinned a
+fingerprint but never set a check type, the preflight only rejected `none`, and
+the §22.13 `known_hosts` step read as if it were what pgBackRest verifies. It
+is not.
+
+### The accepted contract
+
+```ini
+repo2-sftp-host-key-check-type=fingerprint
+repo2-sftp-host-key-hash-type=sha256
+repo2-sftp-host-fingerprint=<64 lowercase hex characters, no separators>
+```
+
+All three are **required together**. The preflight fails the config if any is
+missing, if the check type is anything other than `fingerprint`, if the hash
+type is not `sha256`, or if the fingerprint is absent, still the template
+placeholder, or malformed.
+
+### Why the check type is load-bearing
+
+Verified against the **pinned production build, pgBackRest 2.50** — not
+assumed, and not carried over from a newer release:
+
+| Fact | Source |
+|---|---|
+| `repo-sftp-host-key-check-type` exists (added 2.48, so present on 2.50); allowed values `strict`, `accept-new`, `fingerprint`, `none`; **default `strict`** | `src/build/config/config.yaml` @ `release/2.50`; pgBackRest configuration reference |
+| The configured fingerprint is compared **only** when the check type is exactly `fingerprint`. Any other non-`none` value falls through to `known_hosts` checking and the pin is never read | `src/storage/sftp/storage.c` @ `release/2.50` — `if (param.hostKeyCheckType == SFTP_STRICT_HOSTKEY_CHECKING_FINGERPRINT) { ... } else if (param.hostKeyCheckType != SFTP_STRICT_HOSTKEY_CHECKING_NONE) { /* known hosts */ }` |
+| Comparison is `strcmp()` against `encodeToStr(encodingHex, ...)` | same file; `encodeToStr` uses the alphabet `"0123456789abcdef"`, two characters per byte (`src/common/encode.c` @ `release/2.50`) |
+| `repo-sftp-host-key-hash-type` allows `md5`, `sha1`, `sha256` | `src/build/config/config.yaml` @ `release/2.50` |
+
+The consequence is the whole point: **a config that pins a fingerprint but
+omits the check type is not fingerprint-verified.** It runs under the default
+`strict`, which verifies against a `known_hosts` file — a file this program has
+no procedure for distributing to the `postgres` user, and which the §22.13
+`ssh-keyscan` step populates on a trust-on-first-use basis. That shape reads as
+"pinned" in review while verifying something else entirely.
+
+### Why `fingerprint` and not `strict`
+
+`strict` is a legitimate pgBackRest contract, but it moves the root of trust
+into `~postgres/.ssh/known_hosts`: a mutable file, populated in practice by
+`ssh-keyscan` (which trusts whatever answers), living inside the failure domain
+we are trying to escape, and covered by no escrow or review procedure here.
+`fingerprint` puts the pin in the same reviewed, mode-0600, version-controlled
+config that already carries the encryption contract, where the preflight can
+enforce it. `accept-new` is trust-on-first-use and is **not accepted**. `none`
+is prohibited.
+
+### Generating the fingerprint
+
+`ssh-keygen -l` output does **not** work — it prints base64 (`SHA256:...`) or
+colon-separated MD5, and `strcmp` against lowercase colonless hex will never
+match. Use the form the official documentation specifies, against the host key
+algorithm the endpoint **actually negotiates** (determine that at CHECKPOINT 5;
+do not assume):
+
+```bash
+# RUN ON: repo2-host (the secondary), read-only
+awk '{print $2}' /etc/ssh/ssh_host_<type>_key.pub | base64 -d | sha256sum
+```
+
+Take field 1 of the output — 64 lowercase hex characters — and paste it
+verbatim. Uppercase will fail at runtime with
+`host [...] and configured fingerprint (repo-sftp-host-fingerprint) [...] do not match`.
+
+### Is the fingerprint sensitive?
+
+**No — it is public metadata, and this is deliberate.** It is a digest of the
+endpoint's *public* host key, which every SSH client is handed on connect.
+Storing it in `pgbackrest.conf` and recording it in evidence discloses nothing
+an attacker could not obtain by connecting to the host. The secrets in this
+shape are the **private key file** and the **repo2 cipher passphrase**; the
+preflight reads neither and prints neither, and the shell suite asserts that
+with a canary. The preflight also does not echo the fingerprint value itself —
+not because it is secret, but because a preflight that prints config values is
+one edit away from printing the ones that are.
+
+### Relationship to §22.13's `known_hosts` step
+
+§22.13 populates `known_hosts` for the **operator's own `ssh` reachability
+check**, which is an OpenSSH client and does use `known_hosts`. That step is
+unchanged and still required. It is **not** what pgBackRest verifies: under
+`check-type=fingerprint`, pgBackRest's libssh2 path ignores `known_hosts`
+entirely and compares the pin. Both exist; do not substitute one for the other.
+
+### Modern SSH only
+
+See §22.4b's stop condition. Re-enabling SHA-1 `ssh-rsa` on the endpoint is
+**prohibited for first-customer activation**. If modern SSH auth cannot be
+negotiated against the pinned build: **NO-GO** — escalate, do not weaken sshd.
+
+**Nothing in this section is activated.** `repo2` does not exist, the secondary
+is not procured, and `R-030-DB` remains OPEN.
 
 ---
 
@@ -2295,10 +2406,17 @@ sudo -u postgres ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
      pgbackrest@BACKUP_HOST true && echo SSH_OK
 
 # RUN ON: production-primary
-# known_hosts MUST be pre-populated. The status unit runs under
-# ProtectSystem=strict with the postgres home read-only, so a first connection
-# that needs to APPEND known_hosts fails, `check` errors, and checkStatus pins
-# to "failed" — a permanent FALSE RED on a healthy cluster.
+# known_hosts MUST be pre-populated -- for the OPERATOR'S OpenSSH client above,
+# NOT for pgBackRest. Under the accepted repo2 contract
+# (repo2-sftp-host-key-check-type=fingerprint, §22.4c) pgBackRest's libssh2
+# path ignores known_hosts entirely and compares the pinned fingerprint. Both
+# checks exist; neither substitutes for the other.
+# Still required here because the status unit runs under ProtectSystem=strict
+# with the postgres home read-only, so a first connection that needs to APPEND
+# known_hosts fails, `check` errors, and checkStatus pins to "failed" — a
+# permanent FALSE RED on a healthy cluster.
+# ⚠ ssh-keyscan is trust-on-first-use: it records whatever answers. Confirm the
+# scanned key against the §22.4c fingerprint before relying on it.
 sudo -u postgres ssh-keyscan -H BACKUP_HOST >> ~postgres/.ssh/known_hosts
 
 # RUN ON: production-primary
@@ -2307,9 +2425,12 @@ sudo -u postgres ssh-keyscan -H BACKUP_HOST >> ~postgres/.ssh/known_hosts
 sudo -u postgres ssh pgbackrest@BACKUP_HOST 'command -v pgbackrest || echo NO_PGBACKREST_GOOD'
 
 # RUN ON: production-primary
-# libssh2 in the Debian pgBackRest build may offer only the SHA-1 `ssh-rsa`
-# signature algorithm. Confirm the endpoint accepts the keypair BEFORE
-# CHECKPOINT 7, and record which algorithm was negotiated (§22.4b).
+# Record WHICH signature algorithm was negotiated, BEFORE CHECKPOINT 7.
+# ⛔ STOP RULE (§22.4c): if the only algorithm that authenticates is SHA-1
+# `ssh-rsa`, this is a NO-GO. Do NOT add `PubkeyAcceptedAlgorithms +ssh-rsa`
+# to the endpoint's sshd. Escalate: provider/OS/package upgrade, pivot to the
+# S3 shape, or pivot provider. Determine the acceptable algorithm from what
+# the pinned pgBackRest/libssh2 build offers -- do not assume Ed25519/RSA-SHA2.
 sudo -u postgres ssh -v -o BatchMode=yes pgbackrest@BACKUP_HOST true 2>&1 \
   | grep -iE 'server accepts key|signature algorithm|Authenticated'
 

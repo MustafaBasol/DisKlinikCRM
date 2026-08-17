@@ -1647,52 +1647,202 @@ run bash "$PREFLIGHT"
   && pass "the retention checks never print either passphrase" \
   || fail "CANARY LEAKED while validating retention"
 
-# SFTP host-key verification. The template and the runbook both say "pin it;
-# never host-key-check-type=none", but that is prose -- the same prose the
-# repo2 encryption gate exists because it was not enough. The documented
-# libssh2 error [-18] pushes an operator toward host-key-check-type=none, and
-# the Gate 0 harness itself runs with that setting, so it reads as sanctioned.
+# ── SFTP host-key verification (F4-FCR-004-R1) ────────────────────────────
+#
+# The accepted contract, verified against the PINNED production build
+# (pgBackRest 2.50) and documented with citations in runbook §22.4c:
+#
+#   repo2-sftp-host-key-check-type=fingerprint
+#   repo2-sftp-host-key-hash-type=sha256
+#   repo2-sftp-host-fingerprint=<64 lowercase hex chars, no separators>
+#
+# The check type is the load-bearing key. On 2.50 it DEFAULTS TO strict, and
+# storage/sftp/storage.c compares the pinned fingerprint ONLY when it is
+# exactly `fingerprint`; every other non-`none` value falls through to
+# known_hosts and the pin is never read. So the earlier gate -- which refused
+# only `none` and accepted any other value -- passed configs whose fingerprint
+# was inert. These cases pin that distinction down.
 _SFTP_BASE='[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-type=sftp\nrepo2-path=/var/lib/pgbackrest\nrepo2-sftp-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\nrepo2-cipher-pass=%s-distinct\nrepo2-retention-full=7\nrepo2-retention-archive=7\n'
+# 64 lowercase hex characters == a sha256 digest as pgBackRest renders it.
+_FP_OK='3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b'
 
-printf "${_SFTP_BASE}repo2-sftp-host-key-check-type=none\n" "$CANARY" "$CANARY" > "$PF2"
-EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
-run bash "$PREFLIGHT"
+sftp_pf() {   # $1 = extra config lines (printf format, already \n-escaped)
+  printf "${_SFTP_BASE}$1" "$CANARY" "$CANARY" > "$PF2"
+  EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+  run bash "$PREFLIGHT"
+}
+
+# (3) The accepted pairing passes -- the positive control. Without this, every
+#     negative below could be satisfied by a gate that fails everything.
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=${_FP_OK}\n"
+[[ "$OUT" == *"repo2-sftp-host-key-check-type=fingerprint"* ]] \
+  && [[ "$OUT" == *"repo2-sftp-host-fingerprint is pinned"* ]] \
+  && pass "the accepted contract (check-type=fingerprint + sha256 + 64 hex chars) passes preflight" \
+  || fail "the accepted SFTP host-key contract was rejected ($OUT)"
+[[ "$OUT" != *"$_FP_OK"* ]] \
+  && pass "the preflight reports the fingerprint as pinned WITHOUT echoing its value" \
+  || fail "the preflight printed the fingerprint value ($OUT)"
+
+# (4) none -- verification off entirely.
+sftp_pf "repo2-sftp-host-key-check-type=none\nrepo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=${_FP_OK}\n"
 [[ "$OUT" == *"host-key-check-type=none disables SSH host-key verification"* ]] \
   && pass "repo2-sftp-host-key-check-type=none is a preflight failure, not a warning" \
   || fail "host-key-check-type=none was not refused ($OUT)"
 
-printf "$_SFTP_BASE" "$CANARY" "$CANARY" > "$PF2"
-EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
-run bash "$PREFLIGHT"
+# (5) Missing check type. This is the case the pre-R1 gate ACCEPTED: a pinned
+#     fingerprint that pgBackRest never compares, because the default is
+#     `strict`. It must fail, and the message must name the default.
+sftp_pf "repo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=${_FP_OK}\n"
+[[ "$OUT" == *"repo2-sftp-host-key-check-type is not set"* ]] \
+  && pass "a pinned fingerprint with NO check type fails (default 'strict' never compares the pin)" \
+  || fail "a config whose fingerprint pgBackRest would never read was accepted ($OUT)"
+
+# (5b) strict + a pinned fingerprint is the same defect stated explicitly.
+sftp_pf "repo2-sftp-host-key-check-type=strict\nrepo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=${_FP_OK}\n"
+[[ "$OUT" == *"repo2-sftp-host-key-check-type=strict verifies against"* ]] \
+  && pass "check-type=strict alongside a pinned fingerprint is refused as contradictory" \
+  || fail "strict+fingerprint was accepted even though the pin is inert ($OUT)"
+
+# (5c) accept-new is trust-on-first-use, and the first backup is the one that
+#      carries the data off the host.
+sftp_pf "repo2-sftp-host-key-check-type=accept-new\nrepo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=${_FP_OK}\n"
+[[ "$OUT" == *"accept-new is trust-on-first-use"* ]] \
+  && pass "check-type=accept-new is refused (and is not silently read as 'accept')" \
+  || fail "accept-new was accepted ($OUT)"
+
+# (6) Weak / wrong / missing hash type.
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-key-hash-type=md5\nrepo2-sftp-host-fingerprint=f84e172dfead7aeeeae6c1fdfb5aa8cf\n"
+[[ "$OUT" == *"repo2-sftp-host-key-hash-type=md5 is a broken digest"* ]] \
+  && pass "hash-type=md5 is refused even though pgBackRest 2.50 accepts it" \
+  || fail "md5 host-key hash type was accepted ($OUT)"
+[[ "$OUT" != *"is malformed"* ]] && [[ "$OUT" != *"hex characters but"* ]] \
+  && pass "a rejected hash type does not also emit a bogus fingerprint-length failure" \
+  || fail "md5 produced a second, misleading fingerprint failure ($OUT)"
+
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-key-hash-type=sha1\nrepo2-sftp-host-fingerprint=${_FP_OK}\n"
+[[ "$OUT" == *"repo2-sftp-host-key-hash-type=sha1 is a broken digest"* ]] \
+  && pass "hash-type=sha1 is refused" \
+  || fail "sha1 host-key hash type was accepted ($OUT)"
+
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-fingerprint=${_FP_OK}\n"
+[[ "$OUT" == *"repo2-sftp-host-key-hash-type is not set"* ]] \
+  && pass "a missing hash type is refused (it selects the digest the pin is compared against)" \
+  || fail "a fingerprint with no declared hash type was accepted ($OUT)"
+
+# (7) Missing fingerprint.
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-key-hash-type=sha256\n"
 [[ "$OUT" == *"no repo2-sftp-host-fingerprint is pinned"* ]] \
   && pass "an SFTP repo2 with no pinned fingerprint is a preflight failure" \
   || fail "an unpinned SFTP endpoint was accepted ($OUT)"
 
-printf "${_SFTP_BASE}repo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=<REPLACE - pin it>\n" "$CANARY" "$CANARY" > "$PF2"
-EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
-run bash "$PREFLIGHT"
+# (8) The template placeholder.
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=<REPLACE - pin it>\n"
 [[ "$OUT" == *"repo2-sftp-host-fingerprint is still the"* ]] \
   && pass "a template '<REPLACE ...>' fingerprint placeholder is refused" \
   || fail "the fingerprint placeholder was accepted as a pin ($OUT)"
 
-printf "${_SFTP_BASE}repo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=ab:cd:ef:01:23:45:67:89\n" "$CANARY" "$CANARY" > "$PF2"
-EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
-run bash "$PREFLIGHT"
-[[ "$OUT" == *"repo2-sftp-host-fingerprint is pinned"* ]] \
-  && pass "a pinned SFTP fingerprint passes" \
-  || fail "a correctly pinned SFTP endpoint was rejected ($OUT)"
+# (9) Malformed fingerprints. Each of these is a value pgBackRest compares with
+#     strcmp() against lowercase colonless hex, so each fails at RUN time --
+#     after the operator believes the endpoint is pinned. The pre-R1 regex
+#     `[0-9a-fA-F:]{16,}` ACCEPTED the first two.
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=ab:cd:ef:01:23:45:67:89\n"
+[[ "$OUT" == *"repo2-sftp-host-fingerprint is colon-separated"* ]] \
+  && pass "a colon-separated fingerprint is refused (pgBackRest never matches it)" \
+  || fail "colon-separated fingerprint was accepted as a valid pin ($OUT)"
+
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=3A7BD3E2360A3D29EEA436FCFB7E44C735D117C42D1C1835420B6B9942DD4F1B\n"
+[[ "$OUT" == *"contains uppercase hex"* ]] \
+  && pass "an UPPERCASE hex fingerprint is refused (strcmp is against lowercase)" \
+  || fail "uppercase fingerprint was accepted ($OUT)"
+
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=3a7bd3e2360a3d29eea436fcfb7e44c7\n"
+[[ "$OUT" == *"hex characters but repo2-sftp-host-key-hash-type=sha256 requires exactly 64"* ]] \
+  && pass "a 32-char (md5-length) fingerprint under sha256 is refused on length" \
+  || fail "a wrong-length fingerprint was accepted ($OUT)"
+
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=SHA256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\n"
+[[ "$OUT" == *"in ssh-keygen's '<HASH>:<base64>' form"* ]] \
+  && pass "ssh-keygen's base64 'SHA256:...' form is refused, and named as such" \
+  || fail "the ssh-keygen base64 fingerprint form was accepted or misdiagnosed ($OUT)"
+# Regression guard for the greedy-sed defect this case exposed: a value whose
+# base64 padding ends in `=` must not be truncated to empty and reported as
+# "no fingerprint pinned" -- fail-closed, but it sends the operator to add a
+# value they had already added.
+[[ "$OUT" != *"no repo2-sftp-host-fingerprint is pinned"* ]] \
+  && pass "a fingerprint containing '=' is not truncated to empty by value extraction" \
+  || fail "a base64 fingerprint was truncated and misreported as unpinned ($OUT)"
+
+# A bare malformed value (neither hex, nor colon form, nor ssh-keygen form).
+sftp_pf "repo2-sftp-host-key-check-type=fingerprint\nrepo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=not-a-digest\n"
+[[ "$OUT" == *"repo2-sftp-host-fingerprint is malformed"* ]] \
+  && pass "a non-hex fingerprint is refused as malformed" \
+  || fail "a non-hex fingerprint was accepted ($OUT)"
+
+# (12) No secret leak anywhere in the host-key surface.
 [[ "$OUT" != *"$CANARY"* ]] \
   && pass "the SFTP host-key checks never print either passphrase" \
   || fail "CANARY LEAKED while validating SFTP host-key settings"
 
-# An S3 repo2 must NOT be dragged into the SFTP-only checks.
+# (9b) repo2-sftp-* without repo2-type=sftp is the gap between the two files:
+#      the status writer classifies from repo2-sftp-host alone, this gate keys
+#      on repo2-type, and pgBackRest ignores the SFTP settings entirely.
+printf '[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-path=/var/lib/pgbackrest\nrepo2-sftp-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\nrepo2-cipher-pass=%s-distinct\nrepo2-retention-full=7\nrepo2-retention-archive=7\n' "$CANARY" "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"repo2-sftp-* options are set but repo2-type is"* ]] \
+  && pass "repo2-sftp-* without repo2-type=sftp is refused (preflight and status writer would disagree)" \
+  || fail "a half-configured SFTP repo2 slipped past every host-key check ($OUT)"
+
+# (10) S3 non-regression: an S3 repo2 must NOT be dragged into SFTP-only checks.
 printf '[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-type=s3\nrepo2-s3-endpoint=s3.example.tr\nrepo2-cipher-type=aes-256-cbc\nrepo2-cipher-pass=%s-distinct\nrepo2-retention-full=7\nrepo2-retention-archive=7\n' "$CANARY" "$CANARY" > "$PF2"
 EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
 run bash "$PREFLIGHT"
-[[ "$OUT" != *"sftp-host-fingerprint"* ]] \
+[[ "$OUT" != *"sftp-host-fingerprint"* ]] && [[ "$OUT" != *"sftp-host-key-check-type"* ]] \
   && pass "an S3 repo2 is not subjected to the SFTP host-key checks" \
-  || fail "S3 repo2 wrongly required an SFTP fingerprint ($OUT)"
-unset _SFTP_BASE
+  || fail "S3 repo2 wrongly required SFTP host-key settings ($OUT)"
+unset _SFTP_BASE _FP_OK
+
+# (11) ACTIVE operator guidance must not authorize a SHA-1 ssh-rsa fallback.
+#
+#      The program contract accepted for the first customer is MODERN SSH ONLY,
+#      with an explicit stop rule. Before F4-FCR-004-R1 the template and the
+#      runbook told the operator the endpoint's sshd "may need" / "must
+#      re-enable" `PubkeyAcceptedAlgorithms +ssh-rsa` and to verify at
+#      CHECKPOINT 5 -- i.e. they published the weakening as an available
+#      workaround. Mentioning ssh-rsa is still legitimate (the prohibition and
+#      the historical observation both have to name it), so this asserts on the
+#      AUTHORIZING VERB rather than on the token, and pairs it with a positive
+#      assertion so deleting the stop rule fails too.
+RUNBOOK_F4="$SCRIPT_DIR/../docs/program/runbooks/F4_RECOVERY_OPERATIONS.md"
+GATE0_TOPO="$SCRIPT_DIR/../scripts/noramedi-gate0-repo2-topology.sh"
+_AUTHZ_RE='may need|must re-enable|must set|must add|should add|should set|need to add|will need'
+for _gf in "$CONF_EXAMPLE" "$RUNBOOK_F4"; do
+  _gname="$(basename "$_gf")"
+  _ghits="$(grep -nE 'ssh-rsa|PubkeyAcceptedAlgorithms|HostkeyAlgorithms' "$_gf" 2>/dev/null \
+            | grep -EI "$_AUTHZ_RE" || true)"
+  [[ -z "$_ghits" ]] \
+    && pass "${_gname} does not authorize a SHA-1 ssh-rsa fallback in active guidance" \
+    || fail "${_gname} publishes SHA-1 ssh-rsa re-enablement as an available workaround: ${_ghits}"
+done
+for _gf in "$CONF_EXAMPLE" "$RUNBOOK_F4"; do
+  _gname="$(basename "$_gf")"
+  grep -q 'MODERN SSH AUTH CANNOT BE NEGOTIATED' "$_gf" \
+    && pass "${_gname} publishes the explicit modern-SSH stop condition" \
+    || fail "${_gname} lost the 'MODERN SSH AUTH CANNOT BE NEGOTIATED => NO-GO' stop rule"
+  grep -qi 'PROHIBITED FOR FIRST-CUSTOMER ACTIVATION' "$_gf" \
+    && pass "${_gname} labels SHA-1 re-enablement PROHIBITED for first-customer activation" \
+    || fail "${_gname} lost the PROHIBITED-for-first-customer label"
+done
+# The Gate 0 harness genuinely does weaken its throwaway container's sshd. That
+# is allowed, but it must never read as sanctioned for a real endpoint.
+grep -q 'PROHIBITED FOR FIRST-CUSTOMER ACTIVATION' "$GATE0_TOPO" \
+  && pass "the Gate 0 topology harness labels its ssh-rsa scaffolding PROHIBITED for real endpoints" \
+  || fail "the Gate 0 harness re-enables SHA-1 with no PROHIBITED label — it reads as sanctioned"
+# The template must publish the accepted contract, not just forbid the bad one.
+grep -q '^;   repo2-sftp-host-key-check-type=fingerprint' "$CONF_EXAMPLE" \
+  && pass "pgbackrest.conf.example publishes repo2-sftp-host-key-check-type=fingerprint in the SFTP shape" \
+  || fail "the SFTP template shape does not publish the required check type"
+unset _AUTHZ_RE _ghits _gf _gname
 
 rm -f "$FAKEBIN/id"
 

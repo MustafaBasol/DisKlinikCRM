@@ -205,25 +205,61 @@ pg1-user=postgres
 ;   repo2-sftp-host-user=pgbackrest
 ;   repo2-sftp-private-key-file=/var/lib/postgresql/.ssh/repo2
 ;   repo2-sftp-public-key-file=/var/lib/postgresql/.ssh/repo2.pub
+;   repo2-sftp-host-key-check-type=fingerprint
 ;   repo2-sftp-host-key-hash-type=sha256
-;   repo2-sftp-host-fingerprint=<REPLACE — pin it; never host-key-check-type=none>
+;   repo2-sftp-host-fingerprint=<REPLACE — 64 lowercase hex chars, no colons>
 ;   repo2-cipher-type=aes-256-cbc
 ;   repo2-cipher-pass=<REPLACE — distinct from repo1>
 ;   repo2-retention-full=7
 ;   repo2-retention-archive=7
 ;   repo2-bundle=y
 ;
-;   ⚠ SFTP cost, measured not assumed: the Debian libssh2 build may offer only
-;   the SHA-1 `ssh-rsa` signature algorithm, so the endpoint's sshd may need
-;   `PubkeyAcceptedAlgorithms +ssh-rsa` and the keypair must be PEM
-;   (`ssh-keygen -m PEM -t rsa`). Without it: `ERROR [101]: public key
-;   authentication failed: libssh2 error [-18]`. That weakens the SECONDARY's
-;   auth posture — never production's — and it is build-dependent, so verify at
-;   CHECKPOINT 5 rather than assuming either way.
+;   ⚠ HOST-KEY CONTRACT — the three host-key lines above are REQUIRED TOGETHER,
+;   and the CHECK TYPE is the load-bearing one. Verified against the pinned
+;   production build (pgBackRest 2.50), not assumed:
+;     - repo2-sftp-host-key-check-type accepts strict|accept-new|fingerprint|
+;       none and DEFAULTS TO strict (src/build/config/config.yaml, 2.50).
+;     - src/storage/sftp/storage.c compares repo2-sftp-host-fingerprint ONLY
+;       when the check type is exactly `fingerprint`. Every other non-`none`
+;       value falls through to known_hosts checking, and the pinned
+;       fingerprint is never read at all.
+;   So pinning a fingerprint WITHOUT the check type pins nothing: the default
+;   `strict` silently verifies against a known_hosts file instead, which this
+;   program has no procedure for distributing to the postgres user. That shape
+;   reads as "pinned" while verifying something else entirely, and the
+;   preflight now fails it.
 ;
-; ── Shape C2 — S3 (PROMOTE ON CLEARANCE). Better than C1 on immutability and on
-; not needing ssh-rsa at all. Promote the moment a named Türkiye S3-compatible
-; provider clears E1-E5 and counsel.
+;   FORMAT, from the same source: the value is compared with strcmp() against
+;   encodeToStr(encodingHex, ...) — LOWERCASE hex, NO separators, two
+;   characters per digest byte, so exactly 64 characters for sha256. The
+;   output of `ssh-keygen -l` (base64 `SHA256:...`, or colon-separated MD5)
+;   will NEVER match. Generate it as the official documentation specifies,
+;   from the host key algorithm the endpoint actually negotiates:
+;     awk '{print $2}' /etc/ssh/ssh_host_<type>_key.pub | base64 -d | sha256sum
+;   The fingerprint is PUBLIC metadata — it is a digest of the host's PUBLIC
+;   key, which every client is handed on connect — so it is safe to store here
+;   and to record in evidence. The private key and the cipher passphrase are
+;   the secrets; those are never committed.
+;
+;   ⛔ STOP CONDITION — MODERN SSH AUTH CANNOT BE NEGOTIATED => NO-GO.
+;   Do NOT weaken the endpoint's sshd to make authentication succeed.
+;   `PubkeyAcceptedAlgorithms +ssh-rsa`, `HostkeyAlgorithms +ssh-rsa`, and any
+;   equivalent SHA-1 re-enablement are
+;   PROHIBITED FOR FIRST-CUSTOMER ACTIVATION.
+;   A 2026-08-16 local container experiment observed the Debian
+;   libssh2 build negotiating only the SHA-1 `ssh-rsa` signature algorithm,
+;   failing otherwise with `ERROR [101]: public key authentication failed:
+;   libssh2 error [-18]`. That record is HISTORICAL and is NOT an
+;   authorization. If the procured secondary and the pinned pgBackRest/libssh2
+;   build cannot authenticate with an acceptable modern algorithm, STOP and
+;   escalate: require a provider/OS/package upgrade, pivot the transport to
+;   Shape C2, or pivot the provider. Determine the acceptable algorithm from
+;   what the pinned build actually offers — do NOT assume Ed25519 or RSA-SHA2
+;   is available.
+;
+; ── Shape C2 — S3 (PROMOTE ON CLEARANCE). Better than C1 on immutability, and
+; it depends on no SSH host-key negotiation at all. Promote the moment a named
+; Türkiye S3-compatible provider clears E1-E5 and counsel.
 ;
 ;   repo2-type=s3
 ;   repo2-path=/noramedi

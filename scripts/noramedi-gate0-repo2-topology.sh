@@ -288,11 +288,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssh-server 
     && mkdir -p /var/lib/pgbackrest /home/pgbackrest/.ssh \
     && chown -R pgbackrest:pgbackrest /var/lib/pgbackrest /home/pgbackrest/.ssh \
     && chmod 0700 /home/pgbackrest/.ssh
+# ⛔ PROHIBITED FOR FIRST-CUSTOMER ACTIVATION — LOCAL TEST FIXTURE ONLY.
+#
 # libssh2 in the Debian pgBackRest build may offer only the SHA-1 "ssh-rsa"
 # signature algorithm, which OpenSSH >= 8.8 disables by default. Without this
 # the run fails with ERROR [101] libssh2 error [-18] — an AUTH failure, not a
-# topology refusal. Re-enabling it is a real cost of the SFTP shape and is
-# recorded as such in runbook §22.4b.
+# topology refusal, which would make this harness report INDETERMINATE for a
+# reason that has nothing to do with the topology question it exists to answer.
+#
+# This line is therefore scaffolding inside a THROWAWAY CONTAINER that is
+# built, used and deleted within one harness run, holds no real data, and is
+# never reachable from outside the local Docker network. It is NOT a
+# recommendation, NOT operator guidance, and NOT an authorization.
+#
+# Doing this on the real secondary is PROHIBITED (F4-FCR-004-R1). The accepted
+# first-customer contract is MODERN SSH ONLY, and the stop rule is:
+#   MODERN SSH AUTH CANNOT BE NEGOTIATED => NO-GO.
+# Escalate — provider/OS/package upgrade, transport pivot to S3, or provider
+# pivot — and do not weaken a real sshd. See runbook §22.4b and §22.4c.
 RUN printf 'PubkeyAcceptedAlgorithms +ssh-rsa\nHostkeyAlgorithms +ssh-rsa\n' \
       > /etc/ssh/sshd_config.d/10-libssh2-compat.conf
 CMD ["/usr/sbin/sshd","-D","-e"]
@@ -318,6 +331,20 @@ EOF
   docker exec -u root "${NS}-pg" bash -c \
     'chown postgres:postgres /var/lib/postgresql/.ssh/repo2*; chmod 600 /var/lib/postgresql/.ssh/repo2; chmod 644 /var/lib/postgresql/.ssh/repo2.pub'
 
+  # ⛔ host-key-check-type=none is LOCAL FIXTURE SCAFFOLDING, NOT a config
+  # shape any real deployment may use. The endpoint here is a container whose
+  # host key is generated at build time and destroyed with it, so there is no
+  # stable fingerprint to pin and nothing to impersonate on a private Docker
+  # network. This harness answers a TOPOLOGY question (does ERROR [072] fire?),
+  # not a host-key question.
+  #
+  # The accepted first-customer contract is the opposite of this line:
+  #   repo2-sftp-host-key-check-type=fingerprint
+  #   repo2-sftp-host-key-hash-type=sha256
+  #   repo2-sftp-host-fingerprint=<64 lowercase hex chars>
+  # `none` is a PREFLIGHT FAILURE (noramedi-pgbackrest-preflight.sh), and so is
+  # omitting the check type — on pgBackRest 2.50 the default is `strict`, under
+  # which a pinned fingerprint is never compared. See runbook §22.4c.
   write_conf sftp "repo2-type=sftp
 repo2-path=/var/lib/pgbackrest
 repo2-sftp-host=sftphost
