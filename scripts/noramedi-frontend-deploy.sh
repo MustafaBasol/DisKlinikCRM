@@ -63,13 +63,30 @@
 #     the marker as "served" on a bundle that has no marker at all — which is
 #     precisely the R-038 condition this check exists to detect.
 #
-# Therefore: reachability follows redirects and accepts any final 2xx, and the
-# marker is proven by PARSING THE RETURNED BODY for releaseSha and comparing it
-# to the live bundle on disk. A fallback HTML page carries no releaseSha field,
-# so it is reported as NOT_SERVED and can never pass. Only when the served
-# marker and the promoted bundle report the same valid release identity does
-# this script print NGINX_SERVES_PROMOTED_DIST = VERIFIED — and that single
-# line is the whole of what it claims.
+# A first correction made the verdict depend on PARSING THE RETURNED BODY for
+# releaseSha, which a fallback HTML page can never satisfy. Reviewing that
+# correction (F3-PROD-004-R2-R1) found body validation alone still insufficient
+# in the other direction: a 404 or a 500 whose body happens to contain a
+# well-formed, matching marker could reach VERIFIED. An error page is not a
+# served file, and a body fetched after a redirect to some other host is not
+# this host's answer at all.
+#
+# The contract is therefore explicit. NGINX_SERVES_PROMOTED_DIST = VERIFIED is
+# printed only when ALL of the following hold:
+#
+#   1. the app root is reachable — a final 2xx after redirects;
+#   2. the final /release.json response is itself a 2xx;
+#   3. that response came from an acceptable effective origin (same host, port
+#      and scheme as the base; an http -> https upgrade of the same host is the
+#      one permitted move);
+#   4. its body parses as a release marker;
+#   5. the releaseSha it carries is valid under the release identity contract;
+#   6. that releaseSha equals the one recorded by the live bundle on disk.
+#
+# Conditions 2 and 3 are gates, not scores: a response failing either is
+# reported NOT_SERVED and its body is not read at all, so a valid-looking
+# marker on an error page or on a foreign origin cannot contribute evidence.
+# That single VERIFIED line is the whole of what this script claims.
 #
 # ── WHAT THIS SCRIPT NEVER DOES ──────────────────────────────────────────
 #   * It never deletes anything. There is no `rm` in this file. A stale
@@ -130,10 +147,12 @@
 # verify options:
 #   --url BASE         Additionally fetch BASE/ and BASE/release.json over
 #                      HTTP(S). Reachability follows redirects and accepts any
-#                      final 2xx; the marker is proven by PARSING the returned
-#                      body and comparing releaseSha against the live bundle's,
-#                      never by its HTTP status alone (see PUBLIC MARKER
-#                      VERIFICATION above). Omitted by default: verification is
+#                      final 2xx. The marker counts only when its own final
+#                      response is a 2xx from an acceptable effective origin,
+#                      AND its body parses to a valid releaseSha equal to the
+#                      live bundle's — never by HTTP status alone, and never
+#                      from a body alone (see PUBLIC MARKER VERIFICATION
+#                      above). Omitted by default: verification is
 #                      filesystem-local and needs no network.
 #   --expect-sha SHA   Fail unless the live release marker records SHA.
 #   --check-backend    Also run the existing noramedi-healthcheck.sh. Reported
@@ -900,18 +919,79 @@ report_release_state() {
 
 # ── public (served) verification ─────────────────────────────────────────
 # http_get URL — prints the response body followed by a final line holding the
-# HTTP status of the LAST response after redirects, or 000 when curl itself
-# failed. No temporary file is used, so this adds no cleanup obligation to a
-# script that deliberately owns no deletion primitive.
+# status of the LAST response after redirects and the URL that response
+# actually came from, separated by a single space: "<code> <effective-url>".
+# On a curl failure the line is "000 -". No temporary file is used, so this
+# adds no cleanup obligation to a script that deliberately owns no deletion
+# primitive.
 #
 # Redirects are followed (bounded), because the production site answers `GET /`
-# with a 302 to /login and a healthy site must not read as a failure. Following
-# them is safe here precisely because the marker verdict below is decided by the
-# BODY, not by the status: a redirect that lands on the SPA yields HTML, which
-# has no releaseSha and is reported as NOT_SERVED.
+# with a 302 to /login and a healthy site must not read as a failure. The
+# effective URL is carried back with the status because following a redirect
+# means the body may have come from somewhere other than the host the operator
+# asked about, and neither the status nor the body can say so by itself.
 http_get() {
-  curl -sS -L --max-redirs 5 --max-time 15 -w $'\n%{http_code}' -- "$1" 2>/dev/null \
-    || printf '\n000'
+  curl -sS -L --max-redirs 5 --max-time 15 -w $'\n%{http_code} %{url_effective}' -- "$1" 2>/dev/null \
+    || printf '\n000 -'
+}
+
+# url_origin URL — prints "SCHEME HOST PORT", lowercased, with the port
+# defaulted from the scheme. Prints nothing for anything that is not an
+# absolute http(s) URL, which the caller treats as unacceptable. This is not a
+# URL library and is not meant to become one: it exists only to answer whether
+# a response this instrument read came from the host the operator named.
+url_origin() {
+  local u="${1-}" scheme authority host port=""
+  case "$u" in
+    [Hh][Tt][Tt][Pp]://*|[Hh][Tt][Tt][Pp][Ss]://*) : ;;
+    *) return 0 ;;
+  esac
+  scheme="$(printf '%s' "${u%%://*}" | tr 'A-Z' 'a-z')"
+  authority="${u#*://}"
+  authority="${authority%%/*}"
+  authority="${authority%%\?*}"
+  authority="${authority%%#*}"
+  authority="${authority##*@}"          # userinfo is not part of an origin
+  if [[ "$authority" == \[* ]]; then    # bracketed IPv6 literal
+    host="${authority%%\]*}]"
+    if [[ "${authority#"$host"}" == :* ]]; then port="${authority##*:}"; fi
+  else
+    host="${authority%%:*}"
+    if [[ "$authority" == *:* ]]; then port="${authority##*:}"; fi
+  fi
+  host="$(printf '%s' "$host" | tr 'A-Z' 'a-z')"
+  if [[ -z "$port" ]]; then
+    if [[ "$scheme" == "https" ]]; then port=443; else port=80; fi
+  fi
+  printf '%s %s %s' "$scheme" "$host" "$port"
+}
+
+# effective_origin_acceptable BASE EFFECTIVE — the narrow same-origin rule for
+# this instrument. A response only counts as evidence about the operator's host
+# if it came from the operator's host: same host, same port, same scheme. The
+# single exception is an http -> https upgrade of the same host, which moves
+# the transport and not the origin of the content.
+#
+# Anything else — another host, another port, a downgrade to plaintext — is
+# refused. A valid-looking release marker fetched from somewhere else says
+# nothing about what this host serves, and that is exactly the confusion this
+# rule exists to prevent.
+effective_origin_acceptable() {
+  local b e rest bs bh bp es eh ep
+  b="$(url_origin "${1-}")"
+  e="$(url_origin "${2-}")"
+  [[ -n "$b" && -n "$e" ]] || return 1
+  bs="${b%% *}"; rest="${b#* }"; bh="${rest%% *}"; bp="${rest##* }"
+  es="${e%% *}"; rest="${e#* }"; eh="${rest%% *}"; ep="${rest##* }"
+  [[ "$bh" == "$eh" ]] || return 1
+  if [[ "$bs" == "$es" ]]; then
+    [[ "$bp" == "$ep" ]] || return 1
+    return 0
+  fi
+  # Ports are not compared across a scheme upgrade: each side's default port is
+  # derived from its own scheme, so 80 -> 443 is the upgrade itself, not a move.
+  [[ "$bs" == "http" && "$es" == "https" ]] || return 1
+  return 0
 }
 
 # verify_public_bundle BASE LOCAL_SHA — returns 0 only when the site is
@@ -919,36 +999,71 @@ http_get() {
 # as the bundle this script promoted on disk.
 verify_public_bundle() {
   local base="$1" local_sha="${2-}"
-  local resp code body public_sha match="NOT_APPLICABLE" verified="NOT_VERIFIED" problems=0
+  local resp meta code eff body public_sha
+  local root_url="-" marker_url="-" marker_code="000"
+  local match="NOT_APPLICABLE" verified="NOT_VERIFIED" problems=0
 
-  # 1. Reachability. Any final 2xx counts; the redirect chain is reported so an
-  #    unexpected destination is visible rather than silently accepted.
+  # 1. Reachability. Any final 2xx counts, and the response must have come from
+  #    the host the operator named — a redirect that lands somewhere else is a
+  #    fact about that other host, not about this one.
   resp="$(http_get "$base/")"
-  code="${resp##*$'\n'}"
+  meta="${resp##*$'\n'}"
+  code="${meta%% *}"
+  eff="${meta#* }"
+  root_url="$eff"
   if [[ "$code" == 2?? ]]; then
-    log "OK — GET $base/ -> $code (redirects followed)"
+    if effective_origin_acceptable "$base/" "$eff"; then
+      log "OK — GET $base/ -> $code (redirects followed, final URL $eff)"
+    else
+      warn "GET $base/ -> $code but the response came from $eff, which is not the origin that was asked about. A redirect off this host cannot be evidence about this host."
+      problems=$(( problems + 1 ))
+    fi
   else
     warn "GET $base/ -> $code. The site did not answer with a final 2xx."
     problems=$(( problems + 1 ))
   fi
 
-  # 2. The marker, decided by its CONTENT. This is the step that distinguishes
-  #    a served marker from the SPA fallback, which answers 200 with index.html
-  #    for any path that does not exist on disk.
+  # 2. The marker. Three things have to hold before the returned bytes may be
+  #    read as a release marker at all, and none of them substitutes for
+  #    another:
+  #      * the final response must be a SUCCESS. A 404 or 500 body is an error
+  #        page, and an error page that happens to contain well-formed JSON is
+  #        still an error page. F3-PROD-004-R2-R1: body validation alone let a
+  #        non-2xx response establish production serving evidence.
+  #      * it must have come from the operator's own origin (see above).
+  #      * it must actually carry a valid releaseSha. This is the step that
+  #        distinguishes a served marker from the SPA fallback, which answers
+  #        200 with index.html for any path that does not exist on disk.
+  #    A response failing either of the first two is NOT_SERVED regardless of
+  #    what its body says: nothing is parsed out of it and carried forward.
   resp="$(http_get "$base/$RELEASE_MARKER_NAME")"
-  code="${resp##*$'\n'}"
+  meta="${resp##*$'\n'}"
+  code="${meta%% *}"
+  eff="${meta#* }"
   body="${resp%$'\n'*}"
-  public_sha="$(sanitize_release_sha_field "$(marker_field_from_text "$body" releaseSha)")"
+  marker_code="$code"
+  marker_url="$eff"
 
-  if [[ "$public_sha" == "UNKNOWN" ]]; then
+  if [[ "$code" != 2?? ]]; then
     public_sha="NOT_SERVED"
-    warn "GET $base/$RELEASE_MARKER_NAME answered $code but the response carries no releaseSha field, so no release marker is being served at that path. A ${code}-with-no-marker answer is what an SPA fallback (try_files -> index.html) produces, and it is NOT evidence that the promoted bundle is served."
+    warn "GET $base/$RELEASE_MARKER_NAME -> $code. A non-success response does not serve a release marker, whatever its body contains, so nothing was read out of it."
     problems=$(( problems + 1 ))
-  elif [[ "$public_sha" == "INVALID" ]]; then
-    warn "GET $base/$RELEASE_MARKER_NAME answered $code and carries a releaseSha, but it is not a valid release identity. Reported as INVALID rather than echoed."
+  elif ! effective_origin_acceptable "$base/$RELEASE_MARKER_NAME" "$eff"; then
+    public_sha="NOT_SERVED"
+    warn "GET $base/$RELEASE_MARKER_NAME -> $code but the response came from $eff, which is not the origin that was asked about. A release marker fetched from another origin says nothing about what this host serves, so nothing was read out of it."
     problems=$(( problems + 1 ))
   else
-    log "OK — GET $base/$RELEASE_MARKER_NAME -> $code, marker parsed."
+    public_sha="$(sanitize_release_sha_field "$(marker_field_from_text "$body" releaseSha)")"
+    if [[ "$public_sha" == "UNKNOWN" ]]; then
+      public_sha="NOT_SERVED"
+      warn "GET $base/$RELEASE_MARKER_NAME answered $code but the response carries no releaseSha field, so no release marker is being served at that path. A ${code}-with-no-marker answer is what an SPA fallback (try_files -> index.html) produces, and it is NOT evidence that the promoted bundle is served."
+      problems=$(( problems + 1 ))
+    elif [[ "$public_sha" == "INVALID" ]]; then
+      warn "GET $base/$RELEASE_MARKER_NAME answered $code and carries a releaseSha, but it is not a valid release identity. Reported as INVALID rather than echoed."
+      problems=$(( problems + 1 ))
+    else
+      log "OK — GET $base/$RELEASE_MARKER_NAME -> $code from $eff, marker parsed."
+    fi
   fi
 
   # 3. Served-vs-promoted. Only an exact agreement between two valid identities
@@ -968,6 +1083,9 @@ verify_public_bundle() {
     fi
   fi
 
+  log "PUBLIC_ROOT_URL            = $root_url"
+  log "PUBLIC_MARKER_STATUS       = $marker_code"
+  log "PUBLIC_MARKER_URL          = $marker_url"
   log "PUBLIC_RELEASE_SHA         = $public_sha"
   log "PUBLIC_SHA_MATCHES_LOCAL   = $match"
   log "NGINX_SERVES_PROMOTED_DIST = $verified"

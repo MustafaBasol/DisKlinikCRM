@@ -1103,14 +1103,38 @@ done
 [[ "${FAKE_SITE_DOWN:-0}" == "1" ]] && exit 7
 
 rest="${url#*://}"
+origin="${url%%://*}://${rest%%/*}"
 if [[ "$rest" == */* ]]; then path="/${rest#*/}"; else path="/"; fi
+eff="$url"
 
-emit() { printf '%s' "$1"; [[ -z "$wfmt" ]] || printf '\n%s' "$2"; exit 0; }
+# The write-out format is expanded the way curl expands it, so the production
+# script's -w string is exercised rather than assumed: drop %{url_effective}
+# from it and the origin checks below stop receiving a URL.
+emit() {
+  printf '%s' "$1"
+  if [[ -n "$wfmt" ]]; then
+    out="$wfmt"
+    out="${out//'%{http_code}'/$2}"
+    out="${out//'%{url_effective}'/$eff}"
+    printf '%s' "$out"
+  fi
+  exit 0
+}
 
 # Production answers `GET /` with a 302 to /login.
 if [[ "$path" == "/" && "${FAKE_SITE_ROOT_302:-0}" == "1" ]]; then
   if [[ "$follow" == "1" ]]; then
-    path="/login"
+    path="/login"; eff="$origin/login"
+  else
+    emit '<html><head><title>302 Found</title></head></html>' 302
+  fi
+fi
+
+# A redirect on the marker path. The target serves the SAME marker file: the
+# only thing under test is where the answer came from.
+if [[ "$path" == "/release.json" && -n "${FAKE_SITE_MARKER_REDIRECT:-}" ]]; then
+  if [[ "$follow" == "1" ]]; then
+    eff="$FAKE_SITE_MARKER_REDIRECT"
   else
     emit '<html><head><title>302 Found</title></head></html>' 302
   fi
@@ -1118,7 +1142,13 @@ fi
 
 root="${FAKE_SITE_DIR:-}"
 if [[ -f "$root$path" ]]; then
-  emit "$(cat "$root$path")" 200
+  status=200
+  # A host that answers the marker path with an error while still returning a
+  # body — the R2-R1 case that body-only validation could not reject.
+  if [[ "$path" == "/release.json" && -n "${FAKE_SITE_MARKER_STATUS:-}" ]]; then
+    status="$FAKE_SITE_MARKER_STATUS"
+  fi
+  emit "$(cat "$root$path")" "$status"
 elif [[ "${FAKE_SITE_SPA:-0}" == "1" && -f "$root/index.html" ]]; then
   # try_files $uri /index.html — 200, but it is the app, not the file asked for.
   emit "$(cat "$root/index.html")" 200
@@ -1128,6 +1158,7 @@ FAKECURL
 chmod +x "$CURLBIN/curl"
 
 export FAKE_SITE_DIR="" FAKE_SITE_ROOT_302=0 FAKE_SITE_SPA=0 FAKE_SITE_DOWN=0
+export FAKE_SITE_MARKER_STATUS="" FAKE_SITE_MARKER_REDIRECT=""
 
 PSHA='1111222233334444555566667777888899990000'
 OTHER_SHA='aaaabbbbccccddddeeeeffff0000111122223333'
@@ -1246,7 +1277,102 @@ run bash "$FE" verify --app-dir "$QAPP" --url https://site.test
   && pass "no serving claim is made when neither side has a marker" \
   || fail "a serving claim was made with no marker on either side: $OUT"
 
+# ── P7/P8. A non-success response is not a served file, however good its
+#          body looks. This is the F3-PROD-004-R2-R1 blocker: the first
+#          correction moved the verdict onto the body and, in doing so, let a
+#          404 or a 500 carrying a perfectly valid matching marker establish
+#          production serving evidence. ────────────────────────────────────
+error_status_case() {
+  local status="$1"
+  FAKE_SITE_DIR="$SITE_OK"; FAKE_SITE_ROOT_302=1; FAKE_SITE_SPA=1
+  FAKE_SITE_MARKER_STATUS="$status"
+  BIN="$CURLBIN"
+  run bash "$FE" verify --app-dir "$PAPP" --url https://site.test
+  FAKE_SITE_MARKER_STATUS=""
+
+  [[ "$CODE" -ne 0 ]] \
+    && pass "verify fails when /release.json answers $status, even with a valid matching marker body" \
+    || fail "a $status response established serving evidence: $OUT"
+  [[ "$OUT" == *"NGINX_SERVES_PROMOTED_DIST = NOT_VERIFIED"* ]] \
+    && pass "a $status marker response never yields a VERIFIED serving claim" \
+    || fail "the script claimed VERIFIED on a $status marker response: $OUT"
+  [[ "$OUT" == *"PUBLIC_RELEASE_SHA         = NOT_SERVED"* && "$OUT" != *"PUBLIC_RELEASE_SHA         = $PSHA"* ]] \
+    && pass "the body of a $status response is not read as a served marker at all" \
+    || fail "a $status response body was parsed and reported as a served marker: $OUT"
+  [[ "$OUT" == *"PUBLIC_MARKER_STATUS       = $status"* ]] \
+    && pass "the marker response's own HTTP status is recorded as $status" \
+    || fail "the marker HTTP status was not recorded: $OUT"
+}
+
+error_status_case 404
+error_status_case 500
+
+# ── P9. A SAME-ORIGIN redirect on the marker path is acceptable: the answer
+#        still comes from the host that was asked about. ──────────────────
+FAKE_SITE_DIR="$SITE_OK"; FAKE_SITE_ROOT_302=1; FAKE_SITE_SPA=1
+FAKE_SITE_MARKER_REDIRECT="https://site.test/static/release.json"
+BIN="$CURLBIN"
+run bash "$FE" verify --app-dir "$PAPP" --url https://site.test
+FAKE_SITE_MARKER_REDIRECT=""
+
+[[ "$CODE" -eq 0 ]] \
+  && pass "a same-origin redirect to the marker passes verification" \
+  || fail "a same-origin redirect was refused (exit $CODE): $OUT"
+[[ "$OUT" == *"NGINX_SERVES_PROMOTED_DIST = VERIFIED"* ]] \
+  && pass "a same-origin redirect still establishes the serving claim" \
+  || fail "the serving claim was withheld after a same-origin redirect: $OUT"
+[[ "$OUT" == *"PUBLIC_MARKER_URL          = https://site.test/static/release.json"* ]] \
+  && pass "the marker's final effective URL is recorded, not just its status" \
+  || fail "the effective URL of the marker response was not recorded: $OUT"
+[[ "$OUT" == *"PUBLIC_ROOT_URL            = https://site.test/login"* ]] \
+  && pass "the app root's final effective URL is recorded after the redirect" \
+  || fail "the effective URL of the root response was not recorded: $OUT"
+
+# ── P10. A CROSS-ORIGIN redirect is not. A valid, matching marker fetched
+#         from another host is a fact about that host. ────────────────────
+FAKE_SITE_DIR="$SITE_OK"; FAKE_SITE_ROOT_302=1; FAKE_SITE_SPA=1
+FAKE_SITE_MARKER_REDIRECT="https://elsewhere.test/release.json"
+BIN="$CURLBIN"
+run bash "$FE" verify --app-dir "$PAPP" --url https://site.test
+FAKE_SITE_MARKER_REDIRECT=""
+
+[[ "$CODE" -ne 0 ]] \
+  && pass "verify fails when the marker request is redirected to another origin" \
+  || fail "a cross-origin marker response established serving evidence: $OUT"
+[[ "$OUT" == *"NGINX_SERVES_PROMOTED_DIST = NOT_VERIFIED"* ]] \
+  && pass "a cross-origin marker response never yields a VERIFIED serving claim" \
+  || fail "the script claimed VERIFIED from a foreign origin: $OUT"
+[[ "$OUT" == *"PUBLIC_RELEASE_SHA         = NOT_SERVED"* ]] \
+  && pass "a marker served by another origin is reported as NOT_SERVED here" \
+  || fail "a foreign-origin body was read as this host's marker: $OUT"
+
+# ── P11/P12. A 2xx from the right origin still has to carry a marker. ────
+marker_body_case() {
+  local label="$1" body="$2"
+  local dir="$WORK/site-body-$3"
+  mkdir -p "$dir"
+  cp -r "$PAPP/dist/." "$dir/"
+  printf '%s' "$body" > "$dir/release.json"
+
+  FAKE_SITE_DIR="$dir"; FAKE_SITE_ROOT_302=1; FAKE_SITE_SPA=1
+  BIN="$CURLBIN"
+  run bash "$FE" verify --app-dir "$PAPP" --url https://site.test
+
+  [[ "$CODE" -ne 0 ]] \
+    && pass "verify fails when the served marker $label" \
+    || fail "verify accepted a marker that $label: $OUT"
+  [[ "$OUT" == *"PUBLIC_RELEASE_SHA         = NOT_SERVED"* ]] \
+    && pass "a marker that $label is reported as NOT_SERVED" \
+    || fail "a marker that $label was not reported as NOT_SERVED: $OUT"
+}
+
+marker_body_case "is malformed and cannot be parsed" \
+  '{ "releaseSha": "1111222233334' malformed
+marker_body_case "is well-formed JSON with no releaseSha field" \
+  '{ "builtAt": "2026-01-01T00:00:00Z", "task": "F3-PROD-004" }' nosha
+
 unset FAKE_SITE_DIR FAKE_SITE_ROOT_302 FAKE_SITE_SPA FAKE_SITE_DOWN
+unset FAKE_SITE_MARKER_STATUS FAKE_SITE_MARKER_REDIRECT
 
 # ════════════════════════════════════════════════════════════════════════
 section "Summary"

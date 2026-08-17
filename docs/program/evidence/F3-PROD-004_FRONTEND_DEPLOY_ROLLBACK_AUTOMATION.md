@@ -537,6 +537,8 @@ NGINX_SERVES_PROMOTED_DIST = VERIFIED | NOT_VERIFIED
 
 No mutation semantics changed. `deploy`, `rollback`, promotion, path safety, the device precondition and the release-identity contract are untouched; there is still no `rm`, no `eval`, and no shell-string execution in the file.
 
+> **Amended by §21 (F3-PROD-004-R2-R1).** Moving the verdict onto the body was necessary but **not sufficient**: as written above, a `404` or `500` whose body happened to contain a valid matching marker could still reach `VERIFIED`, and so could a body fetched after a redirect to an unrelated host. §21 adds the final-status and effective-origin gates. Read §20.2 as the first half of the correction, not the contract.
+
 ### 20.3 Tests — 188 → 204
 
 New section **P**, 16 assertions, driven by a `curl` on PATH that reproduces both production behaviours (302 root, SPA fallback) and **only follows the redirect when `-L` is actually passed**:
@@ -596,3 +598,127 @@ Mutant B is the falsification that matters: it restores exactly what was merged 
 ### 20.5 R2 status — unchanged where it must be
 
 `R-038` remains **`CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT`** — **NOT CLOSED**. R2 makes the closure *check* sound; it performs no production access, no deployment, no schema or data change. `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO`. `R-030` / `R-030-DB` / `R-030-FILES` `OPEN` · `FIRST_CUSTOMER_RECOVERY_GATE` `NOT_SATISFIED` · F3 exit gate `NOT_SATISFIED` · F4 NOT COMPLETE · F5 NOT AUTHORIZED · repo2 NOT ACTIVATED. `MIGRATION_REQUIRED` / `MIGRATION_CREATED` / `PRODUCTION_MIGRATION` all **NO**; no tenant, auth, PHI/PII, provider, schema or production-data impact. The published `release.json` contract is unchanged — R2 only *reads* it.
+
+---
+
+## 21. F3-PROD-004-R2-R1 — a served marker needs a successful response from the right origin
+
+**Date:** 2026-08-17 · **Branch:** `fix/f3-prod-004-r2-public-release-marker-verification` (unchanged) · **PR:** #438 (unchanged) · **Reviewed HEAD:** `b8568e47de526bebf3b9910fc338023a4ac12234` · **Raised by:** architecture review of R2.
+
+The R2 review accepted the direction — root redirects followed, SPA fallback HTML rejected, body parsed, served-vs-promoted compared — and held one narrow blocker.
+
+### 21.1 The remaining root cause
+
+R2 made the marker verdict depend on the **body** and, in doing so, stopped consulting the marker response's **own** outcome. `verify_public_bundle()` at `b8568e4` could reach
+
+```
+NGINX_SERVES_PROMOTED_DIST = VERIFIED
+```
+
+with the final `/release.json` response being a **404** or a **500**, provided its body contained a well-formed `releaseSha` equal to the promoted bundle's. It could also reach it on a body fetched after a redirect to a **different host**, because `-L` was followed but the destination was never examined.
+
+Both are the same mistake in a new place: an error page is not a served file, and another host's answer is not this host's answer. Either would have produced R-038 closure evidence that the production nginx never actually supported.
+
+### 21.2 The HTTP status contract
+
+`NGINX_SERVES_PROMOTED_DIST = VERIFIED` is now printed only when **all six** hold:
+
+| # | Condition |
+|---|---|
+| 1 | app-root reachability passes — a final **2xx** after redirects |
+| 2 | the final `/release.json` response is itself **2xx** |
+| 3 | that response came from an **acceptable effective origin** |
+| 4 | the body parses as a release marker |
+| 5 | the `releaseSha` is valid under the §19.3 release-identity contract |
+| 6 | the served `releaseSha` equals the promoted bundle's |
+
+Conditions 2 and 3 are **gates, not scores**: a response failing either is reported `NOT_SERVED` and **its body is not parsed at all**, so a valid-looking marker on an error page or on a foreign origin cannot contribute evidence in any form — not to `PUBLIC_RELEASE_SHA`, not to `PUBLIC_SHA_MATCHES_LOCAL`.
+
+### 21.3 The effective-URL / origin contract
+
+`http_get` now returns `"<final-status> <effective-url>"` (curl `-w` with `%{http_code}` and `%{url_effective}`; `000 -` on curl failure). Both effective URLs are recorded in the run output, so an unexpected destination is visible in the evidence rather than inferred:
+
+```
+PUBLIC_ROOT_URL            = <final URL of GET />
+PUBLIC_MARKER_STATUS       = <final status of GET /release.json>
+PUBLIC_MARKER_URL          = <final URL of GET /release.json>
+PUBLIC_RELEASE_SHA         = <sha> | NOT_SERVED | INVALID
+PUBLIC_SHA_MATCHES_LOCAL   = YES | NO | NOT_APPLICABLE
+NGINX_SERVES_PROMOTED_DIST = VERIFIED | NOT_VERIFIED
+```
+
+The origin rule is deliberately narrow — it decides one question, "did this answer come from the host the operator named", and is not a URL-policy framework:
+
+| Redirect | Verdict |
+|---|---|
+| same scheme, host and port (default port derived from the scheme) | **acceptable** |
+| `http` to `https` on the **same host** | **acceptable** — the transport moved, the origin did not |
+| any other host | **FAIL / NOT_VERIFIED** |
+| any other port | **FAIL / NOT_VERIFIED** |
+| `https` downgraded to `http` | **FAIL / NOT_VERIFIED** |
+| a non-absolute or non-`http(s)` effective URL | **FAIL / NOT_VERIFIED** |
+
+`url_origin()` lowercases scheme and host, strips userinfo (`user@host` is not part of an origin), handles a bracketed IPv6 literal, and defaults the port from the scheme. `effective_origin_acceptable()` compares the parts without a subshell, a temp file or a herestring — the "no cleanup obligation" property of §20.2 is preserved.
+
+### 21.4 Tests — 204 to 223
+
+Section **P** grew by 19 assertions. No R2 assertion was removed or weakened. The fake `curl` now expands the `-w` format the way curl does (`%{http_code}`, `%{url_effective}`), so the production script's write-out string is exercised rather than assumed: drop `%{url_effective}` from it and the origin checks stop receiving a URL.
+
+| Review case | Test | Result |
+|---|---|---|
+| 1. final 200 + matching valid marker | P2 | **PASS / VERIFIED** |
+| 2. final **404** + matching valid JSON body | P7 | **FAIL / NOT_VERIFIED** |
+| 3. final **500** + matching valid JSON body | P8 | **FAIL / NOT_VERIFIED** |
+| 4. **302 same-origin** to a valid marker 200 | P9 | **PASS / VERIFIED** |
+| 5. redirect to a **different host** + valid-looking marker | P10 | **FAIL / NOT_VERIFIED** |
+| 6. SPA fallback 200 + HTML | P1 | **FAIL** |
+| 7. malformed body | P11 | **FAIL** |
+| 8. missing `releaseSha` | P12 | **FAIL** |
+| 9. invalid `releaseSha` | P4 | **FAIL / INVALID**, not echoed |
+| 10. valid but different SHA | P3 | **FAIL**, `PUBLIC_SHA_MATCHES_LOCAL = NO` |
+
+P7/P8 also assert that `PUBLIC_RELEASE_SHA` is **not** the matching SHA on an error response — proving the body was never read — and that `PUBLIC_MARKER_STATUS` records the real status. P9 asserts both recorded effective URLs.
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `bash scripts/noramedi-frontend-deploy.test.sh` | **223 passed, 0 failed, 2 skipped** (204/0/2 at `b8568e4`) |
+| 2 | `npm run test:shell` | **exit 0** — opscheck 178/178, pgBackRest 239/239, PITR app smoke 50/50, frontend deploy **223/223** |
+| 3 | `npm run test:ci-classify` | **28 passed, 0 failed** |
+| 4 | `npm run typecheck:ci-classify` | **exit 0** |
+| 5 | `for f in scripts/*.sh scripts/test-runtime/*.sh; do bash -n "$f"; done` | **exit 0** |
+| 6 | `git diff --check` | **exit 0** |
+
+The same 2 skips as §11 and §20.3 (MSYS symlink, `chmod -x`); neither is in section P, and both run on `ubuntu-latest`.
+
+### 21.5 R2-R1 mutation / falsification
+
+Both mutants were applied to the real file and reverted before commit; the working tree was restored from a pre-mutation copy and re-run green (**223 / 0 / 2**) after each.
+
+**Mutant C — the marker's 2xx requirement removed**, body comparison left intact (the `code != 2xx` test replaced by `if false`):
+
+```
+FAIL - a 404 response established serving evidence
+FAIL - the script claimed VERIFIED on a 404 marker response
+FAIL - a 404 response body was parsed and reported as a served marker
+FAIL - a 500 response established serving evidence
+FAIL - the script claimed VERIFIED on a 500 marker response
+FAIL - a 500 response body was parsed and reported as a served marker
+Results: 217 passed, 6 failed, 2 skipped   (exit 1)
+```
+
+**Mutant D — effective-origin validation disabled** (`effective_origin_acceptable()` returns 0 unconditionally):
+
+```
+FAIL - a cross-origin marker response established serving evidence
+FAIL - the script claimed VERIFIED from a foreign origin
+FAIL - a foreign-origin body was read as this host's marker
+Results: 220 passed, 3 failed, 2 skipped   (exit 1)
+```
+
+Each mutant turns red exactly the cases the review predicted, and nothing else — the status gate and the origin gate are independently falsifiable.
+
+### 21.6 R2-R1 status — unchanged where it must be
+
+No runtime or application file outside `scripts/noramedi-frontend-deploy.sh` was touched, and within it nothing but public verification: `deploy`, `rollback`, two-step rename promotion, build argv, path guards, the release-identity contract and the no-delete policy are byte-identical to `b8568e4`. No new dependency; `curl` was already required by `--url`.
+
+`R-038` remains **`CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT`** — **NOT CLOSED**. `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO` · `ROLLBACK_REHEARSED = NO`. **F3-PROD-005 remains BLOCKED** and no production access of any kind was made for R2-R1. `R-030` / `R-030-DB` / `R-030-FILES` `OPEN` · `FIRST_CUSTOMER_RECOVERY_GATE` `NOT_SATISFIED` · F3 exit gate `NOT_SATISFIED` · F4 NOT COMPLETE · F5 NOT AUTHORIZED · repo2 NOT ACTIVATED. `MIGRATION_REQUIRED` / `MIGRATION_CREATED` / `PRODUCTION_MIGRATION` all **NO**; no tenant, auth, PHI/PII, provider, schema or production-data impact, and no secret is read or printed by any line added here.
