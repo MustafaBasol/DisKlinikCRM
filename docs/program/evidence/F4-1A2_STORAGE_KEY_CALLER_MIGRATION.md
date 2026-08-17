@@ -233,6 +233,14 @@ All local, on this branch. Exit codes are the real observed values.
 
 Nothing was skipped silently. No suite named in the task brief was absent.
 
+**Local `server:test:non-disposable` exits 1 — local environment only, NOT a repository defect.**
+The chain aborts at `test:platform-backup` (`✗ clinic-type token rejected with 403`). Two independent
+facts bound this: (a) it reproduces identically on the **stashed clean baseline**, so it is not caused by
+this task; and (b) **CI passes that exact test** — GitHub Actions run `32010690902`, job
+*Layer 2: non-disposable backend tests* = `success`, with `✓ clinic-type token rejected with 403` in its
+log. The failure is therefore specific to this workstation's environment, not a red repository state.
+Reported here so the earlier, looser phrase "pre-existing failure" is not read as "CI is red".
+
 ---
 
 ## 7. CI classification
@@ -310,6 +318,27 @@ for the storage-path behaviour the guard protects.)
 
 `test:lab-orders` and `test:storage-key-contract` were already members of `server:test:non-disposable`,
 which `runBackendGeneral = true` triggers.
+
+### 7.2 Final CI status (PR #436)
+
+| Head | Workflow | Run | Conclusion |
+|---|---|---|---|
+| `b2e8bfa` (F4-1A2) | `ci` | `32009526121` | **success** |
+| `b2e8bfa` (F4-1A2) | `windows-bridge-pr` | `32009525348` | **success** |
+| `a7dbb22` (F4-1A2-R1) | both | — | `cancelled` (superseded by the next push) |
+| `a3f34d3` (final) | `ci` | `32010690902` | **success** |
+| `a3f34d3` (final) | `windows-bridge-pr` | `32010690725` | **success** |
+
+All 13 jobs of run `32010690902` concluded `success`, including *Layer 2: non-disposable backend tests*, *Layer 3*, *Layer 4*, *Layer 5* (frontend and legacy DB-required) and the *PR Gate* aggregator. Every lane ran because this commit's diff touches `server/package.json` and `scripts/ci-classify/**`, which adds the `CI_TOOLING` fail-safe category.
+
+**CI-level execution proof for the closed gap** — in run `32010690902`, job *Layer 2: non-disposable backend tests* (job `95329760861`):
+
+```
+4446  > server@1.0.0 test:clinic-bulk-export
+4636  117 passed, 0 failed
+```
+
+The suite that previously ran in **no** CI lane now runs, and passes, in CI — not merely locally.
 
 ---
 
