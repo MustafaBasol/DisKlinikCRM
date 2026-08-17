@@ -353,7 +353,7 @@ jobs:
             bash -n "$f"
           done
 
-      - name: Operator shell test suites (opscheck, pgBackRest, PITR app smoke)
+      - name: Operator shell test suites (opscheck, pgBackRest, PITR app smoke, frontend deploy)
         run: |
           set -euo pipefail
           # These suites had NO automated enforcement before F4-FCR-002: they

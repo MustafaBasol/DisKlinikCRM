@@ -108,6 +108,16 @@ pm2 startOrReload /var/www/noramedi/ecosystem.config.cjs --only noramedi-api --u
 pm2 startOrReload /var/www/noramedi/ecosystem.config.cjs --only noramedi-worker --update-env  # [MUTATING]
 pm2 restart noramedi-api                              # [MUTATING] — process-level restart only, no code/config change
 pm2 restart noramedi-worker                            # [MUTATING]
+
+# ── Frontend bundle — a SEPARATE lifecycle (scripts/noramedi-frontend-deploy.sh, F3-PROD-004).
+#    noramedi-deploy.sh above has NO frontend step: it never rebuilds or replaces
+#    /var/www/noramedi/dist, so a backend redeploy or revision rollback leaves the served
+#    bundle exactly as it was. See §4.12. ──
+/usr/local/sbin/noramedi-frontend-deploy.sh verify --check-backend   # read-only: which SHA is served, and does it match the backend
+/usr/local/sbin/noramedi-frontend-deploy.sh deploy --dry-run          # read-only: print the intended build/promotion, mutate nothing
+/usr/local/sbin/noramedi-frontend-deploy.sh deploy                    # [MUTATING] build -> validate -> promote -> verify
+/usr/local/sbin/noramedi-frontend-deploy.sh rollback --dry-run        # read-only: print the intended restoration
+/usr/local/sbin/noramedi-frontend-deploy.sh rollback                  # [MUTATING] restore the bundle the last deploy recorded
 ```
 
 **Deployment topology reference** (see [PRODUCTION_TOPOLOGY.md](../PRODUCTION_TOPOLOGY.md) for the full evidence): single VPS (`disklinik-prod-01`), host Nginx TLS termination, two PM2 `fork`-mode processes (`noramedi-api` → `server/src/index.ts`, `noramedi-worker` → `server/src/worker.ts`), both running as `root` (R-036, open), both defined in the repository's own [`ecosystem.config.cjs`](../../../ecosystem.config.cjs), single-host PostgreSQL 16.14 (`noramedi_crm`), optional fail-open Redis (rate-limit counters only, not a queue/session store), local-disk file storage (`/var/www/noramedi/server/uploads`, `LOCAL_VPS_STORAGE`, no S3 in production), same-host `pg_dump` backups (`/root/noramedi-backups`, no offsite copy — R-030, no PITR — R-031).
@@ -126,6 +136,7 @@ pm2 restart noramedi-worker                            # [MUTATING]
 | 8 | [Object/file storage unavailable](#48-objectfile-storage-unavailable) | 2 (→1 if the shared root disk is full) |
 | 9 | [High 5xx/error spike](#49-high-5xxerror-spike) | 2 (→1 if core patient-facing path, sustained) |
 | 10 | [Security incident / suspicious privileged access](#410-security-incident--suspicious-privileged-access) | 1 (confirmed) or 2 (suspected) |
+| 11 | [Broken frontend bundle / frontend rollback](#412-broken-frontend-bundle--frontend-rollback) | 1 (blank/broken app for all users) or 2 (partial) |
 
 Every runbook below follows the same nine-part structure: **Detection → Immediate containment → Evidence preservation → Customer/data impact determination → Recovery → Validation → Rollback → Escalation → Post-incident review.**
 
@@ -153,6 +164,8 @@ pm2 restart noramedi-api                                # [MUTATING] simple proc
 **Validation.** `/usr/local/sbin/noramedi-healthcheck.sh --local --max-attempts 12 --interval 5` passes; `pm2 describe noramedi-api` restart count has stopped climbing; spot-check 2–3 authenticated smoke routes (login, patient list, appointment list) manually.
 
 **Rollback.** If the outage began immediately after a deploy, the recovery path is redeploying the **prior known-good commit** — there is no automated rollback (`LAUNCH_GATES.md` §2.D: "None exists today"). On the VPS: `git -C /var/www/noramedi log --oneline -5` to identify the prior commit, `git -C /var/www/noramedi checkout <prior-sha>` **[MUTATING]**, then re-run the reload-only form of `noramedi-deploy.sh` above. Per `RISK_REGISTER.md` R-046's standing rule, do **not** roll back any additive schema/migration as part of this — retain the schema, redeploy only the application code, forward-fix afterward.
+
+> **This paragraph covers the BACKEND only.** Rolling the checkout back to a prior commit does **not** change what is in `/var/www/noramedi/dist` — the served frontend bundle is not produced by `noramedi-deploy.sh` and is not affected by it. If the frontend was also deployed in the same window, roll it back separately via [§4.12](#412-broken-frontend-bundle--frontend-rollback). Doing only half leaves a backend/frontend release skew, which `noramedi-frontend-deploy.sh verify` will report as `RELEASE_SHA_MATCH = NO`.
 
 **Escalation.** SEV-1, immediate, decision owner notified without delay — every patient-facing workflow depends on this single API process.
 
@@ -408,6 +421,59 @@ This confirms the backup file is actually restorable and produces row counts/che
 **Owner and escalation.** No dedicated on-call rotation exists for NoraMedi today (consistent with §0/§4.1's existing statement that this repository defines no such channel). Once activated, the human alert channel (minimum: email) delivers to the production operator identified at activation time — that recipient address is configured directly in the external provider's console, is operational contact information, and is therefore **never committed to this repository**. Until an on-call rotation is formally defined elsewhere in this program, that operator is this runbook's own "decision owner" (§0).
 
 **What this does NOT cover.** Elevated 5xx rate (4.9) and TLS/certificate expiry remain explicitly out of this task's scope (see the F3-OBS-002 evidence doc's scope boundary) — both stay manual/log-inspection-only for now.
+
+### 4.12 Broken frontend bundle / frontend rollback
+
+**Added 2026-08-17 by [F3-PROD-004](../evidence/F3-PROD-004_FRONTEND_DEPLOY_ROLLBACK_AUTOMATION.md) (`R-038`).** Before that task the frontend build, promotion and rollback existed **only as an operator-performed manual procedure** — no repository script performed any of it, and no rollback section of this runbook mentioned the frontend at all. The commands below are now repository-defined.
+
+**Detection.** The application loads blank, or the browser console shows a failed module/asset fetch (`404` on `/assets/index-<hash>.js`), while `/api/health` is **`200`** and both PM2 apps are `online`. That combination — healthy backend, broken app — is the signature of a frontend-only fault, and it is exactly what a backend healthcheck cannot see.
+
+**Immediate containment.** Nothing to stop: the frontend is static files, there is no process to kill. Do not restart PM2 — it will not change what nginx serves and will only add noise to the incident.
+
+**Evidence preservation.** Record what is live *before* changing it. All three commands are read-only:
+
+```bash
+/usr/local/sbin/noramedi-frontend-deploy.sh verify --check-backend
+cat /var/www/noramedi/dist/release.json                     # what SHA is the frontend serving?
+cat /var/www/noramedi/.noramedi-frontend-release-state      # which bundle would a rollback restore?
+ls -d /var/www/noramedi/dist.rollback-*                     # every retained bundle (none are ever auto-deleted)
+```
+
+`verify` prints `FRONTEND_RELEASE_SHA`, `BACKEND_RELEASE_SHA` and `RELEASE_SHA_MATCH`. A `MATCH = NO` here often *is* the incident. An absent `release.json` means the live bundle predates F3-PROD-004 and was placed by hand — its source revision cannot be established from the bundle.
+
+**Customer/data impact.** **No patient or clinic data is involved.** The frontend bundle contains no PHI/PII, and neither promotion nor rollback touches the database, uploads, or any tenant record. Impact is availability only.
+
+**Recovery.** Inspect first — `--dry-run` mutates nothing:
+
+```bash
+/usr/local/sbin/noramedi-frontend-deploy.sh rollback --dry-run                # prints the exact intended renames
+/usr/local/sbin/noramedi-frontend-deploy.sh rollback                          # [MUTATING]
+```
+
+The target is the exact path the last deploy recorded — never inferred from directory ordering. To restore a specific retained bundle instead:
+
+```bash
+/usr/local/sbin/noramedi-frontend-deploy.sh rollback \
+  --from /var/www/noramedi/dist.rollback-<tag>-<UTC>                          # [MUTATING]
+```
+
+The bundle that was live is itself preserved, so a rollback is reversible; the script prints the undo command when it finishes.
+
+**Validation.**
+
+```bash
+/usr/local/sbin/noramedi-frontend-deploy.sh verify --url https://<host> --check-backend
+```
+
+`GET /` and `GET /release.json` must return `200`, and `FRONTEND_RELEASE_SHA` must be the release you intended. Then hard-reload the app in a browser and confirm one authenticated route renders.
+
+**Rollback (of the rollback).** Re-run `rollback --from <the dist.rollback-* the previous command just created>`. **No database rollback is ever required for a frontend change** — there is no migration to reverse.
+
+**Promotion semantics you must know before running any of this.** Promotion and rollback are both a **two-step same-filesystem rename** (`mv dist <preserved>`, then `mv <new> dist`) — **near-atomic, not a single atomic exchange**. A very short interval exists in which `dist` does not exist. If the second rename fails, the script attempts a bounded restoration of the previous bundle and tells you, in the failure message, whether that succeeded. If it reports that restoration **also** failed, it prints the exact `mv` command to run by hand; both bundles are intact on disk, because **the script never deletes anything**.
+
+**Escalation.** SEV-1 if the application is unusable for all users; SEV-2 if degraded. Same decision owner as §4.1.
+
+**Post-incident review.** Record which release SHA was promoted, which was restored, whether `RELEASE_SHA_MATCH` was `NO` at any point, and whether the broken bundle passed the script's artifact validation (if it did, the validation missed a real defect class and this runbook's task should be reopened).
 
 ## 5. KVKK personal/health-data breach path
 
