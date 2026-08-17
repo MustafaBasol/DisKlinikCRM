@@ -1,7 +1,7 @@
 # F3-PROD-004 — Reproducible Frontend Deployment & Rollback Automation (R-038)
 
 **Phase:** F3 — Production Hardening / parallel first-customer readiness lane
-**Date:** 2026-08-17 · **R1 architecture-review response:** 2026-08-17 (§19)
+**Date:** 2026-08-17 · **R1 architecture-review response:** 2026-08-17 (§19) · **R2 / R2-R1 public-verification corrections:** 2026-08-17 (§20, §21) · **R3 deployment-artifact ignore rules:** 2026-08-17 (§22)
 **Baseline:** `origin/main` @ `57909ce28d89cc14d67869c75b107c7595a17f23` (PR #436 merge, F4-1A2), clean worktree
 **Branch:** `feature/f3-prod-004-frontend-deploy-rollback`
 **ClickUp:** `869ejqzwx`
@@ -724,3 +724,138 @@ Each mutant turns red exactly the cases the review predicted, and nothing else �
 No runtime or application file outside `scripts/noramedi-frontend-deploy.sh` was touched, and within it nothing but public verification: `deploy`, `rollback`, two-step rename promotion, build argv, path guards, the release-identity contract and the no-delete policy are byte-identical to `b8568e4`. No new dependency; `curl` was already required by `--url`.
 
 `R-038` remains **`CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT`** — **NOT CLOSED**. `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO` · `ROLLBACK_REHEARSED = NO`. **F3-PROD-005 remains BLOCKED** and no production access of any kind was made for R2-R1. `R-030` / `R-030-DB` / `R-030-FILES` `OPEN` · `FIRST_CUSTOMER_RECOVERY_GATE` `NOT_SATISFIED` · F3 exit gate `NOT_SATISFIED` · F4 NOT COMPLETE · F5 NOT AUTHORIZED · repo2 NOT ACTIVATED. `MIGRATION_REQUIRED` / `MIGRATION_CREATED` / `PRODUCTION_MIGRATION` all **NO**; no tenant, auth, PHI/PII, provider, schema or production-data impact, and no secret is read or printed by any line added here.
+
+---
+
+## 22. F3-PROD-004-R3 — a successful deploy no longer blocks the next one
+
+**Date:** 2026-08-17 · **Branch:** `fix/f3-prod-004-r3-deployment-artifact-ignore` · **Baseline:** `origin/main` @ `a694ba8a8b9944f48eb5bbec8e6f0d3cbc06344f` (PR #438 merge, F3-PROD-004-R2/R2-R1), clean worktree · **ClickUp:** `869ek0vrg` · **Raised by:** production preflight, before any deployment.
+
+Every prior revision of this task hardened a check. This one removes a defect the checks created between them, and it was found the only way it could be — by looking at the real host.
+
+### 22.1 Production evidence
+
+```
+/var/www/noramedi
+HEAD          40bfcb899c54e545f992003b2203ad729114a5fe
+origin/main   a694ba8a8b9944f48eb5bbec8e6f0d3cbc06344f
+
+$ git status --porcelain
+?? dist.rollback-f3-sec-004-20260817T093856/
+```
+
+No production access was made by this task. The above is the preflight's report, quoted.
+
+### 22.2 Root cause
+
+`cmd_deploy` step 1 refuses **any** non-empty `git status --porcelain` unless `--allow-dirty` is given (§6, `noramedi-frontend-deploy.sh:610-617`). That gate is correct and stays exactly as it is.
+
+The script also runs **inside the production checkout** — `--app-dir` defaults to `/var/www/noramedi`, which is the git working tree — and it deliberately leaves artifacts there:
+
+| Artifact | Written by | Lifetime |
+|---|---|---|
+| `dist.rollback-<tag>-<UTC>/` | every `deploy` (step 7) and every `rollback` (step 3) | **retained forever** — the script owns no deletion primitive (§8) |
+| `.noramedi-frontend-release-state` | `write_state`, after a successful promotion | permanent, rewritten each run |
+| `dist.next.stale-<UTC>/` | `--clean-staging` | retained; never deleted |
+| `dist.next/` | the build | transient on success; **persists after a failed build or a failed rename 2** |
+
+`.gitignore` covered `dist/` and nothing else here. So the two properties combined into a self-blocking loop: **a successful deploy made its own checkout dirty, and the mandatory subsequent forward deploy was refused because of it.** The retention policy that makes rollback possible was the thing that broke the next deploy. Two rounds of review did not see it because neither the script nor its suite ever ran the gate against a real git checkout.
+
+The three ways out that were **not** taken: `--allow-dirty` (defeats the traceability guarantee the gate exists for, on every deploy, permanently); a host-local `.git/info/exclude` (not repository-owned, not reviewable, lost on any re-clone, invisible to anyone reading this repository); deleting retained bundles (destroys the rollback path to satisfy a cosmetic check).
+
+### 22.3 The ignore contract — exact, and deliberately narrow
+
+Four rules added to the repository's `.gitignore`, with the reasoning kept beside them in the file:
+
+```gitignore
+dist.next/
+dist.next.stale-*/
+dist.rollback-*/
+.noramedi-frontend-release-state
+```
+
+* **Exact artifact names, not a wildcard over build output.** Nothing else in this repository produces any of these names, and no tracked path matches one.
+* **Directory-scoped.** The three directory rules end in `/`, so a *file* that merely starts `dist.rollback-` is **not** ignored and still fails the gate. Asserted, not assumed (§22.4).
+* **`dist.next` needs its own line.** A `.gitignore` pattern matches whole path components, so the existing `dist/` never matches `dist.next` — verified with `git check-ignore`, which reports `dist.next/a` as *not* ignored under `dist/` alone. It was assessed rather than assumed because the task asked; the answer is that it is **not** covered.
+* **Nothing is weakened.** The gate itself is untouched: a modified tracked file or any other untracked path still fails it closed, and `--allow-dirty` is still the only way past a genuinely dirty tree. In particular, ignoring `dist.next` hides nothing operationally — the protection against promoting a stale staging bundle was never the git gate but the script's own staging precondition (step 4), which is a filesystem check. §22.4 asserts both halves of that separately.
+
+**No script was changed.** `scripts/noramedi-frontend-deploy.sh` is byte-identical to `a694ba8`: deploy, rollback, promotion, verification, path guards, release identity and the no-delete policy are all unchanged, as are the deploy/rollback/promotion semantics.
+
+**One further change to the same file, kept in its own commit.** `.gitignore` carried a stray **UTF-16LE fragment** on its `.codegraph/` line (`. \0 c \0 o \0 d \0 …`), which put NUL bytes in the file, so git classified it as **binary** and rendered every diff of it as `Bin 268 -> …`. A `.gitignore`-only change that cannot be read in a diff is not reviewable, which is why it is fixed here. The fragment is inert — a pattern containing NUL bytes matches no path, and the effective `.codegraph/` rule is the plain-text line that already follows it. Proven behaviour-neutral: `git ls-files --others --ignored --exclude-standard --directory` returns the **same 61 entries** before and after, `diff` empty. Separate commit, so it can be dropped independently.
+
+### 22.4 Tests — 223 to 272
+
+A new **section Q**, 49 assertions. No existing assertion was removed, reworded or weakened; sections A–P are unchanged.
+
+The subject under test is `.gitignore` itself. Every fixture is a **real throwaway git checkout** carrying `scripts/../.gitignore` copied verbatim, with a tracked source file and a live bundle; the deploy script is then run against it, so the production gate is driven for real rather than simulated. Nothing in the suite restates a rule, so deleting one from the repository fails these cases rather than this file. Every git process the section starts — the fixtures' and the script's alike — runs with `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`, so a stray `core.excludesFile` on one machine cannot turn a REFUSE case green for a reason that does not exist in production. Planted directories are seeded with a real bundle because **git does not report an empty directory at all** — an empty one would pass for the wrong reason.
+
+| # | Required case | Where | Result |
+|---|---|---|---|
+| — | control: clean checkout deploys (makes everything below attributable) | Q0 | **PASS** |
+| 1 | only `dist.rollback-<tag>-<UTC>/` | Q1 | gate **ALLOWS**; bundle promoted |
+| 2 | only `.noramedi-frontend-release-state` | Q2 | gate **ALLOWS**; bundle promoted |
+| 3 | only `dist.next.stale-<UTC>/` | Q3 | gate **ALLOWS**; bundle promoted |
+| — | all artifacts at once | Q3 | gate **ALLOWS**; bundle promoted |
+| — | only `dist.next/` | Q3b | gate **ALLOWS** — and the deploy is **still refused** by the staging precondition (`may be stale`), *not* by the cleanliness gate |
+| 6 | full lifecycle: deploy → deploy, neither given `--allow-dirty` | Q4 | **PASS** — checkout clean after run 1, run 2 succeeds, the retained bundle from run 1 still on disk |
+| 3 | `--clean-staging` drives a real `dist.next.stale-<UTC>` into existence, then a further deploy | Q4 | **PASS** |
+| 4 | modified tracked source file | Q5 | **REFUSED**, by the cleanliness gate's own wording, zero working-tree mutation |
+| 5 | untracked source-like file (`src/newFeature.ts`) | Q5 | **REFUSED**, same |
+| — | untracked **file** named `dist.rollback-notes.txt` | Q5 | **REFUSED** — the rule is directory-scoped, not a name prefix |
+| 6 | `--allow-dirty` unchanged | Q6 | still deploys past a genuinely dirty tree, still warns |
+
+Each of Q1–Q3 additionally asserts that `git status --porcelain` is empty *and* that the run never mentions `--allow-dirty`, so "allowed" means the gate was satisfied rather than bypassed. Every refusal is attributed to **this** gate by its own message (`uncommitted changes`) — a non-zero exit alone would also be produced by an unrelated failure, which is precisely the trap that let mutant B survive in §11.1. Each refusal case plants the ignored artifacts too, so the refusal has to come from the real change.
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `bash scripts/noramedi-frontend-deploy.test.sh` | **272 passed, 0 failed, 2 skipped** (223/0/2 at `a694ba8`) |
+| 2 | `npm run test:shell` | **exit 0** — opscheck 178/178, pgBackRest 239/239, PITR app smoke 50/50, frontend deploy **272/272** |
+| 3 | `npm run test:ci-classify` | **28 passed, 0 failed** |
+| 4 | `npm run typecheck:ci-classify` | **exit 0** |
+| 5 | `bash -n scripts/noramedi-frontend-deploy.sh` · `bash -n scripts/noramedi-frontend-deploy.test.sh` | **exit 0** |
+| 6 | `git diff --check` | **exit 0** |
+
+The same 2 skips as §11 / §20.3 / §21.4 (MSYS symlink, `chmod -x`); neither is in section Q, and both run on `ubuntu-latest`. Section Q skips in its entirety, counted and printed, if `git` is unavailable — it is not, on `ubuntu-latest`.
+
+### 22.5 R3 mutation / falsification
+
+**Mutant E — the four ignore rules removed** from `.gitignore`, nothing else changed, then restored from a pre-mutation copy and re-run green (272/0/2):
+
+```
+FAIL - a preserved rollback bundle (dist.rollback-<tag>-<UTC>) is still reported by git status: ?? dist.rollback-f3-sec-004-20260817T093856/
+FAIL - a preserved rollback bundle (dist.rollback-<tag>-<UTC>) blocked the deploy (exit 1)
+FAIL - the release state file (.noramedi-frontend-release-state) is still reported by git status: ?? .noramedi-frontend-release-state
+FAIL - a moved-aside stale staging bundle (dist.next.stale-<UTC>) is still reported by git status: ?? dist.next.stale-20260817T093856/
+FAIL - dist.next still dirties the checkout: ?? dist.next/
+FAIL - a successful deploy dirtied its own checkout — the F3-PROD-004-R3 defect: ?? .noramedi-frontend-release-state
+FAIL - deploy 2/2 was blocked by the artifacts deploy 1/2 created (exit 1)
+FAIL - the checkout is dirty after the second deploy: ?? .noramedi-frontend-release-state
+FAIL - stripping the four F3-PROD-004-R3 rules removed 0 line(s), not 4 — the contract was reworded or broadened
+Results: 245 passed, 27 failed, 2 skipped   (exit 1)
+```
+
+The production defect reproduces **verbatim** under the mutant, down to the exact `?? dist.rollback-…` line the preflight reported.
+
+**The falsification is permanent, not only a one-off.** Case **Q7** keeps it in the suite: it builds a second fixture from a `.gitignore` with exactly those four rules stripped and asserts that the identical artifacts *do* block the deploy there. Without it, every "allowed" result above could be green because git never saw the artifacts at all. Q7 also asserts that stripping the contract removes **exactly four lines** — so rewording or broadening a rule turns the suite red rather than passing quietly.
+
+### 22.6 R3 CI reachability
+
+R3 changes `.gitignore`, `scripts/noramedi-frontend-deploy.test.sh` and documentation. **No classifier rule and no workflow change was required or made.** Re-verified with the real CLI on the R3 changed-path set:
+
+```
+$ npm run ci-classify -- "--files=.gitignore,scripts/noramedi-frontend-deploy.test.sh"
+  ".gitignore"                               -> UNKNOWN
+  "scripts/noramedi-frontend-deploy.test.sh" -> CI_TOOLING
+  docsOnly: false
+  runBackendGeneral / runPostgres / runStorage / runFrontendFullSuite / runLegacyBackend: all true
+```
+
+`.gitignore` has no classifier clause and falls through to `UNKNOWN`, which is the **fail-closed** path by design (`classify.ts` module doc) — every lane runs. Adding a clause for it would only narrow that, so none was added. The changed `.sh` reaches the suite by the chain already proven in §12: `CI_TOOLING` → `docs_only=false` → `workflow-and-syntax-lint` (`ci-layers.yml:319-325`) → `npm run test:shell` (`:365`) → `test:shell:frontend-deploy` (`package.json:42`) → section Q.
+
+### 22.7 R3 status — unchanged where it must be
+
+**Files changed:** `.gitignore` (four rules plus the reasoning beside them; separately, the inert UTF-16 fragment removed), `scripts/noramedi-frontend-deploy.test.sh` (section Q, +49 assertions), this evidence file (§22), `docs/program/runbooks/F3_FIRST_CUSTOMER_INCIDENT_RESPONSE.md` §4.12 (what `has uncommitted changes` now means, and that it is never the deploy's own leftovers), `docs/program/CHANGELOG.md`.
+
+**No application, frontend, server, schema, migration, provider-configuration, lockfile or workflow file was touched, and `scripts/noramedi-frontend-deploy.sh` is byte-identical to `a694ba8`.** Deploy, rollback and promotion semantics are unchanged. No retained rollback bundle was deleted; the script still contains no deletion primitive. `--allow-dirty` is unchanged and remains unnecessary for the normal deployment lifecycle — which is now a tested property rather than an intention.
+
+`R-038` remains **`CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT`** — **NOT CLOSED**. R3 removes an obstacle to running the production verification; it does not run it. `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO` · `ROLLBACK_REHEARSED = NO` · no production access of any kind. **F3-PROD-005 remains BLOCKED until this merges.** `R-030` / `R-030-DB` / `R-030-FILES` `OPEN` · `FIRST_CUSTOMER_RECOVERY_GATE` `NOT_SATISFIED` · F3 exit gate `NOT_SATISFIED` · F4 NOT COMPLETE · F5 NOT AUTHORIZED · repo2 NOT ACTIVATED. `MIGRATION_REQUIRED` / `MIGRATION_CREATED` / `PRODUCTION_MIGRATION` all **NO**. No tenant, auth, PHI/PII, provider, schema or production-data impact: the change is four ignore rules and a test section, and no line added here reads or prints a secret. **KVKK:** none — a `.gitignore` rule processes no personal or health data, and the artifacts it names (a static bundle, a SHA pointer file) contain none.

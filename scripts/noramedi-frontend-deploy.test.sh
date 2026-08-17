@@ -1375,6 +1375,338 @@ unset FAKE_SITE_DIR FAKE_SITE_ROOT_302 FAKE_SITE_SPA FAKE_SITE_DOWN
 unset FAKE_SITE_MARKER_STATUS FAKE_SITE_MARKER_REDIRECT
 
 # ════════════════════════════════════════════════════════════════════════
+section "Q. The cleanliness gate ignores this script's own artifacts (F3-PROD-004-R3)"
+# ════════════════════════════════════════════════════════════════════════
+# The defect this section closes was found by a production preflight, not by a
+# diff. The gate at cmd_deploy step 1 refuses ANY non-empty
+# `git status --porcelain` — and the script runs inside the production checkout
+# and leaves four names there itself:
+#
+#   dist.next                 staging build
+#   dist.next.stale-<UTC>     what --clean-staging moves a stale staging aside to
+#   dist.rollback-<tag>-<UTC> the preserved bundle EVERY deploy leaves behind
+#   .noramedi-frontend-release-state   the deterministic rollback pointer
+#
+# So a SUCCESSFUL deploy dirtied its own checkout and blocked the next one:
+#
+#   /var/www/noramedi $ git status --porcelain
+#   ?? dist.rollback-f3-sec-004-20260817T093856/
+#
+# The fix is four exact rules in the repository's .gitignore, and THAT FILE is
+# what this section tests. Every fixture below copies scripts/../.gitignore
+# verbatim into a real throwaway git checkout; nothing here restates a rule, so
+# deleting one from the repository fails these cases rather than this file.
+#
+# Two properties matter equally and both are asserted:
+#   * none of the four artifacts blocks a deploy at the cleanliness gate any
+#     more, driven through the real gate;
+#   * nothing else got quieter. A modified tracked file, an untracked source
+#     file, and even a FILE whose name merely looks like a preserved bundle all
+#     still fail the gate closed — the rules are directory-scoped exact names,
+#     not a wildcard over the checkout. And a leftover dist.next, now invisible
+#     to git, is still refused by the script's own staging precondition, which
+#     is a filesystem check and was always the real protection there (Q3b).
+#
+# Q5 is the falsification, kept permanently in the suite: with those four rules
+# and nothing else stripped out of the copied .gitignore, the identical
+# artifacts DO block the deploy again. Without it every "allowed" result above
+# could be green because git never saw the artifacts at all.
+
+REPO_GITIGNORE="$(cd "$SCRIPT_DIR/.." && pwd)/.gitignore"
+SHA_Q="1111222233334444555566667777888899990000"
+
+# The developer's global/system git config is excluded from every git process
+# this section starts, the fixtures' and the deploy script's alike. A stray
+# core.excludesFile on one machine would otherwise turn the REFUSE cases green
+# for a reason that does not exist on the production host.
+GIT_ISOLATED=(GIT_CONFIG_GLOBAL=/dev/null
+              GIT_CONFIG_NOSYSTEM=1
+              GIT_AUTHOR_NAME=fixture   GIT_AUTHOR_EMAIL=fixture@example.invalid
+              GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid)
+
+git_in() {
+  local dir="$1"; shift
+  env "${GIT_ISOLATED[@]}" git -C "$dir" "$@"
+}
+
+# `git status` may refresh and rewrite .git/index, so the whole-tree snapshot()
+# above would report a mutation the deploy did not make. The claim being
+# measured is about the WORKING TREE, which is what the deploy would rename.
+#
+# Content goes through cksum rather than cat because these fixtures carry a copy
+# of the repository's .gitignore: a command substitution silently drops NUL
+# bytes, so a cat-based snapshot would be blind to a whole class of change in
+# any file that ever acquired one (this one had until F3-PROD-004-R3).
+snapshot_nogit() {
+  ( cd "$1" 2>/dev/null || return 0
+    find . -path ./.git -prune -o -print | LC_ALL=C sort
+    find . -path ./.git -prune -o -type f -print | LC_ALL=C sort | while IFS= read -r f; do
+      printf '%s::' "$f"; cksum < "$f"
+    done ) 2>/dev/null
+}
+
+# new_git_app NAME — a deployment root that is a real git checkout carrying the
+# repository's .gitignore verbatim, one tracked source file, and a clean tree.
+new_git_app() {
+  local name="$1"
+  local app; app="$(new_app "$name")"
+  cp -- "$REPO_GITIGNORE" "$app/.gitignore"
+  mkdir -p "$app/src"
+  printf 'export const answer = 1;\n' > "$app/src/app.ts"
+  git_in "$app" -c init.defaultBranch=main init -q      >/dev/null 2>&1
+  git_in "$app" add -A                                  >/dev/null 2>&1
+  git_in "$app" commit -q -m "fixture: clean checkout"  >/dev/null 2>&1
+  printf '%s\n' "$app"
+}
+
+# plant_state_file APP DIRNAME — the state file exactly as write_state leaves it.
+plant_state_file() {
+  cat > "$1/.noramedi-frontend-release-state" <<EOF
+# noramedi-frontend-deploy.sh state — F3-PROD-004. Machine-written; safe to read.
+ROLLBACK_DIR=$1/$2
+PROMOTED_RELEASE_SHA=$SHA_Q
+PREVIOUS_RELEASE_SHA=unknown
+UPDATED_AT=2026-01-01T00:00:00Z
+EOF
+}
+
+if ! command -v git >/dev/null 2>&1; then
+  SKIPPED=$((SKIPPED + 1))
+  echo "  SKIPPED - git is not available here, so the cleanliness gate cannot be driven at all (it is on CI)."
+else
+
+# ── Q0. Control: the fixture itself deploys. Without this, every "allowed"
+#        result below could be green because the fixture is broken. ──────────
+QAPP="$(new_git_app app-git-control)"
+seed_bundle "$QAPP/dist" v1
+[[ -z "$(git_in "$QAPP" status --porcelain)" ]] \
+  && pass "the fixture checkout starts clean (a live dist/ is already ignored)" \
+  || fail "the fixture is dirty before anything was planted: $(git_in "$QAPP" status --porcelain)"
+run env "${GIT_ISOLATED[@]}" NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+    bash "$FE" deploy --app-dir "$QAPP" --release-sha "$SHA_Q" --tag ctl
+[[ "$CODE" -eq 0 && "$(live_token "$QAPP")" == "v2" ]] \
+  && pass "a deploy from a clean git checkout succeeds (the fixture drives the real gate)" \
+  || fail "the control deploy failed, so section Q proves nothing (exit $CODE): $OUT"
+
+# ── Q1/Q2/Q3. Each artifact ALONE must leave the gate satisfied. ──────────
+# A planted directory is seeded with a real bundle on purpose: git does not
+# report an EMPTY directory at all, so an empty one would pass for the wrong
+# reason. Requirements 1, 2 and 3.
+ALLOW_SEQ=0
+allows_case() {
+  local label="$1"; shift
+  ALLOW_SEQ=$((ALLOW_SEQ + 1))
+  local app; app="$(new_git_app "app-git-allow-$ALLOW_SEQ")"
+  seed_bundle "$app/dist" v1
+  local p
+  for p in "$@"; do
+    case "$p" in
+      */) seed_bundle "$app/${p%/}" old ;;
+      .noramedi-frontend-release-state) plant_state_file "$app" "dist.rollback-prev-20251231T000000Z" ;;
+      *)  printf 'placeholder\n' > "$app/$p" ;;
+    esac
+  done
+  [[ -z "$(git_in "$app" status --porcelain)" ]] \
+    && pass "$label leaves 'git status --porcelain' empty under the repository's ignore rules" \
+    || fail "$label is still reported by git status: $(git_in "$app" status --porcelain)"
+  run env "${GIT_ISOLATED[@]}" NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+      bash "$FE" deploy --app-dir "$app" --release-sha "$SHA_Q" --tag q
+  [[ "$CODE" -eq 0 ]] \
+    && pass "the cleanliness gate allows a deploy from a checkout holding only $label" \
+    || fail "$label blocked the deploy (exit $CODE): $OUT"
+  [[ "$(live_token "$app")" == "v2" ]] \
+    && pass "the deploy past $label actually promoted the new bundle" \
+    || fail "the deploy past $label reported success without promoting: $(live_token "$app")"
+  [[ "$OUT" != *"--allow-dirty"* ]] \
+    && pass "the operator is never told to reach for --allow-dirty because of $label" \
+    || fail "$label produced dirty-worktree output: $OUT"
+}
+
+allows_case "a preserved rollback bundle (dist.rollback-<tag>-<UTC>)" \
+  "dist.rollback-f3-sec-004-20260817T093856/"
+allows_case "the release state file (.noramedi-frontend-release-state)" \
+  ".noramedi-frontend-release-state"
+allows_case "a moved-aside stale staging bundle (dist.next.stale-<UTC>)" \
+  "dist.next.stale-20260817T093856/"
+allows_case "every deployment artifact at once" \
+  "dist.rollback-f3-sec-004-20260817T093856/" ".noramedi-frontend-release-state" \
+  "dist.next.stale-20260817T093856/"
+
+# ── Q3b. dist.next: ignored by git, and STILL refused by the script. ─────
+# `dist/` does not cover `dist.next` — a .gitignore pattern matches whole path
+# components — so a leftover staging bundle used to dirty the checkout too, and
+# it gets a rule of its own.
+#
+# What must not happen is that ignoring it hides it. The protection against
+# promoting a stale staging bundle was never the git gate; it is the script's
+# own staging precondition, which is a filesystem check. This case proves both
+# halves separately: the cleanliness gate is satisfied, and the deploy is still
+# REFUSED — by the staging check, in its own words, not by the cleanliness gate.
+QAPP="$(new_git_app app-git-stale-staging)"
+seed_bundle "$QAPP/dist" v1
+seed_bundle "$QAPP/dist.next" leftover
+[[ -z "$(git_in "$QAPP" status --porcelain)" ]] \
+  && pass "a leftover staging bundle (dist.next) leaves 'git status --porcelain' empty" \
+  || fail "dist.next still dirties the checkout: $(git_in "$QAPP" status --porcelain)"
+run env "${GIT_ISOLATED[@]}" NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+    bash "$FE" deploy --app-dir "$QAPP" --release-sha "$SHA_Q" --tag stale
+[[ "$CODE" -ne 0 && "$OUT" == *"may be stale"* ]] \
+  && pass "a leftover dist.next is still REFUSED, by the staging precondition (ignoring it hid nothing)" \
+  || fail "the stale staging protection did not fire (exit $CODE): $OUT"
+[[ "$OUT" != *"uncommitted changes"* ]] \
+  && pass "that refusal is the staging check, not the cleanliness gate — the gate was satisfied" \
+  || fail "dist.next was still refused by the git cleanliness gate: $OUT"
+[[ "$(live_token "$QAPP")" == "v1" ]] \
+  && pass "nothing was promoted over the leftover staging bundle" \
+  || fail "a stale staging bundle reached the live path"
+
+# ── Q4. The full lifecycle: deploy, then deploy again. Requirement 6. ─────
+# This is the production sequence verbatim — a successful deploy, then the
+# mandatory forward deploy it used to block. Neither run is given --allow-dirty,
+# and the artifacts the first run created are still on disk for the second.
+QAPP="$(new_git_app app-git-lifecycle)"
+seed_bundle "$QAPP/dist" v1
+run env "${GIT_ISOLATED[@]}" NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+    bash "$FE" deploy --app-dir "$QAPP" --release-sha "$SHA_Q" --tag first
+[[ "$CODE" -eq 0 ]] \
+  && pass "lifecycle deploy 1/2 succeeds" \
+  || fail "lifecycle deploy 1/2 failed (exit $CODE): $OUT"
+[[ -d "$QAPP/dist.rollback-first-20260101T000000Z" && -f "$QAPP/.noramedi-frontend-release-state" ]] \
+  && pass "deploy 1/2 left a preserved bundle and a state file in the checkout, as it must" \
+  || fail "deploy 1/2 did not leave the artifacts this section is about"
+[[ -z "$(git_in "$QAPP" status --porcelain)" ]] \
+  && pass "the checkout a successful deploy leaves behind is still clean to git" \
+  || fail "a successful deploy dirtied its own checkout — the F3-PROD-004-R3 defect: $(git_in "$QAPP" status --porcelain)"
+
+run env "${GIT_ISOLATED[@]}" NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v3)" \
+    bash "$FE" deploy --app-dir "$QAPP" --release-sha "$SHA_Q" --tag second
+[[ "$CODE" -eq 0 ]] \
+  && pass "the mandatory subsequent forward deploy succeeds WITHOUT --allow-dirty" \
+  || fail "deploy 2/2 was blocked by the artifacts deploy 1/2 created (exit $CODE): $OUT"
+[[ "$(live_token "$QAPP")" == "v3" ]] \
+  && pass "deploy 2/2 promoted the newer bundle" \
+  || fail "deploy 2/2 did not promote: live is '$(live_token "$QAPP")'"
+[[ -d "$QAPP/dist.rollback-first-20260101T000000Z" ]] \
+  && pass "the retained rollback bundle from deploy 1/2 was never deleted to satisfy the gate" \
+  || fail "the earlier preserved bundle disappeared"
+[[ -z "$(git_in "$QAPP" status --porcelain)" ]] \
+  && pass "the checkout is still clean after two deploys and two retained bundles" \
+  || fail "the checkout is dirty after the second deploy: $(git_in "$QAPP" status --porcelain)"
+
+# --clean-staging is the one path that produces dist.next.stale-*; drive it for
+# real so requirement 3 rests on the script's own behaviour, not on a name this
+# file made up.
+seed_bundle "$QAPP/dist.next" leftover
+run env "${GIT_ISOLATED[@]}" NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v4)" \
+    bash "$FE" deploy --app-dir "$QAPP" --release-sha "$SHA_Q" --tag third --clean-staging
+[[ "$CODE" -eq 0 && -d "$QAPP/dist.next.stale-20260101T000000Z" ]] \
+  && pass "--clean-staging produces dist.next.stale-<UTC> in the checkout, as accepted behaviour" \
+  || fail "--clean-staging did not produce the stale staging artifact (exit $CODE): $OUT"
+[[ -z "$(git_in "$QAPP" status --porcelain)" ]] \
+  && pass "the stale staging artifact the script itself created does not dirty the checkout" \
+  || fail "dist.next.stale-* dirtied the checkout: $(git_in "$QAPP" status --porcelain)"
+run env "${GIT_ISOLATED[@]}" NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v5)" \
+    bash "$FE" deploy --app-dir "$QAPP" --release-sha "$SHA_Q" --tag fourth
+[[ "$CODE" -eq 0 && "$(live_token "$QAPP")" == "v5" ]] \
+  && pass "a deploy still succeeds after --clean-staging, with all three artifact kinds present" \
+  || fail "the post---clean-staging deploy was blocked (exit $CODE): $OUT"
+
+# ── Q5/Q6. What must STILL fail. Requirements 4 and 5. ────────────────────
+# Every case here plants the ignored artifacts too, so the refusal has to come
+# from the real change: the new rules must not swallow one.
+REFUSE_SEQ=0
+refuses_case() {
+  local label="$1" rel="$2" content="$3"
+  REFUSE_SEQ=$((REFUSE_SEQ + 1))
+  local app; app="$(new_git_app "app-git-refuse-$REFUSE_SEQ")"
+  seed_bundle "$app/dist" v1
+  seed_bundle "$app/dist.rollback-prev-20251231T000000Z" old
+  plant_state_file "$app" "dist.rollback-prev-20251231T000000Z"
+  mkdir -p -- "$(dirname -- "$app/$rel")"
+  printf '%s\n' "$content" > "$app/$rel"
+
+  local before; before="$(snapshot_nogit "$app")"
+  run env "${GIT_ISOLATED[@]}" NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+      bash "$FE" deploy --app-dir "$app" --release-sha "$SHA_Q" --tag q
+  [[ "$CODE" -ne 0 ]] \
+    && pass "the gate still REFUSES a deploy when the checkout holds $label" \
+    || fail "$label did not block the deploy — the ignore rules are too broad: $OUT"
+  # Attributable to THIS gate by its own wording. A non-zero exit alone would
+  # also be produced by an unrelated failure.
+  [[ "$OUT" == *"uncommitted changes"* ]] \
+    && pass "the refusal for $label comes from the git cleanliness gate itself" \
+    || fail "the refusal for $label did not come from the cleanliness gate: $OUT"
+  [[ "$(live_token "$app")" == "v1" ]] \
+    && pass "the live bundle is untouched by the refused deploy over $label" \
+    || fail "the live bundle changed during a refused deploy"
+  [[ "$(snapshot_nogit "$app")" == "$before" ]] \
+    && pass "not one byte of the working tree changed while $label was refused" \
+    || fail "the refused deploy over $label mutated the working tree"
+}
+
+refuses_case "a modified tracked source file" \
+  "src/app.ts" "export const answer = 2;"
+refuses_case "an untracked source-like file outside the deployment artifacts" \
+  "src/newFeature.ts" "export const feature = () => true;"
+# The rules end in '/', so they match DIRECTORIES only, and the state file is
+# matched by its exact name. A file that merely starts dist.rollback- is not a
+# deployment artifact and must not be swept up by them.
+refuses_case "an untracked FILE named like a preserved bundle (the rule is directory-scoped)" \
+  "dist.rollback-notes.txt" "notes about a rollback"
+
+# --allow-dirty itself is unchanged: still available, still warns, still the
+# only way past a genuinely dirty tree. Nothing here weakened it.
+QAPP="$(new_git_app app-git-allow-dirty)"
+seed_bundle "$QAPP/dist" v1
+printf 'export const answer = 2;\n' > "$QAPP/src/app.ts"
+run env "${GIT_ISOLATED[@]}" NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+    bash "$FE" deploy --app-dir "$QAPP" --release-sha "$SHA_Q" --tag dirty --allow-dirty
+[[ "$CODE" -eq 0 && "$OUT" == *"DIRTY worktree"* ]] \
+  && pass "--allow-dirty still deploys past a genuinely dirty tree, and still warns" \
+  || fail "--allow-dirty behaviour changed (exit $CODE): $OUT"
+
+# ── Q7. Falsification: it is the REPOSITORY's rules doing this. ───────────
+# The same fixture, built from a .gitignore with EXACTLY the four new rules
+# stripped and nothing else changed. If the artifacts stop blocking the deploy
+# here too, then every "allowed" case above is green for some other reason and
+# proves nothing about .gitignore.
+MUTAPP="$(new_app app-git-mutated-ignore)"
+# -a: .gitignore carried a stray UTF-16 fragment on its '.codegraph/' line until
+# F3-PROD-004-R3 removed it. While those NUL bytes were there grep read the file
+# as binary and emitted no lines at all, which would silently reduce this
+# falsification to a no-op rather than failing it. -a keeps that from ever being
+# a quiet outcome again; the line-count assertion below is what makes it loud.
+grep -a -vxE 'dist\.next/|dist\.next\.stale-\*/|dist\.rollback-\*/|\.noramedi-frontend-release-state' \
+  "$REPO_GITIGNORE" > "$MUTAPP/.gitignore"
+STRIPPED=$(( $(wc -l < "$REPO_GITIGNORE") - $(wc -l < "$MUTAPP/.gitignore") ))
+[[ "$STRIPPED" -eq 4 ]] \
+  && pass "the ignore contract is exactly the four expected rules, verbatim, in .gitignore" \
+  || fail "stripping the four F3-PROD-004-R3 rules removed $STRIPPED line(s), not 4 — the contract was reworded or broadened; reread .gitignore before touching this case"
+
+mkdir -p "$MUTAPP/src"
+printf 'export const answer = 1;\n' > "$MUTAPP/src/app.ts"
+git_in "$MUTAPP" -c init.defaultBranch=main init -q       >/dev/null 2>&1
+git_in "$MUTAPP" add -A                                   >/dev/null 2>&1
+git_in "$MUTAPP" commit -q -m "fixture: rules stripped"   >/dev/null 2>&1
+seed_bundle "$MUTAPP/dist" v1
+seed_bundle "$MUTAPP/dist.rollback-f3-sec-004-20260817T093856" old
+plant_state_file "$MUTAPP" "dist.rollback-f3-sec-004-20260817T093856"
+
+[[ -n "$(git_in "$MUTAPP" status --porcelain)" ]] \
+  && pass "without the four rules the identical artifacts ARE reported by git status" \
+  || fail "the artifacts are invisible to git even with the rules stripped — the cases above prove nothing"
+run env "${GIT_ISOLATED[@]}" NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+    bash "$FE" deploy --app-dir "$MUTAPP" --release-sha "$SHA_Q" --tag mut
+[[ "$CODE" -ne 0 && "$OUT" == *"uncommitted changes"* ]] \
+  && pass "without the four rules the deploy is blocked by its own artifacts — the R3 defect, reproduced" \
+  || fail "the stripped-rules fixture still deployed (exit $CODE), so section Q is not attributable to .gitignore: $OUT"
+[[ "$(live_token "$MUTAPP")" == "v1" ]] \
+  && pass "that blocked deploy promoted nothing (the defect is a hard refusal, not a warning)" \
+  || fail "the blocked deploy still promoted a bundle"
+
+fi
+
+# ════════════════════════════════════════════════════════════════════════
 section "Summary"
 echo "─────────────────────────────────────────"
 echo "Results: $PASSED passed, $FAILED failed, $SKIPPED skipped"
