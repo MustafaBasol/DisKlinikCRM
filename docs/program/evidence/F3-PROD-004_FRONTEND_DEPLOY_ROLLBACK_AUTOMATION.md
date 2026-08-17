@@ -719,6 +719,8 @@ Each mutant turns red exactly the cases the review predicted, and nothing else �
 
 ### 21.6 R2-R1 status — unchanged where it must be
 
+**Files changed:** `scripts/noramedi-frontend-deploy.sh`, `scripts/noramedi-frontend-deploy.test.sh`, this evidence file (§21; §20.2 amended with a forward pointer), `docs/program/CHANGELOG.md`, and `docs/program/runbooks/F3_FIRST_CUSTOMER_INCIDENT_RESPONSE.md` §4.12 — which told the operator the marker is judged by its parsed body, now half the rule. It records `PUBLIC_ROOT_URL`, `PUBLIC_MARKER_STATUS` and `PUBLIC_MARKER_URL` and says why an error page or a redirect off this host proves nothing even when the body looks right.
+
 No runtime or application file outside `scripts/noramedi-frontend-deploy.sh` was touched, and within it nothing but public verification: `deploy`, `rollback`, two-step rename promotion, build argv, path guards, the release-identity contract and the no-delete policy are byte-identical to `b8568e4`. No new dependency; `curl` was already required by `--url`.
 
 `R-038` remains **`CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT`** — **NOT CLOSED**. `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO` · `ROLLBACK_REHEARSED = NO`. **F3-PROD-005 remains BLOCKED** and no production access of any kind was made for R2-R1. `R-030` / `R-030-DB` / `R-030-FILES` `OPEN` · `FIRST_CUSTOMER_RECOVERY_GATE` `NOT_SATISFIED` · F3 exit gate `NOT_SATISFIED` · F4 NOT COMPLETE · F5 NOT AUTHORIZED · repo2 NOT ACTIVATED. `MIGRATION_REQUIRED` / `MIGRATION_CREATED` / `PRODUCTION_MIGRATION` all **NO**; no tenant, auth, PHI/PII, provider, schema or production-data impact, and no secret is read or printed by any line added here.
