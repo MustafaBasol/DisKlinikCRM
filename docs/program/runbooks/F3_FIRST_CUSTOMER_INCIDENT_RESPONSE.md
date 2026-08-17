@@ -467,7 +467,17 @@ The bundle that was live is itself preserved, so a rollback is reversible; the s
 /usr/local/sbin/noramedi-frontend-deploy.sh verify --url https://<host> --check-backend
 ```
 
-`GET /` and `GET /release.json` must return `200`, and `FRONTEND_RELEASE_SHA` must be the release you intended. Then hard-reload the app in a browser and confirm one authenticated route renders.
+`FRONTEND_RELEASE_SHA` must be the release you intended, and the run must print **`NGINX_SERVES_PROMOTED_DIST = VERIFIED`**. Then hard-reload the app in a browser and confirm one authenticated route renders.
+
+**Do not read the HTTP status codes as the answer** (F3-PROD-004-R2). Production's `GET /` is a **302** to `/login`, so `verify` follows redirects and accepts any final 2xx; and the SPA fallback answers **200 with `index.html` for any path that is not on disk**, so a `200` on `/release.json` proves nothing by itself. The marker is therefore judged by its **parsed body**:
+
+| Line | Meaning |
+|---|---|
+| `PUBLIC_RELEASE_SHA = <sha>` | a real marker is being served, and this is the release in it |
+| `PUBLIC_RELEASE_SHA = NOT_SERVED` | the response carried no `releaseSha` — you are looking at the SPA fallback or an error page, **not** at a marker |
+| `PUBLIC_RELEASE_SHA = INVALID` | a marker is served but its release identity is malformed (hand-edited, or written by something other than these scripts) |
+| `PUBLIC_SHA_MATCHES_LOCAL = NO` | the site is serving a **different** release than the bundle this host just promoted — either nginx serves another directory, or a cache is answering with a superseded copy |
+| `NGINX_SERVES_PROMOTED_DIST = VERIFIED` | served marker == promoted bundle. This is the **only** line that establishes that nginx serves `<app-dir>/dist`; it claims nothing about which nginx directive produced that result |
 
 **Rollback (of the rollback).** Re-run `rollback --from <the dist.rollback-* the previous command just created>`. **No database rollback is ever required for a frontend change** — there is no migration to reverse.
 

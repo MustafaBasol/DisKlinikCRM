@@ -497,3 +497,102 @@ docsOnly: false ; runBackendGeneral/runPostgres/runStorage/runFrontendFullSuite/
 ### 19.6 R1 status — unchanged where it must be
 
 `R-038` remains **`CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT`** — **NOT CLOSED**. R1 hardens the tool; it does not perform the production run the row's missing control requires. `R-030` / `R-030-DB` / `R-030-FILES` `OPEN` · `FIRST_CUSTOMER_RECOVERY_GATE` `NOT_SATISFIED` · F3 exit gate `NOT_SATISFIED` · F4 NOT COMPLETE · F5 NOT AUTHORIZED · repo2 NOT ACTIVATED. `MIGRATION_REQUIRED` / `MIGRATION_CREATED` / `PRODUCTION_MIGRATION` all **NO**; no tenant, auth, PHI/PII, provider, schema or production-data impact. The four production-verification steps in §16 are unchanged and still outstanding.
+
+---
+
+## 20. F3-PROD-004-R2 — the public verification check, corrected against the real host
+
+**Date:** 2026-08-17 · **Branch:** `fix/f3-prod-004-r2-public-release-marker-verification` · **Baseline:** `origin/main` @ `dbdbbdfba4ece4f666fe5984244d41b253f7430a` (PR #437 merge) · **Found by:** F3-PROD-005 pre-flight, before any production mutation.
+
+F3-PROD-005 read the live production site before installing anything. `verify --url` — the single check §10 nominates to close the `UNVERIFIED_PRODUCTION` nginx question — was wrong in **both** directions against the real host. Neither failure is reachable from the repository: both depend on production nginx behaviour that no test fixture described.
+
+### 20.1 What was observed on production, pre-deploy
+
+Read-only, from outside the host, against `https://app.noramedi.com` on 2026-08-17:
+
+| Request | Observed | Merged script's verdict | Correct verdict |
+|---|---|---|---|
+| `GET /` | **302** → `https://app.noramedi.com/login` (`Server: nginx/1.24.0`, `Content-Length: 154`) | **FAIL** (`[[ "$code" == "200" ]]`, no `-L`) | reachable |
+| `GET /release.json` | **200**, `Content-Type: text/html`, `Content-Length: 3069`, body byte-identical to `GET /__nonexistent__.json` | **PASS** | **no marker is served** |
+
+The second row is the serious one. The SPA fallback (`try_files $uri /index.html`) answers **200 with `index.html` for any path that does not exist on disk**, so a status-code check reports the release marker as served on a host that has no release marker anywhere — which is exactly the R-038 condition the check exists to detect. The first row is the loud one: a correct deploy could never produce a passing `verify --url`, because production's root path redirects.
+
+**Consequence for R-038:** `NGINX_PROMOTED_DIST_SERVING_EVIDENCE` could not have been established by the merged script. A passing `verify --url` would have been indistinguishable from the pre-deploy state.
+
+### 20.2 The correction
+
+`verify --url` no longer decides anything from an HTTP status:
+
+- **Reachability** follows redirects (`-L --max-redirs 5`) and accepts any final **2xx**, so a redirecting root is not a failure.
+- **The marker is decided by its CONTENT.** The response body is parsed for `releaseSha` through `marker_field_from_text`, the same extraction `read_marker_field` now uses for the on-disk file — one rule for both. A fallback HTML page has no `releaseSha` field and is reported `NOT_SERVED`.
+- **Served-vs-promoted is compared explicitly.** Three new reported lines, in the style of the existing `RELEASE_SHA_MATCH`:
+
+```
+PUBLIC_RELEASE_SHA         = <sha> | NOT_SERVED | INVALID
+PUBLIC_SHA_MATCHES_LOCAL   = YES | NO | NOT_APPLICABLE
+NGINX_SERVES_PROMOTED_DIST = VERIFIED | NOT_VERIFIED
+```
+
+`VERIFIED` is printed only when the served marker and the promoted bundle report the **same valid release identity** and no other problem was recorded. That one line is the whole of what the script claims — it does not assert which nginx directive produced it. A value read out of the served marker goes through the same release-identity contract as every other foreign value (§19.3): reported `INVALID`, never echoed.
+
+No mutation semantics changed. `deploy`, `rollback`, promotion, path safety, the device precondition and the release-identity contract are untouched; there is still no `rm`, no `eval`, and no shell-string execution in the file.
+
+### 20.3 Tests — 188 → 204
+
+New section **P**, 16 assertions, driven by a `curl` on PATH that reproduces both production behaviours (302 root, SPA fallback) and **only follows the redirect when `-L` is actually passed**:
+
+| Assertion | Proves |
+|---|---|
+| verify FAILS when the site serves the SPA fallback instead of a marker | the defect itself |
+| a 200-with-no-marker is `NOT_SERVED` | status is not evidence |
+| `NGINX_SERVES_PROMOTED_DIST = NOT_VERIFIED` on fallback HTML | no over-claim |
+| a 302 on `/` does not fail verification when it resolves to 2xx | the false negative |
+| the served `releaseSha` is parsed out of the response body | the mechanism |
+| served marker == promoted bundle → `VERIFIED` | the positive case |
+| public verification prints no environment secret | canary |
+| served release != live bundle → fail, `PUBLIC_SHA_MATCHES_LOCAL = NO` | cache/wrong-root detection |
+| malformed served identity → `INVALID`, not echoed | §19.3 contract holds for fetched values |
+| unreachable site → fail, never `VERIFIED` | not "nothing to check" |
+| pre-marker bundle behind a fallback → fail (the R-038 condition) | end-to-end |
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `bash scripts/noramedi-frontend-deploy.test.sh` | **204 passed, 0 failed, 2 skipped** (188/2 before R2) |
+| 2 | `npm run test:shell` | **exit 0** — opscheck 178/178, pgBackRest 239/239, PITR app smoke 50/50, frontend deploy 204/204 |
+| 3 | `npm run test:ci-classify` | **28 passed, 0 failed** |
+| 4 | `npm run typecheck:ci-classify` | **exit 0** |
+| 5 | `for f in scripts/*.sh scripts/test-runtime/*.sh; do bash -n "$f"; done` | **exit 0** |
+| 6 | `npx tsx scripts/ci-classify/cli.ts --files-from=<changed>` | `docsOnly: false`, all five deep-gate flags `true` |
+
+The same 2 skips as §11 (MSYS symlink and `chmod -x` limitations); neither is in section P, and both are exercised on `ubuntu-latest`.
+
+### 20.4 R2 mutation / falsification
+
+Both mutants applied to the real file, both reverted before commit. `git grep "MUTANT B"` returns nothing.
+
+**Mutant A — `-L` removed from the fetch** (the redirect is no longer followed):
+
+```
+FAIL - verify failed against a healthy site whose root redirects (exit 1)
+FAIL - the script withheld VERIFIED on a genuinely served marker
+Results: 202 passed, 2 failed, 2 skipped   (exit 1)
+```
+
+**Mutant B — the merged defect reintroduced verbatim** (marker verdict taken from `[[ "$code" == "200" ]]`, public SHA assumed equal to local):
+
+```
+FAIL - verify passed against a host serving no release marker at all
+FAIL - the fallback response was not reported as NOT_SERVED
+FAIL - the script claimed the promoted dist is served on fallback HTML
+FAIL - verify accepted a served release that is not the promoted one
+FAIL - the disagreement was not reported
+FAIL - verify accepted a malformed served release identity
+FAIL - the malformed served value was echoed or mis-reported
+Results: 197 passed, 7 failed, 2 skipped   (exit 1)
+```
+
+Mutant B is the falsification that matters: it restores exactly what was merged in PR #437, and section P turns red on the precise production condition — a live host with no release marker passing verification.
+
+### 20.5 R2 status — unchanged where it must be
+
+`R-038` remains **`CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT`** — **NOT CLOSED**. R2 makes the closure *check* sound; it performs no production access, no deployment, no schema or data change. `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO`. `R-030` / `R-030-DB` / `R-030-FILES` `OPEN` · `FIRST_CUSTOMER_RECOVERY_GATE` `NOT_SATISFIED` · F3 exit gate `NOT_SATISFIED` · F4 NOT COMPLETE · F5 NOT AUTHORIZED · repo2 NOT ACTIVATED. `MIGRATION_REQUIRED` / `MIGRATION_CREATED` / `PRODUCTION_MIGRATION` all **NO**; no tenant, auth, PHI/PII, provider, schema or production-data impact. The published `release.json` contract is unchanged — R2 only *reads* it.

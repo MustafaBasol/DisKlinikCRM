@@ -45,6 +45,32 @@
 # server. `verify --url https://<host>` is the check that closes that loop, and
 # an operator should run it once, deliberately, on first use.
 #
+# ── PUBLIC MARKER VERIFICATION — WHY STATUS CODES ARE NOT ENOUGH ─────────
+# `verify --url` is the only check that can establish "nginx serves the
+# directory this script promotes", so it has to be sound on the real host.
+# F3-PROD-005 observed the live production site BEFORE any deploy and found
+# two facts that made the original status-code-only check wrong in BOTH
+# directions:
+#
+#   * `GET https://app.noramedi.com/` answers 302 (a redirect to /login).
+#     A check that demands exactly 200 and does not follow redirects reports
+#     a FAILURE against a completely healthy site — so a correct deploy could
+#     never produce a passing verify.
+#   * `GET https://app.noramedi.com/release.json` answered 200 while no
+#     release marker existed anywhere on the host. The SPA fallback
+#     (`try_files $uri /index.html`) serves index.html for ANY unknown path,
+#     so the response was HTML with a 200 status. A status-code check reports
+#     the marker as "served" on a bundle that has no marker at all — which is
+#     precisely the R-038 condition this check exists to detect.
+#
+# Therefore: reachability follows redirects and accepts any final 2xx, and the
+# marker is proven by PARSING THE RETURNED BODY for releaseSha and comparing it
+# to the live bundle on disk. A fallback HTML page carries no releaseSha field,
+# so it is reported as NOT_SERVED and can never pass. Only when the served
+# marker and the promoted bundle report the same valid release identity does
+# this script print NGINX_SERVES_PROMOTED_DIST = VERIFIED — and that single
+# line is the whole of what it claims.
+#
 # ── WHAT THIS SCRIPT NEVER DOES ──────────────────────────────────────────
 #   * It never deletes anything. There is no `rm` in this file. A stale
 #     staging directory is moved aside, never removed; a superseded bundle is
@@ -103,8 +129,12 @@
 #
 # verify options:
 #   --url BASE         Additionally fetch BASE/ and BASE/release.json over
-#                      HTTP(S) and report reachability. Omitted by default:
-#                      verification is filesystem-local and needs no network.
+#                      HTTP(S). Reachability follows redirects and accepts any
+#                      final 2xx; the marker is proven by PARSING the returned
+#                      body and comparing releaseSha against the live bundle's,
+#                      never by its HTTP status alone (see PUBLIC MARKER
+#                      VERIFICATION above). Omitted by default: verification is
+#                      filesystem-local and needs no network.
 #   --expect-sha SHA   Fail unless the live release marker records SHA.
 #   --check-backend    Also run the existing noramedi-healthcheck.sh. Reported
 #                      as a separate line: a healthy backend NEVER satisfies a
@@ -429,7 +459,18 @@ EOF
 read_marker_field() {
   local dir="$1" field="$2"
   [[ -f "$dir/$RELEASE_MARKER_NAME" ]] || { printf '\n'; return 0; }
-  grep -oE "\"$field\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$dir/$RELEASE_MARKER_NAME" 2>/dev/null \
+  marker_field_from_text "$(cat "$dir/$RELEASE_MARKER_NAME" 2>/dev/null)" "$field"
+}
+
+# marker_field_from_text TEXT FIELD — the same extraction, against a string
+# rather than a file, so a marker fetched over HTTP is read by exactly the same
+# rule as one on disk. Prints the value, or "" when the field is absent. An
+# HTML fallback page has no such field, which is what makes it distinguishable
+# from a genuinely served marker.
+marker_field_from_text() {
+  local text="${1-}" field="$2"
+  printf '%s' "$text" \
+    | grep -oE "\"$field\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" 2>/dev/null \
     | head -n1 | sed -E 's/.*:[[:space:]]*"([^"]*)"$/\1/'
 }
 
@@ -857,6 +898,85 @@ report_release_state() {
     || warn "backend and frontend are serving DIFFERENT releases. This is permitted by the deploy model (backend and frontend deploy independently) but must be a deliberate choice, not a surprise."
 }
 
+# ── public (served) verification ─────────────────────────────────────────
+# http_get URL — prints the response body followed by a final line holding the
+# HTTP status of the LAST response after redirects, or 000 when curl itself
+# failed. No temporary file is used, so this adds no cleanup obligation to a
+# script that deliberately owns no deletion primitive.
+#
+# Redirects are followed (bounded), because the production site answers `GET /`
+# with a 302 to /login and a healthy site must not read as a failure. Following
+# them is safe here precisely because the marker verdict below is decided by the
+# BODY, not by the status: a redirect that lands on the SPA yields HTML, which
+# has no releaseSha and is reported as NOT_SERVED.
+http_get() {
+  curl -sS -L --max-redirs 5 --max-time 15 -w $'\n%{http_code}' -- "$1" 2>/dev/null \
+    || printf '\n000'
+}
+
+# verify_public_bundle BASE LOCAL_SHA — returns 0 only when the site is
+# reachable AND the release marker it serves reports the same release identity
+# as the bundle this script promoted on disk.
+verify_public_bundle() {
+  local base="$1" local_sha="${2-}"
+  local resp code body public_sha match="NOT_APPLICABLE" verified="NOT_VERIFIED" problems=0
+
+  # 1. Reachability. Any final 2xx counts; the redirect chain is reported so an
+  #    unexpected destination is visible rather than silently accepted.
+  resp="$(http_get "$base/")"
+  code="${resp##*$'\n'}"
+  if [[ "$code" == 2?? ]]; then
+    log "OK — GET $base/ -> $code (redirects followed)"
+  else
+    warn "GET $base/ -> $code. The site did not answer with a final 2xx."
+    problems=$(( problems + 1 ))
+  fi
+
+  # 2. The marker, decided by its CONTENT. This is the step that distinguishes
+  #    a served marker from the SPA fallback, which answers 200 with index.html
+  #    for any path that does not exist on disk.
+  resp="$(http_get "$base/$RELEASE_MARKER_NAME")"
+  code="${resp##*$'\n'}"
+  body="${resp%$'\n'*}"
+  public_sha="$(sanitize_release_sha_field "$(marker_field_from_text "$body" releaseSha)")"
+
+  if [[ "$public_sha" == "UNKNOWN" ]]; then
+    public_sha="NOT_SERVED"
+    warn "GET $base/$RELEASE_MARKER_NAME answered $code but the response carries no releaseSha field, so no release marker is being served at that path. A ${code}-with-no-marker answer is what an SPA fallback (try_files -> index.html) produces, and it is NOT evidence that the promoted bundle is served."
+    problems=$(( problems + 1 ))
+  elif [[ "$public_sha" == "INVALID" ]]; then
+    warn "GET $base/$RELEASE_MARKER_NAME answered $code and carries a releaseSha, but it is not a valid release identity. Reported as INVALID rather than echoed."
+    problems=$(( problems + 1 ))
+  else
+    log "OK — GET $base/$RELEASE_MARKER_NAME -> $code, marker parsed."
+  fi
+
+  # 3. Served-vs-promoted. Only an exact agreement between two valid identities
+  #    establishes that the web server serves the directory this script renamed.
+  local local_reported; local_reported="$(sanitize_release_sha_field "$local_sha")"
+  if [[ "$public_sha" != "NOT_SERVED" && "$public_sha" != "INVALID" \
+     && "$local_reported" != "UNKNOWN" && "$local_reported" != "INVALID" ]]; then
+    if [[ "$public_sha" == "$local_reported" ]]; then
+      match="YES"
+      # An `x && y=z` statement here would abort the script under `set -e` on
+      # exactly the runs that already have a problem to report.
+      if [[ "$problems" -eq 0 ]]; then verified="VERIFIED"; fi
+    else
+      match="NO"
+      warn "the release marker served at $base/$RELEASE_MARKER_NAME reports a DIFFERENT release than the live bundle on disk. Either the web server is serving a different directory than this script promotes, or a cache is answering with a superseded copy."
+      problems=$(( problems + 1 ))
+    fi
+  fi
+
+  log "PUBLIC_RELEASE_SHA         = $public_sha"
+  log "PUBLIC_SHA_MATCHES_LOCAL   = $match"
+  log "NGINX_SERVES_PROMOTED_DIST = $verified"
+  [[ "$verified" == "VERIFIED" ]] \
+    || warn "NGINX_SERVES_PROMOTED_DIST is NOT_VERIFIED — this run does not establish that the web server serves the directory this script promotes."
+
+  [[ "$problems" -eq 0 ]]
+}
+
 cmd_verify() {
   local url="" expect_sha="" failures=0 check_backend=false
 
@@ -898,19 +1018,14 @@ cmd_verify() {
     fi
   fi
 
-  # Optional reachability. Backend health stays with the existing script; it
-  # is reported separately and never allowed to stand in for the frontend.
+  # Optional public verification. Backend health stays with the existing
+  # script; it is reported separately and never allowed to stand in for the
+  # frontend.
   if [[ -n "$url" ]]; then
     if command -v curl >/dev/null 2>&1; then
-      local base="${url%/}" code
-      code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$base/" 2>/dev/null || echo 000)"
-      [[ "$code" == "200" ]] && log "OK — GET $base/ -> $code" \
-        || { warn "GET $base/ -> $code"; failures=$(( failures + 1 )); }
-      code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$base/$RELEASE_MARKER_NAME" 2>/dev/null || echo 000)"
-      [[ "$code" == "200" ]] && log "OK — GET $base/$RELEASE_MARKER_NAME -> $code" \
-        || { warn "GET $base/$RELEASE_MARKER_NAME -> $code"; failures=$(( failures + 1 )); }
+      verify_public_bundle "${url%/}" "$fe" || failures=$(( failures + 1 ))
     else
-      warn "curl is not available; --url reachability checks were SKIPPED (reported, not silently passed)."
+      warn "curl is not available; --url public verification was SKIPPED (reported, not silently passed)."
       failures=$(( failures + 1 ))
     fi
   fi

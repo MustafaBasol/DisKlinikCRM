@@ -1068,6 +1068,187 @@ accept_case "the exact \"unknown\" sentinel the rest of the program already uses
   'unknown' 'dist.rollback-manual-20260101T000000Z'
 
 # ════════════════════════════════════════════════════════════════════════
+section "P. Public verification is decided by the served marker, not by HTTP status (F3-PROD-005)"
+# ════════════════════════════════════════════════════════════════════════
+# `verify --url` is the ONLY check that can establish "nginx serves the
+# directory this script promotes", so its soundness is the whole value of the
+# R-038 closure evidence. F3-PROD-005 read the live production site before any
+# deploy and found the original status-code-only check wrong in both
+# directions: `GET /` answers 302 (a redirect to /login), which failed a
+# healthy site; and `GET /release.json` answered 200 with index.html via the
+# SPA fallback, which passed a host that had no release marker at all.
+#
+# Both production behaviours are reproduced here by a `curl` on PATH. The fake
+# only follows the redirect when -L is actually passed, so removing -L from the
+# production script turns a test red rather than quietly passing.
+
+CURLBIN="$WORK/curlbin"
+mkdir -p "$CURLBIN"
+write_fake_date "$CURLBIN"
+cat > "$CURLBIN/curl" <<'FAKECURL'
+#!/usr/bin/env bash
+follow=0; url=""; wfmt=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -L|--location)            follow=1; shift ;;
+    -w|--write-out)           wfmt="${2-}"; shift 2 ;;
+    --max-redirs|--max-time)  shift 2 ;;
+    --)                       shift ;;
+    -*)                       shift ;;
+    *)                        url="$1"; shift ;;
+  esac
+done
+
+# An unreachable host: curl itself fails and writes nothing at all.
+[[ "${FAKE_SITE_DOWN:-0}" == "1" ]] && exit 7
+
+rest="${url#*://}"
+if [[ "$rest" == */* ]]; then path="/${rest#*/}"; else path="/"; fi
+
+emit() { printf '%s' "$1"; [[ -z "$wfmt" ]] || printf '\n%s' "$2"; exit 0; }
+
+# Production answers `GET /` with a 302 to /login.
+if [[ "$path" == "/" && "${FAKE_SITE_ROOT_302:-0}" == "1" ]]; then
+  if [[ "$follow" == "1" ]]; then
+    path="/login"
+  else
+    emit '<html><head><title>302 Found</title></head></html>' 302
+  fi
+fi
+
+root="${FAKE_SITE_DIR:-}"
+if [[ -f "$root$path" ]]; then
+  emit "$(cat "$root$path")" 200
+elif [[ "${FAKE_SITE_SPA:-0}" == "1" && -f "$root/index.html" ]]; then
+  # try_files $uri /index.html — 200, but it is the app, not the file asked for.
+  emit "$(cat "$root/index.html")" 200
+fi
+emit '<html><head><title>404 Not Found</title></head></html>' 404
+FAKECURL
+chmod +x "$CURLBIN/curl"
+
+export FAKE_SITE_DIR="" FAKE_SITE_ROOT_302=0 FAKE_SITE_SPA=0 FAKE_SITE_DOWN=0
+
+PSHA='1111222233334444555566667777888899990000'
+OTHER_SHA='aaaabbbbccccddddeeeeffff0000111122223333'
+
+PAPP="$(new_app app-public)"
+seed_bundle "$PAPP/dist" p1
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok p2)" \
+    bash "$FE" deploy --app-dir "$PAPP" --release-sha "$PSHA"
+[[ "$CODE" -eq 0 ]] \
+  && pass "a bundle is deployed to verify against" \
+  || fail "setup deploy failed (exit $CODE): $OUT"
+
+# ── P1. The production pre-deploy shape: SPA fallback answers 200 for a
+#        release.json that does not exist anywhere on the host. ────────────
+SITE_NOMARKER="$WORK/site-nomarker"
+mkdir -p "$SITE_NOMARKER"
+cp -r "$PAPP/dist/." "$SITE_NOMARKER/"
+rm -f "$SITE_NOMARKER/release.json"
+
+FAKE_SITE_DIR="$SITE_NOMARKER"; FAKE_SITE_ROOT_302=1; FAKE_SITE_SPA=1
+BIN="$CURLBIN"
+run bash "$FE" verify --app-dir "$PAPP" --url https://site.test
+
+[[ "$CODE" -ne 0 ]] \
+  && pass "verify FAILS when the site serves the SPA fallback instead of a release marker" \
+  || fail "verify passed against a host serving no release marker at all: $OUT"
+[[ "$OUT" == *"PUBLIC_RELEASE_SHA         = NOT_SERVED"* ]] \
+  && pass "a 200-with-no-marker is reported as NOT_SERVED, not as a served marker" \
+  || fail "the fallback response was not reported as NOT_SERVED: $OUT"
+[[ "$OUT" == *"NGINX_SERVES_PROMOTED_DIST = NOT_VERIFIED"* ]] \
+  && pass "the nginx-serves-promoted-dist claim is NOT_VERIFIED on a fallback response" \
+  || fail "the script claimed the promoted dist is served on fallback HTML: $OUT"
+
+# ── P2. A healthy site whose root redirects must PASS. ───────────────────
+SITE_OK="$WORK/site-ok"
+mkdir -p "$SITE_OK"
+cp -r "$PAPP/dist/." "$SITE_OK/"
+
+FAKE_SITE_DIR="$SITE_OK"; FAKE_SITE_ROOT_302=1; FAKE_SITE_SPA=1
+BIN="$CURLBIN"
+run bash "$FE" verify --app-dir "$PAPP" --url https://site.test --expect-sha "$PSHA"
+
+[[ "$CODE" -eq 0 ]] \
+  && pass "a 302 on / does not fail verification when the redirect resolves to a 2xx" \
+  || fail "verify failed against a healthy site whose root redirects (exit $CODE): $OUT"
+[[ "$OUT" == *"PUBLIC_RELEASE_SHA         = $PSHA"* ]] \
+  && pass "the served marker's releaseSha is parsed out of the response body" \
+  || fail "the served releaseSha was not reported: $OUT"
+[[ "$OUT" == *"NGINX_SERVES_PROMOTED_DIST = VERIFIED"* ]] \
+  && pass "served marker == promoted bundle is reported as VERIFIED" \
+  || fail "the script withheld VERIFIED on a genuinely served marker: $OUT"
+[[ "$OUT" != *"$CANARY"* ]] \
+  && pass "public verification prints no environment secret" \
+  || fail "a planted secret reached the public-verification output"
+
+# ── P3. The site serves a DIFFERENT release than the bundle on disk. ─────
+SITE_SKEW="$WORK/site-skew"
+mkdir -p "$SITE_SKEW"
+cp -r "$PAPP/dist/." "$SITE_SKEW/"
+printf '{\n  "releaseSha": "%s",\n  "builtAt": "2026-01-01T00:00:00Z",\n  "builtBy": "noramedi-frontend-deploy.sh",\n  "task": "F3-PROD-004"\n}\n' \
+  "$OTHER_SHA" > "$SITE_SKEW/release.json"
+
+FAKE_SITE_DIR="$SITE_SKEW"; FAKE_SITE_ROOT_302=1; FAKE_SITE_SPA=1
+BIN="$CURLBIN"
+run bash "$FE" verify --app-dir "$PAPP" --url https://site.test
+
+[[ "$CODE" -ne 0 ]] \
+  && pass "verify fails when the served marker names a different release than the live bundle" \
+  || fail "verify accepted a served release that is not the promoted one: $OUT"
+[[ "$OUT" == *"PUBLIC_SHA_MATCHES_LOCAL   = NO"* ]] \
+  && pass "the served-vs-promoted disagreement is reported as PUBLIC_SHA_MATCHES_LOCAL = NO" \
+  || fail "the disagreement was not reported: $OUT"
+
+# ── P4. A served marker whose releaseSha is not a valid release identity is
+#        reported as INVALID and never echoed back. ──────────────────────
+SITE_BAD="$WORK/site-bad"
+mkdir -p "$SITE_BAD"
+cp -r "$PAPP/dist/." "$SITE_BAD/"
+printf '{ "releaseSha": "%s" }\n' 'NOT-a-release-identity' > "$SITE_BAD/release.json"
+
+FAKE_SITE_DIR="$SITE_BAD"; FAKE_SITE_ROOT_302=1; FAKE_SITE_SPA=1
+BIN="$CURLBIN"
+run bash "$FE" verify --app-dir "$PAPP" --url https://site.test
+
+[[ "$CODE" -ne 0 ]] \
+  && pass "verify fails on a served marker carrying a malformed release identity" \
+  || fail "verify accepted a malformed served release identity: $OUT"
+[[ "$OUT" == *"PUBLIC_RELEASE_SHA         = INVALID"* && "$OUT" != *"NOT-a-release-identity"* ]] \
+  && pass "the malformed served value is reported as INVALID, not echoed into the log" \
+  || fail "the malformed served value was echoed or mis-reported: $OUT"
+
+# ── P5. An unreachable site fails; it is never treated as "nothing to check".
+FAKE_SITE_DIR="$SITE_OK"; FAKE_SITE_ROOT_302=0; FAKE_SITE_SPA=1; FAKE_SITE_DOWN=1
+BIN="$CURLBIN"
+run bash "$FE" verify --app-dir "$PAPP" --url https://site.test
+FAKE_SITE_DOWN=0
+
+[[ "$CODE" -ne 0 ]] \
+  && pass "an unreachable site fails verification rather than being skipped" \
+  || fail "verify passed against an unreachable site: $OUT"
+[[ "$OUT" == *"NGINX_SERVES_PROMOTED_DIST = NOT_VERIFIED"* ]] \
+  && pass "an unreachable site never yields a VERIFIED serving claim" \
+  || fail "the script claimed VERIFIED against an unreachable site: $OUT"
+
+# ── P6. The R-038 condition itself: no marker on disk AND none served. ───
+QAPP="$(new_app app-premarker)"
+seed_bundle "$QAPP/dist" q1     # a pre-F3-PROD-004 bundle: no release.json
+FAKE_SITE_DIR="$SITE_NOMARKER"; FAKE_SITE_ROOT_302=1; FAKE_SITE_SPA=1
+BIN="$CURLBIN"
+run bash "$FE" verify --app-dir "$QAPP" --url https://site.test
+
+[[ "$CODE" -ne 0 ]] \
+  && pass "a pre-marker bundle behind an SPA fallback fails verification (the R-038 condition)" \
+  || fail "the R-038 condition passed verification: $OUT"
+[[ "$OUT" == *"NGINX_SERVES_PROMOTED_DIST = NOT_VERIFIED"* ]] \
+  && pass "no serving claim is made when neither side has a marker" \
+  || fail "a serving claim was made with no marker on either side: $OUT"
+
+unset FAKE_SITE_DIR FAKE_SITE_ROOT_302 FAKE_SITE_SPA FAKE_SITE_DOWN
+
+# ════════════════════════════════════════════════════════════════════════
 section "Summary"
 echo "─────────────────────────────────────────"
 echo "Results: $PASSED passed, $FAILED failed, $SKIPPED skipped"
