@@ -147,6 +147,14 @@ const CATEGORY_RULES: CategoryRule[] = [
       underDir(p, 'scripts/test-runtime') ||
       underDir(p, 'scripts/architecture-guardrail') || // remaining guardrail code/tests, config already matched above
       underDir(p, 'scripts/ci-classify') ||
+      // Operational shell scripts and their regression suites
+      // (noramedi-deploy.sh, noramedi-frontend-deploy.sh, *.test.sh, ...).
+      // These already reached the full deep gate via the UNKNOWN fall-through,
+      // so this changes no job selection today. It is here so the mapping is a
+      // stated rule with a test behind it rather than an accident of the
+      // fall-through: the lane that runs `npm run test:shell` must stay
+      // selected by the very files it tests.
+      (underDir(p, 'scripts') && p.endsWith('.sh')) ||
       p === 'package.json' ||
       p === 'package-lock.json' ||
       p === 'server/package.json' ||

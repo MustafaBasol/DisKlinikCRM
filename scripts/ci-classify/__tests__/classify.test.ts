@@ -226,6 +226,42 @@ test('recovery/backup/PITR paths keep the full deep gate (R-030-DB protection)',
   );
 });
 
+test('the frontend deploy script and its shell suite select the lane that runs them (F3-PROD-004 / R-038)', () => {
+  // The lane that executes `npm run test:shell` -- ci-layers.yml's
+  // `workflow-and-syntax-lint` job -- is selected by exactly one thing: the
+  // `docs_only` output being anything other than 'true'. It is NOT keyed on a
+  // per-category flag. So the property that actually keeps
+  // scripts/noramedi-frontend-deploy.test.sh executable in CI is `docsOnly ===
+  // false` for the files that suite covers, and that is what is asserted here.
+  //
+  // This exists because of the F4-1A2 lesson: a changed test that its own
+  // change does not schedule is not a test. Both files are also asserted to
+  // keep the full deep gate, so a later cost-reduction rule cannot quietly
+  // narrow an operational-shell change into a cheap lane.
+  const deployPaths = [
+    'scripts/noramedi-frontend-deploy.sh',
+    'scripts/noramedi-frontend-deploy.test.sh',
+    'scripts/noramedi-deploy.sh',
+  ];
+  for (const p of deployPaths) {
+    const r = classify([p]);
+    assertEqual(r.docsOnly, false, `${p} must not be docs-only, or the shell-test lane is skipped`);
+    assertFlags(r.flags, FULL_GATE, `${p} keeps the full deep gate`);
+  }
+
+  // The realistic changeset for this task: the script, its suite, package.json
+  // (which wires the suite into `npm run test:shell`) and the evidence docs.
+  // The docs must not drag the set into docs-only.
+  const changeset = classify([
+    'scripts/noramedi-frontend-deploy.sh',
+    'scripts/noramedi-frontend-deploy.test.sh',
+    'package.json',
+    'docs/program/RISK_REGISTER.md',
+  ]);
+  assertEqual(changeset.docsOnly, false, 'the F3-PROD-004 changeset is not docs-only');
+  assertFlags(changeset.flags, FULL_GATE, 'the F3-PROD-004 changeset selects the full deep gate');
+});
+
 test('every category is reachable (CATEGORY_RULES completeness spot-check)', () => {
   const samples: Array<[string, Category]> = [
     ['docs/README.md', 'DOCS'],
@@ -243,6 +279,8 @@ test('every category is reachable (CATEGORY_RULES completeness spot-check)', () 
     ['scripts/architecture-guardrail/config/scan-roots.json', 'ARCHITECTURE_BOUNDARY'],
     ['scripts/architecture-guardrail/cli.ts', 'CI_TOOLING'],
     ['scripts/test-runtime/orchestrator.ts', 'CI_TOOLING'],
+    ['scripts/noramedi-frontend-deploy.sh', 'CI_TOOLING'],
+    ['scripts/noramedi-frontend-deploy.test.sh', 'CI_TOOLING'],
     ['.github/workflows/ci-pr.yml', 'CI_TOOLING'],
     ['package.json', 'CI_TOOLING'],
     ['server/package.json', 'CI_TOOLING'],
