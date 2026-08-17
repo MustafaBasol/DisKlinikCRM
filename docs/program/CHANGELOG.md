@@ -4,6 +4,17 @@ Her tracker/faz dokümanı değişikliği buraya kaydedilir. En yeni kayıt en �
 
 ---
 
+## 2026-08-17 — F3-PROD-003 R-076 Production Verification and Closure-Lifecycle Reconciliation
+
+- **Task:** F3-PROD-003 — R-076 Production Verification and Closure-Lifecycle Reconciliation (documentation-only; no production access performed by this task; `MERGED` independently confirmed via `gh pr view 434`, remaining facts operator-supplied)
+- **Change:** Reconciles F3-SEC-004 (PR #434) through `MERGED` → `DEPLOYED` → `PRODUCTION_VERIFIED` (partial). Production release `40bfcb899c54e545f992003b2203ad729114a5fe`, fast-forwarded from `b370b0181fa2f84e24f0f80560425da81f60dcb2`. A live production security smoke, built with the repository's own session/CSRF helpers, proved the write-time allowlist rejects a `javascript:` website write with `HTTP 400` before persistence, and that CSRF is active. No production data was mutated.
+- **Key finding:** F3-SEC-004's own evidence document (§17 item 3) names a conjunctive production-verification step — negative-path (`javascript:` rejected) **and** positive-path (a published clinic's KVKK page still links a legitimate `http`/`https` website). Only the negative half was executable: a read-only scan found `SAFE_PUBLISHED_WEBSITE_COUNT = 0` in production, so no published row exists against which to verify the positive half. No row was created to manufacture the test.
+- **Risk disposition:** `R-076` → `MITIGATED`, explicitly **not** `CLOSED` — the named positive-path step remains the sole outstanding criterion. Not self-closed (remediating task F3-SEC-004; closure task F3-PROD-003; R-019/R-071/R-072/R-073/R-075/R-033/R-040 precedent honoured).
+- **Deliverables:** [evidence/F3-PROD-003_CLINIC_LEGAL_PROFILE_URL_SCHEME_PRODUCTION_VERIFICATION.md](evidence/F3-PROD-003_CLINIC_LEGAL_PROFILE_URL_SCHEME_PRODUCTION_VERIFICATION.md) (new); `RISK_REGISTER.md` (R-076 row), `NORAMEDI_MASTER_TRACKER.md`, `phases/F3_PRODUCTION_HARDENING.md` (entry + change-history row), and a pointer added to `evidence/F3-SEC-004_CLINIC_LEGAL_PROFILE_URL_SCHEME_HARDENING.md` (historical body preserved unedited).
+- **Type:** Documentation only — no application source, schema, migration, package manifest, lockfile, test, CI workflow, deployment script, or runtime configuration was modified. `git diff --check` exit `0`.
+
+---
+
 ## 2026-07-19 — F0-007 Active KVKK Work Baseline and Architecture Freeze Boundary + F0-006 `MERGED` düzeltmesi
 
 - **Task:** F0-007 — Active KVKK Work Baseline and Architecture Freeze Boundary
