@@ -108,12 +108,14 @@
       "status": "PROCUREMENT-READY",
       "rationale": "A plain Türkiye VPS. §16 records Türkiye IaaS as market-available, so E1-E5 can be attempted today.",
       "secondaryRuns": "sshd only — no pgBackRest, therefore no version parity to maintain and no remote protocol exposed",
-      "knownCost": "The Debian libssh2 build may offer only the SHA-1 `ssh-rsa` signature algorithm, so the endpoint's sshd may need `PubkeyAcceptedAlgorithms +ssh-rsa`, and the keypair must be PEM. Without it the run fails with ERROR [101] libssh2 error [-18] — an AUTH failure, not a topology refusal.",
-      "costScope": "Applies to the SECONDARY's authentication posture, never to production. Build-dependent: production's own libssh2 may already negotiate rsa-sha2, so this must be VERIFIED at CHECKPOINT 5 rather than assumed in either direction."
+      "knownCostObservation": "HISTORICAL OBSERVATION, 2026-08-16, local disposable container only: the Debian libssh2 build offered only the SHA-1 `ssh-rsa` signature algorithm, and without re-enabling it the run failed with ERROR [101] libssh2 error [-18] — an AUTH failure, not a topology refusal.",
+      "knownCostAuthorization": "PROHIBITED FOR FIRST-CUSTOMER ACTIVATION. Superseded 2026-08-17 by F4-FCR-004-R1. The observation above is NOT an authorization to set `PubkeyAcceptedAlgorithms +ssh-rsa` (or any equivalent SHA-1 re-enablement) on a real endpoint. The prior wording — 'verify at CHECKPOINT 5 rather than assumed in either direction' — implied the workaround was available on verification, and is WITHDRAWN.",
+      "stopCondition": "MODERN SSH AUTH CANNOT BE NEGOTIATED => NO-GO. Do not edit sshd to re-enable SHA-1. Escalate: provider/OS/package upgrade, transport pivot to S3, or provider pivot. Do not assume Ed25519 or RSA-SHA2 is available either — determine what the pinned pgBackRest/libssh2 build actually offers. See runbook §22.4b and §22.4c.",
+      "hostKeyContract": "repo2-sftp-host-key-check-type=fingerprint + repo2-sftp-host-key-hash-type=sha256 + repo2-sftp-host-fingerprint=<64 lowercase hex chars, no separators>. Verified against pgBackRest release/2.50: the option exists (added 2.48), defaults to `strict`, and src/storage/sftp/storage.c compares the pinned fingerprint ONLY when the check type is exactly `fingerprint`. See runbook §22.4c."
     },
     "s3": {
       "status": "PROMOTE ON CLEARANCE",
-      "rationale": "Better on immutability, and needs no ssh-rsa at all. Blocked only on evidence: no Türkiye-resident S3-compatible provider is evidenced as procurable anywhere in this repository.",
+      "rationale": "Better on immutability, and depends on no SSH host-key negotiation at all. Blocked only on evidence: no Türkiye-resident S3-compatible provider is evidenced as procurable anywhere in this repository.",
       "uriStyle": "pgBackRest defaults to `host`; most non-AWS S3-compatible endpoints need `path`. Getting it wrong presents as a DNS or certificate failure rather than a config error.",
       "mandatoryLifecycleRules": [
         "abort incomplete multipart uploads — pgBackRest never issues AbortMultipartUpload, and orphaned parts are billed but invisible to ListObjects",

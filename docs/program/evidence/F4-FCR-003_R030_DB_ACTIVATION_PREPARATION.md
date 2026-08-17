@@ -767,12 +767,25 @@ flows. Both proven shapes satisfy it.
 | Version parity burden | none | none |
 | Residency evidence | E1–E5 on a plain TR VPS, which §16 records as market-available | hardest — a new vendor class, and **no Türkiye-resident S3-compatible provider is evidenced as procurable** anywhere here |
 | Immutability | no native object-lock | yes |
-| Known cost | libssh2 may offer only SHA-1 `ssh-rsa`, so the endpoint's sshd may need `PubkeyAcceptedAlgorithms +ssh-rsa` and the keypair must be PEM | two bucket lifecycle rules are effectively mandatory (abort incomplete multipart uploads; expire noncurrent versions) |
+| Known cost | ⛔ HISTORICAL, see the note below: a local experiment observed libssh2 offering only SHA-1 `ssh-rsa`. Re-enabling it on the endpoint is **PROHIBITED for first-customer activation** — treat inability to negotiate modern SSH auth as a NO-GO | two bucket lifecycle rules are effectively mandatory (abort incomplete multipart uploads; expire noncurrent versions) |
 
-The `ssh-rsa` cost applies to the **secondary's** authentication posture, never
-to production, and it is build-dependent — production's own libssh2 may already
-negotiate `rsa-sha2`. **Verify at CHECKPOINT 5 rather than assuming either
-way**, and prefer S3 if a Türkiye provider clears.
+> ⛔ **HISTORICAL — PROHIBITED FOR FIRST-CUSTOMER ACTIVATION.** Superseded
+> 2026-08-17 by F4-FCR-004-R1; see runbook §22.4b/§22.4c.
+>
+> The `ssh-rsa` row above records what a **local disposable-container
+> experiment observed** on 2026-08-16. It is retained as an observation and is
+> **not an authorization**. The accepted first-customer contract is **modern
+> SSH only**: re-enabling SHA-1 on the endpoint's sshd
+> (`PubkeyAcceptedAlgorithms +ssh-rsa` or equivalent) is **prohibited**.
+>
+> The guidance this paragraph previously carried — "verify at CHECKPOINT 5
+> rather than assuming either way", implying the workaround was available if
+> verification showed it necessary — is **withdrawn**. The correct rule is:
+> **if modern SSH auth cannot be negotiated against the pinned
+> pgBackRest/libssh2 build, that is a NO-GO.** Escalate — provider/OS/package
+> upgrade, transport pivot to S3, or provider pivot — and do not weaken sshd.
+> Do not assume Ed25519 or RSA-SHA2 is available either; determine what the
+> pinned build actually offers.
 
 ⚠ **Do not enforce immutability by revoking the credential's delete right.**
 `backup` runs `expire` automatically and `expire-auto` is **global**, not

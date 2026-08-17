@@ -340,6 +340,12 @@ REPO2_TYPE="$(repo_conf_value 'repo2-type' || true)"
 REPO2_HOST="$(repo_conf_value 'repo2-host' || true)"
 REPO2_PATH="$(repo_conf_value 'repo2-path' || true)"
 REPO2_S3_ENDPOINT="$(repo_conf_value 'repo2-s3-endpoint' || true)"
+# SELECTED TOPOLOGY = C carries NO repo2-host by design, so an SFTP repo2 is
+# identified by repo2-sftp-host. Without reading it, the classifier fell
+# through to the repo2-path branch below and called a Türkiye VPS a local
+# directory. The write path already reads this key
+# (noramedi-pgbackrest-backup.sh); the reporting path did not.
+REPO2_SFTP_HOST="$(repo_conf_value 'repo2-sftp-host' || true)"
 REPO2_CIPHER_TYPE="$(repo_conf_value 'repo2-cipher-type' || true)"
 
 # Whether a repo2 exists AT ALL — deliberately the same test the block below
@@ -350,7 +356,7 @@ REPO2_CIPHER_TYPE="$(repo_conf_value 'repo2-cipher-type' || true)"
 REPO2_CONFIGURED=false
 
 # A repo1 that is on the same filesystem as PGDATA is, by definition, T0/T1.
-if [[ -n "$REPO2_HOST" || -n "$REPO2_TYPE" || -n "$REPO2_PATH" ]]; then
+if [[ -n "$REPO2_HOST" || -n "$REPO2_TYPE" || -n "$REPO2_PATH" || -n "$REPO2_SFTP_HOST" ]]; then
   REPO2_CONFIGURED=true
   OFFHOST_TIER="T1"
   OFFHOST_REASON="REPO2_NOT_INDEPENDENT"
@@ -386,6 +392,28 @@ if [[ -n "$REPO2_HOST" || -n "$REPO2_TYPE" || -n "$REPO2_PATH" ]]; then
     if [[ "$REPO2_CIPHER_TYPE" != "aes-256-cbc" ]]; then
       _independent=false; OFFHOST_REASON="REPO2_PLAINTEXT"
     fi
+  elif [[ "$REPO2_TYPE" == "sftp" || -n "$REPO2_SFTP_HOST" ]]; then
+    # Must precede the repo2-path branch: an SFTP repo2 legitimately carries a
+    # repo2-path too, but that path is meaningful only on the REMOTE endpoint.
+    # Same self/loopback/plaintext reasoning as the repo2-host branch above --
+    # a remote-looking name that is really this host is not a failure domain.
+    _lower="$(printf '%s' "$REPO2_SFTP_HOST" | tr 'A-Z' 'a-z')"
+    _self="$(hostname 2>/dev/null | tr 'A-Z' 'a-z' || true)"
+    _selffqdn="$(hostname -f 2>/dev/null | tr 'A-Z' 'a-z' || true)"
+    case "$_lower" in
+      "") _independent=false; OFFHOST_REASON="REPO2_SFTP_HOST_UNSET" ;;
+      localhost|127.*|::1|0.0.0.0) _independent=false; OFFHOST_REASON="REPO2_LOOPBACK_HOST" ;;
+      *)
+        if [[ -n "$_self" && "$_lower" == "$_self" ]] || [[ -n "$_selffqdn" && "$_lower" == "$_selffqdn" ]]; then
+          _independent=false; OFFHOST_REASON="REPO2_IS_THIS_HOST"
+        else
+          _independent=true
+        fi
+        ;;
+    esac
+    if [[ "$REPO2_CIPHER_TYPE" != "aes-256-cbc" ]]; then
+      _independent=false; OFFHOST_REASON="REPO2_PLAINTEXT"
+    fi
   elif [[ -n "$REPO2_PATH" ]]; then
     # A path is never off-host, however different the disk. Recorded as an
     # explicit reason because "we added a second directory" is the single most
@@ -402,7 +430,12 @@ if [[ -n "$REPO2_HOST" || -n "$REPO2_TYPE" || -n "$REPO2_PATH" ]]; then
     # upgrades this to "yes". Configuration is not proof.
     # The currently-configured repo2 target, so a proof earned against a
     # DIFFERENT target cannot be inherited by a newly-repointed repository.
-    CURRENT_TARGET="${REPO2_HOST:-${REPO2_S3_ENDPOINT:-${REPO2_PATH:-}}}"
+    # Precedence host -> sftp-host -> s3-endpoint -> path, and the restore
+    # drill MUST derive PROOF_TARGET with the same order. An SFTP proof keyed
+    # on repo2-path would record /var/lib/pgbackrest, which is identical on
+    # every SFTP endpoint, so repointing repo2 at a different host would
+    # inherit the old host's proof.
+    CURRENT_TARGET="${REPO2_HOST:-${REPO2_SFTP_HOST:-${REPO2_S3_ENDPOINT:-${REPO2_PATH:-}}}}"
     # -f, not -e: a symlink pointing at an attacker-writable location must not
     # be able to manufacture off-host readiness.
     if [[ -f "$OFFHOST_PROOF" ]] && [[ ! -L "$OFFHOST_PROOF" ]]; then

@@ -443,6 +443,142 @@ else
       fi
     done
     unset _rk _rv
+
+    # SFTP host-key verification — the accepted contract, ENFORCED:
+    #
+    #   repo2-sftp-host-key-check-type=fingerprint
+    #   repo2-sftp-host-key-hash-type=sha256
+    #   repo2-sftp-host-fingerprint=<64 lowercase hex chars, no separators>
+    #
+    # Verified against the PINNED production build (pgBackRest 2.50), not
+    # assumed and not carried back from a newer release. Runbook §22.4c holds
+    # the citation table; the facts this code turns on are:
+    #
+    #   - repo2-sftp-host-key-check-type accepts strict|accept-new|fingerprint|
+    #     none and DEFAULTS TO strict (src/build/config/config.yaml @ 2.50).
+    #   - src/storage/sftp/storage.c compares repo2-sftp-host-fingerprint ONLY
+    #     when the check type is exactly `fingerprint`. Every other non-`none`
+    #     value falls through to known_hosts checking and the pin is never read.
+    #   - the comparison is strcmp() against encodeToStr(encodingHex, ...),
+    #     whose alphabet is "0123456789abcdef" at two chars per digest byte
+    #     (src/common/encode.c @ 2.50).
+    #
+    # So "a fingerprint is pinned" is NOT the same claim as "the fingerprint is
+    # verified". A config carrying a pin but no check type runs under the
+    # default `strict` and verifies against a known_hosts file this program has
+    # no procedure for distributing -- populated in practice by ssh-keyscan,
+    # which records whatever answers. That shape reads as pinned in review
+    # while verifying something else entirely. Refusing only `none`, as this
+    # gate did before F4-FCR-004-R1, could not tell the two apart.
+    #
+    # With verification off altogether, backups are written to whatever answers
+    # on that address. Contents stay AES-256, but object and backup NAMES are
+    # not encrypted, and a durability claim earned against an unauthenticated
+    # endpoint is not a durability claim at all.
+    #
+    # The fingerprint is PUBLIC metadata -- a digest of the endpoint's public
+    # host key, handed to every client on connect -- so pinning it in this file
+    # discloses nothing. This script still never echoes the value: not because
+    # it is secret, but because a preflight that prints config values is one
+    # edit away from printing the ones that are.
+    REPO2_TYPE_VAL="$(grep -oE '^[[:space:]]*repo2-type[[:space:]]*=[[:space:]]*[A-Za-z0-9-]+' "$PGBACKREST_CONF" 2>/dev/null | sed -E 's/.*=[[:space:]]*//' | head -n1 || true)"
+    if [[ "$REPO2_TYPE_VAL" == "sftp" ]]; then
+      # `-` is inside the class deliberately: `accept-new` is a valid value and
+      # a [A-Za-z]+ class would silently read it as "accept".
+      _hkc="$(grep -oE '^[[:space:]]*repo2-sftp-host-key-check-type[[:space:]]*=[[:space:]]*[A-Za-z-]+' "$PGBACKREST_CONF" 2>/dev/null | sed -E 's/.*=[[:space:]]*//' | head -n1 || true)"
+      case "$_hkc" in
+        fingerprint)
+          ok "repo2-sftp-host-key-check-type=fingerprint"
+          ;;
+        none)
+          bad "repo2-sftp-host-key-check-type=none disables SSH host-key verification on the transport that carries every tenant's backup off this host — backups would be written to whatever answers on that address. Set repo2-sftp-host-key-check-type=fingerprint (runbook §22.4c)."
+          ;;
+        accept-new)
+          bad "repo2-sftp-host-key-check-type=accept-new is trust-on-first-use: it accepts whatever host answers first and only notices a change afterwards, so the very first backup — the one that carries the data off this host — is unverified. Set repo2-sftp-host-key-check-type=fingerprint (runbook §22.4c)."
+          ;;
+        strict)
+          bad "repo2-sftp-host-key-check-type=strict verifies against ~postgres/.ssh/known_hosts, NOT against repo2-sftp-host-fingerprint: on pgBackRest 2.50 the pinned fingerprint is compared only when the check type is exactly 'fingerprint'. As configured the pin is inert. Set repo2-sftp-host-key-check-type=fingerprint (runbook §22.4c)."
+          ;;
+        "")
+          bad "repo2-sftp-host-key-check-type is not set. pgBackRest defaults it to 'strict', which verifies against known_hosts and NEVER compares repo2-sftp-host-fingerprint — so a fingerprint pinned here would verify nothing while reading as pinned. Set repo2-sftp-host-key-check-type=fingerprint explicitly (runbook §22.4c)."
+          ;;
+        *)
+          bad "unrecognized repo2-sftp-host-key-check-type '${_hkc}' — pgBackRest 2.50 accepts strict|accept-new|fingerprint|none, and this program requires fingerprint (runbook §22.4c)"
+          ;;
+      esac
+
+      # Hash type selects the digest the pin is compared against, and fixes its
+      # expected length. md5/sha1 are accepted by pgBackRest and rejected here.
+      _hkh="$(grep -oE '^[[:space:]]*repo2-sftp-host-key-hash-type[[:space:]]*=[[:space:]]*[A-Za-z0-9]+' "$PGBACKREST_CONF" 2>/dev/null | sed -E 's/.*=[[:space:]]*//' | head -n1 || true)"
+      _fp_len=0
+      case "$_hkh" in
+        sha256)
+          ok "repo2-sftp-host-key-hash-type=sha256"
+          _fp_len=64
+          ;;
+        md5|sha1)
+          bad "repo2-sftp-host-key-hash-type=${_hkh} is a broken digest to hang an endpoint's identity on — both have practical collision attacks. pgBackRest 2.50 still accepts it; this program does not. Set repo2-sftp-host-key-hash-type=sha256 and RE-DERIVE the fingerprint (runbook §22.4c)."
+          ;;
+        "")
+          bad "repo2-sftp-host-key-hash-type is not set. It selects the digest repo2-sftp-host-fingerprint is compared against, so without it the pin is ambiguous. Set repo2-sftp-host-key-hash-type=sha256 (runbook §22.4c)."
+          ;;
+        *)
+          bad "unrecognized repo2-sftp-host-key-hash-type '${_hkh}' — pgBackRest 2.50 accepts md5|sha1|sha256, and this program requires sha256 (runbook §22.4c)"
+          ;;
+      esac
+
+      # Syntax is decided by strcmp() against a lowercase hex digest, so
+      # uppercase hex, colon-separated hex, and ssh-keygen's "SHA256:<base64>"
+      # form can NEVER match. Each of those fails at RUN time — after the
+      # operator believes the endpoint is pinned — with:
+      #   host [...] and configured fingerprint (repo2-sftp-host-fingerprint)
+      #   [...] do not match
+      # Catching it here is the difference between a config review and an
+      # outage during the first off-host backup.
+      # Split on the FIRST `=`, not the last. The usual `s/.*=//` idiom is
+      # greedy, and a fingerprint pasted in ssh-keygen's base64 form ends in
+      # `=` padding -- which that idiom truncates to the empty string, turning
+      # a malformed pin into "no fingerprint pinned". Still fail-closed, but it
+      # sends the operator to add a value they had already added.
+      _fp="$(grep -oE '^[[:space:]]*repo2-sftp-host-fingerprint[[:space:]]*=[[:space:]]*[^[:space:]]+' "$PGBACKREST_CONF" 2>/dev/null | sed -E 's/^[^=]*=[[:space:]]*//' | head -n1 || true)"
+      _fp_re="^[0-9a-f]{${_fp_len}}\$"
+      if [[ -z "$_fp" ]]; then
+        bad "repo2-type=sftp but no repo2-sftp-host-fingerprint is pinned — the endpoint's identity is unverified, so a backup could be written to any host answering on that address"
+      elif [[ "$_fp" == "<REPLACE"* ]]; then
+        bad "repo2-sftp-host-fingerprint is still the '<REPLACE ...>' placeholder from the template"
+      elif [[ "$_fp_len" -eq 0 ]]; then
+        # The hash type already failed, so the expected length is undecidable.
+        # Emitting a second "malformed" failure for the same root cause would
+        # send the operator to re-derive against a digest that is itself wrong.
+        :
+      elif [[ "$_fp" =~ $_fp_re ]]; then
+        ok "repo2-sftp-host-fingerprint is pinned (${_fp_len} lowercase hex characters; value never printed by this script)"
+      elif [[ "$_fp" =~ ^(SHA256|SHA1|MD5|sha256|sha1|md5): ]]; then
+        bad "repo2-sftp-host-fingerprint is in ssh-keygen's '<HASH>:<base64>' form. pgBackRest compares against a BARE lowercase hex digest, so this can never match and repo2 would fail at run time rather than here. Re-derive it per runbook §22.4c."
+      elif [[ "$_fp" == *:* ]]; then
+        bad "repo2-sftp-host-fingerprint is colon-separated. pgBackRest compares it byte-for-byte against lowercase hex with NO separators, so this value can never match and repo2 would fail at run time rather than here. Re-derive it per runbook §22.4c."
+      elif [[ "$_fp" =~ ^[0-9a-fA-F]+$ ]]; then
+        if [[ "${#_fp}" -ne "$_fp_len" ]]; then
+          bad "repo2-sftp-host-fingerprint is ${#_fp} hex characters but repo2-sftp-host-key-hash-type=${_hkh} requires exactly ${_fp_len}. A wrong-length pin can never match (runbook §22.4c)."
+        else
+          bad "repo2-sftp-host-fingerprint contains uppercase hex. pgBackRest compares with strcmp() against a LOWERCASE hex digest, so an uppercase pin never matches and fails at run time. Lowercase it (runbook §22.4c)."
+        fi
+      else
+        bad "repo2-sftp-host-fingerprint is malformed — expected exactly ${_fp_len} lowercase hex characters with no separators. Note that 'ssh-keygen -l' prints the base64 'SHA256:...' form, which pgBackRest never matches; derive it per runbook §22.4c."
+      fi
+      unset _hkc _hkh _fp _fp_len _fp_re
+    elif grep -qE '^[[:space:]]*repo2-sftp-' "$PGBACKREST_CONF" 2>/dev/null; then
+      # The two files must not disagree about what shape this is. The status
+      # writer classifies a repo2 as SFTP from repo2-sftp-host ALONE, because
+      # SELECTED TOPOLOGY = C sets no repo2-host; this gate keys on repo2-type,
+      # because that is what actually selects pgBackRest's SFTP driver. A
+      # config carrying repo2-sftp-* without repo2-type=sftp lands between
+      # them: pgBackRest ignores the SFTP settings entirely, while the status
+      # writer reports the shape as off-host SFTP and none of the host-key
+      # checks above ever run.
+      bad "repo2-sftp-* options are set but repo2-type is '${REPO2_TYPE_VAL:-unset}', not 'sftp'. pgBackRest would not use the SFTP driver at all, yet the status writer classifies this shape as SFTP from repo2-sftp-host — set repo2-type=sftp, or remove the repo2-sftp-* keys."
+    fi
+    unset REPO2_TYPE_VAL
   fi
 fi
 

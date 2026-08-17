@@ -1,8 +1,72 @@
 # F4 — Storage and Backup Foundation
 
-Faz durumu: `TODO` · Son güncelleme: 2026-08-16 (F4-FCR-003-R2 — **repo2 yedek topolojisi kararı**: `SELECTED TOPOLOGY = C`, yani **depo host'u OLMAYAN**, üretim birincili tarafından yazılan saha dışı bir `repo2`. §22.11 blokajı **çözüldü**: `ERROR [072]`'nin koşulu `--repo=2` değil, yalnızca **`repoN-host` ayarlanmış olması**; depo host'u olmayan bir `repo2` bu kontrolü tetikleyemez. Sabitlenmiş **pgBackRest 2.50** üzerinde uçtan uca doğrulandı — `repo2-host` negatif kontrolü **reddedildi (çıkış 72)**, `s3` ve `sftp` şekilleri ise birincilde `backup`/`info`/`verify` **ve tam `restore`** işlemlerini çıkış 0 ile tamamladı; `repo2` nesnelerinde **0 düz metin PHI**. Seçenek A (depo-host sürücülü) güveni **karşılıklı** hale getirdiği ve §16.5 ile §22.9'un kapısını ihlal ettiği için, seçenek B (yükseltme) ise elde bulunan bir yeteneği canlı bir PHI host'unda paket yükseltmesiyle satın aldığı için **reddedildi** (kontrol **2.55.0**'da kaldırılmıştı). Runbook yakınsandı: CHECKPOINT 5–8, restore ve rollback akışlarındaki **her komut artık `RUN ON:` işareti taşıyor**. **`R-030-DB` `OPEN` kalır** — ikincil VPS **TEDARİK EDİLMEMİŞ**. Öncesinde F4-FCR-003-R1 — mimari inceleme düzeltmeleri: CI kırmızısının kök nedeni bir `pipefail` + `SIGPIPE` yarışı yüzünden **sessizce geçen bir muhafızdı**, pgBackRest **2.50** sürüm eşitliği yerelde koşuldu (`OBSERVED_LOCAL_ONLY — SAME SEMANTICS`), **WAL birikim izlemesi** eklendi; 2.50 üzerinde `backup --repo=2` birincilde reddediliyor — §22.11 blokajı. Öncesinde F4-FCR-003 — `R-030-DB` saha dışı aktivasyon hazırlığı: dört sessiz-hata kusuru kapatıldı, **Gate 0 yerelde çalıştırıldı ve `PASS`**, operatör aktivasyon paketi yazıldı; **`R-030` / `R-030-DB` `OPEN`**, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` — kalan blokaj tedarik ve hukuk)
+Faz durumu: `TODO` · Son güncelleme: 2026-08-17 (F4-FCR-004 / F4-FCR-004-R1 — **SFTP güvenlik sözleşmesi + yönetişim düzeltmesi**, aşağıdaki bölüme bakınız: sonuç `BLOCKED_EXTERNAL`, PR #441 üzerindeki üç birleştirme blokajı düzeltildi, **`repo2` AKTİF EDİLMEDİ**, `R-030-DB` `OPEN` kalır. Öncesinde F4-FCR-003-R2 — **repo2 yedek topolojisi kararı**: `SELECTED TOPOLOGY = C`, yani **depo host'u OLMAYAN**, üretim birincili tarafından yazılan saha dışı bir `repo2`. §22.11 blokajı **çözüldü**: `ERROR [072]`'nin koşulu `--repo=2` değil, yalnızca **`repoN-host` ayarlanmış olması**; depo host'u olmayan bir `repo2` bu kontrolü tetikleyemez. Sabitlenmiş **pgBackRest 2.50** üzerinde uçtan uca doğrulandı — `repo2-host` negatif kontrolü **reddedildi (çıkış 72)**, `s3` ve `sftp` şekilleri ise birincilde `backup`/`info`/`verify` **ve tam `restore`** işlemlerini çıkış 0 ile tamamladı; `repo2` nesnelerinde **0 düz metin PHI**. Seçenek A (depo-host sürücülü) güveni **karşılıklı** hale getirdiği ve §16.5 ile §22.9'un kapısını ihlal ettiği için, seçenek B (yükseltme) ise elde bulunan bir yeteneği canlı bir PHI host'unda paket yükseltmesiyle satın aldığı için **reddedildi** (kontrol **2.55.0**'da kaldırılmıştı). Runbook yakınsandı: CHECKPOINT 5–8, restore ve rollback akışlarındaki **her komut artık `RUN ON:` işareti taşıyor**. **`R-030-DB` `OPEN` kalır** — ikincil VPS **TEDARİK EDİLMEMİŞ**. Öncesinde F4-FCR-003-R1 — mimari inceleme düzeltmeleri: CI kırmızısının kök nedeni bir `pipefail` + `SIGPIPE` yarışı yüzünden **sessizce geçen bir muhafızdı**, pgBackRest **2.50** sürüm eşitliği yerelde koşuldu (`OBSERVED_LOCAL_ONLY — SAME SEMANTICS`), **WAL birikim izlemesi** eklendi; 2.50 üzerinde `backup --repo=2` birincilde reddediliyor — §22.11 blokajı. Öncesinde F4-FCR-003 — `R-030-DB` saha dışı aktivasyon hazırlığı: dört sessiz-hata kusuru kapatıldı, **Gate 0 yerelde çalıştırıldı ve `PASS`**, operatör aktivasyon paketi yazıldı; **`R-030` / `R-030-DB` `OPEN`**, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` — kalan blokaj tedarik ve hukuk)
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
+
+## F4-FCR-004 — FIRST_CUSTOMER_RECOVERY_GATE / R-030-DB Saha Dışı Kurtarma Kapanış Orkestrasyonu
+
+`F4-FCR-004_STATUS = BLOCKED_EXTERNAL` · `AGENT_COMPLETED = YES` · `LOCAL_TESTS = PASSED`
+`PR_OPENED = YES (#441)` · `MERGED = NO` · `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO`
+`R-030-DB = OPEN` · `R-030 = OPEN` · `R-030-FILES = OPEN`
+`FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` · `F4 COMPLETE = NO` · `F5 AUTHORIZED = NO`
+`repo2 = NOT_ACTIVATED`
+
+**Görev, program sahibi tarafından görev talimatında verilmiştir.** Daha önce bu
+dosyada ve tracker'da bulunmuyordu; **bu eksiklik bir yönetişim boşluğudur, görevin
+hiç verilmediğinin kanıtı değildir** ve aksi yöndeki önceki iddia geri çekilmiştir.
+
+`F4-FCR-004-R1`, mimari incelemenin üç blokajını **aynı dal ve aynı PR #441**
+üzerinde düzeltir (`fix/f4-fcr-004-repo2-sftp-offhost-classification`, R1 öncesi
+head `cdb263f`). Yeni PR yok, merge yok, dağıtım yok, üretim erişimi yok.
+
+- **Blokaj 1 — yasaklı SHA-1 `ssh-rsa` geri dönüşü aktif operatör rehberliğinden
+  kaldırıldı.** Şablon, runbook (§16.5 adım 4, §22.4b, §22.13) ve F4-FCR-003 kanıt
+  dokümanları, ikincilin sshd'sinin `PubkeyAcceptedAlgorithms +ssh-rsa`'ya
+  "ihtiyaç duyabileceğini" ve bunun CHECKPOINT 5'te doğrulanmasını yazıyordu; bu
+  rehberlik **geri çekildi**. 2026-08-16 libssh2 gözlemi korunur ama
+  **`HISTORICAL` / `PROHIBITED FOR FIRST-CUSTOMER ACTIVATION`** olarak
+  etiketlenmiştir. Yerine açık durdurma kuralı yayımlandı: **MODERN SSH AUTH
+  CANNOT BE NEGOTIATED => NO-GO** — sağlayıcı/OS/paket yükseltmesi, S3'e taşıma
+  veya sağlayıcı değişimi ile yükselt; **sshd'yi SHA-1 için zayıflatma.** Hiçbir
+  algoritma körlemesine önerilmez: kabul edilebilir algoritma, sabitlenmiş
+  pgBackRest/libssh2 yapısının gerçekte sunduğundan belirlenir.
+- **Blokaj 2 — tek ve kanıtlanmış host-key sözleşmesi.** PR #441 yalnızca
+  `host-key-check-type=none`'ı reddediyor, diğer tüm değerleri kabul ediyordu.
+  Sabitlenmiş üretim yapısı **pgBackRest 2.50** üzerinden uzlaştırıldı: seçenek
+  2.48'de eklendi, `strict|accept-new|fingerprint|none` kabul eder ve
+  **varsayılanı `strict`**'tir; `storage/sftp/storage.c` sabitlenen parmak izini
+  **yalnızca** kontrol tipi tam olarak `fingerprint` iken karşılaştırır. Yani
+  **kontrol tipi olmadan sabitlenen bir parmak izi hiçbir şeyi doğrulamaz.**
+  Kabul edilen sözleşme: `repo2-sftp-host-key-check-type=fingerprint` +
+  `repo2-sftp-host-key-hash-type=sha256` +
+  `repo2-sftp-host-fingerprint=<64 küçük harf hex, ayraçsız>` — şablonda,
+  runbook §16.5 adım 8'de ve yeni **runbook §22.4c**'de yayımlandı. `strict`
+  değerlendirildi ve gerekçesiyle reddedildi (güven kökünü, `ssh-keyscan` ile
+  doldurulan değişken bir `known_hosts` dosyasına taşır).
+- **Parmak izi sözdizimi kanıtlandı, uydurulmadı.** Karşılaştırma
+  `encodeToStr(encodingHex, ...)` çıktısına karşı `strcmp()`'tir; bu nedenle
+  yalnızca küçük harf, ayraçsız hex eşleşebilir. **PR #441'in
+  `[0-9a-fA-F:]{16,}` regex'i geri çekildi** — pgBackRest'in asla
+  eşleştiremeyeceği iki nokta üst üste ayraçlı ve büyük harfli değerleri kabul
+  ediyordu. S3 yolu etkilenmedi ve bu test edilir.
+- **Blokaj 3 — yönetişim** tracker, CHANGELOG, bu dosya ve yalnızca yaşam
+  döngüsü işaretçisi olarak RISK_REGISTER'a işlendi. **Hiçbir risk durumu
+  değiştirilmedi.**
+- **Kesinlik düzeltmesi:** PR #441 "no runtime surface" diye tanımlanmamalıdır.
+  Doğrusu: **uygulama çalışma zamanı değişikliği yok, şema/migration değişikliği
+  yok, kiracı/veri mutasyonu yok; ancak operasyonel backup/status/preflight/
+  restore-drill script'leri DEĞİŞTİ**, bu PR ile **dağıtılmıyorlar** ve üretim
+  aktivasyonu yasak olarak kalır.
+- **Testler:** `noramedi-pgbackrest.test.sh` **252 → 275 doğrulama, 275 geçti /
+  0 başarısız**; `test:ci-classify` 28/28; `typecheck:ci-classify` çıkış 0;
+  değişen her shell dosyasında `bash -n` temiz; `git diff --check` çıkış 0.
+
+**Dış blokajların hiçbiri kapatılmadı veya üretilmedi:** ikincil Türkiye VPS
+tedariki, birincil sağlayıcı/bölge temel kanıtı, E1–E5, I1–I5, KVKK Md. 6 hosting
+DPA / hukuk görüşü, destek/yönetici erişim duruşu, kimlik bilgisi/parola
+saklayıcıları ve emanet, gerçek `repo2` aktivasyonu, `repo2` kaynaklı
+restore/PITR tatbikatı, RPO/RTO kanıtı.
 
 ## F4-1A2 — Storage-Key Caller Migration (birincil çağrı yerlerinin yetkili sözleşmeye taşınması)
 
