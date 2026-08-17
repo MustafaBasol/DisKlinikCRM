@@ -123,6 +123,22 @@ function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
+/**
+ * Index of the planned-key assignment inside generateClinicBulkExport.
+ *
+ * F4-1A2: this used to be a literal `indexOf('const storageKey = buildExportStorageKey')`,
+ * which coupled two ORDERING assertions to one builder's exact call syntax and
+ * was part of why F4-1A deferred the caller migration. It now matches any
+ * authoritative storage-key contract call that assigns `storageKey`, so the
+ * ordering claims stay meaningful whether the call goes through the
+ * `buildExportStorageKey` façade or `buildObjectStorageKey` directly. Returns
+ * -1 when absent, matching the previous indexOf contract.
+ */
+function plannedKeyAssignmentIndex(source: string, fromIndex: number): number {
+  const match = /const storageKey = build\w*StorageKey\(/.exec(source.slice(fromIndex));
+  return match ? fromIndex + match.index : -1;
+}
+
 async function main() {
   section('1. Legacy endpoint disable');
 
@@ -1220,7 +1236,12 @@ async function main() {
     const writeFinishedAwaitIndex = source.indexOf('await writeFinished;', genFnStart);
     const finalStatIndex = source.indexOf('finalStat.size > maxBytes', genFnStart);
     const validateCallIndex = source.indexOf('await validateZipStructuralIntegrity(', genFnStart);
-    const plannedKeyIndex = source.indexOf('const storageKey = buildExportStorageKey', genFnStart);
+    // F4-1A2: the planned-key landmark no longer pins the exact builder call
+    // syntax — any authoritative storage-key contract call assigning storageKey
+    // counts, so this ORDERING claim survives a façade/builder change. The
+    // export key's own shape is proven by exact string equality in
+    // storageKeyContract.test.ts §8, not from source text here.
+    const plannedKeyIndex = plannedKeyAssignmentIndex(source, genFnStart);
     assert.ok(writeFinishedAwaitIndex > -1 && finalStatIndex > -1 && validateCallIndex > -1 && plannedKeyIndex > -1);
     assert.ok(
       writeFinishedAwaitIndex < finalStatIndex && finalStatIndex < validateCallIndex && validateCallIndex < plannedKeyIndex,
@@ -1261,7 +1282,7 @@ async function main() {
     assert.equal(occurrences, 3, 'must re-check exactly 3 times: generation start, before planned-key persist/upload, before the ready transition');
 
     const firstCheckIndex = genBody.indexOf('assertClinicBulkExportGenerationAllowed');
-    const plannedKeyIndex = genBody.indexOf('const storageKey = buildExportStorageKey');
+    const plannedKeyIndex = plannedKeyAssignmentIndex(genBody, 0);
     const doUploadIndex = genBody.indexOf('await doUpload(storageKey');
     const readyUpdateIndex = genBody.indexOf("data: { status: 'ready'");
     assert.ok(firstCheckIndex > -1 && firstCheckIndex < plannedKeyIndex, 'the first re-check must sit before the planned-key computation');

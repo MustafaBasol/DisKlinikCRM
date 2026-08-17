@@ -76,6 +76,17 @@ function bucket(): string {
  * existing callers (and the static call-site regression tests) rely on, and
  * both delegate here.
  *
+ * F4-1A2 (caller migration) completed the second half of that reconciliation:
+ * routes/labOrders.ts and services/imaging/imagingIngestCore.ts used to borrow
+ * `buildStorageKey` — the PATIENT-ATTACHMENT façade — for a lab attachment and
+ * an imaging image respectively, so two of the three content classes were
+ * mislabelled at the call site even though the emitted bytes were right. Both
+ * now call `buildObjectStorageKey` with their own `kind`. `buildStorageKey`
+ * remains, narrowed to the one class it actually names (patient attachments,
+ * routes/attachments.ts), and `buildExportStorageKey` is unchanged. No key
+ * shape moved: all three content kinds share one template by design, which
+ * `storageKeyContract.test.ts` §8 proves by exact string equality.
+ *
  * The key SHAPES are deliberately unchanged — this is a contract/validation
  * change, not a key migration (storage-key migration is frozen: see
  * docs/program/KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md §3 item 8). Every
@@ -166,10 +177,13 @@ export function buildObjectStorageKey(spec: StorageObjectSpec): string {
  * clinicId ve üretilen ad sunucu kaynaklı olduğundan path traversal riski yok;
  * uzantı yine de dosya adından değil, doğrulanmış originalName'den alınır.
  *
- * Delegates to buildObjectStorageKey — see the contract note above. Throws if
- * clinicId is empty or carries a separator/traversal: previously such a value
- * produced a key like "/1699999999-abc.pdf", which resolveLocalPath() would
- * have honoured as an ABSOLUTE path and written outside the upload root.
+ * The PATIENT-ATTACHMENT façade (routes/attachments.ts). Since F4-1A2 the lab
+ * and imaging callers no longer borrow this name — they declare their own
+ * `kind` — so this is once again a single-class façade. Delegates to
+ * buildObjectStorageKey; see the contract note above. Throws if clinicId is
+ * empty or carries a separator/traversal: previously such a value produced a
+ * key like "/1699999999-abc.pdf", which resolveLocalPath() would have honoured
+ * as an ABSOLUTE path and written outside the upload root.
  */
 export function buildStorageKey(clinicId: string, originalName: string): string {
   return buildObjectStorageKey({ kind: 'patient-attachment', clinicId, originalName });

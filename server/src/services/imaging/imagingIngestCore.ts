@@ -39,7 +39,7 @@
  */
 
 import prisma from '../../db.js';
-import { buildStorageKey, deleteFile, fileNameFromKey, saveFile } from '../fileStorage.js';
+import { buildObjectStorageKey, deleteFile, fileNameFromKey, saveFile } from '../fileStorage.js';
 import { isAllowedFileSignature } from '../../utils/fileSignature.js';
 import { IMAGING_EXTENSIONS_BY_MIME, normalizeDeclaredMime } from './imagingUploadValidation.js';
 
@@ -115,7 +115,15 @@ export async function ingestImagingStudyCore(
     throw new ImagingIngestFileValidationError();
   }
 
-  const storageKey = buildStorageKey(input.clinicId, input.originalName);
+  // F4-1A2: declares its own object class ('imaging-image') to the authoritative
+  // contract. The owning clinic source (input.clinicId, validated upstream) and
+  // the emitted key shape are both unchanged — all three content classes share
+  // the same `<clinicId>/<opaqueId><ext>` template (fileStorage.ts).
+  const storageKey = buildObjectStorageKey({
+    kind: 'imaging-image',
+    clinicId: input.clinicId,
+    originalName: input.originalName,
+  });
   await saveFile(storageKey, input.fileBuffer, effectiveMime);
 
   try {

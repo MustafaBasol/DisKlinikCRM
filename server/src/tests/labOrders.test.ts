@@ -13,9 +13,16 @@
  */
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import type { Response } from 'express';
 
+import prisma from '../db.js';
+import labOrdersRouter from '../routes/labOrders.js';
+import type { AuthRequest } from '../middleware/auth.js';
 import {
   ALLOWED_TRANSITIONS,
   PRE_RECEIPT_STATUSES,
@@ -52,6 +59,66 @@ function src(relPath: string) {
 }
 
 const ALL_STATUSES = LAB_WORK_ORDER_STATUSES as readonly LabWorkOrderStatus[];
+
+// ── F4-1A2 behavioural upload harness ────────────────────────────────────────
+// The real Express route chain is pulled out of the router's own stack and
+// invoked directly against an in-memory Prisma double — the repository's
+// established convention for route-level tests without a live server (see
+// labOrderAttachmentLegalHold.test.ts / paymentsListFieldScope.test.ts). This
+// replaces F4-1A's static `indexOf('buildStorageKey(order.clinicId')` pin with
+// a test that observes the key the route ACTUALLY persists.
+const UPLOAD_ROOT = path.resolve(process.cwd(), 'uploads');
+const FIXTURE_RUN = `f4-1a2-fixture-${randomUUID()}`;
+/** The clinic that owns the lab order — the only correct key source. */
+const CLINIC_ORDER = `${FIXTURE_RUN}-order-clinic`;
+/** The requesting user's default clinic — deliberately DIFFERENT. */
+const CLINIC_REQUEST_DEFAULT = `${FIXTURE_RUN}-request-clinic`;
+const ORDER_ID = `${FIXTURE_RUN}-order`;
+
+type Handler = (req: AuthRequest, res: Response, next: () => void) => void | Promise<void>;
+
+function uploadChainWithoutMulter(): Handler[] {
+  const routePath = '/lab-orders/:id/attachments';
+  for (const layer of (labOrdersRouter as any).stack) {
+    if (layer.route && layer.route.path === routePath && layer.route.methods?.post) {
+      const full: Handler[] = layer.route.stack.map((s: any) => s.handle);
+      // handleUpload wraps multer and parses a real multipart stream; this
+      // suite injects req.file directly (memoryStorage semantics) instead.
+      const runnable = full.filter((fn) => fn.name !== 'handleUpload');
+      assert.equal(
+        full.length - runnable.length,
+        1,
+        'expected exactly one multer wrapper (handleUpload) in the upload chain — its identity changed',
+      );
+      return runnable;
+    }
+  }
+  throw new Error(`No route handler found for POST ${routePath}`);
+}
+
+function mockResponse(): Response & { statusCode: number; body: any } {
+  const res: any = {
+    statusCode: 200,
+    body: undefined,
+    status(code: number) { this.statusCode = code; return this; },
+    json(payload: unknown) { this.body = payload; return this; },
+  };
+  return res;
+}
+
+async function runChain(chain: Handler[], req: AuthRequest, res: Response): Promise<void> {
+  for (const fn of chain) {
+    let calledNext = false;
+    await fn(req, res, () => { calledNext = true; });
+    if (!calledNext) return;
+  }
+}
+
+function removeFixtureObjects() {
+  for (const clinicId of [CLINIC_ORDER, CLINIC_REQUEST_DEFAULT]) {
+    fs.rmSync(path.join(UPLOAD_ROOT, clinicId), { recursive: true, force: true });
+  }
+}
 
 async function main() {
   // ── Status transitions ───────────────────────────────────────────────────
@@ -280,9 +347,23 @@ async function main() {
 
     const orderLookupIndex = uploadRouteSrc.indexOf('prisma.labWorkOrder.findFirst');
     const signatureCheckIndex = uploadRouteSrc.indexOf('isAllowedFileSignature(req.file.buffer');
-    const keyIndex = uploadRouteSrc.indexOf('buildStorageKey(order.clinicId');
+    // F4-1A2: this landmark used to pin the exact call syntax
+    // ('buildStorageKey(order.clinicId'), which is what deferred the caller
+    // migration in the first place. It now accepts ANY authoritative
+    // storage-key contract call that takes its clinic from order.clinicId, so
+    // the ORDERING claim below survives a builder/façade change. The tenant
+    // claim itself is no longer asserted from source text at all — it is proven
+    // against the real route in the "Attachment upload storage key
+    // (behavioural, F4-1A2)" section below.
+    const keyMatch = /storageKey = build\w*StorageKey\(\s*\{?[^)]*order\.clinicId/.exec(uploadRouteSrc);
+    const keyIndex = keyMatch ? keyMatch.index : -1;
     const saveIndex = uploadRouteSrc.indexOf('await saveFile(storageKey');
     const dbInsertIndex = uploadRouteSrc.indexOf('prisma.labOrderAttachment.create');
+
+    assert.ok(
+      !/build\w*StorageKey\(\s*\{?[^)]*req\.user/.test(uploadRouteSrc),
+      'the storage key must never be derived from the request user clinic',
+    );
 
     assert.ok(
       orderLookupIndex !== -1 && signatureCheckIndex !== -1 && keyIndex !== -1 && saveIndex !== -1 && dbInsertIndex !== -1,
@@ -362,6 +443,111 @@ async function main() {
   await test('a user with no clinic access sees nothing', () => {
     const list = simulateListLabOrders([]);
     assert.deepEqual(list, []);
+  });
+
+  // ── F4-1A2: behavioural proof of the persisted attachment storage key ─────
+  section('Attachment upload storage key (behavioural, F4-1A2)');
+
+  const createdAttachments: any[] = [];
+  (prisma as any).labWorkOrder = {
+    findFirst: async ({ where }: any) => {
+      const accessible: string[] = where?.clinicId?.in ?? [];
+      if (where?.id !== ORDER_ID || !accessible.includes(CLINIC_ORDER)) return null;
+      return { id: ORDER_ID, clinicId: CLINIC_ORDER, patientId: `${FIXTURE_RUN}-patient`, deletedAt: null };
+    },
+  };
+  (prisma as any).labOrderAttachment = {
+    create: async ({ data }: any) => {
+      createdAttachments.push(data);
+      return { id: randomUUID(), ...data, legalHold: false, legalHoldReason: null, uploadedBy: { firstName: 'T', lastName: 'U' } };
+    },
+  };
+
+  async function uploadFixtureAttachment() {
+    createdAttachments.length = 0;
+    const req = {
+      user: {
+        id: `${FIXTURE_RUN}-user`,
+        role: 'RECEPTIONIST',
+        // The request-default clinic is NOT the order's clinic. Both are
+        // accessible, so authorization succeeds and the ONLY thing deciding the
+        // key is which clinic the route chooses to derive it from.
+        clinicId: CLINIC_REQUEST_DEFAULT,
+        organizationId: `${FIXTURE_RUN}-org`,
+        allowedClinicIds: [CLINIC_REQUEST_DEFAULT, CLINIC_ORDER],
+        canAccessAllClinics: false,
+      },
+      params: { id: ORDER_ID },
+      body: {},
+      query: {},
+      headers: {},
+      ip: '203.0.113.11',
+      file: {
+        buffer: Buffer.from('%PDF-1.4 fixture bytes'),
+        mimetype: 'application/pdf',
+        originalname: 'Ayse Yilmaz rapor.pdf',
+        size: 22,
+      },
+    } as unknown as AuthRequest;
+
+    const res = mockResponse();
+    await runChain(uploadChainWithoutMulter(), req, res);
+    return { res, data: createdAttachments[0] };
+  }
+
+  await test('the persisted key derives from order.clinicId, NEVER the request-default clinic', async () => {
+    try {
+      const { res, data } = await uploadFixtureAttachment();
+
+      assert.equal(res.statusCode, 201, `expected 201, got ${res.statusCode}: ${JSON.stringify(res.body)}`);
+      assert.ok(data, 'the attachment row must have been created');
+      assert.equal(data.clinicId, CLINIC_ORDER, 'the row must be owned by the order clinic');
+      assert.ok(
+        data.filePath.startsWith(`${CLINIC_ORDER}/`),
+        `filePath must be scoped to the ORDER clinic (got ${data.filePath})`,
+      );
+      assert.ok(
+        !data.filePath.includes(CLINIC_REQUEST_DEFAULT),
+        `filePath must never reference the request-default clinic (got ${data.filePath})`,
+      );
+    } finally {
+      removeFixtureObjects();
+    }
+  });
+
+  await test('the persisted key keeps the accepted <clinicId>/<opaqueId><ext> shape and leaks no filename PII', async () => {
+    try {
+      const { data } = await uploadFixtureAttachment();
+      assert.match(
+        data.filePath,
+        new RegExp(`^${CLINIC_ORDER}/\\d+-[a-z0-9]+\\.pdf$`),
+        `unexpected key shape (got ${data.filePath})`,
+      );
+      for (const secret of ['Ayse', 'Yilmaz', 'rapor']) {
+        assert.ok(!data.filePath.includes(secret), `key must not embed "${secret}" (got ${data.filePath})`);
+      }
+      assert.equal(data.fileName, path.posix.basename(data.filePath), 'fileName is the key basename, unchanged');
+    } finally {
+      removeFixtureObjects();
+    }
+  });
+
+  await test('the object is actually written under the order clinic prefix on disk', async () => {
+    try {
+      const { data } = await uploadFixtureAttachment();
+      assert.equal(
+        fs.existsSync(path.join(UPLOAD_ROOT, data.filePath)),
+        true,
+        `the stored object must exist at the persisted key (${data.filePath})`,
+      );
+      assert.equal(
+        fs.existsSync(path.join(UPLOAD_ROOT, CLINIC_REQUEST_DEFAULT)),
+        false,
+        'nothing may be written under the request-default clinic prefix',
+      );
+    } finally {
+      removeFixtureObjects();
+    }
   });
 
   // ── Result ────────────────────────────────────────────────────────────────
