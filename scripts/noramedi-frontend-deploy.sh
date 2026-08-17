@@ -54,6 +54,15 @@
 #     a DSN, or a connection string. The only identifiers it prints are paths
 #     under the deployment root and the git release SHA (which `git log`
 #     already shows, and which the deploy log is expected to record).
+#   * It never interprets an environment-supplied string as shell source. The
+#     production build is a fixed argument vector (BUILD_ARGV); the only
+#     substitution point is an executable file it runs directly.
+#   * It never proceeds on an UNVERIFIED precondition. In particular, if the
+#     filesystem device of a path cannot be determined, the same-filesystem
+#     requirement of the promotion contract is unverifiable and the operation
+#     is REFUSED — it is not downgraded to a warning.
+#   * It never writes an unvalidated release identity into the publicly served
+#     release marker: 40- or 64-char lowercase hex, or the literal "unknown".
 #
 # Usage:
 #   noramedi-frontend-deploy.sh deploy   [OPTIONS]
@@ -68,7 +77,12 @@
 #
 # deploy options:
 #   --release-sha SHA  Release identifier to record (default: $RELEASE_SHA,
-#                      else `git -C <app-dir> rev-parse HEAD`, else "unknown")
+#                      else `git -C <app-dir> rev-parse HEAD`, else "unknown").
+#                      Must be 40 or 64 lowercase hex characters, or exactly
+#                      "unknown" — the same shape noramedi-deploy.sh:182 and
+#                      ecosystem.config.cjs already produce. Anything else is
+#                      refused, not escaped: this value is served publicly in
+#                      dist/release.json.
 #   --tag NAME         Label embedded in the preserved directory's name
 #                      (default: the 12-char release SHA). [A-Za-z0-9._-] only.
 #   --skip-build       Do not run the build; <DIR>/dist.next must already exist
@@ -96,6 +110,17 @@
 #                      as a separate line: a healthy backend NEVER satisfies a
 #                      frontend check, and a frontend failure is never hidden
 #                      behind it.
+#
+# Environment:
+#   NORAMEDI_APP_DIR                     Default deployment root.
+#   RELEASE_SHA                          Default release identity (validated).
+#   NORAMEDI_HEALTHCHECK                 Path to noramedi-healthcheck.sh.
+#   NORAMEDI_FRONTEND_BUILD_EXECUTABLE   Test/diagnostic seam ONLY. Absolute
+#       path to an executable FILE, which is validated (absolute, exists,
+#       regular file, executable) and then EXECUTED with the staging directory
+#       as its single argument, in the deployment root. It is never sourced and
+#       never interpreted as shell source. Setting it emits a WARNING; production
+#       leaves it unset and gets the fixed repository build.
 #
 # Exit status: 0 = success. Any non-zero exit means the live bundle is either
 # unchanged (the overwhelmingly common case — every precondition is checked
@@ -223,14 +248,114 @@ device_of() {
 }
 
 assert_same_filesystem() {
-  local a="$1" b="$2" da db
+  local a="$1" b="$2" da db dry=""
+  # A dry run reaches this check too, and must not report a deployment as safe
+  # when the real one would refuse. It says so explicitly instead.
+  [[ "$DRY_RUN" == "true" ]] && dry=" DRY RUN: nothing was changed, and this is exactly what the real operation would do — REFUSE."
   da="$(device_of "$a")"; db="$(device_of "$b")"
+
+  # F3-PROD-004-R1, blocker 1: an UNDETERMINED device is a REFUSAL, not a
+  # warning. This previously warned and returned 0, which made a fail-closed
+  # promotion contract fail OPEN on precisely the hosts where it matters most:
+  # one where `stat` cannot report a device is one where nothing has verified
+  # that these two paths share a filesystem, and a cross-device `mv` degrades
+  # silently into copy-then-delete — stretching the near-atomic window into a
+  # long one, on production, with no signal other than a warning nobody reads.
+  # UNKNOWN DEVICE = REFUSE OPERATION.
   if [[ "$da" == "unknown" || "$db" == "unknown" ]]; then
-    warn "could not determine the filesystem device for '$a' / '$b'; the same-filesystem precondition is UNVERIFIED."
-    return 0
+    die "could not determine the filesystem device of '$a' and/or '$b' (device: $da / $db), so the same-filesystem precondition the promotion contract depends on is UNVERIFIABLE on this host. Refusing: no rename, no state change, the live bundle is UNCHANGED.$dry"
   fi
   [[ "$da" == "$db" ]] \
-    || die "'$a' and '$b' are on different filesystems (device $da vs $db). The promotion contract requires a same-filesystem rename; refusing."
+    || die "'$a' and '$b' are on different filesystems (device $da vs $db). The promotion contract requires a same-filesystem rename; refusing. No rename, no state change, the live bundle is UNCHANGED.$dry"
+}
+
+# ── build execution (no shell-string evaluation) ─────────────────────────
+# F3-PROD-004-R1, blocker 2: this script previously took a build *command
+# string* from the environment and evaluated it. In a tool an operator runs
+# against a production host that is an arbitrary-code seam, and it existed for
+# one reason only — so the regression suite could substitute a build. Both
+# needs are met here without it:
+#
+#   * production runs BUILD_ARGV, a fixed argument vector, with no shell
+#     involved: no word splitting, no expansion, nothing the environment can
+#     influence;
+#   * the suite sets NORAMEDI_FRONTEND_BUILD_EXECUTABLE to an ABSOLUTE path to
+#     an executable FILE, which is validated and then executed directly with
+#     the staging directory as its single argument. It is a program to run,
+#     never a string to interpret.
+#
+# There is deliberately no path through this script that hands an
+# environment-supplied string to a shell for interpretation.
+BUILD_ARGV=(npm run build -- --outDir dist.next)
+
+assert_build_executable() {
+  local exe="$1"
+  [[ "$exe" == /* ]] \
+    || die "NORAMEDI_FRONTEND_BUILD_EXECUTABLE must be an absolute path to an executable file; '$exe' is not absolute. Refusing: a bare name would be resolved through PATH."
+  [[ "$exe" != *$'\n'* ]] || die "NORAMEDI_FRONTEND_BUILD_EXECUTABLE contains a newline; refusing."
+  [[ -e "$exe" ]] || die "NORAMEDI_FRONTEND_BUILD_EXECUTABLE points at a path that does not exist: '$exe'"
+  [[ ! -d "$exe" ]] || die "NORAMEDI_FRONTEND_BUILD_EXECUTABLE is a directory, not an executable file: '$exe'"
+  [[ -f "$exe" ]] || die "NORAMEDI_FRONTEND_BUILD_EXECUTABLE is not a regular file: '$exe'"
+  [[ -x "$exe" ]] \
+    || die "NORAMEDI_FRONTEND_BUILD_EXECUTABLE is not executable: '$exe'. This script executes it as a program; it never sources or interprets it."
+}
+
+# run_build [OVERRIDE_EXECUTABLE] — the cd is scoped to a subshell so the rest
+# of the script keeps operating on absolute paths.
+run_build() {
+  local exe="${1-}"
+  if [[ -n "$exe" ]]; then
+    assert_build_executable "$exe"
+    warn "using the overridden build executable '$exe' instead of the repository build, because NORAMEDI_FRONTEND_BUILD_EXECUTABLE is set. This is a test/diagnostic seam; production leaves it unset."
+    ( cd "$APP_DIR" && "$exe" "$STAGING_DIR" )
+    return $?
+  fi
+  ( cd "$APP_DIR" && "${BUILD_ARGV[@]}" )
+}
+
+# ── release identity contract ────────────────────────────────────────────
+# F3-PROD-004-R1, blocker 3: releaseSha is PUBLIC deployment metadata — it is
+# written into dist/release.json, which nginx serves to anyone. It previously
+# accepted whatever an operator passed and interpolated it straight into JSON,
+# so a value containing a quote or a newline produced a malformed release.json
+# and arbitrary text in operator-facing output.
+#
+# The accepted contract is the one the rest of the program already produces:
+# scripts/noramedi-deploy.sh:182 and ecosystem.config.cjs:84-97 both resolve
+# `git rev-parse HEAD`, falling back to the exact literal "unknown". That is a
+# full 40-hex SHA-1 or that one sentinel — nothing in this repository produces
+# or consumes an abbreviated RELEASE_SHA, so short SHAs are NOT accepted. 64
+# hex is allowed for forward compatibility with a SHA-256 object format.
+#
+# Lowercase only, deliberately: `git rev-parse` never emits uppercase, and
+# silently accepting it would make the frontend marker mismatch the backend's
+# pm2_env value and report a release skew that does not exist.
+is_valid_release_sha() {
+  [[ "${1-}" =~ ^([0-9a-f]{40}|[0-9a-f]{64}|unknown)$ ]]
+}
+
+assert_valid_release_sha() {
+  local sha="${1-}" source_label="$2"
+  is_valid_release_sha "$sha" && return 0
+  # Report the shape, never echo back an arbitrary blob: the value is already
+  # suspect and this message goes into the deploy log.
+  local shown="$sha"
+  [[ "${#shown}" -le 80 ]] || shown="${shown:0:80}…(truncated, ${#sha} chars)"
+  shown="${shown//$'\n'/\\n}"; shown="${shown//$'\r'/\\r}"; shown="${shown//$'\t'/\\t}"
+  if [[ "$sha" =~ ^[0-9a-fA-F]{40}$ || "$sha" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    die "$source_label is not a valid release identity: '$shown' is hex but not lowercase. Use the lowercase form \`git rev-parse HEAD\` emits, so the frontend marker can be compared against the backend's."
+  fi
+  die "$source_label is not a valid release identity: '$shown'. Accepted: a 40- or 64-character lowercase hex git SHA, or the exact literal \"unknown\". Refusing — this value would be written into the publicly served release marker."
+}
+
+# Values read back OUT of an existing marker or out of PM2 are not ours and may
+# predate this contract (or be hand-edited). They are never trusted into
+# operator output verbatim.
+sanitize_release_sha_field() {
+  local v="${1-}"
+  if [[ -z "$v" ]]; then printf 'UNKNOWN'; return 0; fi
+  if is_valid_release_sha "$v"; then printf '%s' "$v"; return 0; fi
+  printf 'INVALID'
 }
 
 # ── bundle validation ────────────────────────────────────────────────────
@@ -283,6 +408,11 @@ RELEASE_MARKER_NAME="release.json"
 
 write_release_marker() {
   local dir="$1" sha="$2" built_at
+  # Defence in depth: cmd_deploy validates the release identity long before it
+  # gets here, but this is the one function that writes a publicly served file,
+  # so it refuses to interpolate anything the contract does not allow rather
+  # than trusting its caller to have checked.
+  assert_valid_release_sha "$sha" "the release identity being written to the release marker"
   built_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   cat > "$dir/$RELEASE_MARKER_NAME" <<EOF
 {
@@ -431,6 +561,11 @@ cmd_deploy() {
     release_sha="unknown"
     warn "no release SHA could be determined (not a git checkout and neither RELEASE_SHA nor --release-sha was given); the release marker will record \"unknown\"."
   fi
+  # Validated before it is used for anything — before the preserved-directory
+  # name is derived from it, and long before it reaches the public marker.
+  # `git rev-parse HEAD` satisfies this by construction; an operator-supplied
+  # value that does not is a hard refusal, not something to escape and accept.
+  assert_valid_release_sha "$release_sha" "the release identity for this deploy (--release-sha / \$RELEASE_SHA / git HEAD)"
   log "Release SHA     : $release_sha"
 
   # 2. Preserved-directory name. Same convention the operator already used by
@@ -481,17 +616,23 @@ cmd_deploy() {
   assert_same_filesystem "$STAGING_DIR" "$APP_DIR"
   [[ "$have_live" == "false" ]] || assert_same_filesystem "$LIVE_DIR" "$rollback_dir"
 
-  # 5. Build. NORAMEDI_FRONTEND_BUILD_CMD exists so the regression suite can
-  #    drive every path in this script without a Vite toolchain; production
-  #    leaves it unset and gets the repository's own build script.
-  local build_cmd="${NORAMEDI_FRONTEND_BUILD_CMD:-npm run build -- --outDir dist.next}"
+  # 5. Build. The production path is a FIXED command (see run_build). The only
+  #    substitution point is an explicit executable, validated as such and
+  #    invoked directly — never interpreted as shell source.
+  local build_exe=""
+  build_exe="${NORAMEDI_FRONTEND_BUILD_EXECUTABLE:-}"
   if [[ "$skip_build" == "true" ]]; then
     log "Skipping build (--skip-build); validating the existing staging bundle."
   elif [[ "$DRY_RUN" == "true" ]]; then
-    log "DRY RUN — would run in '$APP_DIR': $build_cmd"
+    if [[ -n "$build_exe" ]]; then
+      assert_build_executable "$build_exe"
+      log "DRY RUN — would run the overridden build executable in '$APP_DIR': $build_exe $STAGING_DIR"
+    else
+      log "DRY RUN — would run in '$APP_DIR': ${BUILD_ARGV[*]}"
+    fi
   else
     log "Building frontend into $(basename -- "$STAGING_DIR")..."
-    if ! ( cd "$APP_DIR" && eval "$build_cmd" ); then
+    if ! run_build "$build_exe"; then
       die "frontend build failed. The live bundle at '$LIVE_DIR' is UNCHANGED — nothing was renamed."
     fi
     log "Build completed."
@@ -511,8 +652,7 @@ cmd_deploy() {
 
   local previous_sha="none"
   if [[ "$have_live" == "true" ]]; then
-    previous_sha="$(read_marker_field "$LIVE_DIR" releaseSha)"
-    [[ -n "$previous_sha" ]] || previous_sha="unknown"
+    previous_sha="$(sanitize_release_sha_field "$(read_marker_field "$LIVE_DIR" releaseSha)")"
   fi
 
   # 7. Promotion — TWO-STEP SAME-FILESYSTEM RENAME PROMOTION. Near-atomic.
@@ -626,11 +766,13 @@ cmd_rollback() {
   fi
   assert_same_filesystem "$src" "$LIVE_DIR"
 
+  # Both markers are pre-existing files, possibly written before this contract
+  # existed or by hand, so neither is trusted into output verbatim.
   local from_sha to_sha
-  to_sha="$(read_marker_field "$src" releaseSha)"; [[ -n "$to_sha" ]] || to_sha="unknown"
+  to_sha="$(sanitize_release_sha_field "$(read_marker_field "$src" releaseSha)")"
   from_sha="none"
   if [[ "$have_live" == "true" ]]; then
-    from_sha="$(read_marker_field "$LIVE_DIR" releaseSha)"; [[ -n "$from_sha" ]] || from_sha="unknown"
+    from_sha="$(sanitize_release_sha_field "$(read_marker_field "$LIVE_DIR" releaseSha)")"
   fi
   log "Rolling back    : $from_sha -> $to_sha"
 
@@ -690,9 +832,18 @@ cmd_rollback() {
 # frontend lines are produced from the frontend bundle alone.
 report_release_state() {
   local fe be match
-  fe="$(read_marker_field "$LIVE_DIR" releaseSha)"; [[ -n "$fe" ]] || fe="UNKNOWN"
+  # Both values come from outside this script — one from a file on disk, one
+  # from PM2's environment — so both go through the release-identity contract
+  # before they are printed or compared. A non-conforming value is reported as
+  # INVALID rather than echoed, and never produces a MATCH verdict.
+  fe="$(sanitize_release_sha_field "$(read_marker_field "$LIVE_DIR" releaseSha)")"
   be="$(backend_release_sha noramedi-api)"
-  if [[ "$be" == "NOT_APPLICABLE" || "$be" == "UNSET" || "$fe" == "UNKNOWN" ]]; then
+  case "$be" in
+    NOT_APPLICABLE|UNSET) : ;;
+    *) be="$(sanitize_release_sha_field "$be")" ;;
+  esac
+  if [[ "$be" == "NOT_APPLICABLE" || "$be" == "UNSET" || "$be" == "INVALID" \
+     || "$fe" == "UNKNOWN" || "$fe" == "INVALID" ]]; then
     match="NOT_APPLICABLE"
   elif [[ "$be" == "$fe" ]]; then
     match="YES"
@@ -722,6 +873,10 @@ cmd_verify() {
   done
 
   resolve_paths
+  # An operator-supplied expectation is held to the same contract as a written
+  # one: a malformed --expect-sha would otherwise be reported as a release
+  # mismatch, which reads as a production problem rather than a typo.
+  [[ -z "$expect_sha" ]] || assert_valid_release_sha "$expect_sha" "--expect-sha"
   log "=== NoraMedi frontend verify ($SCRIPT_TASK) — read-only ==="
   log "Live bundle     : $LIVE_DIR"
 

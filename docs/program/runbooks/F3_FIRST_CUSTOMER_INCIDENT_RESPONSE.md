@@ -439,7 +439,9 @@ cat /var/www/noramedi/.noramedi-frontend-release-state      # which bundle would
 ls -d /var/www/noramedi/dist.rollback-*                     # every retained bundle (none are ever auto-deleted)
 ```
 
-`verify` prints `FRONTEND_RELEASE_SHA`, `BACKEND_RELEASE_SHA` and `RELEASE_SHA_MATCH`. A `MATCH = NO` here often *is* the incident. An absent `release.json` means the live bundle predates F3-PROD-004 and was placed by hand — its source revision cannot be established from the bundle.
+`verify` prints `FRONTEND_RELEASE_SHA`, `BACKEND_RELEASE_SHA` and `RELEASE_SHA_MATCH`. A `MATCH = NO` here often *is* the incident. An absent `release.json` means the live bundle predates F3-PROD-004 and was placed by hand — its source revision cannot be established from the bundle. Either SHA may also read **`INVALID`**: the value is present but is not a 40-/64-character lowercase hex SHA or the literal `unknown`, so it was hand-edited or written by something other than these scripts. Treat `INVALID` as "unknown", not as a mismatch — `RELEASE_SHA_MATCH` deliberately becomes `NOT_APPLICABLE` rather than guessing.
+
+**If a deploy or rollback refuses with `UNVERIFIABLE`,** the script could not determine the filesystem device of the paths involved and therefore could not confirm the same-filesystem precondition the two-rename promotion depends on. **Nothing was renamed and the live bundle is unchanged** — this is a refusal, not a failure mid-promotion. Do not work around it by moving directories by hand: a cross-device `mv` silently becomes copy-then-delete, which is exactly the long window the refusal exists to prevent. Establish why `stat` cannot report a device on that host before deploying.
 
 **Customer/data impact.** **No patient or clinic data is involved.** The frontend bundle contains no PHI/PII, and neither promotion nor rollback touches the database, uploads, or any tenant record. Impact is availability only.
 

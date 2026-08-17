@@ -1,7 +1,7 @@
 # F3-PROD-004 — Reproducible Frontend Deployment & Rollback Automation (R-038)
 
 **Phase:** F3 — Production Hardening / parallel first-customer readiness lane
-**Date:** 2026-08-17
+**Date:** 2026-08-17 · **R1 architecture-review response:** 2026-08-17 (§19)
 **Baseline:** `origin/main` @ `57909ce28d89cc14d67869c75b107c7595a17f23` (PR #436 merge, F4-1A2), clean worktree
 **Branch:** `feature/f3-prod-004-frontend-deploy-rollback`
 **ClickUp:** `869ejqzwx`
@@ -57,7 +57,7 @@ Classification: `AUTOMATED` = performed by a repository script · `MANUAL` = ope
 | Q | Frontend release marker (artifact ↔ source) | **MISSING** — no `release.json`, no `__RELEASE__`, no `define:` in `vite.config.ts`, no release-related `import.meta.env` | **AUTOMATED** (`dist/release.json`) |
 | R | Post-promotion frontend verification | **MISSING** | **AUTOMATED** |
 | S | Backend/frontend release-SHA consistency | **MISSING** | **AUTOMATED** (reported, §7) |
-| T | Shell-level regression coverage for any of the above | **MISSING** | **AUTOMATED** (105 assertions, §8) |
+| T | Shell-level regression coverage for any of the above | **MISSING** | **AUTOMATED** (188 assertions, §8/§19) |
 | U | Which directory nginx actually serves | **UNVERIFIED** (F0-006 §3/§4; host nginx config is not repository-owned) | **STILL UNVERIFIED — see §10** |
 | V | Database rollback for a frontend deploy | NOT REQUIRED | NOT REQUIRED |
 
@@ -107,7 +107,9 @@ This task **does not** upgrade the procedure to an atomic exchange and claims no
 - a failure of rename 2 triggers a **bounded best-effort restoration** (`mv <rollback> <dist>`), so production is not left without a live directory;
 - both outcomes of that restoration produce a distinct, explicit operator message.
 
-**Same-filesystem is enforced, not assumed.** `rename(2)` cannot cross devices; if it could, `mv` would silently degrade to copy-then-delete with a genuinely long window. The script compares `stat` device IDs and fails closed on a mismatch (`assert_same_filesystem`). If the device cannot be determined it says so and marks the precondition `UNVERIFIED` rather than claiming it.
+**Same-filesystem is enforced, not assumed.** `rename(2)` cannot cross devices; if it could, `mv` would silently degrade to copy-then-delete with a genuinely long window. The script compares `stat` device IDs and fails closed on a mismatch (`assert_same_filesystem`).
+
+**An undetermined device is also a refusal.** If `stat` cannot report a device for either path, the precondition is *unverifiable*, and the operation is refused — no rename, no state change, live bundle unchanged. The first revision of this script warned and continued in that case, which made a fail-closed contract fail open on exactly the hosts where nothing had verified the precondition. Corrected under R1; see §19.1.
 
 ---
 
@@ -141,6 +143,8 @@ No frontend release marker existed anywhere in the repository (searched: `releas
 
 The operator can now answer *"what git SHA is this frontend serving?"* with `cat /var/www/noramedi/dist/release.json` locally, or `curl https://<host>/release.json` remotely.
 
+**`releaseSha` is a validated contract, not free text** (added under R1 — §19.3). Accepted: a 40- or 64-character **lowercase** hex git object id, or the exact literal `unknown`. Anything else — a quote, a newline, a space, a slash, an abbreviated SHA, uppercase hex, arbitrary prose — is **refused before anything is built or renamed**, not escaped and accepted. This is the shape the rest of the program already produces (`noramedi-deploy.sh:182` and `ecosystem.config.cjs:84-97` both resolve `git rev-parse HEAD`, falling back to that same literal), and nothing in the repository produces or consumes an abbreviated `RELEASE_SHA`. Values read back *out* of a pre-existing marker, or out of `pm2_env`, are held to the same contract and reported as `INVALID` rather than echoed into operator output.
+
 **Nothing else may be added to it.** It is served publicly by nginx like any other file in the bundle. It carries no hostname, no filesystem path, no environment value, no secret. The suite asserts this both by content-matching and by pinning the field count, so a future field cannot be added without a test turning red.
 
 Deploying from a dirty worktree would produce a bundle no SHA describes — precisely the R-038 traceability failure — so the script **refuses a dirty checkout** unless `--allow-dirty` is passed, in which case it warns that the recorded SHA does not fully describe the bundle.
@@ -171,7 +175,9 @@ Only the `RELEASE_SHA` key is ever read out of `pm2_env`, so no other value in t
 
 **`--dry-run`** validates preconditions, prints the intended paths and renames, and performs no build, no rename, no delete, no state write, no PM2 interaction. Proven by full recursive byte-level snapshot comparison, and by asserting the build command never executed.
 
-**Fail-closed conditions, each with a test:** build failure · staging output missing · staging empty · `index.html` missing · `index.html` referencing an absent hashed asset · stale staging directory · rollback-destination collision · cross-filesystem staging/live · unsafe or empty deployment root · invalid rollback source · rollback source equal to the live or staging path · non-existent rollback source · symlinked live/staging/source path · unsafe `--tag` · unknown command or option · missing option value · rename-2 failure without restoration.
+**Fail-closed conditions, each with a test:** build failure · staging output missing · staging empty · `index.html` missing · `index.html` referencing an absent hashed asset · stale staging directory · rollback-destination collision · cross-filesystem staging/live · **undetermined filesystem device (R1)** · unsafe or empty deployment root · invalid rollback source · rollback source equal to the live or staging path · non-existent rollback source · symlinked live/staging/source path · unsafe `--tag` · **malformed release identity, including `--expect-sha` (R1)** · **build-executable override that is not an absolute path to an executable regular file (R1)** · unknown command or option · missing option value · rename-2 failure without restoration.
+
+A `--dry-run` is subject to every one of these. It reports that the real operation **would refuse**, and never prints its completion line in that case: a dry run must not describe a deployment as safe on a host where it would fail.
 
 ---
 
@@ -207,20 +213,20 @@ All suites run against `mktemp` working directories with PATH-injected fakes. **
 
 | # | Command | Result |
 |---|---|---|
-| 1 | `bash scripts/noramedi-frontend-deploy.test.sh` | **105 passed, 0 failed, 1 skipped** |
-| 2 | `npm run test:shell` (the exact CI aggregate) | **exit 0** — opscheck 178/178, pgBackRest 239/239, PITR app smoke 50/50, frontend deploy 105/105 |
+| 1 | `bash scripts/noramedi-frontend-deploy.test.sh` | **188 passed, 0 failed, 2 skipped** (105/1 before R1) |
+| 2 | `npm run test:shell` (the exact CI aggregate) | **exit 0** — opscheck 178/178, pgBackRest 239/239, PITR app smoke 50/50, frontend deploy 188/188 |
 | 3 | `npm run test:ci-classify` | **28 passed, 0 failed** (was 24 before this task) |
 | 4 | `npm run typecheck:ci-classify` | **exit 0** |
 | 5 | `for f in scripts/*.sh scripts/test-runtime/*.sh; do bash -n "$f"; done` (the CI gate verbatim) | **exit 0, all pass** |
 | 6 | `npx tsx scripts/ci-classify/cli.ts --files-from=<this task's changed files>` | `docsOnly: false`, all five deep-gate flags `true` (§12) |
 
-**The one skip, reported rather than hidden:** the symlinked-live-path guard could not be exercised on the Windows/MSYS development host, which cannot create real symlinks without developer mode. The suite prints `SKIPPED`, counts it, and repeats it in the summary line. **On `ubuntu-latest` — the only runner that gates this repository — that branch does not execute and the guard is exercised.** It is not claimed as locally verified.
+**The two skips, reported rather than hidden.** Both are Windows/MSYS filesystem limitations of the development host, not gaps in the suite. (1) The symlinked-live-path guard — MSYS cannot create real symlinks without developer mode. (2) The non-executable build-override guard (added under R1) — this filesystem reports a shebang file as executable even after `chmod -x`, so the "not executable" branch cannot be reached locally. In both cases the suite prints `SKIPPED`, counts it, and repeats the count in the summary line. **On `ubuntu-latest` — the only runner that gates this repository — neither skip fires and both guards are exercised.** Neither is claimed as locally verified.
 
-**Coverage against the required categories:** successful staged build/promotion ✓ · build failure → live unchanged ✓ · invalid staging output → live unchanged (three variants) ✓ · rollback target collision → abort ✓ · second rename failure → previous live bundle restored ✓ · explicit rollback → expected version becomes live ✓ · invalid rollback source → abort (five variants) ✓ · unsafe path → abort (thirteen variants) ✓ · dry-run → zero mutations ✓ · release marker correctness ✓ · no secret leakage ✓ · shell syntax ✓ · path quoting with spaces ✓.
+**Coverage against the required categories:** successful staged build/promotion ✓ · build failure → live unchanged ✓ · invalid staging output → live unchanged (three variants) ✓ · rollback target collision → abort ✓ · second rename failure → previous live bundle restored ✓ · explicit rollback → expected version becomes live ✓ · invalid rollback source → abort (five variants) ✓ · unsafe path → abort (thirteen variants) ✓ · dry-run → zero mutations ✓ · release marker correctness ✓ · no secret leakage ✓ · shell syntax ✓ · path quoting with spaces ✓ · **undetermined filesystem device → deploy, rollback and both dry-runs refuse (R1)** ✓ · **build override → six rejection variants plus three proven-not-executed injection payloads (R1)** ✓ · **release identity → sixteen rejection variants and three accepted values, each with the marker re-parsed as JSON (R1)** ✓.
 
 ### 11.1 Mutation / falsification
 
-Two mutants, both applied to the real file, both reverted before commit. **`git grep "false && mv"` returns nothing and `git diff` shows no mutant text.**
+Two mutants at first authoring, both applied to the real file, both reverted before commit; **three further mutants under R1 are in §19.4.** Counts in this subsection are those of the pre-R1 suite (105 assertions). **`git grep "false && mv"` returns nothing and `git diff` shows no mutant text.**
 
 **Mutant A — restoration branch disabled** (`if mv -- "$rollback_dir" "$LIVE_DIR"` → `if false && mv …`):
 
@@ -386,7 +392,7 @@ No schema change, no migration, no data mutation. Nothing to reverse.
 | Field | Value |
 |---|---|
 | `AGENT_COMPLETED` | **YES** |
-| Tests executed locally | **YES** — 105/105 suite, `npm run test:shell` exit 0, 28/28 classifier, both typechecks and the `bash -n` gate clean, 1 platform skip reported |
+| Tests executed locally | **YES** — 188/188 suite, `npm run test:shell` exit 0, 28/28 classifier, both typechecks and the `bash -n` gate clean, 2 platform skips reported |
 | `TESTS_PASSED` (tracker status) | **NOT SELF-ASSIGNED** — `docs/program/README.md` §5 forbids an agent assigning this. §11 reports what was executed; the status is external. |
 | `PR_OPENED` | YES (see tracker entry) |
 | `MERGED` | **NO** |
@@ -399,8 +405,8 @@ No schema change, no migration, no data mutation. Nothing to reverse.
 
 | File | Change |
 |---|---|
-| `scripts/noramedi-frontend-deploy.sh` | **new** — deploy/rollback/verify, promotion, restoration, path safety, release marker |
-| `scripts/noramedi-frontend-deploy.test.sh` | **new** — 105-assertion hermetic regression suite |
+| `scripts/noramedi-frontend-deploy.sh` | **new** — deploy/rollback/verify, promotion, restoration, path safety, release-identity contract, release marker |
+| `scripts/noramedi-frontend-deploy.test.sh` | **new** — 188-assertion hermetic regression suite |
 | `package.json` | `test:shell:frontend-deploy` added; chained into `test:shell` |
 | `scripts/ci-classify/classify.ts` | one `CI_TOOLING` clause for `scripts/**/*.sh` |
 | `scripts/ci-classify/__tests__/classify.test.ts` | one F3-PROD-004 test + two `samples` entries |
@@ -409,3 +415,85 @@ No schema change, no migration, no data mutation. Nothing to reverse.
 | **this file** | new evidence document |
 
 No application source file, no Prisma schema, no migration, no lockfile, no `ecosystem.config.cjs`, and no change to `scripts/noramedi-deploy.sh`.
+
+---
+
+## 19. F3-PROD-004-R1 — architecture review response
+
+The F3-PROD-004 design was **accepted** in architecture review, with **three blockers to correct before merge**. All three are corrected on the same branch, in the same PR (#437). Nothing in the accepted design changed: one script, `deploy`/`rollback`/`verify`, the two-step same-filesystem rename promotion described exactly as before, deterministic rollback with no directory-order guessing, bounded restoration on a rename-2 failure, no delete primitive, `release.json`, PM2 runtime SHA comparison, independent frontend/backend status, path safety, dry-run, R-038 lifecycle, and no application/schema/data change.
+
+| # | Blocker | Correction |
+|---|---|---|
+| 1 | Same-filesystem check **failed open** on an undetermined device | Undetermined device is now a **refusal** (§19.1) |
+| 2 | Build executed an **environment-supplied command string** | The build seam is now an **executable file**, executed directly; the production build is a fixed argument vector (§19.2) |
+| 3 | `releaseSha` accepted **arbitrary bytes** into a publicly served marker | A **validated release-identity contract**, proven from repository evidence (§19.3) |
+
+### 19.1 Blocker 1 — an undetermined filesystem device now refuses the operation
+
+`assert_same_filesystem` compared `stat` device IDs and died on a mismatch, but when a device could **not** be determined it emitted a `WARNING` and returned success. That is the fail-closed promotion contract failing **open**, and failing open in the worst place: a host where `stat` cannot report a device is precisely a host where nothing has verified that staging, live and the preserved bundle share a filesystem, and a cross-device `mv` degrades silently into copy-then-delete — stretching the near-atomic window into a long one, on production, behind a warning nobody reads.
+
+**UNKNOWN DEVICE = REFUSE OPERATION.** Both branches now `die`: no rename, no state mutation, live bundle unchanged, and the message says so.
+
+**Dry-run behaviour is explicitly defined.** The check runs before the dry-run early return in both `deploy` and `rollback`, so a dry run on such a host **refuses too**, states that it is a dry run and that nothing was changed, and reports that the real operation would refuse. It does **not** print its `=== DRY RUN complete — zero mutations ===` line — a dry run must never describe a deployment as safe on a host where it would fail. That negative assertion is a test in its own right.
+
+**Test seam — no production hook.** The suite puts a `stat` on `PATH` that cannot report a device, the same technique already used for the failing `mv`. Section M drives deploy, deploy `--dry-run`, rollback and rollback `--dry-run`, asserting in each case that the refusal came from *this* check by its own wording (`UNVERIFIABLE`), that the live bundle is byte-identical, and that no state file was written — plus a **positive control** proving the identical rollback succeeds once the device can be determined, so the four refusals are attributable rather than incidental.
+
+### 19.2 Blocker 2 — no shell-string build execution
+
+`NORAMEDI_FRONTEND_BUILD_CMD` was read from the environment and passed to `eval`. It existed for one reason — so the regression suite could substitute a build without a Vite toolchain — but it was an arbitrary-code seam in a tool an operator runs against a production host, and it is gone.
+
+- **Production runs a fixed argument vector:** `BUILD_ARGV=(npm run build -- --outDir dist.next)`, invoked with no shell — no word splitting, no expansion, nothing the environment can influence.
+- **The only substitution point is an executable file:** `NORAMEDI_FRONTEND_BUILD_EXECUTABLE`, which must be an **absolute path** (a bare name would be resolved through `PATH`), must contain no newline, must **exist**, must **not be a directory**, must be a **regular file**, and must be **executable**. It is then run directly with the staging directory as its single argument. It is never sourced and never interpreted as shell source.
+- Using it emits a `WARNING`, so a production run that somehow has it set says so in the deploy log rather than silently building something unexpected.
+- There is **no `eval`** and **no `sh -c` / `bash -c`** anywhere in the file, and the removed variable name appears nowhere in it — comments included.
+
+The suite asserts all of that structurally on the comment-stripped file, and behaviourally: six rejection variants, three of which are real injection payloads (`printf x > …`, `/bin/sh -c '…'`, `/bin/echo hi; printf x > …`) whose **side-effect files are asserted not to exist afterwards**. The shell scripting the suite needs now lives entirely on the suite's side of that boundary — the test file authors a helper program, and the production script only ever executes a validated executable.
+
+### 19.3 Blocker 3 — release identity is a validated contract
+
+`releaseSha` is written into `dist/release.json`, which nginx serves publicly. It was interpolated unvalidated, so a value containing a quote or a newline produced a **malformed release marker** and arbitrary text in operator-facing output.
+
+**The accepted contract, proven from repository evidence rather than chosen:** `scripts/noramedi-deploy.sh:182` resolves `RELEASE_SHA="${RELEASE_SHA:-$(git -C "$APP_DIR" rev-parse HEAD … || echo unknown)}"`, and `ecosystem.config.cjs:84-97` (`resolveReleaseSha`) does the same with the same fallback. Both produce a **full 40-character lowercase SHA-1 or the exact literal `unknown`**. Nothing in this repository produces or consumes an abbreviated `RELEASE_SHA`, so **short SHAs are not accepted**. 64 hex is allowed for forward compatibility with a SHA-256 object format.
+
+```
+accept:  ^[0-9a-f]{40}$   |   ^[0-9a-f]{64}$   |   unknown
+```
+
+- **Lowercase only, deliberately.** `git rev-parse` never emits uppercase; silently accepting it would make the frontend marker mismatch the backend's `pm2_env` value and report a release skew that does not exist. Uppercase hex gets its own message naming the fix.
+- **Fail closed, never escape-and-continue.** Validation runs in `cmd_deploy` before the value is used for anything — before the preserved-directory name is derived from it, before the build — and again inside `write_release_marker` as defence in depth. `--expect-sha` is held to the same contract, so a malformed expectation is a refusal rather than a reported production mismatch.
+- **The error message is bounded.** An overlong or control-character-bearing value is summarised (truncated at 80 characters with a length, tabs/newlines/CRs escaped) rather than echoed whole into the deploy log.
+- **Values read back are not trusted either.** A `releaseSha` from a pre-existing or hand-edited marker, and the `RELEASE_SHA` read out of `pm2_env`, are reported as `INVALID` if they do not satisfy the contract, and `RELEASE_SHA_MATCH` becomes `NOT_APPLICABLE` rather than a verdict.
+- **`release.json` validity is checked with a real JSON parser**, not grep: each accepted deploy re-reads the marker through `node`/`JSON.parse` and asserts both the exact four-field key set and that `releaseSha` round-trips byte-identically.
+
+Sixteen rejection variants are tested — double quote, JSON field injection (`x", "builtBy": "…`), newline, carriage return, tab, space, backslash, slash, `$( )`, backticks, 12-character SHA, 39- and 41-character near-misses, non-hex of the right length, arbitrary prose, uppercase hex, and a 500-character blob — each asserting the specific refusal message and that nothing under the deployment root changed. The `$( )` and backtick cases additionally assert their payload never executed. Three accepted values (40-hex, 64-hex, `unknown`) assert success, marker validity and the derived preserved-directory name.
+
+**One pre-existing test defect this contract exposed.** The secret-canary loop in section K ran a dry-run deploy with `--release-sha ffff1111` — eight characters. Under the new contract that invocation aborts at validation, so the case would have gone on "passing" while exercising nothing. It now uses a full 40-character SHA, and the dry-run path it was written to cover is actually reached.
+
+### 19.4 R1 mutation / falsification
+
+Three mutants, each applied to the real file, each reverted. `git grep` for mutant text returns nothing.
+
+| Mutant | Change | Result |
+|---|---|---|
+| **1** | `assert_same_filesystem` restored to `warn` + `return 0` on an unknown device | **177 passed, 11 failed, exit 1 — killed.** Every section-M assertion failed, including the byte-level snapshot ones: the mutant actually performed the promotion and the rollback on a host where the precondition was unverifiable. |
+| **2** | `eval` on an environment-supplied command string restored alongside the executable seam | **186 passed, 2 failed, exit 1 — killed** by the two structural assertions (`no eval at all`, `the removed seam is still referenced`). |
+| **2b** | The stricter variant: override validation removed and the override run as `sh -c "$exe"` — i.e. a future "fix" that lets the seam take a command string again | **178 passed, 10 failed, exit 1 — killed.** Three injected payloads (`pwned-relative`, `pwned-absolute`, `pwned-semicolon`) were **actually created on disk** and the assertions detected them, so the security claim rests on observed behaviour and not only on a grep of the source. |
+| **3** | `assert_valid_release_sha` short-circuited to `return 0` | **157 passed, 31 failed, exit 1 — killed.** Several rejected values exited non-zero anyway for unrelated reasons; because every assertion requires the *specific* refusal message, those cases still failed — the lesson mutant B taught this suite at first authoring, applied. |
+
+Clean tree after reverting all three: **188 passed, 0 failed, 2 skipped, exit 0.**
+
+### 19.5 R1 CI reachability
+
+R1 changes only `scripts/noramedi-frontend-deploy.sh`, `scripts/noramedi-frontend-deploy.test.sh` and documentation. **No classifier rule and no workflow change was required or made** — the existing chain applies unchanged, re-verified with the real CLI on the R1 changed-path set:
+
+```
+fileCategories: scripts/noramedi-frontend-deploy.sh      -> CI_TOOLING
+                scripts/noramedi-frontend-deploy.test.sh -> CI_TOOLING
+docsOnly: false ; runBackendGeneral/runPostgres/runStorage/runFrontendFullSuite/runLegacyBackend: all true
+```
+
+→ `workflow-and-syntax-lint` (`ci-layers.yml:319-325`) → `npm run test:shell` (`:365`) → `test:shell:frontend-deploy` (`package.json:42`) → the 188-assertion suite, on `ubuntu-latest`, where both local skips are exercised.
+
+### 19.6 R1 status — unchanged where it must be
+
+`R-038` remains **`CLOSURE_PROPOSED_AWAITING_MERGE_AND_DEPLOYMENT`** — **NOT CLOSED**. R1 hardens the tool; it does not perform the production run the row's missing control requires. `R-030` / `R-030-DB` / `R-030-FILES` `OPEN` · `FIRST_CUSTOMER_RECOVERY_GATE` `NOT_SATISFIED` · F3 exit gate `NOT_SATISFIED` · F4 NOT COMPLETE · F5 NOT AUTHORIZED · repo2 NOT ACTIVATED. `MIGRATION_REQUIRED` / `MIGRATION_CREATED` / `PRODUCTION_MIGRATION` all **NO**; no tenant, auth, PHI/PII, provider, schema or production-data impact. The four production-verification steps in §16 are unchanged and still outstanding.

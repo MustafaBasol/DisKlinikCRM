@@ -100,9 +100,26 @@ EOF
   chmod +x "$FAILBIN/mv"
 }
 
+# A `stat` that cannot report a filesystem device — the host the promotion
+# contract's same-filesystem precondition cannot be verified on. Same technique
+# as the failing `mv`: the seam is on PATH, so the production script needs no
+# test-only hook to reach its fail-closed path (F3-PROD-004-R1, blocker 1).
+NOSTATBIN="$WORK/nostatbin"
+mkdir -p "$NOSTATBIN"
+write_no_device_stat() {
+  cat > "$NOSTATBIN/stat" <<'EOF'
+#!/usr/bin/env bash
+echo "fake stat: filesystem device information is unavailable on this host" >&2
+exit 1
+EOF
+  chmod +x "$NOSTATBIN/stat"
+}
+
 write_fake_date "$FAKEBIN"
 write_fake_date "$FAILBIN"
+write_fake_date "$NOSTATBIN"
 write_failing_mv
+write_no_device_stat
 
 # ── invocation ───────────────────────────────────────────────────────────
 OUT=""
@@ -144,14 +161,37 @@ new_app() {
   printf '%s\n' "$app"
 }
 
-# A build command that produces a valid staged bundle. Passed to the script as
-# NORAMEDI_FRONTEND_BUILD_CMD, which is the documented seam that lets this
-# suite drive every path without a Vite toolchain.
-build_ok() {
+# ── the build seam (F3-PROD-004-R1, blocker 2) ───────────────────────────
+# The production script no longer accepts a build *command string*: there is no
+# shell-string build hook left in it. Its only substitution point is
+# NORAMEDI_FRONTEND_BUILD_EXECUTABLE, an absolute path to an executable file it
+# runs directly. So the shell scripting this suite needs stays entirely on this
+# side of that boundary — this file authors the helper program, and the
+# production script only ever executes a validated executable.
+#
+# build_exe SHELL_BODY -> absolute path to a fresh executable running SHELL_BODY.
+BUILD_EXE_SEQ=0
+build_exe() {
+  local body="$1"
+  BUILD_EXE_SEQ=$((BUILD_EXE_SEQ + 1))
+  local f="$WORK/build-helper-$BUILD_EXE_SEQ.sh"
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf 'set -uo pipefail\n'
+    printf '%s\n' "$body"
+  } > "$f"
+  chmod +x "$f"
+  printf '%s\n' "$f"
+}
+
+# The body of a build that produces a valid staged bundle. Relative to the
+# deployment root, which is the cwd the production script invokes it in.
+build_ok_body() {
   local token="$1"
   printf 'mkdir -p dist.next/assets && printf "chunk\\n" > dist.next/assets/index-%s.js && printf ".c{}\\n" > dist.next/assets/index-%s.css && printf "<!doctype html><html><head><link rel=\\"stylesheet\\" href=\\"/assets/index-%s.css\\"><script type=\\"module\\" src=\\"/assets/index-%s.js\\"></script></head><body></body></html>" > dist.next/index.html' \
     "$token" "$token" "$token" "$token"
 }
+build_ok() { build_exe "$(build_ok_body "$1")"; }
 
 # bundle_token BUNDLE_DIR — which build is this? live_token takes a deployment
 # root; bundle_token takes a bundle directory (preserved, staged, whatever).
@@ -176,7 +216,7 @@ section "A. Successful staged build, validation and promotion"
 APP="$(new_app app-happy)"
 seed_bundle "$APP/dist" v1
 
-run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2)" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
     bash "$FE" deploy --app-dir "$APP" --release-sha 1111222233334444555566667777888899990000
 
 [[ "$CODE" -eq 0 ]] \
@@ -254,7 +294,7 @@ APP="$(new_app app-buildfail)"
 seed_bundle "$APP/dist" v1
 SNAP_BEFORE="$(snapshot "$APP")"
 
-run env NORAMEDI_FRONTEND_BUILD_CMD="exit 3" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_exe 'exit 3')" \
     bash "$FE" deploy --app-dir "$APP" --release-sha aaaa1111bbbb2222cccc3333dddd4444eeee5555
 
 [[ "$CODE" -ne 0 ]] \
@@ -273,7 +313,7 @@ section "D. Invalid staging output is refused before any rename"
 APP="$(new_app app-nostage)"
 seed_bundle "$APP/dist" v1
 SNAP_BEFORE="$(snapshot "$APP")"
-run env NORAMEDI_FRONTEND_BUILD_CMD="true" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_exe 'true')" \
     bash "$FE" deploy --app-dir "$APP" --release-sha aaaa1111bbbb2222cccc3333dddd4444eeee5555
 [[ "$CODE" -ne 0 ]] \
   && pass "a build that exits 0 but produces no staging directory is refused" \
@@ -287,11 +327,11 @@ run env NORAMEDI_FRONTEND_BUILD_CMD="true" \
 # left in place for the operator to inspect. The live bundle is what must be
 # byte-identical, so that is what is compared.
 reject_case() {
-  local label="$1" cmd="$2" expect="$3"
+  local label="$1" body="$2" expect="$3"
   local app; app="$(new_app "app-reject-$RANDOM$RANDOM")"
   seed_bundle "$app/dist" v1
   local before; before="$(snapshot "$app/dist")"
-  run env NORAMEDI_FRONTEND_BUILD_CMD="$cmd" \
+  run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_exe "$body")" \
       bash "$FE" deploy --app-dir "$app" --release-sha aaaa1111bbbb2222cccc3333dddd4444eeee5555
   if [[ "$CODE" -ne 0 && "$OUT" == *"$expect"* ]]; then
     pass "$label is refused"
@@ -327,7 +367,7 @@ APP="$(new_app app-stalestage)"
 seed_bundle "$APP/dist" v1
 seed_bundle "$APP/dist.next" vstale
 SNAP_BEFORE="$(snapshot "$APP")"
-run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2)" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
     bash "$FE" deploy --app-dir "$APP" --release-sha aaaa1111bbbb2222cccc3333dddd4444eeee5555
 [[ "$CODE" -ne 0 && "$OUT" == *"stale"* ]] \
   && pass "a pre-existing staging directory aborts the deploy rather than being silently overwritten" \
@@ -337,7 +377,7 @@ run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2)" \
   || fail "the deployment root was mutated by the stale-staging abort"
 
 # --clean-staging moves it aside; it must never delete it.
-run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2)" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
     bash "$FE" deploy --app-dir "$APP" --clean-staging --release-sha aaaa1111bbbb2222cccc3333dddd4444eeee5555
 [[ "$CODE" -eq 0 ]] \
   && pass "--clean-staging allows the deploy to proceed" \
@@ -353,7 +393,7 @@ seed_bundle "$APP/dist" v1
 mkdir -p "$APP/dist.rollback-aaaa1111bbbb-20260101T000000Z"
 printf 'do-not-touch\n' > "$APP/dist.rollback-aaaa1111bbbb-20260101T000000Z/SENTINEL"
 SNAP_BEFORE="$(snapshot "$APP")"
-run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2)" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
     bash "$FE" deploy --app-dir "$APP" --release-sha aaaa1111bbbb2222cccc3333dddd4444eeee5555
 [[ "$CODE" -ne 0 ]] \
   && pass "a colliding rollback destination aborts the deploy" \
@@ -374,7 +414,7 @@ section "F. Second-rename failure restores the previous live bundle"
 APP="$(new_app app-renamefail)"
 seed_bundle "$APP/dist" v1
 BIN="$FAILBIN"
-run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2)" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
     bash "$FE" deploy --app-dir "$APP" --release-sha bbbb1111cccc2222dddd3333eeee4444ffff5555
 
 [[ "$CODE" -ne 0 ]] \
@@ -404,7 +444,7 @@ section "G. Rollback restores the exact expected version"
 # ════════════════════════════════════════════════════════════════════════
 APP="$(new_app app-rollback)"
 seed_bundle "$APP/dist" v1
-run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2)" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
     bash "$FE" deploy --app-dir "$APP" --tag rel-a --release-sha 1111111111111111111111111111111111111111
 [[ "$CODE" -eq 0 && "$(live_token "$APP")" == "v2" ]] \
   && pass "setup: v2 deployed over v1" \
@@ -567,7 +607,7 @@ for badtag in "../escape" "a/b" "with space" "\$(touch $WORK/pwned)" "\`touch $W
   APP="$(new_app "app-badtag-$RANDOM$RANDOM")"
   seed_bundle "$APP/dist" v1
   SNAP_BEFORE="$(snapshot "$APP")"
-  run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2)" \
+  run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
       bash "$FE" deploy --app-dir "$APP" --tag "$badtag" --release-sha aaaa1111bbbb2222cccc3333dddd4444eeee5555
   if [[ "$CODE" -ne 0 && "$OUT" == *"tag"* && "$(snapshot "$APP")" == "$SNAP_BEFORE" ]]; then
     pass "refuses tag '$badtag' before touching anything"
@@ -583,7 +623,7 @@ done
 APP="$WORK/app with space"
 mkdir -p "$APP"
 seed_bundle "$APP/dist" v1
-run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2)" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
     bash "$FE" deploy --app-dir "$APP" --tag spaced --release-sha cccc1111dddd2222eeee3333ffff444455556666
 [[ "$CODE" -eq 0 && "$(live_token "$APP")" == "v2" ]] \
   && pass "a deployment root containing a space deploys correctly (quoting is intact end to end)" \
@@ -601,7 +641,7 @@ seed_bundle "$APP/dist" v1
 seed_bundle "$APP/dist.rollback-old-20250101T000000Z" v0
 SNAP_BEFORE="$(snapshot "$APP")"
 
-run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2) && touch $WORK/build-ran" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_exe "$(build_ok_body v2); touch $WORK/build-ran")" \
     bash "$FE" deploy --app-dir "$APP" --dry-run --release-sha eeee1111ffff2222aaaa3333bbbb4444cccc5555
 [[ "$CODE" -eq 0 ]] \
   && pass "dry-run deploy exits 0" \
@@ -661,7 +701,7 @@ APP="$(new_app app-canary)"
 seed_bundle "$APP/dist" v1
 LEAKED=0
 for args in \
-  "deploy --app-dir $APP --dry-run --release-sha ffff1111" \
+  "deploy --app-dir $APP --dry-run --release-sha ffff1111aaaa2222bbbb3333cccc4444dddd5555" \
   "verify --app-dir $APP" \
   "rollback --app-dir $APP" \
   "help"
@@ -670,11 +710,11 @@ do
   run bash "$FE" $args
   [[ "$OUT" == *"$CANARY"* ]] && LEAKED=$((LEAKED + 1))
 done
-run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v2)" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
     bash "$FE" deploy --app-dir "$APP" --tag canary --release-sha ffff1111aaaa2222bbbb3333cccc4444dddd5555
 [[ "$OUT" == *"$CANARY"* ]] && LEAKED=$((LEAKED + 1))
 BIN="$FAILBIN"
-run env NORAMEDI_FRONTEND_BUILD_CMD="$(build_ok v3)" \
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v3)" \
     bash "$FE" deploy --app-dir "$APP" --tag canary2 --release-sha ffff1111aaaa2222bbbb3333cccc4444dddd6666
 [[ "$OUT" == *"$CANARY"* ]] && LEAKED=$((LEAKED + 1))
 
@@ -739,6 +779,293 @@ if [[ -n "$CHAIN" ]]; then
 else
   fail "package.json has no test:shell script — the CI shell lane would run nothing"
 fi
+
+# ════════════════════════════════════════════════════════════════════════
+section "M. An UNDETERMINED filesystem device refuses the operation (R1 blocker 1)"
+# ════════════════════════════════════════════════════════════════════════
+# The promotion contract is a same-filesystem rename. This precondition used to
+# WARN and continue when `stat` could not report a device — a fail-closed
+# contract failing OPEN on precisely the hosts where nothing had verified it.
+# Driven for real with a `stat` on PATH that cannot report a device; the
+# production script has no hook for this.
+#
+# Every case here asserts the refusal came from THIS check by its own wording.
+# Asserting only a non-zero exit is what let a deleted path-safety guard survive
+# mutation B earlier in this task.
+
+APP="$(new_app app-nodev-deploy)"
+seed_bundle "$APP/dist" v1
+SNAP_BEFORE="$(snapshot "$APP")"
+BIN="$NOSTATBIN"
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+    bash "$FE" deploy --app-dir "$APP" --release-sha 1111222233334444555566667777888899990000
+[[ "$CODE" -ne 0 && "$OUT" == *"UNVERIFIABLE"* ]] \
+  && pass "deploy REFUSES when the filesystem device cannot be determined" \
+  || fail "deploy did not fail closed on an undetermined device (exit $CODE): $OUT"
+[[ "$OUT" == *"UNCHANGED"* ]] \
+  && pass "the refusal tells the operator the live bundle is unchanged" \
+  || fail "the refusal does not state the live state: $OUT"
+[[ "$(snapshot "$APP")" == "$SNAP_BEFORE" ]] \
+  && pass "not one byte under the deployment root changed — the check precedes the build and both renames" \
+  || fail "the deployment root was mutated despite an unverifiable device"
+[[ ! -e "$APP/.noramedi-frontend-release-state" ]] \
+  && pass "no rollback state was recorded" \
+  || fail "a state file was written despite the refusal"
+
+BIN="$NOSTATBIN"
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+    bash "$FE" deploy --app-dir "$APP" --dry-run --release-sha 1111222233334444555566667777888899990000
+[[ "$CODE" -ne 0 && "$OUT" == *"UNVERIFIABLE"* ]] \
+  && pass "dry-run deploy reports that the real operation would REFUSE" \
+  || fail "dry-run deploy did not report the refusal (exit $CODE): $OUT"
+[[ "$OUT" == *"DRY RUN"* ]] \
+  && pass "the dry-run refusal says explicitly that nothing was changed" \
+  || fail "the dry-run refusal does not distinguish itself from a real one: $OUT"
+[[ "$OUT" != *"DRY RUN complete"* ]] \
+  && pass "a dry run never reports the deployment as safe when the real one would fail" \
+  || fail "the dry run declared success on a host where the deploy would refuse: $OUT"
+[[ "$(snapshot "$APP")" == "$SNAP_BEFORE" ]] \
+  && pass "dry-run refusal mutated nothing" \
+  || fail "the dry-run refusal mutated the deployment root"
+
+APP="$(new_app app-nodev-rollback)"
+seed_bundle "$APP/dist" v2
+seed_bundle "$APP/dist.rollback-manual-20260101T000000Z" v1
+SNAP_BEFORE="$(snapshot "$APP")"
+BIN="$NOSTATBIN"
+run bash "$FE" rollback --app-dir "$APP" --from "$APP/dist.rollback-manual-20260101T000000Z"
+[[ "$CODE" -ne 0 && "$OUT" == *"UNVERIFIABLE"* ]] \
+  && pass "rollback REFUSES when the filesystem device cannot be determined" \
+  || fail "rollback did not fail closed on an undetermined device (exit $CODE): $OUT"
+[[ "$(live_token "$APP")" == "v2" ]] \
+  && pass "the live bundle is still the pre-rollback one" \
+  || fail "the live bundle changed during a refused rollback"
+[[ "$(snapshot "$APP")" == "$SNAP_BEFORE" ]] \
+  && pass "not one byte changed during the refused rollback" \
+  || fail "the deployment root was mutated during a refused rollback"
+
+BIN="$NOSTATBIN"
+run bash "$FE" rollback --app-dir "$APP" --dry-run --from "$APP/dist.rollback-manual-20260101T000000Z"
+[[ "$CODE" -ne 0 && "$OUT" == *"UNVERIFIABLE"* && "$OUT" != *"DRY RUN complete"* ]] \
+  && pass "dry-run rollback reports the refusal instead of reporting success" \
+  || fail "dry-run rollback did not report the refusal (exit $CODE): $OUT"
+
+# Positive control: with a working `stat` the identical rollback succeeds. Without
+# this, the four assertions above could be passing for any reason at all.
+run bash "$FE" rollback --app-dir "$APP" --from "$APP/dist.rollback-manual-20260101T000000Z"
+[[ "$CODE" -eq 0 && "$(live_token "$APP")" == "v1" ]] \
+  && pass "the same rollback succeeds once the device CAN be determined (the refusals above are attributable)" \
+  || fail "the control rollback failed, so section M proves nothing (exit $CODE): $OUT"
+
+# ════════════════════════════════════════════════════════════════════════
+section "N. The build is a fixed command, never an evaluated string (R1 blocker 2)"
+# ════════════════════════════════════════════════════════════════════════
+# The script used to accept a build COMMAND STRING from the environment and
+# evaluate it — arbitrary code execution in a tool an operator runs against
+# production, present only to make this suite possible. It now runs a fixed
+# argument vector, and the only substitution point is an executable file.
+
+if grep -qE '(^|[^[:alnum:]_])eval([^[:alnum:]_]|$)' "$CODE_ONLY"; then
+  fail "the deploy script evaluates a string: $(grep -nE '(^|[^[:alnum:]_])eval([^[:alnum:]_]|$)' "$CODE_ONLY" | head -3)"
+else
+  pass "the deploy script contains no eval at all"
+fi
+if grep -qE '(bash|sh|zsh|dash)[[:space:]]+-c' "$CODE_ONLY"; then
+  fail "the deploy script hands a string to a shell: $(grep -nE '(bash|sh|zsh|dash)[[:space:]]+-c' "$CODE_ONLY" | head -3)"
+else
+  pass "the deploy script never invokes a shell with -c on any value"
+fi
+if grep -q 'BUILD_CMD' "$FE"; then
+  fail "the removed shell-string build seam is still referenced: $(grep -n 'BUILD_CMD' "$FE" | head -3)"
+else
+  pass "the shell-string build seam is gone from the script entirely, comments included"
+fi
+if grep -q 'BUILD_ARGV=(npm run build -- --outDir dist.next)' "$FE"; then
+  pass "the production build is a fixed argument vector: npm run build -- --outDir dist.next"
+else
+  fail "the fixed production build argument vector is missing or changed shape"
+fi
+
+# build_reject LABEL VALUE EXPECT [SIDE_EFFECT_PATH]
+build_reject() {
+  local label="$1" value="$2" expect="$3" side="${4-}"
+  local app; app="$(new_app "app-bexe-$RANDOM$RANDOM")"
+  seed_bundle "$app/dist" v1
+  local before; before="$(snapshot "$app")"
+  run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$value" \
+      bash "$FE" deploy --app-dir "$app" --release-sha aaaa1111bbbb2222cccc3333dddd4444eeee5555
+  [[ "$CODE" -ne 0 && "$OUT" == *"$expect"* ]] \
+    && pass "refuses $label" \
+    || fail "accepted $label, or refused it for the wrong reason (exit $CODE): $OUT"
+  [[ "$(snapshot "$app")" == "$before" ]] \
+    && pass "nothing under the deployment root changed while refusing $label" \
+    || fail "the deployment root was mutated while refusing $label"
+  if [[ -n "$side" ]]; then
+    [[ ! -e "$side" ]] \
+      && pass "the value was NOT interpreted as shell code ($label — its side effect never happened)" \
+      || fail "the value was executed as shell code: '$side' exists ($label)"
+  fi
+}
+
+build_reject "a bare command name (would be resolved through PATH)" \
+  "npm" "must be an absolute path"
+build_reject "a shell command STRING rather than a path" \
+  "printf x > $WORK/pwned-relative" "must be an absolute path" "$WORK/pwned-relative"
+build_reject "an absolute-looking shell command string with a redirect" \
+  "/bin/sh -c 'printf x > $WORK/pwned-absolute'" "does not exist" "$WORK/pwned-absolute"
+build_reject "an absolute path with shell metacharacters appended" \
+  "/bin/echo hi; printf x > $WORK/pwned-semicolon" "does not exist" "$WORK/pwned-semicolon"
+build_reject "an executable that does not exist" \
+  "/nonexistent-build-helper-$RANDOM" "does not exist"
+build_reject "a directory" \
+  "$WORK" "is a directory"
+
+NOEXEC="$WORK/not-executable-helper.sh"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$NOEXEC"
+chmod -x "$NOEXEC" 2>/dev/null || true
+if [[ -x "$NOEXEC" ]]; then
+  SKIPPED=$((SKIPPED + 1))
+  echo "  SKIPPED - this filesystem reports every file as executable; the non-executable-override guard was NOT exercised here (it is on CI)."
+else
+  build_reject "a regular file that is not executable" "$NOEXEC" "is not executable"
+fi
+
+# Using the seam at all must be conspicuous: a production run that somehow has it
+# set should say so in the deploy log rather than build something unexpected
+# silently.
+APP="$(new_app app-bexe-warn)"
+seed_bundle "$APP/dist" v1
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+    bash "$FE" deploy --app-dir "$APP" --release-sha aaaa1111bbbb2222cccc3333dddd4444eeee5555
+[[ "$CODE" -eq 0 && "$OUT" == *"WARNING"* && "$OUT" == *"NORAMEDI_FRONTEND_BUILD_EXECUTABLE"* ]] \
+  && pass "an overridden build executable succeeds but is reported as a WARNING in the log" \
+  || fail "the build override was used without a visible warning (exit $CODE): $OUT"
+[[ "$(live_token "$APP")" == "v2" ]] \
+  && pass "the overridden executable is actually run (it produced the promoted bundle)" \
+  || fail "the override did not produce the live bundle"
+
+# ════════════════════════════════════════════════════════════════════════
+section "O. Release identity contract (R1 blocker 3)"
+# ════════════════════════════════════════════════════════════════════════
+# releaseSha is PUBLIC metadata: dist/release.json is served to anyone. It used
+# to be interpolated into JSON unvalidated, so a quote or a newline produced a
+# malformed marker and arbitrary text in operator output.
+#
+# The accepted shape is the one the rest of the program already produces —
+# noramedi-deploy.sh:182 and ecosystem.config.cjs both resolve `git rev-parse
+# HEAD` or the literal "unknown" — so 40/64 lowercase hex, or that sentinel.
+
+json_of() { node -e '
+  const fs = require("fs");
+  const o = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(process.argv[2] === "@keys"
+    ? Object.keys(o).sort().join(",")
+    : String(o[process.argv[2]]));
+' "$1" "$2" 2>/dev/null; }
+
+sha_reject() {
+  local label="$1" sha="$2" expect="${3:-not a valid release identity}" side="${4-}"
+  local app; app="$(new_app "app-sha-$RANDOM$RANDOM")"
+  seed_bundle "$app/dist" v1
+  local before; before="$(snapshot "$app")"
+  run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+      bash "$FE" deploy --app-dir "$app" --release-sha "$sha"
+  [[ "$CODE" -ne 0 && "$OUT" == *"$expect"* ]] \
+    && pass "refuses $label" \
+    || fail "accepted $label, or refused it for the wrong reason (exit $CODE): $OUT"
+  [[ "$(snapshot "$app")" == "$before" ]] \
+    && pass "nothing under the deployment root changed while refusing $label" \
+    || fail "the deployment root was mutated while refusing $label"
+  if [[ -n "$side" ]]; then
+    [[ ! -e "$side" ]] \
+      && pass "the rejected identity was never interpreted as code ($label)" \
+      || fail "the release identity was executed as shell code ($label)"
+  fi
+}
+
+sha_reject "a double quote (it would break the JSON marker)" \
+  'aaaa1111bbbb2222cccc3333dddd4444eeee55"5'
+sha_reject "a JSON field-injection attempt" \
+  'x", "builtBy": "somebody-else'
+sha_reject "an embedded newline" \
+  "$(printf 'aaaa1111bbbb2222cccc3333dddd4444eeee5555\nx')"
+sha_reject "an embedded carriage return" \
+  "$(printf 'aaaa1111bbbb2222cccc3333dddd4444eeee5555\rx')"
+sha_reject "an embedded tab" \
+  "$(printf 'aaaa1111bbbb2222cccc3333dddd4444eeee5555\tx')"
+sha_reject "an embedded space" \
+  'aaaa1111bbbb2222cccc3333dddd4444eeee555 5'
+sha_reject "a backslash" \
+  'aaaa1111bbbb2222cccc3333dddd4444eeee555\5'
+sha_reject "a slash (it would look like a path component)" \
+  'aaaa1111bbbb2222cccc3333dddd4444eeee5/55'
+sha_reject "a shell-looking value" \
+  "\$(printf x > $WORK/sha-pwned)" "not a valid release identity" "$WORK/sha-pwned"
+sha_reject "a backtick-looking value" \
+  "\`printf x > $WORK/sha-pwned-tick\`" "not a valid release identity" "$WORK/sha-pwned-tick"
+sha_reject "an abbreviated 12-character SHA (nothing in this repository produces one)" \
+  'aaaa1111bbbb'
+sha_reject "a 39-character near-miss" \
+  'aaaa1111bbbb2222cccc3333dddd4444eeee555'
+sha_reject "a 41-character near-miss" \
+  'aaaa1111bbbb2222cccc3333dddd4444eeee55551'
+sha_reject "non-hex characters of the right length" \
+  'zzzz1111bbbb2222cccc3333dddd4444eeee5555'
+sha_reject "arbitrary prose" \
+  'the release we deployed on tuesday'
+
+# Uppercase hex is a valid SHA typed the wrong way; it gets its own message,
+# because silently accepting it would report a release skew that does not exist.
+sha_reject "an UPPERCASE hex SHA" \
+  'AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555' 'hex but not lowercase'
+
+# An overlong blob must be refused without echoing it back into the deploy log.
+LONG_SHA="$(printf 'a%.0s' {1..500})"
+APP="$(new_app app-sha-long)"
+seed_bundle "$APP/dist" v1
+run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+    bash "$FE" deploy --app-dir "$APP" --release-sha "$LONG_SHA"
+[[ "$CODE" -ne 0 && "$OUT" == *"not a valid release identity"* ]] \
+  && pass "refuses a 500-character release identity" \
+  || fail "accepted an overlong release identity (exit $CODE): $OUT"
+[[ "$OUT" == *"truncated, 500 chars"* ]] \
+  && pass "the overlong value is summarised, not echoed whole into the deploy log" \
+  || fail "the error message does not bound the value it reports: $OUT"
+
+# --expect-sha is operator-supplied too, and a malformed one must not be
+# reported as a production release mismatch.
+run bash "$FE" verify --app-dir "$APP" --expect-sha 'not a sha'
+[[ "$CODE" -ne 0 && "$OUT" == *"not a valid release identity"* ]] \
+  && pass "verify refuses a malformed --expect-sha instead of reporting a mismatch" \
+  || fail "verify accepted a malformed --expect-sha (exit $CODE): $OUT"
+
+# ── the accepted values, and the marker they produce ─────────────────────
+accept_case() {
+  local label="$1" sha="$2" tagdir="$3"
+  local app; app="$(new_app "app-shaok-$RANDOM$RANDOM")"
+  seed_bundle "$app/dist" v1
+  run env NORAMEDI_FRONTEND_BUILD_EXECUTABLE="$(build_ok v2)" \
+      bash "$FE" deploy --app-dir "$app" --release-sha "$sha"
+  [[ "$CODE" -eq 0 ]] \
+    && pass "accepts $label" \
+    || fail "refused $label (exit $CODE): $OUT"
+  [[ "$(json_of "$app/dist/release.json" @keys)" == "builtAt,builtBy,releaseSha,task" ]] \
+    && pass "release.json parses as JSON and carries exactly the four documented fields ($label)" \
+    || fail "release.json is not valid JSON or its field set changed ($label): $(cat "$app/dist/release.json" 2>/dev/null)"
+  [[ "$(json_of "$app/dist/release.json" releaseSha)" == "$sha" ]] \
+    && pass "the parsed releaseSha is exactly the accepted value ($label)" \
+    || fail "releaseSha round-tripped wrong ($label)"
+  [[ -d "$app/$tagdir" ]] \
+    && pass "the preserved bundle is named from the accepted identity ($label)" \
+    || fail "expected preserved bundle '$tagdir' ($label); got: $(ls -d "$app"/dist.rollback-* 2>/dev/null)"
+}
+
+accept_case "a 40-character lowercase SHA-1" \
+  'aaaa1111bbbb2222cccc3333dddd4444eeee5555' 'dist.rollback-aaaa1111bbbb-20260101T000000Z'
+accept_case "a 64-character lowercase SHA-256 object id" \
+  'aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff6666aaaa7777bbbb8888' 'dist.rollback-aaaa1111bbbb-20260101T000000Z'
+accept_case "the exact \"unknown\" sentinel the rest of the program already uses" \
+  'unknown' 'dist.rollback-manual-20260101T000000Z'
 
 # ════════════════════════════════════════════════════════════════════════
 section "Summary"
