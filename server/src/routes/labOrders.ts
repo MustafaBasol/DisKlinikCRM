@@ -3,7 +3,7 @@ import multer from 'multer';
 import prisma from '../db.js';
 import { isAllowedFileSignature } from '../utils/fileSignature.js';
 import { isInlinePreviewable } from '../utils/filePreview.js';
-import { buildStorageKey, fileNameFromKey, openFileStream, saveFile } from '../services/fileStorage.js';
+import { buildObjectStorageKey, fileNameFromKey, openFileStream, saveFile } from '../services/fileStorage.js';
 import {
   deleteStoredObjectWithEvidence,
   isReconciliationSafe,
@@ -392,7 +392,14 @@ router.post(
 
       // Depolama anahtarı order'ın gerçek kliniğinden türetilir — dosyanın
       // nereye yazılacağı konusunda req.user.clinicId'ye asla güvenilmez.
-      storageKey = buildStorageKey(order.clinicId, req.file.originalname);
+      // F4-1A2: bu çağrı artık kendi nesne sınıfını ('lab-attachment') yetkili
+      // sözleşmeye bildirir. Anahtar biçimi değişmedi — üç içerik sınıfı aynı
+      // `<clinicId>/<opaqueId><ext>` şablonunu paylaşır (fileStorage.ts).
+      storageKey = buildObjectStorageKey({
+        kind: 'lab-attachment',
+        clinicId: order.clinicId,
+        originalName: req.file.originalname,
+      });
       await saveFile(storageKey, req.file.buffer, req.file.mimetype);
 
       const attachment = await prisma.labOrderAttachment.create({

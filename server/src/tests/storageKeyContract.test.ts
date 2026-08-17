@@ -67,6 +67,26 @@ const UNSAFE_SEGMENTS: Array<[string, string]> = [
 
 const CONTENT_KINDS = ['patient-attachment', 'lab-attachment', 'imaging-image'] as const;
 
+// ── Deterministic opaque-id pinning (F4-1A2 equivalence proof) ───────────────
+// The content-class opaque id is `${Date.now()}-${Math.random().toString(36).slice(2)}`.
+// Pinning both sources turns the equivalence assertions below into exact string
+// comparisons instead of probabilistic shape matches. Restored in a finally
+// block by every test that uses it, so no other assertion sees a frozen clock.
+const PINNED_EPOCH_MS = 1755400000000;
+// (0.5).toString(36) === '0.i' → slice(2) === 'i'
+const PINNED_RAND_SUFFIX = 'i';
+
+function pinOpaqueId(): () => void {
+  const realNow = Date.now;
+  const realRandom = Math.random;
+  Date.now = () => PINNED_EPOCH_MS;
+  Math.random = () => 0.5;
+  return () => {
+    Date.now = realNow;
+    Math.random = realRandom;
+  };
+}
+
 async function main() {
   // ── 1. Accepted per-class key shapes ──────────────────────────────────────
   section('1. Accepted forward key contract (shapes unchanged)');
@@ -263,6 +283,102 @@ async function main() {
   await test('buildExportStorageKey preserves its locked exact string', () => {
     // Mirrors the assertion locked in kvkkAttachmentImagingLifecycle.test.ts.
     assert.equal(buildExportStorageKey('clinic-abc', 'export-uuid-1'), 'exports/clinic-abc/export-uuid-1.zip');
+  });
+
+  // ── 8. F4-1A2 caller-migration equivalence ────────────────────────────────
+  section('8. F4-1A2 — migrated callers emit byte-identical keys');
+
+  await test('lab-attachment and imaging-image keys are byte-identical to the pre-migration key', () => {
+    // Before F4-1A2, routes/labOrders.ts and services/imaging/imagingIngestCore.ts
+    // both built their key through buildStorageKey(), which hard-codes
+    // kind:'patient-attachment'. F4-1A2 moves them onto their true object class.
+    // Date.now()/Math.random() are pinned here so this is an EXACT string
+    // comparison — the equivalence proof, not a shape match.
+    const restore = pinOpaqueId();
+    try {
+      const originalName = 'Ayse Yilmaz rapor.PDF';
+      const before = buildObjectStorageKey({ kind: 'patient-attachment', clinicId: 'clinic-1', originalName });
+      const labAfter = buildObjectStorageKey({ kind: 'lab-attachment', clinicId: 'clinic-1', originalName });
+      const imagingAfter = buildObjectStorageKey({ kind: 'imaging-image', clinicId: 'clinic-1', originalName });
+
+      assert.equal(labAfter, before, 'lab-attachment key must be byte-identical to the pre-migration output');
+      assert.equal(imagingAfter, before, 'imaging-image key must be byte-identical to the pre-migration output');
+      assert.equal(before, `clinic-1/${PINNED_EPOCH_MS}-${PINNED_RAND_SUFFIX}.pdf`, 'pinned literal drifted');
+    } finally {
+      restore();
+    }
+  });
+
+  await test('the patient-attachment façade still emits that identical string too', () => {
+    const restore = pinOpaqueId();
+    try {
+      assert.equal(
+        buildStorageKey('clinic-1', 'Ayse Yilmaz rapor.PDF'),
+        `clinic-1/${PINNED_EPOCH_MS}-${PINNED_RAND_SUFFIX}.pdf`,
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  await test('both export callers keep the exact locked archive string', () => {
+    // patientPrivacyExportPackage.ts passes an exportId; clinicBulkExportPackage.ts
+    // passes a jobId. One shape, unchanged, and a pure function of its inputs.
+    assert.equal(buildExportStorageKey('clinic-1', 'export-9'), 'exports/clinic-1/export-9.zip');
+    assert.equal(buildExportStorageKey('clinic-7', 'job-42'), 'exports/clinic-7/job-42.zip');
+    assert.equal(
+      buildObjectStorageKey({ kind: 'export-archive', clinicId: 'clinic-1', exportId: 'export-9' }),
+      buildExportStorageKey('clinic-1', 'export-9'),
+      'the export façade and the authoritative builder must not drift apart',
+    );
+  });
+
+  await test('lab-attachment key derives from the owning clinic — a different request clinic is observable', () => {
+    // The KVKK-relevant invariant behind labOrders.ts: the key must come from
+    // order.clinicId. If a caller ever substituted the request-default clinic,
+    // the emitted key would differ — proven here to be detectable, and proven
+    // end-to-end through the real route in labOrders.test.ts.
+    const restore = pinOpaqueId();
+    try {
+      const owningClinicKey = buildObjectStorageKey({ kind: 'lab-attachment', clinicId: 'clinic-order', originalName: 'a.pdf' });
+      const requestClinicKey = buildObjectStorageKey({ kind: 'lab-attachment', clinicId: 'clinic-request', originalName: 'a.pdf' });
+      assert.notEqual(owningClinicKey, requestClinicKey, 'the tenant segment must be observable in the key');
+      assert.ok(owningClinicKey.startsWith('clinic-order/'), `got ${owningClinicKey}`);
+      assert.ok(!owningClinicKey.includes('clinic-request'), `got ${owningClinicKey}`);
+    } finally {
+      restore();
+    }
+  });
+
+  for (const kind of ['lab-attachment', 'imaging-image'] as const) {
+    for (const [value, label] of UNSAFE_SEGMENTS) {
+      await test(`${kind} clinicId stays fail-closed: ${label}`, () => {
+        // The migrated classes must inherit the same fail-closed validation the
+        // pre-migration path had — not merely the same happy-path shape.
+        assert.throws(
+          () => buildObjectStorageKey({ kind, clinicId: value, originalName: 'a.pdf' }),
+          /Invalid storage key segment: clinicId/,
+          `${kind} clinicId ${JSON.stringify(value)} must be rejected`,
+        );
+      });
+    }
+  }
+
+  await test('backup-artifact keys are NOT reachable through the primary contract (NOT_F4_1A2_TARGET)', () => {
+    // file-backups/<domain>/<clinicId>/<recordId>.bin and
+    // file-backups/manifests/<runId>.json stay owned by fileBackupDestination.ts
+    // and fileBackupService.ts. No StorageObjectSpec kind emits them, so the
+    // caller migration cannot have reshaped a backup path.
+    const emitted = [
+      ...CONTENT_KINDS.map((kind) => buildObjectStorageKey({ kind, clinicId: 'clinic-1', originalName: 'a.bin' })),
+      buildObjectStorageKey({ kind: 'export-archive', clinicId: 'clinic-1', exportId: 'run-1' }),
+    ];
+    for (const key of emitted) {
+      assert.ok(!key.startsWith('file-backups/'), `primary contract must never emit a backup key (got ${key})`);
+    }
+    // …and the backup shapes themselves still resolve, untouched, as legacy refs.
+    assert.equal(isSafeStorageKey('file-backups/imaging/clinic-1/rec-1.bin'), true);
+    assert.equal(isSafeStorageKey('file-backups/manifests/run-1.json'), true);
   });
 
   // ── Result ────────────────────────────────────────────────────────────────

@@ -4,6 +4,50 @@ Faz durumu: `TODO` · Son güncelleme: 2026-08-16 (F4-FCR-003-R2 — **repo2 yed
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
 
+## F4-1A2 — Storage-Key Caller Migration (birincil çağrı yerlerinin yetkili sözleşmeye taşınması)
+
+`F4-1A2_SCOPED_FREEZE_EXCEPTION = AUTHORIZED_BY_PROGRAM_OWNER_2026-08-17`
+`F4-1A2_STATUS = AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
+Baseline `origin/main` @ `268432f10b6ba2f3d65d9895f6493cb03466fa35` · Branch `feature/f4-1a2-storage-key-caller-migration`
+
+### İstisnanın kaydı (dar kapsamlı, yalnızca çağrı-yeri taşıması)
+
+> **F4-1A2 dar kapsamlı dondurma istisnası (`F4-1A2_SCOPED_FREEZE_EXCEPTION = AUTHORIZED_BY_PROGRAM_OWNER_2026-08-17`).** Program sahibi, yalnızca F4-1A2 için, tracker §8'in 11. maddesine karşı dar kapsamlı bir istisna yetkilendirmiştir. İstisnanın kapsamı **yalnızca çağrı-yeri (caller) taşımasıdır**. Bu yetkilendirme: **hiçbir anahtar biçimi değişikliğine**, **hiçbir `filePath`/`storageKey` backfill'ine**, **hiçbir nesne yeniden adlandırma/taşıma/kopyalamasına**, **hiçbir şema/migration'a** ve **hiçbir sağlayıcı aktivasyonuna** izin vermez. F4-1A istisnasını **genelleştirmez**, başka hiçbir dondurulmuş depolama migrasyonunu **yetkilendirmez**, `R-030`/`R-030-DB`/`R-030-FILES`'i **ilerletmez**, `FIRST_CUSTOMER_RECOVERY_GATE`'i **karşılamaz** ve **F5'i yetkilendirmez**. `KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §5 koşul 5 **hâlâ karşılanmamıştır**; bu istisna o koşulu karşılamaz.
+
+### §8 / §13 belirsizliğinin uzlaştırılması (ek — geçmiş silinmedi)
+
+Bu görev ilk denemesinde **yetkilendirme kapısında durdurulmuştur**. Tracker §13'ün önceki ifadesi ("F4-1A2 … needs no freeze exception beyond the one already recorded in §8") ile §8 madde 11'in kendi metni ("**yalnızca F4-1A için**" … "**genelleştirilemez**") çelişiyordu; ayrıca depoda hiçbir yerde `F4-1A2_SCOPED_FREEZE_EXCEPTION` anahtarı yoktu ve §2.3 gereği **hiçbir ajan böyle bir istisnayı kendi kendine onaylayamaz**. Sınıflandırma `B — REQUIRES_PROGRAM_OWNER_CONFIRMATION` olarak raporlanmış, hiçbir çalışma zamanı kodu düzenlenmemiştir. §13'ün o ifadesi **belirsiz kabul edilmiş ve yukarıdaki açık F4-1A2 yetkilendirmesiyle geçersiz kılınmıştır (superseded)**; özgün cümle **tarih olarak yerinde bırakılmıştır**, silinmemiştir.
+
+### Ne taşındı, ne taşınmadı
+
+F4-1A'nın beş çağrı yerinden **ikisi** taşındı. `routes/labOrders.ts` ve `services/imaging/imagingIngestCore.ts`, bir lab eki ve bir görüntüleme görüntüsü için **hasta-eki façade'ını (`buildStorageKey`) ödünç alıyordu** — ürettikleri baytlar doğruydu ama çağrı yeri sözleşmeye **yanlış nesne sınıfını** bildiriyordu. İkisi de artık kendi `kind`'ını (`lab-attachment`, `imaging-image`) `buildObjectStorageKey`'e bildirir.
+
+Diğer üçü **kasıtlı olarak dokunulmadı**: `routes/attachments.ts` zaten doğru sınıfı adlandıran `buildStorageKey` façade'ını, `patientPrivacyExportPackage.ts` ve `clinicBulkExportPackage.ts` ise zaten doğru olan `buildExportStorageKey` façade'ını kullanıyordu. Program sahibinin talimatı gereği anlamlı façade'lar korunmuş, **yeni bir üretici (builder) oluşturulmamış**, hiçbir façade yeniden adlandırılmamıştır. `buildStorageKey` yalnızca gerçekten adlandırdığı tek sınıfa (hasta ekleri) daraltılmıştır.
+
+**`NOT_F4_1A2_TARGET`:** `fileBackupDestination.ts` (`file-backups/<domain>/<clinicId>/<recordId>.bin`), `fileBackupService.ts` (`file-backups/manifests/<runId>.json`), pgBackRest yolları ve veritabanı yedek yolları — **hiçbiri değiştirilmedi**.
+
+### Anahtar biçimi: bayt-bayt aynı
+
+Üç içerik sınıfı tek bir şablonu paylaşır, bu yüzden `kind` değişikliği tek bir baytı bile değiştiremez. `storageKeyContract.test.ts` §8 bunu **tam dize eşitliğiyle** kanıtlar (`Date.now()` ve `Math.random()` sabitlenerek): hasta eki / lab eki / görüntüleme üçü de `clinic-1/1755400000000-i.pdf`; dışa aktarma anahtarları `exports/<clinicId>/<exportId>.zip` olarak değişmedi. Kalıcı hiçbir değer okunmadı, yazılmadı, taşınmadı; dual-read, okuma-anında migrasyon, prefix enumerasyonu veya fallback **yok**.
+
+### Sabitlenmiş kaynak-metin testleri
+
+`labOrders.test.ts`'in `indexOf('buildStorageKey(order.clinicId')` sabiti **silinmedi, dönüştürüldü**: sıralama iddiası sözdiziminden bağımsız bir regex'e taşındı, kiracı iddiası ise artık **gerçek Express route zinciri** üzerinden davranışsal olarak kanıtlanıyor (in-memory Prisma double; `req.user.clinicId` ile `order.clinicId` **bilerek farklı** ve ikisi de erişilebilir). `clinicBulkExport.test.ts:1223,1264` yalnızca konumsal işaretçi olarak kullandıkları için ortak bir `plannedKeyAssignmentIndex()` yardımcısına taşındı; asıl konuları (bayt tavanı ve üç bayrak yeniden kontrolü) **değiştirilmedi**.
+
+### Mutasyon kanıtı
+
+İki mutant uygulandı ve geri alındı (hiçbiri commit edilmedi): (1) `order.clinicId` → `req.user!.clinicId` → `test:lab-orders` **4 test başarısız**; (2) `exports/` → `archives/` → `test:storage-key-contract` **4 test başarısız**. Geri alındıktan sonra sırasıyla 35/35 ve 70/70.
+
+### Testler
+
+`test:storage-key-contract` 70/70, `test:lab-orders` 35/35, `test:clinic-bulk-export` 117/117, `test:imaging` 103/103, `test:patient-privacy` 38/38, `test:kvkk-lifecycle` 113/113, `test:lab-attachment-legal-hold` 21/21, `test:storage-deletion-evidence` 34/34, `test:file-preview` 12/12, `typecheck` çıkış 0; kök dizinde `guardrail:scan` çıkış 0, `log-privacy-guard:scan --strict-baseline` **yeni ihlal yok**, `git diff --check` çıkış 0.
+
+**Bildirilen CI kapsam boşluğu:** `test:clinic-bulk-export` yalnızca `server:test:legacy-db-required` üyesidir ve bu değişiklik kümesi için `runLegacyBackend = false`'dur — bu PR'daki `clinicBulkExport.test.ts` düzenlemesi **hiçbir CI katmanında çalışmayacaktır**. Yerelde 117/117 geçti; bu yerel bir olgudur, CI olgusu değildir. **CI kablolaması bu görevle değiştirilmedi** (kapsam dışı).
+
+### Durum
+
+`MIGRATION_REQUIRED = NO` · `MIGRATION_CREATED = NO` · `PRODUCTION_MIGRATION = NO` · üretim mutasyonu **YOK**. Geri alma **yalnızca depo/uygulama revert'idir**; kalıcı anahtar değişmediği için DB veya depolama geri alması yoktur. **Faz durumu `TODO` değişmedi**; F4 kurtarma şeridi dış nedenlerle bloklu kalır; `R-030`/`R-030-DB`/`R-030-FILES` `OPEN`; `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`; `repo2` **AKTİF DEĞİL**; **F5 yetkilendirilmedi**. Kanıt: [../evidence/F4-1A2_STORAGE_KEY_CALLER_MIGRATION.md](../evidence/F4-1A2_STORAGE_KEY_CALLER_MIGRATION.md).
+
 ## F4-FCR-003 — `R-030-DB` saha dışı aktivasyon hazırlığı ve Gate 0
 
 `F4-FCR-003_STATUS = AGENT_COMPLETED` · `NOT_MERGED` / `NOT_DEPLOYED` / `NOT_PRODUCTION_VERIFIED`
