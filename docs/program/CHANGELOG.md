@@ -4,6 +4,18 @@ Her tracker/faz dokümanı değişikliği buraya kaydedilir. En yeni kayıt en �
 
 ---
 
+## 2026-08-17 — F3-PROD-003-R2 Residual Stale Rollback Instruction Removed from the F3 Phase Document
+
+- **Task:** F3-PROD-003-R2 — architecture-review follow-up, documentation-only, applied to the **same branch and same PR (#435)** as F3-PROD-003 / F3-PROD-003-R1. No new PR, no merge, no deployment, no runtime change.
+- **Finding:** R1 corrected the rollback wording in the PR body, `NORAMEDI_MASTER_TRACKER.md` and the evidence document, but one **still-active** stale instruction survived inside the F3-PROD-003 paragraph of `phases/F3_PRODUCTION_HARDENING.md`: *"**Rollback (repository-supported, backend only):** revert to `b370b0181fa2f84e24f0f80560425da81f60dcb2` and re-run `scripts/noramedi-deploy.sh`"*. It implied an `origin/main` rewrite for a production **runtime** rollback and omitted the mandatory `--skip-pull`.
+- **Correction:** replaced (superseded sentence preserved inline as history, not deleted) with the corrected contract — known-good backend baseline `b370b0181fa2f84e24f0f80560425da81f60dcb2`; a **production-checkout revision change, not an `origin/main` rewrite**; **the repository provides no dedicated command that selects a previous git revision**; per the authoritative runbook [runbooks/F3_FIRST_CUSTOMER_INCIDENT_RESPONSE.md §4.1](runbooks/F3_FIRST_CUSTOMER_INCIDENT_RESPONSE.md) the operator checks the production tree out to that revision and runs `/usr/local/sbin/noramedi-deploy.sh --skip-pull --skip-build --skip-migrate --skip-generate`; **`--skip-pull` is mandatory** because the script's step 1 `git pull` would otherwise fast-forward production back to current `main` and defeat the rollback; **no DB rollback required**; frontend restore from `dist.rollback-f3-sec-004-20260817T093856` remains manual and not repository-scripted; the frontend replacement is not described as atomic.
+- **Search classification:** a targeted search of all six changed documents and the PR body for `revert to \`b370`, ``re-run `scripts/noramedi-deploy.sh` ``, `Rollback (repository-supported`, `atomic swap`, `atomically swapped` found **exactly one active operational instruction** (the phase-document sentence above, now fixed). Every remaining match is clearly-marked superseded quotation or corrective wording in `CHANGELOG.md`, `NORAMEDI_MASTER_TRACKER.md`, `evidence/F3-PROD-003_…md` and this phase document's own R1/R2 records. `RISK_REGISTER.md` and `evidence/F3-SEC-004_…md` contain no match of any stale form.
+- **Unchanged (explicitly):** task ID `F3-PROD-003`; `R-076` = `MITIGATED`, **not** `CLOSED`; production verification = **partial**; `SAFE_PUBLISHED_WEBSITE_COUNT = 0`; migration = none; release SHA `40bfcb899c54e545f992003b2203ad729114a5fe`; prior release `b370b0181fa2f84e24f0f80560425da81f60dcb2`; all production evidence; F3/F4/F5 status (F3 exit gate `NOT SATISFIED`, `F3_COMPLETE = NO`, `F4_TRANSITION_AUTHORIZED = NO`).
+- **Deliverables:** `phases/F3_PRODUCTION_HARDENING.md` (header, F3-PROD-003 paragraph rollback sentence, change-history row), this CHANGELOG, and a traceability line in `evidence/F3-PROD-003_CLINIC_LEGAL_PROFILE_URL_SCHEME_PRODUCTION_VERIFICATION.md`.
+- **Type:** Documentation only — no application source, schema, migration, package manifest, lockfile, test, CI workflow, deployment script, or runtime configuration was modified. `git diff --check` exit `0`.
+
+---
+
 ## 2026-08-17 — F3-PROD-003-R1 Frontend-Swap Atomicity and Backend-Rollback Wording Correction
 
 - **Task:** F3-PROD-003-R1 — documentation-only precision correction requested by architecture review, applied to the **same branch and same PR (#435)** as F3-PROD-003. No new PR, no merge, no deployment, no runtime change.
