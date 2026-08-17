@@ -567,6 +567,69 @@ run bash "$STATUS" --stdout --no-check
   && pass "a proof with no target binding is refused (fails toward unproven, never toward yes)" \
   || fail "expected unproven for an unbound proof ($OUT)"
 
+# 12b. The SFTP shape of SELECTED TOPOLOGY = C. It carries repo2-path (which is
+#      meaningful only on the REMOTE endpoint) and NO repo2-host, so before
+#      F4-FCR-004 the classifier fell through to the repo2-path branch and
+#      reported a Turkiye VPS as REPO2_IS_A_LOCAL_PATH -- offHost could never
+#      reach 'yes' on the transport the program selected as procurement-ready.
+CONF_SFTP="$WORK/pgbackrest-sftp.conf"
+cp "$CONF" "$CONF_SFTP"
+printf 'repo2-type=sftp\nrepo2-path=/var/lib/pgbackrest\nrepo2-sftp-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\n' >> "$CONF_SFTP"
+PROOF_SFTP="$WORK/proof-sftp.json"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_SFTP" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s18b" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF_SFTP" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$(offhost_of "$OUT")" == "unproven" ]] \
+  && pass "an SFTP repo2 with a remote sftp-host -> offHost='unproven' (not 'no'), so a drill can still earn it" \
+  || fail "expected unproven for a remote SFTP repo2 ($OUT)"
+[[ "$OUT" != *"REPO2_IS_A_LOCAL_PATH"* ]] \
+  && pass "an SFTP repo2 is NOT misclassified as REPO2_IS_A_LOCAL_PATH" \
+  || fail "SFTP repo2 still classified as a local path ($OUT)"
+
+# 12c. The drill's PROOF_TARGET and the status writer's CURRENT_TARGET must
+#      derive the SAME key for SFTP. If the drill recorded repo2-path instead,
+#      the proof would say /var/lib/pgbackrest -- identical on every SFTP
+#      endpoint -- and repointing repo2 would inherit the old host's proof.
+printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","target":"backup.example.tr","runId":"t","finishedAt":"%s"}\n' \
+  "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF_SFTP"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_SFTP" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s18c" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF_SFTP" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$(offhost_of "$OUT")" == "yes" ]] \
+  && pass "an SFTP proof bound to repo2-sftp-host is accepted (drill and status writer agree on the target key)" \
+  || fail "expected yes for an sftp-host-bound proof ($OUT)"
+grep -q '_pt_sftp' "$DRILL" \
+  && pass "the restore drill derives PROOF_TARGET from repoN-sftp-host too" \
+  || fail "the restore drill has no sftp-host in its PROOF_TARGET precedence"
+
+# 12d. A proof bound to the SFTP repo2-path must NOT be accepted -- that is the
+#      exact inheritance the target binding exists to prevent.
+printf '{"schemaVersion":1,"result":"passed","repo":2,"stanza":"noramedi","target":"/var/lib/pgbackrest","runId":"t","finishedAt":"%s"}\n' \
+  "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$PROOF_SFTP"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_SFTP" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s18d" NORAMEDI_PGBACKREST_OFFHOST_PROOF="$PROOF_SFTP" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$(offhost_of "$OUT")" == "unproven" ]] \
+  && pass "an SFTP proof bound to the repo2-path is refused (a path is identical on every endpoint)" \
+  || fail "expected unproven for a path-bound SFTP proof ($OUT)"
+
+# 12e. An SFTP repo2 whose sftp-host is THIS machine is not a failure domain.
+CONF_SFTP_SELF="$WORK/pgbackrest-sftp-self.conf"
+cp "$CONF" "$CONF_SFTP_SELF"
+printf 'repo2-type=sftp\nrepo2-path=/var/lib/pgbackrest\nrepo2-sftp-host=%s\nrepo2-cipher-type=aes-256-cbc\n' "$(hostname)" >> "$CONF_SFTP_SELF"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_SFTP_SELF" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s18e" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$(offhost_of "$OUT")" == "no" ]] && [[ "$OUT" == *"REPO2_IS_THIS_HOST"* ]] \
+  && pass "an SFTP repo2 pointing at this host -> offHost='no' (REPO2_IS_THIS_HOST)" \
+  || fail "expected no/REPO2_IS_THIS_HOST for a self-referencing sftp-host ($OUT)"
+
+# 12f. A remote SFTP repo2 that is PLAINTEXT is still refused.
+CONF_SFTP_PLAIN="$WORK/pgbackrest-sftp-plain.conf"
+cp "$CONF" "$CONF_SFTP_PLAIN"
+printf 'repo2-type=sftp\nrepo2-path=/var/lib/pgbackrest\nrepo2-sftp-host=backup.example.tr\nrepo2-cipher-type=none\n' >> "$CONF_SFTP_PLAIN"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$CONF_SFTP_PLAIN" NORAMEDI_PGBACKREST_STATE_DIR="$WORK/s18f" FAKE_ARCHIVE_MODE=on FAKE_INFO_JSON="$INFO_ONE_BACKUP")
+run bash "$STATUS" --stdout --no-check
+[[ "$(offhost_of "$OUT")" == "no" ]] && [[ "$OUT" == *"REPO2_PLAINTEXT"* ]] \
+  && pass "a remote but UNENCRYPTED SFTP repo2 -> offHost='no' (REPO2_PLAINTEXT)" \
+  || fail "expected no/REPO2_PLAINTEXT for a plaintext SFTP repo2 ($OUT)"
+
 # 13. Refusal reasons are DISTINCT. A target mismatch is neither stale nor
 #     future-dated, and reporting it as one sent the operator after proof
 #     ageing while the real cause was that the drill and this writer derived
@@ -1583,6 +1646,53 @@ run bash "$PREFLIGHT"
 [[ "$OUT" != *"$CANARY"* ]] \
   && pass "the retention checks never print either passphrase" \
   || fail "CANARY LEAKED while validating retention"
+
+# SFTP host-key verification. The template and the runbook both say "pin it;
+# never host-key-check-type=none", but that is prose -- the same prose the
+# repo2 encryption gate exists because it was not enough. The documented
+# libssh2 error [-18] pushes an operator toward host-key-check-type=none, and
+# the Gate 0 harness itself runs with that setting, so it reads as sanctioned.
+_SFTP_BASE='[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-type=sftp\nrepo2-path=/var/lib/pgbackrest\nrepo2-sftp-host=backup.example.tr\nrepo2-cipher-type=aes-256-cbc\nrepo2-cipher-pass=%s-distinct\nrepo2-retention-full=7\nrepo2-retention-archive=7\n'
+
+printf "${_SFTP_BASE}repo2-sftp-host-key-check-type=none\n" "$CANARY" "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"host-key-check-type=none disables SSH host-key verification"* ]] \
+  && pass "repo2-sftp-host-key-check-type=none is a preflight failure, not a warning" \
+  || fail "host-key-check-type=none was not refused ($OUT)"
+
+printf "$_SFTP_BASE" "$CANARY" "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"no repo2-sftp-host-fingerprint is pinned"* ]] \
+  && pass "an SFTP repo2 with no pinned fingerprint is a preflight failure" \
+  || fail "an unpinned SFTP endpoint was accepted ($OUT)"
+
+printf "${_SFTP_BASE}repo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=<REPLACE - pin it>\n" "$CANARY" "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"repo2-sftp-host-fingerprint is still the"* ]] \
+  && pass "a template '<REPLACE ...>' fingerprint placeholder is refused" \
+  || fail "the fingerprint placeholder was accepted as a pin ($OUT)"
+
+printf "${_SFTP_BASE}repo2-sftp-host-key-hash-type=sha256\nrepo2-sftp-host-fingerprint=ab:cd:ef:01:23:45:67:89\n" "$CANARY" "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" == *"repo2-sftp-host-fingerprint is pinned"* ]] \
+  && pass "a pinned SFTP fingerprint passes" \
+  || fail "a correctly pinned SFTP endpoint was rejected ($OUT)"
+[[ "$OUT" != *"$CANARY"* ]] \
+  && pass "the SFTP host-key checks never print either passphrase" \
+  || fail "CANARY LEAKED while validating SFTP host-key settings"
+
+# An S3 repo2 must NOT be dragged into the SFTP-only checks.
+printf '[global]\nrepo1-path=/var/lib/pgbackrest\nrepo1-cipher-type=aes-256-cbc\nrepo1-cipher-pass=%s\nrepo2-type=s3\nrepo2-s3-endpoint=s3.example.tr\nrepo2-cipher-type=aes-256-cbc\nrepo2-cipher-pass=%s-distinct\nrepo2-retention-full=7\nrepo2-retention-archive=7\n' "$CANARY" "$CANARY" > "$PF2"
+EXTRA_ENV=(NORAMEDI_PGBACKREST_CONF="$PF2" NORAMEDI_PGBACKREST_REPO_PATH="$WORK/repo" FAKE_ARCHIVE_MODE=off FAKE_INFO_JSON="$INFO_ONE_BACKUP" FAKE_CONFIG_FILE="$PGCONF_FILE" FAKE_DATA_DIRECTORY="$PGDATA_FAKE")
+run bash "$PREFLIGHT"
+[[ "$OUT" != *"sftp-host-fingerprint"* ]] \
+  && pass "an S3 repo2 is not subjected to the SFTP host-key checks" \
+  || fail "S3 repo2 wrongly required an SFTP fingerprint ($OUT)"
+unset _SFTP_BASE
 
 rm -f "$FAKEBIN/id"
 

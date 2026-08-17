@@ -915,8 +915,18 @@ sudo bash scripts/noramedi-pgbackrest-status.sh --stdout        # expect offHost
 # 13-16. Controlled restore FROM repo2, smokes, cleanup.
 #        Follow the §21.3 marker procedure first. Application and
 #        tenant-isolation smokes run inside the drill; cleanup is verified.
-sudo bash scripts/noramedi-pgbackrest-restore-drill.sh --repo 2 --record \
-     --stanza noramedi --set <BACKUP_LABEL> --marker-seg <WAL> --marker-b-at <TS>
+#        Use §22.14's verified form. A run with --marker-seg/--marker-b-at but
+#        no --target/--pitr-run-id records pitrVerification "not_applicable"
+#        and verified:false, so the marker fields land in the evidence document
+#        with nothing verifying them.
+sudo REHEARSAL_OS_USER=postgres \
+     PG_BINDIR=/usr/lib/postgresql/16/bin \
+     NORAMEDI_APP_SERVER_DIR=/var/www/noramedi/server \
+     NORAMEDI_PITR_DRILL_PROD_PGDATA=/var/lib/postgresql/16/main \
+     NORAMEDI_PITR_MARKER_ORG=<SENTINEL_ORG> \
+     bash scripts/noramedi-pgbackrest-restore-drill.sh --repo 2 --record \
+     --stanza noramedi --set <BACKUP_LABEL> --target '<TS>+00' \
+     --pitr-run-id <RUN_ID> --marker-seg <WAL> --marker-b-at '<TS>+00'
 sudo bash scripts/noramedi-pgbackrest-status.sh --stdout        # only NOW may it read "yes"
 
 # RUN ON: production-primary
@@ -2488,7 +2498,14 @@ the config, the credential and the passphrase.
 
 ```bash
 # RUN ON: production-primary
-sudo NORAMEDI_PITR_MARKER_ORG=SENTINEL \
+# REHEARSAL_OS_USER and NORAMEDI_APP_SERVER_DIR are REQUIRED: the drill exits 2
+# without the first when run as root, and 3 without the second. Both have no
+# default by design -- see §21.4.
+sudo REHEARSAL_OS_USER=postgres \
+     PG_BINDIR=/usr/lib/postgresql/16/bin \
+     NORAMEDI_APP_SERVER_DIR=/var/www/noramedi/server \
+     NORAMEDI_PITR_DRILL_PROD_PGDATA=/var/lib/postgresql/16/main \
+     NORAMEDI_PITR_MARKER_ORG=SENTINEL \
      bash scripts/noramedi-pgbackrest-restore-drill.sh \
      --repo 2 --record --stanza noramedi \
      --set BACKUP_LABEL --target 'TS+00' \

@@ -443,6 +443,33 @@ else
       fi
     done
     unset _rk _rv
+
+    # SFTP host-key verification. The template says "pin it; never
+    # host-key-check-type=none" and the runbook says the same, but prose is
+    # exactly what the repo2 encryption gate exists because prose was not
+    # enough. The documented libssh2 error [-18] failure pushes an operator
+    # toward host-key-check-type=none as the quickest way to make CHECKPOINT 5
+    # go green -- and the Gate 0 harness itself runs with that setting, so it
+    # reads as sanctioned. With it, backups are written to whatever answers on
+    # that address. Contents stay AES-256, but object and backup NAMES are not
+    # encrypted, and a durability claim earned against an unauthenticated
+    # endpoint is not a durability claim at all.
+    REPO2_TYPE_VAL="$(grep -oE '^[[:space:]]*repo2-type[[:space:]]*=[[:space:]]*[A-Za-z0-9-]+' "$PGBACKREST_CONF" 2>/dev/null | sed -E 's/.*=[[:space:]]*//' | head -n1 || true)"
+    if [[ "$REPO2_TYPE_VAL" == "sftp" ]]; then
+      _hkc="$(grep -oE '^[[:space:]]*repo2-sftp-host-key-check-type[[:space:]]*=[[:space:]]*[A-Za-z]+' "$PGBACKREST_CONF" 2>/dev/null | sed -E 's/.*=[[:space:]]*//' | head -n1 || true)"
+      if [[ "$_hkc" == "none" ]]; then
+        bad "repo2-sftp-host-key-check-type=none disables SSH host-key verification on the transport that carries every tenant's backup off this host. Pin repo2-sftp-host-fingerprint instead."
+      fi
+      if grep -qE '^[[:space:]]*repo2-sftp-host-fingerprint[[:space:]]*=[[:space:]]*<REPLACE' "$PGBACKREST_CONF" 2>/dev/null; then
+        bad "repo2-sftp-host-fingerprint is still the '<REPLACE ...>' placeholder from the template"
+      elif grep -qE '^[[:space:]]*repo2-sftp-host-fingerprint[[:space:]]*=[[:space:]]*[0-9a-fA-F:]{16,}' "$PGBACKREST_CONF" 2>/dev/null; then
+        ok "repo2-sftp-host-fingerprint is pinned"
+      else
+        bad "repo2-type=sftp but no repo2-sftp-host-fingerprint is pinned — the endpoint's identity is unverified, so a backup could be written to any host answering on that address"
+      fi
+      unset _hkc
+    fi
+    unset REPO2_TYPE_VAL
   fi
 fi
 

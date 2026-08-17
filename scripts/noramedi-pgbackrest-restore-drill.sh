@@ -1319,7 +1319,8 @@ if [[ "$DO_RECORD" == true ]]; then
       # proof would keep a brand-new, never-restored-from destination showing a
       # green "off-host" tick.
       # Extracted with the SAME per-key precedence the status writer applies
-      # (host -> s3-endpoint -> path; noramedi-pgbackrest-status.sh). The two
+      # (host -> sftp-host -> s3-endpoint -> path;
+      # noramedi-pgbackrest-status.sh). The two
       # MUST agree: the status writer discards a proof whose `target` is not
       # byte-identical to the target it derives, so any divergence silently
       # downgrades a PASSING off-host drill back to "unproven".
@@ -1343,10 +1344,14 @@ if [[ "$DO_RECORD" == true ]]; then
         grep -oE "^[[:space:]]*${1}[[:space:]]*=[[:space:]]*[^[:space:]]+" "$_proof_conf" 2>/dev/null \
           | sed -E 's/.*=[[:space:]]*//' | head -n1
       }
+      # SELECTED TOPOLOGY = C sets no repoN-host, so for the SFTP shape the
+      # only key that identifies the endpoint is repoN-sftp-host. Keyed the
+      # same way and in the same position as the status writer.
       _pt_host="$(proof_conf_value "repo${REPO_NUM}-host" || true)"
+      _pt_sftp="$(proof_conf_value "repo${REPO_NUM}-sftp-host" || true)"
       _pt_s3="$(proof_conf_value "repo${REPO_NUM}-s3-endpoint" || true)"
       _pt_path="$(proof_conf_value "repo${REPO_NUM}-path" || true)"
-      PROOF_TARGET="${_pt_host:-${_pt_s3:-${_pt_path:-}}}"
+      PROOF_TARGET="${_pt_host:-${_pt_sftp:-${_pt_s3:-${_pt_path:-}}}}"
       TMP_PROOF="$(mktemp "${PROOF_DIR}/.pitr-proof.XXXXXX")"
       printf '{\n  "schemaVersion": 1,\n  "result": "passed",\n  "repo": %s,\n  "stanza": "%s",\n  "target": "%s",\n  "runId": "%s",\n  "finishedAt": "%s"\n}\n' \
         "$REPO_NUM" "$STANZA" "${PROOF_TARGET:-unknown}" "$RUN_ID" "$(date -u -d "@$FINISH_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')" > "$TMP_PROOF"
