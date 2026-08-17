@@ -2,6 +2,8 @@
 
 **Status: `MERGED` / `DEPLOYED` / `PRODUCTION_VERIFIED` (partial — blocking/negative path only) / `R-076` → `MITIGATED`, explicitly not `CLOSED`.**
 
+> **Amended 2026-08-17 by F3-PROD-003-R1 (documentation-only correction requested by architecture review, same branch / same PR #435).** Two descriptive errors were corrected, and nothing else: (1) the frontend `dist` replacement was described as an *atomic swap*; it is in fact a **two-step same-filesystem rename swap** (`mv dist "$ROLLBACK_DIR"` then `mv dist.next dist`) and is therefore **near-atomic, not a single atomic exchange** — see §5.1. (2) The backend rollback procedure was described as reverting `origin/main` and re-running the deploy script with `--skip-migrate` only; that wording implied a remote-branch rewrite for a runtime rollback and, by omitting `--skip-pull`, would have let the script's `git pull` fast-forward production back to current `main` and defeat the rollback — see §11, now aligned to the authoritative runbook. **No finding, status, count, SHA, or lifecycle state changed:** `R-076` remains `MITIGATED` (not `CLOSED`), `MERGED` = yes, `DEPLOYED` = yes, `PRODUCTION_VERIFIED` = partial, negative path production-verified, positive path outstanding, `SAFE_PUBLISHED_WEBSITE_COUNT = 0`, no production data mutated, migration = none.
+
 This task performed **no production access itself**. All production facts below are **operator-supplied**, accepted per this program's established convention for operator-executed evidence (e.g. F3-PROD-001, F3-PROD-002, F3-IMPL-002-PROD-RECON). Where independently checkable from this repository/GitHub without production access, facts were re-verified and are marked as such.
 
 ## 1. Task identity and phase
@@ -84,7 +86,9 @@ Everything in this section is operator-supplied; this task performed no producti
 - `bash scripts/noramedi-deploy.sh --skip-pull --skip-build --skip-migrate` — matches the script's documented flags (`--skip-pull`: source already fast-forwarded; `--skip-build`: no dependency change in F3-SEC-004; `--skip-migrate`: no schema/migration in F3-SEC-004). `prisma generate` ran (not skipped) — Prisma Client v7.9.1 generated.
 - `noramedi-api` / `noramedi-worker`: both `status=online`, `release=40bfcb899c54e545f992003b2203ad729114a5fe`.
 - `/api/health` reached `200` on attempt 3 (two startup-window `000` results first) — a bounded retry pattern this program has observed and accepted before (cf. F3-PROD-002 §7).
-- Frontend: built to `dist.next` via `npx tsc -b && npx vite build --outDir dist.next` (2714 modules, 93 assets, `dist.next/index.html` present, only pre-existing chunk-size warnings); atomically swapped into `dist`; prior `dist` preserved at `dist.rollback-f3-sec-004-20260817T093856`.
+- Frontend: built to `dist.next` via `npx tsc -b && npx vite build --outDir dist.next` (2714 modules, 93 assets, `dist.next/index.html` present, only pre-existing chunk-size warnings); then put into place by a **two-step same-filesystem rename swap** — `mv dist "$ROLLBACK_DIR"` followed by `mv dist.next dist` — with the prior `dist` preserved as the rollback backup `dist.rollback-f3-sec-004-20260817T093856`.
+
+**Atomicity, stated precisely (corrected by F3-PROD-003-R1):** this is a **near-atomic two-rename replacement, not a single atomic exchange**. Two `mv` calls means a very short interval exists between them in which `/var/www/noramedi/dist` does not exist at all. The operational properties that make this materially safer than copying files into a live `dist` tree still hold — each rename is a same-filesystem metadata operation rather than a multi-file copy, Vite's content-hashed asset filenames mean no old and new asset can collide under one name, and the prior build is retained in full for restore — but this document does **not** claim filesystem-level atomicity for the swap.
 
 ### 5.2 Frontend build/swap/rollback is not a repository-scripted procedure
 
@@ -93,7 +97,7 @@ $ grep -n "rollback\|dist\.next\|dist\b" scripts/noramedi-deploy.sh
 (no matches)
 ```
 
-`scripts/noramedi-deploy.sh`'s own header documents its full sequence: `git pull` → `npm ci` → `prisma migrate deploy` → `prisma generate` → PM2 `startOrReload` (API, worker) → API healthcheck → worker verification. **There is no frontend build, swap, or rollback step anywhere in this script**, and no other repository script performs one. The `dist.next` build, the atomic swap into `dist`, and the `dist.rollback-*` backup convention used for this deploy are therefore an **operator-performed manual procedure**, not a repository-defined contract.
+`scripts/noramedi-deploy.sh`'s own header documents its full sequence: `git pull` → `npm ci` → `prisma migrate deploy` → `prisma generate` → PM2 `startOrReload` (API, worker) → API healthcheck → worker verification. **There is no frontend build, swap, or rollback step anywhere in this script**, and no other repository script performs one. The `dist.next` build, the two-rename swap into `dist`, and the `dist.rollback-*` backup convention used for this deploy are therefore an **operator-performed manual procedure**, not a repository-defined contract.
 
 This is not a new finding: **`R-038`** (`docs/program/RISK_REGISTER.md`) already reads, verbatim, *"Frontend build-artifact'in kaynak kod ile eşleştiği doğrulanmadı — hiçbir depo scripti frontend build'i deploy etmiyor"* and has been `OPEN` since F0-006. This task's observation directly corroborates that row and changes nothing about its status.
 
@@ -191,9 +195,25 @@ R-076 is named by none of F3's three exit-gate criteria (observability, security
 
 ## 11. Rollback
 
-**Backend — repository-supported:** revert `origin/main` to `b370b0181fa2f84e24f0f80560425da81f60dcb2` and re-run `scripts/noramedi-deploy.sh` (with `--skip-migrate`, since neither F3-SEC-004 nor this task wrote a migration; there is nothing to reverse in the database). This is the same script/contract used for the forward deploy — no rollback-specific command exists in, or is invented for, the repository.
+*(Rewritten by F3-PROD-003-R1 — the prior wording said "revert `origin/main` to `b370b018…` and re-run `scripts/noramedi-deploy.sh --skip-migrate`". That was both inaccurate and unsafe: it implied rewriting the remote `main` branch in order to perform a **production runtime** rollback, and it omitted `--skip-pull`, without which the script's step 1 `git pull` would fast-forward the production checkout straight back to current `main` and silently defeat the rollback. The corrected text below is used instead; the superseded sentence is preserved here as history, not deleted.)*
 
-**Frontend — not repository-scripted (see §5.2):** the operator preserved the prior build at `dist.rollback-f3-sec-004-20260817T093856`; restoring it in place of `dist` is a manual filesystem operation, not a script this repository defines.
+**Backend rollback baseline:** `b370b0181fa2f84e24f0f80560425da81f60dcb2` — the prior known-good production release. **No DB rollback is required or possible to need:** F3-SEC-004 wrote no migration, so no schema change has to be reversed; `RISK_REGISTER.md` `R-046`'s standing rule (retain additive schema, redeploy application code only, forward-fix afterward) applies unchanged.
+
+**No remote-branch operation is implied.** Rolling production back does **not** mean reverting, resetting, or force-pushing `origin/main`. It is a change to what revision the production checkout has checked out. A repository-side revert PR is a separate decision with its own review, and this task neither requires nor recommends one.
+
+**The repository provides no dedicated rollback script that selects a previous git revision.** `scripts/noramedi-deploy.sh` deploys whatever revision the production checkout is on (and, unless `--skip-pull` is given, first `git pull`s it forward); it has no "deploy revision X" or "roll back" mode. The revision selection is therefore a separate, operator-performed step.
+
+**Approved procedure — cited, not invented.** [`docs/program/runbooks/F3_FIRST_CUSTOMER_INCIDENT_RESPONSE.md` §4.1 "Rollback"](../runbooks/F3_FIRST_CUSTOMER_INCIDENT_RESPONSE.md) is this program's authoritative runbook for exactly this operation, and it already specifies the sequence (its own `[MUTATING]` markers retained):
+
+```
+git -C /var/www/noramedi log --oneline -5                    # identify the prior commit
+git -C /var/www/noramedi checkout <prior-sha>                # [MUTATING] here: b370b0181fa2f84e24f0f80560425da81f60dcb2
+/usr/local/sbin/noramedi-deploy.sh --skip-pull --skip-build --skip-migrate --skip-generate   # [MUTATING]
+```
+
+`--skip-pull` is **mandatory** in this form and is not merely an optimization: the deploy script's step 1 is `git pull` (skipped only by `--skip-pull`, per the script's own header, lines 7 and 28), so omitting it against an intentionally checked-out prior release would pull the production checkout back to current `main` and undo the rollback before PM2 ever reloads. `--skip-migrate` is appropriate because this rollback crosses no F3-SEC-004 migration. `--skip-build`/`--skip-generate` follow the runbook's reload-only form and are correct here because F3-SEC-004 changed no dependency and no Prisma schema. The runbook also notes the deploy script is installed at `/usr/local/sbin/noramedi-deploy.sh` on the VPS; `LAUNCH_GATES.md` §2.D's "None exists today" — no automated rollback — remains accurate.
+
+**Frontend — not repository-scripted (see §5.2):** the operator preserved the prior build at `dist.rollback-f3-sec-004-20260817T093856`; restoring it in place of `dist` is a manual filesystem operation performed by the operator. **This repository defines no script that performs the frontend restore**, and none is invented here.
 
 No database rollback is required or was performed: F3-SEC-004 wrote no migration, and the §6.3 negative smoke was rejected with 400 before any write reached the database.
 
