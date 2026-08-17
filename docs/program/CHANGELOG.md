@@ -4,6 +4,18 @@ Her tracker/faz dokümanı değişikliği buraya kaydedilir. En yeni kayıt en �
 
 ---
 
+## 2026-08-17 — F3-PROD-005-R1 Architecture Review Corrections (rollback dry-run evidence, backend-skew rationale)
+
+- **Task:** F3-PROD-005-R1 — architecture review of PR #440 found two defects; both are corrected on the same branch/PR (`docs/f3-prod-005-r038-production-closure`), documentation-only, no runtime/deploy-script/application/schema/migration file changed.
+- **Defect 1 — missing rollback dry-run.** F3-PROD-004's own evidence §16 required a `rollback --dry-run` before R-038 could close. The initial production run recorded in the F3-PROD-005 entry below executed the real rollback and forward redeploy but **not** the dry-run, even though the original PR claimed the full §16 checklist was satisfied. The operator has now executed the missing dry-run — **after** the real rollback and forward redeploy had already completed (chronology not rewritten): source `/var/www/noramedi/dist.rollback-f3-prod-005-forward-20260817T164630Z`, source release correctly reported `UNKNOWN` (preserved pre-marker bundle), `DRY_ROLLBACK_EXIT=0`, index/checkout/release-marker unchanged before and after, API health `{"status":"ok"}`. Recorded in `evidence/F3-PROD-005_R038_PRODUCTION_VERIFICATION.md` §16.1.
+- **Defect 2 — false backend-skew rationale.** The evidence document's original §11 claimed the backend "has had no subsequent code change requiring redeployment" since F3-PROD-003 (`40bfcb89…`). **This was false.** `git log 40bfcb899c54e545f992003b2203ad729114a5fe..4cfe94f2f871994a9b33e9281bb2ff43552c62d6` includes **F4-1A2** (`b2e8bfa` — "migrate lab-order and imaging storage-key callers onto the authoritative contract"), which changes `server/src/routes/labOrders.ts`, `server/src/services/fileStorage.ts`, and `server/src/services/imaging/imagingIngestCore.ts` — backend runtime source. §11 is corrected in place: the disclosed skew (`RELEASE_SHA_MATCH = NO`) still stands and is still not a blocker to R-038 closure (R-038's scope is frontend deployment/rollback reproducibility), but the document no longer claims the backend is fully current or that no backend redeploy is required, and does not close or advance any backend deployment risk/task. Recorded in `evidence/F3-PROD-005_R038_PRODUCTION_VERIFICATION.md` §16.2.
+- **`R-038` remains `CLOSED`.** Both corrections complete the required evidence rather than reversing the closure decision. **Repository-governance closure is not final until PR #440 merges.**
+- **Tests:** `npm run test:ci-classify` and `npm run typecheck:ci-classify` re-run against this correction's changed-file set; `git diff --check` clean. No runtime/application/schema/migration/deploy-script test suite affected.
+- **Migration/Security/KVKK:** unchanged from the F3-PROD-005 entry below — all `NO`/not applicable.
+- **Deliverables:** `evidence/F3-PROD-005_R038_PRODUCTION_VERIFICATION.md` (§16 new, §11 corrected in place), `RISK_REGISTER.md`, `NORAMEDI_MASTER_TRACKER.md`, `phases/F3_PRODUCTION_HARDENING.md`, this CHANGELOG. `evidence/README.md` unchanged (no correction needed there).
+
+---
+
 ## 2026-08-17 — F3-PROD-005 R-038 Production Verification Closure
 
 - **Task:** F3-PROD-005 — R-038 Production Verification Closure (ClickUp `869ejxa5a`), documentation-only, branch `docs/f3-prod-005-r038-production-closure` from fresh `origin/main` @ `4cfe94f2f871994a9b33e9281bb2ff43552c62d6` (PR #439 merge, F3-PROD-004-R3). **No runtime code change, no deploy-script change, no application/server/frontend source touched, no migration.** The deploy/verify/rollback/redeploy run itself is **operator-executed and operator-supplied** — this task performed no production access of its own.
