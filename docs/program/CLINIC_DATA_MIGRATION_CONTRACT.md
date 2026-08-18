@@ -1114,3 +1114,34 @@ migration, encryption, parser, route, UI, or existing-importer code was touched 
 only. Program state (`F4 COMPLETE` **NO** · `FIRST_CUSTOMER_RECOVERY_GATE` **NOT_SATISFIED** ·
 `F5 AUTHORIZED` **NO** · `R-030`/`R-030-DB`/`R-030-FILES` **OPEN** · `repo2` **NOT ACTIVATED**) is
 unchanged.
+
+### 21.2 R3 targeted re-profiling corrections (`F3-DATA-MIG-001`, 2026-08-18) — additive, nothing above withdrawn
+
+The companion document's own §18 named six cheap evidence gaps left after R1/R2 and recommended a
+short, read-only re-profiling pass over the real workbook before the next PR. That pass was executed
+(2026-08-18) — **the first time in this task family that the real workbook was actually re-opened**;
+R1/R2 both worked from aggregates restated from §3 above. Full evidence lives in the companion
+document's §19 R3 record and its §2a/§5/§14/§15/§18 updates; summarized here so this contract is not
+read in isolation:
+
+| # | R3 correction | Companion §§ |
+| --- | --- | --- |
+| 1 | **C-1 closed.** The missing 91st column name is `YAKINLIKKODU` (relationship/kinship code), omitted from every prior transcription including this contract's own §3. Measured 0.00 % filled | §5 matrix, C-11 |
+| 2 | **C-2 closed for this workbook.** `ADRES_KODU` measured 0.00 % filled — no data exists to resolve the UAVT-vs-postal-code question. Import disposition is now moot (nothing to write); the semantic question itself remains open for any future source | §5 matrix, C-12 |
+| 3 | **C-7 closed.** `ONEMLINOT` measured 45.70 % filled with substantial free text (confirms and strengthens the legal-decision blocker); `KONTROLNOTU` measured 0.01 % filled (near-vestigial, downgraded from a field-wide legal gate to 2-row manual review) | §5 matrix, C-13/C-14 |
+| 4 | **G-E6's measurement gap closed.** `DOSYANO` measured 98.84 % filled, 99.88 % distinct among filled (17 duplicate pairs). Confirms — does not merely restate — C-6's "clinic-facing, not vendor-internal" conclusion | §5 matrix, §14, C-15 |
+| 5 | **G-E20 withdrawn.** `AILEGURUBU` measured 100 % filled, 100 % distinct, and never repeats even inside groups of rows sharing the same phone number — this refutes, not confirms, the family/household-key hypothesis that motivated G-E20. Reclassified vendor-internal | §5 matrix, §14, C-16 |
+
+**Bonus finding:** `YAKINLIKKODU` (the C-1 column) is measured 0.00 % filled in this workbook — it is
+the more plausible relationship-code candidate than `AILEGURUBU` if a family/household key is ever
+needed again, but this workbook carries no data in it either.
+
+**Not measured by R3, still open:** `EK_ACIKLAMA`/`CHECKBOX` content shape, and roughly 25 other
+columns whose fill was never profiled. **The full 91-column matrix is therefore not yet fully frozen**,
+though the six gaps this task was scoped to close are.
+
+**No program state changed. No schema, migration, parser, route, permission, UI or existing-importer
+code was created or modified.** `SCHEMA_CHANGE_AUTHORIZED = NO`. The scratchpad-only Python/`xlrd`
+reader used for this measurement was never committed to this repository; the real workbook itself was
+never copied into the worktree, committed, or attached anywhere, and no raw PII/PHI cell value was
+printed or logged.

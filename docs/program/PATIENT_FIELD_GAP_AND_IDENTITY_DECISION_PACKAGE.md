@@ -51,7 +51,7 @@ boundary is reported in §2 (D-2) **for a separate future task**, not for repair
 | Base | `origin/main` @ `c67f6ebdec49b991aaf49e7b26b6b40cf2683d8f` (merge of PR #442) |
 | Working tree at start | clean |
 | Evidence sources | `server/prisma/schema.prisma` (3,697 lines, 105 models) · `server/src/schemas/index.ts` · `server/src/routes/patients.ts` · `server/src/utils/encryption.ts` · `scripts/log-privacy-guard/` · `docs/program/`, `docs/compliance/`, `docs/vendor/` · ClickUp tasks `F3-DATA-MIG-001…013`, `US-01.8` |
-| Real workbook | **not re-opened by this task.** All figures are aggregates restated from the merged contract §3. `REAL_XLS_DATA_COMMITTED_TO_GIT = NO`, `RAW_PII_IN_LOGS = 0` |
+| Real workbook | **not re-opened by this task (R1/R2 baseline).** All figures were aggregates restated from the merged contract §3. `REAL_XLS_DATA_COMMITTED_TO_GIT = NO`, `RAW_PII_IN_LOGS = 0`. **R3 (2026-08-18) reopened it** — see the R3 record in §19 for the read path, tooling and results |
 
 ---
 
@@ -292,7 +292,12 @@ const DIRECT_PII_IDENTIFIER_NAMES = new Set(['email', 'phone']);
 
 ## 5. Source→NoraMedi field matrix (F3-DATA-MIG-002)
 
-All 91 columns, individually dispositioned. Column 91 is an explicit placeholder pending C-1.
+All 91 columns, individually dispositioned. **C-1 is closed (R3, 2026-08-18): the 91st name is
+`YAKINLIKKODU`** — the row below previously carrying the `UNENUMERATED_COLUMN_91` placeholder now
+carries its real name and measured evidence. The workbook is physically 92 columns wide; the leading
+column (position 1) is a genuine structural artifact carrying zero content — no header text and no
+data of any type — across the header row and all 14,890 data rows. It is not a 92nd named column and
+requires no disposition.
 
 Legend — `DATA_CLASSIFICATION`: `PII` · `SPECIAL` (KVKK Art. 6) · `ID#` (identity number) ·
 `FIN` · `OPS` · `VENDOR` · `CONSENT?` · `PRES`.
@@ -331,14 +336,14 @@ transform.
 | `FAX` | Fax | UNKNOWN | str | — | **NO** | — | — | NO | PII | `BLOCKED_NO_DESTINATION` | G-E8; **recommend NOT building** | MIG-002 |
 | `EMAIL` | E-mail | **0.05 %** (7 rows, 1 valid) | str | `Patient.email` `:227` | YES | trim, lower, `''`→NULL | `.email()` | NO | PII | `IMPORT_AFTER_NORMALIZATION` | ~6 of 7 will fail. **Unusable as identity** | MIG-005 |
 | `ADRESI` | Street address | UNKNOWN | str | `Patient.address` `:230` | YES | trim | — | NO | PII | `IMPORT_DIRECT` | — | MIG-005 |
-| `ADRES_KODU` | Address code | UNKNOWN | str/num | `Patient.postalCode` `:232` | **field YES / semantics NO** | pending | 5-digit posta kodu vs 10-digit UAVT | NO | PII | `MANUAL_REVIEW` | **C-2 — needs a digit-length histogram first** | MIG-001 |
+| `ADRES_KODU` | Address code | **0.00 % (0/14,890) — R3** | — | `Patient.postalCode` `:232` | **field YES / semantics UNRESOLVED** | n/a | 5-digit posta kodu vs 10-digit UAVT — **still unresolved, no data to examine** | NO | PII | `IMPORT_DIRECT` | **C-12 (closes C-2 for this workbook) — 0 rows would ever be written, so there is no corruption risk here.** The UAVT-vs-postal-code question remains open and MUST be re-measured before import from any future source that shows non-zero `ADRES_KODU` fill | MIG-001 |
 | `IL` | Province | UNKNOWN | str | `Patient.city` `:231` | YES | trim | — | NO | PII | `IMPORT_DIRECT` | no canonicalization exists | MIG-005 |
 | `ILCE` | District | ≈13 rows | str | — | **NO** | — | — | NO | PII | `BLOCKED_NO_DESTINATION` | G-E7 | MIG-002 |
 | `MAHALLE` | Neighbourhood | UNKNOWN | str | `Patient.address` `:230` (**composed**) | via composition | documented `MAHALLE`+`ADRESI` → `address` | — | NO | PII | `IMPORT_AFTER_NORMALIZATION` | composition rule must be **stable across reruns** or idempotency breaks | MIG-005 |
 | `KANGURUBU` | Blood group | 1 row | str | — | **NO** | — | ABO/Rh | NO | **SPECIAL** | `BLOCKED_NO_DESTINATION` | G-E11 + Art. 6 legal gate | MIG-002 |
-| `ONEMLINOT` | Important clinical note | **UNKNOWN (C-7)** | str | `Patient.notes` `:236` | **YES** | composition | length bound | NO | **SPECIAL** | `BLOCKED_LEGAL_DECISION` | destination exists; blocker is purely legal | MIG-002 |
+| `ONEMLINOT` | Important clinical note | **45.70 % (6,805/14,890) — R3** | str 6,796 / num 6 / date 3 | `Patient.notes` `:236` | **YES** | composition | length bound | NO | **SPECIAL** | `BLOCKED_LEGAL_DECISION` | **C-13 (closes C-7 for this field) — measured a substantial, materially large free-text corpus** (95 duplicate-text groups aside, 706 of the 6,805 filled rows exceed 200 characters). This *strengthens* the legal-decision blocker: it is not "empty in this file" (the withdrawn original claim) and not merely "unmeasured" (C-7's holding pattern) — it is confirmed, sized, real clinical free text | MIG-002 |
 | `UZUNNOT` | Long note | **0 %** | — | `Patient.notes` `:236` | **YES** | — | — | NO | **SPECIAL** | `BLOCKED_LEGAL_DECISION` | 0 % here; gate applies to next customer | MIG-002 |
-| `KONTROLNOTU` | Recall note | **UNKNOWN (C-7)** | str | `Patient.notes` `:236` | **YES** | composition | length bound | NO | **SPECIAL** | `BLOCKED_LEGAL_DECISION` | as `ONEMLINOT` | MIG-002 |
+| `KONTROLNOTU` | Recall note | **0.01 % (2/14,890) — R3** | str | `Patient.notes` `:236` | **YES** | composition | length bound | NO | **SPECIAL** | `MANUAL_REVIEW` | **C-14 (closes C-7 for this field) — near-vestigial, unlike `ONEMLINOT`.** Downgraded from a field-wide legal gate to individual review of the 2 affected rows; a blanket `BLOCKED_LEGAL_DECISION` is no longer proportionate to 2/14,890 rows | MIG-002 |
 | `TEDAVIDURUMU` | Treatment status | **0.02 %** (3 rows) | num | — | **NO** | — | — | NO | OPS | `IGNORE_SUMMARY_NOT_TRANSACTION` | 3/14,890 proves no treatment history | MIG-001 |
 | `SUBE_ID` | Branch id | 61 % / **1 distinct** | str | — | **NO** (deliberate) | — | — | NO | VENDOR | `IGNORE_VENDOR_INTERNAL` | cannot derive destination clinic; operator-selected | MIG-013 |
 | `HASTADOKTOR` | Assigned doctor label | **99.5 %** / 25 distinct | str | `User.id` via map — **and no `Patient` field to hold it** | **NO** (both) | exact match only | must resolve | **YES (25)** | OPS | `IMPORT_AFTER_REFERENCE_MAPPING` | **C-8** — G-E2 (map store) + G-E3 (destination column) | MIG-006 |
@@ -346,7 +351,7 @@ transform.
 | `KURUMREFERANSI` | Institutional referrer | UNKNOWN | str | — | **NO** | — | — | **YES** | OPS | `BLOCKED_NO_DESTINATION` | G-E19 | MIG-006 |
 | `REHBER_ID` | Guide/agency id | UNKNOWN | str/num | — | **NO** | — | — | **YES** | VENDOR | `IGNORE_VENDOR_INTERNAL` | K-2: re-open if profiling shows an agency FK | MIG-001 |
 | `CALISMAGURUBU` | Working group | UNKNOWN | str | — | **NO** | — | — | NO | VENDOR | `IGNORE_VENDOR_INTERNAL` | meaning unconfirmed | MIG-006 |
-| `AILEGURUBU` | Family group | UNKNOWN | str/num | — | **NO** | — | — | NO | OPS | `BLOCKED_NO_DESTINATION` | **G-E20 — the missing explanation for the 28.6 % shared-phone population** | MIG-005 |
+| `AILEGURUBU` | Family group (name unchanged; **semantics refuted, R3**) | **100.00 % (14,890/14,890) — R3** | str, fixed 24 chars, all-digit | — | **NO** | — | — | NO | VENDOR | `IGNORE_VENDOR_INTERNAL` | **C-16 (closes/refutes G-E20) — 100 % distinct (14,890/14,890 unique values).** Inside every one of the 1,557 shared-`CEPTELEFONU` groups (3,512 rows), the count of distinct `AILEGURUBU` values always equals the group size — no two rows sharing a phone ever share an `AILEGURUBU` value. A real household/family key would produce repeats among family members; none exist. Behaves as an opaque per-record system identifier, not a business attribute | MIG-001 |
 | `UCRETTARIFESI` | Fee tariff | UNKNOWN | str | — | **NO** | — | — | **YES** | FIN | `BLOCKED_NO_DESTINATION` | G-E21; model mismatch (D-17) | MIG-006 |
 | `KURUMTARIFE` | Institution tariff | UNKNOWN | str | — | **NO** | — | — | **YES** | FIN | `BLOCKED_NO_DESTINATION` | G-E19 | MIG-006 |
 | `SIGORTATURU` | Insurance type | UNKNOWN | str | — | **NO** | — | map to `insuranceTypes` (`schemas:5`) | **YES** | FIN | `BLOCKED_NO_DESTINATION` | G-E23. Creating an `InsuranceProvision` to hold a type would **fabricate a financial record** | MIG-006 |
@@ -381,7 +386,7 @@ transform.
 | `CHECKBOX` | Unlabelled checkbox | UNKNOWN | bool | — | **NO** | — | — | NO | VENDOR | `IGNORE_VENDOR_INTERNAL` | **if profiling shows consent-like semantics → `BLOCKED_LEGAL_DECISION`** | MIG-001 |
 | `HESAP_KODU` | Ledger account code | UNKNOWN | str | — | **NO** | — | — | NO | VENDOR | `IGNORE_VENDOR_INTERNAL` | no ledger model (D-10) | MIG-001 |
 | `UST_HESAP_KODU` | Parent ledger code | UNKNOWN | str | — | **NO** | — | — | NO | VENDOR | `IGNORE_VENDOR_INTERNAL` | as above | MIG-001 |
-| `DOSYANO` | Patient chart number | UNKNOWN | str/num | — | **NO** | — | uniqueness TBM | NO | OPS | `BLOCKED_NO_DESTINATION` | **G-E6 (C-6) — clinic-facing, not vendor-internal** | MIG-005 |
+| `DOSYANO` | Patient chart number | **98.84 % (14,718/14,890) — R3** | num | — | **NO** | — | **near-unique — measured, not TBM** | NO | OPS | `BLOCKED_NO_DESTINATION` | **C-15 (closes G-E6's measurement gap) — 99.88 % distinct among filled (14,701/14,718); only 17 duplicate pairs (34 rows), all requiring manual reconciliation, not silent overwrite.** Digit length concentrated at 4–5 digits (14,492/14,718 = 98.5 %). Clinic-facing, not vendor-internal (C-6) — still confirmed, now with fill/uniqueness evidence behind it | MIG-005 |
 | `SUBEDOSYANO` | Branch file no | UNKNOWN | str/num | — | **NO** | — | — | NO | OPS | `BLOCKED_NO_DESTINATION` | G-E6 | MIG-005 |
 | `ALTDOSYANO` | Sub-file no | UNKNOWN | str/num | — | **NO** | — | — | NO | OPS | `BLOCKED_NO_DESTINATION` | G-E6 | MIG-005 |
 | `ULKEGIRISTARIHI` | Country entry date | **UNMEASURED** | date | — | **NO** | serial→date | — | NO | PII | `BLOCKED_NO_DESTINATION` | G-E10 | US-01.8 |
@@ -391,37 +396,43 @@ transform.
 | `RESIMUZANTI` | Photo file extension | UNKNOWN | str | — | **NO** | — | — | NO | VENDOR | `IGNORE_VENDOR_INTERNAL` | a filename fragment; images not in this export | MIG-001 |
 | `HASTARENGI` | UI row colour | UNKNOWN | str/num | — | **NO** | — | — | NO | **PRES** | `IGNORE_VENDOR_INTERNAL` | vendor UI state | MIG-002 |
 | `EK_ACIKLAMA` | Additional description | UNKNOWN | str | `Patient.notes` `:236` (fit unconfirmed) | field YES / semantics NO | pending | length bound | NO | **SPECIAL (presumed)** | `MANUAL_REVIEW` | profile for clinical content → `BLOCKED_LEGAL_DECISION` or `IMPORT_AFTER_NORMALIZATION` | MIG-001 |
-| `UNENUMERATED_COLUMN_91` | **Never named in the merged contract** | — | — | — | — | — | — | — | — | `MANUAL_REVIEW` | **C-1 — contract defect** | MIG-001 |
+| `YAKINLIKKODU` | Relationship/kinship code — **the C-1 column, identified R3** | **0.00 % (0/14,890) — R3** | — | — | **NO** | — | — | NO | PII | `BLOCKED_NO_DESTINATION` | **C-11 (closes C-1) — the genuinely missing 91st name.** Physical position 12 (between `SOSYAL_GUVENCE_KURUMU` and `DOSYANO`), omitted from every prior transcription of this matrix (verified absent from all three program docs before this task). 0 % filled for this customer, so it carries no first-customer risk, but it is the more plausible relationship/kinship-linkage candidate than `AILEGURUBU` (C-16) if a future export populates it — re-profile it, not `AILEGURUBU`, if a family/household key is ever needed again | MIG-001 |
 
 ### 5.1 Decision counts
 
-| IMPORT_DECISION | Count |
-| --- | --- |
-| `IMPORT_DIRECT` | **5** |
-| `IMPORT_AFTER_NORMALIZATION` | **5** |
-| `IMPORT_AFTER_REFERENCE_MAPPING` | **1** |
-| `IMPORT_AFTER_SCHEMA_FIELD` | **1** |
-| `HISTORICAL_METADATA_ONLY` | **4** |
-| `MANUAL_REVIEW` | **3** |
-| `IGNORE_VENDOR_INTERNAL` | **11** |
-| `IGNORE_SUMMARY_NOT_TRANSACTION` | **16** |
-| `BLOCKED_LEGAL_DECISION` | **5** |
-| `BLOCKED_INVALID_SOURCE` | **0** |
-| `BLOCKED_NO_DESTINATION` | **40** |
-| **Total** | **91** |
+| IMPORT_DECISION | Count | R3 change |
+| --- | --- | --- |
+| `IMPORT_DIRECT` | **6** | +1 (`ADRES_KODU`, C-12) |
+| `IMPORT_AFTER_NORMALIZATION` | **5** | — |
+| `IMPORT_AFTER_REFERENCE_MAPPING` | **1** | — |
+| `IMPORT_AFTER_SCHEMA_FIELD` | **1** | — |
+| `HISTORICAL_METADATA_ONLY` | **4** | — |
+| `MANUAL_REVIEW` | **2** | −1 (`ADRES_KODU` out) +1 (`KONTROLNOTU` in, C-14) −1 (`UNENUMERATED_COLUMN_91` slot closed, C-11) |
+| `IGNORE_VENDOR_INTERNAL` | **12** | +1 (`AILEGURUBU`, C-16) |
+| `IGNORE_SUMMARY_NOT_TRANSACTION` | **16** | — |
+| `BLOCKED_LEGAL_DECISION` | **4** | −1 (`KONTROLNOTU` out, C-14) |
+| `BLOCKED_INVALID_SOURCE` | **0** | — |
+| `BLOCKED_NO_DESTINATION` | **40** | −1 (`AILEGURUBU` out) +1 (`YAKINLIKKODU` in, C-11) |
+| **Total** | **91** | net 0 — same 91 named columns, now all individually measured or explicitly still-`UNKNOWN` |
 
-`5+5+1+1+4+3+11+16+5+0+40 = 91` ✓
+`6+5+1+1+4+2+12+16+4+0+40 = 91` ✓ (pre-R3: `5+5+1+1+4+3+11+16+5+0+40 = 91`)
 
-**Rolled up to the report's requested buckets:** `IMPORT_DIRECT` 5 · `IMPORT_AFTER_NORMALIZATION` 5 ·
+**Rolled up to the report's requested buckets:** `IMPORT_DIRECT` 6 · `IMPORT_AFTER_NORMALIZATION` 5 ·
 `IMPORT_AFTER_REFERENCE_MAPPING` 1 · `IMPORT_AFTER_SCHEMA_FIELD` 1 · `HISTORICAL_METADATA_ONLY` 4 ·
-`IGNORE` **27** (11 vendor-internal + 16 summary) · `BLOCKED` **45** (40 no-destination + 5 legal) ·
-`MANUAL_REVIEW` 3.
+`IGNORE` **28** (12 vendor-internal + 16 summary) · `BLOCKED` **44** (40 no-destination + 4 legal) ·
+`MANUAL_REVIEW` 2.
 
 **`BLOCKED_INVALID_SOURCE` is deliberately 0.** `TCNO`'s 8.5 % malformed values are a **row-level**
 classification, not a column-level one — the column itself is valid and migratable.
 
-**Headline: 12 of 91 columns (13.2 %) reach a NoraMedi field today** — 10 unconditionally, 3 gated
-on a legal decision, 2 unresolved. **40 columns (44 %) have no destination at all.**
+**Headline (pre-R3, not recomputed by this task): "12 of 91 columns (13.2 %) reach a NoraMedi field
+today."** R3 changed three dispositions (`ADRES_KODU`, `KONTROLNOTU`, `AILEGURUBU`) and closed the
+placeholder row (`YAKINLIKKODU`), which shifts this headline's inputs, but a full recount of "reaches
+a field" (which the pre-R3 text applies inconsistently — compare 10 unconditional + 3 legal-gated = 13
+against the stated 12) was out of this task's six-item scope and is **not asserted here**. The bucket
+counts immediately above are the mechanically verified, current numbers; treat the "12 of 91" prose as
+historical until a future task recounts it. **40 columns (44 %) have no destination at all — unchanged
+by R3** (`AILEGURUBU` left that bucket, `YAKINLIKKODU` entered it).
 
 ---
 
@@ -1192,9 +1203,9 @@ All items are **additive, expand-migrate-contract, no destructive change**. Orde
 | **G-E5** | `Patient.gender` `String?` (§8) | No gender field; product already promises one | `CINSIYET` 79.3 % | PII | nullable, no default, zero backfill | none | none | NO | drop column | MIG-002 | NO — P1 |
 | **G-E2** | `MigrationReferenceMap` | `User`/`AppointmentType` have no provenance | `HASTADOKTOR` 25 distinct | OPS | fully additive | `(sourceSystem, entityType, status)` | `@@unique([organizationId, sourceSystem, entityType, sourceValue])` | NO | drop table | MIG-006 | NO — P1 |
 | **G-E3** | `Patient.primaryPractitionerId` FK? | Resolved `User.id` has nowhere to land (C-8) | `HASTADOKTOR` 99.5 % | OPS | nullable, zero backfill | `@@index([clinicId, primaryPractitionerId])` | none | NO | null then drop | MIG-006 | NO — P1 |
-| **G-E6** | `Patient.chartNumber` (+ branch/sub) | Legacy chart lookup; paper-archive resolution (C-6) | `DOSYANO` **UNMEASURED** | OPS | nullable | `@@index([clinicId, chartNumber])` | **NOT unique** until fill+collisions measured | NO | drop columns | MIG-005 | NO — P1 *conditional on measurement* |
+| **G-E6** | `Patient.chartNumber` (+ branch/sub) | Legacy chart lookup; paper-archive resolution (C-6) | `DOSYANO` **measured (R3): 98.84 % fill, 99.88 % distinct, 17 dup pairs** | OPS | nullable | `@@index([clinicId, chartNumber])` | **near-unique, not hard-unique** — 34/14,718 rows (0.23 %) are duplicate pairs needing manual reconciliation before any DB-level unique constraint | NO | drop columns | MIG-005 | NO — P1 *measurement complete (C-15); still requires program-owner authorization before schema work* |
 | **G-E7** | `Patient.district` | TR addresses need province+district | `ILCE` ~13 rows | PII | nullable | none | none | NO | drop column | MIG-002 | NO — P2 |
-| **G-E20** | `Patient.familyGroupKey` | Explains the 28.6 % shared-phone population | `AILEGURUBU` **UNMEASURED** | PII | nullable | `@@index([clinicId, familyGroupKey])` | none | NO | drop column | MIG-005 | NO — P2 |
+| **G-E20** | ~~`Patient.familyGroupKey`~~ **WITHDRAWN (R3)** | ~~Explains the 28.6 % shared-phone population~~ **Does not — hypothesis refuted** | `AILEGURUBU` **measured (R3): 100 % fill, 100 % distinct — never repeats even within a shared-phone group (C-16)** | PII | — | — | — | — | — | — | **NO — WITHDRAWN.** `AILEGURUBU` cannot serve as a family/household key; do not build this field from it. `YAKINLIKKODU` (the C-1 column) is a more plausible relationship-code candidate but is 0 % filled in this workbook — nothing to build from either source today |
 | **G-E8** | `Patient.alternatePhone` (+label) | One phone field only (C-5) | 0.3 % / 1.1 % | PII | nullable. **Must be excluded from `@@index([clinicId, phone])` matching** or it changes the shared-phone invariant | none | none | NO | drop columns | MIG-002 | NO — P2 |
 | **G-E9 / G-E10** | `nationality`, health-tourism block | US-01.8 | **0 % / UNMEASURED** | PII | nullable | optional | none | NO | drop columns | US-01.8 | **NO — explicitly disqualified for this customer** |
 | **G-E11** | `PatientMedicalHistory.bloodType` | Emergency clinical safety | `KANGURUBU` 1 row | **SPECIAL** | additive to the versioned model; must join anonymization | none | none | per legal decision | drop column | MIG-002 | NO — DEFER |
@@ -1246,14 +1257,15 @@ clear before patient execution starts.
 
 ### `P1_REQUIRED_BEFORE_FULL_MIGRATION`
 
-`G-E5` gender · `G-E2` reference map · `G-E3` practitioner FK · `G-E6` chart number *(conditional on
-an unmade measurement)*.
+`G-E5` gender · `G-E2` reference map · `G-E3` practitioner FK · `G-E6` chart number *(measurement
+complete, R3 — 98.84 % fill, 99.88 % distinct)*.
 
 ### `P2_PRODUCT_ENHANCEMENT`
 
-`G-E7` district · `G-E20` family group · `G-E8` alternate phone · `G-E9`/`G-E10` nationality and
-health tourism · `G-E18` referredBy · `G-E19` corporate accounts · `G-E23` insurance type ·
-`G-E24` recall interval · address canonicalization.
+`G-E7` district · ~~`G-E20` family group~~ **withdrawn, R3 — `AILEGURUBU` hypothesis refuted by
+measurement** · `G-E8` alternate phone · `G-E9`/`G-E10` nationality and health tourism · `G-E18`
+referredBy · `G-E19` corporate accounts · `G-E23` insurance type · `G-E24` recall interval · address
+canonicalization.
 
 ### `DEFER`
 
@@ -1385,27 +1397,39 @@ Only genuine owner decisions. Everything else above is a recommendation with evi
 
 ## 18. Next implementation task
 
-**Recommended: `F3-DATA-MIG-001` (targeted re-profiling), *not* `F3-DATA-MIG-PR0`.**
+**R3 status (2026-08-18): the targeted re-profiling recommended below was executed.** Five of the six
+gaps in the table below are `CLOSED`; the sixth (`EK_ACIKLAMA`/`CHECKBOX`) remains open. See
+§19's R3 record for the full evidence and §2a for the corrections it produced (C-11…C-16).
+
+**Recommended next: `F3-DATA-MIG-PR0`** (Platform Admin intake safety foundation — no schema, no
+domain writes). A further short re-profiling pass for `EK_ACIKLAMA`/`CHECKBOX` is optional and does
+not block PR0.
+
+**Original recommendation (superseded by the above, kept for history): `F3-DATA-MIG-001` (targeted
+re-profiling), *not* `F3-DATA-MIG-PR0`.**
 
 PR 0 is genuinely unblocked and needs no schema change — but it is not the highest-value next step,
 because **this document's own matrix cannot be certified complete until a short, cheap measurement
 pass is done**, and several dispositions above are explicitly gated on it:
 
-| Must measure | Unblocks |
-| --- | --- |
-| **The verbatim 91-column header row** | C-1 — no mapping profile can be frozen while one column is unnamed |
-| `ADRES_KODU` digit-length histogram | C-2 — `postalCode` mapping, currently `MANUAL_REVIEW` |
-| `ONEMLINOT`, `KONTROLNOTU` fill | C-7 — sizes the special-category legal question before it is asked |
-| `DOSYANO` fill + collisions | G-E6's priority, currently P1-conditional |
-| `AILEGURUBU` fill + correlation with shared phones | G-E20 — could materially improve the dedup report |
-| `EK_ACIKLAMA`, `CHECKBOX` content shape | Their `MANUAL_REVIEW` dispositions |
+| Must measure | Unblocks | Status (R3, 2026-08-18) |
+| --- | --- | --- |
+| **The verbatim 91-column header row** | C-1 — no mapping profile can be frozen while one column is unnamed | **CLOSED** — `YAKINLIKKODU`, 0.00 % filled (C-11) |
+| `ADRES_KODU` digit-length histogram | C-2 — `postalCode` mapping, currently `MANUAL_REVIEW` | **CLOSED for this workbook** — 0.00 % filled, no data to histogram; disposition moot (C-12). Semantic question stays open for future sources |
+| `ONEMLINOT`, `KONTROLNOTU` fill | C-7 — sizes the special-category legal question before it is asked | **CLOSED** — `ONEMLINOT` 45.70 %, `KONTROLNOTU` 0.01 % (C-13, C-14) |
+| `DOSYANO` fill + collisions | G-E6's priority, currently P1-conditional | **CLOSED** — 98.84 % fill, 99.88 % distinct (C-15) |
+| `AILEGURUBU` fill + correlation with shared phones | G-E20 — could materially improve the dedup report | **CLOSED — hypothesis refuted, not confirmed** (C-16) |
+| `EK_ACIKLAMA`, `CHECKBOX` content shape | Their `MANUAL_REVIEW` dispositions | **STILL OPEN** — out of this task's six-item scope |
 
-This is a **read-only profiling pass over a file that is already available**, using the same
-scratchpad-only reader as the merged analysis. It creates no code, no schema and no PR risk, and it
-converts six "UNMEASURED" cells into rankable evidence. It is measured in hours.
+This was a **read-only profiling pass over a file that is already available** (`F3-DATA-MIG-001`
+targeted re-profiling, executed 2026-08-18), using a scratchpad-only Python/`xlrd` reader — no code,
+schema or PR risk to the product, and no raw PII/PHI value was printed, logged or committed at any
+point. It converted five of the six "UNMEASURED" cells into rankable evidence and closed C-1; a sixth
+item (`EK_ACIKLAMA`/`CHECKBOX`) remains unmeasured and is the natural next re-profiling target.
 
 **Then `F3-DATA-MIG-PR0`** (Platform Admin intake safety foundation — no schema, no domain writes),
-followed by PR 1 once the parser dependency is decided.
+followed by PR 1 once the parser dependency is decided. A further short re-profiling pass for
+`EK_ACIKLAMA`/`CHECKBOX` remains optional before PR0 and does not block it.
 
 **Dependency reality:** `F3-DATA-MIG-003` cannot be *implemented* before owner decisions 1–2, and
 `F3-DATA-MIG-005` (patient execution) cannot start before the §12 provenance decision. Neither
@@ -1419,7 +1443,9 @@ blocks PR 0.
 
 1. `Patient` has **no** identity, gender, nationality or district field; **no unique constraint of
    any kind**; and its detail/create/update routes return the whole record.
-2. **12 of 91 source columns (13.2 %) reach a NoraMedi field today; 40 (44 %) have no destination.**
+2. **12 of 91 source columns (13.2 %) reach a NoraMedi field today; 40 (44 %) have no destination**
+   *(pre-R3 figure; the "reaches a field" headline was not recomputed by R3 — see §5.1)*. **40 (44 %)
+   have no destination is unchanged by R3.**
 3. The only viable migration key is `HASTA_ID`. Phone and name are empirically disproven.
 4. The product's **only** reversible encryption is non-deterministic AES-256-GCM over machine
    secrets, with **no key rotation**; no patient PII column is encrypted.
@@ -1439,10 +1465,15 @@ blocks PR 0.
 
 ### Remaining unknowns
 
-`C-1` the 91st column · fill rates for the ~30 columns never profiled · `K-1`/`K-2` the remaining
-vendor exports (narrowed by D-3 but not closed) · `K-3` the 25 practitioner labels · `K-4`
+~~`C-1` the 91st column~~ **CLOSED, R3 — `YAKINLIKKODU`.** ~~`ONEMLINOT`/`KONTROLNOTU` fill~~
+**CLOSED, R3.** ~~`DOSYANO` fill+collisions~~ **CLOSED, R3.** ~~`AILEGURUBU` family-group
+correlation~~ **CLOSED, R3 — refuted.** Still open: `EK_ACIKLAMA`/`CHECKBOX` content shape · fill
+rates for the remaining ~25 columns never profiled (down from ~30 pre-R3) · `K-1`/`K-2` the
+remaining vendor exports (narrowed by D-3 but not closed) · `K-3` the 25 practitioner labels · `K-4`
 `KVKKILKKODU`'s meaning · `K-5` whether signed consent forms exist · the size of the D-13/D-14 binary
-corpora · whether `ADRES_KODU` is a postal code.
+corpora · **whether `ADRES_KODU` is a postal code — still open** (moot for this workbook at 0 % fill;
+must be re-measured against any future source that populates it) · whether `YAKINLIKKODU` is
+populated in any other vendor export (0 % here).
 
 ### Merge, deployment and program safety
 
@@ -1477,6 +1508,43 @@ encryption, parser, route, UI, or existing-importer code was touched.
 | 11 | Provenance — unchanged; both designs remain open, `P0` unchanged | §12 |
 | 12 | Next task confirmed unchanged: `F3-DATA-MIG-001` targeted re-profiling | §18 |
 
+### R3 targeted re-profiling record (this revision, `F3-DATA-MIG-001`, 2026-08-18)
+
+**The first time in this document's lifecycle that the real workbook was actually re-opened** — R1/R2
+restated aggregates from the merged contract §3 without opening the file (§1 baseline note, pre-R3).
+R3 opened `C:\Users\Mustafa\Downloads\hastalar tüm liste (1).xls` (BIFF8, 14,890 data rows × 91 named
+columns + 1 structurally-empty leading column) with a scratchpad-only Python/`xlrd` reader that
+computed aggregate counts, type breakdowns, length/digit histograms and distinct/duplicate counts —
+**no cell value was ever printed, logged, or written to any file this task committed.**
+`REAL_XLS_DATA_COMMITTED_TO_GIT = NO`, `RAW_PII_IN_LOGS = 0` (unchanged from R1/R2, re-verified).
+
+| # | Correction | Where |
+| --- | --- | --- |
+| **C-11** | Closes **C-1**. The genuinely missing 91st name is `YAKINLIKKODU` (relationship/kinship code), physical position 12, omitted from every prior transcription. Measured 0.00 % (0/14,890) filled | §5 matrix, §5 intro note |
+| **C-12** | Closes **C-2** for this workbook. `ADRES_KODU` measured 0.00 % (0/14,890) filled — no data exists to resolve UAVT-vs-postal-code. Disposition moved `MANUAL_REVIEW` → `IMPORT_DIRECT` (vacuous — 0 rows written); the semantic question itself remains **open** for any future source with non-zero fill | §5 matrix (`ADRES_KODU`), §18 |
+| **C-13** | Closes **C-7** for `ONEMLINOT`. Measured 45.70 % (6,805/14,890) filled, free text, up to 706 rows over 200 characters. Strengthens (does not weaken) `BLOCKED_LEGAL_DECISION` — this is confirmed, sized clinical free text, not "empty" or "unmeasured" | §5 matrix (`ONEMLINOT`) |
+| **C-14** | Closes **C-7** for `KONTROLNOTU`. Measured 0.01 % (2/14,890) filled — near-vestigial, unlike `ONEMLINOT`. Downgraded from field-wide `BLOCKED_LEGAL_DECISION` to `MANUAL_REVIEW` of the 2 affected rows | §5 matrix (`KONTROLNOTU`) |
+| **C-15** | Closes G-E6's measurement gap. `DOSYANO` measured 98.84 % (14,718/14,890) filled, 99.88 % distinct among filled (14,701/14,718; 17 duplicate pairs = 34 rows), digit length concentrated at 4–5 digits (98.5 % of filled). Disposition unchanged (`BLOCKED_NO_DESTINATION` — no schema field created by this task), priority confirmed P1 | §5 matrix (`DOSYANO`), §14 (`G-E6`), §15 |
+| **C-16** | **Refutes** G-E20's family-group-key hypothesis for `AILEGURUBU`. Measured 100.00 % (14,890/14,890) filled, fixed 24-character all-digit text, **100 % distinct** — including inside all 1,557 shared-`CEPTELEFONU` groups (3,512 rows), where distinct-`AILEGURUBU` count always equals group size. A real household key would produce repeats among family members; none exist. Reclassified `BLOCKED_NO_DESTINATION` → `IGNORE_VENDOR_INTERNAL`; G-E20 **withdrawn**, not merely left open | §5 matrix (`AILEGURUBU`), §14 (`G-E20`), §15 |
+
+**Bonus finding, not one of the six required measurements:** `YAKINLIKKODU` (the C-11 column) was also
+measured — 0.00 % filled, same as `ADRES_KODU`. It is the more plausible relationship/kinship-linkage
+field than `AILEGURUBU` if a family/household key is ever needed again, but carries no data in this
+export either.
+
+**Not measured by R3** (explicitly out of the six-item scope given to this task): `EK_ACIKLAMA` and
+`CHECKBOX` content shape, both still `MANUAL_REVIEW`.
+
+**Freeze status: the six targeted gaps are `CLOSED`. The full 91-column matrix is `NOT YET FULLY
+FROZEN`** — `EK_ACIKLAMA`/`CHECKBOX` and roughly 25 other `UNKNOWN`-fill columns remain unmeasured,
+none of them in this task's scope.
+
+**Program state re-verified unchanged:** `F4 COMPLETE` **NO** · `FIRST_CUSTOMER_RECOVERY_GATE`
+**NOT_SATISFIED** · `F5 AUTHORIZED` **NO** · `R-030` / `R-030-DB` / `R-030-FILES` **OPEN** · `repo2`
+**NOT ACTIVATED**. No application, schema, migration, parser, route, permission, UI or existing-importer
+code was touched. The scratchpad-only Python/`xlrd` reader used to compute these aggregates was never
+committed to this repository.
+
 ### Lifecycle
 
 ```text
@@ -1488,4 +1556,6 @@ MERGED                             = NO
 DEPLOYED                           = NO
 PRODUCTION_VERIFIED                = NO
 R1_CORRECTIONS_APPLIED             = YES
+R3_TARGETED_REPROFILING_APPLIED    = YES  (F3-DATA-MIG-001, real workbook opened, 5/6 gaps closed)
+FIELD_MATRIX_FULLY_FROZEN          = NO  (EK_ACIKLAMA/CHECKBOX and ~25 other columns still unmeasured)
 ```
