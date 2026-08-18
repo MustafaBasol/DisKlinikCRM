@@ -142,6 +142,99 @@ export function isUuid(value: unknown): value is string {
   );
 }
 
+export interface TransitionOptions {
+  actorPlatformAdminId: string | null;
+  action: string;
+  /**
+   * Scalar column writes to apply along with the status change.
+   *
+   * Deliberately the `UpdateMany` input type, not `UpdateInput`: the status
+   * change is a conditional UPDATE (see below), which cannot carry nested
+   * relation writes. Typing it this way makes that a compile error rather than
+   * a runtime surprise for a future caller.
+   */
+  data?: Prisma.MigrationRunUncheckedUpdateManyInput;
+  safeMetadata?: Record<string, unknown>;
+  outcome?: string;
+}
+
+/**
+ * One state-machine step, executed inside a transaction the CALLER owns.
+ *
+ * Exported because some operator actions are a single logical step that the
+ * state machine expresses as more than one edge — analyze is
+ * UPLOADED -> ANALYZED -> MAPPING_*, and a mapping edit after a dry run is
+ * DRY_RUN_COMPLETE -> MAPPING_REQUIRED -> MAPPING_READY. Those callers must be
+ * able to take every edge, PLUS the row writes that belong with them, in ONE
+ * transaction, so a failure half-way cannot leave the run advertising a stage
+ * it never reached — or leave edited rows behind a status that never moved.
+ *
+ * This is NOT a way around the state machine: every hop still goes through
+ * assertTransition and still writes its own audit row, so a multi-hop action
+ * is auditable as the sequence it actually performed.
+ */
+export async function transitionRunInTx(
+  tx: Prisma.TransactionClient,
+  runId: string,
+  from: MigrationRunStatus,
+  to: MigrationRunStatus,
+  options: TransitionOptions,
+) {
+  assertTransition(from, to);
+
+  /*
+   * THE STATUS CHANGE IS A CONDITIONAL UPDATE, not a read followed by a write.
+   *
+   * `UPDATE ... WHERE id = ? AND status = ?` is one atomic statement in
+   * Postgres, exactly like the execution lock above. A read-then-update-by-id
+   * would have a window: the caller's transaction runs at READ COMMITTED, so a
+   * concurrent transition that COMMITS after our read but before our write is
+   * invisible to the read and then silently overwritten by the write — a lost
+   * update that moves the run out of a status somebody else had already left.
+   * With the status in the WHERE clause the write simply matches no row, we
+   * throw, and the caller's whole transaction — mapping edits included — rolls
+   * back.
+   */
+  const changed = await tx.migrationRun.updateMany({
+    where: { id: runId, status: from },
+    data: { ...(options.data ?? {}), status: to },
+  });
+
+  if (changed.count !== 1) {
+    // Diagnose only AFTER the atomic attempt failed, never as a pre-check.
+    // A zero-row UPDATE does not abort the transaction, so this read is safe.
+    const current = await tx.migrationRun.findUnique({
+      where: { id: runId },
+      select: { status: true },
+    });
+    if (!current) {
+      throw new MigrationError('RUN_NOT_FOUND', { message: 'Migration run not found.' });
+    }
+    throw new MigrationError('MIGRATION_STATE_INVALID', {
+      message: `The run changed status while this request was in flight (expected ${from}, found ${current.status}). Reload and try again.`,
+    });
+  }
+
+  const updated = await tx.migrationRun.findUniqueOrThrow({ where: { id: runId } });
+
+  await writePlatformAdminAuditEventInTx(tx, {
+    actorPlatformAdminId: options.actorPlatformAdminId,
+    action: options.action,
+    resourceType: MIGRATION_AUDIT_RESOURCE,
+    resourceKey: runId,
+    previousValue: from,
+    newValue: to,
+    outcome: options.outcome ?? 'success',
+    safeMetadata: {
+      organizationId: updated.organizationId,
+      clinicId: updated.clinicId,
+      ...(options.safeMetadata ?? {}),
+    },
+  });
+
+  return updated;
+}
+
 /**
  * Move a run to a new status, enforcing the state machine and writing the
  * audit row in the SAME transaction as the status change.
@@ -150,55 +243,9 @@ export async function transitionRun(
   runId: string,
   from: MigrationRunStatus,
   to: MigrationRunStatus,
-  options: {
-    actorPlatformAdminId: string | null;
-    action: string;
-    data?: Prisma.MigrationRunUpdateInput;
-    safeMetadata?: Record<string, unknown>;
-    outcome?: string;
-  },
+  options: TransitionOptions,
 ) {
-  assertTransition(from, to);
-
-  return prisma.$transaction(async (tx) => {
-    // Re-read inside the transaction: the status we validated against may have
-    // moved between the caller's read and here (another tab, the executor
-    // finishing a batch). Without this the state machine is advisory only.
-    const current = await tx.migrationRun.findUnique({
-      where: { id: runId },
-      select: { status: true },
-    });
-    if (!current) {
-      throw new MigrationError('RUN_NOT_FOUND', { message: 'Migration run not found.' });
-    }
-    if (current.status !== from) {
-      throw new MigrationError('MIGRATION_STATE_INVALID', {
-        message: `The run changed status while this request was in flight (expected ${from}, found ${current.status}). Reload and try again.`,
-      });
-    }
-
-    const updated = await tx.migrationRun.update({
-      where: { id: runId },
-      data: { ...(options.data ?? {}), status: to },
-    });
-
-    await writePlatformAdminAuditEventInTx(tx, {
-      actorPlatformAdminId: options.actorPlatformAdminId,
-      action: options.action,
-      resourceType: MIGRATION_AUDIT_RESOURCE,
-      resourceKey: runId,
-      previousValue: from,
-      newValue: to,
-      outcome: options.outcome ?? 'success',
-      safeMetadata: {
-        organizationId: updated.organizationId,
-        clinicId: updated.clinicId,
-        ...(options.safeMetadata ?? {}),
-      },
-    });
-
-    return updated;
-  });
+  return prisma.$transaction((tx) => transitionRunInTx(tx, runId, from, to, options));
 }
 
 /**
