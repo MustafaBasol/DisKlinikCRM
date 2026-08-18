@@ -142,6 +142,75 @@ export function isUuid(value: unknown): value is string {
   );
 }
 
+export interface TransitionOptions {
+  actorPlatformAdminId: string | null;
+  action: string;
+  data?: Prisma.MigrationRunUpdateInput;
+  safeMetadata?: Record<string, unknown>;
+  outcome?: string;
+}
+
+/**
+ * One state-machine step, executed inside a transaction the CALLER owns.
+ *
+ * Exported because some operator actions are a single logical step that the
+ * state machine expresses as more than one edge — analyze is
+ * UPLOADED -> ANALYZED -> MAPPING_*. Those callers must be able to take both
+ * edges, plus the row writes that belong with them, in ONE transaction, so a
+ * failure half-way cannot leave the run advertising a stage it never reached.
+ *
+ * This is NOT a way around the state machine: every hop still goes through
+ * assertTransition and still writes its own audit row, so a multi-hop action
+ * is auditable as the sequence it actually performed.
+ */
+export async function transitionRunInTx(
+  tx: Prisma.TransactionClient,
+  runId: string,
+  from: MigrationRunStatus,
+  to: MigrationRunStatus,
+  options: TransitionOptions,
+) {
+  assertTransition(from, to);
+
+  // Re-read inside the transaction: the status we validated against may have
+  // moved between the caller's read and here (another tab, the executor
+  // finishing a batch). Without this the state machine is advisory only.
+  const current = await tx.migrationRun.findUnique({
+    where: { id: runId },
+    select: { status: true },
+  });
+  if (!current) {
+    throw new MigrationError('RUN_NOT_FOUND', { message: 'Migration run not found.' });
+  }
+  if (current.status !== from) {
+    throw new MigrationError('MIGRATION_STATE_INVALID', {
+      message: `The run changed status while this request was in flight (expected ${from}, found ${current.status}). Reload and try again.`,
+    });
+  }
+
+  const updated = await tx.migrationRun.update({
+    where: { id: runId },
+    data: { ...(options.data ?? {}), status: to },
+  });
+
+  await writePlatformAdminAuditEventInTx(tx, {
+    actorPlatformAdminId: options.actorPlatformAdminId,
+    action: options.action,
+    resourceType: MIGRATION_AUDIT_RESOURCE,
+    resourceKey: runId,
+    previousValue: from,
+    newValue: to,
+    outcome: options.outcome ?? 'success',
+    safeMetadata: {
+      organizationId: updated.organizationId,
+      clinicId: updated.clinicId,
+      ...(options.safeMetadata ?? {}),
+    },
+  });
+
+  return updated;
+}
+
 /**
  * Move a run to a new status, enforcing the state machine and writing the
  * audit row in the SAME transaction as the status change.
@@ -150,55 +219,9 @@ export async function transitionRun(
   runId: string,
   from: MigrationRunStatus,
   to: MigrationRunStatus,
-  options: {
-    actorPlatformAdminId: string | null;
-    action: string;
-    data?: Prisma.MigrationRunUpdateInput;
-    safeMetadata?: Record<string, unknown>;
-    outcome?: string;
-  },
+  options: TransitionOptions,
 ) {
-  assertTransition(from, to);
-
-  return prisma.$transaction(async (tx) => {
-    // Re-read inside the transaction: the status we validated against may have
-    // moved between the caller's read and here (another tab, the executor
-    // finishing a batch). Without this the state machine is advisory only.
-    const current = await tx.migrationRun.findUnique({
-      where: { id: runId },
-      select: { status: true },
-    });
-    if (!current) {
-      throw new MigrationError('RUN_NOT_FOUND', { message: 'Migration run not found.' });
-    }
-    if (current.status !== from) {
-      throw new MigrationError('MIGRATION_STATE_INVALID', {
-        message: `The run changed status while this request was in flight (expected ${from}, found ${current.status}). Reload and try again.`,
-      });
-    }
-
-    const updated = await tx.migrationRun.update({
-      where: { id: runId },
-      data: { ...(options.data ?? {}), status: to },
-    });
-
-    await writePlatformAdminAuditEventInTx(tx, {
-      actorPlatformAdminId: options.actorPlatformAdminId,
-      action: options.action,
-      resourceType: MIGRATION_AUDIT_RESOURCE,
-      resourceKey: runId,
-      previousValue: from,
-      newValue: to,
-      outcome: options.outcome ?? 'success',
-      safeMetadata: {
-        organizationId: updated.organizationId,
-        clinicId: updated.clinicId,
-        ...(options.safeMetadata ?? {}),
-      },
-    });
-
-    return updated;
-  });
+  return prisma.$transaction((tx) => transitionRunInTx(tx, runId, from, to, options));
 }
 
 /**

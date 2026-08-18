@@ -50,6 +50,7 @@ import {
   loadRunOrThrow,
   resolveAndVerifyTarget,
   transitionRun,
+  transitionRunInTx,
   isUuid,
 } from '../services/migration/migrationRunService.js';
 import {
@@ -385,7 +386,46 @@ router.post('/migrations/runs/:id/analyze', async (req: PlatformAdminRequest, re
 
     const profileByIndex = new Map(profiles.map((p) => [p.index, p]));
 
-    await prisma.$transaction(async (tx) => {
+    const unresolved = suggestions.filter(
+      (s) => s.mappingState === 'MANUAL_REQUIRED' || s.mappingState === 'AUTO_REVIEW',
+    ).length;
+
+    const fromStatus = run.status as MigrationRunStatus;
+    const mappingStatus: MigrationRunStatus = unresolved > 0 ? 'MAPPING_REQUIRED' : 'MAPPING_READY';
+
+    const analysisData = {
+      sheetName: workbook.metadata.sheets[workbook.metadata.selectedSheetIndex]?.name ?? null,
+      sheetIndex: workbook.metadata.selectedSheetIndex,
+      totalSourceRows: workbook.rows.length,
+      headerColumnCount: workbook.headers.length,
+      analysisWarnings: workbook.metadata.warnings as never,
+      analyzedAt: new Date(),
+    };
+    const analysisMetadata = {
+      totalSourceRows: workbook.rows.length,
+      headerColumnCount: workbook.headers.length,
+      unresolvedMappings: unresolved,
+      parseMs: workbook.metadata.parseMs,
+    };
+
+    /*
+     * ONE transaction for the whole analyze action: replace the proposed
+     * mappings AND move the run, or do neither.
+     *
+     * The accepted lifecycle is UPLOADED -> ANALYZED -> MAPPING_READY |
+     * MAPPING_REQUIRED (see runState.ts). ANALYZED is a real state, not a
+     * label: it is the point at which the workbook has been read and the
+     * columns proposed but no mapping decision has been reviewed. Analyze
+     * therefore takes BOTH edges rather than the non-existent
+     * UPLOADED -> MAPPING_* shortcut, which is what previously threw
+     * MIGRATION_STATE_INVALID *after* the mappings had already been committed
+     * and left the run stranded in UPLOADED with a full mapping set.
+     *
+     * Re-analyzing a run that is already past ANALYZED (the operator picks a
+     * different sheet, or re-runs the suggestion engine) starts from that
+     * status instead; the state machine already carries those edges.
+     */
+    const updated = await prisma.$transaction(async (tx) => {
       await tx.migrationFieldMapping.deleteMany({ where: { runId: run.id } });
       await tx.migrationFieldMapping.createMany({
         data: suggestions.map((s) => ({
@@ -403,35 +443,28 @@ router.post('/migrations/runs/:id/analyze', async (req: PlatformAdminRequest, re
           isAutoSuggested: true,
         })),
       });
-    });
 
-    const unresolved = suggestions.filter(
-      (s) => s.mappingState === 'MANUAL_REQUIRED' || s.mappingState === 'AUTO_REVIEW',
-    ).length;
+      if (fromStatus === 'UPLOADED') {
+        await transitionRunInTx(tx, run.id, 'UPLOADED', 'ANALYZED', {
+          actorPlatformAdminId: actorId(req),
+          action: 'clinic_data_migration.analyzed',
+          data: analysisData,
+          safeMetadata: analysisMetadata,
+        });
+        return transitionRunInTx(tx, run.id, 'ANALYZED', mappingStatus, {
+          actorPlatformAdminId: actorId(req),
+          action: 'clinic_data_migration.mapping_proposed',
+          safeMetadata: { unresolvedMappings: unresolved, proposed: suggestions.length },
+        });
+      }
 
-    const updated = await transitionRun(
-      run.id,
-      run.status as MigrationRunStatus,
-      unresolved > 0 ? 'MAPPING_REQUIRED' : 'MAPPING_READY',
-      {
+      return transitionRunInTx(tx, run.id, fromStatus, mappingStatus, {
         actorPlatformAdminId: actorId(req),
         action: 'clinic_data_migration.analyzed',
-        data: {
-          sheetName: workbook.metadata.sheets[workbook.metadata.selectedSheetIndex]?.name ?? null,
-          sheetIndex: workbook.metadata.selectedSheetIndex,
-          totalSourceRows: workbook.rows.length,
-          headerColumnCount: workbook.headers.length,
-          analysisWarnings: workbook.metadata.warnings as never,
-          analyzedAt: new Date(),
-        },
-        safeMetadata: {
-          totalSourceRows: workbook.rows.length,
-          headerColumnCount: workbook.headers.length,
-          unresolvedMappings: unresolved,
-          parseMs: workbook.metadata.parseMs,
-        },
-      },
-    );
+        data: analysisData,
+        safeMetadata: analysisMetadata,
+      });
+    });
 
     res.json({
       run: updated,
@@ -523,21 +556,52 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
     const validation = validateMappings(mappings, headers);
 
     const nextStatus: MigrationRunStatus = validation.valid ? 'MAPPING_READY' : 'MAPPING_REQUIRED';
-    const updated = await transitionRun(run.id, run.status as MigrationRunStatus, nextStatus, {
-      actorPlatformAdminId: actorId(req),
-      action: 'clinic_data_migration.mapping_saved',
-      // Counts only. Never the destinations chosen for named source columns —
-      // those are safe, but the count is what an auditor needs.
-      safeMetadata: {
-        changed: incoming.length,
-        mapped: validation.mappedCount,
-        unresolved: validation.unresolvedCount,
-        blocked: validation.blockedCount,
-        legalBlocked: validation.legalBlockedCount,
-        ignored: validation.ignoredCount,
-        valid: validation.valid,
-      },
-    });
+    const fromStatus = run.status as MigrationRunStatus;
+    // Counts only. Never the destinations chosen for named source columns —
+    // those are safe, but the count is what an auditor needs.
+    const savedMetadata = {
+      changed: incoming.length,
+      mapped: validation.mappedCount,
+      unresolved: validation.unresolvedCount,
+      blocked: validation.blockedCount,
+      legalBlocked: validation.legalBlockedCount,
+      ignored: validation.ignoredCount,
+      valid: validation.valid,
+    };
+
+    /*
+     * Editing the mapping AFTER a dry run (DRY_RUN_COMPLETE) or after the run
+     * was marked ready (READY) invalidates the dry run, which was computed
+     * against the mapping that just changed. The state machine says so: the
+     * only edge back into the mapping stage from those two states is
+     * -> MAPPING_REQUIRED. So a valid edit takes that edge FIRST and then
+     * MAPPING_REQUIRED -> MAPPING_READY, both in one transaction. Going
+     * straight to MAPPING_READY is not a legal edge and used to throw
+     * MIGRATION_STATE_INVALID after the mapping rows had already been written
+     * — the same defect shape as analyze.
+     */
+    const needsMappingStageHop =
+      nextStatus === 'MAPPING_READY' &&
+      (fromStatus === 'DRY_RUN_COMPLETE' || fromStatus === 'READY');
+
+    const updated = needsMappingStageHop
+      ? await prisma.$transaction(async (tx) => {
+          await transitionRunInTx(tx, run.id, fromStatus, 'MAPPING_REQUIRED', {
+            actorPlatformAdminId: actorId(req),
+            action: 'clinic_data_migration.mapping_saved',
+            safeMetadata: savedMetadata,
+          });
+          return transitionRunInTx(tx, run.id, 'MAPPING_REQUIRED', 'MAPPING_READY', {
+            actorPlatformAdminId: actorId(req),
+            action: 'clinic_data_migration.mapping_revalidated',
+            safeMetadata: savedMetadata,
+          });
+        })
+      : await transitionRun(run.id, fromStatus, nextStatus, {
+          actorPlatformAdminId: actorId(req),
+          action: 'clinic_data_migration.mapping_saved',
+          safeMetadata: savedMetadata,
+        });
 
     res.json({ run: updated, mappings, validation });
   } catch (error) {
