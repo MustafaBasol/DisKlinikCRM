@@ -1088,3 +1088,29 @@ Recorded here so this contract is not read in isolation. Full evidence in §2 of
 
 **No program state changed. No schema, migration or runtime code was created or modified.**
 `SCHEMA_CHANGE_AUTHORIZED = NO`.
+
+### 21.1 R1 program-owner corrections (2026-08-18) — additive, nothing above withdrawn
+
+The companion document received a program-owner architecture-review pass (R1) after this §21 was
+first added. **Additive only** — the §21 record above and PR #442's evidence stand unchanged. R1's
+corrections, in full, live in the companion document; summarized here so this contract is not read in
+isolation:
+
+| # | R1 correction | Companion §§ |
+| --- | --- | --- |
+| 1 | `TCNO`/national-identity data reclassified `P0_FIRST_CUSTOMER_BLOCKER` (was `P1`) — a program-owner decision, not an engineering one. The absence of a current NoraMedi consumer does not make discarding ~11,500 identity values acceptable for a full clinic migration | §6.0, §15 |
+| 2 | `PatientIdentityDocument` is `CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE` — the leading candidate, explicitly **not** an approved schema | §6.0, §6.1, §6.3 |
+| 3 | Withdrawn: reusing the general `ENCRYPTION_KEY` for patient identity ciphertext. Required: dedicated, isolated key material with `cryptoVersion`, rotation, backwards decryption, fail-closed startup, no raw-PII logging, testable lifecycle, and a path to future KMS/envelope encryption | §6.2a |
+| 4 | HMAC lookup design corrected to an explicit tenant-bound requirement — a single global `HMAC(pepper, normalizedTCNO)` is rejected; the same identity value in two organizations must never produce the same lookup token | §6.4 |
+| 5 | Platform Admin access split: no general plaintext read/unmask, but an audited migration write-through capability that ingests, classifies, encrypts and persists identity data without exposing plaintext through ordinary APIs/UI | §6.6, §6.6a |
+| 6 | Withdrawn: "a parent's TC on a child's row proves duplicate identities are legitimate domain semantics." Corrected: source ambiguity / data-quality debt, classified `AMBIGUOUS` / `MANUAL_REVIEW`, never auto-merged. The no-hard-unique-constraint outcome is unchanged; the reasoning is corrected | §6.5 |
+| 7 | Gender remains a recommendation (`GENDER_FIELD_REQUIRED = YES`, `GENDER_DOMAIN_CONTRACT = NOT_AUTHORIZED_YET`), not proof of an accepted contract — the basic importer validates and discards the value, which is evidence, not a persisted contract | §8 |
+| 8 | Health Tourism confirmed as a separate future modular-monolith module; US-01.8 is backlog/context evidence only and must not be used to pull tourism workflows into Patient Core or this migration | §7.0 |
+| 9 | Five pre-existing defects explicitly tagged `PRE_EXISTING = YES` / `CAUSED_BY_MIGRATION = NO` / `SEPARATE_TASK_REQUIRED = YES`: broad-projection scalar auto-exposure, anonymization/export field-list drift, log-privacy-guard identity-field gap, `primaryClinicId` runtime gap, accent-insensitive search gap | §16.1 |
+| 10 | `PLAN_LIMIT_DECISION_REQUIRED_BEFORE_EXECUTION = YES` made explicit, with required dry-run reporting fields (source/destination counts, resulting count, org/clinic plan caps, blocked/allowed) | §17 item 5 |
+
+**Still true after R1:** `SCHEMA_CHANGE_AUTHORIZED = NO`, `MIGRATION_CREATED = NO`. No schema,
+migration, encryption, parser, route, UI, or existing-importer code was touched by R1 — documentation
+only. Program state (`F4 COMPLETE` **NO** · `FIRST_CUSTOMER_RECOVERY_GATE` **NOT_SATISFIED** ·
+`F5 AUTHORIZED` **NO** · `R-030`/`R-030-DB`/`R-030-FILES` **OPEN** · `repo2` **NOT ACTIVATED**) is
+unchanged.

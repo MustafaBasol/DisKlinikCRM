@@ -427,17 +427,57 @@ on a legal decision, 2 unresolved. **40 columns (44 %) have no destination at al
 
 ## 6. TC / national identifier recommendation (F3-DATA-MIG-003)
 
+### 6.0 R1 program-owner decision — priority correction
+
+```text
+TC_NATIONAL_IDENTITY_FIRST_CUSTOMER_PRIORITY = P0_FIRST_CUSTOMER_BLOCKER
+PATIENT_IDENTITY_DOCUMENT_MODEL              = CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE
+SCHEMA_IMPLEMENTATION_AUTHORIZED             = NO
+PATIENT_IDENTITY_CRYPTO_KEY_SEPARATION       = REQUIRED
+IDENTITY_LOOKUP_TOKEN_TENANT_BOUND           = YES
+```
+
+**This section (§6) and §15 previously ranked `TCNO`/G-E4 as `P1_REQUIRED_BEFORE_FULL_MIGRATION`.**
+That ranking is **corrected by program-owner decision, R1**. The objective of this program is a
+complete, controlled clinic-data migration for the first customer. The real source contains
+**~11,500 populated `TCNO` values** — a major patient identity dataset. The absence of an existing
+NoraMedi route or report that *consumes* a TC number does not make it acceptable to silently discard
+that dataset during a "full migration." **`TCNO` is therefore `P0_FIRST_CUSTOMER_BLOCKER`, alongside
+`G-E1` (provenance).** §15 is corrected accordingly below.
+
+This does **not** mean invalid legacy TC values are imported as verified identities. Every value is
+row-classified before any write:
+
+```text
+VALID              — 11 digits, checksum passes
+INVALID_LEGACY      — wrong shape/checksum but present; historical data-entry error, not corruption
+AMBIGUOUS           — plausible identity value whose ownership relative to the patient row is unclear
+                       (e.g. §6.5 guardian/child semantics)
+DUPLICATE_SOURCE     — the same normalized value appears against ≥2 patients in the source
+MANUAL_REVIEW        — does not resolve cleanly into the above; requires a human decision before write
+```
+
+`§6.5`'s per-case table is restated using this vocabulary. **Patient execution must not start until
+an accepted secure identity destination design exists** — promoting the priority to P0 makes that
+design a first-customer *blocker*, not merely a P1 nice-to-have finished "sometime before full
+migration."
+
 ### 6.1 Decision summary
 
-| Question | Recommendation |
-| --- | --- |
-| Where does it live | **New child model `PatientIdentityDocument`** — *not* scalars on `Patient` |
-| Encryption | AES-256-GCM, reusing `utils/encryption.ts` `encryptSecretTagged` (`enc:v1:`) |
-| Searchable | **Yes, exact-match only**, via an **HMAC-SHA256 lookup column with a new dedicated pepper** — never `ENCRYPTION_KEY` |
-| DB unique constraint | **No cross-patient unique at launch.** Non-unique index + application-level duplicate *warning* |
-| Checksum | Enforced at write time for `TCKN`; migration **quarantines the value, never blocks the patient row** |
-| Key rotation | None exists. Ship `cryptoVersion Int @default(1)` from day one |
-| Platform Admin visibility | **NONE.** Hard boundary |
+| Question | Recommendation | Status |
+| --- | --- | --- |
+| First-customer priority | **`P0_FIRST_CUSTOMER_BLOCKER`** (§6.0 — program-owner decision, R1) | DECIDED |
+| Where does it live | A separate child model, working name `PatientIdentityDocument` — *not* scalars on `Patient` | **`CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE`.** The exact Prisma shape in §6.3 is illustrative, not an approved schema |
+| Encryption | Dedicated, isolated key material for patient identity data — **not** the general `ENCRYPTION_KEY` and **not** its lifecycle. See §6.2a | `NOT_AUTHORIZED_YET` — architecture required, not implemented |
+| Searchable | **Yes, exact-match only**, via an **HMAC-SHA256 lookup column, tenant-bound** (§6.4) | `CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE` |
+| DB unique constraint | **No cross-patient unique at launch.** Non-unique index + application-level duplicate *warning*. Reason is unresolved legacy semantics and dirty-data compatibility (§6.5), not a claim that duplicate identities are correct domain behavior | `CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE` |
+| Checksum | Enforced at write time for `TCKN`; migration **quarantines the value, never blocks the patient row** | `CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE` |
+| Key rotation | None exists today for any key. Ship `cryptoVersion Int @default(1)` plus a rotation-capable key hierarchy from day one (§6.2a) | `NOT_AUTHORIZED_YET` |
+| Platform Admin visibility | **Split by capability, not a single "NONE."** See §6.6a | `CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE` |
+
+**None of the above is schema-authorized.** `SCHEMA_IMPLEMENTATION_AUTHORIZED = NO`. This section
+proposes an architecture for the next design review; it does not approve a Prisma schema, and §6.3's
+model listing must not be read as pre-approved.
 
 ### 6.2 Why a child model, not columns on `Patient`
 
@@ -466,17 +506,70 @@ migrations `20260803120000` and `20260803135254` — **after** the freeze's cond
 satisfied. `PatientMedicalHistory` explicitly models KVKK special-category data. This is a live,
 merged precedent for exactly this shape.
 
+### 6.2a Crypto-key separation — R1 correction, withdraws key reuse
+
+**Withdrawn.** An earlier draft of this section recommended reusing `utils/encryption.ts`
+`encryptSecretTagged` — i.e. the general platform `ENCRYPTION_KEY` — for patient identity ciphertext.
+**That recommendation is withdrawn.** `ENCRYPTION_KEY` today protects **rotatable machine secrets**
+(TOTP secrets, WhatsApp/Meta/Instagram tokens, calendar and SMS provider credentials): if it leaks,
+every one of those secrets can be revoked and reissued at the provider. **A T.C. Kimlik No is
+immutable, lifelong, government-issued regulated PII** — it cannot be reissued if the key protecting
+it is compromised. Sharing a key means sharing a blast radius between two data classes with
+fundamentally different consequence profiles, and it means a future rotation of one forces a
+rotation conversation about the other. §6.8's "decisive asymmetry" argument already makes this case
+for retention; R1 extends the same logic to key *identity*, not just key *lifecycle timing*.
+
+```text
+PATIENT_IDENTITY_CRYPTO_KEY_SEPARATION = REQUIRED
+```
+
+The patient-identity encryption boundary must be designed (not implemented in this PR) to support:
+
+- **dedicated key material, or an equivalent isolated key hierarchy** — never the same key object,
+  env var, or secret-manager entry as `ENCRYPTION_KEY` or any provider/platform secret;
+- **`cryptoVersion`** on every row (already present in §6.3's illustrative shape) so a future key
+  generation is distinguishable per record;
+- **future key rotation** — a defined (if not yet built) procedure for introducing a new key
+  generation without a destructive rewrite;
+- **backwards decryption during rotation** — old-generation ciphertext must remain readable while a
+  rotation is in progress, keyed off `cryptoVersion`;
+- **fail-closed startup/configuration** — the service must refuse to start (or refuse identity writes)
+  if the dedicated key material is missing or malformed, mirroring the fail-closed pattern already
+  established by `assertIpHashSecretConfigured()` (`passwordStepUp.ts:79-89`), not the weaker
+  production-only boot check in `isEncryptionKeyConfigured()` (`encryption.ts:103-106`);
+- **no raw PII logging** — no path may log the plaintext value, the encryption key, or the pepper;
+- **a testable key lifecycle** — key/pepper presence, fail-closed behavior, and rotation logic must be
+  coverable by tests independent of any real key material;
+- **a path to future KMS / envelope encryption** — the design must not force a destructive `Patient`
+  or identity-model redesign when the platform later adopts a KMS-backed envelope scheme (e.g. a
+  wrapped data-key per record instead of a single static key).
+
+**Not implemented in this PR.** No key management code, no env var wiring, and no encryption code are
+added by this documentation-only change. Where an illustrative candidate name is useful for
+readability (e.g. in §6.3's Prisma doc-comments or §6.4's HMAC formula), it is marked illustrative,
+not final — the final name and key-management mechanism are decided at schema-implementation review,
+not here.
+
 ### 6.3 Proposed model — PROPOSAL ONLY, `NOT_AUTHORIZED_YET`
 
+**Illustrative only — `SCHEMA_IMPLEMENTATION_AUTHORIZED = NO` (§6.0).** This Prisma shape is the
+leading candidate for the next design stage, not an approved schema. Field names, the encryption
+call, and the pepper env-var name below are illustrative placeholders pending §6.2a's key-separation
+architecture — none of it is authorized for implementation.
+
 ```prisma
-/// F3-DATA-MIG-003. Encrypted national/travel identity documents.
+/// F3-DATA-MIG-003. ILLUSTRATIVE ONLY — not an approved schema (§6.0, §6.2a).
+/// Encrypted national/travel identity documents.
 /// docType: TCKN | PASSPORT | FOREIGN_ID   (stable backend string contract, per the
 ///   Patient.patientStatus / PatientEmergencyContact.contactType convention — NOT a Prisma enum)
-/// valueEncrypted: AES-256-GCM via utils/encryption.ts encryptSecretTagged ('enc:v1:')
-/// lookupHash: HMAC-SHA256(PATIENT_IDENTITY_HASH_PEPPER, organizationId:docType:normalizedValue)
-///   NEVER an unkeyed hash — the valid TC space is ~9e8 and exhaustively invertible in <1s
+/// valueEncrypted: AES-256-GCM under DEDICATED patient-identity key material — NEVER the general
+///   ENCRYPTION_KEY or its lifecycle (§6.2a, PATIENT_IDENTITY_CRYPTO_KEY_SEPARATION = REQUIRED).
+///   utils/encryption.ts's algorithm/format may be reused as a primitive; its key object may not.
+/// lookupHash: HMAC-SHA256(identityLookupKey, organizationId:docType:normalizedValue) — tenant-bound
+///   by construction (§6.4). NEVER an unkeyed hash — the valid TC space is ~9e8 and exhaustively
+///   invertible in <1s. `identityLookupKey` is an illustrative name for a dedicated, isolated pepper.
 /// cryptoVersion: key/pepper generation. No rotation mechanism exists today; this column exists
-///   so that adding one later is an additive backfill, not a destructive rewrite.
+///   so that adding one later is an additive backfill, not a destructive rewrite (§6.2a).
 model PatientIdentityDocument {
   id             String       @id @default(uuid())
   patientId      String
@@ -498,52 +591,108 @@ model PatientIdentityDocument {
 }
 ```
 
-### 6.4 Lookup design — and why an unkeyed hash is unacceptable
+### 6.4 Lookup design — tenant-bound, and why an unkeyed hash is unacceptable
+
+**R1 correction — the tenant-binding property is now stated as a required invariant, not an
+implementation detail.** A single global `HMAC(globalPepper, normalizedTCNO)` — with no tenant input
+in the hashed data — is **not accepted**: the same person produces the same stable lookup token in
+every organization that happens to serve them, which makes the lookup column a **cross-tenant
+correlator** readable by anyone with DB access, independent of the encryption boundary.
+
+```text
+IDENTITY_LOOKUP_TOKEN_TENANT_BOUND = YES
+```
+
+**Required invariant:** *the same normalized identity value in two different organizations must not
+produce the same persisted lookup token.* Any uniqueness or indexing built on the lookup token must
+also be tenant-scoped — `@@index([organizationId, docType, lookupHash])` in §6.3 already scopes on
+`organizationId` first; that scoping is load-bearing, not incidental, and must not be dropped in
+implementation.
 
 A TC number is 11 digits with `d1 ≠ 0`, and `d10`/`d11` are checksums derived from `d1..d9`. The
 valid space is therefore **≈ 9 × 10⁸**, not 10¹¹. A commodity GPU computes ~10¹⁰ SHA-256/s.
 
 > **An unkeyed `sha256(tc)` column is exhaustively invertible in well under one second — it is
-> plaintext with extra steps.** A keyed HMAC with a server-side pepper is not a hardening nicety;
-> it is the entire security property.
+> plaintext with extra steps.** A keyed HMAC is not a hardening nicety; it is the entire security
+> property, and on its own it is **not** sufficient — the tenant-binding property above is a second,
+> independent requirement layered on top of it.
 
-```
-lookupHash = HMAC-SHA256(
-  key  = PATIENT_IDENTITY_HASH_PEPPER,          // NEW dedicated env var, >= 32 chars
-  data = organizationId + ':' + docType + ':' + normalizedValue
-)
+**Candidate designs** (both satisfy the invariant; the choice is deferred to schema-implementation
+review, not decided here):
+
+```text
+Candidate A — org id folded into the hashed data, one global key:
+  lookupHash = HMAC-SHA256(
+    key  = identityLookupKey,                      // illustrative name; a single dedicated,
+                                                     // isolated pepper (§6.2a) — never ENCRYPTION_KEY
+    data = organizationId + ':' + docType + ':' + normalizedValue
+  )
+
+Candidate B — a per-organization derived lookup key, org id absent from the data:
+  orgLookupKey = HKDF(identityLookupKey, salt = organizationId)   // or an equivalent per-org
+                                                                    // derivation / envelope key
+  lookupHash   = HMAC-SHA256(key = orgLookupKey, data = docType + ':' + normalizedValue)
 ```
 
-- **Dedicated pepper, never `ENCRYPTION_KEY`.** The repo already states this rule in writing
-  (`passwordStepUp.ts:12-13`, `:82-87`) and enforces it **per request, fail-closed**
-  (`assertIpHashSecretConfigured()`, `:79-89`) — not merely at boot. Mirror that exactly.
-- **`organizationId` inside the HMAC input.** Without it the column is a stable **cross-tenant
-  patient correlator** readable by anyone with DB access, and identical TCs across clinics become
-  visibly linkable. Tenant-salting also correctly makes cross-tenant dedup impossible, which is the
-  desired isolation property.
+| | Candidate A (org id in data) | Candidate B (org id in key derivation) |
+| --- | --- | --- |
+| Tenant-bound? | Yes — different `organizationId` ⇒ different hash input ⇒ different token | Yes — different `organizationId` ⇒ different derived key ⇒ different token |
+| Key management surface | One key to escrow/rotate | One key to escrow + a derivation function to keep stable; a bug in derivation is a silent tenant-isolation failure |
+| Blast radius of a leaked pepper | One leaked pepper decodes lookup tokens for **every** tenant (still cannot recover plaintext without the encryption key — §6.2a keeps that separate) | One leaked *derived* key exposes lookup correlation for one tenant only, if per-tenant keys are also stored separately rather than re-derived from one root |
+| Complexity | Lower — matches the illustrative shape already in §6.3 | Higher — needs a documented, versioned derivation function |
+| Recommendation | **Leading candidate for the next design stage**, on simplicity grounds | Documented as the alternative; revisit if per-tenant key isolation becomes a requirement independent of this migration |
+
+- **Dedicated key, never `ENCRYPTION_KEY`, never shared with the patient-identity encryption key
+  either (§6.2a).** The repo already states the "never reuse a general secret for a purpose-specific
+  HMAC" rule in writing (`passwordStepUp.ts:12-13`, `:82-87`) and enforces it **per request,
+  fail-closed** (`assertIpHashSecretConfigured()`, `:79-89`) — not merely at boot. Mirror that pattern
+  for whichever candidate is chosen.
 - **Search UX:** only when the query is exactly 11 digits **and passes the checksum**, compute the
-  HMAC and add `{ identityDocuments: { some: { lookupHash } } }` to the existing `where.OR`
-  (`patients.ts:68-75`). Otherwise it stays a name/phone/email search. **No plaintext TC ever reaches
-  a log, a query string, or an ORM `contains`.** Substring search over an identity number is
-  impossible by design — and undesirable anyway.
-- **Recovery asymmetry worth recording:** if `ENCRYPTION_KEY` is lost but the pepper survives,
-  search still works while display is permanently dead; if the pepper is lost but the key survives,
-  lookups can be **rebuilt** by decrypting and re-hashing. Losing both is unrecoverable. **Both must
-  be escrowed.**
+  HMAC (Candidate A or B) and add `{ identityDocuments: { some: { lookupHash } } }` to the existing
+  `where.OR` (`patients.ts:68-75`), scoped by the request's `organizationId` as it already is today.
+  Otherwise it stays a name/phone/email search. **No plaintext TC ever reaches a log, a query string,
+  or an ORM `contains`.** Substring search over an identity number is impossible by design — and
+  undesirable anyway.
+- **Recovery asymmetry worth recording:** if the patient-identity encryption key is lost but the
+  lookup key/pepper survives, search still works while display is permanently dead; if the lookup
+  key/pepper is lost but the encryption key survives, lookups can be **rebuilt** by decrypting and
+  re-hashing (Candidate A) or re-deriving (Candidate B). Losing both is unrecoverable. **All key
+  material must be escrowed.**
 
 ### 6.5 Uniqueness and legacy-data policy
 
-**Decision: no cross-patient unique constraint at launch.**
+**Decision: no cross-patient unique constraint at launch — same outcome as the prior draft, corrected
+reasoning.**
 
-| Reason | Evidence |
+**R1 correction — withdrawn claim.** The prior draft argued that duplicate TCs across patients are
+**legitimate domain semantics**, citing `PatientEmergencyContact.isLegalDecisionMaker`'s documented
+non-uniqueness as proof that "a parent's TC recorded against a minor" is an intentional, accepted
+pattern. **That claim is withdrawn.** `isLegalDecisionMaker` documents *guardianship*, a relationship
+concept that belongs to the guardian/relationship domain — it does not prove that recording a
+guardian's identity number **on the child's own verified identity record** is correct behavior. The
+source workbook may well contain exactly that pattern, but its presence there is **source ambiguity
+and data-quality debt**, not evidence of a legitimate domain rule. The correct classification for a
+cross-patient duplicate TC, using the §6.0 vocabulary, is:
+
+```text
+AMBIGUOUS       — is this a genuine duplicate, a shared-guardian entry, or a data-entry error?
+MANUAL_REVIEW   — resolved by a human, not inferred or auto-merged
+```
+
+**No duplicate identity record is ever automatically merged.** This section does not adopt a design
+that treats guardian-TC-on-child as correct; it only decides where the *constraint* sits, for reasons
+that are independent of that question:
+
+| Reason no hard DB unique constraint at this stage | Evidence |
 | --- | --- |
-| It would hard-block 60 real rows on day one | 30 duplicate values across 60 rows |
-| Duplicate TCs are **legitimate** in dentistry — a parent's TC recorded against a minor child | The repo already models guardianship: `PatientEmergencyContact.isLegalDecisionMaker` is documented as *"intentionally NOT unique per patient"* (`schema.prisma:315-317`) |
-| The repo's established answer to a soft identifier is a **warning API, not a constraint** | `GET /patients/check-phone-duplicate` (`routes/patients.ts:36-42`) — mirror this |
-| Asymmetric cost | Adding a unique index later, after cleanup, is additive. Discovering at migration time that 60 rows cannot be written is a blocked go-live |
+| Unresolved legacy semantics | 30 duplicate values across 60 rows in the source; whether each is a genuine duplicate, a guardian-on-minor entry, or a data-entry error is **not determinable from the workbook alone** and needs manual collision resolution, not an inferred rule |
+| Dirty-data migration compatibility | A hard unique constraint would hard-block those 60 real rows on day one, before any human has reviewed which ones are genuine collisions |
+| Asymmetric cost | Adding a unique index later, after manual review, is additive. Discovering at migration time that 60 rows cannot be written is a blocked go-live |
+| Precedent for a *soft* signal, not a *hard* one | The repo's established answer to a soft identifier is a **warning API, not a constraint** — `GET /patients/check-phone-duplicate` (`routes/patients.ts:36-42`) |
 
 Keep `@@unique([patientId, docType])` — that *is* a genuine invariant and all legacy data satisfies
-it. Detect cross-patient collisions in the application and surface a **soft duplicate warning**.
+it. Detect cross-patient collisions in the application and surface a **soft duplicate warning for
+manual review** — never an automatic merge, and never a claim that the duplicate is legitimate.
 
 **Checksum**, enforced at write time via a zod `.refine()` mirroring the existing `dateOfBirth`
 refine (`schemas/index.ts:29`):
@@ -551,14 +700,14 @@ refine (`schemas/index.ts:29`):
 
 **Migration classification — the patient row is never lost:**
 
-| Case | Count | Action |
-| --- | --- | --- |
-| Valid shape + valid checksum | ≤ 10,525 | Import; `isVerified = true` |
-| 11 digits, checksum fails | subset | **Do not write the document.** Emit `IDENTITY_CHECKSUM_INVALID`. **Patient still imports** |
-| 10/12/13-digit or 12–20-char string | ~975 | **Do not write.** `IDENTITY_SHAPE_INVALID` (sub-code `LIKELY_TAX_NUMBER` for 12-digit — see `VERGINO`). **Patient still imports** |
-| Duplicate across ≥2 patients | 60 rows / 30 values | **Import both.** `IDENTITY_DUPLICATE_WARNING`, reporting **`HASTA_ID`s only — never the TC value** |
-| Blank | 3,390 | Skip; not an error |
-| `SILINDI = true` legacy rows | 172 | **Do not import an identity document at all** — these arrive already `archived`; storing identity numbers for records the clinic has already deleted has no lawful purpose |
+| Case | Count | Classification | Action |
+| --- | --- | --- | --- |
+| Valid shape + valid checksum | ≤ 10,525 | `VALID` | Import; `isVerified = true` |
+| 11 digits, checksum fails | subset | `INVALID_LEGACY` | **Do not write the document.** Emit `IDENTITY_CHECKSUM_INVALID`. **Patient still imports** |
+| 10/12/13-digit or 12–20-char string | ~975 | `INVALID_LEGACY` | **Do not write.** `IDENTITY_SHAPE_INVALID` (sub-code `LIKELY_TAX_NUMBER` for 12-digit — see `VERGINO`). **Patient still imports** |
+| Duplicate across ≥2 patients | 60 rows / 30 values | `AMBIGUOUS` → `MANUAL_REVIEW` | **Import the patient rows; do not auto-resolve or merge the identity records.** `IDENTITY_DUPLICATE_WARNING`, reporting **`HASTA_ID`s only — never the TC value** — routed for human collision review, not treated as legitimate by default |
+| Blank | 3,390 | — | Skip; not an error |
+| `SILINDI = true` legacy rows | 172 | — | **Do not import an identity document at all** — these arrive already `archived`; storing identity numbers for records the clinic has already deleted has no lawful purpose |
 
 **Rationale for never blocking the patient row:** the merged contract reserves `BLOCK THE ROW` for
 *data corruption* (float coercion), and records **0 triggers in this file**. Legacy dirt is not
@@ -587,7 +736,7 @@ Roles (`src/utils/permissions.ts:37-44`): `OWNER`, `ORG_ADMIN`, `CLINIC_MANAGER`
 | `BILLING` | MASKED | ⚠️ **gated — ship MASKED-only** | e-Fatura needs the buyer TC, but **no e-invoice feature exists** (D-10). Revisit when it does |
 | `DENTIST` | MASKED | ❌ | Clinically irrelevant; already the most restricted patient scope |
 | `ASSISTANT` | **NONE** | ❌ | Not in the `authorize()` list for `GET /api/patients` at all |
-| **`PlatformAdmin`** | **NONE — no unmask, no exception** | ❌ | `routes/platformAdmin.ts` touches patients only via `count()` and `_count` aggregates. **The platform has never read a patient row. This must not be the feature that changes that.** |
+| **`PlatformAdmin`** (ordinary APIs/UI) | **NONE — no unmask, no exception** | ❌ | `routes/platformAdmin.ts` touches patients only via `count()` and `_count` aggregates. **The platform has never read a patient row through its ordinary APIs. This must not be the feature that changes that.** Migration write-through is a distinct, separately-authorized capability — see §6.6a |
 
 **Mask format: `*******1234`** — `***`+last-4 is the established convention
 (`utils/logRedaction.ts:9-13`, `services/privacy/redaction.ts:182-186`), padded to 11 chars.
@@ -609,6 +758,49 @@ test modeled on `tests/retentionManualRunAudit.test.ts:575-611`.
 bulk archive export and is far too heavy for a check-in desk. **Do** add a per-user hourly unmask
 cap with a Postgres-authoritative counter modeled on `ClinicBulkExportPasswordAttempt`
 (`schema.prisma:3171-3184`). **Bulk unmasking is the real exfiltration risk, not a single lookup.**
+
+### 6.6a Platform Admin — split write from read (R1 correction)
+
+**Withdrawn.** An earlier draft's "Platform Admin gets NONE" was overly broad — it conflated two
+different capabilities that must be governed differently: **ordinary plaintext access to an
+identity value**, and **the migration ingest pipeline's need to write encrypted identity data on the
+customer's behalf**. The Platform Admin Migration Center (owned by `F3-DATA-MIG-013`) is, by design,
+the operator of the migration — it must be able to move source identity data into the encrypted
+destination without a human at the clinic re-entering it, and without that necessarily meaning
+Platform Admin staff can *read* it back out in plaintext through ordinary tooling.
+
+```text
+PLATFORM_ADMIN_GENERAL_PLAINTEXT_READ      = NO
+PLATFORM_ADMIN_GENERAL_UNMASK              = NO
+PLATFORM_ADMIN_MIGRATION_WRITE_THROUGH     = YES
+PLATFORM_ADMIN_MIGRATION_RAW_VALUE_LOGGING = NO
+PLATFORM_ADMIN_MIGRATION_AUDIT             = YES
+```
+
+- **`PLATFORM_ADMIN_GENERAL_PLAINTEXT_READ = NO` / `PLATFORM_ADMIN_GENERAL_UNMASK = NO`.** Nothing in
+  §6.6's role table changes: through the ordinary Platform Admin APIs and UI — the same surfaces used
+  for support, billing, and operations — identity values remain inaccessible, exactly as the withdrawn
+  "NONE" language intended for that surface.
+- **`PLATFORM_ADMIN_MIGRATION_WRITE_THROUGH = YES`.** The migration service, running under Platform
+  Admin authorization (`F3-DATA-MIG-013`'s scope), **ingests source identity data, normalizes and
+  classifies it (§6.0's `VALID`/`INVALID_LEGACY`/`AMBIGUOUS`/`DUPLICATE_SOURCE`/`MANUAL_REVIEW`
+  vocabulary), encrypts it under the dedicated identity key (§6.2a), and persists it** — without that
+  pipeline exposing plaintext through any ordinary Platform Admin API or UI screen. This is a
+  purpose-built, narrow write path, not a general read/write grant to the role.
+- **`PLATFORM_ADMIN_MIGRATION_RAW_VALUE_LOGGING = NO`.** The migration pipeline is held to the same
+  no-raw-PII-logging rule as §6.2a and §6.7 — a write-through capability is not an exemption from it.
+- **Migration verification uses only:** masked values (§6.6's mask format), counts, row
+  classifications (§6.0's vocabulary), checksums/tokens where safe (e.g. the lookup hash, never the
+  plaintext or the encryption key), and audit metadata. **Not plaintext identity values.** A
+  reconciliation report that needs to prove "the 10,525 valid TCs were written" proves it by count and
+  classification, never by rendering the values.
+- **`PLATFORM_ADMIN_MIGRATION_AUDIT = YES`.** Every migration write to `PatientIdentityDocument` is
+  audited via the same fail-closed transactional path as unmask (`writeAuditLogInTx()`,
+  `auditLog.ts:79-98`), carrying `docType`, classification, and outcome — never the value, the
+  ciphertext, or the lookup hash, mirroring §6.6's unmask-audit rule.
+- **Not implemented in this PR.** This section documents the required capability split for the next
+  design/implementation stage; no migration write-through code, route, or authorization change is
+  made here.
 
 ### 6.7 Audit, logging and anonymization consequences
 
@@ -689,6 +881,31 @@ which is genuinely blocked on legal review.
 
 ## 7. Passport / nationality / health tourism — reconciliation with US-01.8
 
+### 7.0 Module-boundary correction (R1, program-owner decision)
+
+**Health Tourism / International Patient Operations is a separate future module, not part of Patient
+Core or this migration.** Program-owner decision: it will be implemented later as its own modular-
+monolith domain/add-on. **US-01.8 must not be used to justify pulling health-tourism workflows into
+Patient Core or into this migration's implementation.** US-01.8 is used below **only as backlog and
+requirements context** — evidence that the concepts exist and are unimplemented — not as authorization
+to build them here or to widen this migration's scope.
+
+**Explicitly deferred to the future Health Tourism module** — none of the following is created,
+designed, or implemented by this document or by the migration: `healthTourismType`, the tourism
+travel workflow, hotel bookings, transfer logistics, agency relationships, the tourism funnel,
+tourism analytics, tourism-specific UI, and tourism entitlements/billing.
+
+**Identity, passport, and nationality concepts may belong to Patient Core — but only where an
+independent general patient-identity requirement justifies them, unrelated to the paid Health
+Tourism module.** That independent requirement already exists and is documented in full in §6: the
+program owner's `TC_NATIONAL_IDENTITY_FIRST_CUSTOMER_PRIORITY = P0_FIRST_CUSTOMER_BLOCKER` decision
+is driven by ~11,500 populated domestic `TCNO` values in a **domestic, single-branch clinic's**
+patient book (§7.1) — it has nothing to do with health tourism. Where §7.2 below recommends field
+names for `nationality` or `passportNumber`, those recommendations are naming guidance **for the
+general patient-identity model in §6**, in case a future need for them arises independent of
+US-01.8 — they are not, and must not be read as, an authorization to build the Health Tourism module
+now.
+
 **US-01.8 exists.** It is `[KISMEN] US-01.8 · Sağlık turizmi alanları (uyruk, pasaport, dil, ülke
 kodu)`, ClickUp `869ecymu1`, under `EPIC-01 · Hasta Yönetimi`, priority **Should**, assigned. Its
 technical scope is verbatim: `nationality · identityDocType [TC/MAVI_KART/PASAPORT] · passportNo ·
@@ -759,30 +976,41 @@ migration must classify, not guess.**
 
 ## 8. Gender recommendation
 
-**Recommendation: add gender. `P1`, not `P0`.**
+**R1 correction — the field remains a recommendation, not an accepted final contract.**
+
+```text
+GENDER_FIELD_REQUIRED      = YES
+GENDER_DOMAIN_CONTRACT     = NOT_AUTHORIZED_YET
+```
+
+**Recommendation: add gender. `P1`, not `P0`.** This section previously called the basic importer's
+published `male/female/other` template "decisive" evidence of a NoraMedi domain contract. **That
+framing is corrected.** The importer's template column **validates and then discards** the value
+(`patientsImport.ts:104` vs. `:335-348`, §2 D-2) — it is real, useful **repository evidence** that
+the product has publicly *communicated* a vocabulary to customers, but a value that is validated and
+thrown away is not proof of a **persisted domain contract**. No `gender` column exists anywhere in
+`schema.prisma`, and this document does not authorize adding one.
 
 | Question | Answer |
 | --- | --- |
-| Does NoraMedi represent gender anywhere today? | **No** — zero matches in `schema.prisma`. But see below |
-| Does the product already *promise* it? | **YES — and this is decisive** |
-| Value model | **`String?` with `male \| female \| other \| unknown`** in a `///` doc-comment — not a Prisma enum |
-| Nullable? | Yes, no default. The 20.7 % blank source rows map to `NULL` |
-| Backward compatibility | Additive, nullable, zero backfill |
+| Does NoraMedi represent gender anywhere today? | **No** — zero matches in `schema.prisma` |
+| Does the product already *publish* a vocabulary to customers? | **Yes** — the basic importer's template (`excelImport.ts:55`), instruction sheet (`:100`), and validator (`patientsImport.ts:104`) all say `male/female/other`. **This is evidence a future contract should account for, not proof one already exists** — the value is discarded, never stored (§2 D-2) |
+| Value model (illustrative, not authorized) | **`String?` with `male \| female \| other \| unknown`** in a `///` doc-comment — not a Prisma enum. **Exact field name and enum are decided at schema-implementation review**, not here |
+| Nullable / unknown behavior | Yes, no default. The 20.7 % blank source rows map to `NULL` / unknown |
+| `other` vs. unknown | **Not the same state.** `other` is an affirmative, patient-reported value; a blank/legacy row that was never asked is `NULL`/unknown. The value model must keep them distinct, not collapse an unanswered field into `other` |
+| Legacy blank values | Remain `NULL`/unknown — never defaulted to any of `male`/`female`/`other` |
+| Backward compatibility | Additive, nullable, zero backfill, if and when authorized |
 
-**The decisive evidence is that NoraMedi has already published a gender vocabulary to customers.**
-The existing basic importer ships a template column headed `gender (male/female/other)`
-(`utils/excelImport.ts:55`), documents it in the user-facing instruction sheet (`:100`), and
-validates against `VALID_GENDERS = new Set(['male','female','other',''])`
-(`routes/patientsImport.ts:104`) — **and then silently discards the value** because
-`prisma.patient.create` never writes it (`:335-348`).
+**Do not change the existing basic importer.** §2 D-2's silent-discard defect stays exactly as
+reported — out of scope, reported only, belongs to a separate future task.
 
-> **A new `gender` field should adopt the vocabulary the product already promises — `male | female |
-> other` plus a null/unknown state — rather than inherit the source's 2-value `CINSIYET`.** Choosing
-> a binary model from the legacy data would (a) contradict NoraMedi's own published import template
-> and (b) be exactly the "binary source values become the permanent domain model" trap. Source values
-> map into that vocabulary; they do not define it.
+> **If a `gender` field is later authorized, it should account for the vocabulary the product has
+> already published (`male | female | other` plus a null/unknown state) rather than default to the
+> source's 2-value `CINSIYET`** — but that alignment decision, the field name, and the enum are made
+> at schema-implementation review, not asserted as settled here.
 
-**Supporting evidence:**
+**Supporting evidence for the recommendation** (none of it converts the recommendation into an
+authorized contract):
 
 - **Source data is clean and substantial** — `CINSIYET` is 79.3 % filled with exactly 2 distinct
   values. It is the second-best-populated unmapped column in the file (11,807 real values).
@@ -960,7 +1188,7 @@ All items are **additive, expand-migrate-contract, no destructive change**. Orde
 | ID | Field / model | Why required | Source need | Security | Backward compat | Index | Unique | Encryption | Rollback | Task | P0? |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **G-E1** | Provenance store — design (a) or (b), §12 | Idempotent rerun, rollback, reconciliation | `HASTA_ID` 100 %, 14,890 unique | OPS | (b) fully additive; (a) alters `Patient` | `(runId, entityType)` | `@@unique([runId, entityType, sourceId])` **tenant-scoped** | NO | drop additive tables | MIG-004 | **YES** |
-| **G-E4** | `PatientIdentityDocument` (§6.3) | No identity storage exists | `TCNO` 77.2 % (11,500) | **ID# — highest in codebase** | additive child model; `Patient` untouched | `@@index([organizationId, docType, lookupHash])` | `@@unique([patientId, docType])` only | **YES — mandatory**, + HMAC pepper | drop model | MIG-003 | NO — P1 |
+| **G-E4** | `PatientIdentityDocument` (§6.3, `CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE`) | No identity storage exists | `TCNO` 77.2 % (11,500) | **ID# — highest in codebase** | additive child model; `Patient` untouched | `@@index([organizationId, docType, lookupHash])` — tenant-scoped | `@@unique([patientId, docType])` only | **YES — mandatory, dedicated key separate from `ENCRYPTION_KEY`** (§6.2a) + tenant-bound HMAC lookup (§6.4) | drop model | MIG-003 | **YES — P0 (§6.0, §15, program-owner decision R1)** |
 | **G-E5** | `Patient.gender` `String?` (§8) | No gender field; product already promises one | `CINSIYET` 79.3 % | PII | nullable, no default, zero backfill | none | none | NO | drop column | MIG-002 | NO — P1 |
 | **G-E2** | `MigrationReferenceMap` | `User`/`AppointmentType` have no provenance | `HASTADOKTOR` 25 distinct | OPS | fully additive | `(sourceSystem, entityType, status)` | `@@unique([organizationId, sourceSystem, entityType, sourceValue])` | NO | drop table | MIG-006 | NO — P1 |
 | **G-E3** | `Patient.primaryPractitionerId` FK? | Resolved `User.id` has nowhere to land (C-8) | `HASTADOKTOR` 99.5 % | OPS | nullable, zero backfill | `@@index([clinicId, primaryPractitionerId])` | none | NO | null then drop | MIG-006 | NO — P1 |
@@ -986,27 +1214,40 @@ lock-duration review against pilot table sizes.
 
 ## 15. First-customer blocker ranking
 
-### `P0_FIRST_CUSTOMER_BLOCKER` — exactly one
+**R1 correction.** This section previously ranked `G-E4` (identity documents / `TCNO`) as
+`P1_REQUIRED_BEFORE_FULL_MIGRATION`, reasoning from *current product consumption* (no route or report
+reads an identity number today). **The program owner has corrected that reasoning (§6.0):** the
+relevant test for a full clinic migration is not "does NoraMedi consume this field today" but "is this
+a major, well-populated patient identity dataset that a *complete, controlled* migration would
+otherwise silently discard." ~11,500 populated `TCNO` values fail that test as a P1. **`G-E4` moves to
+`P0_FIRST_CUSTOMER_BLOCKER`, alongside `G-E1`.**
 
-**G-E1, the provenance store.** The only gap justified on **measured** evidence rather than
-judgement: `HASTA_ID` is 100 % filled and perfectly unique, and every alternative key is empirically
-disproven (28.6 % shared phones, 25.7 % colliding names). Without a durable `HASTA_ID → Patient.id`
-record, a rerun duplicates 14,890 patients, rollback cannot identify what the run wrote, and
-reconciliation cannot close. **Every other gap can be backfilled later *through* G-E1; G-E1 cannot be
-backfilled through anything.**
+### `P0_FIRST_CUSTOMER_BLOCKER` — two, by program-owner decision (R1)
+
+**G-E1, the provenance store.** The only gap justified purely on **measured** evidence: `HASTA_ID` is
+100 % filled and perfectly unique, and every alternative key is empirically disproven (28.6 % shared
+phones, 25.7 % colliding names). Without a durable `HASTA_ID → Patient.id` record, a rerun duplicates
+14,890 patients, rollback cannot identify what the run wrote, and reconciliation cannot close. **Every
+other gap can be backfilled later *through* G-E1; G-E1 cannot be backfilled through anything.**
+
+**G-E4, the secure identity document model.** Promoted from P1 by program-owner decision (§6.0):
+`TCNO` is 77.2 % filled — **11,500 real values**, the second-most-populated PII field in the source
+after name and DOB. Discarding it would mean the "full clinic migration" silently drops a major
+identity dataset, which the program owner has ruled unacceptable regardless of whether any current
+NoraMedi route consumes the value. **Patient execution must not start until an accepted secure
+identity destination design exists** (§6.0) — that design (§6.1–§6.6a) is
+`CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE`, not yet `SCHEMA_IMPLEMENTATION_AUTHORIZED`, so **G-E4 is a P0 blocker on the
+design/authorization step, not on this document delivering working code.**
+
+**Relationship between the two P0s:** G-E1 (provenance) and G-E4 (identity) are independent gaps that
+happen to share a priority tier — G-E1 blocks safe rerun/rollback of *any* patient row; G-E4 blocks
+completeness of the identity data specifically. Resolving one does not resolve the other; both must
+clear before patient execution starts.
 
 ### `P1_REQUIRED_BEFORE_FULL_MIGRATION`
 
-`G-E4` identity documents · `G-E5` gender · `G-E2` reference map · `G-E3` practitioner FK ·
-`G-E6` chart number *(conditional on an unmade measurement)*.
-
-**Why `G-E4` is P1 and not P0, stated plainly:** `TCNO` is 77.2 % filled — 11,500 real values — but
-**actual product usage in NoraMedi today is zero.** No field, no route, no invoice and no report
-reads an identity number. A field with no current consumer is not a first-customer *blocker*, however
-well-populated the source. The clinic can operate on day one without it. It is P1 because "full
-migration" cannot honestly be claimed while 11,500 identity values are dropped, and because it is the
-only gap carrying a mandatory encryption precondition. **Promote to P0 only if the program owner
-rules identity numbers in scope for go-live** — that is a genuine owner decision (§17).
+`G-E5` gender · `G-E2` reference map · `G-E3` practitioner FK · `G-E6` chart number *(conditional on
+an unmade measurement)*.
 
 ### `P2_PRODUCT_ENHANCEMENT`
 
@@ -1044,27 +1285,64 @@ task** — lifecycle updates are the program controller's.
 | `F3-DATA-MIG-004` — staging / batch / idempotency | `869egww5m` | §12 provenance candidates · G-E1 · `KVKKILKKODU`, `KAYITTARIHI`, `KAYITSAATI`, `KAYDEDEN` as run metadata |
 | `F3-DATA-MIG-005` — patient master import & duplicates | `869egww76` | Row-level import behaviour · `SILINDI` → `archived` · phone normalization consumption · G-E6, G-E20 · the shared-phone impact report |
 | `F3-DATA-MIG-006` — practitioner / branch / service mapping | `869egww97` | §13 implementation · G-E2, G-E3, G-E19, G-E21, G-E23 · K-3 |
-| `F3-DATA-MIG-013` — Platform Admin Migration Center | `869egwwqj` | §6.6 authorization matrix · Platform-Admin-never-reads-patient-rows boundary · mapping-endpoint authorization |
+| `F3-DATA-MIG-013` — Platform Admin Migration Center | `869egwwqj` | §6.6 authorization matrix · §6.6a write/read capability split (no general plaintext read/unmask; scoped migration write-through, audited) · mapping-endpoint authorization |
 | `US-01.8` — health tourism fields | `869ecymu1` | §7 in full · G-E9, G-E10 · `phoneCountryCode` reuse · `preferredLanguage` · **`identityDocType` satisfied via `PatientIdentityDocument.docType`, not a duplicate scalar** · the cascading lookup tables in its own DoD |
 
-**Cross-cutting items with no natural home** — recommend the program owner assign them:
+### 16.1 Pre-existing defects — R1 classification (not to be silently absorbed into migration work)
+
+**These findings are accepted evidence, produced by inspecting the existing product while
+researching the migration.** They are correctly separated so they are never quietly folded into a
+migration-implementation PR's scope. Classified per program-owner instruction:
+
+```text
+PRE_EXISTING          = YES
+CAUSED_BY_MIGRATION   = NO
+SEPARATE_TASK_REQUIRED = YES
+```
+
+applies to each of the five findings below. **No existing ClickUp task was identified in this pass
+that already covers any of them** — this document does not invent duplicate tasks; it recommends the
+program owner open (or point to) the smallest task that fits each, if one already exists outside the
+scope this task searched.
+
+1. **New `Patient` scalar auto-exposure through broad API projection** (§4.3) — `GET/POST/PUT
+   /api/patients` use `include:`/whole-record spreads with no top-level `select:`
+   (`routes/patients.ts:167-191`, `:273`, `:296`, `:337`), so any future scalar added to `Patient`
+   ships to every authorized clinic role's client with zero code change. `PRE_EXISTING = YES` ·
+   `CAUSED_BY_MIGRATION = NO` · `SEPARATE_TASK_REQUIRED = YES`.
+2. **Patient anonymization / export field-list schema drift is fail-open** (§4.4) — the
+   anonymization deny-list, the KVKK subject-access allow-list, and the clinic bulk-export allow-list
+   already disagree with each other and with `schema.prisma` (`smsOptOut`/`smsOptOutAt` drift), and no
+   test asserts allow-list-vs-model parity. `PRE_EXISTING = YES` · `CAUSED_BY_MIGRATION = NO` ·
+   `SEPARATE_TASK_REQUIRED = YES`.
+3. **The log-privacy guard does not recognize national identity fields** (§4.6) —
+   `DIRECT_PII_IDENTIFIER_NAMES` (`scripts/log-privacy-guard/lib/scanner.ts:125`) covers only
+   `email`/`phone`; it would stay silently green on a new `nationalId`/`tckn`/`identityNumber` field.
+   `PRE_EXISTING = YES` · `CAUSED_BY_MIGRATION = NO` · `SEPARATE_TASK_REQUIRED = YES`.
+4. **`primaryClinicId` runtime population gap** (§2 D-7) — no runtime create path sets
+   `Patient.primaryClinicId`; only a one-off script does
+   (`server/src/scripts/migrate-to-multibranch.ts:139-140`), yet the organization dashboard counts by
+   it (`patientOrganizationMetrics.ts:46,49`). Imported patients would be invisible to that dashboard
+   unless the migration explicitly decides to set it. `PRE_EXISTING = YES` ·
+   `CAUSED_BY_MIGRATION = NO` · `SEPARATE_TASK_REQUIRED = YES`.
+5. **Accent-insensitive Patient search gap** (§2 D-6) — `routes/patients.ts:68-75` uses
+   `ILIKE`-style `contains`/`mode:'insensitive'` with no `unaccent`/`citext`/`pg_trgm` anywhere in 75
+   migrations, so `Şahin` ≠ `Sahin`. A direct hazard for a Turkish legacy dataset's post-migration
+   duplicate review. `PRE_EXISTING = YES` · `CAUSED_BY_MIGRATION = NO` · `SEPARATE_TASK_REQUIRED =
+   YES`.
+
+### 16.2 Other cross-cutting items with no natural home
+
+Recommend the program owner assign them; same non-absorption principle as §16.1, lower individual
+severity:
 
 - **§2 D-2** — the basic importer's silent `gender` drop. **Inside the out-of-scope boundary; needs
   its own task.**
 - **§2 D-1 / G-6** — 8 phone normalizers, not 6; only a non-exported route-local const handles
   foreign numbers.
-- **§2 D-6** — patient search is **not accent-insensitive** and uses no index. A Turkish-dataset
-  hazard for post-migration verification and duplicate review.
-- **§2 D-7** — `primaryClinicId` is never set at runtime, so **imported patients would be invisible
-  to the organization dashboard's patient counts**. Must be settled before reconciliation baselines
-  are agreed.
 - **§2 D-8** — three incompatible `source` vocabularies; production already holds values the write
   schema rejects.
 - **§2 D-9** — `Patient.notes` has no UI control; `postalCode`/`country` have no writer at all.
-- **§4.4** — the anonymization deny-list drift (`smsOptOut`/`smsOptOutAt`), the re-implemented
-  already-diverged `patientPrivacy.test.ts`, and **the absence of any schema-drift guard for Patient
-  field lists** (anonymization is fail-open).
-- **§4.6** — extending `DIRECT_PII_IDENTIFIER_NAMES` in the log-privacy guard.
 - **D-10** — invoice history is unmigratable by construction; no invoice model exists.
 
 ---
@@ -1073,16 +1351,29 @@ task** — lifecycle updates are the program controller's.
 
 Only genuine owner decisions. Everything else above is a recommendation with evidence attached.
 
-1. **Is identity data in scope for first-customer go-live?** This is the single decision that moves
-   `G-E4` between P1 and P0 and determines whether the encryption work sits on the critical path.
-2. **Approve or reject `PatientIdentityDocument` (§6.3)** and its encryption + HMAC-pepper
-   preconditions — including accepting that a new `PATIENT_IDENTITY_HASH_PEPPER` secret enters the
-   environment, and that `ENCRYPTION_KEY` gains a never-rotatable, lifelong data class behind it.
+1. ~~Is identity data in scope for first-customer go-live?~~ **DECIDED, R1 (§6.0):**
+   `TC_NATIONAL_IDENTITY_FIRST_CUSTOMER_PRIORITY = P0_FIRST_CUSTOMER_BLOCKER`. Identity data is in
+   scope for the full clinic migration; `G-E4` is `P0`. What remains open is **not** whether it is in
+   scope, but the design and authorization steps below (items 2–2b).
+2. **Approve, reject, or send back for revision the `PatientIdentityDocument` candidate architecture**
+   (§6.1–§6.6a): the child-model shape (§6.3, `CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE`), the
+   dedicated crypto-key-separation requirement (§6.2a), the tenant-bound lookup design and its choice
+   between Candidate A / Candidate B (§6.4), the no-hard-unique-at-launch policy (§6.5), and the
+   Platform Admin write-through/read split (§6.6a). **`SCHEMA_IMPLEMENTATION_AUTHORIZED = NO`** until
+   this review completes — this is the P0 blocker's actual critical-path step, not a schema PR.
+2a. **Name the dedicated key material and its custodian** — accepting that a new, isolated secret
+   (illustrative name `identityLookupKey` / equivalent for the encryption key) enters the environment,
+   **separate from `ENCRYPTION_KEY`** (§6.2a), with its own escrow and rotation story.
+2b. **Choose Candidate A vs Candidate B for the tenant-bound lookup HMAC** (§6.4), or request a third.
 3. **Provenance design (a) vs (b)** (§12). Blocks PR 4 onward; blocks nothing in PRs 0–3.
 4. **Special-category legal decision** (§11) — `KANGURUBU` and the clinical note columns. Requires
    legal input, not engineering.
-5. **Plan limits** — 14,890 patients against a `Clinic.maxPatients` default of 500. A commercial
-   decision, and it is reached long before any schema question.
+5. **Plan limits.** `PLAN_LIMIT_DECISION_REQUIRED_BEFORE_EXECUTION = YES` — 14,890 patients against a
+   `Clinic.maxPatients` default of 500. A commercial decision, reached long before any schema question,
+   and the full migration **must not silently bypass commercial/entitlement limits**. Dry-run must
+   report, before any execution decision is made: source active patient count; destination current
+   count; resulting count after the run; the organization's plan cap; the clinic's cap; and whether
+   execution is blocked or allowed against those caps. See §18a.
 6. **Consent expectation with the customer** (§10) — the entire migrated base arrives
    non-messageable. Needs to be said out loud before go-live, not after.
 7. **Request the remaining vendor exports** (§3.1), now including the odontogram, payment plans, lab
@@ -1166,6 +1457,26 @@ corpora · whether `ADRES_KODU` is a postal code.
 - **Out-of-scope boundary preserved:** the basic clinic patient importer is unchanged; its one
   reported defect (D-2) is explicitly left for a separate task.
 
+### R1 correction record (this revision)
+
+Applied against program-owner review of PR #443. Documentation-only; no schema, migration,
+encryption, parser, route, UI, or existing-importer code was touched.
+
+| # | Correction | Where |
+| --- | --- | --- |
+| 1 | `TCNO`/identity data promoted `P1` → `P0_FIRST_CUSTOMER_BLOCKER` | §6.0, §15, §14 (`G-E4`), §17 item 1 |
+| 2 | `PatientIdentityDocument` marked `CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE`, `SCHEMA_IMPLEMENTATION_AUTHORIZED = NO` | §6.0, §6.1, §6.3 |
+| 3 | Withdrew reuse of general `ENCRYPTION_KEY`; required dedicated key separation | §6.2a |
+| 4 | Corrected HMAC to an explicit tenant-bound design with documented candidates | §6.4 |
+| 5 | Split Platform Admin capability: no general plaintext read/unmask, but audited migration write-through | §6.6, §6.6a |
+| 6 | Withdrew "guardian TC on child is legitimate domain semantics"; reclassified `AMBIGUOUS`/`MANUAL_REVIEW` | §6.5 |
+| 7 | Gender reframed as recommendation only; added `GENDER_FIELD_REQUIRED`/`GENDER_DOMAIN_CONTRACT` tags | §8 |
+| 8 | Health Tourism confirmed as a separate future module; US-01.8 not used to widen migration/Patient-Core scope | §7.0 |
+| 9 | Five pre-existing defects explicitly tagged `PRE_EXISTING`/`CAUSED_BY_MIGRATION`/`SEPARATE_TASK_REQUIRED` | §16.1 |
+| 10 | Plan-limit decision requirement and dry-run reporting fields made explicit | §17 item 5 |
+| 11 | Provenance — unchanged; both designs remain open, `P0` unchanged | §12 |
+| 12 | Next task confirmed unchanged: `F3-DATA-MIG-001` targeted re-profiling | §18 |
+
 ### Lifecycle
 
 ```text
@@ -1176,4 +1487,5 @@ PR_OPENED                          = DRAFT
 MERGED                             = NO
 DEPLOYED                           = NO
 PRODUCTION_VERIFIED                = NO
+R1_CORRECTIONS_APPLIED             = YES
 ```
