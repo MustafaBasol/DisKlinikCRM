@@ -527,6 +527,9 @@ router.get('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
   }
 });
 
+/** Transaction window for the mapping-edit routes. See PUT /mappings below. */
+const TX_OPTIONS = { maxWait: 5_000, timeout: 20_000 } as const;
+
 /** The statuses in which the mapping may still be edited. */
 const MAPPING_EDITABLE_STATUSES: readonly MigrationRunStatus[] = [
   'ANALYZED',
@@ -573,6 +576,12 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
      * persisted underneath a run still advertising DRY_RUN_COMPLETE / READY /
      * MAPPING_READY. The dry run summary and the status then described a
      * mapping that no longer existed.
+     *
+     * The window is widened past Prisma's 5 s default because the statement
+     * count scales with how much of the sheet was saved at once — the real
+     * first-customer workbook is ~60 columns, one UPDATE each. A timeout would
+     * roll back safely, so this only stops a large-but-legitimate save from
+     * hitting one.
      */
     const { updated, mappings, validation } = await prisma.$transaction(async (tx) => {
       // 1. THE AUTHORITATIVE STATUS. Read inside the transaction, not the one
@@ -663,7 +672,7 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
         safeMetadata: savedMetadata,
       });
       return { updated: moved, mappings: state.mappings, validation: result };
-    });
+    }, TX_OPTIONS);
 
     res.json({ run: updated, mappings, validation });
   } catch (error) {
