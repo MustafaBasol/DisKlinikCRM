@@ -1045,3 +1045,72 @@ The one applicable gate, with its exact command and its real result:
 **R1 and R2 both changed documentation only, on the same branch and the same draft PR #442. No new PR
 was opened, nothing was merged, and nothing was deployed. No runtime, schema, migration, parser, UI,
 permissions, route or test file was modified by any revision of this task.**
+
+---
+
+## 21. Patient Field Gap & Secure Identity Decision Package
+
+**Added by `F3-DATA-MIG-001` / `-002` / `-003` (2026-08-18). Additive — nothing above this line is
+altered, withdrawn or overwritten.** The record of PR #442 stands as accepted historical evidence.
+
+The follow-on analysis lives in a companion document so this contract is not duplicated:
+
+**→ [PATIENT_FIELD_GAP_AND_IDENTITY_DECISION_PACKAGE.md](PATIENT_FIELD_GAP_AND_IDENTITY_DECISION_PACKAGE.md)**
+
+It extends this contract with:
+
+- **complete per-column coverage** — all 91 source columns individually dispositioned, where §7 above
+  dispositioned ~30, most of them in groups;
+- **a secure national-identifier architecture** answering §19 open decision 3 (`TCNO`) — model shape,
+  encryption, searchable lookup, uniqueness, masking, authorization, audit, retention and backup;
+- **an explicit gender recommendation** answering the `CINSIYET` half of that decision;
+- **a ranked gap package** (P0 / P1 / P2 / defer) with a proposed additive schema set, all marked
+  `NOT_AUTHORIZED_YET`;
+- **an expanded source dataset register** adding four datasets §5 above does not list — the
+  odontogram, payment plans, lab orders, and the attachment/imaging binary corpora.
+
+### Corrections it applies to this document
+
+Recorded here so this contract is not read in isolation. Full evidence in §2 of the companion.
+
+| # | Correction |
+| --- | --- |
+| C-1 | §3 declares **91** named columns and enumerates **90**. One column name is missing from the transcription — **no mapping profile can be certified complete until the verbatim header row is re-emitted** |
+| C-2 | `ADRES_KODU` → `Patient.postalCode` is downgraded to `MANUAL_REVIEW`; it is plausibly a 10-digit UAVT address code, not a 5-digit postal code |
+| C-3 | `ULKE` is a **valid mapping carrying zero rows**, not an `IGNORE` |
+| C-4 | The government/health identifiers are `BLOCKED_NO_DESTINATION`, not `IGNORE` |
+| C-5 | `EVTELEFONU` / `ISTELEFONU` are `BLOCKED_NO_DESTINATION`. **They must never be written to `PatientEmergencyContact`** |
+| C-6 | `DOSYANO` is **clinic-facing, not vendor-internal** — dropping it makes the clinic's paper archive unresolvable |
+| C-7 | `ONEMLINOT` and `KONTROLNOTU` fill rates were **never measured**; "empty in this file" is unsupported for them |
+| C-8 | `Patient` has **no practitioner field at all**, so a resolved `User.id` has nowhere to land — two gaps, not one |
+| D-1 | G-6 undercounts: there are **8** phone normalizers, not 6 |
+| D-3 | K-2 narrows to a testable hypothesis — **DigiDentiS**, whose API contract is already in this repo and already integrated |
+
+**No program state changed. No schema, migration or runtime code was created or modified.**
+`SCHEMA_CHANGE_AUTHORIZED = NO`.
+
+### 21.1 R1 program-owner corrections (2026-08-18) — additive, nothing above withdrawn
+
+The companion document received a program-owner architecture-review pass (R1) after this §21 was
+first added. **Additive only** — the §21 record above and PR #442's evidence stand unchanged. R1's
+corrections, in full, live in the companion document; summarized here so this contract is not read in
+isolation:
+
+| # | R1 correction | Companion §§ |
+| --- | --- | --- |
+| 1 | `TCNO`/national-identity data reclassified `P0_FIRST_CUSTOMER_BLOCKER` (was `P1`) — a program-owner decision, not an engineering one. The absence of a current NoraMedi consumer does not make discarding ~11,500 identity values acceptable for a full clinic migration | §6.0, §15 |
+| 2 | `PatientIdentityDocument` is `CANDIDATE_ACCEPTED_FOR_NEXT_DESIGN_STAGE` — the leading candidate, explicitly **not** an approved schema | §6.0, §6.1, §6.3 |
+| 3 | Withdrawn: reusing the general `ENCRYPTION_KEY` for patient identity ciphertext. Required: dedicated, isolated key material with `cryptoVersion`, rotation, backwards decryption, fail-closed startup, no raw-PII logging, testable lifecycle, and a path to future KMS/envelope encryption | §6.2a |
+| 4 | HMAC lookup design corrected to an explicit tenant-bound requirement — a single global `HMAC(pepper, normalizedTCNO)` is rejected; the same identity value in two organizations must never produce the same lookup token | §6.4 |
+| 5 | Platform Admin access split: no general plaintext read/unmask, but an audited migration write-through capability that ingests, classifies, encrypts and persists identity data without exposing plaintext through ordinary APIs/UI | §6.6, §6.6a |
+| 6 | Withdrawn: "a parent's TC on a child's row proves duplicate identities are legitimate domain semantics." Corrected: source ambiguity / data-quality debt, classified `AMBIGUOUS` / `MANUAL_REVIEW`, never auto-merged. The no-hard-unique-constraint outcome is unchanged; the reasoning is corrected | §6.5 |
+| 7 | Gender remains a recommendation (`GENDER_FIELD_REQUIRED = YES`, `GENDER_DOMAIN_CONTRACT = NOT_AUTHORIZED_YET`), not proof of an accepted contract — the basic importer validates and discards the value, which is evidence, not a persisted contract | §8 |
+| 8 | Health Tourism confirmed as a separate future modular-monolith module; US-01.8 is backlog/context evidence only and must not be used to pull tourism workflows into Patient Core or this migration | §7.0 |
+| 9 | Five pre-existing defects explicitly tagged `PRE_EXISTING = YES` / `CAUSED_BY_MIGRATION = NO` / `SEPARATE_TASK_REQUIRED = YES`: broad-projection scalar auto-exposure, anonymization/export field-list drift, log-privacy-guard identity-field gap, `primaryClinicId` runtime gap, accent-insensitive search gap | §16.1 |
+| 10 | `PLAN_LIMIT_DECISION_REQUIRED_BEFORE_EXECUTION = YES` made explicit, with required dry-run reporting fields (source/destination counts, resulting count, org/clinic plan caps, blocked/allowed) | §17 item 5 |
+
+**Still true after R1:** `SCHEMA_CHANGE_AUTHORIZED = NO`, `MIGRATION_CREATED = NO`. No schema,
+migration, encryption, parser, route, UI, or existing-importer code was touched by R1 — documentation
+only. Program state (`F4 COMPLETE` **NO** · `FIRST_CUSTOMER_RECOVERY_GATE` **NOT_SATISFIED** ·
+`F5 AUTHORIZED` **NO** · `R-030`/`R-030-DB`/`R-030-FILES` **OPEN** · `repo2` **NOT ACTIVATED**) is
+unchanged.
