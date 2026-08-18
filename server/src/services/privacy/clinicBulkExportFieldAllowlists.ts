@@ -60,6 +60,14 @@ export const PATIENT_SELECT = {
   patientStatus: true,
   source: true,
   notes: true,
+  // F3-DATA-MIG-TODAY-001 (G-E5/G-E6). Clinic-owned patient data the exporting
+  // clinic already sees in the UI; a bulk export that silently dropped them
+  // would be an incomplete data contract.
+  gender: true,
+  chartNumber: true,
+  // primaryPractitionerId (G-E3) is deliberately NOT exported: it is a STAFF
+  // foreign key, not patient data, and no consumer of this export package
+  // reads it today. Add it only alongside a consumer that needs it.
   communicationConsent: true,
   marketingConsent: true,
   smsOptOut: true,
@@ -219,4 +227,17 @@ export const DENYLISTED_FIELD_NAMES = [
   'webhookSecret',
   'encryptedCredentials',
   'clientSecret',
+  // F3-DATA-MIG-003 / G-E4 — PatientIdentityDocument columns. The clinic bulk
+  // export deliberately carries NO identity-document stream today; adding one
+  // is a separate, larger change to the export package (it needs its own
+  // decryption, its own consent/scope review and its own manifest entry).
+  // These three entries make it structurally impossible for a future edit to
+  // bolt an identity stream onto an existing select and leak the AES-GCM
+  // ciphertext ('valueEncrypted'), the tenant-bound HMAC correlation token
+  // ('lookupHash') or its key generation ('cryptoVersion') — the existing
+  // "every entity SELECT excludes every denylisted field name" test fails the
+  // moment such a select appears.
+  'valueEncrypted',
+  'lookupHash',
+  'cryptoVersion',
 ] as const;

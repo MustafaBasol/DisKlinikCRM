@@ -68,15 +68,15 @@ model Clinic {
   treatmentPackageApplications  TreatmentPackageApplication[]
   notifications                 Notification[]
   invitations                   ClinicInvitation[]
-  defaultUsers                  User[]                         @relation("UserDefaultClinic")
-  primaryPatients               Patient[]                      @relation("PatientPrimaryClinic")
+  defaultUsers                  User[]                             @relation("UserDefaultClinic")
+  primaryPatients               Patient[]                          @relation("PatientPrimaryClinic")
   userClinics                   UserClinic[]
   patientClinics                PatientClinic[]
   clinicWorkingHours            ClinicWorkingHours[]
   clinicWhatsAppConnections     ClinicWhatsAppConnection[]
-  whatsappInboxEntries          WhatsAppInboxEntry[]           @relation("InboxEntryClinic")
+  whatsappInboxEntries          WhatsAppInboxEntry[]               @relation("InboxEntryClinic")
   clinicInstagramConnections    ClinicInstagramConnection[]
-  instagramInboxEntries         InstagramInboxEntry[]          @relation("InstagramInboxEntryClinic")
+  instagramInboxEntries         InstagramInboxEntry[]              @relation("InstagramInboxEntryClinic")
   instagramConversationMessages InstagramConversationMessage[]
   postTreatmentTemplates        PostTreatmentMessageTemplate[]
   postTreatmentQueue            PostTreatmentMessageQueue[]
@@ -107,6 +107,11 @@ model Clinic {
   patientEmergencyContacts      PatientEmergencyContact[]
   patientMedicalHistories       PatientMedicalHistory[]
   patientConditions             PatientCondition[]
+  // F3-DATA-MIG-TODAY-001 — Platform Admin clinic data migration back-relations.
+  migrationRuns                 MigrationRun[]                     @relation("MigrationRunClinic")
+  migrationRecords              MigrationRecord[]                  @relation("MigrationRecordClinic")
+  migrationReferenceMaps        MigrationReferenceMap[]            @relation("MigrationReferenceMapClinic")
+  patientIdentityDocuments      PatientIdentityDocument[]          @relation("PatientIdentityDocumentClinic")
 
   @@unique([organizationId, slug])
 }
@@ -135,54 +140,57 @@ model User {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  tasksCreated                 Task[]                         @relation("TaskCreator")
-  tasksAssigned                Task[]                         @relation("TaskAssignee")
-  appointments                 Appointment[]                  @relation("Practitioner")
-  appointmentRequests          AppointmentRequest[]           @relation("AppointmentRequestPractitioner")
-  contactRequestsAssigned      ContactRequest[]               @relation("ContactRequestAssignee")
-  contactRequestsResolved      ContactRequest[]               @relation("ContactRequestResolver")
-  availabilities               DoctorAvailability[]           @relation("DoctorAvailability")
-  offDays                      DoctorOffDay[]                 @relation("DoctorOffDays")
-  treatmentCases               TreatmentCase[]                @relation("Practitioner")
-  insuranceAssigned            InsuranceProvision[]           @relation("InsuranceAssignedTo")
-  insuranceCreated             InsuranceProvision[]           @relation("InsuranceCreatedBy")
-  sentMessages                 SentMessage[]
-  createdTemplates             MessageTemplate[]              @relation("TemplateCreator")
-  activityLogs                 ActivityLog[]
-  uploadedAttachments          PatientAttachment[]            @relation("AttachmentUploader")
-  privacyExportsRequested      PatientPrivacyExportArchive[]  @relation("PrivacyExportRequester")
-  clinicBulkExportsRequested   ClinicBulkExportArchive[]      @relation("ClinicBulkExportRequester")
-  clinicBulkExportsStepUpVerified ClinicBulkExportArchive[]   @relation("ClinicBulkExportStepUpVerifier")
-  toothRecordsCreated          ToothRecord[]                  @relation("ToothRecordCreator")
-  paymentPlans                 PaymentPlan[]
-  compensationRules            PractitionerCompensationRule[] @relation("PractitionerCompRules")
-  serviceCompRules             ServiceCompensationRule[]      @relation("ServiceCompRules")
-  practitionerEarnings         PractitionerEarning[]          @relation("PractitionerEarnings")
-  practitionerPayouts          PractitionerPayout[]           @relation("PractitionerPayouts")
-  payoutsCreated               PractitionerPayout[]           @relation("PayoutCreator")
-  inventoryTransactions        InventoryTransaction[]         @relation("InventoryPerformedBy")
-  proceduresCreated            TreatmentPlanProcedure[]       @relation("ProcedureCreator")
-  packageApplicationsCreated   TreatmentPackageApplication[]  @relation("TreatmentPackageApplicationCreator")
-  userClinics                  UserClinic[]
-  resolvedInboxEntries         WhatsAppInboxEntry[]           @relation("InboxEntryResolver")
-  resolvedInstagramEntries     InstagramInboxEntry[]          @relation("InstagramInboxEntryResolver")
-  assignedRecallCandidates     RecallCandidate[]              @relation("RecallCandidateAssignee")
-  performedRecallActions       RecallAction[]                 @relation("RecallActionPerformer")
-  passwordResetTokens          PasswordResetToken[]
-  emailVerificationTokens      EmailVerificationToken[]
-  smsMessagesCreated           SmsMessage[]                   @relation("SmsMessageCreator")
-  laboratoriesCreated          Laboratory[]                   @relation("LaboratoryCreator")
-  labWorkOrdersCreated         LabWorkOrder[]                 @relation("LabWorkOrderCreator")
-  labWorkOrdersAsPractitioner  LabWorkOrder[]                 @relation("LabWorkOrderPractitioner")
-  labWorkOrderStatusChanges    LabWorkOrderStatusHistory[]    @relation("LabWorkOrderStatusChanger")
-  labOrderAttachmentsUploaded  LabOrderAttachment[]           @relation("LabOrderAttachmentUploader")
-  imagingDevicesCreated        ImagingDevice[]                @relation("ImagingDeviceCreator")
-  imagingRequestsRequested     ImagingRequest[]               @relation("ImagingRequestRequester")
-  imagingStudiesCreated        ImagingStudy[]                 @relation("ImagingStudyCreator")
-  imagingBridgeAgentsCreated   ImagingBridgeAgent[]           @relation("ImagingBridgeAgentCreator")
-  imagingBridgePairingsCreated ImagingBridgePairing[]         @relation("ImagingBridgePairingCreator")
-  legacyConsentCorrections     PatientLegacyConsentCorrection[]
-  medicalHistoryRecorded       PatientMedicalHistory[]        @relation("MedicalHistoryRecorder")
+  tasksCreated                    Task[]                           @relation("TaskCreator")
+  tasksAssigned                   Task[]                           @relation("TaskAssignee")
+  appointments                    Appointment[]                    @relation("Practitioner")
+  appointmentRequests             AppointmentRequest[]             @relation("AppointmentRequestPractitioner")
+  contactRequestsAssigned         ContactRequest[]                 @relation("ContactRequestAssignee")
+  contactRequestsResolved         ContactRequest[]                 @relation("ContactRequestResolver")
+  availabilities                  DoctorAvailability[]             @relation("DoctorAvailability")
+  offDays                         DoctorOffDay[]                   @relation("DoctorOffDays")
+  treatmentCases                  TreatmentCase[]                  @relation("Practitioner")
+  insuranceAssigned               InsuranceProvision[]             @relation("InsuranceAssignedTo")
+  insuranceCreated                InsuranceProvision[]             @relation("InsuranceCreatedBy")
+  sentMessages                    SentMessage[]
+  createdTemplates                MessageTemplate[]                @relation("TemplateCreator")
+  activityLogs                    ActivityLog[]
+  uploadedAttachments             PatientAttachment[]              @relation("AttachmentUploader")
+  privacyExportsRequested         PatientPrivacyExportArchive[]    @relation("PrivacyExportRequester")
+  clinicBulkExportsRequested      ClinicBulkExportArchive[]        @relation("ClinicBulkExportRequester")
+  clinicBulkExportsStepUpVerified ClinicBulkExportArchive[]        @relation("ClinicBulkExportStepUpVerifier")
+  toothRecordsCreated             ToothRecord[]                    @relation("ToothRecordCreator")
+  paymentPlans                    PaymentPlan[]
+  compensationRules               PractitionerCompensationRule[]   @relation("PractitionerCompRules")
+  serviceCompRules                ServiceCompensationRule[]        @relation("ServiceCompRules")
+  practitionerEarnings            PractitionerEarning[]            @relation("PractitionerEarnings")
+  practitionerPayouts             PractitionerPayout[]             @relation("PractitionerPayouts")
+  payoutsCreated                  PractitionerPayout[]             @relation("PayoutCreator")
+  inventoryTransactions           InventoryTransaction[]           @relation("InventoryPerformedBy")
+  proceduresCreated               TreatmentPlanProcedure[]         @relation("ProcedureCreator")
+  packageApplicationsCreated      TreatmentPackageApplication[]    @relation("TreatmentPackageApplicationCreator")
+  userClinics                     UserClinic[]
+  resolvedInboxEntries            WhatsAppInboxEntry[]             @relation("InboxEntryResolver")
+  resolvedInstagramEntries        InstagramInboxEntry[]            @relation("InstagramInboxEntryResolver")
+  assignedRecallCandidates        RecallCandidate[]                @relation("RecallCandidateAssignee")
+  performedRecallActions          RecallAction[]                   @relation("RecallActionPerformer")
+  passwordResetTokens             PasswordResetToken[]
+  emailVerificationTokens         EmailVerificationToken[]
+  smsMessagesCreated              SmsMessage[]                     @relation("SmsMessageCreator")
+  laboratoriesCreated             Laboratory[]                     @relation("LaboratoryCreator")
+  labWorkOrdersCreated            LabWorkOrder[]                   @relation("LabWorkOrderCreator")
+  labWorkOrdersAsPractitioner     LabWorkOrder[]                   @relation("LabWorkOrderPractitioner")
+  labWorkOrderStatusChanges       LabWorkOrderStatusHistory[]      @relation("LabWorkOrderStatusChanger")
+  labOrderAttachmentsUploaded     LabOrderAttachment[]             @relation("LabOrderAttachmentUploader")
+  imagingDevicesCreated           ImagingDevice[]                  @relation("ImagingDeviceCreator")
+  imagingRequestsRequested        ImagingRequest[]                 @relation("ImagingRequestRequester")
+  imagingStudiesCreated           ImagingStudy[]                   @relation("ImagingStudyCreator")
+  imagingBridgeAgentsCreated      ImagingBridgeAgent[]             @relation("ImagingBridgeAgentCreator")
+  imagingBridgePairingsCreated    ImagingBridgePairing[]           @relation("ImagingBridgePairingCreator")
+  legacyConsentCorrections        PatientLegacyConsentCorrection[]
+  medicalHistoryRecorded          PatientMedicalHistory[]          @relation("MedicalHistoryRecorder")
+  /// F3-DATA-MIG-TODAY-001 (G-E3) back-relation. A migration never creates a
+  /// User; it only resolves an existing one through MigrationReferenceMap.
+  patientsAsPrimaryPractitioner   Patient[]                        @relation("PatientPrimaryPractitioner")
 
   // Global uniqueness on lower(email) is enforced by a raw DB index (migration 20260629120000).
 }
@@ -219,39 +227,70 @@ model DoctorOffDay {
 }
 
 model Patient {
-  id                   String       @id @default(uuid())
-  clinicId             String
-  clinic               Clinic       @relation(fields: [clinicId], references: [id])
-  firstName            String
-  lastName             String
-  email                String?
-  phone                String?
-  dateOfBirth          DateTime?
-  address              String?
-  city                 String?
-  postalCode           String?
-  country              String?
-  patientStatus        String       @default("new") // new, active, inactive, archived
-  source               String? // google, referral, social_media, etc.
-  notes                String?
-  communicationConsent Boolean      @default(false)
-  marketingConsent     Boolean      @default(false)
+  id                    String       @id @default(uuid())
+  clinicId              String
+  clinic                Clinic       @relation(fields: [clinicId], references: [id])
+  firstName             String
+  lastName              String
+  email                 String?
+  phone                 String?
+  dateOfBirth           DateTime?
+  address               String?
+  city                  String?
+  postalCode            String?
+  country               String?
+  patientStatus         String       @default("new") // new, active, inactive, archived
+  source                String? // google, referral, social_media, etc.
+  notes                 String?
+  /// F3-DATA-MIG-TODAY-001 (G-E5). Additive, nullable, no default, zero
+  /// backfill. Allowed values: male | female | other — the vocabulary the
+  /// product already publishes to customers in the basic import template
+  /// (utils/excelImport.ts:55). NULL means "not recorded / never asked" and is
+  /// a DISTINCT state from 'other', which is an affirmative, patient-reported
+  /// value. A blank or unrecognized legacy source value maps to NULL and a
+  /// row warning — NEVER to 'other', and never to a guessed male/female.
+  /// Not a Prisma enum, per the repo-wide String + doc-comment convention.
+  /// Nulled by anonymization (services/privacy/patientAnonymization.ts).
+  gender                String?
+  /// F3-DATA-MIG-TODAY-001 (G-E6). Legacy clinic-facing chart / file number
+  /// (source DOSYANO — the number reception staff quote and that is written on
+  /// every paper chart). Additive, nullable, zero backfill.
+  /// DELIBERATELY NOT UNIQUE: measured source evidence carries 17 duplicate
+  /// pairs (34 of 14,718 filled rows, 0.23 %) that require manual
+  /// reconciliation — a hard unique constraint would block go-live before any
+  /// human reviewed them. Duplicates are surfaced for manual review, never
+  /// silently overwritten. Indexed tenant-first as @@index([clinicId,
+  /// chartNumber]).
+  /// Re-identification vector against the physical archive — nulled by
+  /// anonymization.
+  chartNumber           String?
+  /// F3-DATA-MIG-TODAY-001 (G-E3). The patient's assigned practitioner
+  /// (source HASTADOKTOR, resolved to a real User.id through
+  /// MigrationReferenceMap). Additive, nullable, zero backfill.
+  /// A migration NEVER creates a User to satisfy this: a migration-created
+  /// practitioner would be a credentialed, payable account created without an
+  /// onboarding decision. An unresolved source practitioner value blocks the
+  /// affected rows instead.
+  primaryPractitionerId String?
+  primaryPractitioner   User?        @relation("PatientPrimaryPractitioner", fields: [primaryPractitionerId], references: [id])
+  communicationConsent  Boolean      @default(false)
+  marketingConsent      Boolean      @default(false)
   // SMS opt-out (KVKK/GDPR): blocks all outbound SMS when set.
   // Foundation for future STOP/RET/IPTAL/UNSUBSCRIBE inbound keywords.
-  smsOptOut            Boolean      @default(false)
-  smsOptOutAt          DateTime?
-  organizationId       String // Phase 1b: NOT NULL after backfill
-  organization         Organization @relation(fields: [organizationId], references: [id])
-  primaryClinicId      String? // Default/preferred branch (not exclusive)
-  primaryClinic        Clinic?      @relation("PatientPrimaryClinic", fields: [primaryClinicId], references: [id])
+  smsOptOut             Boolean      @default(false)
+  smsOptOutAt           DateTime?
+  organizationId        String // Phase 1b: NOT NULL after backfill
+  organization          Organization @relation(fields: [organizationId], references: [id])
+  primaryClinicId       String? // Default/preferred branch (not exclusive)
+  primaryClinic         Clinic?      @relation("PatientPrimaryClinic", fields: [primaryClinicId], references: [id])
   // KVKK/GDPR anonymization tracking
-  isAnonymized         Boolean      @default(false)
-  anonymizedAt         DateTime?
-  anonymizedById       String?
-  anonymizationReason  String?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  deletedAt            DateTime?
+  isAnonymized          Boolean      @default(false)
+  anonymizedAt          DateTime?
+  anonymizedById        String?
+  anonymizationReason   String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  deletedAt             DateTime?
 
   appointments                  Appointment[]
   appointmentRequests           AppointmentRequest[]
@@ -270,8 +309,8 @@ model Patient {
   treatmentPlanProcedures       TreatmentPlanProcedure[]
   treatmentPackageApplications  TreatmentPackageApplication[]
   patientClinics                PatientClinic[]
-  whatsappInboxEntries          WhatsAppInboxEntry[]           @relation("InboxEntryPatient")
-  instagramInboxEntries         InstagramInboxEntry[]          @relation("InstagramInboxEntryPatient")
+  whatsappInboxEntries          WhatsAppInboxEntry[]               @relation("InboxEntryPatient")
+  instagramInboxEntries         InstagramInboxEntry[]              @relation("InstagramInboxEntryPatient")
   instagramConversationMessages InstagramConversationMessage[]
   postTreatmentQueue            PostTreatmentMessageQueue[]
   recallCandidates              RecallCandidate[]
@@ -287,9 +326,19 @@ model Patient {
   emergencyContacts             PatientEmergencyContact[]
   medicalHistoryVersions        PatientMedicalHistory[]
   medicalConditionLinks         PatientCondition[]
+  /// F3-DATA-MIG-003 / G-E4. Encrypted national/travel identity documents.
+  /// Returned ONLY when explicitly included — never by the whole-record spread
+  /// at routes/patients.ts:167-191/:273. That is the whole point of the child
+  /// model. See PatientIdentityDocument.
+  identityDocuments             PatientIdentityDocument[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
+  /// F3-DATA-MIG-TODAY-001 (G-E6). Tenant column leads, so the index is usable
+  /// under the clinic scope every query already applies.
+  @@index([clinicId, chartNumber])
+  /// F3-DATA-MIG-TODAY-001 (G-E3).
+  @@index([clinicId, primaryPractitionerId])
 }
 
 /// US-01.2: patient emergency contacts, relationship (contactType), and legal
@@ -397,7 +446,7 @@ model PatientMedicalHistory {
   /// services/privacy/patientAnonymization.ts. Relational, coded allergy
   /// entries also live in PatientCondition (category = allergy); this field
   /// is the free-text clinical summary alongside those structured entries.
-  allergies String?
+  allergies          String?
   /// Free-text current-medications summary. Same anonymization treatment as allergies.
   currentMedications String?
 
@@ -425,16 +474,16 @@ model PatientMedicalHistory {
 /// that file's header comment for the documented initial list and its
 /// deliberately limited scope).
 model MedicalCondition {
-  id       String   @id @default(uuid())
+  id        String   @id @default(uuid())
   /// Standard ICD-10 code, e.g. "E11.9", "Z88.0". Stable identifier — never
   /// reused for a different clinical meaning; extend the catalog by adding
   /// new rows, never by repurposing an existing code.
-  code     String   @unique
+  code      String   @unique
   /// systemic | allergy | medication_risk | dental | obstetric | behavioral
-  category String
-  nameEn   String
-  nameTr   String
-  isActive Boolean  @default(true)
+  category  String
+  nameEn    String
+  nameTr    String
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   patientLinks PatientCondition[]
@@ -1178,8 +1227,8 @@ model PatientAttachment {
   /// metadata redaction AND the deletion-review/execute live-delete path for
   /// this attachment. Set only via the legal-hold PATCH endpoint
   /// (OWNER/ORG_ADMIN) — no automatic trigger is implemented in this PR.
-  legalHold       Boolean   @default(false)
-  legalHoldReason String?
+  legalHold                Boolean   @default(false)
+  legalHoldReason          String?
   /// Set by the orphan-check inspection (docs/compliance/53) when the DB row
   /// exists but the physical file could not be found in storage. Informational
   /// only — never used to trigger any automatic deletion.
@@ -1558,6 +1607,9 @@ model PlatformAdmin {
   securityIncidentsClosed       SecurityIncident[]         @relation("SecurityIncidentCloser")
   securityIncidentActivity      SecurityIncidentActivity[] @relation("SecurityIncidentActivityActor")
   platformAdminAuditEvents      PlatformAdminAuditEvent[]  @relation("PlatformAdminAuditActor")
+  /// F3-DATA-MIG-TODAY-001. onDelete: SetNull on the owning side so a deleted
+  /// Platform Admin never destroys migration-run history.
+  migrationRunsCreated          MigrationRun[]             @relation("MigrationRunCreator")
 }
 
 model ClinicInvitation {
@@ -1611,6 +1663,11 @@ model Organization {
   patientEmergencyContacts      PatientEmergencyContact[]
   patientMedicalHistories       PatientMedicalHistory[]
   patientConditions             PatientCondition[]
+  // F3-DATA-MIG-TODAY-001 — Platform Admin clinic data migration back-relations.
+  migrationRuns                 MigrationRun[]
+  migrationReferenceMaps        MigrationReferenceMap[]
+  migrationRecords              MigrationRecord[]
+  patientIdentityDocuments      PatientIdentityDocument[]
 }
 
 model UserClinic {
@@ -1819,7 +1876,7 @@ model OperationalEvent {
   /// Left null by every feature that doesn't need dedupe. When set, a create is performed
   /// as an upsert on this unique key so duplicate-alert suppression is atomic (never
   /// check-then-insert) — see clinicBulkExportPackage.ts.
-  dedupeKey      String?   @unique
+  dedupeKey String? @unique
 
   @@index([organizationId, severity])
   @@index([organizationId, source])
@@ -2219,10 +2276,10 @@ model ClinicLegalProfile {
 /// place (publish can be re-run to edit an already-published profile), so a
 /// mutable FK alone would not preserve historical notice attribution.
 model PublicBookingNoticeEvidence {
-  id             String  @id @default(uuid())
+  id             String              @id @default(uuid())
   organizationId String
   clinicId       String
-  clinic         Clinic  @relation(fields: [clinicId], references: [id])
+  clinic         Clinic              @relation(fields: [clinicId], references: [id])
   legalProfileId String?
   legalProfile   ClinicLegalProfile? @relation(fields: [legalProfileId], references: [id], onDelete: SetNull)
 
@@ -2243,15 +2300,15 @@ model PublicBookingNoticeEvidence {
 
   noticeVersion       String
   noticeEffectiveDate DateTime?
-  language            String   @default("tr")
+  language            String    @default("tr")
   /// Fixed to "web_booking" for this flow; kept as a column (not a literal)
   /// so other future channels can reuse this table without a schema change.
-  channel             String   @default("web_booking")
+  channel             String    @default("web_booking")
   /// Timestamp the server issued/delivered the notice payload to the
   /// client. This proves server-side delivery only, NOT that the visitor
   /// actually read or scrolled to the notice — never describe it as proof
   /// of reading or review anywhere in code, UI copy, or documentation.
-  deliveredAt         DateTime @default(now())
+  deliveredAt         DateTime  @default(now())
 
   noticeTextSnapshot     String
   controllerNameSnapshot String
@@ -2312,12 +2369,12 @@ model ChannelConsentLog {
 /// Looked up by the central decision service (communicationConsentPolicy.ts) on
 /// every send. A missing row means status = unknown (never implicitly granted).
 model PatientCommunicationPreference {
-  id             String   @id @default(uuid())
+  id             String  @id @default(uuid())
   organizationId String
   clinicId       String
-  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  clinic         Clinic  @relation(fields: [clinicId], references: [id])
   patientId      String
-  patient        Patient  @relation(fields: [patientId], references: [id])
+  patient        Patient @relation(fields: [patientId], references: [id])
 
   /// sms | email | whatsapp | phone_call | push
   channel String
@@ -2348,7 +2405,7 @@ model PatientCommunicationPreference {
 
   /// Free-form evidence classification, e.g. verbal_staff_record | signed_form |
   /// portal_click | inbound_reply | public_booking_checkbox
-  evidenceType String?
+  evidenceType  String?
   /// Legal notice / KVKK text version shown at the time of the decision
   noticeVersion String?
   /// Internal policy/config version applied by the decision service
@@ -2357,12 +2414,12 @@ model PatientCommunicationPreference {
   actorUserId          String?
   actorPlatformAdminId String?
   /// Hashed with COMMUNICATION_CONSENT_EVIDENCE_HASH_SECRET — never raw
-  requestIpHash String?
+  requestIpHash        String?
   /// Hashed with COMMUNICATION_CONSENT_EVIDENCE_HASH_SECRET — never raw
-  userAgentHash       String?
-  externalProviderRef String?
+  userAgentHash        String?
+  externalProviderRef  String?
   /// Sanitized, bounded free text — see consentEvidenceSanitizer.ts
-  notes String?
+  notes                String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2993,13 +3050,13 @@ model ImagingImage {
 /// is a short-lived transfer artifact, not an audit record. The durable
 /// record of a download is the AuditLog entry written at download time.
 model PatientPrivacyExportArchive {
-  id                String    @id @default(uuid())
+  id                String @id @default(uuid())
   organizationId    String
   clinicId          String
-  clinic            Clinic    @relation(fields: [clinicId], references: [id])
+  clinic            Clinic @relation(fields: [clinicId], references: [id])
   patientId         String
   requestedByUserId String
-  requestedByUser   User      @relation("PrivacyExportRequester", fields: [requestedByUserId], references: [id])
+  requestedByUser   User   @relation("PrivacyExportRequester", fields: [requestedByUserId], references: [id])
 
   /// Lifecycle state: queued -> generating -> ready | failed. A row is
   /// created with status="generating" BEFORE the (potentially slow) ZIP
@@ -3012,7 +3069,7 @@ model PatientPrivacyExportArchive {
 
   /// Storage key under exports/<clinicId>/<uuid>.zip (fileStorage.ts) —
   /// never serialized to any API response. Null while status="generating".
-  storageKey String?
+  storageKey   String?
   /// Manifest described in docs/compliance/53 (exportVersion, includedFiles
   /// w/ sha256, missingFiles, skippedFiles). Null while status="generating".
   manifestJson Json?
@@ -3073,14 +3130,14 @@ model PatientPrivacyExportArchive {
 /// an S3/local filesystem delete). artifactDeletedAt/cleanupFailureCode
 /// track that separate, retryable step — see clinicBulkExportPackage.ts.
 model ClinicBulkExportArchive {
-  id                String        @id @default(uuid())
+  id                String  @id @default(uuid())
   organizationId    String
   clinicId          String
-  clinic            Clinic        @relation(fields: [clinicId], references: [id])
+  clinic            Clinic  @relation(fields: [clinicId], references: [id])
   /// Nullable + SetNull (not a required relation): archive/audit history must
   /// survive the requesting user being deactivated/deleted later.
   requestedByUserId String?
-  requestedByUser   User?         @relation("ClinicBulkExportRequester", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  requestedByUser   User?   @relation("ClinicBulkExportRequester", fields: [requestedByUserId], references: [id], onDelete: SetNull)
 
   /// The user whose password most recently satisfied step-up for THIS
   /// archive (creation, or a fresh re-verification at download-token
@@ -3094,7 +3151,7 @@ model ClinicBulkExportArchive {
   /// deactivated/deleted — a null value can never satisfy passwordless
   /// window reuse for anyone.
   stepUpVerifiedByUserId String?
-  stepUpVerifiedByUser   User?         @relation("ClinicBulkExportStepUpVerifier", fields: [stepUpVerifiedByUserId], references: [id], onDelete: SetNull)
+  stepUpVerifiedByUser   User?   @relation("ClinicBulkExportStepUpVerifier", fields: [stepUpVerifiedByUserId], references: [id], onDelete: SetNull)
 
   status String @default("queued") // queued | generating | ready | failed | expired
 
@@ -3107,7 +3164,7 @@ model ClinicBulkExportArchive {
   /// Object-storage key under exports/<clinicId>/<uuid>.zip. Never serialized
   /// to any API response. Preserved (not nulled) on a failed storage-delete
   /// attempt so the next cleanup run can retry — see cleanupFailureCode.
-  storageKey String?
+  storageKey   String?
   /// Manifest (see docs/compliance/54): schemaVersion, entityCounts,
   /// fileNames, sha256PerFile, scopeDescription. Only ever written for a
   /// successfully completed job — never partially written on failure.
@@ -3228,7 +3285,7 @@ model SecuritySignalEvent {
   actorPlatformAdminId String?
 
   /// HMAC-SHA256(SECURITY_SIGNAL_IP_HASH_SECRET, ip) — never a raw IP.
-  ipHash String?
+  ipHash               String?
   /// Bounded/normalized user-agent fingerprint (hashed) — never the raw header.
   userAgentFingerprint String?
 
@@ -3369,11 +3426,11 @@ model SecurityIncidentActivity {
 /// backup ever run" (mirrors the concern R-032 raised for the DB restore
 /// test, applied here to file backup/restore).
 model FileBackupRun {
-  id           String    @id @default(uuid())
-  startedAt    DateTime  @default(now())
-  finishedAt   DateTime?
-  status       String    @default("running") // running | completed | failed
-  trigger      String    @default("scheduled") // scheduled | manual
+  id         String    @id @default(uuid())
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  status     String    @default("running") // running | completed | failed
+  trigger    String    @default("scheduled") // scheduled | manual
 
   filesScanned  Int    @default(0)
   filesCopied   Int    @default(0)
@@ -3517,10 +3574,10 @@ model RecoveryDrillRun {
 /// Disabled by default — `enabled` must be explicitly turned on by a
 /// Platform Admin after mappings are configured.
 model ExternalCalendarIntegration {
-  id             String   @id @default(uuid())
+  id             String @id @default(uuid())
   organizationId String
-  clinicId       String   @unique
-  clinic         Clinic   @relation(fields: [clinicId], references: [id])
+  clinicId       String @unique
+  clinic         Clinic @relation(fields: [clinicId], references: [id])
 
   /// digidentis | (future provider keys)
   provider String  @default("digidentis")
@@ -3531,9 +3588,9 @@ model ExternalCalendarIntegration {
 
   /// DigiDentiS OAuth2 client id. Not classified as a secret, but never
   /// returned in full by the admin API (last-4 hint only).
-  clientId String?
+  clientId               String?
   /// AES-256-GCM (utils/encryption.ts encryptSecret). Write-only from the API.
-  clientSecretEncrypted String?
+  clientSecretEncrypted  String?
   /// AES-256-GCM (utils/encryption.ts encryptSecret). HMAC key used to verify
   /// inbound DigiDentiS webhook signatures. Write-only from the API.
   webhookSecretEncrypted String?
@@ -3542,7 +3599,7 @@ model ExternalCalendarIntegration {
   /// URL exposes no predictable/enumerable identifier and can be rotated
   /// (regenerated) independently of the integration row itself. Generated
   /// app-side with crypto.randomBytes (see externalCalendarConnectionService.ts).
-  webhookReceiverKey String @unique
+  webhookReceiverKey     String  @unique
 
   /// DigiDentiS-side company/clinic identifiers this row maps to.
   externalCompanyId String?
@@ -3579,11 +3636,11 @@ model ExternalCalendarMapping {
   clinicId       String
 
   /// practitioner | service
-  mappingType String
+  mappingType   String
   /// NoraMedi User.id (practitioner) or AppointmentType.id (service)
-  localId     String
+  localId       String
   /// Provider-side doctor id or treatment type id
-  externalId  String
+  externalId    String
   /// Cached display label from the provider, for the admin UI only — never
   /// used for matching.
   externalLabel String?
@@ -3665,26 +3722,26 @@ model ExternalCalendarAppointmentLink {
   /// "active | cancelled | rescheduled" from the original design doc collapses
   /// into this same field once a row is synced: 'synced' plays the role
   /// "active" would have played for a freshly created appointment link.
-  status       String    @default("pending")
+  status        String    @default("pending")
   /// Attempts already made (immediate + retry job + manual retry all
   /// increment this atomically as part of the claim). Compared against the
   /// job's MAX_ATTEMPTS to classify retry exhaustion as failed_terminal.
-  attempts     Int       @default(0)
+  attempts      Int       @default(0)
   /// Backoff floor: the retry job only claims a failed_retryable row once
   /// now() >= nextAttemptAt. Null means "claimable as soon as picked up"
   /// (fresh pending rows, or immediately after a manual retry request).
   nextAttemptAt DateTime?
   lastAttemptAt DateTime?
   /// Set only on a successful create — the moment the row reaches 'synced'.
-  lastSyncedAt DateTime?
+  lastSyncedAt  DateTime?
   /// Sanitized, human-readable failure summary for staff — never the raw
   /// provider response body (which may echo back patient data) and never
   /// secrets/credentials. See classifyExternalCalendarSyncError().
-  lastError String?
+  lastError     String?
   /// Machine-readable failure classification, e.g. AUTH_ERROR,
   /// MAPPING_MISSING, VALIDATION_ERROR, SLOT_NOT_AVAILABLE, RATE_LIMITED,
   /// TRANSIENT, NOT_CONFIGURED. Null while pending/syncing/synced.
-  errorCode String?
+  errorCode     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3694,4 +3751,457 @@ model ExternalCalendarAppointmentLink {
   @@index([clinicId])
   @@index([appointmentId])
   @@index([status, nextAttemptAt])
+}
+
+// =============================================================================
+// F3-DATA-MIG-TODAY-001 — Platform Admin clinic data migration
+// =============================================================================
+// Additive only (expand-migrate-contract). No existing model is altered
+// destructively; the only changes to existing models are three NULLABLE
+// Patient scalars (gender, chartNumber, primaryPractitionerId) plus
+// back-relations, all with zero backfill.
+//
+// This whole block is PLATFORM ADMIN ONLY. Nothing here is reachable from a
+// clinic-authenticated session. The existing basic clinic patient importer
+// (routes/patientsImport.ts) is RETAINED / OUT_OF_SCOPE / UNCHANGED and shares
+// none of these models.
+//
+// Status / enum-like columns are plain String with the allowed values in a
+// /// doc-comment, following the repo-wide convention (Patient.patientStatus,
+// PatientEmergencyContact.contactType, Appointment.status, ...). No Prisma
+// enum is introduced.
+
+/// F3-DATA-MIG-TODAY-001 - One Platform-Admin-initiated clinic data migration
+/// run. Owns the run lifecycle state machine, the uploaded source file's safe
+/// metadata, the dry-run summary and the final reconciliation.
+///
+/// status (state machine - server/src/services/migration/runState.ts is
+/// authoritative; illegal transitions are rejected with MIGRATION_STATE_INVALID):
+///   CREATED | UPLOADED | ANALYZED | MAPPING_REQUIRED | MAPPING_READY
+///   | DRY_RUN_RUNNING | DRY_RUN_COMPLETE | BLOCKED | READY | RUNNING
+///   | PARTIAL_FAILURE | COMPLETED | FAILED | CANCELLED
+///
+/// sourceFileStoredPath is a server-local, non-public, run-scoped path under
+/// server/.tmp/migration-source/<runId>/ - never served over HTTP, never under
+/// uploads/, and deleted by retention (sourceFileDeletedAt). The original
+/// filename is NEVER used to build the path (traversal-proof by construction);
+/// only a sanitized display form is retained.
+model MigrationRun {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  clinicId       String
+  clinic         Clinic       @relation("MigrationRunClinic", fields: [clinicId], references: [id])
+
+  /// Stable vendor/profile identifier, e.g. "legacy-dental-tr-v1". Part of the
+  /// provenance identity together with organizationId + sourceEntity + sourceId.
+  sourceSystem   String
+  /// Mapping-profile version this run was executed under.
+  profileVersion String @default("v1")
+  /// patient (the only entity in scope today). Declared so the domain is not
+  /// designed around one spreadsheet: practitioner | service | appointment |
+  /// treatment_case | procedure | payment remain BLOCKED - no source data.
+  entityType     String @default("patient")
+
+  status String @default("CREATED")
+
+  /// Sanitized display filename. NEVER used to build a filesystem path.
+  sourceFileNameSafe   String?
+  /// xls | xlsx - determined by BINARY SIGNATURE, never by extension or MIME.
+  sourceFileFormat     String?
+  sourceFileSizeBytes  Int?
+  sourceFileSha256     String?
+  sourceFileStoredPath String?
+  sourceFileDeletedAt  DateTime?
+
+  sheetName         String?
+  sheetIndex        Int?
+  totalSourceRows   Int?
+  headerColumnCount Int?
+  /// Non-blocking analysis warnings, e.g. hidden sheets, empty leading column.
+  analysisWarnings  Json?
+
+  batchSize    Int @default(500)
+  totalBatches Int @default(0)
+  currentBatch Int @default(0)
+
+  processedRows Int @default(0)
+  createdRows   Int @default(0)
+  matchedRows   Int @default(0)
+  skippedRows   Int @default(0)
+  failedRows    Int @default(0)
+  warningRows   Int @default(0)
+  blockedRows   Int @default(0)
+
+  /// Full dry-run report (counts, blockers, plan limits, identity
+  /// classifications). Aggregates only - NEVER row values, NEVER PII/PHI.
+  dryRunSummary    Json?
+  /// Deterministic post-execution reconciliation. Aggregates only.
+  reconciliation   Json?
+  /// Safe typed error code for a FAILED/BLOCKED run (see failure taxonomy).
+  lastErrorCode    String?
+  /// Safe, human-readable message. NEVER a raw DB exception, NEVER PII.
+  lastErrorMessage String?
+
+  /// Held by the process currently executing this run. A conditional UPDATE on
+  /// (id, status, executionLockToken) is the cross-process mutual-exclusion
+  /// primitive - a second execute request cannot acquire it.
+  executionLockToken   String?
+  executionLockedAt    DateTime?
+  /// Refreshed between batches; a lock older than the stale threshold can be
+  /// reclaimed by an explicit Platform Admin resume after a process restart.
+  executionHeartbeatAt DateTime?
+  /// Set by a cancel request; the executor stops scheduling further batches.
+  cancelRequestedAt    DateTime?
+  cancelRequestedById  String?
+
+  createdByPlatformAdminId String?
+  createdByPlatformAdmin   PlatformAdmin? @relation("MigrationRunCreator", fields: [createdByPlatformAdminId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  uploadedAt  DateTime?
+  analyzedAt  DateTime?
+  dryRunAt    DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  batches       MigrationRunBatch[]
+  fieldMappings MigrationFieldMapping[]
+  rowOutcomes   MigrationRowOutcome[]
+  records       MigrationRecord[]       @relation("MigrationRecordCreatedByRun")
+
+  @@index([organizationId, createdAt])
+  @@index([clinicId, createdAt])
+  @@index([status, createdAt])
+}
+
+/// F3-DATA-MIG-TODAY-001 - Durable per-batch execution state. A run executes in
+/// bounded batches with per-batch atomicity: a failure in batch N never rolls
+/// back committed batches 1..N-1, and resume restarts at the first
+/// non-succeeded batch.
+///
+/// status: PENDING | RUNNING | SUCCEEDED | FAILED | CANCELLED | SKIPPED
+model MigrationRunBatch {
+  id    String       @id @default(uuid())
+  runId String
+  run   MigrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  batchNumber Int
+  /// Inclusive source row range (1-based data-row numbering, header excluded).
+  rowStart    Int
+  rowEnd      Int
+
+  status String @default("PENDING")
+
+  processedRows Int @default(0)
+  createdRows   Int @default(0)
+  matchedRows   Int @default(0)
+  skippedRows   Int @default(0)
+  failedRows    Int @default(0)
+  warningRows   Int @default(0)
+
+  retryCount Int @default(0)
+
+  /// Safe typed error code - never a raw DB exception string.
+  errorCode    String?
+  errorSummary String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([runId, batchNumber])
+  @@index([runId, status])
+}
+
+/// F3-DATA-MIG-TODAY-001 - The Platform Admin's resolved source-to-destination
+/// field mapping for one run. Every source column gets exactly one row, so a
+/// run can never execute with an undecided column.
+///
+/// state: AUTO_CONFIDENT | AUTO_REVIEW | MANUAL_REQUIRED | BLOCKED | IGNORE
+///        | LEGAL_BLOCKED | RESOLVED
+/// destinationField is the canonical destination key (e.g. "patient.firstName",
+/// "patient.identity.tckn", "provenance.sourceId"), null when IGNORE/BLOCKED.
+model MigrationFieldMapping {
+  id    String       @id @default(uuid())
+  runId String
+  run   MigrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  /// Source header EXACTLY as exported (byte-exact). Reruns re-key on this.
+  sourceField      String
+  /// Physical 0-based column index in the worksheet.
+  sourceIndex      Int
+  /// Normalized form used for matching only - never the stored key.
+  sourceNormalized String
+
+  destinationField String?
+  /// Named transform contract applied between source and destination, e.g.
+  /// "trim", "phone_tr", "date_excel_serial", "gender_tr", "deleted_to_status",
+  /// "compose_address". Null = direct assignment after trim.
+  transform        String?
+  /// Ordering when several source fields compose into one destination
+  /// (documented multi-source composition, e.g. MAHALLE + ADRESI -> address).
+  composeOrder     Int?
+
+  state         String  @default("MANUAL_REQUIRED")
+  /// 0..100. Deterministic - produced by the rule that matched, not by a model.
+  confidence    Int     @default(0)
+  /// Machine-readable reason the suggestion was made, e.g. "EXACT_HEADER",
+  /// "ALIAS", "NORMALIZED", "FIRST_CUSTOMER_MATRIX", "NO_DESTINATION",
+  /// "LEGAL_GATE", "VENDOR_INTERNAL".
+  reason        String?
+  /// Aggregate source profile for this column (fill rate, distinct count,
+  /// observed types). Aggregates only - NEVER sample values.
+  sourceProfile Json?
+
+  isAutoSuggested Boolean @default(false)
+
+  decidedByPlatformAdminId String?
+  decidedAt                DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([runId, sourceField])
+  @@index([runId, state])
+}
+
+/// F3-DATA-MIG-TODAY-001 (G-E2) - Explicit source-value to NoraMedi-entity
+/// reference mapping, e.g. the 25 distinct HASTADOKTOR labels to User.id.
+///
+/// Tenant-scoped by construction. sourceValue is stored BYTE-EXACT as exported
+/// (no trimming, no case folding, no Turkish-locale casing, no diacritic
+/// stripping) - normalization may be computed for display/ranking but must
+/// never become the stored key, or reruns silently re-key.
+///
+/// NO fuzzy matching, NO auto-creation of destination rows. A migration-created
+/// User would be a credentialed, payable account created without an onboarding
+/// decision - forbidden.
+///
+/// entityType: practitioner | staff_user | service | branch
+/// status:     UNMAPPED | MAPPED_APPROVED | MAPPED_IGNORED | CONFLICTED
+model MigrationReferenceMap {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// F3-DATA-MIG-TODAY-001-R1 - THE MAPPING IS BRANCH-SCOPED, NOT ONLY
+  /// TENANT-SCOPED. In a multi-branch organization the same source label
+  /// ("Dr Ayse") is two different people in two different branches: clinic A's
+  /// "Dr Ayse" is User A, clinic B's is User B. An organization-only invariant
+  /// silently reuses clinic A's approved mapping when clinic B is migrated and
+  /// attributes every one of clinic B's patients to the wrong practitioner.
+  /// The mapping is therefore keyed on the run's target clinic as well, and a
+  /// destination user must be an eligible practitioner FOR THAT CLINIC
+  /// (utils/relationGuards.ts findClinicPractitioner).
+  clinicId String
+  clinic   Clinic @relation("MigrationReferenceMapClinic", fields: [clinicId], references: [id])
+
+  sourceSystem String
+  entityType   String
+  sourceValue  String
+
+  /// Resolved destination row id (User.id for practitioner/staff_user).
+  /// Null while UNMAPPED or MAPPED_IGNORED.
+  destinationId String?
+  status        String  @default("UNMAPPED")
+
+  /// Approval is human and attributed. Frontend selection is not evidence.
+  approvedByPlatformAdminId String?
+  approvedAt                DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Names are pinned: the generated names would exceed PostgreSQL's 63-char
+  // identifier limit and be truncated, which makes schema and migration SQL
+  // disagree.
+  @@unique([organizationId, clinicId, sourceSystem, entityType, sourceValue], map: "MigrationReferenceMap_organizationId_clinicId_sourceSystem_key")
+  @@index([organizationId, clinicId, sourceSystem, entityType, status], map: "MigrationReferenceMap_organizationId_clinicId_sourceSystem_idx")
+  @@index([clinicId])
+}
+
+/// F3-DATA-MIG-TODAY-001 (G-E1) - DURABLE CROSS-RUN PROVENANCE. This is the
+/// idempotency anchor: it records which destination row a given source record
+/// produced, independently of which run produced it.
+///
+/// The unique invariant is (organizationId, sourceSystem, sourceEntity,
+/// sourceId) - TENANT-SCOPED, not global. A globally unique index over vendor
+/// source ids would itself be a cross-tenant hazard: the same HASTA_ID in two
+/// organizations is two unrelated patients and MUST NOT collide.
+///
+/// Rerunning the same source row therefore matches an existing record instead
+/// of creating a second Patient, and a batch retry cannot duplicate.
+///
+/// HASTA_ID is SOURCE PROVENANCE, never a patient business identifier, and is
+/// never surfaced as the patient's medical identity. Phone, email and name are
+/// empirically disproven as keys (28.6 % shared phones, 25.7 % colliding names)
+/// and are NEVER used for provenance or dedup.
+///
+/// destinationId is polymorphic by sourceEntity (Patient.id when
+/// sourceEntity='patient') and deliberately carries no FK - the same table
+/// serves future entity types. Reconciliation verifies resolution by query.
+///
+/// outcome: created | matched
+///   `updated` is deliberately NOT supported in v1 - a patient-master import
+///   only ever creates or matches, which keeps rollback a bounded delete over
+///   `created` rows and removes the pre-image problem entirely.
+model MigrationRecord {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  clinicId       String
+  clinic         Clinic       @relation("MigrationRecordClinic", fields: [clinicId], references: [id])
+
+  sourceSystem String
+  sourceEntity String
+  /// The vendor's own primary key for the record - HASTA_ID for patients.
+  sourceId     String
+
+  destinationId String
+  outcome       String
+
+  /// The run that FIRST created this record. Immutable - rollback is scoped on
+  /// it, so a later rerun must never overwrite it.
+  createdByRunId String
+  createdByRun   MigrationRun @relation("MigrationRecordCreatedByRun", fields: [createdByRunId], references: [id])
+  /// The most recent run that observed this source record. Mutable.
+  lastSeenRunId  String
+  lastSeenAt     DateTime     @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, sourceSystem, sourceEntity, sourceId])
+  @@index([createdByRunId, sourceEntity])
+  @@index([organizationId, sourceEntity, destinationId])
+  @@index([clinicId, sourceEntity])
+}
+
+/// F3-DATA-MIG-TODAY-001 - Per-run, per-row outcome. Drives the SUCCESS and
+/// FAILURE XLSX reports, resume (the first non-terminal row of the first
+/// non-succeeded batch), and the deterministic reconciliation.
+///
+/// Separate from MigrationRecord on purpose: MigrationRecord is the durable
+/// cross-run identity map (one row per source record, ever), while this is the
+/// per-run ledger (one row per source row, per run). Sharing one table would
+/// make run A's report mutate when run B executes.
+///
+/// status: CREATED | MATCHED | SKIPPED | FAILED | BLOCKED | INVALID
+///         | MANUAL_REVIEW | AMBIGUOUS | DUPLICATE_SOURCE | MAPPING_REQUIRED
+///
+/// NO RAW PII/PHI IN THIS TABLE. errorMessage is a safe, templated string;
+/// sourceId is the vendor provenance key (HASTA_ID), which is operational, not
+/// clinical. No name, phone, e-mail, address, note or identity value is stored.
+model MigrationRowOutcome {
+  id    String       @id @default(uuid())
+  runId String
+  run   MigrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  /// 1-based data-row number (worksheet header excluded), stable across reruns.
+  sourceRowNumber Int
+  batchNumber     Int?
+  /// HASTA_ID - provenance only.
+  sourceId        String?
+
+  status String
+
+  /// Machine-readable result/error code from the typed failure taxonomy.
+  resultCode   String?
+  /// Safe, human-readable explanation. NEVER a raw DB exception, NEVER PII.
+  errorMessage String?
+  /// Canonical destination field the failure concerns, when field-scoped.
+  fieldName    String?
+  retryable    Boolean @default(false)
+
+  /// Patient.id when the row created or matched a patient.
+  destinationPatientId String?
+
+  /// VALID | INVALID_LEGACY | AMBIGUOUS | DUPLICATE_SOURCE | MANUAL_REVIEW
+  /// | ABSENT - the national-identity classification for this row. The VALUE
+  /// itself is never stored here.
+  identityClassification String?
+  /// True when an encrypted PatientIdentityDocument was written for this row.
+  identityWritten        Boolean @default(false)
+
+  /// Non-blocking warning codes, e.g. ["GENDER_VALUE_UNRECOGNIZED",
+  /// "PHONE_LEADING_ZERO_RESTORED"]. Codes only - never values.
+  warnings Json?
+
+  createdAt DateTime @default(now())
+
+  @@unique([runId, sourceRowNumber])
+  @@index([runId, status])
+  @@index([runId, batchNumber])
+}
+
+/// F3-DATA-MIG-003 / G-E4 - Encrypted national/travel identity documents.
+///
+/// A SEPARATE CHILD MODEL, deliberately not scalars on Patient: GET
+/// /api/patients/:id uses `include:` with no top-level `select:` and responds
+/// with a whole-record spread (routes/patients.ts:167-191, :273), so ANY new
+/// Patient scalar auto-leaks to every authorized clinic client with zero code
+/// change. A relation is returned only when explicitly included - and it never
+/// is. This makes the boundary safe by construction rather than safe by
+/// remembering to refactor the hottest patient route.
+///
+/// docType: TCKN | PASSPORT | FOREIGN_ID  (stable backend string contract)
+///
+/// valueEncrypted: AES-256-GCM under DEDICATED patient-identity key material -
+///   NEVER the general ENCRYPTION_KEY and never its lifecycle. A T.C. Kimlik No
+///   is immutable, lifelong, government-issued regulated PII: it cannot be
+///   reissued if the key protecting it leaks, unlike every current
+///   ENCRYPTION_KEY consumer (rotatable machine secrets). See
+///   server/src/utils/patientIdentityCrypto.ts - fail-closed, per call.
+///
+/// lookupHash: HMAC-SHA256(dedicated lookup secret,
+///   organizationId + ':' + docType + ':' + normalizedValue) - TENANT-BOUND by
+///   construction. The same normalized identity value in two different
+///   organizations MUST NOT produce the same persisted token, or the column
+///   becomes a cross-tenant correlator readable by anyone with DB access.
+///   NEVER an unkeyed hash: the valid TC space is ~9e8 and exhaustively
+///   invertible in well under a second - an unkeyed hash is plaintext with
+///   extra steps.
+///
+/// cryptoVersion: key generation. No rotation mechanism exists in the product
+///   today; this column exists so adding one later is an additive backfill
+///   rather than a destructive rewrite, and so old-generation ciphertext stays
+///   readable while a rotation is in progress.
+///
+/// isVerified: only ever true for a value that passed shape + checksum
+///   validation. Legacy-invalid, ambiguous and source-duplicate values are
+///   QUARANTINED - no row is written at all - and recorded only as a
+///   classification on MigrationRowOutcome. A malformed legacy value must never
+///   be converted into a verified identity.
+///
+/// NO cross-patient unique constraint at launch: source data carries 30
+/// duplicate values across 60 rows whose nature (genuine duplicate /
+/// guardian-on-minor / data-entry error) is not determinable from the workbook.
+/// Collisions are surfaced as a soft warning for manual review and are NEVER
+/// auto-merged. @@unique([patientId, docType]) IS a genuine invariant and all
+/// legacy data satisfies it.
+model PatientIdentityDocument {
+  id             String       @id @default(uuid())
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id])
+  clinicId       String
+  clinic         Clinic       @relation("PatientIdentityDocumentClinic", fields: [clinicId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  docType        String
+  valueEncrypted String
+  lookupHash     String
+  cryptoVersion  Int     @default(1)
+  isVerified     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([patientId, docType])
+  @@index([organizationId, docType, lookupHash])
+  @@index([clinicId])
 }

@@ -72,7 +72,8 @@
       "privacy": "Gizlilik / Veri",
       "backups": "Yedekler",
       "securityIncidents": "Güvenlik Olayları",
-      "externalCalendar": "Harici Takvim"
+      "externalCalendar": "Harici Takvim",
+      "migration": "Veri Aktarımı"
     }
   },
   "dashboard": {
@@ -570,5 +571,390 @@
     "pitrInactiveDetail": "Depo mevcut ancak archive_mode açık değil; bu nedenle zaman noktasına kurtarma yeteneği yoktur ve en kötü durumda veri kaybı yalnızca günlük yedekleme aralığıyla sınırlıdır.",
     "pitrWalStaleTitle": "WAL arşivleme durmuş — kurtarılabilir nokta geride kalıyor",
     "pitrWalStaleDetail": "En yeni arşivlenen WAL segmenti {{age}} eskilikte (eşik {{minutes}} dakika). Yedekler ve archive_command hâlâ başarı bildiriyor, bu yüzden bu sayfada başka hiçbir şey kırmızıya dönmüyor — ancak o andan itibaren yapılan her işlem kurtarılamaz durumda. `pgbackrest check` çıktısını ve PostgreSQL günlüğünde archive_command hatalarını inceleyin."
+  },
+  "migration": {
+    "title": "Veri Aktarım Merkezi",
+    "newRun": "Yeni Aktarım",
+    "viewHistory": "Geçmişi Görüntüle",
+    "resumedNotice": "Devam eden aktarım kaldığı yerden açıldı (ID: {{id}}…).",
+    "stepperLabel": "Veri aktarım adımları",
+    "steps": {
+      "target": "Hedef",
+      "upload": "Yükleme",
+      "analyze": "Analiz",
+      "mapping": "Alan Eşleme",
+      "reference": "Referans Eşleme",
+      "dryRun": "Deneme Çalıştırma",
+      "confirm": "Onay",
+      "progress": "İlerleme",
+      "results": "Sonuçlar"
+    },
+    "statuses": {
+      "CREATED": "Oluşturuldu",
+      "UPLOADED": "Yüklendi",
+      "ANALYZED": "Analiz Edildi",
+      "MAPPING_REQUIRED": "Eşleme Gerekli",
+      "MAPPING_READY": "Eşleme Hazır",
+      "DRY_RUN_RUNNING": "Deneme Çalıştırılıyor",
+      "DRY_RUN_COMPLETE": "Deneme Tamamlandı",
+      "BLOCKED": "Engellendi",
+      "READY": "Hazır",
+      "RUNNING": "Çalışıyor",
+      "PARTIAL_FAILURE": "Kısmi Hata",
+      "COMPLETED": "Tamamlandı",
+      "FAILED": "Başarısız",
+      "CANCELLED": "İptal Edildi"
+    },
+    "batchStatuses": {
+      "PENDING": "Bekliyor",
+      "RUNNING": "Çalışıyor",
+      "SUCCEEDED": "Başarılı",
+      "FAILED": "Başarısız",
+      "CANCELLED": "İptal Edildi",
+      "SKIPPED": "Atlandı"
+    },
+    "errors": {
+      "loadRunFailed": "Aktarım kaydı yüklenemedi",
+      "targetsLoadFailed": "Organizasyon/klinik listesi yüklenemedi",
+      "createRunFailed": "Aktarım kaydı oluşturulamadı"
+    },
+    "target": {
+      "title": "Hedef Organizasyon ve Klinik",
+      "subtitle": "Verinin aktarılacağı organizasyonu ve kliniği seçin.",
+      "organization": "Organizasyon",
+      "selectOrganization": "Organizasyon seçin",
+      "noOrganizations": "Kayıtlı organizasyon bulunamadı.",
+      "clinic": "Klinik",
+      "selectClinic": "Klinik seçin",
+      "noClinics": "Bu organizasyonda klinik bulunamadı.",
+      "createRun": "Aktarımı Başlat"
+    },
+    "upload": {
+      "title": "Dosya Yükleme",
+      "subtitle": "Eski sistemden alınan hasta dosyasını yükleyin.",
+      "dropzone": "Dosyayı buraya sürükleyin veya seçmek için tıklayın",
+      "acceptedFormats": "Kabul edilen formatlar: .xls, .xlsx (maks. 32 MB)",
+      "signatureNote": "Dosya formatı uzantıya değil, sunucu tarafında ikili (binary) imzaya göre doğrulanır.",
+      "continue": "Yükle ve Devam Et",
+      "errors": {
+        "extension": "Yalnızca .xls veya .xlsx dosyaları kabul edilir.",
+        "tooLarge": "Dosya çok büyük (maksimum {{max}}).",
+        "uploadFailed": "Dosya yüklenemedi"
+      }
+    },
+    "analyze": {
+      "title": "Dosya Analizi",
+      "subtitle": "Sayfa yapısı ve sütun profili tespit edildi.",
+      "sheetPicker": "Çalışma sayfası",
+      "hidden": "gizli",
+      "formatXls": "XLS (eski BIFF8)",
+      "formatXlsx": "XLSX",
+      "rowCount": "Satır sayısı",
+      "columnCount": "Sütun sayısı",
+      "sheetCount": "Sayfa sayısı",
+      "warnings": "Analiz uyarıları",
+      "continue": "Alan Eşlemeye Geç",
+      "errors": { "analyzeFailed": "Dosya analiz edilemedi" }
+    },
+    "mapping": {
+      "title": "Alan Eşleme",
+      "subtitle": "Her kaynak sütunu bir hedef alana eşleyin. Tüm kararlar bu ekranda verilir.",
+      "acceptAllSafe": "Güvenli otomatik eşlemeleri kabul et",
+      "validateMapping": "Eşlemeyi doğrula",
+      "searchPlaceholder": "Kaynak sütun ara…",
+      "rowsShown": "{{shown}} / {{total}} sütun gösteriliyor",
+      "noRows": "Filtreyle eşleşen sütun yok.",
+      "cannotContinue": "Eşleme geçersiz olduğu için devam edilemiyor — yukarıdaki sorunları çözün.",
+      "continue": "Referans Eşlemeye Geç",
+      "columnIndex": "Sütun {{n}}",
+      "distinctCount": "{{n}} farklı değer",
+      "maxLength": "maks. {{n}} karakter",
+      "legalGate": "Yasal engel — seçilemez",
+      "noDestination": "Hedef yok / atla",
+      "composeOrder": "sıra",
+      "groups": {
+        "provenance": "Köken Bilgisi",
+        "identity": "Kimlik",
+        "name": "Ad Soyad",
+        "contact": "İletişim",
+        "address": "Adres",
+        "clinical": "Klinik",
+        "operational": "Operasyonel"
+      },
+      "transforms": {
+        "trim": "Kırp",
+        "trim_collapse": "Kırp + boşlukları sadeleştir",
+        "lower_trim": "Küçük harfe çevir + kırp",
+        "phone_tr": "TR telefon normalize",
+        "date_excel_serial": "Excel tarih serisi",
+        "gender_tr": "TR cinsiyet eşleme",
+        "deleted_to_status": "Silindi → durum",
+        "compose_address": "Adres bileşimi",
+        "chart_number": "Dosya numarası",
+        "identity_tckn": "T.C. Kimlik No doğrulama",
+        "provenance_source_id": "Köken kaynak kimliği",
+        "practitioner_reference": "Hekim referansı"
+      },
+      "cellTypes": {
+        "empty": "boş",
+        "string": "metin",
+        "number": "sayı",
+        "date": "tarih",
+        "boolean": "mantıksal",
+        "error": "hata"
+      },
+      "reasons": {
+        "EXACT_HEADER": "Birebir başlık eşleşmesi",
+        "ALIAS": "Bilinen takma ad",
+        "NORMALIZED": "Normalize edilmiş eşleşme",
+        "FIRST_CUSTOMER_MATRIX": "İlk müşteri eşleme matrisi",
+        "SAVED_TEMPLATE": "Kayıtlı şablon",
+        "MANUAL": "Elle seçildi",
+        "NO_DESTINATION": "Hedef bulunamadı",
+        "LEGAL_GATE": "Yasal engel",
+        "VENDOR_INTERNAL": "Tedarikçiye özel sütun",
+        "SUMMARY_NOT_TRANSACTION": "Özet sütun, işlem değil",
+        "SEMANTICS_UNRESOLVED": "Anlamı çözülemedi",
+        "UNKNOWN_HEADER": "Tanınmayan başlık"
+      },
+      "states": {
+        "AUTO_CONFIDENT": "Otomatik (Yüksek Güven)",
+        "AUTO_REVIEW": "Otomatik (Gözden Geçir)",
+        "MANUAL_REQUIRED": "Elle Eşleme Gerekli",
+        "BLOCKED": "Engellendi",
+        "IGNORE": "Yok Sayıldı",
+        "LEGAL_BLOCKED": "Yasal Engel",
+        "RESOLVED": "Çözüldü"
+      },
+      "filters": {
+        "all": "Tümü",
+        "unresolved": "Sadece çözülmemiş",
+        "blocked": "Sadece engellenmiş",
+        "legal": "Sadece yasal engelliler",
+        "ignored": "Yok sayılanlar",
+        "auto": "Otomatik güvenli"
+      },
+      "columns": {
+        "source": "Kaynak Sütun",
+        "profile": "Profil",
+        "destination": "Hedef",
+        "confidence": "Güven / Neden",
+        "state": "Durum",
+        "actions": "İşlemler"
+      },
+      "actions": { "ignore": "Yok say", "block": "Engelle", "reset": "Otomatiğe sıfırla" },
+      "summary": {
+        "mapped": "Eşlenen",
+        "unresolved": "Çözülmemiş",
+        "blocked": "Engellenen",
+        "legalBlocked": "Yasal Engelli",
+        "ignored": "Yok Sayılan"
+      },
+      "errors": {
+        "loadFailed": "Eşleme verisi yüklenemedi",
+        "saveFailed": "Eşleme kaydedilemedi",
+        "acceptFailed": "Otomatik eşlemeler kabul edilemedi",
+        "validateFailed": "Eşleme doğrulanamadı"
+      }
+    },
+    "reference": {
+      "title": "Referans Eşleme",
+      "subtitle": "Kaynak hekim etiketlerini mevcut kullanıcılarla eşleyin.",
+      "noNewUsersNote": "Bu ekranda hiçbir yeni kullanıcı oluşturulmaz — yalnızca mevcut kullanıcılarla eşleme yapılır.",
+      "notRequired": "Bu aktarım için referans eşleme gerekmiyor.",
+      "continue": "Deneme Çalıştırmaya Geç",
+      "searchPlaceholder": "Kullanıcı ara…",
+      "unresolvedCount": "{{n}} etiket henüz çözülmedi",
+      "resolveAllFirst": "Devam etmeden önce tüm etiketleri çözün",
+      "status": {
+        "unmapped": "Eşlenmedi",
+        "mappedApproved": "Eşlendi",
+        "mappedIgnored": "Yok sayıldı",
+        "conflicted": "Çakışma"
+      },
+      "columns": {
+        "sourceLabel": "Kaynak Etiket",
+        "rowCount": "Satır Sayısı",
+        "destination": "Hedef Kullanıcı",
+        "status": "Durum",
+        "actions": "İşlemler"
+      },
+      "actions": { "ignore": "Yok say", "unignore": "Geri al" },
+      "errors": { "loadFailed": "Referans verisi yüklenemedi", "saveFailed": "Referans eşlemesi kaydedilemedi" }
+    },
+    "dryRun": {
+      "title": "Deneme Çalıştırma",
+      "subtitle": "Gerçek verilere dokunmadan aktarımın sonucunu önceden görün.",
+      "zeroWritesNote": "Deneme çalıştırma SIFIR veri yazma işlemi yapar — hiçbir hasta kaydı oluşturulmaz veya değiştirilmez.",
+      "inProgress": "Deneme çalıştırma sürüyor…",
+      "run": "Deneme Çalıştırmayı Başlat",
+      "rerun": "Yeniden Çalıştır",
+      "continue": "Onaya Geç",
+      "rowTotals": "Satır Toplamları",
+      "expectedOutcome": "Beklenen Sonuç",
+      "problems": "Sorunlar",
+      "rowClassBreakdown": "Satır Sınıfı Dağılımı",
+      "identityBreakdown": "Kimlik Sınıflandırma Dağılımı",
+      "blockers": "Engelleyiciler",
+      "warnings": "Uyarılar",
+      "affectedRows": "{{n}} satırı etkiliyor",
+      "executableYes": "Aktarım çalıştırılabilir",
+      "executableNo": "Aktarım şu an çalıştırılamaz",
+      "fields": {
+        "totalSourceRows": "Toplam Kaynak Satır",
+        "parsedRows": "Ayrıştırılan Satır",
+        "validRows": "Geçerli Satır",
+        "warningRows": "Uyarılı Satır",
+        "blockedRows": "Engellenen Satır",
+        "invalidRows": "Geçersiz Satır",
+        "duplicateSourceRows": "Yinelenen Kaynak Satır",
+        "ambiguousRows": "Belirsiz Satır",
+        "manualReviewRows": "Elle İnceleme Gereken Satır",
+        "unresolvedMappings": "Çözülmemiş Eşleme",
+        "referenceMappingBlockers": "Referans Eşleme Engeli",
+        "legalBlockers": "Yasal Engel",
+        "expectedCreateCount": "Oluşturulacak",
+        "expectedReuseCount": "Yeniden Kullanılacak",
+        "expectedSkippedCount": "Atlanacak"
+      },
+      "rowClasses": {
+        "VALID_NEW": "Geçerli — Yeni",
+        "VALID_MATCHED": "Geçerli — Eşleşti",
+        "NORMALIZED": "Normalize Edildi",
+        "AMBIGUOUS": "Belirsiz",
+        "MAPPING_REQUIRED": "Eşleme Gerekli",
+        "INVALID": "Geçersiz",
+        "DUPLICATE_SOURCE": "Kaynakta Yinelenen",
+        "DUPLICATE_DESTINATION": "Hedefte Yinelenen",
+        "SKIPPED_BY_POLICY": "Politika Gereği Atlandı",
+        "BLOCKED": "Engellendi"
+      },
+      "identityClasses": {
+        "VALID": "Geçerli",
+        "INVALID_LEGACY": "Geçersiz (Eski Sistem)",
+        "AMBIGUOUS": "Belirsiz",
+        "DUPLICATE_SOURCE": "Kaynakta Yinelenen",
+        "MANUAL_REVIEW": "Elle İnceleme",
+        "ABSENT": "Kayıtlı Değil"
+      },
+      "planLimit": {
+        "title": "Plan Limiti",
+        "allowed": "İzin Veriliyor",
+        "blocked": "Engelliyor",
+        "sourceActive": "Kaynakta Aktif Hasta",
+        "destinationCurrent": "Hedefte Mevcut Hasta",
+        "expectedResulting": "Sonuçta Beklenen Toplam",
+        "orgCap": "Organizasyon Tavanı",
+        "clinicCap": "Klinik Tavanı",
+        "effectiveCap": "Geçerli Tavan",
+        "none": "Yok",
+        "source": {
+          "organization_plan": "organizasyon planı",
+          "clinic_column": "klinik sütunu",
+          "none": "tavan tanımlı değil"
+        }
+      },
+      "sharedPhone": {
+        "title": "Paylaşılan Telefon Etkisi",
+        "destinationBefore": "Öncesi (Hedef)",
+        "destinationAfter": "Sonrası (Beklenen)",
+        "flippedToAmbiguous": "Belirsize Dönenler",
+        "sourceRowsSharing": "Telefon Paylaşan Kaynak Satır",
+        "note": "Paylaşılan aile telefonları desteklenen bir davranıştır — hastalar birleştirilmez."
+      },
+      "errors": { "loadFailed": "Deneme çalıştırma verisi yüklenemedi", "runFailed": "Deneme çalıştırma başarısız" }
+    },
+    "confirm": {
+      "title": "Onay ve Çalıştırma",
+      "subtitle": "Aktarımı gerçek verilere uygulamadan önce son kontrol.",
+      "noDryRun": "Devam etmeden önce bir deneme çalıştırma tamamlanmalı.",
+      "willBeCreated": "Oluşturulacak",
+      "willBeReused": "Yeniden Kullanılacak",
+      "willBeSkipped": "Atlanacak",
+      "impactSentence": "{{org}} organizasyonunun {{clinic}} kliniğine {{created}} yeni hasta oluşturulacak, {{reused}} mevcut hasta yeniden kullanılacak.",
+      "notExecutable": "Deneme çalıştırma sonucuna göre bu aktarım şu an çalıştırılamaz.",
+      "irreversibleNote": "Bu işlem geri alınamaz. Çalıştırıldıktan sonra hasta kayıtları oluşturulmuş/güncellenmiş olacaktır.",
+      "acknowledgeCheckbox": "Bu aktarımın geri alınamaz olduğunu ve gerçek hasta verisi üzerinde çalışacağını anladım.",
+      "execute": "Aktarımı Çalıştır",
+      "errors": { "loadFailed": "Onay verisi yüklenemedi", "executeFailed": "Aktarım başlatılamadı" }
+    },
+    "progress": {
+      "title": "Aktarım İlerlemesi",
+      "processedOf": "{{processed}} / {{total}} satır işlendi",
+      "batch": "Parti",
+      "created": "Oluşturulan",
+      "matched": "Eşleşen",
+      "failed": "Başarısız",
+      "skipped": "Atlanan",
+      "warnings": "Uyarı",
+      "blocked": "Engellenen",
+      "elapsed": "Geçen Süre",
+      "cancel": "İptal Et",
+      "retryFailed": "Başarısızları Tekrar Dene",
+      "resume": "Devam Ettir",
+      "viewResults": "Sonuçları Gör",
+      "columns": {
+        "batch": "Parti",
+        "status": "Durum",
+        "rows": "Satır",
+        "retries": "Tekrar",
+        "error": "Hata"
+      },
+      "errors": {
+        "loadFailed": "İlerleme verisi yüklenemedi",
+        "cancelFailed": "İptal işlemi başarısız",
+        "retryFailed": "Tekrar deneme başarısız",
+        "resumeFailed": "Devam ettirme başarısız"
+      }
+    },
+    "results": {
+      "title": "Aktarım Sonuçları",
+      "subtitle": "Aktarımın son mutabakat raporu.",
+      "noReconciliation": "Bu aktarım için henüz bir mutabakat raporu yok.",
+      "created": "Oluşturulan",
+      "reused": "Yeniden Kullanılan",
+      "skipped": "Atlanan",
+      "failed": "Başarısız",
+      "manualReview": "Elle İnceleme",
+      "blocked": "Engellenen",
+      "tenantScopeClean": "Kiracı sınırları temiz (dışarı sızma yok)",
+      "provenanceResolves": "Tüm köken referansları çözülüyor",
+      "destinationBefore": "Öncesi (Hedef)",
+      "destinationAfter": "Sonrası (Hedef)",
+      "destinationDelta": "Değişim",
+      "batchTotal": "Toplam Parti",
+      "batchSucceeded": "Başarılı",
+      "batchFailed": "Başarısız",
+      "batchPending": "Bekleyen",
+      "batchCancelled": "İptal Edilen",
+      "downloadSuccess": "Başarı Raporu (XLSX)",
+      "downloadFailure": "Hata Raporu (XLSX)",
+      "arithmetic": {
+        "title": "Mutabakat Aritmetiği",
+        "balanced": "Dengeli",
+        "imbalanced": "Dengesiz",
+        "eligible": "uygun toplam"
+      },
+      "errors": { "loadFailed": "Sonuç verisi yüklenemedi", "downloadFailed": "Rapor indirilemedi" }
+    },
+    "history": {
+      "title": "Aktarım Geçmişi",
+      "allOrganizations": "Tüm Organizasyonlar",
+      "empty": "Kayıtlı aktarım bulunamadı.",
+      "columns": {
+        "id": "Kimlik",
+        "organization": "Organizasyon",
+        "clinic": "Klinik",
+        "file": "Dosya",
+        "initiator": "Başlatan",
+        "status": "Durum",
+        "rows": "Oluş./Eşl./Hata",
+        "batches": "Parti",
+        "created": "Oluşturuldu",
+        "completed": "Tamamlandı",
+        "reports": "Raporlar"
+      },
+      "errors": { "loadFailed": "Aktarım geçmişi yüklenemedi", "downloadFailed": "Rapor indirilemedi" }
+    }
   }
 }

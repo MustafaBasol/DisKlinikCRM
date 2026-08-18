@@ -83,6 +83,11 @@ async function main() {
     assert.deepEqual(ruleIdsOf(violations), ['DIRECT_PII_FIELD']);
   });
 
+  await test('07: raw national identity number (tckn) logged directly -> DIRECT_PII_FIELD', () => {
+    const { violations } = scanFixture('unsafe', '07-direct-pii-identity.ts');
+    assert.deepEqual(ruleIdsOf(violations), ['DIRECT_PII_FIELD']);
+  });
+
   section('Positive fixtures — must NOT fail (Step 7, 6 required cases + repo baseline)');
 
   await test('01: safeErrorFields(err) wrapper -> zero findings', () => {
