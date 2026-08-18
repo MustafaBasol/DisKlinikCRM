@@ -19,7 +19,7 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-const MigrationResultsStep: React.FC<Omit<MigrationStepProps, 'onNext' | 'nextStep'>> = ({ run, api, onRunUpdated }) => {
+const MigrationResultsStep: React.FC<Pick<MigrationStepProps, 'run' | 'api' | 'onRunUpdated'>> = ({ run, api, onRunUpdated }) => {
   const { t } = useTranslation(['platform']);
   const [reconciliation, setReconciliation] = useState<ReconciliationDto | null>(null);
   const [loading, setLoading] = useState(true);

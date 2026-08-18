@@ -332,6 +332,26 @@ export async function anonymizePatientData(
   // Sanitize reason
   const safeReason = reason.slice(0, 500);
 
+  // ── 0. PatientIdentityDocument: HARD DELETE, BEFORE the patient is marked ─
+  // F3-DATA-MIG-TODAY-001. Ordering here is deliberate and load-bearing.
+  //
+  // This function is a sequence of independent Prisma calls, not one
+  // transaction (wrapping ~15 operations across many models, including raw
+  // SQL, in a single transaction is a separate change with its own risk).
+  // Given that, the ORDER decides what a mid-way failure leaves behind.
+  //
+  // Deleting the encrypted national identity FIRST means a failure at any
+  // later step leaves `isAnonymized = false`: the request is reported as
+  // failed and a retry re-runs the whole sequence. Doing it after the patient
+  // update would mean a failure between the two leaves a row that CLAIMS to
+  // be anonymized while still holding a decryptable T.C. Kimlik No — the one
+  // outcome this whole boundary exists to prevent.
+  //
+  // `deleteMany` is idempotent, so re-running costs nothing. The
+  // already-anonymized branch above performs the same delete, which is what
+  // repairs rows anonymized before this field existed.
+  const identityDocumentsDeleted = await deletePatientIdentityDocuments(patientId);
+
   // ── 1. Anonymize patient identity fields ──────────────────────────────────
   await prisma.patient.update({
     where: { id: patientId },
@@ -373,8 +393,8 @@ export async function anonymizePatientData(
     },
   });
 
-  // ── 1b. PatientIdentityDocument: HARD DELETE (see helper for why) ─────────
-  const identityDocumentsDeleted = await deletePatientIdentityDocuments(patientId);
+  // (Identity documents were hard-deleted in step 0, before the patient was
+  // marked anonymized — see the ordering rationale there.)
 
   // ── 2. ContactRequests: clear contact PII ─────────────────────────────────
   await prisma.contactRequest.updateMany({

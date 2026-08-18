@@ -144,10 +144,19 @@ async function collectStructuredExportData(
           },
         }),
         // F3-DATA-MIG-003 / G-E4: the data subject is entitled to the identity
-        // number held about them. lookupHash and valueEncrypted are NEVER
-        // selected — the hash is a tenant correlation token (not the subject's
-        // data) and the ciphertext is an internal storage artifact; the subject
-        // gets the plaintext instead, decrypted below.
+        // number held about them, so the subject-access export carries the
+        // PLAINTEXT value (this download is already step-up protected,
+        // one-time-claim, 1 h TTL).
+        //
+        // Precisely what does and does not leave this route:
+        //  - `lookupHash` is NEVER selected. It is a tenant correlation token
+        //    derived for internal lookup, not data held "about" the subject,
+        //    and exporting it would hand out a stable cross-record correlator.
+        //  - `valueEncrypted` IS selected here because decryption needs it,
+        //    but it is stripped in the mapping step below and NEVER appears in
+        //    the response. The guarantee is "never present in the export", not
+        //    "never read from the database" — those are different claims and
+        //    only the first one is true.
         prisma.patientIdentityDocument.findMany({
           where: { patientId, clinicId, organizationId },
           select: {

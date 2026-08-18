@@ -72,7 +72,8 @@
       "privacy": "Datenschutz / Daten",
       "backups": "Sicherungen",
       "securityIncidents": "Sicherheitsvorfälle",
-      "externalCalendar": "Externer Kalender"
+      "externalCalendar": "Externer Kalender",
+      "migration": "Datenmigration"
     }
   },
   "dashboard": {
@@ -570,5 +571,390 @@
     "pitrInactiveDetail": "Das Repository existiert, aber archive_mode ist nicht aktiv. Es gibt daher keine Point-in-Time-Recovery-Fähigkeit, und der maximale Datenverlust bleibt allein durch das tägliche Backup-Intervall begrenzt.",
     "pitrWalStaleTitle": "Die WAL-Archivierung steht still — der wiederherstellbare Punkt fällt zurück",
     "pitrWalStaleDetail": "Das neueste archivierte WAL-Segment ist {{age}} alt (Schwellenwert {{minutes}} Minuten). Backups und archive_command melden weiterhin Erfolg, daher wird auf dieser Seite sonst nichts rot — aber jede Transaktion seitdem ist nicht wiederherstellbar. Prüfen Sie `pgbackrest check` und das PostgreSQL-Log auf archive_command-Fehler."
+  },
+  "migration": {
+    "title": "Datenmigrations-Zentrale",
+    "newRun": "Neue Migration",
+    "viewHistory": "Verlauf anzeigen",
+    "resumedNotice": "Eine laufende Migration wurde fortgesetzt (ID: {{id}}…).",
+    "stepperLabel": "Schritte der Datenmigration",
+    "steps": {
+      "target": "Ziel",
+      "upload": "Hochladen",
+      "analyze": "Analyse",
+      "mapping": "Feldzuordnung",
+      "reference": "Referenzzuordnung",
+      "dryRun": "Testlauf",
+      "confirm": "Bestätigung",
+      "progress": "Fortschritt",
+      "results": "Ergebnisse"
+    },
+    "statuses": {
+      "CREATED": "Erstellt",
+      "UPLOADED": "Hochgeladen",
+      "ANALYZED": "Analysiert",
+      "MAPPING_REQUIRED": "Zuordnung erforderlich",
+      "MAPPING_READY": "Zuordnung bereit",
+      "DRY_RUN_RUNNING": "Testlauf läuft",
+      "DRY_RUN_COMPLETE": "Testlauf abgeschlossen",
+      "BLOCKED": "Blockiert",
+      "READY": "Bereit",
+      "RUNNING": "Läuft",
+      "PARTIAL_FAILURE": "Teilweiser Fehler",
+      "COMPLETED": "Abgeschlossen",
+      "FAILED": "Fehlgeschlagen",
+      "CANCELLED": "Abgebrochen"
+    },
+    "batchStatuses": {
+      "PENDING": "Ausstehend",
+      "RUNNING": "Läuft",
+      "SUCCEEDED": "Erfolgreich",
+      "FAILED": "Fehlgeschlagen",
+      "CANCELLED": "Abgebrochen",
+      "SKIPPED": "Übersprungen"
+    },
+    "errors": {
+      "loadRunFailed": "Der Migrationslauf konnte nicht geladen werden",
+      "targetsLoadFailed": "Organisationen/Kliniken konnten nicht geladen werden",
+      "createRunFailed": "Der Migrationslauf konnte nicht erstellt werden"
+    },
+    "target": {
+      "title": "Zielorganisation und -klinik",
+      "subtitle": "Wählen Sie die Organisation und Klinik, in die die Daten migriert werden.",
+      "organization": "Organisation",
+      "selectOrganization": "Organisation auswählen",
+      "noOrganizations": "Keine Organisationen gefunden.",
+      "clinic": "Klinik",
+      "selectClinic": "Klinik auswählen",
+      "noClinics": "Für diese Organisation wurden keine Kliniken gefunden.",
+      "createRun": "Migration starten"
+    },
+    "upload": {
+      "title": "Datei-Upload",
+      "subtitle": "Laden Sie die aus dem Altsystem exportierte Patientendatei hoch.",
+      "dropzone": "Datei hierher ziehen oder zum Durchsuchen klicken",
+      "acceptedFormats": "Akzeptierte Formate: .xls, .xlsx (max. 32 MB)",
+      "signatureNote": "Das Dateiformat wird serverseitig anhand der Binärsignatur geprüft, nicht anhand der Dateiendung.",
+      "continue": "Hochladen und fortfahren",
+      "errors": {
+        "extension": "Nur .xls- oder .xlsx-Dateien werden akzeptiert.",
+        "tooLarge": "Datei ist zu groß (maximal {{max}}).",
+        "uploadFailed": "Die Datei konnte nicht hochgeladen werden"
+      }
+    },
+    "analyze": {
+      "title": "Dateianalyse",
+      "subtitle": "Blattstruktur und Spaltenprofil wurden erkannt.",
+      "sheetPicker": "Arbeitsblatt",
+      "hidden": "ausgeblendet",
+      "formatXls": "XLS (Legacy BIFF8)",
+      "formatXlsx": "XLSX",
+      "rowCount": "Zeilenanzahl",
+      "columnCount": "Spaltenanzahl",
+      "sheetCount": "Blattanzahl",
+      "warnings": "Analysewarnungen",
+      "continue": "Weiter zur Feldzuordnung",
+      "errors": { "analyzeFailed": "Die Datei konnte nicht analysiert werden" }
+    },
+    "mapping": {
+      "title": "Feldzuordnung",
+      "subtitle": "Ordnen Sie jede Quellspalte einem Zielfeld zu. Alle Entscheidungen erfolgen auf diesem einen Bildschirm.",
+      "acceptAllSafe": "Alle sicheren automatischen Zuordnungen übernehmen",
+      "validateMapping": "Zuordnung validieren",
+      "searchPlaceholder": "Quellspalten durchsuchen…",
+      "rowsShown": "{{shown}} von {{total}} Spalten angezeigt",
+      "noRows": "Keine Spalten entsprechen diesem Filter.",
+      "cannotContinue": "Die Zuordnung ist ungültig — beheben Sie die obigen Probleme, um fortzufahren.",
+      "continue": "Weiter zur Referenzzuordnung",
+      "columnIndex": "Spalte {{n}}",
+      "distinctCount": "{{n}} verschiedene Werte",
+      "maxLength": "max. {{n}} Zeichen",
+      "legalGate": "Rechtliche Sperre — nicht auswählbar",
+      "noDestination": "Kein Ziel / überspringen",
+      "composeOrder": "Reihenfolge",
+      "groups": {
+        "provenance": "Herkunft",
+        "identity": "Identität",
+        "name": "Name",
+        "contact": "Kontakt",
+        "address": "Adresse",
+        "clinical": "Klinisch",
+        "operational": "Operativ"
+      },
+      "transforms": {
+        "trim": "Trimmen",
+        "trim_collapse": "Trimmen + Leerzeichen zusammenfassen",
+        "lower_trim": "Kleinschreibung + trimmen",
+        "phone_tr": "TR-Telefonnummer normalisieren",
+        "date_excel_serial": "Excel-Datumsseriennummer",
+        "gender_tr": "TR-Geschlechtszuordnung",
+        "deleted_to_status": "Gelöscht-Kennzeichen → Status",
+        "compose_address": "Adresszusammensetzung",
+        "chart_number": "Kartennummer",
+        "identity_tckn": "Validierung der Personenkennziffer",
+        "provenance_source_id": "Herkunfts-Quellkennung",
+        "practitioner_reference": "Behandler-Referenz"
+      },
+      "cellTypes": {
+        "empty": "leer",
+        "string": "Text",
+        "number": "Zahl",
+        "date": "Datum",
+        "boolean": "boolesch",
+        "error": "Fehler"
+      },
+      "reasons": {
+        "EXACT_HEADER": "Exakte Kopfzeilenübereinstimmung",
+        "ALIAS": "Bekannter Alias",
+        "NORMALIZED": "Normalisierte Übereinstimmung",
+        "FIRST_CUSTOMER_MATRIX": "Erstkunden-Zuordnungsmatrix",
+        "SAVED_TEMPLATE": "Gespeicherte Vorlage",
+        "MANUAL": "Manuell ausgewählt",
+        "NO_DESTINATION": "Kein Ziel gefunden",
+        "LEGAL_GATE": "Rechtliche Sperre",
+        "VENDOR_INTERNAL": "Anbieterinterne Spalte",
+        "SUMMARY_NOT_TRANSACTION": "Zusammenfassungsspalte, keine Transaktion",
+        "SEMANTICS_UNRESOLVED": "Bedeutung ungeklärt",
+        "UNKNOWN_HEADER": "Unbekannte Kopfzeile"
+      },
+      "states": {
+        "AUTO_CONFIDENT": "Automatisch (hohe Sicherheit)",
+        "AUTO_REVIEW": "Automatisch (zu prüfen)",
+        "MANUAL_REQUIRED": "Manuelle Zuordnung erforderlich",
+        "BLOCKED": "Blockiert",
+        "IGNORE": "Ignoriert",
+        "LEGAL_BLOCKED": "Rechtlich gesperrt",
+        "RESOLVED": "Gelöst"
+      },
+      "filters": {
+        "all": "Alle",
+        "unresolved": "Nur ungelöste",
+        "blocked": "Nur blockierte",
+        "legal": "Nur rechtlich gesperrte",
+        "ignored": "Ignorierte",
+        "auto": "Automatisch sicher"
+      },
+      "columns": {
+        "source": "Quellspalte",
+        "profile": "Profil",
+        "destination": "Ziel",
+        "confidence": "Sicherheit / Grund",
+        "state": "Status",
+        "actions": "Aktionen"
+      },
+      "actions": { "ignore": "Ignorieren", "block": "Blockieren", "reset": "Auf Automatik zurücksetzen" },
+      "summary": {
+        "mapped": "Zugeordnet",
+        "unresolved": "Ungelöst",
+        "blocked": "Blockiert",
+        "legalBlocked": "Rechtlich gesperrt",
+        "ignored": "Ignoriert"
+      },
+      "errors": {
+        "loadFailed": "Die Zuordnung konnte nicht geladen werden",
+        "saveFailed": "Die Zuordnung konnte nicht gespeichert werden",
+        "acceptFailed": "Automatische Zuordnungen konnten nicht übernommen werden",
+        "validateFailed": "Die Zuordnung konnte nicht validiert werden"
+      }
+    },
+    "reference": {
+      "title": "Referenzzuordnung",
+      "subtitle": "Ordnen Sie Quell-Behandlerbezeichnungen bestehenden Benutzern zu.",
+      "noNewUsersNote": "Auf diesem Bildschirm wird niemals ein neuer Benutzer erstellt — es werden nur Zuordnungen zu bestehenden Benutzern vorgenommen.",
+      "notRequired": "Für diese Migration ist keine Referenzzuordnung erforderlich.",
+      "continue": "Weiter zum Testlauf",
+      "searchPlaceholder": "Benutzer suchen…",
+      "unresolvedCount": "{{n}} Bezeichnungen noch ungelöst",
+      "resolveAllFirst": "Lösen Sie alle Bezeichnungen auf, bevor Sie fortfahren",
+      "status": {
+        "unmapped": "Nicht zugeordnet",
+        "mappedApproved": "Zugeordnet",
+        "mappedIgnored": "Ignoriert",
+        "conflicted": "Konflikt"
+      },
+      "columns": {
+        "sourceLabel": "Quellbezeichnung",
+        "rowCount": "Zeilenanzahl",
+        "destination": "Zielbenutzer",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "actions": { "ignore": "Ignorieren", "unignore": "Rückgängig" },
+      "errors": { "loadFailed": "Referenzdaten konnten nicht geladen werden", "saveFailed": "Die Referenzzuordnung konnte nicht gespeichert werden" }
+    },
+    "dryRun": {
+      "title": "Testlauf",
+      "subtitle": "Zeigen Sie das Ergebnis der Migration vorab an, ohne echte Daten zu berühren.",
+      "zeroWritesNote": "Ein Testlauf führt NULL Schreibvorgänge in den Fachdaten aus — es wird kein Patientendatensatz erstellt oder geändert.",
+      "inProgress": "Testlauf läuft…",
+      "run": "Testlauf starten",
+      "rerun": "Erneut ausführen",
+      "continue": "Weiter zur Bestätigung",
+      "rowTotals": "Zeilensummen",
+      "expectedOutcome": "Erwartetes Ergebnis",
+      "problems": "Probleme",
+      "rowClassBreakdown": "Aufschlüsselung nach Zeilenklasse",
+      "identityBreakdown": "Aufschlüsselung der Identitätsklassifizierung",
+      "blockers": "Blockierer",
+      "warnings": "Warnungen",
+      "affectedRows": "betrifft {{n}} Zeilen",
+      "executableYes": "Diese Migration ist ausführbar",
+      "executableNo": "Diese Migration kann derzeit nicht ausgeführt werden",
+      "fields": {
+        "totalSourceRows": "Quellzeilen gesamt",
+        "parsedRows": "Verarbeitete Zeilen",
+        "validRows": "Gültige Zeilen",
+        "warningRows": "Zeilen mit Warnung",
+        "blockedRows": "Blockierte Zeilen",
+        "invalidRows": "Ungültige Zeilen",
+        "duplicateSourceRows": "Duplikate in der Quelle",
+        "ambiguousRows": "Mehrdeutige Zeilen",
+        "manualReviewRows": "Zeilen zur manuellen Prüfung",
+        "unresolvedMappings": "Ungelöste Zuordnungen",
+        "referenceMappingBlockers": "Blockierer der Referenzzuordnung",
+        "legalBlockers": "Rechtliche Blockierer",
+        "expectedCreateCount": "Wird erstellt",
+        "expectedReuseCount": "Wird wiederverwendet",
+        "expectedSkippedCount": "Wird übersprungen"
+      },
+      "rowClasses": {
+        "VALID_NEW": "Gültig — Neu",
+        "VALID_MATCHED": "Gültig — Zugeordnet",
+        "NORMALIZED": "Normalisiert",
+        "AMBIGUOUS": "Mehrdeutig",
+        "MAPPING_REQUIRED": "Zuordnung erforderlich",
+        "INVALID": "Ungültig",
+        "DUPLICATE_SOURCE": "Duplikat in der Quelle",
+        "DUPLICATE_DESTINATION": "Duplikat im Ziel",
+        "SKIPPED_BY_POLICY": "Durch Richtlinie übersprungen",
+        "BLOCKED": "Blockiert"
+      },
+      "identityClasses": {
+        "VALID": "Gültig",
+        "INVALID_LEGACY": "Ungültig (Altsystem)",
+        "AMBIGUOUS": "Mehrdeutig",
+        "DUPLICATE_SOURCE": "Duplikat in der Quelle",
+        "MANUAL_REVIEW": "Manuelle Prüfung",
+        "ABSENT": "Nicht erfasst"
+      },
+      "planLimit": {
+        "title": "Plan-Limit",
+        "allowed": "Zulässig",
+        "blocked": "Blockierend",
+        "sourceActive": "Aktiv in der Quelle",
+        "destinationCurrent": "Aktuell im Ziel",
+        "expectedResulting": "Erwartete Gesamtsumme",
+        "orgCap": "Organisationslimit",
+        "clinicCap": "Kliniklimit",
+        "effectiveCap": "Wirksames Limit",
+        "none": "Keines",
+        "source": {
+          "organization_plan": "Organisationsplan",
+          "clinic_column": "Klinikspalte",
+          "none": "kein Limit konfiguriert"
+        }
+      },
+      "sharedPhone": {
+        "title": "Auswirkung geteilter Telefonnummern",
+        "destinationBefore": "Vorher (Ziel)",
+        "destinationAfter": "Nachher (erwartet)",
+        "flippedToAmbiguous": "Zu mehrdeutig gewechselt",
+        "sourceRowsSharing": "Quellzeilen mit geteilter Telefonnummer",
+        "note": "Geteilte Familientelefonnummern sind ein unterstütztes Verhalten — Patienten werden deswegen nie zusammengeführt."
+      },
+      "errors": { "loadFailed": "Die Testlaufdaten konnten nicht geladen werden", "runFailed": "Der Testlauf ist fehlgeschlagen" }
+    },
+    "confirm": {
+      "title": "Bestätigung & Ausführung",
+      "subtitle": "Letzte Prüfung, bevor die Migration auf echte Daten angewendet wird.",
+      "noDryRun": "Ein Testlauf muss erfolgreich abgeschlossen sein, bevor Sie fortfahren können.",
+      "willBeCreated": "Wird erstellt",
+      "willBeReused": "Wird wiederverwendet",
+      "willBeSkipped": "Wird übersprungen",
+      "impactSentence": "Es werden {{created}} neue Patienten erstellt und {{reused}} bestehende Patienten wiederverwendet, in die Klinik {{clinic}} von {{org}}.",
+      "notExecutable": "Laut Testlauf kann diese Migration derzeit nicht ausgeführt werden.",
+      "irreversibleNote": "Diese Aktion kann nicht rückgängig gemacht werden. Nach der Ausführung wurden Patientendatensätze erstellt und/oder aktualisiert.",
+      "acknowledgeCheckbox": "Ich verstehe, dass diese Migration unumkehrbar ist und mit echten Patientendaten arbeitet.",
+      "execute": "Migration ausführen",
+      "errors": { "loadFailed": "Bestätigungsdaten konnten nicht geladen werden", "executeFailed": "Die Migration konnte nicht gestartet werden" }
+    },
+    "progress": {
+      "title": "Migrationsfortschritt",
+      "processedOf": "{{processed}} / {{total}} Zeilen verarbeitet",
+      "batch": "Charge",
+      "created": "Erstellt",
+      "matched": "Zugeordnet",
+      "failed": "Fehlgeschlagen",
+      "skipped": "Übersprungen",
+      "warnings": "Warnungen",
+      "blocked": "Blockiert",
+      "elapsed": "Verstrichene Zeit",
+      "cancel": "Abbrechen",
+      "retryFailed": "Fehlgeschlagene wiederholen",
+      "resume": "Fortsetzen",
+      "viewResults": "Ergebnisse anzeigen",
+      "columns": {
+        "batch": "Charge",
+        "status": "Status",
+        "rows": "Zeilen",
+        "retries": "Wiederholungen",
+        "error": "Fehler"
+      },
+      "errors": {
+        "loadFailed": "Fortschrittsdaten konnten nicht geladen werden",
+        "cancelFailed": "Abbrechen fehlgeschlagen",
+        "retryFailed": "Wiederholung fehlgeschlagen",
+        "resumeFailed": "Fortsetzen fehlgeschlagen"
+      }
+    },
+    "results": {
+      "title": "Migrationsergebnisse",
+      "subtitle": "Der abschließende Abstimmungsbericht der Migration.",
+      "noReconciliation": "Für diesen Lauf liegt noch kein Abstimmungsbericht vor.",
+      "created": "Erstellt",
+      "reused": "Wiederverwendet",
+      "skipped": "Übersprungen",
+      "failed": "Fehlgeschlagen",
+      "manualReview": "Manuelle Prüfung",
+      "blocked": "Blockiert",
+      "tenantScopeClean": "Mandantengrenzen sind sauber (kein Datenaustritt)",
+      "provenanceResolves": "Alle Herkunftsreferenzen lösen sich auf",
+      "destinationBefore": "Vorher (Ziel)",
+      "destinationAfter": "Nachher (Ziel)",
+      "destinationDelta": "Veränderung",
+      "batchTotal": "Chargen gesamt",
+      "batchSucceeded": "Erfolgreich",
+      "batchFailed": "Fehlgeschlagen",
+      "batchPending": "Ausstehend",
+      "batchCancelled": "Abgebrochen",
+      "downloadSuccess": "Erfolgsbericht (XLSX)",
+      "downloadFailure": "Fehlerbericht (XLSX)",
+      "arithmetic": {
+        "title": "Abstimmungsarithmetik",
+        "balanced": "Ausgeglichen",
+        "imbalanced": "Nicht ausgeglichen",
+        "eligible": "berechtigte Gesamtsumme"
+      },
+      "errors": { "loadFailed": "Die Ergebnisse konnten nicht geladen werden", "downloadFailed": "Der Bericht konnte nicht heruntergeladen werden" }
+    },
+    "history": {
+      "title": "Migrationsverlauf",
+      "allOrganizations": "Alle Organisationen",
+      "empty": "Keine Migrationsläufe gefunden.",
+      "columns": {
+        "id": "ID",
+        "organization": "Organisation",
+        "clinic": "Klinik",
+        "file": "Datei",
+        "initiator": "Initiator",
+        "status": "Status",
+        "rows": "Erstellt/Zugeordnet/Fehlgeschlagen",
+        "batches": "Chargen",
+        "created": "Erstellt",
+        "completed": "Abgeschlossen",
+        "reports": "Berichte"
+      },
+      "errors": { "loadFailed": "Der Migrationsverlauf konnte nicht geladen werden", "downloadFailed": "Der Bericht konnte nicht heruntergeladen werden" }
+    }
   }
 }

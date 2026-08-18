@@ -72,7 +72,8 @@
       "privacy": "Privacy / Data",
       "backups": "Backups",
       "securityIncidents": "Security Incidents",
-      "externalCalendar": "External Calendar"
+      "externalCalendar": "External Calendar",
+      "migration": "Data Migration"
     }
   },
   "dashboard": {
@@ -570,5 +571,390 @@
     "pitrInactiveDetail": "The repository exists but archive_mode is not on, so there is no point-in-time recovery capability and worst-case data loss remains bounded only by the daily backup interval.",
     "pitrWalStaleTitle": "WAL archiving has stalled — the recoverable point is falling behind",
     "pitrWalStaleDetail": "The newest archived WAL segment is {{age}} old (threshold {{minutes}} minutes). Backups and archive_command still report success, so nothing else on this page turns red — but every transaction since then is unrecoverable. Check `pgbackrest check` and the PostgreSQL log for archive_command failures."
+  },
+  "migration": {
+    "title": "Data Migration Center",
+    "newRun": "New Migration",
+    "viewHistory": "View History",
+    "resumedNotice": "Resumed an in-progress migration (ID: {{id}}…).",
+    "stepperLabel": "Data migration steps",
+    "steps": {
+      "target": "Target",
+      "upload": "Upload",
+      "analyze": "Analyze",
+      "mapping": "Field Mapping",
+      "reference": "Reference Mapping",
+      "dryRun": "Dry Run",
+      "confirm": "Confirm",
+      "progress": "Progress",
+      "results": "Results"
+    },
+    "statuses": {
+      "CREATED": "Created",
+      "UPLOADED": "Uploaded",
+      "ANALYZED": "Analyzed",
+      "MAPPING_REQUIRED": "Mapping Required",
+      "MAPPING_READY": "Mapping Ready",
+      "DRY_RUN_RUNNING": "Dry Run In Progress",
+      "DRY_RUN_COMPLETE": "Dry Run Complete",
+      "BLOCKED": "Blocked",
+      "READY": "Ready",
+      "RUNNING": "Running",
+      "PARTIAL_FAILURE": "Partial Failure",
+      "COMPLETED": "Completed",
+      "FAILED": "Failed",
+      "CANCELLED": "Cancelled"
+    },
+    "batchStatuses": {
+      "PENDING": "Pending",
+      "RUNNING": "Running",
+      "SUCCEEDED": "Succeeded",
+      "FAILED": "Failed",
+      "CANCELLED": "Cancelled",
+      "SKIPPED": "Skipped"
+    },
+    "errors": {
+      "loadRunFailed": "Could not load the migration run",
+      "targetsLoadFailed": "Could not load organizations/clinics",
+      "createRunFailed": "Could not create the migration run"
+    },
+    "target": {
+      "title": "Target Organization & Clinic",
+      "subtitle": "Choose the organization and clinic the data will be migrated into.",
+      "organization": "Organization",
+      "selectOrganization": "Select an organization",
+      "noOrganizations": "No organizations found.",
+      "clinic": "Clinic",
+      "selectClinic": "Select a clinic",
+      "noClinics": "No clinics found for this organization.",
+      "createRun": "Start Migration"
+    },
+    "upload": {
+      "title": "File Upload",
+      "subtitle": "Upload the patient file exported from the legacy system.",
+      "dropzone": "Drag a file here, or click to browse",
+      "acceptedFormats": "Accepted formats: .xls, .xlsx (max 32 MB)",
+      "signatureNote": "The file format is verified server-side by binary signature, not by its extension.",
+      "continue": "Upload and Continue",
+      "errors": {
+        "extension": "Only .xls or .xlsx files are accepted.",
+        "tooLarge": "File is too large (maximum {{max}}).",
+        "uploadFailed": "The file could not be uploaded"
+      }
+    },
+    "analyze": {
+      "title": "File Analysis",
+      "subtitle": "Sheet structure and column profile were detected.",
+      "sheetPicker": "Worksheet",
+      "hidden": "hidden",
+      "formatXls": "XLS (legacy BIFF8)",
+      "formatXlsx": "XLSX",
+      "rowCount": "Row count",
+      "columnCount": "Column count",
+      "sheetCount": "Sheet count",
+      "warnings": "Analysis warnings",
+      "continue": "Continue to Field Mapping",
+      "errors": { "analyzeFailed": "The file could not be analyzed" }
+    },
+    "mapping": {
+      "title": "Field Mapping",
+      "subtitle": "Map every source column to a destination field. All decisions are made on this one screen.",
+      "acceptAllSafe": "Accept all safe automatic mappings",
+      "validateMapping": "Validate mapping",
+      "searchPlaceholder": "Search source columns…",
+      "rowsShown": "Showing {{shown}} of {{total}} columns",
+      "noRows": "No columns match this filter.",
+      "cannotContinue": "The mapping is invalid — resolve the issues above before continuing.",
+      "continue": "Continue to Reference Mapping",
+      "columnIndex": "Column {{n}}",
+      "distinctCount": "{{n}} distinct values",
+      "maxLength": "max {{n}} chars",
+      "legalGate": "Legal gate — not selectable",
+      "noDestination": "No destination / skip",
+      "composeOrder": "order",
+      "groups": {
+        "provenance": "Provenance",
+        "identity": "Identity",
+        "name": "Name",
+        "contact": "Contact",
+        "address": "Address",
+        "clinical": "Clinical",
+        "operational": "Operational"
+      },
+      "transforms": {
+        "trim": "Trim",
+        "trim_collapse": "Trim + collapse whitespace",
+        "lower_trim": "Lowercase + trim",
+        "phone_tr": "Normalize TR phone",
+        "date_excel_serial": "Excel date serial",
+        "gender_tr": "TR gender mapping",
+        "deleted_to_status": "Deleted flag → status",
+        "compose_address": "Address composition",
+        "chart_number": "Chart number",
+        "identity_tckn": "National ID validation",
+        "provenance_source_id": "Provenance source id",
+        "practitioner_reference": "Practitioner reference"
+      },
+      "cellTypes": {
+        "empty": "empty",
+        "string": "text",
+        "number": "number",
+        "date": "date",
+        "boolean": "boolean",
+        "error": "error"
+      },
+      "reasons": {
+        "EXACT_HEADER": "Exact header match",
+        "ALIAS": "Known alias",
+        "NORMALIZED": "Normalized match",
+        "FIRST_CUSTOMER_MATRIX": "First-customer mapping matrix",
+        "SAVED_TEMPLATE": "Saved template",
+        "MANUAL": "Manually chosen",
+        "NO_DESTINATION": "No destination found",
+        "LEGAL_GATE": "Legal gate",
+        "VENDOR_INTERNAL": "Vendor-internal column",
+        "SUMMARY_NOT_TRANSACTION": "Summary column, not transactional",
+        "SEMANTICS_UNRESOLVED": "Semantics unresolved",
+        "UNKNOWN_HEADER": "Unrecognized header"
+      },
+      "states": {
+        "AUTO_CONFIDENT": "Automatic (High Confidence)",
+        "AUTO_REVIEW": "Automatic (Needs Review)",
+        "MANUAL_REQUIRED": "Manual Mapping Required",
+        "BLOCKED": "Blocked",
+        "IGNORE": "Ignored",
+        "LEGAL_BLOCKED": "Legal Block",
+        "RESOLVED": "Resolved"
+      },
+      "filters": {
+        "all": "All",
+        "unresolved": "Unresolved only",
+        "blocked": "Blocked only",
+        "legal": "Legal blockers only",
+        "ignored": "Ignored",
+        "auto": "Auto-confident"
+      },
+      "columns": {
+        "source": "Source Column",
+        "profile": "Profile",
+        "destination": "Destination",
+        "confidence": "Confidence / Reason",
+        "state": "State",
+        "actions": "Actions"
+      },
+      "actions": { "ignore": "Ignore", "block": "Block", "reset": "Reset to auto" },
+      "summary": {
+        "mapped": "Mapped",
+        "unresolved": "Unresolved",
+        "blocked": "Blocked",
+        "legalBlocked": "Legal Blocked",
+        "ignored": "Ignored"
+      },
+      "errors": {
+        "loadFailed": "The mapping could not be loaded",
+        "saveFailed": "The mapping could not be saved",
+        "acceptFailed": "Automatic mappings could not be accepted",
+        "validateFailed": "The mapping could not be validated"
+      }
+    },
+    "reference": {
+      "title": "Reference Mapping",
+      "subtitle": "Map source practitioner labels to existing users.",
+      "noNewUsersNote": "No new user is ever created on this screen — only mappings to existing users.",
+      "notRequired": "This migration does not require reference mapping.",
+      "continue": "Continue to Dry Run",
+      "searchPlaceholder": "Search users…",
+      "unresolvedCount": "{{n}} labels still unresolved",
+      "resolveAllFirst": "Resolve all labels before continuing",
+      "status": {
+        "unmapped": "Unmapped",
+        "mappedApproved": "Mapped",
+        "mappedIgnored": "Ignored",
+        "conflicted": "Conflicted"
+      },
+      "columns": {
+        "sourceLabel": "Source Label",
+        "rowCount": "Row Count",
+        "destination": "Destination User",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "actions": { "ignore": "Ignore", "unignore": "Undo" },
+      "errors": { "loadFailed": "Reference data could not be loaded", "saveFailed": "The reference mapping could not be saved" }
+    },
+    "dryRun": {
+      "title": "Dry Run",
+      "subtitle": "Preview the migration's outcome without touching real data.",
+      "zeroWritesNote": "A dry run performs ZERO domain writes — no patient record is created or changed.",
+      "inProgress": "Dry run in progress…",
+      "run": "Run the Dry Run",
+      "rerun": "Run Again",
+      "continue": "Continue to Confirmation",
+      "rowTotals": "Row Totals",
+      "expectedOutcome": "Expected Outcome",
+      "problems": "Problems",
+      "rowClassBreakdown": "Row Class Breakdown",
+      "identityBreakdown": "Identity Classification Breakdown",
+      "blockers": "Blockers",
+      "warnings": "Warnings",
+      "affectedRows": "affects {{n}} rows",
+      "executableYes": "This migration is executable",
+      "executableNo": "This migration cannot be executed right now",
+      "fields": {
+        "totalSourceRows": "Total Source Rows",
+        "parsedRows": "Parsed Rows",
+        "validRows": "Valid Rows",
+        "warningRows": "Warning Rows",
+        "blockedRows": "Blocked Rows",
+        "invalidRows": "Invalid Rows",
+        "duplicateSourceRows": "Duplicate Source Rows",
+        "ambiguousRows": "Ambiguous Rows",
+        "manualReviewRows": "Manual Review Rows",
+        "unresolvedMappings": "Unresolved Mappings",
+        "referenceMappingBlockers": "Reference Mapping Blockers",
+        "legalBlockers": "Legal Blockers",
+        "expectedCreateCount": "Will Be Created",
+        "expectedReuseCount": "Will Be Reused",
+        "expectedSkippedCount": "Will Be Skipped"
+      },
+      "rowClasses": {
+        "VALID_NEW": "Valid — New",
+        "VALID_MATCHED": "Valid — Matched",
+        "NORMALIZED": "Normalized",
+        "AMBIGUOUS": "Ambiguous",
+        "MAPPING_REQUIRED": "Mapping Required",
+        "INVALID": "Invalid",
+        "DUPLICATE_SOURCE": "Duplicate In Source",
+        "DUPLICATE_DESTINATION": "Duplicate In Destination",
+        "SKIPPED_BY_POLICY": "Skipped By Policy",
+        "BLOCKED": "Blocked"
+      },
+      "identityClasses": {
+        "VALID": "Valid",
+        "INVALID_LEGACY": "Invalid (Legacy)",
+        "AMBIGUOUS": "Ambiguous",
+        "DUPLICATE_SOURCE": "Duplicate In Source",
+        "MANUAL_REVIEW": "Manual Review",
+        "ABSENT": "Not Recorded"
+      },
+      "planLimit": {
+        "title": "Plan Limit",
+        "allowed": "Allowed",
+        "blocked": "Blocking",
+        "sourceActive": "Active In Source",
+        "destinationCurrent": "Current In Destination",
+        "expectedResulting": "Expected Resulting Total",
+        "orgCap": "Organization Cap",
+        "clinicCap": "Clinic Cap",
+        "effectiveCap": "Effective Cap",
+        "none": "None",
+        "source": {
+          "organization_plan": "organization plan",
+          "clinic_column": "clinic column",
+          "none": "no cap configured"
+        }
+      },
+      "sharedPhone": {
+        "title": "Shared Phone Impact",
+        "destinationBefore": "Before (Destination)",
+        "destinationAfter": "After (Expected)",
+        "flippedToAmbiguous": "Flipped To Ambiguous",
+        "sourceRowsSharing": "Source Rows Sharing A Phone",
+        "note": "Shared family phone numbers are a supported behavior — patients are never merged because of a shared phone."
+      },
+      "errors": { "loadFailed": "The dry run data could not be loaded", "runFailed": "The dry run failed" }
+    },
+    "confirm": {
+      "title": "Confirmation & Execution",
+      "subtitle": "Final check before applying the migration to real data.",
+      "noDryRun": "A dry run must complete successfully before you can continue.",
+      "willBeCreated": "Will Be Created",
+      "willBeReused": "Will Be Reused",
+      "willBeSkipped": "Will Be Skipped",
+      "impactSentence": "{{created}} new patients will be created and {{reused}} existing patients will be reused, into {{org}}'s {{clinic}} clinic.",
+      "notExecutable": "Based on the dry run, this migration cannot be executed right now.",
+      "irreversibleNote": "This action cannot be undone. Once it runs, patient records will have been created and/or updated.",
+      "acknowledgeCheckbox": "I understand this migration is irreversible and will operate on real patient data.",
+      "execute": "Execute Migration",
+      "errors": { "loadFailed": "Confirmation data could not be loaded", "executeFailed": "The migration could not be started" }
+    },
+    "progress": {
+      "title": "Migration Progress",
+      "processedOf": "{{processed}} / {{total}} rows processed",
+      "batch": "Batch",
+      "created": "Created",
+      "matched": "Matched",
+      "failed": "Failed",
+      "skipped": "Skipped",
+      "warnings": "Warnings",
+      "blocked": "Blocked",
+      "elapsed": "Elapsed",
+      "cancel": "Cancel",
+      "retryFailed": "Retry Failed",
+      "resume": "Resume",
+      "viewResults": "View Results",
+      "columns": {
+        "batch": "Batch",
+        "status": "Status",
+        "rows": "Rows",
+        "retries": "Retries",
+        "error": "Error"
+      },
+      "errors": {
+        "loadFailed": "Progress data could not be loaded",
+        "cancelFailed": "Cancel failed",
+        "retryFailed": "Retry failed",
+        "resumeFailed": "Resume failed"
+      }
+    },
+    "results": {
+      "title": "Migration Results",
+      "subtitle": "The migration's final reconciliation report.",
+      "noReconciliation": "There is no reconciliation report for this run yet.",
+      "created": "Created",
+      "reused": "Reused",
+      "skipped": "Skipped",
+      "failed": "Failed",
+      "manualReview": "Manual Review",
+      "blocked": "Blocked",
+      "tenantScopeClean": "Tenant scope is clean (no leakage)",
+      "provenanceResolves": "Every provenance reference resolves",
+      "destinationBefore": "Before (Destination)",
+      "destinationAfter": "After (Destination)",
+      "destinationDelta": "Delta",
+      "batchTotal": "Total Batches",
+      "batchSucceeded": "Succeeded",
+      "batchFailed": "Failed",
+      "batchPending": "Pending",
+      "batchCancelled": "Cancelled",
+      "downloadSuccess": "Success Report (XLSX)",
+      "downloadFailure": "Failure Report (XLSX)",
+      "arithmetic": {
+        "title": "Reconciliation Arithmetic",
+        "balanced": "Balanced",
+        "imbalanced": "Imbalanced",
+        "eligible": "eligible total"
+      },
+      "errors": { "loadFailed": "Results could not be loaded", "downloadFailed": "The report could not be downloaded" }
+    },
+    "history": {
+      "title": "Migration History",
+      "allOrganizations": "All Organizations",
+      "empty": "No migration runs found.",
+      "columns": {
+        "id": "ID",
+        "organization": "Organization",
+        "clinic": "Clinic",
+        "file": "File",
+        "initiator": "Initiator",
+        "status": "Status",
+        "rows": "Created/Matched/Failed",
+        "batches": "Batches",
+        "created": "Created",
+        "completed": "Completed",
+        "reports": "Reports"
+      },
+      "errors": { "loadFailed": "Migration history could not be loaded", "downloadFailed": "The report could not be downloaded" }
+    }
   }
 }

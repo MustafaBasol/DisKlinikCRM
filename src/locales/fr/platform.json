@@ -72,7 +72,8 @@
       "privacy": "Confidentialité / Données",
       "backups": "Sauvegardes",
       "securityIncidents": "Incidents de sécurité",
-      "externalCalendar": "Calendrier externe"
+      "externalCalendar": "Calendrier externe",
+      "migration": "Migration de données"
     }
   },
   "dashboard": {
@@ -570,5 +571,390 @@
     "pitrInactiveDetail": "Le dépôt existe mais archive_mode n'est pas activé ; il n'y a donc aucune capacité de récupération à un instant précis, et la perte de données maximale reste bornée uniquement par l'intervalle de sauvegarde quotidien.",
     "pitrWalStaleTitle": "L'archivage WAL est bloqué — le point récupérable prend du retard",
     "pitrWalStaleDetail": "Le segment WAL archivé le plus récent date de {{age}} (seuil {{minutes}} minutes). Les sauvegardes et archive_command signalent toujours un succès, donc rien d'autre sur cette page ne passe au rouge — mais chaque transaction depuis lors est irrécupérable. Vérifiez `pgbackrest check` et le journal PostgreSQL pour des échecs d'archive_command."
+  },
+  "migration": {
+    "title": "Centre de migration de données",
+    "newRun": "Nouvelle migration",
+    "viewHistory": "Voir l'historique",
+    "resumedNotice": "Une migration en cours a été reprise (ID : {{id}}…).",
+    "stepperLabel": "Étapes de la migration de données",
+    "steps": {
+      "target": "Cible",
+      "upload": "Téléversement",
+      "analyze": "Analyse",
+      "mapping": "Correspondance des champs",
+      "reference": "Correspondance des références",
+      "dryRun": "Simulation",
+      "confirm": "Confirmation",
+      "progress": "Progression",
+      "results": "Résultats"
+    },
+    "statuses": {
+      "CREATED": "Créée",
+      "UPLOADED": "Téléversée",
+      "ANALYZED": "Analysée",
+      "MAPPING_REQUIRED": "Correspondance requise",
+      "MAPPING_READY": "Correspondance prête",
+      "DRY_RUN_RUNNING": "Simulation en cours",
+      "DRY_RUN_COMPLETE": "Simulation terminée",
+      "BLOCKED": "Bloquée",
+      "READY": "Prête",
+      "RUNNING": "En cours",
+      "PARTIAL_FAILURE": "Échec partiel",
+      "COMPLETED": "Terminée",
+      "FAILED": "Échouée",
+      "CANCELLED": "Annulée"
+    },
+    "batchStatuses": {
+      "PENDING": "En attente",
+      "RUNNING": "En cours",
+      "SUCCEEDED": "Réussi",
+      "FAILED": "Échoué",
+      "CANCELLED": "Annulé",
+      "SKIPPED": "Ignoré"
+    },
+    "errors": {
+      "loadRunFailed": "Impossible de charger la migration",
+      "targetsLoadFailed": "Impossible de charger les organisations/cliniques",
+      "createRunFailed": "Impossible de créer la migration"
+    },
+    "target": {
+      "title": "Organisation et clinique cibles",
+      "subtitle": "Choisissez l'organisation et la clinique vers lesquelles les données seront migrées.",
+      "organization": "Organisation",
+      "selectOrganization": "Sélectionner une organisation",
+      "noOrganizations": "Aucune organisation trouvée.",
+      "clinic": "Clinique",
+      "selectClinic": "Sélectionner une clinique",
+      "noClinics": "Aucune clinique trouvée pour cette organisation.",
+      "createRun": "Démarrer la migration"
+    },
+    "upload": {
+      "title": "Téléversement du fichier",
+      "subtitle": "Téléversez le fichier patients exporté depuis l'ancien système.",
+      "dropzone": "Glissez un fichier ici, ou cliquez pour le sélectionner",
+      "acceptedFormats": "Formats acceptés : .xls, .xlsx (32 Mo max.)",
+      "signatureNote": "Le format du fichier est vérifié côté serveur par signature binaire, pas par son extension.",
+      "continue": "Téléverser et continuer",
+      "errors": {
+        "extension": "Seuls les fichiers .xls ou .xlsx sont acceptés.",
+        "tooLarge": "Le fichier est trop volumineux (maximum {{max}}).",
+        "uploadFailed": "Le fichier n'a pas pu être téléversé"
+      }
+    },
+    "analyze": {
+      "title": "Analyse du fichier",
+      "subtitle": "La structure des feuilles et le profil des colonnes ont été détectés.",
+      "sheetPicker": "Feuille de calcul",
+      "hidden": "masquée",
+      "formatXls": "XLS (BIFF8 hérité)",
+      "formatXlsx": "XLSX",
+      "rowCount": "Nombre de lignes",
+      "columnCount": "Nombre de colonnes",
+      "sheetCount": "Nombre de feuilles",
+      "warnings": "Avertissements d'analyse",
+      "continue": "Passer à la correspondance des champs",
+      "errors": { "analyzeFailed": "Le fichier n'a pas pu être analysé" }
+    },
+    "mapping": {
+      "title": "Correspondance des champs",
+      "subtitle": "Associez chaque colonne source à un champ de destination. Toutes les décisions se prennent sur cet unique écran.",
+      "acceptAllSafe": "Accepter toutes les correspondances automatiques sûres",
+      "validateMapping": "Valider la correspondance",
+      "searchPlaceholder": "Rechercher des colonnes sources…",
+      "rowsShown": "{{shown}} colonnes affichées sur {{total}}",
+      "noRows": "Aucune colonne ne correspond à ce filtre.",
+      "cannotContinue": "La correspondance n'est pas valide — résolvez les problèmes ci-dessus pour continuer.",
+      "continue": "Passer à la correspondance des références",
+      "columnIndex": "Colonne {{n}}",
+      "distinctCount": "{{n}} valeurs distinctes",
+      "maxLength": "{{n}} caractères max.",
+      "legalGate": "Blocage légal — non sélectionnable",
+      "noDestination": "Aucune destination / ignorer",
+      "composeOrder": "ordre",
+      "groups": {
+        "provenance": "Provenance",
+        "identity": "Identité",
+        "name": "Nom",
+        "contact": "Contact",
+        "address": "Adresse",
+        "clinical": "Clinique",
+        "operational": "Opérationnel"
+      },
+      "transforms": {
+        "trim": "Rogner",
+        "trim_collapse": "Rogner + réduire les espaces",
+        "lower_trim": "Minuscules + rogner",
+        "phone_tr": "Normaliser le téléphone TR",
+        "date_excel_serial": "Numéro de série de date Excel",
+        "gender_tr": "Correspondance de genre TR",
+        "deleted_to_status": "Indicateur supprimé → statut",
+        "compose_address": "Composition de l'adresse",
+        "chart_number": "Numéro de dossier",
+        "identity_tckn": "Validation du numéro d'identité national",
+        "provenance_source_id": "Identifiant de la source de provenance",
+        "practitioner_reference": "Référence du praticien"
+      },
+      "cellTypes": {
+        "empty": "vide",
+        "string": "texte",
+        "number": "nombre",
+        "date": "date",
+        "boolean": "booléen",
+        "error": "erreur"
+      },
+      "reasons": {
+        "EXACT_HEADER": "Correspondance exacte d'en-tête",
+        "ALIAS": "Alias connu",
+        "NORMALIZED": "Correspondance normalisée",
+        "FIRST_CUSTOMER_MATRIX": "Matrice de correspondance premier client",
+        "SAVED_TEMPLATE": "Modèle enregistré",
+        "MANUAL": "Choisi manuellement",
+        "NO_DESTINATION": "Aucune destination trouvée",
+        "LEGAL_GATE": "Blocage légal",
+        "VENDOR_INTERNAL": "Colonne interne au fournisseur",
+        "SUMMARY_NOT_TRANSACTION": "Colonne récapitulative, non transactionnelle",
+        "SEMANTICS_UNRESOLVED": "Sémantique non résolue",
+        "UNKNOWN_HEADER": "En-tête non reconnu"
+      },
+      "states": {
+        "AUTO_CONFIDENT": "Automatique (haute confiance)",
+        "AUTO_REVIEW": "Automatique (à vérifier)",
+        "MANUAL_REQUIRED": "Correspondance manuelle requise",
+        "BLOCKED": "Bloquée",
+        "IGNORE": "Ignorée",
+        "LEGAL_BLOCKED": "Blocage légal",
+        "RESOLVED": "Résolue"
+      },
+      "filters": {
+        "all": "Toutes",
+        "unresolved": "Non résolues uniquement",
+        "blocked": "Bloquées uniquement",
+        "legal": "Blocages légaux uniquement",
+        "ignored": "Ignorées",
+        "auto": "Automatiques sûres"
+      },
+      "columns": {
+        "source": "Colonne source",
+        "profile": "Profil",
+        "destination": "Destination",
+        "confidence": "Confiance / Raison",
+        "state": "État",
+        "actions": "Actions"
+      },
+      "actions": { "ignore": "Ignorer", "block": "Bloquer", "reset": "Réinitialiser à l'automatique" },
+      "summary": {
+        "mapped": "Associées",
+        "unresolved": "Non résolues",
+        "blocked": "Bloquées",
+        "legalBlocked": "Blocage légal",
+        "ignored": "Ignorées"
+      },
+      "errors": {
+        "loadFailed": "La correspondance n'a pas pu être chargée",
+        "saveFailed": "La correspondance n'a pas pu être enregistrée",
+        "acceptFailed": "Les correspondances automatiques n'ont pas pu être acceptées",
+        "validateFailed": "La correspondance n'a pas pu être validée"
+      }
+    },
+    "reference": {
+      "title": "Correspondance des références",
+      "subtitle": "Associez les libellés de praticiens sources à des utilisateurs existants.",
+      "noNewUsersNote": "Aucun nouvel utilisateur n'est jamais créé sur cet écran — seules des correspondances vers des utilisateurs existants sont établies.",
+      "notRequired": "Cette migration ne nécessite pas de correspondance des références.",
+      "continue": "Passer à la simulation",
+      "searchPlaceholder": "Rechercher des utilisateurs…",
+      "unresolvedCount": "{{n}} libellés encore non résolus",
+      "resolveAllFirst": "Résolvez tous les libellés avant de continuer",
+      "status": {
+        "unmapped": "Non associé",
+        "mappedApproved": "Associé",
+        "mappedIgnored": "Ignoré",
+        "conflicted": "Conflit"
+      },
+      "columns": {
+        "sourceLabel": "Libellé source",
+        "rowCount": "Nombre de lignes",
+        "destination": "Utilisateur cible",
+        "status": "Statut",
+        "actions": "Actions"
+      },
+      "actions": { "ignore": "Ignorer", "unignore": "Annuler" },
+      "errors": { "loadFailed": "Les données de référence n'ont pas pu être chargées", "saveFailed": "La correspondance des références n'a pas pu être enregistrée" }
+    },
+    "dryRun": {
+      "title": "Simulation",
+      "subtitle": "Prévisualisez le résultat de la migration sans toucher aux données réelles.",
+      "zeroWritesNote": "Une simulation effectue ZÉRO écriture métier — aucun dossier patient n'est créé ni modifié.",
+      "inProgress": "Simulation en cours…",
+      "run": "Lancer la simulation",
+      "rerun": "Relancer",
+      "continue": "Passer à la confirmation",
+      "rowTotals": "Totaux de lignes",
+      "expectedOutcome": "Résultat attendu",
+      "problems": "Problèmes",
+      "rowClassBreakdown": "Répartition par classe de ligne",
+      "identityBreakdown": "Répartition de la classification d'identité",
+      "blockers": "Blocages",
+      "warnings": "Avertissements",
+      "affectedRows": "concerne {{n}} lignes",
+      "executableYes": "Cette migration est exécutable",
+      "executableNo": "Cette migration ne peut pas être exécutée pour le moment",
+      "fields": {
+        "totalSourceRows": "Total des lignes sources",
+        "parsedRows": "Lignes analysées",
+        "validRows": "Lignes valides",
+        "warningRows": "Lignes avec avertissement",
+        "blockedRows": "Lignes bloquées",
+        "invalidRows": "Lignes invalides",
+        "duplicateSourceRows": "Doublons dans la source",
+        "ambiguousRows": "Lignes ambiguës",
+        "manualReviewRows": "Lignes à vérifier manuellement",
+        "unresolvedMappings": "Correspondances non résolues",
+        "referenceMappingBlockers": "Blocages de correspondance des références",
+        "legalBlockers": "Blocages légaux",
+        "expectedCreateCount": "Seront créées",
+        "expectedReuseCount": "Seront réutilisées",
+        "expectedSkippedCount": "Seront ignorées"
+      },
+      "rowClasses": {
+        "VALID_NEW": "Valide — Nouveau",
+        "VALID_MATCHED": "Valide — Correspondance trouvée",
+        "NORMALIZED": "Normalisée",
+        "AMBIGUOUS": "Ambiguë",
+        "MAPPING_REQUIRED": "Correspondance requise",
+        "INVALID": "Invalide",
+        "DUPLICATE_SOURCE": "Doublon dans la source",
+        "DUPLICATE_DESTINATION": "Doublon dans la destination",
+        "SKIPPED_BY_POLICY": "Ignorée par la politique",
+        "BLOCKED": "Bloquée"
+      },
+      "identityClasses": {
+        "VALID": "Valide",
+        "INVALID_LEGACY": "Invalide (ancien système)",
+        "AMBIGUOUS": "Ambiguë",
+        "DUPLICATE_SOURCE": "Doublon dans la source",
+        "MANUAL_REVIEW": "Vérification manuelle",
+        "ABSENT": "Non renseignée"
+      },
+      "planLimit": {
+        "title": "Limite du plan",
+        "allowed": "Autorisée",
+        "blocked": "Bloquante",
+        "sourceActive": "Actifs dans la source",
+        "destinationCurrent": "Actuel dans la destination",
+        "expectedResulting": "Total résultant attendu",
+        "orgCap": "Plafond de l'organisation",
+        "clinicCap": "Plafond de la clinique",
+        "effectiveCap": "Plafond effectif",
+        "none": "Aucun",
+        "source": {
+          "organization_plan": "plan de l'organisation",
+          "clinic_column": "colonne de la clinique",
+          "none": "aucun plafond configuré"
+        }
+      },
+      "sharedPhone": {
+        "title": "Impact des téléphones partagés",
+        "destinationBefore": "Avant (destination)",
+        "destinationAfter": "Après (attendu)",
+        "flippedToAmbiguous": "Basculés en ambigus",
+        "sourceRowsSharing": "Lignes sources partageant un téléphone",
+        "note": "Les numéros de téléphone familiaux partagés sont un comportement pris en charge — les patients ne sont jamais fusionnés à cause d'un téléphone partagé."
+      },
+      "errors": { "loadFailed": "Les données de simulation n'ont pas pu être chargées", "runFailed": "La simulation a échoué" }
+    },
+    "confirm": {
+      "title": "Confirmation et exécution",
+      "subtitle": "Dernière vérification avant d'appliquer la migration aux données réelles.",
+      "noDryRun": "Une simulation doit se terminer avec succès avant de pouvoir continuer.",
+      "willBeCreated": "Seront créés",
+      "willBeReused": "Seront réutilisés",
+      "willBeSkipped": "Seront ignorés",
+      "impactSentence": "{{created}} nouveaux patients seront créés et {{reused}} patients existants seront réutilisés, dans la clinique {{clinic}} de {{org}}.",
+      "notExecutable": "D'après la simulation, cette migration ne peut pas être exécutée pour le moment.",
+      "irreversibleNote": "Cette action est irréversible. Une fois exécutée, des dossiers patients auront été créés et/ou mis à jour.",
+      "acknowledgeCheckbox": "Je comprends que cette migration est irréversible et qu'elle agira sur des données patients réelles.",
+      "execute": "Exécuter la migration",
+      "errors": { "loadFailed": "Les données de confirmation n'ont pas pu être chargées", "executeFailed": "La migration n'a pas pu être démarrée" }
+    },
+    "progress": {
+      "title": "Progression de la migration",
+      "processedOf": "{{processed}} / {{total}} lignes traitées",
+      "batch": "Lot",
+      "created": "Créées",
+      "matched": "Associées",
+      "failed": "Échouées",
+      "skipped": "Ignorées",
+      "warnings": "Avertissements",
+      "blocked": "Bloquées",
+      "elapsed": "Temps écoulé",
+      "cancel": "Annuler",
+      "retryFailed": "Réessayer les échecs",
+      "resume": "Reprendre",
+      "viewResults": "Voir les résultats",
+      "columns": {
+        "batch": "Lot",
+        "status": "Statut",
+        "rows": "Lignes",
+        "retries": "Tentatives",
+        "error": "Erreur"
+      },
+      "errors": {
+        "loadFailed": "Les données de progression n'ont pas pu être chargées",
+        "cancelFailed": "L'annulation a échoué",
+        "retryFailed": "La nouvelle tentative a échoué",
+        "resumeFailed": "La reprise a échoué"
+      }
+    },
+    "results": {
+      "title": "Résultats de la migration",
+      "subtitle": "Le rapport de rapprochement final de la migration.",
+      "noReconciliation": "Aucun rapport de rapprochement n'existe encore pour cette exécution.",
+      "created": "Créés",
+      "reused": "Réutilisés",
+      "skipped": "Ignorés",
+      "failed": "Échoués",
+      "manualReview": "Vérification manuelle",
+      "blocked": "Bloqués",
+      "tenantScopeClean": "Le périmètre du locataire est propre (aucune fuite)",
+      "provenanceResolves": "Toutes les références de provenance se résolvent",
+      "destinationBefore": "Avant (destination)",
+      "destinationAfter": "Après (destination)",
+      "destinationDelta": "Écart",
+      "batchTotal": "Total des lots",
+      "batchSucceeded": "Réussis",
+      "batchFailed": "Échoués",
+      "batchPending": "En attente",
+      "batchCancelled": "Annulés",
+      "downloadSuccess": "Rapport de succès (XLSX)",
+      "downloadFailure": "Rapport d'échecs (XLSX)",
+      "arithmetic": {
+        "title": "Arithmétique de rapprochement",
+        "balanced": "Équilibré",
+        "imbalanced": "Déséquilibré",
+        "eligible": "total éligible"
+      },
+      "errors": { "loadFailed": "Les résultats n'ont pas pu être chargés", "downloadFailed": "Le rapport n'a pas pu être téléchargé" }
+    },
+    "history": {
+      "title": "Historique des migrations",
+      "allOrganizations": "Toutes les organisations",
+      "empty": "Aucune migration trouvée.",
+      "columns": {
+        "id": "ID",
+        "organization": "Organisation",
+        "clinic": "Clinique",
+        "file": "Fichier",
+        "initiator": "Initiateur",
+        "status": "Statut",
+        "rows": "Créés/Associés/Échoués",
+        "batches": "Lots",
+        "created": "Créée",
+        "completed": "Terminée",
+        "reports": "Rapports"
+      },
+      "errors": { "loadFailed": "L'historique des migrations n'a pas pu être chargé", "downloadFailed": "Le rapport n'a pas pu être téléchargé" }
+    }
   }
 }
