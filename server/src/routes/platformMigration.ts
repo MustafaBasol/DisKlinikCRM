@@ -889,7 +889,8 @@ router.post('/migrations/runs/:id/dry-run', async (req: PlatformAdminRequest, re
 // ---------------------------------------------------------------------------
 // Execute / progress / cancel / retry / resume
 // ---------------------------------------------------------------------------
-async function buildExecuteInput(run: {
+/** Exported for the DB-backed branch-isolation regression; not a route. */
+export async function buildExecuteInput(run: {
   id: string;
   organizationId: string;
   clinicId: string;
@@ -915,6 +916,11 @@ async function buildExecuteInput(run: {
   const references = await prisma.migrationReferenceMap.findMany({
     where: {
       organizationId: run.organizationId,
+      // Branch isolation: the reference map is clinic-scoped, so the EXECUTION
+      // input must be read at the run's target clinic. Without this, a sibling
+      // clinic's approved row for the same source label could be written into
+      // the map and attribute imported patients to the wrong clinician.
+      clinicId: run.clinicId,
       sourceSystem: run.sourceSystem,
       entityType: 'practitioner',
       status: { in: ['MAPPED_APPROVED', 'MAPPED_IGNORED'] },

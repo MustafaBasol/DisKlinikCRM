@@ -48,6 +48,8 @@ import {
   listClinicPractitioners,
 } from '../utils/relationGuards.js';
 import { computeIdentityLookupHash } from '../utils/patientIdentityCrypto.js';
+import { deleteSourceFile, storeSourceFile } from '../services/migration/sourceFileStore.js';
+import { buildExecuteInput } from '../routes/platformMigration.js';
 import { SOURCE_SYSTEM_DEFAULT, MigrationError } from '../services/migration/contracts.js';
 import type { ResolvedMapping } from '../services/migration/rowBuilder.js';
 
@@ -1077,6 +1079,258 @@ async function main() {
         assert.equal(recomputed.processedRows, 150);
         assert.equal(recomputed.createdRows, 150);
         assert.equal(recomputed.failedRows, 0);
+      },
+    );
+
+    // ---------------------------------------------------------------------
+    section('12. R2/BLOCKER — the EXECUTION input is clinic-scoped');
+
+    await test(
+      "a run targeted to clinic B can never load or write clinic A's practitioner mapping",
+      async () => {
+        // Organization O with two branches. `makeTenant` gives us clinic A;
+        // clinic B is its sibling under the SAME organization, which is the
+        // only configuration in which the defect could fire.
+        const tenant = await makeTenant('execrefscope');
+        const clinicA = tenant.clinicId;
+        const clinicB = await prisma.clinic.create({
+          data: {
+            name: `ExecB-${randomUUID().slice(0, 8)}`,
+            slug: `execb-${randomUUID().slice(0, 8)}`,
+            organizationId: tenant.organizationId,
+            maxPatients: 100000,
+          },
+        });
+
+        const dentistA = await makePractitioner(tenant.organizationId, clinicA, 'execa');
+        const dentistB = await makePractitioner(tenant.organizationId, clinicB.id, 'execb');
+
+        // The SAME source label, approved INDEPENDENTLY in both branches to two
+        // different people. That is legitimate data, not corruption: “Dr Ayşe”
+        // at branch A and “Dr Ayşe” at branch B are different clinicians, which
+        // is exactly why execution must not resolve the label organization-wide.
+        const SOURCE_LABEL = 'Dr Ayşe';
+        // A second label that exists ONLY in clinic A. It is what makes the
+        // assertions below order-independent: a Map keyed by sourceValue
+        // collapses the duplicated label to one entry whichever row the
+        // database happens to return last, but it cannot collapse two
+        // DIFFERENT labels. An unscoped read therefore yields a map of size 2
+        // no matter the row order, and `size === 1` becomes a real detector
+        // rather than an accident of physical row ordering.
+        const CLINIC_A_ONLY_LABEL = 'Dr Kemal';
+        await prisma.migrationReferenceMap.createMany({
+          data: [
+            {
+              organizationId: tenant.organizationId,
+              clinicId: clinicB.id,
+              sourceSystem: SOURCE_SYSTEM_DEFAULT,
+              entityType: 'practitioner',
+              sourceValue: SOURCE_LABEL,
+              destinationId: dentistB.id,
+              status: 'MAPPED_APPROVED',
+            },
+            {
+              organizationId: tenant.organizationId,
+              clinicId: clinicA,
+              sourceSystem: SOURCE_SYSTEM_DEFAULT,
+              entityType: 'practitioner',
+              sourceValue: SOURCE_LABEL,
+              destinationId: dentistA.id,
+              status: 'MAPPED_APPROVED',
+            },
+            {
+              organizationId: tenant.organizationId,
+              clinicId: clinicA,
+              sourceSystem: SOURCE_SYSTEM_DEFAULT,
+              entityType: 'practitioner',
+              sourceValue: CLINIC_A_ONLY_LABEL,
+              destinationId: dentistA.id,
+              status: 'MAPPED_APPROVED',
+            },
+          ],
+        });
+
+        // NEGATIVE CONTROL. The pre-fix query shape (organization + source
+        // system + entity type, WITHOUT clinicId) really does return both
+        // branches' rows, so the assertions below fail on the old code rather
+        // than pass vacuously. Everything asserted here is order-independent:
+        // the row order a seq scan returns is not a contract, and the earlier
+        // version of this test passed against the DEFECT precisely because a
+        // Map keyed by sourceValue silently kept whichever duplicate came last.
+        const orgWideRows = await prisma.migrationReferenceMap.findMany({
+          where: {
+            organizationId: tenant.organizationId,
+            sourceSystem: SOURCE_SYSTEM_DEFAULT,
+            entityType: 'practitioner',
+            status: { in: ['MAPPED_APPROVED', 'MAPPED_IGNORED'] },
+          },
+        });
+        assert.equal(
+          orgWideRows.length,
+          3,
+          'the unscoped query shape must be shown to return BOTH branches',
+        );
+        // The duplicated label really is ambiguous org-wide: two rows, two
+        // different destinations. Which one an unscoped Map keeps is undefined,
+        // which is exactly the defect — a patient attributed to whichever
+        // clinician the database happened to return last.
+        const orgWideForLabel = orgWideRows.filter((r) => r.sourceValue === SOURCE_LABEL);
+        assert.equal(orgWideForLabel.length, 2);
+        assert.equal(
+          new Set(orgWideForLabel.map((r) => r.destinationId)).size,
+          2,
+          'the two branches must resolve the same label to two different people',
+        );
+        assert.equal(
+          new Set(orgWideRows.map((r) => r.sourceValue)).size,
+          2,
+          'the unscoped shape would build a TWO-entry practitioner map, whatever the row order',
+        );
+        assert.ok(
+          orgWideRows.some((r) => r.destinationId === dentistA.id),
+          "the unscoped shape would put clinic A's dentist inside the execution map",
+        );
+
+        // A workbook whose practitioner column carries that label on every row.
+        const rows = syntheticRows(6, 41);
+        const sheet: FixtureSheet = {
+          name: 'Sayfa1',
+          rows: [
+            [...HEADERS, 'HASTADOKTOR'].map((h) => ({ v: h })),
+            ...rows.map((r) => [
+              { v: r.hastaId },
+              { v: r.ad },
+              { v: r.soyad },
+              { v: r.phone },
+              { v: r.tckn },
+              { v: r.cinsiyet },
+              { v: r.dosyano },
+              { v: SOURCE_LABEL },
+            ]),
+          ],
+        };
+        const buffer = buildBiff8Fixture([sheet]);
+        const workbook = await parseSourceWorkbook(buffer, 'xls');
+        const suggestions = suggestMappings(workbook.headers, profileColumns(workbook), {
+          sourceSystem: SOURCE_SYSTEM_DEFAULT,
+        });
+        assert.ok(
+          suggestions.some((s) => s.destinationField === 'patient.primaryPractitionerId'),
+          'the fixture must actually exercise the practitioner reference path',
+        );
+
+        // The run TARGETS CLINIC B.
+        const run = await prisma.migrationRun.create({
+          data: {
+            organizationId: tenant.organizationId,
+            clinicId: clinicB.id,
+            sourceSystem: SOURCE_SYSTEM_DEFAULT,
+            status: 'READY',
+            batchSize: 500,
+            totalSourceRows: workbook.rows.length,
+            headerColumnCount: workbook.headers.length,
+            sourceFileFormat: 'xls',
+            sheetIndex: 0,
+          },
+        });
+        await prisma.migrationFieldMapping.createMany({
+          data: suggestions.map((s) => ({
+            runId: run.id,
+            sourceField: s.sourceField,
+            sourceIndex: s.sourceIndex,
+            sourceNormalized: s.sourceField,
+            destinationField: s.destinationField,
+            transform: s.transform,
+            composeOrder: s.composeOrder,
+            state: s.destinationField ? 'AUTO_CONFIDENT' : 'IGNORE',
+            confidence: 100,
+            isAutoSuggested: true,
+          })),
+        });
+
+        // The REAL execution input is built by the route helper reading the
+        // REAL stored source file — not by this file's local `executeInput`
+        // shim, which would prove nothing about the production query.
+        const stored = await storeSourceFile(run.id, buffer);
+        await prisma.migrationRun.update({
+          where: { id: run.id },
+          data: { sourceFileStoredPath: stored.storedPath },
+        });
+
+        try {
+          const persisted = await prisma.migrationRun.findUniqueOrThrow({ where: { id: run.id } });
+          const input = await buildExecuteInput(persisted, null);
+
+          // ---- the execution INPUT is branch-isolated ---------------------
+          assert.equal(input.clinicId, clinicB.id, 'the execution input must target clinic B');
+          assert.equal(
+            input.practitionerMap.size,
+            1,
+            "exactly ONE reference row may be loaded: clinic B's",
+          );
+          assert.deepEqual(
+            [...input.practitionerMap.keys()],
+            [SOURCE_LABEL],
+            "clinic A's own label must not even appear as a key",
+          );
+          assert.equal(
+            input.practitionerMap.get(SOURCE_LABEL),
+            dentistB.id,
+            "the source label must resolve to clinic B's dentist",
+          );
+          assert.ok(
+            ![...input.practitionerMap.values()].includes(dentistA.id),
+            "clinic A's dentist must be unreachable from the execution input",
+          );
+
+          // ---- and the WRITE PATH honours it ------------------------------
+          const result = await executeMigrationRun(input);
+          assert.equal(result.status, 'COMPLETED');
+          assert.equal(result.createdRows, 6);
+          assert.equal(result.failedRows, 0, 'no row may be blocked as an unresolved reference');
+
+          const patients = await prisma.patient.findMany({
+            where: { organizationId: tenant.organizationId },
+            select: { clinicId: true, primaryClinicId: true, primaryPractitionerId: true },
+          });
+          assert.equal(patients.length, 6);
+          for (const p of patients) {
+            assert.equal(
+              p.primaryPractitionerId,
+              dentistB.id,
+              "every imported patient must be attributed to clinic B's dentist",
+            );
+            assert.equal(p.clinicId, clinicB.id, 'clinicId must be the run target clinic B');
+            assert.equal(
+              p.primaryClinicId,
+              clinicB.id,
+              'primaryClinicId must be the run target clinic B',
+            );
+          }
+
+          assert.equal(
+            await prisma.patient.count({
+              where: {
+                organizationId: tenant.organizationId,
+                primaryPractitionerId: dentistA.id,
+              },
+            }),
+            0,
+            "clinic A's dentist may never be selected by an execution targeted at clinic B",
+          );
+          assert.equal(
+            await prisma.patient.count({
+              where: {
+                organizationId: tenant.organizationId,
+                OR: [{ clinicId: clinicA }, { primaryClinicId: clinicA }],
+              },
+            }),
+            0,
+            'nothing may land in the sibling branch',
+          );
+        } finally {
+          await deleteSourceFile(stored.storedPath).catch(() => undefined);
+        }
       },
     );
   } finally {
