@@ -3,7 +3,9 @@
 **Task:** `F3-DATA-MIG-PREP-001` — Klinik tam veri taşıma readiness ve migration contract
 **Date:** 2026-08-18
 **Baseline:** `origin/main` @ `283a9efd69e8bc370327f4490b3202c739a931d7`
-**Status:** `ANALYSIS_COMPLETE` — contract established, **no implementation performed**
+**Status:** `PR_READY_FOR_ARCHITECTURE_REVIEW` — contract established, **no implementation performed**
+**Revision:** `R1` (2026-08-18) — program-owner architecture-review corrections applied on the same
+branch and the same draft PR #442. Corrections are itemised in §20.
 
 ---
 
@@ -37,19 +39,24 @@ recovery path**. A clinic data migration is a large, hard-to-reverse write. Runn
 gate closes means a failed migration has no proven restore. This is independent of whether the
 migration *code* is ready.
 
-**(2) The schema changes this contract identifies as mandatory are currently FROZEN.**
-`KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §3 item 1 — *"Broad Prisma schema refactoring"* — remains in
-force, gated on §5 condition 5 (external declaration that the KVKK baseline is stable), which is
-**not satisfied**. §4 of the same document states: *"Design work being allowed does not authorize
-implementation."*
+**(2) Any schema change durable execution turns out to need is `NOT AUTHORIZED YET`.**
+That is the correct classification — **not** "permanently forbidden", and **not** "already permitted".
+`KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §3 item 1 prohibits *"Broad Prisma schema refactoring"* and
+remains in force, gated on §5 condition 5 (external declaration that the KVKK baseline is stable),
+which is **not satisfied**; §4 of the same document states *"Design work being allowed does not
+authorize implementation."*
 
-Per `NORAMEDI_MASTER_TRACKER.md` §8, only the **program owner** may grant a narrow scoped exception,
-and §2.3 states no agent may self-approve one. The precedent for what an acceptable exception looks
-like is `F4_STORAGE_AND_BACKUP.md:535-548` (R-079): *"yalnızca R-079'a mahsus, en küçük eklemeli
-migration"* — two columns and one index, mirroring an existing model.
+That prohibition must **not** be converted into a blanket ban on every conceivable additive migration.
+A narrow additive change is a different category from a broad refactor, and
+`F4_STORAGE_AND_BACKUP.md:535-548` (R-079) is the standing precedent for one being granted:
+*"yalnızca R-079'a mahsus, en küçük eklemeli migration"* — two columns and one index, mirroring an
+existing model. What the freeze does guarantee is that **no schema change may be implemented before
+explicit program-owner architecture review** (`NORAMEDI_MASTER_TRACKER.md` §8; §2.3 — no agent may
+self-approve).
 
-**Therefore this task performed no implementation and created no migration.** §12 states exactly what
-exception would need to be requested, and why the feature cannot be built without it.
+**No schema exception is granted by this document or by its R1 review.** This task therefore performed
+no implementation and created no migration. §12 records what review would have to weigh, and §15 shows
+that the entire near-term path does not depend on the answer.
 
 ---
 
@@ -82,22 +89,34 @@ context, tenant session, default clinic, or frontend-only state.
 
 **Classification: CONFLICT with the permanent product rule.**
 
-A nuance that keeps the remediation correctly scoped: the existing clinic-facing import is a
-**500-row, `.xlsx`-only, template-driven patient-list import** (`MAX_IMPORT_ROWS = 500`,
-`server/src/utils/excelImport.ts:11`; `MAX_FILE_SIZE_BYTES = 5 MiB`, `:12`). It is *not* a clinic
-data migration and cannot become one. The permanent rule governs **full clinic data migration**.
+For correct scoping of the follow-up: the existing clinic-facing import is a **500-row,
+`.xlsx`-only, template-driven patient-list import** (`MAX_IMPORT_ROWS = 500`,
+`server/src/utils/excelImport.ts:11`; `MAX_FILE_SIZE_BYTES = 5 MiB`, `:12`). It is *not* a clinic data
+migration and cannot become one. That bounds how much code the removal touches — it does **not** exempt
+the feature from the rule.
 
-The program owner must choose:
+### Accepted decision (R1, program owner): removal, not retention
 
-- **Option A (recommended, smallest safe path).** Retain the 500-row template import as a
-  clinic-facing convenience feature and rule it **explicitly out of scope** of the migration product
-  rule — but remove `RECEPTIONIST` from `IMPORT_ROLES`, and keep the row cap as the structural
-  guarantee that it can never be used to bulk-load a legacy export.
-- **Option B (strict reading).** Deprecate and remove the clinic-facing import entirely; all patient
-  loading becomes Platform Admin only.
+**The existing clinic-facing patient import must NOT remain as a clinic convenience feature.**
 
-This document does **not** choose. It records that a decision is **required** and that the current
-state satisfies neither. **No change was made to any of these files by this task.**
+An earlier revision of this document presented two paths — retaining the 500-row template import with
+`RECEPTIONIST` dropped, or removing it outright. **That choice is closed. Retention is no longer an
+available path.** Every clinic-facing patient-import surface in the table above is scheduled for
+removal or disablement, and patient loading becomes a Platform Admin operation exclusively.
+
+Scope boundary, stated explicitly so the follow-up cannot drift:
+
+- **In scope — the clinic-facing *patient* import:** `server/src/routes/patientsImport.ts`, its
+  registration at `server/src/index.ts:241`, `src/components/PatientImportModal.tsx`, its trigger in
+  `src/pages/Patients.tsx`, and `canImportPatients()` at `src/utils/permissions.ts:349`.
+- **Explicitly OUT of scope — the separate *staff / user* import:** `server/src/routes/usersImport.ts`
+  and `src/components/UserImportModal.tsx`. This decision concerns patient data and clinic data
+  migration. It is **not** broadened to the staff import unless the program owner authorizes that
+  separately.
+
+The removal is scheduled as **`F3-DATA-MIG-PR0`** (§15) — the smallest follow-up code task and the first
+implementation step after this documentation PR. **No code was changed by this task or by R1; both are
+documentation-only.**
 
 ---
 
@@ -108,7 +127,7 @@ Docs are not implementation evidence. Every row is backed by repository evidence
 | Area | Existing support | Exact repo evidence | Reusable | Gap |
 | --- | --- | --- | --- | --- |
 | Platform Admin migration | **NONE** | `server/src/routes/platformAdmin.ts` — zero `multer` usage; `prisma.patient.*` only `count()` at `:307`, `:352` | Platform auth gate `platformAdmin.ts:154` | Entire feature |
-| Clinic-facing import | **EXISTS (conflicts)** | `patientsImport.ts:58`, `:225`, `:278` | Two-phase preview→confirm shape | Violates product rule |
+| Clinic-facing import | **EXISTS (conflicts)** | `patientsImport.ts:58`, `:225`, `:278` | Two-phase preview→confirm shape | Violates product rule — **scheduled for removal (`F3-DATA-MIG-PR0`)** |
 | `.xlsx` parsing | **YES** | `server/src/utils/excelImport.ts:246` `wb.xlsx.load(buffer)` | `parseExcelFile()` `:241`, `cellToString()` `:20` | Bound to a 500-row template |
 | **`.xls` (legacy BIFF8)** | **NO** | ExcelJS 4.4.0 exposes only `xlsx` and `csv` readers — `server/node_modules/exceljs/lib/doc/workbook.js:33,38` | — | **Requires a new dependency** |
 | CSV parsing | **NO (unwired)** | ExcelJS ships a `csv` reader; no code path calls it | ExcelJS `csv` | Not wired up |
@@ -120,8 +139,8 @@ Docs are not implementation evidence. Every row is backed by repository evidence
 | Treatment historical creation | **NO SAFE PATH** | Only route handlers; side effects inlined in the same transaction — `treatmentPlanProcedures.ts:151-192` | — | See §8 |
 | Payment historical creation | **NO SAFE PATH** | `POST /api/payments` stamps `createdById` from session (`payments.ts:100`) and defaults `paidAt` to `new Date()` (`schemas/index.ts:299`) | — | See §8 |
 | Dry-run / preview | **PARTIAL (clinic import only)** | `patientsImport.ts:225` preview performs no writes | Two-phase shape | Not Platform Admin; no mapping stage |
-| **Idempotency** | **IMPOSSIBLE TODAY** | `Patient` has **zero** unique constraints (`schema.prisma:221-317`); no `CREATE UNIQUE INDEX … ON "Patient"` in any of the 75 migrations | — | **Requires schema change** |
-| **Rollback** | **NONE** | No provenance column on any patient/clinical/finance entity | — | **Requires schema change** |
+| **Idempotency** | **NO ACCEPTED MECHANISM** | No durable cross-run provenance store exists anywhere. `Patient` carries no source-provenance field and has **zero** unique constraints (`schema.prisma:221-317`) — no `CREATE UNIQUE INDEX … ON "Patient"` in any of the 75 migrations | — | **Requires an accepted provenance design (§6.1)** |
+| **Rollback** | **NO ACCEPTED MECHANISM** | No provenance record on any patient/clinical/finance entity, so the set of rows a given run wrote cannot be identified afterwards | — | **Requires an accepted provenance design (§6.1)** |
 | Reconciliation | **PARTIAL (reusable reads)** | `services/reports/revenueByPeriodQuery.ts:73+`; `routes/reports.ts:46-147`; `routes/financeDashboard.ts:136-252` | Yes — as read-side primitives | No run-scoped diffing |
 | Audit | **YES (platform side)** | `services/platformAdminAudit.ts:39` `writePlatformAdminAuditEventInTx`; in-tx usage `platformAdmin.ts:673-688` | **Yes — reuse directly** | No migration action types |
 | Temp source cleanup | **N/A (no disk)** | Every upload uses `multer.memoryStorage()` — `patientsImport.ts:30`, `usersImport.ts:35`, `attachments.ts:70`, `imaging.ts:103`, `labOrders.ts:338` | Memory-only pattern; `fileStorage.ts:419` `ensureExportTempDir()` if disk is ever needed | Large files need a stream story |
@@ -339,7 +358,7 @@ rejected by validation. Dry-run must surface them as `INVALID` **before** execut
 | --- | --- | --- |
 | U-1 | **Legacy `.xls` surfaces as a 500** with a misleading message | `excelImport.ts:246-249`; reproduced against the real file |
 | U-2 | **File type trusted from extension/MIME only** | `patientsImport.ts:33-41` — the `\|\|` means a client-declared MIME *or* a `.xlsx` suffix suffices; no content sniffing |
-| U-3 | **Clinic-facing import violates the permanent product rule** | `patientsImport.ts:58` includes `RECEPTIONIST` |
+| U-3 | **Clinic-facing patient import violates the permanent product rule** | The feature as a whole, not merely its role list: `patientsImport.ts:58` grants four tenant-scoped roles (including `RECEPTIONIST`) access to `:225` / `:278`. **Accepted resolution: removal / disablement — `F3-DATA-MIG-PR0` (§1, §15)** |
 | U-4 | **`earningService` queries a non-existent column** | `services/earningService.ts:127` and `:181` pass `deletedAt: null` to `prisma.payment.aggregate`, but `Payment` has no `deletedAt` (verified in `schema.prisma:900-925`). Raises `PrismaClientValidationError`, swallowed by `.catch(console.error)` at `payments.ts:125`, `:200`, `treatmentCases.ts:260`, `:327`. **Billed-base earning generation is dead and `collectedAmount` is never refreshed.** Pre-existing; not caused by migration, but it means **earnings figures cannot be trusted as a reconciliation baseline** |
 | U-5 | **No `$transaction` in the finance domain** | verified absent across `payments.ts`, `paymentPlans.ts`, `earningService.ts`, `practitionerPayouts.ts`. `paymentPlans.ts:225-250` can leave a paid `Payment` with an unpaid installment |
 | U-6 | **Unscoped patient reads in messaging** | `services/postTreatmentMessaging.ts:124-127`, `:218`, `:256`, `:294` — `findUnique({ where: { id } })` with no org/clinic filter, feeding name+phone into outbound message rendering |
@@ -398,18 +417,47 @@ NoraMedi domain application contracts
 
 ### 6.1 Provenance — the anchor of idempotency and rollback
 
-Every migrated entity carries:
+Idempotent rerun and provenance-aware rollback both need the same thing: a **durable, cross-run record
+of which destination row a given source record produced.** Whatever form that record takes, it must
+carry the equivalent of:
 
-| Field | Meaning |
+| Element | Meaning |
 | --- | --- |
 | `sourceSystem` | stable vendor/profile identifier (e.g. `legacy-dental-tr-v1`) |
 | `sourceEntity` | `patient` \| `practitioner` \| `service` \| `treatment_case` \| `procedure` \| `appointment` \| `payment` |
 | `sourceId` | the vendor's own primary key — for patients, `HASTA_ID` (proven 100 % unique) |
+| destination reference | the NoraMedi row the source record resolved to |
 
-Uniqueness must be **tenant-scoped**: `@@unique([organizationId, sourceSystem, sourceEntity, sourceId])`.
-A global unique index would itself be a cross-tenant hazard.
+**Uniqueness must be tenant-scoped**, on the equivalent of
+`(organizationId, sourceSystem, sourceEntity, sourceId)`. A globally unique index over vendor source
+ids would itself be a cross-tenant hazard.
 
-**This is currently unimplementable** — see G-3 and §12.
+#### Current state — stated precisely
+
+- NoraMedi currently has **no accepted durable cross-run migration provenance / idempotency
+  mechanism.**
+- `Patient` currently has **no source-provenance fields and no unique constraint** carrying one
+  (`schema.prisma:221-317`; no `CREATE UNIQUE INDEX … ON "Patient"` in any of the 75 migrations).
+- Durable execution therefore **requires an accepted provenance design** before it can be built.
+
+This is a statement about an **absent accepted design**, not a claim that idempotency is impossible in
+principle.
+
+#### What this document deliberately does NOT decide
+
+At least two designs satisfy the requirement, and choosing between them is an **architecture-review
+decision, not an analysis output**:
+
+- **(a) Provenance on `Patient` itself** — source fields on the entity, with a tenant-scoped unique
+  constraint.
+- **(b) A separate migration provenance / mapping table** — run and record tables holding
+  `(runId, entityType, sourceId) → destinationId` with appropriate uniqueness and invariants, leaving
+  `Patient` untouched.
+
+They differ materially in blast radius, in what the freeze boundary has to weigh, and in how
+reconciliation and rollback are expressed. Both are viable. **Neither is adopted here.** §12 records the
+lifecycle state; §15 records that parsing, file-signature detection, the Platform Admin authorization
+shell and full dry-run reporting **do not depend on this decision at all.**
 
 ### 6.2 Canonical package shape
 
@@ -659,39 +707,59 @@ structurally valid but tenant-incoherent patient is creatable.
 
 ## 12. Schema / migration status
 
+Stated as lifecycle values rather than a single flag, because the honest answer differs by stage:
+
+```text
+MIGRATION_REQUIRED_FOR_ANALYSIS                       = NO
+MIGRATION_REQUIRED_FOR_PARSER_AND_DRY_RUN_FOUNDATION  = NO
+MIGRATION_REQUIRED_FOR_DURABLE_EXECUTION              = UNRESOLVED / LIKELY YES
+MIGRATION_CREATED                                     = NO
+MIGRATION_TESTED                                      = NO
+PRODUCTION_MIGRATION                                  = NO
+ROLLBACK_METHOD                                       = N/A (nothing created)
 ```
-MIGRATION_REQUIRED   = YES (for any implementation) — NO (for this task)
-MIGRATION_CREATED    = NO
-MIGRATION_TESTED     = NO
-PRODUCTION_MIGRATION = NO
-ROLLBACK_METHOD      = N/A (nothing created)
-```
 
-**No Prisma migration was created, and none may be created without an explicit program-owner scoped
-freeze exception** (`KVKK_ARCHITECTURE_FREEZE_BOUNDARY.md` §3 item 1; `NORAMEDI_MASTER_TRACKER.md`
-§8; §2.3 — no agent may self-approve).
+`MIGRATION_REQUIRED_FOR_DURABLE_EXECUTION` is **`UNRESOLVED`, not `YES`**. The final execution schema
+depends on which provenance design is accepted (§6.1). Both candidate designs are expected to need
+*some* additive schema — hence `LIKELY YES` — but the shape, the table count, and whether `Patient`
+itself is touched at all are open questions for architecture review.
 
-### The exception that would need to be requested
+What is **not** open: parsing, file-signature detection, the Platform Admin authorization shell,
+header discovery, mapping proposal and full dry-run reporting are all buildable with **no schema
+change whatsoever** (§15, PRs 0–3). An earlier revision of this document stated
+`MIGRATION_REQUIRED = YES (for any implementation)`; that was **incorrect** and is withdrawn — the
+document's own evidence contradicts it.
 
-Expand-migrate-contract, additive only, no destructive change:
+**No Prisma migration was created by this task.** Any schema change required for durable execution must
+receive **explicit program-owner architecture review before implementation**
+(`NORAMEDI_MASTER_TRACKER.md` §8; §2.3 — no agent may self-approve). **No schema exception is granted by
+this document or by its R1 review.**
 
-| # | Change | Purpose |
-| --- | --- | --- |
-| 1 | `MigrationRun` table — `id`, `organizationId`, `clinicId`, `sourceSystem`, `profileVersion`, `status`, `sourceChecksums`, `actorPlatformAdminId`, timestamps | Run identity, reconciliation, resumability |
-| 2 | `MigrationImportedRecord` table — `runId`, `entityType`, `sourceId`, `destinationId`, `outcome` (`created`/`matched`/`updated`), `createdAt`; `@@unique([runId, entityType, sourceId])` | Idempotency + provenance-aware rollback |
-| 3 | `Patient.sourceSystem` + `Patient.sourceExternalId`, with `@@unique([organizationId, sourceSystem, sourceExternalId])` | Tenant-scoped idempotency anchor |
+### What architecture review would have to weigh
+
+Expand-migrate-contract, additive only, no destructive change. The table below is **illustrative of the
+shape of the request** — it is not an adopted design, and the design column shows which §6.1 option each
+item belongs to:
+
+| # | Candidate change | Purpose | §6.1 design |
+| --- | --- | --- | --- |
+| 1 | `MigrationRun` table — `id`, `organizationId`, `clinicId`, `sourceSystem`, `profileVersion`, `status`, `sourceChecksums`, `actorPlatformAdminId`, timestamps | Run identity, reconciliation, resumability | (b) |
+| 2 | `MigrationImportedRecord` table — `runId`, `entityType`, `sourceId`, `destinationId`, `outcome` (`created`/`matched`/`updated`), `createdAt`; `@@unique([runId, entityType, sourceId])` | Idempotency + provenance-aware rollback | (b) |
+| 3 | `Patient.sourceSystem` + `Patient.sourceExternalId`, with `@@unique([organizationId, sourceSystem, sourceExternalId])` | Tenant-scoped idempotency anchor on the entity itself | (a) |
 
 Items 1–2 are additive tables touching no existing model — the closest precedent to the R-079
-exception. Item 3 alters `Patient` and is the harder ask.
+exception. Item 3 alters `Patient` and is the materially larger ask. A design built on 1–2 alone may
+avoid touching `Patient` at all; weighing that trade-off is precisely what review is for.
 
-**A zero-migration alternative exists and should be evaluated first.** `dataRetentionManualRunAudit.ts`
-models an entire Platform-Admin run lifecycle on `PlatformAdminAuditEvent`'s free-form
-`action`/`outcome` + JSON `safeMetadata` (`:11-12`) **with no schema change at all**. That covers
-items 1–2 for a dry-run-only capability. It does **not** cover item 3 — without a unique provenance
-column on `Patient` there is no idempotent *execution*. So: **dry-run is buildable today; execution
-is not.**
+**A zero-migration foundation exists and should be built first regardless of the outcome.**
+`dataRetentionManualRunAudit.ts` models an entire Platform-Admin run lifecycle on
+`PlatformAdminAuditEvent`'s free-form `action`/`outcome` + JSON `safeMetadata` (`:11-12`) **with no
+schema change at all**. That is sufficient for a **dry-run-only** capability — classification,
+reporting and reconciliation counts — because a dry-run writes no domain rows and so needs no durable
+provenance. It is **not** sufficient for durable execution. So: **dry-run is buildable today; execution
+awaits an accepted provenance design.**
 
-If the exception is granted, the mandatory proof (per `docs/compliance/53-…md:182-183`, `:503-507`)
+If a migration is later approved, the mandatory proof (per `docs/compliance/53-…md:182-183`, `:503-507`)
 is: `prisma migrate deploy` against a fresh empty disposable DB, then
 `npx prisma migrate diff --from-config-datasource prisma.config.ts --to-schema prisma/schema.prisma --script`
 producing **zero** statements for the owned tables — plus a schema-integrity regression guard in the
@@ -708,7 +776,7 @@ Produced per `runId`, deterministic, comparing input against destination.
 `created + matched + updated + skipped + invalid + blocked + ambiguous + mappingRequired == parsed`.
 
 **Patient checks:** destination count of `Patient` where `(organizationId, sourceSystem)` matches the
-run equals `created + matched`; every `MigrationImportedRecord.destinationId` resolves to a live row
+run equals `created + matched`; every provenance record's destination reference resolves to a live row
 in the target clinic; **zero** rows outside the target `(organizationId, clinicId)`.
 
 **Shared-phone impact report (mandatory, migration-specific).** For every phone touched, the
@@ -734,12 +802,13 @@ Three caveats that must be stated in any financial reconciliation, not discovere
 ## 14. Rollback design
 
 DB PITR is **not** the normal rollback mechanism — and per §0 it is not currently a *provable* one
-either. Rollback must be provenance-aware, driven by `MigrationImportedRecord`:
+either. Rollback must be provenance-aware, driven by whatever durable provenance record the accepted
+§6.1 design provides:
 
 | Outcome recorded | Rollback rule |
 | --- | --- |
 | `created` | Deletable — but only after verifying **no dependent rows** were created since (appointments, payments, messages, consent events). If dependents exist, downgrade to `archived` rather than delete |
-| `updated` | **Not automatically reversible** — requires the pre-image. Either store the changed fields' prior values in `MigrationImportedRecord`, or declare updates out of scope for v1 |
+| `updated` | **Not automatically reversible** — requires the pre-image. Either store the changed fields' prior values alongside the provenance record, or declare updates out of scope for v1 |
 | `matched` | **Never delete.** The row pre-existed the migration |
 
 **Recommendation for v1: forbid `updated` entirely.** A patient-master-data import should only ever
@@ -758,18 +827,23 @@ authorized by this task.**
 
 | PR | Scope | Schema? | Blocked on |
 | --- | --- | --- | --- |
-| **PR 0** | **Product decision + smallest fix.** Resolve §1 Option A/B. Add magic-byte file-type detection and a typed `LEGACY_XLS_UNSUPPORTED` error so a real `.xls` no longer 500s (U-1, U-2). Remove `RECEPTIONIST` from `IMPORT_ROLES` if Option A | **NO** | Program-owner decision on A/B |
+| **PR 0** — **`F3-DATA-MIG-PR0`** | **Remove clinic-facing patient import + safe legacy file rejection foundation.** The product decision is **closed** (§1). Must: remove/disable clinic-facing `PatientImportModal` access; remove/disable clinic patient-import API access; enforce the **Platform Admin-only migration boundary** at the backend authorization layer; add safe **file-signature detection**; make the legacy `.xls` unsupported state **typed and non-500** until an accepted legacy parser exists (U-1, U-2, U-3). Staff/user import is **out of scope** | **NO** | — **ready to scope** |
 | **PR 1** | **Legacy `.xls` parser + canonical source contract + synthetic `.xls` fixture.** Requires a dependency decision — SheetJS's npm-published `xlsx@0.18.5` carries known advisories and current SheetJS is distributed off-npm. **This is a supply-chain decision for the program owner**, not an agent's | **NO** | Dependency approval |
 | **PR 2** | Platform-Admin-only upload + header discovery + mapping proposal + **dry-run only** (no writes), on `PlatformAdminAuditEvent` with **no schema change** — the `dataRetentionManualRunAudit` pattern. Full authorization + tenant-isolation test matrix | **NO** | PR 1 |
 | **PR 3** | Canonical phone normalizer (G-6), consolidating the 6 implementations behind one contract | **NO** | — (independently valuable) |
-| **PR 4** | Provenance schema + idempotent patient **execution** | **YES** | **Program-owner freeze exception (§12)** |
+| **PR 4** | Provenance + idempotent patient **execution** | **LIKELY** | **Accepted §6.1 provenance design, then program-owner architecture review of whatever schema it needs (§12)** |
 | **PR 5** | Practitioner / service reference mapping | YES | PR 4 + K-3 |
 | **PR 6** | Historical treatment/procedure migration + domain write contracts + side-effect suppression | YES | PR 5 + **K-1/K-2 source files** |
 | **PR 7** | Historical finance migration | YES | PR 6 + U-4/U-5 fixed |
 | **PR 8** | Reconciliation + rollback + evidence + first-customer rehearsal | — | All above + **`FIRST_CUSTOMER_RECOVERY_GATE = SATISFIED`** |
 
-**PRs 0–3 need no schema change and are therefore not blocked by the KVKK freeze.** They are the
-entire near-term path.
+**PRs 0–3 need no schema change and are therefore not blocked by the freeze boundary.** They are the
+entire near-term path, and none of them waits on the §6.1 provenance decision.
+
+`F3-DATA-MIG-PR0` bundles a product-boundary removal with a file-handling hardening fix. **Their scope
+must be separated carefully during implementation review** — the removal is an authorization-boundary
+change and the signature detection is a validation change, and each needs its own tests. What is no
+longer open is *whether* the removal happens.
 
 ---
 
@@ -781,7 +855,7 @@ To be implemented with the PRs above; mapped to existing patterns to imitate.
 | --- | --- | --- | --- |
 | 1 | Unauthenticated → 401, **zero** audit rows | 3 | `server/src/tests/retentionManualRunAudit.test.ts:236-239` |
 | 2 | Clinic JWT (`type=clinic_user`) → 401/403, zero rows, `next()` never called | 3 | same `:245-253`; `platformAdmin.test.ts:298` |
-| 3 | Each of OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST/DENTIST/BILLING denied | 3 | as above |
+| 3 | Each of OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST/DENTIST/BILLING denied — **and, after `F3-DATA-MIG-PR0`, the removed clinic patient-import routes are unreachable for every one of them** | 3 | as above |
 | 4 | Cross-org destination rejected | 3 | `dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts:103-113` (**list→403, detail→404**) |
 | 5 | Same-org unassigned clinic denied, not silently emptied | 3 | same `:84-94` |
 | 6 | Writes land only in the target tenant | 3 | `dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts` |
@@ -792,8 +866,8 @@ To be implemented with the PRs above; mapped to existing patterns to imitate.
 | 11 | Legacy `.xls` yields a typed error, **not a 500** | 2 | new (U-1) |
 | 12 | Synthetic `.xls` dirty-data fixture: blank email, malformed/duplicate/shared-family phone, missing name, ambiguous practitioner, deleted row, malformed date, identity-coercion hazard, duplicate source id | 2 | `excelImport.test.ts` |
 | 13 | Shared-family phone never merges two patients | 2 | `patientSharedPhone.test.ts` |
-| 14 | Idempotent rerun creates no duplicates | 3 | requires PR 4 |
-| 15 | Failure in batch N → resume preserves prior batches, no duplicates | 3 | requires PR 4 |
+| 14 | Idempotent rerun creates no duplicates | 3 | requires the accepted §6.1 provenance design (PR 4) |
+| 15 | Failure in batch N → resume preserves prior batches, no duplicates | 3 | requires the accepted §6.1 provenance design (PR 4) |
 | 16 | No PII in logs; `log-privacy-guard:scan --strict-baseline` green **with no new baseline exception** | 1 | `.github/workflows/ci-layers.yml:316-317` |
 | 17 | Schema-integrity guard for any new table/index | 3 | `kvkkHigh007High008SchemaIntegrity.test.ts:37-45` |
 
@@ -810,13 +884,13 @@ script in `server/package.json`, then append it to `server:test:non-disposable` 
 ## 17. First-customer capability state
 
 ```
-PATIENT_MASTER_DATA_READY   = NO   (parser + provenance missing)
+PATIENT_MASTER_DATA_READY   = NO   (no legacy parser; no accepted provenance design)
 TREATMENT_HISTORY_READY     = NO   (no source data; no write contract)
 PROCEDURE_HISTORY_READY     = NO   (same)
 FINANCIAL_HISTORY_READY     = NO   (no source data; U-4/U-5 open)
 REFERENCE_MAPPING_READY     = NO
-IDEMPOTENT_RERUN_READY      = NO   (no unique constraint anywhere)
-ROLLBACK_READY              = NO   (no provenance)
+IDEMPOTENT_RERUN_READY      = NO   (no accepted provenance design — §6.1)
+ROLLBACK_READY              = NO   (no durable provenance record — §6.1)
 RECONCILIATION_READY        = NO
 PLATFORM_ADMIN_UI_READY     = NO
 PRODUCTION_DEPLOYED         = NO
@@ -855,15 +929,67 @@ RAW_PII_IN_LOGS              = 0
 
 ## 19. Open decisions for the program owner
 
-1. **§1 Option A or B** — scope of the clinic-facing import.
-2. **`.xls` dependency** — which parser, given the supply-chain profile (PR 1).
-3. **Freeze exception** — grant or withhold the additive migration in §12 (blocks PR 4+).
-4. **`TCNO` / `CINSIYET`** — add fields to `Patient`, or accept that the customer's identity and
+**Closed in R1:** the scope of the clinic-facing patient import. **Removal is accepted; retention is
+not an available path** (§1). Scheduled as `F3-DATA-MIG-PR0` (§15), scoped to the patient import only
+— the staff/user import is untouched.
+
+Still open:
+
+1. **`.xls` dependency** — which parser, given the supply-chain profile (PR 1).
+2. **Provenance design** — (a) provenance fields on `Patient` with tenant-scoped uniqueness, or (b) a
+   separate provenance/mapping table (§6.1) — followed by explicit architecture review of whatever
+   additive migration the chosen design needs (§12). Blocks PR 4 onward; **blocks nothing in PRs 0–3**.
+3. **`TCNO` / `CINSIYET`** — add fields to `Patient`, or accept that the customer's identity and
    gender data cannot be migrated (G-2). Identity numbers would additionally require an
    encryption-at-rest decision; `utils/encryption.ts` currently protects **secrets only**, and no
    patient PII column is encrypted.
-5. **Plan limits** — 14,890 patients versus a `maxPatients` default of 500 (§11).
-6. **Mandatory MFA** for Platform Admin migration routes (§10).
-7. **Special-category data** (`KANGURUBU`, clinical notes) — legal decision required before mapping.
-8. **Source exports** — request treatment/procedure/payment/appointment/practitioner exports from
+4. **Plan limits** — 14,890 patients versus a `maxPatients` default of 500 (§11).
+5. **Mandatory MFA** for Platform Admin migration routes (§10).
+6. **Special-category data** (`KANGURUBU`, clinical notes) — legal decision required before mapping.
+7. **Source exports** — request treatment/procedure/payment/appointment/practitioner exports from
    the legacy vendor (K-1/K-2). Nothing beyond patient master data can be designed without them.
+
+---
+
+## 20. This task's execution lifecycle and R1 corrections
+
+### Execution lifecycle — stated without inflation
+
+**No TypeScript, application, schema, migration, parser or UI code was changed** by
+`F3-DATA-MIG-PREP-001` or by its `R1` correction pass. No application typecheck and no server suite was
+run, because running one would produce evidence about code this task never touched. A generic
+`TESTS_PASSED = YES` would therefore be misleading, and is **not** claimed:
+
+```text
+AGENT_COMPLETED                    = YES
+APPLICABLE_DOC_PRIVACY_GATE_PASSED = YES
+APPLICATION_TESTS_RUN              = NO
+TYPECHECK_RUN                      = NO
+SERVER_SUITE_RUN                   = NO
+PR_OPENED                          = YES   (#442, DRAFT)
+MERGED                             = NO
+DEPLOYED                           = NO
+PRODUCTION_VERIFIED                = NO
+```
+
+The one applicable gate, with its exact command and its real result:
+
+| Command | Result |
+| --- | --- |
+| `npm run log-privacy-guard:scan -- --strict-baseline` | **PASS, exit 0** — 269 files scanned, *"No new violations"*, 103 grandfathered entries, **no new baseline exception added** |
+| `git diff --check` | exit 0 |
+| `git diff --numstat` on `NORAMEDI_MASTER_TRACKER.md` | additive only — **zero deleted lines** |
+
+### R1 architecture-review corrections
+
+| # | Correction | Applied in |
+| --- | --- | --- |
+| 1 | **Product decision closed — removal is final.** Retention removed as an available path; the clinic-facing patient import is scheduled for removal/disablement; the staff/user import is explicitly **not** in scope | §1, §2, §4.2 (U-3), §15, §19 |
+| 2 | **Idempotency/provenance overclaim corrected.** "Impossible" → *no accepted durable cross-run provenance mechanism*; two valid designs recorded; the final schema is deliberately **not** pre-decided here | §2, §6.1, §13, §14, §17 |
+| 3 | **`MIGRATION_REQUIRED` split into precise lifecycle values.** Analysis and the parser/dry-run foundation are `NO`; durable execution is `UNRESOLVED / LIKELY YES`. The former blanket `YES (for any implementation)` is withdrawn as contradicted by this document's own evidence | §12 |
+| 4 | **Freeze-boundary wording corrected to `NOT AUTHORIZED YET`.** The prohibition on *broad* Prisma refactoring is no longer presented as an automatic ban on every narrow additive migration; what is required is explicit program-owner architecture review. **No schema exception is granted by R1** | §0, §12 |
+| 5 | **Test lifecycle stated precisely** — no unqualified `TESTS_PASSED = YES`; the exact command run and its real result are preserved | §20 (this section) |
+| 6 | **Program state re-verified unchanged** — `F4 COMPLETE = NO`, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`, `F5 AUTHORIZED = NO`, `R-030` / `R-030-DB` / `R-030-FILES` `OPEN`, `repo2` NOT ACTIVATED | §0 |
+
+**R1 changed documentation only, on the same branch and the same draft PR #442. No new PR was opened,
+nothing was merged, and nothing was deployed.**
