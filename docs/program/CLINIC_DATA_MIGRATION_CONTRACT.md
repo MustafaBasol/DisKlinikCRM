@@ -4,8 +4,8 @@
 **Date:** 2026-08-18
 **Baseline:** `origin/main` @ `283a9efd69e8bc370327f4490b3202c739a931d7`
 **Status:** `PR_READY_FOR_ARCHITECTURE_REVIEW` — contract established, **no implementation performed**
-**Revision:** `R1` (2026-08-18) — program-owner architecture-review corrections applied on the same
-branch and the same draft PR #442. Corrections are itemised in §20.
+**Revision:** `R2` (2026-08-18) — program-owner corrections applied on the same branch and the same
+draft PR #442, superseding `R1`. Corrections are itemised in §20.
 
 ---
 
@@ -62,10 +62,15 @@ that the entire near-term path does not depend on the answer.
 
 ## 1. Permanent product decision
 
-**Patient import and full clinic data migration are PLATFORM ADMIN operations only.**
+**The NEW full clinic data migration capability is a PLATFORM ADMIN operation only.**
 
-Clinics MUST NOT perform patient imports themselves. The following tenant-scoped roles must be
-denied at the **backend authorization boundary** — frontend hiding is not acceptance evidence:
+That rule governs the capability this document designs: the one that ingests a legacy vendor's export
+set (`.xls`, `.xlsx`, CSV, several related files) and loads patient master data, treatments,
+procedures, payments, appointments, practitioners and services, with provenance, idempotency,
+reconciliation, rollback and run evidence.
+
+Clinics MUST NOT perform full clinic data migration. The following tenant-scoped roles must be denied
+at the **backend authorization boundary** — frontend hiding is not acceptance evidence:
 
 `OWNER`, `ORG_ADMIN`, `CLINIC_MANAGER`, `RECEPTIONIST`, `DENTIST` / practitioner roles, `BILLING`,
 and every other clinic/tenant-scoped role.
@@ -74,9 +79,40 @@ and every other clinic/tenant-scoped role.
 re-verified by the backend**. The destination tenant must never be derived from active clinic
 context, tenant session, default clinic, or frontend-only state.
 
-### Current repository state contradicts this decision
+### Scope boundary — the rule is NOT retroactive
 
-**`CLINIC_FACING_IMPORT_UI_EXISTS = YES`** · **`CLINIC_FACING_IMPORT_API_EXISTS = YES`**
+```text
+FULL_CLINIC_DATA_MIGRATION           = PLATFORM_ADMIN_ONLY          (new capability — this document)
+EXISTING_BASIC_CLINIC_PATIENT_IMPORT = RETAINED / OUT_OF_SCOPE / UNCHANGED
+```
+
+These are **two separate capabilities.** The Platform-Admin-only rule attaches to the new one. It is
+**not** applied retroactively to the existing basic clinic patient importer, which is working
+functionality that predates this program.
+
+### Existing basic clinic patient import — retained, working, out of scope
+
+```text
+EXISTING BASIC CLINIC PATIENT IMPORT
+STATUS = EXISTS / WORKING / OUT_OF_SCOPE
+```
+
+**Accepted decision (R2, program owner): keep it exactly as it is.**
+
+No work in this migration program removes it, disables it, changes its roles, drops `RECEPTIONIST`,
+moves it to Platform Admin, alters `PatientImportModal.tsx` or `patientsImport.ts`, changes its row
+limit or its `.xlsx` behaviour, or reuses/refactors it as part of the new migration engine. Only a
+future independent task that explicitly targets this feature may change it.
+
+An earlier revision of this document (`R1`) classified this importer as a conflict requiring removal.
+**That classification was wrong. It is withdrawn in full**, together with the `F3-DATA-MIG-PR0`
+removal task it proposed.
+
+It is recorded below as **repository evidence** — patterns the new capability should imitate rather
+than reinvent — and not as a defect or as work.
+
+**`CLINIC_FACING_IMPORT_UI_EXISTS = YES`** · **`CLINIC_FACING_IMPORT_API_EXISTS = YES`** — both
+**intentional and retained**.
 
 | Layer | Evidence | Roles currently allowed |
 | --- | --- | --- |
@@ -87,36 +123,36 @@ context, tenant session, default clinic, or frontend-only state.
 | Frontend gate | `src/utils/permissions.ts:349` `canImportPatients()` | same four roles |
 | Staff import (same pattern) | `server/src/routes/usersImport.ts:63` — `['OWNER','ORG_ADMIN','CLINIC_MANAGER']`; UI `src/components/UserImportModal.tsx:52` | three roles |
 
-**Classification: CONFLICT with the permanent product rule.**
+**Classification: WORKING FUNCTIONALITY, OUT OF SCOPE. Not a conflict.**
 
-For correct scoping of the follow-up: the existing clinic-facing import is a **500-row,
-`.xlsx`-only, template-driven patient-list import** (`MAX_IMPORT_ROWS = 500`,
-`server/src/utils/excelImport.ts:11`; `MAX_FILE_SIZE_BYTES = 5 MiB`, `:12`). It is *not* a clinic data
-migration and cannot become one. That bounds how much code the removal touches — it does **not** exempt
-the feature from the rule.
+What it is: a **500-row, `.xlsx`-only, template-driven patient-list import** (`MAX_IMPORT_ROWS = 500`,
+`server/src/utils/excelImport.ts:11`; `MAX_FILE_SIZE_BYTES = 5 MiB`, `:12`). That row cap is precisely
+why it is a different product from a clinic data migration and cannot become one — it structurally
+cannot bulk-load a 14,890-row legacy export. The two capabilities do not overlap, so the existence of
+one does not compromise the boundary of the other.
 
-### Accepted decision (R1, program owner): removal, not retention
+**Untouchable file list for this program** — no migration-program PR may modify any of these:
 
-**The existing clinic-facing patient import must NOT remain as a clinic convenience feature.**
+- `server/src/routes/patientsImport.ts`
+- `src/components/PatientImportModal.tsx`
+- `src/pages/Patients.tsx`
+- `src/utils/permissions.ts` (`canImportPatients()`, `:349`)
+- the existing Excel import utilities and the current clinic-import tests
 
-An earlier revision of this document presented two paths — retaining the 500-row template import with
-`RECEPTIONIST` dropped, or removing it outright. **That choice is closed. Retention is no longer an
-available path.** Every clinic-facing patient-import surface in the table above is scheduled for
-removal or disablement, and patient loading becomes a Platform Admin operation exclusively.
+The separate **staff / user import** (`server/src/routes/usersImport.ts`,
+`src/components/UserImportModal.tsx`) is likewise out of scope and untouched.
 
-Scope boundary, stated explicitly so the follow-up cannot drift:
+**What the existing importer is useful for** — patterns the new Platform Admin capability should
+imitate rather than reinvent:
 
-- **In scope — the clinic-facing *patient* import:** `server/src/routes/patientsImport.ts`, its
-  registration at `server/src/index.ts:241`, `src/components/PatientImportModal.tsx`, its trigger in
-  `src/pages/Patients.tsx`, and `canImportPatients()` at `src/utils/permissions.ts:349`.
-- **Explicitly OUT of scope — the separate *staff / user* import:** `server/src/routes/usersImport.ts`
-  and `src/components/UserImportModal.tsx`. This decision concerns patient data and clinic data
-  migration. It is **not** broadened to the staff import unless the program owner authorizes that
-  separately.
+| Pattern | Where |
+| --- | --- |
+| `.xlsx` parsing | `server/src/utils/excelImport.ts:241` `parseExcelFile()`; `:20` `cellToString()` |
+| Two-phase preview → confirm | `patientsImport.ts:225` (performs no writes) → `:278` |
+| Row-level normalization and per-row error reporting | `patientsImport.ts:114-129` |
+| Memory-only upload handling | `multer.memoryStorage()`, `patientsImport.ts:30` |
 
-The removal is scheduled as **`F3-DATA-MIG-PR0`** (§15) — the smallest follow-up code task and the first
-implementation step after this documentation PR. **No code was changed by this task or by R1; both are
-documentation-only.**
+**No code was changed by this task, by R1, or by R2. All three are documentation-only.**
 
 ---
 
@@ -127,7 +163,7 @@ Docs are not implementation evidence. Every row is backed by repository evidence
 | Area | Existing support | Exact repo evidence | Reusable | Gap |
 | --- | --- | --- | --- | --- |
 | Platform Admin migration | **NONE** | `server/src/routes/platformAdmin.ts` — zero `multer` usage; `prisma.patient.*` only `count()` at `:307`, `:352` | Platform auth gate `platformAdmin.ts:154` | Entire feature |
-| Clinic-facing import | **EXISTS (conflicts)** | `patientsImport.ts:58`, `:225`, `:278` | Two-phase preview→confirm shape | Violates product rule — **scheduled for removal (`F3-DATA-MIG-PR0`)** |
+| Existing basic clinic patient import | **EXISTS / WORKING / OUT_OF_SCOPE** | `patientsImport.ts:58`, `:225`, `:278` | Two-phase preview→confirm shape; `.xlsx` parse; memory-upload pattern | **None — retained unchanged (§1)**; a 500-row template import is a different product from clinic data migration |
 | `.xlsx` parsing | **YES** | `server/src/utils/excelImport.ts:246` `wb.xlsx.load(buffer)` | `parseExcelFile()` `:241`, `cellToString()` `:20` | Bound to a 500-row template |
 | **`.xls` (legacy BIFF8)** | **NO** | ExcelJS 4.4.0 exposes only `xlsx` and `csv` readers — `server/node_modules/exceljs/lib/doc/workbook.js:33,38` | — | **Requires a new dependency** |
 | CSV parsing | **NO (unwired)** | ExcelJS ships a `csv` reader; no code path calls it | ExcelJS `csv` | Not wired up |
@@ -356,9 +392,9 @@ rejected by validation. Dry-run must surface them as `INVALID` **before** execut
 
 | ID | Issue | Evidence |
 | --- | --- | --- |
-| U-1 | **Legacy `.xls` surfaces as a 500** with a misleading message | `excelImport.ts:246-249`; reproduced against the real file |
-| U-2 | **File type trusted from extension/MIME only** | `patientsImport.ts:33-41` — the `\|\|` means a client-declared MIME *or* a `.xlsx` suffix suffices; no content sniffing |
-| U-3 | **Clinic-facing patient import violates the permanent product rule** | The feature as a whole, not merely its role list: `patientsImport.ts:58` grants four tenant-scoped roles (including `RECEPTIONIST`) access to `:225` / `:278`. **Accepted resolution: removal / disablement — `F3-DATA-MIG-PR0` (§1, §15)** |
+| U-1 | **Legacy `.xls` surfaces as a 500** with a misleading message | `excelImport.ts:246-249`; reproduced against the real file. **The remediation belongs in the NEW Platform Admin migration intake (§15, PR 0), which must classify by content signature and return a typed unsupported-format error. The existing basic importer is out of scope and is not changed by this program (§1).** |
+| U-2 | **File type trusted from extension/MIME only** | `patientsImport.ts:33-41` — the `\|\|` means a client-declared MIME *or* a `.xlsx` suffix suffices; no content sniffing. **Reported only: pre-existing, inside the out-of-scope basic importer (§1). This task neither changes it nor recommends changing it here — it is raised for a future independent task. The NEW migration intake must do content-signature classification from the start (§15, PR 0).** |
+| U-3 | ~~Clinic-facing patient import violates the permanent product rule~~ — **WITHDRAWN (R2)** | **Not a defect.** The existing basic clinic patient import is **retained, working and out of scope** (§1); the Platform-Admin-only rule governs the new full migration capability only and is not retroactive. Row kept as a numbered placeholder so U-4/U-5/U-6 references stay stable |
 | U-4 | **`earningService` queries a non-existent column** | `services/earningService.ts:127` and `:181` pass `deletedAt: null` to `prisma.payment.aggregate`, but `Payment` has no `deletedAt` (verified in `schema.prisma:900-925`). Raises `PrismaClientValidationError`, swallowed by `.catch(console.error)` at `payments.ts:125`, `:200`, `treatmentCases.ts:260`, `:327`. **Billed-base earning generation is dead and `collectedAmount` is never refreshed.** Pre-existing; not caused by migration, but it means **earnings figures cannot be trusted as a reconciliation baseline** |
 | U-5 | **No `$transaction` in the finance domain** | verified absent across `payments.ts`, `paymentPlans.ts`, `earningService.ts`, `practitionerPayouts.ts`. `paymentPlans.ts:225-250` can leave a paid `Payment` with an unpaid installment |
 | U-6 | **Unscoped patient reads in messaging** | `services/postTreatmentMessaging.ts:124-127`, `:218`, `:256`, `:294` — `findUnique({ where: { id } })` with no org/clinic filter, feeding name+phone into outbound message rendering |
@@ -827,10 +863,10 @@ authorized by this task.**
 
 | PR | Scope | Schema? | Blocked on |
 | --- | --- | --- | --- |
-| **PR 0** — **`F3-DATA-MIG-PR0`** | **Remove clinic-facing patient import + safe legacy file rejection foundation.** The product decision is **closed** (§1). Must: remove/disable clinic-facing `PatientImportModal` access; remove/disable clinic patient-import API access; enforce the **Platform Admin-only migration boundary** at the backend authorization layer; add safe **file-signature detection**; make the legacy `.xls` unsupported state **typed and non-500** until an accepted legacy parser exists (U-1, U-2, U-3). Staff/user import is **out of scope** | **NO** | — **ready to scope** |
-| **PR 1** | **Legacy `.xls` parser + canonical source contract + synthetic `.xls` fixture.** Requires a dependency decision — SheetJS's npm-published `xlsx@0.18.5` carries known advisories and current SheetJS is distributed off-npm. **This is a supply-chain decision for the program owner**, not an agent's | **NO** | Dependency approval |
-| **PR 2** | Platform-Admin-only upload + header discovery + mapping proposal + **dry-run only** (no writes), on `PlatformAdminAuditEvent` with **no schema change** — the `dataRetentionManualRunAudit` pattern. Full authorization + tenant-isolation test matrix | **NO** | PR 1 |
-| **PR 3** | Canonical phone normalizer (G-6), consolidating the 6 implementations behind one contract | **NO** | — (independently valuable) |
+| **PR 0** — **`F3-DATA-MIG-PR0`** | **Platform Admin full-migration intake safety foundation.** A **NEW** Platform Admin migration route/shell only: explicit `organizationId` + `clinicId` targeting re-verified by the backend; the Platform Admin authorization boundary (§10); safe file-type/**signature** classification; **typed unsupported-format errors** (U-1, U-2 remediated in the new intake). **No domain writes. No schema change. No change to the existing basic clinic patient importer** | **NO** | — **ready to scope** |
+| **PR 1** — **`F3-DATA-MIG-PR1`** | **Legacy `.xls` parser + canonical migration source contract + synthetic `.xls` fixture + parser/security tests.** Requires a maintained-parser dependency decision — SheetJS's npm-published `xlsx@0.18.5` carries known advisories and current SheetJS is distributed off-npm. **This is a supply-chain decision for the program owner**, not an agent's. Vendor-neutral canonical input contract (§6). **No change to the basic clinic importer's behaviour** | **NO** | Dependency approval |
+| **PR 2** — **`F3-DATA-MIG-PR2`** | **Platform Admin upload / mapping / dry-run.** Header discovery, mapping proposal, validation, **dry-run and preview with zero domain writes**, on `PlatformAdminAuditEvent` with **no schema change** — the `dataRetentionManualRunAudit` pattern. Full authorization + tenant-isolation test matrix | **NO** | PR 1 |
+| **PR 3** | Canonical normalization — canonical phone normalizer (G-6), consolidating the 6 implementations behind one contract | **NO** | — (independently valuable) |
 | **PR 4** | Provenance + idempotent patient **execution** | **LIKELY** | **Accepted §6.1 provenance design, then program-owner architecture review of whatever schema it needs (§12)** |
 | **PR 5** | Practitioner / service reference mapping | YES | PR 4 + K-3 |
 | **PR 6** | Historical treatment/procedure migration + domain write contracts + side-effect suppression | YES | PR 5 + **K-1/K-2 source files** |
@@ -840,10 +876,12 @@ authorized by this task.**
 **PRs 0–3 need no schema change and are therefore not blocked by the freeze boundary.** They are the
 entire near-term path, and none of them waits on the §6.1 provenance decision.
 
-`F3-DATA-MIG-PR0` bundles a product-boundary removal with a file-handling hardening fix. **Their scope
-must be separated carefully during implementation review** — the removal is an authorization-boundary
-change and the signature detection is a validation change, and each needs its own tests. What is no
-longer open is *whether* the removal happens.
+**Every PR above builds NEW Platform Admin surface. None of them touches the existing basic clinic
+patient importer** (§1) — not its routes, its UI, its roles, its row limit, its `.xlsx` behaviour or
+its tests, and it is not reused or refactored as part of the migration engine.
+
+An earlier revision (`R1`) proposed a PR 0 that removed the clinic-facing importer. **That is
+withdrawn**; PR 0 is now purely additive new-capability work.
 
 ---
 
@@ -855,7 +893,7 @@ To be implemented with the PRs above; mapped to existing patterns to imitate.
 | --- | --- | --- | --- |
 | 1 | Unauthenticated → 401, **zero** audit rows | 3 | `server/src/tests/retentionManualRunAudit.test.ts:236-239` |
 | 2 | Clinic JWT (`type=clinic_user`) → 401/403, zero rows, `next()` never called | 3 | same `:245-253`; `platformAdmin.test.ts:298` |
-| 3 | Each of OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST/DENTIST/BILLING denied — **and, after `F3-DATA-MIG-PR0`, the removed clinic patient-import routes are unreachable for every one of them** | 3 | as above |
+| 3 | Each of OWNER/ORG_ADMIN/CLINIC_MANAGER/RECEPTIONIST/DENTIST/BILLING denied **on the new Platform Admin migration routes**. The existing basic clinic importer keeps its own authorization unchanged and is not asserted against here | 3 | as above |
 | 4 | Cross-org destination rejected | 3 | `dbVerification/kvkkHigh006DbClinicScopeAccess.test.ts:103-113` (**list→403, detail→404**) |
 | 5 | Same-org unassigned clinic denied, not silently emptied | 3 | same `:84-94` |
 | 6 | Writes land only in the target tenant | 3 | `dbVerification/kvkkHigh006DbRecordOwnedMutationScope.test.ts` |
@@ -929,9 +967,10 @@ RAW_PII_IN_LOGS              = 0
 
 ## 19. Open decisions for the program owner
 
-**Closed in R1:** the scope of the clinic-facing patient import. **Removal is accepted; retention is
-not an available path** (§1). Scheduled as `F3-DATA-MIG-PR0` (§15), scoped to the patient import only
-— the staff/user import is untouched.
+**Closed in R2:** the scope of the existing basic clinic patient import. **It is retained exactly as
+it is, and is out of scope for this program** (§1). The Platform-Admin-only rule applies to the new
+full clinic data migration capability alone and is not retroactive. R1's contrary conclusion — that
+the importer conflicted and had to be removed — is withdrawn.
 
 Still open:
 
@@ -955,8 +994,8 @@ Still open:
 
 ### Execution lifecycle — stated without inflation
 
-**No TypeScript, application, schema, migration, parser or UI code was changed** by
-`F3-DATA-MIG-PREP-001` or by its `R1` correction pass. No application typecheck and no server suite was
+**No TypeScript, application, schema, migration, parser, UI, permissions, route or test code was
+changed** by `F3-DATA-MIG-PREP-001` or by its `R1` and `R2` correction passes. No application typecheck and no server suite was
 run, because running one would produce evidence about code this task never touched. A generic
 `TESTS_PASSED = YES` would therefore be misleading, and is **not** claimed:
 
@@ -980,16 +1019,29 @@ The one applicable gate, with its exact command and its real result:
 | `git diff --check` | exit 0 |
 | `git diff --numstat` on `NORAMEDI_MASTER_TRACKER.md` | additive only — **zero deleted lines** |
 
+### R2 product-scope correction (supersedes R1 item 1)
+
+| # | Correction | Applied in |
+| --- | --- | --- |
+| R2-1 | **The existing basic clinic patient import is RETAINED, WORKING and OUT OF SCOPE.** `EXISTING_BASIC_CLINIC_PATIENT_IMPORT = RETAINED / OUT_OF_SCOPE / UNCHANGED`. No migration-program work removes it, disables it, changes its roles, drops `RECEPTIONIST`, moves it to Platform Admin, touches `PatientImportModal.tsx` / `patientsImport.ts`, changes its row limit or `.xlsx` behaviour, or reuses it in the migration engine | §1 |
+| R2-2 | **Only the NEW full clinic data migration capability is Platform Admin-only**, and the rule is **not retroactive**. `FULL_CLINIC_DATA_MIGRATION = PLATFORM_ADMIN_ONLY` | §1, §10 |
+| R2-3 | **All "conflict / must be removed" wording withdrawn.** The importer is reclassified `EXISTS / WORKING / OUT_OF_SCOPE` and recorded as reusable repository evidence rather than a defect; U-3 is marked **WITHDRAWN** | §1, §2 matrix, §4.2 (U-1/U-2/U-3), §19, §20 |
+| R2-4 | **PR sequence replaced.** `F3-DATA-MIG-PR0` is now *Platform Admin full-migration intake safety foundation* — new surface only, no domain writes, no schema change, no change to the existing importer. PR 1 parser + canonical source contract; PR 2 upload/mapping/dry-run | §15 |
+| R2-5 | **Pre-existing findings inside the out-of-scope importer are reported, not actioned** — U-2's extension/MIME-only file-type trust is raised for a future independent task; the remediation for this program lands in the new intake | §4.2 |
+
+**R1 item 1 below is superseded by the R2 table above. R1 items 2–6 stand unchanged.**
+
 ### R1 architecture-review corrections
 
 | # | Correction | Applied in |
 | --- | --- | --- |
-| 1 | **Product decision closed — removal is final.** Retention removed as an available path; the clinic-facing patient import is scheduled for removal/disablement; the staff/user import is explicitly **not** in scope | §1, §2, §4.2 (U-3), §15, §19 |
+| 1 | ~~Product decision closed — removal is final~~ — **SUPERSEDED BY R2.** The importer is retained and out of scope; see the R2 table above | §1 (rewritten) |
 | 2 | **Idempotency/provenance overclaim corrected.** "Impossible" → *no accepted durable cross-run provenance mechanism*; two valid designs recorded; the final schema is deliberately **not** pre-decided here | §2, §6.1, §13, §14, §17 |
 | 3 | **`MIGRATION_REQUIRED` split into precise lifecycle values.** Analysis and the parser/dry-run foundation are `NO`; durable execution is `UNRESOLVED / LIKELY YES`. The former blanket `YES (for any implementation)` is withdrawn as contradicted by this document's own evidence | §12 |
 | 4 | **Freeze-boundary wording corrected to `NOT AUTHORIZED YET`.** The prohibition on *broad* Prisma refactoring is no longer presented as an automatic ban on every narrow additive migration; what is required is explicit program-owner architecture review. **No schema exception is granted by R1** | §0, §12 |
 | 5 | **Test lifecycle stated precisely** — no unqualified `TESTS_PASSED = YES`; the exact command run and its real result are preserved | §20 (this section) |
 | 6 | **Program state re-verified unchanged** — `F4 COMPLETE = NO`, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED`, `F5 AUTHORIZED = NO`, `R-030` / `R-030-DB` / `R-030-FILES` `OPEN`, `repo2` NOT ACTIVATED | §0 |
 
-**R1 changed documentation only, on the same branch and the same draft PR #442. No new PR was opened,
-nothing was merged, and nothing was deployed.**
+**R1 and R2 both changed documentation only, on the same branch and the same draft PR #442. No new PR
+was opened, nothing was merged, and nothing was deployed. No runtime, schema, migration, parser, UI,
+permissions, route or test file was modified by any revision of this task.**
