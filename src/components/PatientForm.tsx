@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
-import { patientService } from '../services/api';
+import { patientService, userService } from '../services/api';
 import { useTranslation } from 'react-i18next';
 import { useClinic } from '../context/ClinicContext';
+import { useAuth } from '../context/AuthContext';
+import { normalizeRole } from '../utils/permissions';
 
 interface PatientFormProps {
   patient?: any;
@@ -10,9 +12,16 @@ interface PatientFormProps {
   onSuccess: () => void;
 }
 
+// GET /api/users authorize() list (server/src/routes/users.ts) minus DENTIST
+// — DENTIST cannot list clinic staff, so the practitioner picker falls back
+// to a read-only display for that role. Kept local: this is a UX gate only,
+// the server is the real enforcement point.
+const PRACTITIONER_PICKER_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST'];
+
 const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }) => {
   const { t } = useTranslation(['patients', 'common']);
   const { selectedClinicId } = useClinic();
+  const { user } = useAuth();
   const [phoneDuplicates, setPhoneDuplicates] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
   const phoneCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [formData, setFormData] = useState({
@@ -28,6 +37,9 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
     patientStatus: 'new',
     source: 'other',
     notes: '',
+    gender: '',
+    chartNumber: '',
+    primaryPractitionerId: '',
     communicationConsent: false,
     marketingConsent: false,
   });
@@ -35,11 +47,44 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
 
+  // The clinic the practitioner picker (and its tenant-scoped fetch) is
+  // bound to: the patient's own clinic when editing, or the currently
+  // selected branch when creating. Left undefined when creating from an
+  // "all branches" view — a picker cannot be tenant-scoped to nothing, so it
+  // stays hidden until a specific branch is known (server/src/routes/patients.ts
+  // still enforces this even if the UI gate is ever bypassed).
+  const targetClinicId: string | undefined = patient?.clinicId
+    || (selectedClinicId && selectedClinicId !== 'all' ? selectedClinicId : undefined);
+  const canPickPractitioner = PRACTITIONER_PICKER_ROLES.includes(normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false));
+  const [practitioners, setPractitioners] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
+  const [practitionersLoading, setPractitionersLoading] = useState(false);
+
+  useEffect(() => {
+    if (!canPickPractitioner || !targetClinicId) {
+      setPractitioners([]);
+      return;
+    }
+    let cancelled = false;
+    setPractitionersLoading(true);
+    userService.getDoctors(targetClinicId)
+      .then(res => {
+        if (cancelled) return;
+        const list = (res.data ?? []).filter((u: any) => u.isActive !== false);
+        setPractitioners(list);
+      })
+      .catch(() => { if (!cancelled) setPractitioners([]); })
+      .finally(() => { if (!cancelled) setPractitionersLoading(false); });
+    return () => { cancelled = true; };
+  }, [canPickPractitioner, targetClinicId]);
+
   useEffect(() => {
     if (patient) {
       setFormData({
         ...patient,
         dateOfBirth: patient.dateOfBirth ? new Date(patient.dateOfBirth).toISOString().split('T')[0] : '',
+        gender: patient.gender || '',
+        chartNumber: patient.chartNumber || '',
+        primaryPractitionerId: patient.primaryPractitionerId || '',
       });
     }
   }, [patient]);
@@ -227,6 +272,58 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
                 <option value="archived">{t('patients:status.archived')}</option>
               </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="label">{t('patients:form.gender')}</label>
+              <select name="gender" value={formData.gender || ''} onChange={handleChange} className="input-field">
+                <option value="">{t('patients:form.genderUnspecified')}</option>
+                <option value="male">{t('patients:gender.male')}</option>
+                <option value="female">{t('patients:gender.female')}</option>
+                <option value="other">{t('patients:gender.other')}</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">{t('patients:form.chartNumber')}</label>
+              <input
+                name="chartNumber"
+                value={formData.chartNumber || ''}
+                onChange={handleChange}
+                className="input-field"
+                placeholder={t('patients:form.chartNumberPlaceholder')}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="label">{t('patients:form.primaryPractitioner')}</label>
+            {canPickPractitioner && targetClinicId ? (
+              <>
+                <select
+                  name="primaryPractitionerId"
+                  value={formData.primaryPractitionerId || ''}
+                  onChange={handleChange}
+                  disabled={practitionersLoading}
+                  className={`input-field ${errors.primaryPractitionerId ? 'border-red-500' : ''}`}
+                >
+                  <option value="">{t('patients:form.primaryPractitionerUnassigned')}</option>
+                  {practitioners.map(p => (
+                    <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
+                  ))}
+                </select>
+                {errors.primaryPractitionerId && <p className="text-xs text-red-500 mt-1">{errors.primaryPractitionerId._errors[0]}</p>}
+              </>
+            ) : (
+              <p className="input-field bg-gray-50 text-gray-500 flex items-center">
+                {patient?.primaryPractitioner
+                  ? `${patient.primaryPractitioner.firstName} ${patient.primaryPractitioner.lastName}`
+                  : t('patients:form.primaryPractitionerUnassigned')}
+                {!canPickPractitioner && (
+                  <span className="ml-2 text-xs text-gray-400">{t('patients:form.primaryPractitionerReadOnlyHint')}</span>
+                )}
+              </p>
+            )}
           </div>
 
           <div>

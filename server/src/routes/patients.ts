@@ -12,6 +12,29 @@ import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
+/**
+ * F3-DATA-MIG-TODAY-001-UI-001: a well-formed UUID in primaryPractitionerId
+ * is not itself sufficient — it must resolve to an active practitioner in
+ * the SAME clinic the patient belongs to. Zod alone cannot express that
+ * (it has no DB access), so this runs after schema validation on every
+ * create/update. Returns null when valid, or a ready-to-send 400 body.
+ */
+export async function validatePrimaryPractitioner(primaryPractitionerId: string | null | undefined, clinicId: string) {
+  if (!primaryPractitionerId) return null;
+  const practitioner = await prisma.user.findFirst({
+    where: { id: primaryPractitionerId, clinicId, role: 'doctor', isActive: true },
+    select: { id: true },
+  });
+  if (practitioner) return null;
+  return {
+    error: {
+      primaryPractitionerId: {
+        _errors: ['Selected practitioner is not an active practitioner at this clinic.'],
+      },
+    },
+  };
+}
+
 // GET /api/patients/check-phone-duplicate
 // Returns patients in the same clinic sharing the given phone. Non-blocking — callers decide what to do.
 router.get('/patients/check-phone-duplicate', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
@@ -179,6 +202,9 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
           include: { treatmentCase: true, assignedTo: { select: userNameRoleSelect } },
           orderBy: { updatedAt: 'desc' },
         },
+        // Name only — never the identityDocuments relation. See
+        // PatientIdentityDocument doc comment in prisma/schema.prisma.
+        primaryPractitioner: { select: userNameSelect },
         treatmentCases: {
           where: { deletedAt: null },
           orderBy: { updatedAt: 'desc' },
@@ -285,6 +311,9 @@ router.post('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'REC
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
   try {
+    const practitionerError = await validatePrimaryPractitioner(validation.data.primaryPractitionerId, clinicId);
+    if (practitionerError) return res.status(400).json(practitionerError);
+
     const patient = await prisma.patient.create({ data: { ...validation.data, clinicId, organizationId: req.user!.organizationId } });
 
     await logActivity({
@@ -326,6 +355,9 @@ router.put('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
       });
       if (!hasAppointment) return res.status(403).json({ error: 'Forbidden: You can only update your own patients' });
     }
+
+    const practitionerError = await validatePrimaryPractitioner(validation.data.primaryPractitionerId, clinicId);
+    if (practitionerError) return res.status(400).json(practitionerError);
 
     const patient = await prisma.patient.update({ where: { id }, data: validation.data });
 

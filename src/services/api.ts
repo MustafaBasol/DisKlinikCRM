@@ -308,7 +308,11 @@ export const messageService = {
 };
 
 export const userService = {
-  getDoctors: () => api.get('/users', { params: { role: 'doctor' } }),
+  // clinicId scopes to a single target clinic (e.g. patient primary
+  // practitioner picker) — omit to fall back to all clinics the caller can
+  // access, as before.
+  getDoctors: (clinicId?: string) =>
+    api.get('/users', { params: { role: 'doctor', ...(clinicId && clinicId !== 'all' ? { clinicId } : {}) } }),
   getAll: () => api.get('/users'),
   create: (data: any) => api.post('/users', data),
   update: (id: string, data: any) => api.put(`/users/${id}`, data),

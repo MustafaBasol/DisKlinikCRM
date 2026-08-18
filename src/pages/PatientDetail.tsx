@@ -17,6 +17,7 @@ import {
   ClipboardList,
   MessageSquare,
   Briefcase,
+  Stethoscope,
   ShieldCheck,
   Paperclip,
   Download,
@@ -374,6 +375,12 @@ const PatientDetail: React.FC = () => {
     return `${log.user.firstName} ${log.user.lastName}`;
   };
 
+  const genderLabel = patient.gender ? t(`patients:gender.${patient.gender}`, { defaultValue: patient.gender }) : t('common:noData');
+  const chartNumberLabel = patient.chartNumber || t('common:noData');
+  const primaryPractitionerLabel = patient.primaryPractitioner
+    ? `${patient.primaryPractitioner.firstName} ${patient.primaryPractitioner.lastName}`
+    : t('patients:form.primaryPractitionerUnassigned');
+
   return (
     <div className="space-y-4 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -466,6 +473,20 @@ const PatientDetail: React.FC = () => {
                 <MapPin size={18} className="text-gray-400" />
                 <span className="text-sm">{patient.address ? `${patient.address}, ${patient.city}` : t('common:noData')}</span>
               </div>
+              <div className="flex items-center gap-3 text-gray-600">
+                <UserIcon size={18} className="text-gray-400" />
+                <span className="text-sm">{t('patients:form.gender')}: {genderLabel}</span>
+              </div>
+              {patient.chartNumber && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <ClipboardList size={18} className="text-gray-400" />
+                  <span className="text-sm">{t('patients:form.chartNumber')}: {chartNumberLabel}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-3 text-gray-600">
+                <Stethoscope size={18} className="text-gray-400" />
+                <span className="text-sm truncate">{t('patients:form.primaryPractitioner')}: {primaryPractitionerLabel}</span>
+              </div>
             </div>
           </div>
 
@@ -550,6 +571,20 @@ const PatientDetail: React.FC = () => {
                   <div className="flex items-center gap-3 text-gray-600">
                     <MapPin size={16} className="text-gray-400 flex-shrink-0" />
                     <span className="text-sm">{patient.address ? `${patient.address}, ${patient.city}` : t('common:noData')}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <UserIcon size={16} className="text-gray-400 flex-shrink-0" />
+                    <span className="text-sm">{t('patients:form.gender')}: {genderLabel}</span>
+                  </div>
+                  {patient.chartNumber && (
+                    <div className="flex items-center gap-3 text-gray-600">
+                      <ClipboardList size={16} className="text-gray-400 flex-shrink-0" />
+                      <span className="text-sm">{t('patients:form.chartNumber')}: {chartNumberLabel}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Stethoscope size={16} className="text-gray-400 flex-shrink-0" />
+                    <span className="text-sm truncate">{t('patients:form.primaryPractitioner')}: {primaryPractitionerLabel}</span>
                   </div>
                 </div>
                 <div className={`card p-4 ${patient.notes ? 'border-amber-200 bg-amber-50' : ''}`}>

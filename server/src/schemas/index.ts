@@ -21,6 +21,12 @@ export const optionalUuid = z.preprocess(
 
 // --- Patient ---
 
+// F3-DATA-MIG-TODAY-001-UI-001: the vocabulary already published to customers
+// in the basic import template (utils/excelImport.ts:55) and accepted by
+// Patient.gender (prisma/schema.prisma) — kept in one place so the form and
+// the API validate against the same three values.
+export const patientGenderValues = ['male', 'female', 'other'] as const;
+
 const patientBaseSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
@@ -34,6 +40,15 @@ const patientBaseSchema = z.object({
   patientStatus: z.enum(['new', 'active', 'inactive', 'archived']).default('new'),
   source: z.enum(['google', 'referral', 'social_media', 'instagram', 'website', 'phone', 'walk_in', 'doctolib', 'other']).optional().nullable(),
   notes: z.string().optional().nullable(),
+  // NULL = "not recorded / never asked", a distinct state from 'other' — see
+  // Patient.gender doc comment in prisma/schema.prisma.
+  gender: z.preprocess(value => value === '' ? null : value, z.enum(patientGenderValues).optional().nullable()),
+  // Legacy clinic-facing chart/file number. Deliberately not unique — see
+  // Patient.chartNumber doc comment.
+  chartNumber: z.preprocess(value => (typeof value === 'string' ? (value.trim() === '' ? null : value.trim()) : value), z.string().max(64).optional().nullable()),
+  // Validated against the target clinic's active practitioners server-side
+  // (routes/patients.ts) — a well-formed UUID here is not itself sufficient.
+  primaryPractitionerId: optionalUuid,
   communicationConsent: z.boolean().default(false),
   marketingConsent: z.boolean().default(false),
 });

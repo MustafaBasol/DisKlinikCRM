@@ -190,7 +190,19 @@
     "lastNameRequired": "Nachname ist erforderlich",
     "emailInvalid": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
     "phoneDuplicateTitle": "Diese Telefonnummer ist bereits bei anderen Patienten registriert:",
-    "phoneDuplicateBody": "Das ist normal bei Kindern oder Familienmitgliedern. Sie können trotzdem speichern."
+    "phoneDuplicateBody": "Das ist normal bei Kindern oder Familienmitgliedern. Sie können trotzdem speichern.",
+    "gender": "Geschlecht",
+    "genderUnspecified": "Nicht angegeben",
+    "chartNumber": "Akten-/Patientennummer",
+    "chartNumberPlaceholder": "z. B. 10423",
+    "primaryPractitioner": "Hauptbehandler",
+    "primaryPractitionerUnassigned": "Nicht zugewiesen",
+    "primaryPractitionerReadOnlyHint": "(nur Ansicht — wird von Rezeption/Verwaltung zugewiesen)"
+  },
+  "gender": {
+    "male": "Männlich",
+    "female": "Weiblich",
+    "other": "Divers"
   },
   "dentalChart": {
     "title": "Zahnstatus",

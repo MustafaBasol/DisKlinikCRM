@@ -190,7 +190,19 @@
     "lastNameRequired": "Last name is required",
     "emailInvalid": "Please enter a valid email address",
     "phoneDuplicateTitle": "This phone number is already registered to other patients:",
-    "phoneDuplicateBody": "This is normal for children or family members. You can still save."
+    "phoneDuplicateBody": "This is normal for children or family members. You can still save.",
+    "gender": "Gender",
+    "genderUnspecified": "Not specified",
+    "chartNumber": "Chart / File Number",
+    "chartNumberPlaceholder": "e.g. 10423",
+    "primaryPractitioner": "Primary Practitioner",
+    "primaryPractitionerUnassigned": "Unassigned",
+    "primaryPractitionerReadOnlyHint": "(view only — assigned by reception/management)"
+  },
+  "gender": {
+    "male": "Male",
+    "female": "Female",
+    "other": "Other"
   },
   "dentalChart": {
     "title": "Dental Chart",
