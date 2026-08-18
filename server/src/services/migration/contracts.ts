@@ -361,10 +361,13 @@ export type TransformName = (typeof TRANSFORM_NAMES)[number];
  *  - patient.source               — enum-constrained; REFERANSI is free text
  *    that may name a THIRD PARTY. Coercing it would destroy the referrer
  *    identity and pollute a typed marketing enum.
- *  - patient.primaryClinicId      — set by no runtime path today; the
- *    organization dashboard counts by it. Deliberately left unset so this
- *    migration does not silently change what that dashboard reports. Recorded
- *    as a known consequence in the reconciliation, not papered over.
+ * patient.primaryClinicId is NOT in this list. It is set — to the run's
+ * server-validated target clinic, identical to patient.clinicId. Organization
+ * patient metrics filter on it (services/patientOrganizationMetrics.ts), so an
+ * unset value would make every imported patient invisible to organization-level
+ * counts, and migrate-to-multibranch.ts already backfills exactly this
+ * invariant. It is never sourced from SUBE_ID or any other workbook branch
+ * column: the target clinic is chosen by Platform Admin and server-validated.
  */
 export const DESTINATION_FIELDS: readonly DestinationFieldDef[] = [
   {

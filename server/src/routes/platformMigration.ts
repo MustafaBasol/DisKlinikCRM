@@ -79,6 +79,10 @@ import {
   buildFailureReport,
   buildSuccessReport,
 } from '../services/migration/reports/migrationReports.js';
+import {
+  findClinicPractitioner,
+  listClinicPractitioners,
+} from '../utils/relationGuards.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
@@ -637,19 +641,26 @@ router.get('/migrations/runs/:id/references', async (req: PlatformAdminRequest, 
       return res.json({ required: false, entityType: 'practitioner', values: [], candidates: [] });
     }
 
+    // Candidates are the TARGET CLINIC's eligible practitioners, not every
+    // active organization user. listClinicPractitioners is the repository's
+    // existing single source of truth for "is this user an eligible
+    // practitioner for this clinic" (branch-scoped UserClinic assignment with a
+    // practitioner role, or the legacy primary User.clinicId assignment, both
+    // requiring User.isActive) — the same helper the external-calendar mapping
+    // UI and its write-path validation already use. Offering receptionists,
+    // managers or a sibling branch's dentist here would let an operator
+    // attribute a whole clinic's patients to someone who does not practise
+    // there.
     const [existing, candidates] = await Promise.all([
       prisma.migrationReferenceMap.findMany({
         where: {
           organizationId: run.organizationId,
+          clinicId: run.clinicId,
           sourceSystem: run.sourceSystem,
           entityType: 'practitioner',
         },
       }),
-      prisma.user.findMany({
-        where: { organizationId: run.organizationId, isActive: true },
-        select: { id: true, firstName: true, lastName: true, role: true },
-        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-      }),
+      listClinicPractitioners(run.clinicId),
     ]);
 
     const byValue = new Map(existing.map((e) => [e.sourceValue, e]));
@@ -707,21 +718,27 @@ router.put('/migrations/runs/:id/references', async (req: PlatformAdminRequest, 
             message: 'An approved practitioner mapping must name an existing NoraMedi user.',
           });
         }
-        const user = await prisma.user.findFirst({
-          where: { id: destinationId, organizationId: run.organizationId },
-          select: { id: true },
-        });
-        if (!user) {
+        // Organization membership alone is NOT enough. The destination must be
+        // an eligible practitioner FOR THE RUN'S TARGET CLINIC under the
+        // repository's accepted multi-branch access model — the same check the
+        // candidate list is built from, so a direct API call cannot approve a
+        // receptionist, a deactivated user, or a sibling branch's dentist even
+        // though the UI no longer offers them. Cross-organization users are
+        // excluded by construction: the clinic belongs to run.organizationId.
+        const practitioner = await findClinicPractitioner(destinationId, run.clinicId);
+        if (!practitioner) {
           throw new MigrationError('REFERENCE_UNRESOLVED', {
-            message: 'The selected user does not exist in this organization.',
+            message:
+              'The selected user is not an eligible practitioner for this migration’s target clinic.',
           });
         }
       }
 
       await prisma.migrationReferenceMap.upsert({
         where: {
-          organizationId_sourceSystem_entityType_sourceValue: {
+          organizationId_clinicId_sourceSystem_entityType_sourceValue: {
             organizationId: run.organizationId,
+            clinicId: run.clinicId,
             sourceSystem: run.sourceSystem,
             entityType: 'practitioner',
             sourceValue,
@@ -729,6 +746,7 @@ router.put('/migrations/runs/:id/references', async (req: PlatformAdminRequest, 
         },
         create: {
           organizationId: run.organizationId,
+          clinicId: run.clinicId,
           sourceSystem: run.sourceSystem,
           entityType: 'practitioner',
           sourceValue,
@@ -759,6 +777,7 @@ router.put('/migrations/runs/:id/references', async (req: PlatformAdminRequest, 
     const existing = await prisma.migrationReferenceMap.findMany({
       where: {
         organizationId: run.organizationId,
+        clinicId: run.clinicId,
         sourceSystem: run.sourceSystem,
         entityType: 'practitioner',
       },
@@ -811,6 +830,7 @@ router.post('/migrations/runs/:id/dry-run', async (req: PlatformAdminRequest, re
     const referenceRecords = await prisma.migrationReferenceMap.findMany({
       where: {
         organizationId: run.organizationId,
+        clinicId: run.clinicId,
         sourceSystem: run.sourceSystem,
         entityType: 'practitioner',
       },

@@ -110,6 +110,7 @@ model Clinic {
   // F3-DATA-MIG-TODAY-001 — Platform Admin clinic data migration back-relations.
   migrationRuns                 MigrationRun[]                     @relation("MigrationRunClinic")
   migrationRecords              MigrationRecord[]                  @relation("MigrationRecordClinic")
+  migrationReferenceMaps        MigrationReferenceMap[]            @relation("MigrationReferenceMapClinic")
   patientIdentityDocuments      PatientIdentityDocument[]          @relation("PatientIdentityDocumentClinic")
 
   @@unique([organizationId, slug])
@@ -3987,6 +3988,18 @@ model MigrationReferenceMap {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
+  /// F3-DATA-MIG-TODAY-001-R1 - THE MAPPING IS BRANCH-SCOPED, NOT ONLY
+  /// TENANT-SCOPED. In a multi-branch organization the same source label
+  /// ("Dr Ayse") is two different people in two different branches: clinic A's
+  /// "Dr Ayse" is User A, clinic B's is User B. An organization-only invariant
+  /// silently reuses clinic A's approved mapping when clinic B is migrated and
+  /// attributes every one of clinic B's patients to the wrong practitioner.
+  /// The mapping is therefore keyed on the run's target clinic as well, and a
+  /// destination user must be an eligible practitioner FOR THAT CLINIC
+  /// (utils/relationGuards.ts findClinicPractitioner).
+  clinicId String
+  clinic   Clinic @relation("MigrationReferenceMapClinic", fields: [clinicId], references: [id])
+
   sourceSystem String
   entityType   String
   sourceValue  String
@@ -4003,8 +4016,12 @@ model MigrationReferenceMap {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([organizationId, sourceSystem, entityType, sourceValue])
-  @@index([organizationId, sourceSystem, entityType, status])
+  // Names are pinned: the generated names would exceed PostgreSQL's 63-char
+  // identifier limit and be truncated, which makes schema and migration SQL
+  // disagree.
+  @@unique([organizationId, clinicId, sourceSystem, entityType, sourceValue], map: "MigrationReferenceMap_organizationId_clinicId_sourceSystem_key")
+  @@index([organizationId, clinicId, sourceSystem, entityType, status], map: "MigrationReferenceMap_organizationId_clinicId_sourceSystem_idx")
+  @@index([clinicId])
 }
 
 /// F3-DATA-MIG-TODAY-001 (G-E1) - DURABLE CROSS-RUN PROVENANCE. This is the

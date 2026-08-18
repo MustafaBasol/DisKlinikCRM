@@ -61,7 +61,10 @@ export async function findAppointmentInClinic(appointmentId: string, clinicId: s
  */
 const PRACTITIONER_ROLE_VALUES = ['DENTIST', 'dentist', 'doctor'] as const;
 
-type ClinicPractitioner = { id: string; firstName: string; lastName: string };
+// `role` is the role that made this user eligible FOR THIS CLINIC: the
+// branch-scoped UserClinic role when there is one, otherwise the legacy
+// primary-assignment User.role. Additive — existing callers ignore it.
+type ClinicPractitioner = { id: string; firstName: string; lastName: string; role: string };
 
 /**
  * Lists this clinic's eligible practitioners: users with an active
@@ -78,10 +81,14 @@ export async function listClinicPractitioners(clinicId: string): Promise<ClinicP
       user: { isActive: true },
       role: { in: [...PRACTITIONER_ROLE_VALUES] },
     },
-    select: { userId: true, user: { select: { id: true, firstName: true, lastName: true } } },
+    select: {
+      userId: true,
+      role: true,
+      user: { select: { id: true, firstName: true, lastName: true } },
+    },
   });
   const assignedIds = new Set(assignments.map((a) => a.userId));
-  const assignedPractitioners = assignments.map((a) => a.user);
+  const assignedPractitioners = assignments.map((a) => ({ ...a.user, role: a.role }));
   const legacyPractitioners = await prisma.user.findMany({
     where: {
       clinicId,
@@ -89,7 +96,7 @@ export async function listClinicPractitioners(clinicId: string): Promise<ClinicP
       role: { in: [...PRACTITIONER_ROLE_VALUES] },
       id: { notIn: [...assignedIds] },
     },
-    select: { id: true, firstName: true, lastName: true },
+    select: { id: true, firstName: true, lastName: true, role: true },
   });
   return [...assignedPractitioners, ...legacyPractitioners].sort((a, b) =>
     `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`),
@@ -115,9 +122,9 @@ export async function findClinicPractitioner(
       user: { isActive: true },
       role: { in: [...PRACTITIONER_ROLE_VALUES] },
     },
-    select: { user: { select: { id: true, firstName: true, lastName: true } } },
+    select: { role: true, user: { select: { id: true, firstName: true, lastName: true } } },
   });
-  if (branchAssignment) return branchAssignment.user;
+  if (branchAssignment) return { ...branchAssignment.user, role: branchAssignment.role };
 
   return prisma.user.findFirst({
     where: {
@@ -126,7 +133,7 @@ export async function findClinicPractitioner(
       isActive: true,
       role: { in: [...PRACTITIONER_ROLE_VALUES] },
     },
-    select: { id: true, firstName: true, lastName: true },
+    select: { id: true, firstName: true, lastName: true, role: true },
   });
 }
 

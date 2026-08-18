@@ -35,8 +35,18 @@ import { buildBiff8Fixture, type FixtureSheet } from './helpers/biff8Fixture.js'
 import { parseSourceWorkbook, profileColumns } from '../services/migration/parser/canonicalParser.js';
 import { suggestMappings } from '../services/migration/mapping/mappingEngine.js';
 import { runDryRun } from '../services/migration/dryRun.js';
-import { executeMigrationRun } from '../services/migration/executor.js';
+import {
+  executeMigrationRun,
+  markFailedBatchesForRetry,
+  recomputeRunCounters,
+  resumeMigrationRun,
+  MIN_BATCH_SIZE as MIN_PRODUCTION_BATCH_SIZE,
+} from '../services/migration/executor.js';
 import { buildReconciliation } from '../services/migration/reconciliation.js';
+import {
+  findClinicPractitioner,
+  listClinicPractitioners,
+} from '../utils/relationGuards.js';
 import { computeIdentityLookupHash } from '../utils/patientIdentityCrypto.js';
 import { SOURCE_SYSTEM_DEFAULT, MigrationError } from '../services/migration/contracts.js';
 import type { ResolvedMapping } from '../services/migration/rowBuilder.js';
@@ -156,6 +166,39 @@ async function makeTenant(label: string) {
   return { organizationId: organization.id, clinicId: clinic.id, planId: plan.id };
 }
 
+/**
+ * A user carrying an explicit branch-scoped UserClinic assignment — the
+ * repository's accepted multi-branch access model. `role` is the CLINIC role,
+ * which is what practitioner eligibility is decided on.
+ */
+async function makeUser(
+  organizationId: string,
+  clinicId: string,
+  role: string,
+  label: string,
+) {
+  const suffix = randomUUID().slice(0, 8);
+  const user = await prisma.user.create({
+    data: {
+      organizationId,
+      clinicId,
+      email: `mig-${label}-${suffix}@example.invalid`,
+      passwordHash: 'not-a-real-hash',
+      firstName: `Test${label}`,
+      lastName: `User${suffix}`,
+      role,
+      isActive: true,
+    },
+  });
+  await prisma.userClinic.create({
+    data: { userId: user.id, clinicId, role, isActive: true },
+  });
+  return user;
+}
+
+const makePractitioner = (organizationId: string, clinicId: string, label: string) =>
+  makeUser(organizationId, clinicId, 'DENTIST', label);
+
 async function cleanupTenants() {
   for (const organizationId of createdOrgIds) {
     // Order matters: children before parents.
@@ -167,6 +210,8 @@ async function cleanupTenants() {
     await prisma.patientIdentityDocument.deleteMany({ where: { organizationId } });
     await prisma.migrationRun.deleteMany({ where: { organizationId } });
     await prisma.patient.deleteMany({ where: { organizationId } });
+    await prisma.userClinic.deleteMany({ where: { user: { organizationId } } });
+    await prisma.user.deleteMany({ where: { organizationId } });
     await prisma.clinic.deleteMany({ where: { organizationId } });
     const org = await prisma.organization.findUnique({
       where: { id: organizationId },
@@ -462,10 +507,14 @@ async function main() {
     // ---------------------------------------------------------------------
     section('5. Batching, failure containment and resume');
 
+    // NOTE the batch size. clampBatchSize enforces a production FLOOR of 50, so
+    // a test asking for 10 silently gets 50 and one batch. Exercising the real
+    // batching path therefore means 120 rows at the smallest size production
+    // will actually honour, not a size the product clamps away.
     await test('multiple batches are created and all succeed', async () => {
       const tenant = await makeTenant('batch');
-      const rows = syntheticRows(25, 7);
-      const prep = await prepareRun(tenant, rows, 10);
+      const rows = syntheticRows(120, 7);
+      const prep = await prepareRun(tenant, rows, MIN_PRODUCTION_BATCH_SIZE);
 
       const result = await executeMigrationRun(
         executeInput(prep.run, prep.workbook, prep.mappings),
@@ -476,9 +525,9 @@ async function main() {
         where: { runId: prep.run.id },
         orderBy: { batchNumber: 'asc' },
       });
-      assert.equal(batches.length, 3, '25 rows at batch size 10 is 3 batches');
+      assert.equal(batches.length, 3, '120 rows at batch size 50 is 3 batches');
       assert.ok(batches.every((b) => b.status === 'SUCCEEDED'));
-      assert.equal(batches.reduce((a, b) => a + b.createdRows, 0), 25);
+      assert.equal(batches.reduce((a, b) => a + b.createdRows, 0), 120);
     });
 
     await test('a run that already committed batches is not re-done on resume', async () => {
@@ -590,6 +639,446 @@ async function main() {
       });
       assert.equal(outside, 0, 'zero rows outside the target (organizationId, clinicId)');
     });
+
+    // ═════════════════════════════════════════════════════════════════════
+    // R1 — the three architecture blockers
+    // ═════════════════════════════════════════════════════════════════════
+
+    // ---------------------------------------------------------------------
+    section("9. R1/BLOCKER-1 — primaryClinicId is the run's target clinic");
+
+    await test('imported patients carry clinicId AND primaryClinicId = run.clinicId', async () => {
+      const tenant = await makeTenant('primaryclinic');
+      const prep = await prepareRun(tenant, syntheticRows(12, 21));
+      await executeMigrationRun(executeInput(prep.run, prep.workbook, prep.mappings));
+
+      const patients = await prisma.patient.findMany({
+        where: { organizationId: tenant.organizationId },
+        select: { id: true, clinicId: true, primaryClinicId: true },
+      });
+      assert.equal(patients.length, 12);
+      for (const p of patients) {
+        assert.equal(p.clinicId, tenant.clinicId, 'clinicId must be the run target');
+        assert.equal(
+          p.primaryClinicId,
+          tenant.clinicId,
+          'primaryClinicId must be the run target, not null',
+        );
+      }
+
+      // The point of the fix: organization patient metrics filter on
+      // primaryClinicId, so a null would make every imported patient invisible
+      // there. Proved with the query those metrics actually run.
+      const visibleToOrgMetrics = await prisma.patient.count({
+        where: { primaryClinicId: tenant.clinicId, deletedAt: null },
+      });
+      assert.equal(visibleToOrgMetrics, 12, 'every imported patient must be visible to org metrics');
+    });
+
+    await test('a source branch column (SUBE_ID) cannot change clinicId or primaryClinicId', async () => {
+      const tenant = await makeTenant('subeid');
+      // A SIBLING clinic in the same organization. The workbook names it in a
+      // branch column, which must be ignored entirely.
+      const sibling = await prisma.clinic.create({
+        data: {
+          name: `Sibling-${randomUUID().slice(0, 8)}`,
+          slug: `sib-${randomUUID().slice(0, 8)}`,
+          organizationId: tenant.organizationId,
+          maxPatients: 100000,
+        },
+      });
+
+      const rows = syntheticRows(8, 22);
+      const sheet: FixtureSheet = {
+        name: 'Sayfa1',
+        rows: [
+          [...HEADERS, 'SUBE_ID'].map((h) => ({ v: h })),
+          ...rows.map((r) => [
+            { v: r.hastaId },
+            { v: r.ad },
+            { v: r.soyad },
+            { v: r.phone },
+            { v: r.tckn },
+            { v: r.cinsiyet },
+            { v: r.dosyano },
+            { v: sibling.id },
+          ]),
+        ],
+      };
+      const workbook = await parseSourceWorkbook(buildBiff8Fixture([sheet]), 'xls');
+      const profiles = profileColumns(workbook);
+      const suggestions = suggestMappings(workbook.headers, profiles, {
+        sourceSystem: SOURCE_SYSTEM_DEFAULT,
+      });
+
+      // No mapping the engine can produce may address a clinic-identity field.
+      for (const s of suggestions) {
+        assert.notEqual(s.destinationField, 'patient.clinicId');
+        assert.notEqual(s.destinationField, 'patient.primaryClinicId');
+      }
+
+      const run = await prisma.migrationRun.create({
+        data: {
+          organizationId: tenant.organizationId,
+          clinicId: tenant.clinicId,
+          sourceSystem: SOURCE_SYSTEM_DEFAULT,
+          status: 'READY',
+          batchSize: 500,
+          totalSourceRows: workbook.rows.length,
+          headerColumnCount: workbook.headers.length,
+        },
+      });
+      const mappings: ResolvedMapping[] = suggestions.map((s) => ({
+        sourceField: s.sourceField,
+        sourceIndex: s.sourceIndex,
+        destinationField: s.destinationField,
+        transform: s.transform,
+        composeOrder: s.composeOrder,
+        state: s.destinationField ? 'AUTO_CONFIDENT' : 'IGNORE',
+      }));
+      await executeMigrationRun(executeInput(run, workbook, mappings));
+
+      const patients = await prisma.patient.findMany({
+        where: { organizationId: tenant.organizationId },
+        select: { clinicId: true, primaryClinicId: true },
+      });
+      assert.equal(patients.length, 8);
+      for (const p of patients) {
+        assert.equal(p.clinicId, tenant.clinicId);
+        assert.equal(p.primaryClinicId, tenant.clinicId);
+      }
+
+      // Cross-clinic target mismatch is impossible: nothing landed in the
+      // sibling branch the workbook named.
+      assert.equal(
+        await prisma.patient.count({
+          where: {
+            organizationId: tenant.organizationId,
+            OR: [{ clinicId: sibling.id }, { primaryClinicId: sibling.id }],
+          },
+        }),
+        0,
+        'the source branch column must never redirect a row to a sibling clinic',
+      );
+    });
+
+    // ---------------------------------------------------------------------
+    section('10. R1/BLOCKER-2 — practitioner reference map is clinic-safe');
+
+    await test("clinic A's mapping cannot be silently reused by clinic B", async () => {
+      const tenant = await makeTenant('refmapa');
+      const clinicB = await prisma.clinic.create({
+        data: {
+          name: `B-${randomUUID().slice(0, 8)}`,
+          slug: `bb-${randomUUID().slice(0, 8)}`,
+          organizationId: tenant.organizationId,
+          maxPatients: 100000,
+        },
+      });
+      const userA = await makePractitioner(tenant.organizationId, tenant.clinicId, 'a');
+      const userB = await makePractitioner(tenant.organizationId, clinicB.id, 'b');
+
+      const SOURCE_LABEL = 'Dr Ayse';
+
+      // The SAME source label, approved in clinic A only.
+      await prisma.migrationReferenceMap.create({
+        data: {
+          organizationId: tenant.organizationId,
+          clinicId: tenant.clinicId,
+          sourceSystem: SOURCE_SYSTEM_DEFAULT,
+          entityType: 'practitioner',
+          sourceValue: SOURCE_LABEL,
+          destinationId: userA.id,
+          status: 'MAPPED_APPROVED',
+        },
+      });
+
+      // A clinic-B-scoped read must NOT see clinic A's approval.
+      const seenByB = await prisma.migrationReferenceMap.findMany({
+        where: {
+          organizationId: tenant.organizationId,
+          clinicId: clinicB.id,
+          sourceSystem: SOURCE_SYSTEM_DEFAULT,
+          entityType: 'practitioner',
+        },
+      });
+      assert.equal(seenByB.length, 0, "clinic B must not inherit clinic A's mapping");
+
+      // The same label may be mapped INDEPENDENTLY in the sibling clinic — the
+      // unique key must permit it rather than collide.
+      await prisma.migrationReferenceMap.create({
+        data: {
+          organizationId: tenant.organizationId,
+          clinicId: clinicB.id,
+          sourceSystem: SOURCE_SYSTEM_DEFAULT,
+          entityType: 'practitioner',
+          sourceValue: SOURCE_LABEL,
+          destinationId: userB.id,
+          status: 'MAPPED_APPROVED',
+        },
+      });
+
+      const resolvedForA = await prisma.migrationReferenceMap.findFirst({
+        where: { clinicId: tenant.clinicId, sourceValue: SOURCE_LABEL },
+        select: { destinationId: true },
+      });
+      const resolvedForB = await prisma.migrationReferenceMap.findFirst({
+        where: { clinicId: clinicB.id, sourceValue: SOURCE_LABEL },
+        select: { destinationId: true },
+      });
+      assert.equal(resolvedForA?.destinationId, userA.id);
+      assert.equal(resolvedForB?.destinationId, userB.id);
+      assert.notEqual(
+        resolvedForA?.destinationId,
+        resolvedForB?.destinationId,
+        'the same source label must be able to mean two different people',
+      );
+    });
+
+    await test('the reference-map unique key still collides WITHIN one clinic', async () => {
+      const tenant = await makeTenant('refmapdup');
+      await prisma.migrationReferenceMap.create({
+        data: {
+          organizationId: tenant.organizationId,
+          clinicId: tenant.clinicId,
+          sourceSystem: SOURCE_SYSTEM_DEFAULT,
+          entityType: 'practitioner',
+          sourceValue: 'Dr Tek',
+          status: 'UNMAPPED',
+        },
+      });
+      await assert.rejects(
+        () =>
+          prisma.migrationReferenceMap.create({
+            data: {
+              organizationId: tenant.organizationId,
+              clinicId: tenant.clinicId,
+              sourceSystem: SOURCE_SYSTEM_DEFAULT,
+              entityType: 'practitioner',
+              sourceValue: 'Dr Tek',
+              status: 'UNMAPPED',
+            },
+          }),
+        'one source label may resolve only once per clinic',
+      );
+    });
+
+    await test('practitioner eligibility is enforced for the TARGET clinic', async () => {
+      const tenant = await makeTenant('practelig');
+      const other = await prisma.clinic.create({
+        data: {
+          name: `Other-${randomUUID().slice(0, 8)}`,
+          slug: `oth-${randomUUID().slice(0, 8)}`,
+          organizationId: tenant.organizationId,
+          maxPatients: 100000,
+        },
+      });
+
+      const valid = await makePractitioner(tenant.organizationId, tenant.clinicId, 'ok');
+      const otherClinicDentist = await makePractitioner(tenant.organizationId, other.id, 'other');
+      const receptionist = await makeUser(
+        tenant.organizationId,
+        tenant.clinicId,
+        'RECEPTIONIST',
+        'rec',
+      );
+      const inactive = await makePractitioner(tenant.organizationId, tenant.clinicId, 'inactive');
+      await prisma.user.update({ where: { id: inactive.id }, data: { isActive: false } });
+
+      // A valid practitioner for the target clinic succeeds.
+      assert.ok(
+        await findClinicPractitioner(valid.id, tenant.clinicId),
+        'a dentist assigned to the target clinic must be accepted',
+      );
+
+      // A user without target-clinic access is rejected.
+      assert.equal(
+        await findClinicPractitioner(otherClinicDentist.id, tenant.clinicId),
+        null,
+        "a sibling clinic's dentist has no access to the target clinic",
+      );
+
+      // A non-practitioner is rejected even though they belong to the clinic.
+      assert.equal(
+        await findClinicPractitioner(receptionist.id, tenant.clinicId),
+        null,
+        'a receptionist is not a practitioner',
+      );
+
+      // A deactivated user is rejected.
+      assert.equal(
+        await findClinicPractitioner(inactive.id, tenant.clinicId),
+        null,
+        'a deactivated user is not selectable',
+      );
+
+      // The candidate LIST offered to the operator is exactly the eligible set.
+      const candidates = await listClinicPractitioners(tenant.clinicId);
+      const ids = candidates.map((c) => c.id);
+      assert.ok(ids.includes(valid.id));
+      assert.ok(!ids.includes(otherClinicDentist.id), 'no sibling-clinic user may be offered');
+      assert.ok(!ids.includes(receptionist.id), 'no non-practitioner may be offered');
+      assert.ok(!ids.includes(inactive.id), 'no deactivated user may be offered');
+    });
+
+    // ---------------------------------------------------------------------
+    section('11. R1/BLOCKER-3 — retry leaves trustworthy progress counters');
+
+    await test(
+      'batch1 ok / batch2 infra-fails / batch3 ok, then batch2 retried: counters balance',
+      async () => {
+        const tenant = await makeTenant('retrycount');
+        const rows = syntheticRows(150, 77);
+        const prep = await prepareRun(tenant, rows, MIN_PRODUCTION_BATCH_SIZE);
+
+        // A GENUINE infrastructure failure confined to batch 2. A database
+        // trigger raises on one row in rows 51..100, aborting that batch's
+        // transaction exactly as a real outage would — the batch rolls back
+        // whole, writing no patients and no row-outcome ledger entries.
+        const doomedFirstName = `Sentetik${77 * 1000 + 60}`;
+        await prisma.$executeRawUnsafe(
+          `CREATE OR REPLACE FUNCTION mig_test_fail_batch2() RETURNS trigger AS $fn$ ` +
+            `BEGIN IF NEW."firstName" = '${doomedFirstName}' THEN ` +
+            `RAISE EXCEPTION 'simulated infrastructure failure'; END IF; RETURN NEW; END; ` +
+            `$fn$ LANGUAGE plpgsql;`,
+        );
+        await prisma.$executeRawUnsafe(
+          `CREATE TRIGGER mig_test_fail_batch2_trg BEFORE INSERT ON "Patient" ` +
+            `FOR EACH ROW EXECUTE FUNCTION mig_test_fail_batch2();`,
+        );
+
+        let firstPass;
+        try {
+          firstPass = await executeMigrationRun(
+            executeInput(prep.run, prep.workbook, prep.mappings),
+          );
+        } finally {
+          await prisma.$executeRawUnsafe(
+            'DROP TRIGGER IF EXISTS mig_test_fail_batch2_trg ON "Patient";',
+          );
+          await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS mig_test_fail_batch2();');
+        }
+
+        assert.equal(firstPass.status, 'PARTIAL_FAILURE', 'batch 2 must fail the run');
+
+        const batchesAfterFailure = await prisma.migrationRunBatch.findMany({
+          where: { runId: prep.run.id },
+          orderBy: { batchNumber: 'asc' },
+        });
+        assert.equal(batchesAfterFailure.length, 3);
+        assert.deepEqual(
+          batchesAfterFailure.map((b) => b.status),
+          ['SUCCEEDED', 'FAILED', 'SUCCEEDED'],
+          'batches 1 and 3 commit; only batch 2 fails',
+        );
+
+        // Batch 2 rolled back WHOLE: 100 patients, and no ledger rows for it.
+        assert.equal(
+          await prisma.patient.count({ where: { organizationId: tenant.organizationId } }),
+          100,
+          'a failed batch writes no patients',
+        );
+        assert.equal(
+          await prisma.migrationRowOutcome.count({
+            where: { runId: prep.run.id, batchNumber: 2 },
+          }),
+          0,
+          'a rolled-back batch leaves no row-outcome ledger entries',
+        );
+
+        const failedRun = await prisma.migrationRun.findUniqueOrThrow({
+          where: { id: prep.run.id },
+        });
+        assert.equal(failedRun.createdRows, 100, 'createdRows while batch 2 is failed');
+        assert.equal(failedRun.failedRows, 50, "the rolled-back batch's rows are reported failed");
+        assert.equal(failedRun.processedRows, 150, 'processedRows while batch 2 is failed');
+
+        // ---- the retry ----
+        assert.equal(await markFailedBatchesForRetry(prep.run.id), 1);
+        const retried = await resumeMigrationRun(
+          executeInput(prep.run, prep.workbook, prep.mappings),
+        );
+        assert.equal(retried.status, 'COMPLETED');
+
+        // ---- THE CLAIM: no row is both a historical failure and a success ----
+        const finalRun = await prisma.migrationRun.findUniqueOrThrow({
+          where: { id: prep.run.id },
+        });
+        assert.equal(finalRun.processedRows, 150, 'processedRows');
+        assert.equal(finalRun.createdRows, 150, 'createdRows');
+        assert.equal(finalRun.matchedRows, 0, 'matchedRows');
+        assert.equal(
+          finalRun.failedRows,
+          0,
+          'the retried batch must NOT still be counted as historically failed',
+        );
+        assert.equal(finalRun.skippedRows, 0, 'skippedRows');
+        assert.equal(
+          finalRun.processedRows,
+          finalRun.createdRows + finalRun.matchedRows + finalRun.skippedRows + finalRun.failedRows,
+          'processed must equal the disjoint outcome buckets',
+        );
+
+        // warningRows is a projection of the ledger, not an accumulator.
+        const ledgerWarningRows = (
+          await prisma.migrationRowOutcome.findMany({
+            where: { runId: prep.run.id },
+            select: { warnings: true },
+          })
+        ).filter((o) => Array.isArray(o.warnings) && o.warnings.length > 0).length;
+        assert.equal(finalRun.warningRows, ledgerWarningRows, 'warningRows');
+
+        // Batch statuses and the durable ledger.
+        const finalBatches = await prisma.migrationRunBatch.findMany({
+          where: { runId: prep.run.id },
+          orderBy: { batchNumber: 'asc' },
+        });
+        assert.deepEqual(
+          finalBatches.map((b) => b.status),
+          ['SUCCEEDED', 'SUCCEEDED', 'SUCCEEDED'],
+          'every batch ends SUCCEEDED after the retry',
+        );
+        assert.equal(
+          finalBatches.find((b) => b.batchNumber === 2)?.retryCount,
+          1,
+          'the retried batch records exactly one retry',
+        );
+        assert.equal(
+          await prisma.migrationRowOutcome.count({ where: { runId: prep.run.id } }),
+          150,
+          'exactly one ledger row per source row — no duplicates from the retry',
+        );
+        assert.equal(
+          await prisma.patient.count({ where: { organizationId: tenant.organizationId } }),
+          150,
+          'the retry creates the missing 50 and duplicates nothing',
+        );
+
+        // Reconciliation must balance against the database.
+        const report = await buildReconciliation({
+          runId: prep.run.id,
+          organizationId: tenant.organizationId,
+          clinicId: tenant.clinicId,
+          sourceSystem: SOURCE_SYSTEM_DEFAULT,
+          destinationCountBefore: 0,
+          eligibleTotal: 150,
+          sourceTotal: 150,
+        });
+        assert.equal(report.balanced, true, report.imbalanceDetail ?? 'reconciliation must balance');
+        assert.equal(report.created, 150);
+        assert.equal(report.failed, 0);
+        assert.equal(report.provenanceResolves, true);
+        assert.equal(report.tenantScopeClean, true);
+        assert.equal(report.batchTotals.succeeded, 3);
+        assert.equal(report.batchTotals.failed, 0);
+
+        // The projection is idempotent: recomputing changes nothing.
+        const recomputed = await recomputeRunCounters(prep.run.id);
+        assert.equal(recomputed.processedRows, 150);
+        assert.equal(recomputed.createdRows, 150);
+        assert.equal(recomputed.failedRows, 0);
+      },
+    );
   } finally {
     await cleanupTenants().catch((err) => {
       console.error('cleanup failed:', (err as Error).message);

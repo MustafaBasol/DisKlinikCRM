@@ -283,9 +283,14 @@ ALTER TABLE "MigrationFieldMapping" ADD CONSTRAINT "MigrationFieldMapping_runId_
 -- NO fuzzy matching and NO auto-creation of destination rows: a
 -- migration-created User would be a credentialed, payable account created
 -- without an onboarding decision.
+-- R1: the mapping is BRANCH-scoped. In a multi-branch organization the same
+-- source label is two different people in two different branches, so an
+-- organization-only unique key silently reuses clinic A's approved mapping
+-- when clinic B is migrated. clinicId is part of the identity of a mapping.
 CREATE TABLE "MigrationReferenceMap" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
+    "clinicId" TEXT NOT NULL,
     "sourceSystem" TEXT NOT NULL,
     "entityType" TEXT NOT NULL,
     "sourceValue" TEXT NOT NULL,
@@ -299,10 +304,12 @@ CREATE TABLE "MigrationReferenceMap" (
     CONSTRAINT "MigrationReferenceMap_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "MigrationReferenceMap_organizationId_sourceSystem_entityType_sourceValue_key" ON "MigrationReferenceMap"("organizationId", "sourceSystem", "entityType", "sourceValue");
-CREATE INDEX "MigrationReferenceMap_organizationId_sourceSystem_entityType_status_idx" ON "MigrationReferenceMap"("organizationId", "sourceSystem", "entityType", "status");
+CREATE UNIQUE INDEX "MigrationReferenceMap_organizationId_clinicId_sourceSystem_key" ON "MigrationReferenceMap"("organizationId", "clinicId", "sourceSystem", "entityType", "sourceValue");
+CREATE INDEX "MigrationReferenceMap_organizationId_clinicId_sourceSystem_idx" ON "MigrationReferenceMap"("organizationId", "clinicId", "sourceSystem", "entityType", "status");
+CREATE INDEX "MigrationReferenceMap_clinicId_idx" ON "MigrationReferenceMap"("clinicId");
 
 ALTER TABLE "MigrationReferenceMap" ADD CONSTRAINT "MigrationReferenceMap_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "MigrationReferenceMap" ADD CONSTRAINT "MigrationReferenceMap_clinicId_fkey" FOREIGN KEY ("clinicId") REFERENCES "Clinic"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- ---------------------------------------------------------------------------
 -- MigrationRecord (G-E1) — DURABLE CROSS-RUN PROVENANCE / IDEMPOTENCY ANCHOR

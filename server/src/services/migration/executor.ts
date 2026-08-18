@@ -242,29 +242,25 @@ async function executeBatches(input: ExecuteInput, lock: AcquiredLock): Promise<
       identityByRow,
       practitionerMap: input.practitionerMap,
       isRetry: batch.status === 'FAILED',
+      // A re-attempt is either a still-FAILED batch picked up by a resume, or
+      // one that markFailedBatchesForRetry already reset to PENDING (which is
+      // why retryCount, not status, is the durable signal). Used only to clear
+      // a prior attempt's ledger rows.
+      isReattempt: batch.status === 'FAILED' || batch.retryCount > 0,
       previousRetryCount: batch.retryCount,
     });
 
-    totals.processedRows += result.processedRows;
-    totals.createdRows += result.createdRows;
-    totals.matchedRows += result.matchedRows;
-    totals.failedRows += result.failedRows;
-    totals.skippedRows += result.skippedRows;
-    totals.warningRows += result.warningRows;
     if (result.failed) anyBatchFailed = true;
 
+    // NOT `{ increment: … }`. The run counters are recomputed from the durable
+    // ledger so that a retried batch cannot be counted twice — see
+    // recomputeRunCounters. `totals` is the whole run's state, not this
+    // invocation's, which is what a retry-only invocation must report.
     await prisma.migrationRun.update({
       where: { id: runId },
-      data: {
-        currentBatch: batch.batchNumber,
-        processedRows: { increment: result.processedRows },
-        createdRows: { increment: result.createdRows },
-        matchedRows: { increment: result.matchedRows },
-        failedRows: { increment: result.failedRows },
-        skippedRows: { increment: result.skippedRows },
-        warningRows: { increment: result.warningRows },
-      },
+      data: { currentBatch: batch.batchNumber },
     });
+    Object.assign(totals, await recomputeRunCounters(runId));
 
     logger.info(
       safeLogContext(logCtx, {
@@ -279,6 +275,11 @@ async function executeBatches(input: ExecuteInput, lock: AcquiredLock): Promise<
       '[migration] batch complete',
     );
   }
+
+  // Final authoritative projection. Also covers the invocation that had no
+  // pending batches at all (a resume with nothing left to do), which must still
+  // report the run's real totals rather than zeros.
+  Object.assign(totals, await recomputeRunCounters(runId));
 
   const finalStatus: ExecuteResult['status'] = cancelled
     ? 'CANCELLED'
@@ -295,9 +296,17 @@ async function executeBatches(input: ExecuteInput, lock: AcquiredLock): Promise<
   return { ...totals, status: finalStatus, suppressedEffects: getSuppressionCounts() };
 }
 
+/**
+ * The smallest batch size execution will actually honour. Exported so a test
+ * cannot ask for a size the product silently clamps away and then assert on a
+ * batch count that never happens.
+ */
+export const MIN_BATCH_SIZE = 50;
+export const MAX_BATCH_SIZE = 2000;
+
 function clampBatchSize(requested: number): number {
   if (!Number.isFinite(requested)) return 500;
-  return Math.min(2000, Math.max(50, Math.floor(requested)));
+  return Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, Math.floor(requested)));
 }
 
 /**
@@ -366,6 +375,8 @@ interface BatchInput {
   identityByRow: Map<number, IdentityDecision>;
   practitionerMap: ReadonlyMap<string, string | null>;
   isRetry: boolean;
+  /** A prior attempt exists; clear its ledger rows before rewriting them. */
+  isReattempt: boolean;
   previousRetryCount: number;
 }
 
@@ -425,6 +436,18 @@ async function executeOneBatch(input: BatchInput): Promise<BatchResult> {
   try {
     await prisma.$transaction(
       async (tx) => {
+        // A retried batch must leave exactly ONE ledger entry per source row.
+        // The rows below are inserted with `skipDuplicates`, which would keep a
+        // superseded outcome rather than replace it, so any prior attempt's
+        // entries for this batch are cleared first. In the normal case (an
+        // infrastructure failure rolled the batch back) there are none — this
+        // is the guard that keeps the ledger authoritative even if a previous
+        // attempt did commit rows. Inside the transaction: if this attempt
+        // rolls back, the delete rolls back with it.
+        if (input.isReattempt) {
+          await tx.migrationRowOutcome.deleteMany({ where: { runId, batchNumber } });
+        }
+
         // Existing provenance for exactly this batch's source ids — one indexed
         // query per batch rather than one per row.
         const sourceIds = rows.map((row) => row.sourceId).filter((id): id is string => Boolean(id));
@@ -523,6 +546,16 @@ async function executeOneBatch(input: BatchInput): Promise<BatchResult> {
             data: {
               organizationId,
               clinicId,
+              // The run's server-validated target clinic, never a source value.
+              // Organization patient metrics filter on primaryClinicId
+              // (services/patientOrganizationMetrics.ts), so leaving it null
+              // would make every imported patient invisible to org-level
+              // counts. migrate-to-multibranch.ts backfills exactly this
+              // invariant (primaryClinicId = the patient's clinic), so setting
+              // it here matches the accepted multi-branch model rather than
+              // inventing one. SUBE_ID and every other workbook branch column
+              // is deliberately NOT a source for this field.
+              primaryClinicId: clinicId,
               firstName: row.draft.firstName,
               lastName: row.draft.lastName,
               email: row.draft.email,
@@ -543,9 +576,6 @@ async function executeOneBatch(input: BatchInput): Promise<BatchResult> {
               //   createdAt        — means "row created in NoraMedi"
               //   communicationConsent / marketingConsent / smsOptOut
               //                    — consent is never invented
-              //   primaryClinicId  — no runtime path sets it; leaving it unset
-              //                      keeps the organization dashboard's counts
-              //                      behaving exactly as they do today
             },
             select: { id: true },
           });
@@ -661,11 +691,125 @@ async function executeOneBatch(input: BatchInput): Promise<BatchResult> {
   }
 }
 
-/** Mark failed batches for another attempt. The retry is a normal resume. */
+/**
+ * F3-DATA-MIG-TODAY-001-R1 — THE ONE AUTHORITATIVE RUN-COUNTER PROJECTION.
+ *
+ * The run counters used to be maintained with `{ increment: … }` per batch.
+ * That is not reversible, and a retry made it lie:
+ *
+ *   batch 2 rolls back  → run.failedRows += 500   (phantom: the transaction
+ *                                                  committed NOTHING, so no
+ *                                                  row ledger entry exists)
+ *   batch 2 is retried  → run.createdRows += 500
+ *   final               → the same 500 source rows are reported simultaneously
+ *                         as historical failures AND as creations, and
+ *                         created + failed exceeds the rows that exist.
+ *
+ * So the counters are no longer accumulated at all. They are RECOMPUTED from
+ * the durable ledger every time they are written — after each batch and at
+ * finalization. The ledger is authoritative because MigrationRowOutcome rows
+ * are written inside the batch transaction: a rolled-back batch leaves none,
+ * which is exactly why the phantom disappears on its own.
+ *
+ * Rows of a batch that is currently FAILED are counted as attempted-and-failed
+ * even though they have no ledger entry — otherwise a permanently failed batch
+ * would silently report zero failures. That term is derived from batch STATUS,
+ * so a successful retry flips the batch to SUCCEEDED and the term drops to zero
+ * in the same recompute that picks up its new CREATED rows. Nothing to reverse.
+ *
+ * This keeps processedRows = created + matched + skipped + failed exact, which
+ * is what makes GET /progress and the reconciliation agree.
+ */
+const RUN_CREATED_STATUSES = ['CREATED'];
+const RUN_MATCHED_STATUSES = ['MATCHED'];
+const RUN_SKIPPED_STATUSES = ['SKIPPED'];
+
+export interface RunCounters {
+  processedRows: number;
+  createdRows: number;
+  matchedRows: number;
+  failedRows: number;
+  skippedRows: number;
+  warningRows: number;
+}
+
+export async function recomputeRunCounters(runId: string): Promise<RunCounters> {
+  const [grouped, failedBatches, warningRows] = await Promise.all([
+    prisma.migrationRowOutcome.groupBy({
+      by: ['status'],
+      where: { runId },
+      _count: { _all: true },
+    }),
+    // Rows attempted by a batch that is currently FAILED: the transaction rolled
+    // back, so they have no ledger entry, but they were attempted and did not
+    // land. rowEnd is inclusive.
+    prisma.migrationRunBatch.findMany({
+      where: { runId, status: 'FAILED' },
+      select: { rowStart: true, rowEnd: true },
+    }),
+    // Warnings are a JSONB array of CODES. An outcome may carry an empty array,
+    // which is not a warning — hence the explicit length test rather than a
+    // null check. jsonb_typeof guards a non-array value from erroring.
+    prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::bigint AS count
+      FROM "MigrationRowOutcome"
+      WHERE "runId" = ${runId}
+        AND jsonb_typeof("warnings") = 'array'
+        AND jsonb_array_length("warnings") > 0
+    `,
+  ]);
+
+  const countByStatus = new Map(grouped.map((g) => [g.status, g._count._all]));
+  const sum = (statuses: readonly string[]): number =>
+    statuses.reduce((total, status) => total + (countByStatus.get(status) ?? 0), 0);
+
+  const createdRows = sum(RUN_CREATED_STATUSES);
+  const matchedRows = sum(RUN_MATCHED_STATUSES);
+  const skippedRows = sum(RUN_SKIPPED_STATUSES);
+  const ledgerTotal = [...countByStatus.values()].reduce((a, b) => a + b, 0);
+
+  // Everything in the ledger that is not created/matched/skipped did not
+  // produce a destination row: FAILED, INVALID, BLOCKED, MAPPING_REQUIRED,
+  // MANUAL_REVIEW, AMBIGUOUS, DUPLICATE_SOURCE. The executor has always
+  // reported BLOCKED/INVALID rows in failedRows; this preserves that meaning
+  // without enumerating a taxonomy that can drift.
+  const ledgerFailed = ledgerTotal - createdRows - matchedRows - skippedRows;
+  const rolledBackRows = failedBatches.reduce(
+    (total, batch) => total + Math.max(0, batch.rowEnd - batch.rowStart + 1),
+    0,
+  );
+
+  const counters: RunCounters = {
+    createdRows,
+    matchedRows,
+    skippedRows,
+    failedRows: ledgerFailed + rolledBackRows,
+    processedRows: ledgerTotal + rolledBackRows,
+    warningRows: Number(warningRows[0]?.count ?? 0),
+  };
+
+  await prisma.migrationRun.update({ where: { id: runId }, data: counters });
+  return counters;
+}
+
+/**
+ * Mark failed batches for another attempt. The retry is a normal resume.
+ *
+ * retryCount is incremented HERE because this call clears the FAILED status:
+ * by the time the executor reads the batch it looks like a plain PENDING one,
+ * so the executor can no longer tell that this is a re-attempt. Leaving the
+ * increment to the executor alone silently recorded every retried batch as a
+ * first attempt.
+ */
 export async function markFailedBatchesForRetry(runId: string): Promise<number> {
   const result = await prisma.migrationRunBatch.updateMany({
     where: { runId, status: 'FAILED' },
-    data: { status: 'PENDING', errorCode: null, errorSummary: null },
+    data: {
+      status: 'PENDING',
+      retryCount: { increment: 1 },
+      errorCode: null,
+      errorSummary: null,
+    },
   });
   return result.count;
 }

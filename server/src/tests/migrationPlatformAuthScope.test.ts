@@ -379,13 +379,46 @@ await test('the migration feature never writes consent, notes, postalCode or cre
     'deletedAt:',
     'isAnonymized:',
     'source:',
-    'primaryClinicId:',
   ]) {
     assert.ok(
       !createBlock.includes(forbidden),
       `the migration must not set ${forbidden} on a patient`,
     );
   }
+});
+
+/**
+ * R1/BLOCKER-1. primaryClinicId is deliberately NOT in the forbidden list any
+ * more: leaving it null made every imported patient invisible to organization
+ * patient metrics, which filter on it. It must be set, and it must be set to
+ * the run's server-validated target clinic — never to a workbook branch value.
+ */
+await test('the migration sets primaryClinicId to the run target clinic only', () => {
+  const executorSrc = src('../services/migration/executor.ts');
+  const createBlock = executorSrc.slice(
+    executorSrc.indexOf('tx.patient.create('),
+    executorSrc.indexOf('tx.migrationRecord.create('),
+  );
+  assert.ok(
+    /primaryClinicId:\s*clinicId\s*,/.test(createBlock),
+    "primaryClinicId must be assigned the run's validated target clinicId",
+  );
+  // The only value it may take is the run's clinicId binding. Any source-derived
+  // expression (a mapped draft field or a branch column) is forbidden.
+  assert.ok(
+    !/primaryClinicId:\s*row\./.test(createBlock),
+    'primaryClinicId must never come from a source row',
+  );
+  // Comments are stripped first: the create block DOCUMENTS that SUBE_ID is not
+  // a source for this field, and a naive scan would flag its own explanation.
+  const codeOnly = createBlock
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+  assert.ok(
+    !/SUBE_ID/i.test(codeOnly),
+    'no source branch identifier may appear in the patient create block',
+  );
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
