@@ -1045,3 +1045,46 @@ The one applicable gate, with its exact command and its real result:
 **R1 and R2 both changed documentation only, on the same branch and the same draft PR #442. No new PR
 was opened, nothing was merged, and nothing was deployed. No runtime, schema, migration, parser, UI,
 permissions, route or test file was modified by any revision of this task.**
+
+---
+
+## 21. Patient Field Gap & Secure Identity Decision Package
+
+**Added by `F3-DATA-MIG-001` / `-002` / `-003` (2026-08-18). Additive — nothing above this line is
+altered, withdrawn or overwritten.** The record of PR #442 stands as accepted historical evidence.
+
+The follow-on analysis lives in a companion document so this contract is not duplicated:
+
+**→ [PATIENT_FIELD_GAP_AND_IDENTITY_DECISION_PACKAGE.md](PATIENT_FIELD_GAP_AND_IDENTITY_DECISION_PACKAGE.md)**
+
+It extends this contract with:
+
+- **complete per-column coverage** — all 91 source columns individually dispositioned, where §7 above
+  dispositioned ~30, most of them in groups;
+- **a secure national-identifier architecture** answering §19 open decision 3 (`TCNO`) — model shape,
+  encryption, searchable lookup, uniqueness, masking, authorization, audit, retention and backup;
+- **an explicit gender recommendation** answering the `CINSIYET` half of that decision;
+- **a ranked gap package** (P0 / P1 / P2 / defer) with a proposed additive schema set, all marked
+  `NOT_AUTHORIZED_YET`;
+- **an expanded source dataset register** adding four datasets §5 above does not list — the
+  odontogram, payment plans, lab orders, and the attachment/imaging binary corpora.
+
+### Corrections it applies to this document
+
+Recorded here so this contract is not read in isolation. Full evidence in §2 of the companion.
+
+| # | Correction |
+| --- | --- |
+| C-1 | §3 declares **91** named columns and enumerates **90**. One column name is missing from the transcription — **no mapping profile can be certified complete until the verbatim header row is re-emitted** |
+| C-2 | `ADRES_KODU` → `Patient.postalCode` is downgraded to `MANUAL_REVIEW`; it is plausibly a 10-digit UAVT address code, not a 5-digit postal code |
+| C-3 | `ULKE` is a **valid mapping carrying zero rows**, not an `IGNORE` |
+| C-4 | The government/health identifiers are `BLOCKED_NO_DESTINATION`, not `IGNORE` |
+| C-5 | `EVTELEFONU` / `ISTELEFONU` are `BLOCKED_NO_DESTINATION`. **They must never be written to `PatientEmergencyContact`** |
+| C-6 | `DOSYANO` is **clinic-facing, not vendor-internal** — dropping it makes the clinic's paper archive unresolvable |
+| C-7 | `ONEMLINOT` and `KONTROLNOTU` fill rates were **never measured**; "empty in this file" is unsupported for them |
+| C-8 | `Patient` has **no practitioner field at all**, so a resolved `User.id` has nowhere to land — two gaps, not one |
+| D-1 | G-6 undercounts: there are **8** phone normalizers, not 6 |
+| D-3 | K-2 narrows to a testable hypothesis — **DigiDentiS**, whose API contract is already in this repo and already integrated |
+
+**No program state changed. No schema, migration or runtime code was created or modified.**
+`SCHEMA_CHANGE_AUTHORIZED = NO`.
