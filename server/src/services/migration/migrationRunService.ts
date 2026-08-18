@@ -155,9 +155,11 @@ export interface TransitionOptions {
  *
  * Exported because some operator actions are a single logical step that the
  * state machine expresses as more than one edge — analyze is
- * UPLOADED -> ANALYZED -> MAPPING_*. Those callers must be able to take both
- * edges, plus the row writes that belong with them, in ONE transaction, so a
- * failure half-way cannot leave the run advertising a stage it never reached.
+ * UPLOADED -> ANALYZED -> MAPPING_*, and a mapping edit after a dry run is
+ * DRY_RUN_COMPLETE -> MAPPING_REQUIRED -> MAPPING_READY. Those callers must be
+ * able to take every edge, PLUS the row writes that belong with them, in ONE
+ * transaction, so a failure half-way cannot leave the run advertising a stage
+ * it never reached — or leave edited rows behind a status that never moved.
  *
  * This is NOT a way around the state machine: every hop still goes through
  * assertTransition and still writes its own audit row, so a multi-hop action
@@ -172,26 +174,40 @@ export async function transitionRunInTx(
 ) {
   assertTransition(from, to);
 
-  // Re-read inside the transaction: the status we validated against may have
-  // moved between the caller's read and here (another tab, the executor
-  // finishing a batch). Without this the state machine is advisory only.
-  const current = await tx.migrationRun.findUnique({
-    where: { id: runId },
-    select: { status: true },
+  /*
+   * THE STATUS CHANGE IS A CONDITIONAL UPDATE, not a read followed by a write.
+   *
+   * `UPDATE ... WHERE id = ? AND status = ?` is one atomic statement in
+   * Postgres, exactly like the execution lock above. A read-then-update-by-id
+   * would have a window: the caller's transaction runs at READ COMMITTED, so a
+   * concurrent transition that COMMITS after our read but before our write is
+   * invisible to the read and then silently overwritten by the write — a lost
+   * update that moves the run out of a status somebody else had already left.
+   * With the status in the WHERE clause the write simply matches no row, we
+   * throw, and the caller's whole transaction — mapping edits included — rolls
+   * back.
+   */
+  const changed = await tx.migrationRun.updateMany({
+    where: { id: runId, status: from },
+    data: { ...(options.data ?? {}), status: to },
   });
-  if (!current) {
-    throw new MigrationError('RUN_NOT_FOUND', { message: 'Migration run not found.' });
-  }
-  if (current.status !== from) {
+
+  if (changed.count !== 1) {
+    // Diagnose only AFTER the atomic attempt failed, never as a pre-check.
+    // A zero-row UPDATE does not abort the transaction, so this read is safe.
+    const current = await tx.migrationRun.findUnique({
+      where: { id: runId },
+      select: { status: true },
+    });
+    if (!current) {
+      throw new MigrationError('RUN_NOT_FOUND', { message: 'Migration run not found.' });
+    }
     throw new MigrationError('MIGRATION_STATE_INVALID', {
       message: `The run changed status while this request was in flight (expected ${from}, found ${current.status}). Reload and try again.`,
     });
   }
 
-  const updated = await tx.migrationRun.update({
-    where: { id: runId },
-    data: { ...(options.data ?? {}), status: to },
-  });
+  const updated = await tx.migrationRun.findUniqueOrThrow({ where: { id: runId } });
 
   await writePlatformAdminAuditEventInTx(tx, {
     actorPlatformAdminId: options.actorPlatformAdminId,

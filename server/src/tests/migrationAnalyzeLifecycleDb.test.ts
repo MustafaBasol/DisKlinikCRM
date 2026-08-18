@@ -29,6 +29,15 @@
  * DB-BACKED. Requires DATABASE_URL to point at a DISPOSABLE Postgres — it
  * creates and deletes real rows. Registered under `server:test:disposable-db`.
  *
+ * R2 extends this suite to the same defect class on PUT /mappings and
+ * POST /mappings/accept-auto: those routes committed their mapping-row edits in
+ * one transaction and moved the run in another, so a rejected transition — a
+ * concurrent status change, a dry run started in another tab — left the edited
+ * rows persisted underneath a run that never moved. Both routes are now one
+ * transaction, and the transition itself is a CONDITIONAL update
+ * (`WHERE id = ? AND status = ?`) so a status that changed mid-transaction
+ * rolls the whole logical action back instead of being silently overwritten.
+ *
  * Route handlers are invoked by extracting the router's middleware chain, the
  * same technique as platformBackupAudit.test.ts — no supertest dependency.
  *
@@ -223,6 +232,109 @@ const uploadChain = routeChain('post', '/migrations/runs/:id/upload');
 const analyzeChain = routeChain('post', '/migrations/runs/:id/analyze');
 const mappingsGetChain = routeChain('get', '/migrations/runs/:id/mappings');
 const mappingsPutChain = routeChain('put', '/migrations/runs/:id/mappings');
+const acceptAutoChain = routeChain('post', '/migrations/runs/:id/mappings/accept-auto');
+
+// ---------------------------------------------------------------------------
+// Concurrency seam
+// ---------------------------------------------------------------------------
+
+/**
+ * Run `action` while ANOTHER connection commits a status change into the
+ * middle of the route's own transaction — the stale/concurrent request the
+ * atomicity fix exists for.
+ *
+ * `prisma.$transaction` is patched for the duration so the flip lands at a
+ * chosen, DETERMINISTIC point rather than being raced for:
+ *
+ *  - 'transaction-open': just before the route's transaction begins, i.e.
+ *    after its courtesy status pre-check has already passed. Proves the route
+ *    does not trust that pre-check.
+ *  - 'after-mapping-write': after the route has applied its first mapping-row
+ *    update INSIDE its transaction. Proves the edited rows roll back when the
+ *    transition is then rejected.
+ *
+ * The flip itself goes through the base client, so it is a genuinely separate
+ * transaction on a separate connection, exactly like a second browser tab.
+ */
+async function withConcurrentStatusFlip<T>(
+  runId: string,
+  newStatus: MigrationRunStatus,
+  when: 'transaction-open' | 'after-mapping-write',
+  action: () => Promise<T>,
+): Promise<T> {
+  const original = prisma.$transaction.bind(prisma) as any;
+  let fired = false;
+  const flip = async () => {
+    if (fired) return;
+    fired = true;
+    await prisma.migrationRun.update({ where: { id: runId }, data: { status: newStatus } });
+  };
+
+  (prisma as any).$transaction = (arg: any, options: any) => {
+    if (typeof arg !== 'function') {
+      // The batch form. A route that writes its rows through a batch and moves
+      // the run afterwards has already committed those rows by the time this
+      // resolves — firing the flip here is what makes the divergence visible.
+      return original(arg, options).then(async (result: unknown) => {
+        if (when === 'after-mapping-write') await flip();
+        return result;
+      });
+    }
+    if (when === 'transaction-open') {
+      return flip().then(() => original(arg, options));
+    }
+    return original(async (tx: any) => {
+      const proxied = new Proxy(tx, {
+        get(target, prop, receiver) {
+          const value = Reflect.get(target, prop, receiver);
+          if (prop !== 'migrationFieldMapping' || typeof value !== 'object' || value === null) {
+            return value;
+          }
+          return new Proxy(value, {
+            get(model, modelProp, modelReceiver) {
+              const method = Reflect.get(model, modelProp, modelReceiver);
+              if (modelProp !== 'updateMany' || typeof method !== 'function') return method;
+              return async (...args: unknown[]) => {
+                const result = await (method as any).apply(model, args);
+                await flip();
+                return result;
+              };
+            },
+          });
+        },
+      });
+      return arg(proxied);
+    }, options);
+  };
+
+  try {
+    const result = await action();
+    assert.equal(fired, true, 'the concurrency seam never fired — the test proves nothing');
+    return result;
+  } finally {
+    (prisma as any).$transaction = original;
+  }
+}
+
+/** Mapping rows exactly as persisted, for a byte/field-equivalence comparison. */
+const mappingRows = (runId: string) =>
+  prisma.migrationFieldMapping.findMany({ where: { runId }, orderBy: { sourceIndex: 'asc' } });
+
+/** Audit rows this logical action would have written had it committed. */
+async function mappingAuditCount(runId: string) {
+  return prisma.platformAdminAuditEvent.count({
+    where: {
+      resourceKey: runId,
+      action: {
+        in: [
+          'clinic_data_migration.mapping_saved',
+          'clinic_data_migration.mapping_revalidated',
+          'clinic_data_migration.mapping_auto_accepted',
+        ],
+      },
+    },
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Synthetic .xlsx fixture
@@ -651,6 +763,223 @@ async function main() {
       assert.equal(hops.includes('DRY_RUN_COMPLETE->MAPPING_READY'), false);
     },
   );
+
+  // -------------------------------------------------------------------------
+  section('Mapping edit atomicity (R2)');
+  // -------------------------------------------------------------------------
+
+  /**
+   * A run analyzed through the real routes and then parked at `status` as
+   * FIXTURE SETUP — reaching DRY_RUN_COMPLETE/READY for real needs a dry run,
+   * which is migrationExecutionDb.test.ts's job and requires identity-crypto
+   * secrets this suite deliberately does not.
+   */
+  async function mappedRunAt(
+    tenant: { organizationId: string; clinicId: string },
+    status: MigrationRunStatus,
+  ) {
+    const id = await createRun(tenant);
+    await uploadWorkbook(id, fixture);
+    await analyze(id);
+    if (status !== 'MAPPING_READY') {
+      await prisma.migrationRun.update({ where: { id }, data: { status } });
+    }
+    return id;
+  }
+
+  /** A no-op-shaped but real edit of one decided column. */
+  async function editProvenanceColumn(
+    runId: string,
+    overrides: Record<string, unknown> = {},
+  ) {
+    const existing = await prisma.migrationFieldMapping.findFirstOrThrow({
+      where: { runId, destinationField: 'provenance.sourceId' },
+    });
+    return runChain(
+      mappingsPutChain,
+      adminReq(
+        { id: runId },
+        {
+          mappings: [
+            {
+              sourceField: existing.sourceField,
+              destinationField: existing.destinationField,
+              transform: existing.transform,
+              composeOrder: existing.composeOrder,
+              state: 'RESOLVED',
+              ...overrides,
+            },
+          ],
+        },
+      ),
+      mockRes(),
+    );
+  }
+
+  const mappingCensusBefore = await domainCensus();
+
+  await test('READY + valid edit: READY -> MAPPING_REQUIRED -> MAPPING_READY, atomically', async () => {
+    const readyRunId = await mappedRunAt(target, 'READY');
+    const res = await editProvenanceColumn(readyRunId);
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    assert.equal(res.body.validation.valid, true);
+
+    const run = await prisma.migrationRun.findUniqueOrThrow({ where: { id: readyRunId } });
+    assert.equal(run.status, 'MAPPING_READY');
+
+    const hops = (
+      await prisma.platformAdminAuditEvent.findMany({
+        where: { resourceKey: readyRunId },
+        orderBy: { createdAt: 'asc' },
+      })
+    )
+      .filter((e) => e.previousValue && e.newValue)
+      .map((e) => `${e.previousValue}->${e.newValue}`);
+    assert.equal(hops.includes('READY->MAPPING_REQUIRED'), true, JSON.stringify(hops));
+    assert.equal(hops.includes('MAPPING_REQUIRED->MAPPING_READY'), true, JSON.stringify(hops));
+    assert.equal(hops.includes('READY->MAPPING_READY'), false, 'no shortcut edge');
+
+    // The edit is persisted — the two hops did not roll it back.
+    const edited = await prisma.migrationFieldMapping.findFirstOrThrow({
+      where: { runId: readyRunId, destinationField: 'provenance.sourceId' },
+    });
+    assert.equal(edited.state, 'RESOLVED');
+    assert.equal(edited.isAutoSuggested, false);
+  });
+
+  await test('an edit that invalidates the mapping lands in MAPPING_REQUIRED', async () => {
+    const invalidRunId = await mappedRunAt(target, 'MAPPING_READY');
+    const res = await editProvenanceColumn(invalidRunId, {
+      destinationField: null,
+      state: 'MANUAL_REQUIRED',
+    });
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    assert.equal(res.body.validation.valid, false);
+
+    const run = await prisma.migrationRun.findUniqueOrThrow({ where: { id: invalidRunId } });
+    assert.equal(run.status, 'MAPPING_REQUIRED');
+    const rows = await mappingRows(invalidRunId);
+    assert.equal(
+      rows.some((r) => r.destinationField === 'provenance.sourceId'),
+      false,
+      'the invalidating edit is itself persisted — only the status decision changed',
+    );
+  });
+
+  await test(
+    'STALE REQUEST: status changes as the edit transaction opens -> 409, nothing written',
+    async () => {
+      const staleRunId = await mappedRunAt(target, 'MAPPING_READY');
+      const before = await mappingRows(staleRunId);
+      const auditBefore = await mappingAuditCount(staleRunId);
+
+      // The request was routed while the run was still editable; by the time
+      // its transaction opens the run is executing.
+      const res = await withConcurrentStatusFlip(staleRunId, 'RUNNING', 'transaction-open', () =>
+        editProvenanceColumn(staleRunId),
+      );
+
+      assert.equal(res.statusCode, 409, JSON.stringify(res.body));
+      assert.equal(res.body.code, 'MIGRATION_STATE_INVALID');
+
+      const run = await prisma.migrationRun.findUniqueOrThrow({ where: { id: staleRunId } });
+      assert.equal(run.status, 'RUNNING', 'the concurrent status must survive untouched');
+      assert.deepEqual(await mappingRows(staleRunId), before, 'mapping rows must be unchanged');
+      assert.equal(
+        await mappingAuditCount(staleRunId),
+        auditBefore,
+        'a failed logical action may leave no audit row behind',
+      );
+    },
+  );
+
+  await test(
+    'CONCURRENT COMMIT MID-TRANSACTION: applied mapping edits ROLL BACK with the rejected hop',
+    async () => {
+      const racedRunId = await mappedRunAt(target, 'DRY_RUN_COMPLETE');
+      const before = await mappingRows(racedRunId);
+      const auditBefore = await mappingAuditCount(racedRunId);
+
+      /*
+       * The route has already re-read DRY_RUN_COMPLETE inside its transaction
+       * and applied the mapping-row update when another connection commits
+       * DRY_RUN_RUNNING. The conditional transition then matches no row, the
+       * transaction aborts, and the row update that had ALREADY been applied
+       * inside it must disappear with it. Before R2 that update lived in its
+       * own committed transaction and survived.
+       */
+      const res = await withConcurrentStatusFlip(
+        racedRunId,
+        'DRY_RUN_RUNNING',
+        'after-mapping-write',
+        () => editProvenanceColumn(racedRunId),
+      );
+
+      assert.equal(res.statusCode, 409, JSON.stringify(res.body));
+      assert.equal(res.body.code, 'MIGRATION_STATE_INVALID');
+
+      const run = await prisma.migrationRun.findUniqueOrThrow({ where: { id: racedRunId } });
+      assert.equal(run.status, 'DRY_RUN_RUNNING');
+
+      const after = await mappingRows(racedRunId);
+      assert.deepEqual(after, before, 'every mapping field must be byte-equivalent to before');
+      assert.equal(
+        after.some((r) => r.decidedByPlatformAdminId !== null),
+        false,
+        'the rolled-back edit must leave no decision provenance behind',
+      );
+      assert.equal(await mappingAuditCount(racedRunId), auditBefore);
+    },
+  );
+
+  await test(
+    'accept-auto is atomic too: a concurrent status change promotes nothing',
+    async () => {
+      const autoRunId = await mappedRunAt(target, 'MAPPING_READY');
+      // Give the run something to promote.
+      await prisma.migrationFieldMapping.updateMany({
+        where: { runId: autoRunId, destinationField: 'provenance.sourceId' },
+        data: { state: 'AUTO_REVIEW' },
+      });
+      const before = await mappingRows(autoRunId);
+      const auditBefore = await mappingAuditCount(autoRunId);
+
+      const res = await withConcurrentStatusFlip(autoRunId, 'RUNNING', 'transaction-open', () =>
+        runChain(acceptAutoChain, adminReq({ id: autoRunId }), mockRes()),
+      );
+
+      assert.equal(res.statusCode, 409, JSON.stringify(res.body));
+      assert.equal(res.body.code, 'MIGRATION_STATE_INVALID');
+      const run = await prisma.migrationRun.findUniqueOrThrow({ where: { id: autoRunId } });
+      assert.equal(run.status, 'RUNNING');
+      assert.deepEqual(await mappingRows(autoRunId), before);
+      assert.equal(await mappingAuditCount(autoRunId), auditBefore);
+    },
+  );
+
+  await test('a mapping edit never touches a sibling clinic run', async () => {
+    const siblingRunId = await mappedRunAt(sibling, 'MAPPING_READY');
+    const siblingBefore = await mappingRows(siblingRunId);
+    const siblingRunBefore = await prisma.migrationRun.findUniqueOrThrow({
+      where: { id: siblingRunId },
+    });
+
+    const editRunId = await mappedRunAt(target, 'MAPPING_READY');
+    const res = await editProvenanceColumn(editRunId);
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+
+    assert.deepEqual(await mappingRows(siblingRunId), siblingBefore);
+    const siblingRunAfter = await prisma.migrationRun.findUniqueOrThrow({
+      where: { id: siblingRunId },
+    });
+    assert.equal(siblingRunAfter.status, siblingRunBefore.status);
+    assert.equal(siblingRunAfter.organizationId, sibling.organizationId);
+    assert.equal(siblingRunAfter.clinicId, sibling.clinicId);
+  });
+
+  await test('no mapping edit wrote a patient/appointment/payment/clinical row', async () => {
+    assert.deepEqual(await domainCensus(), mappingCensusBefore);
+  });
 
   // -------------------------------------------------------------------------
   section('The state machine is NOT weakened');
