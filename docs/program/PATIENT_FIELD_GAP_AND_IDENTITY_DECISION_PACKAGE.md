@@ -336,14 +336,14 @@ transform.
 | `FAX` | Fax | UNKNOWN | str | — | **NO** | — | — | NO | PII | `BLOCKED_NO_DESTINATION` | G-E8; **recommend NOT building** | MIG-002 |
 | `EMAIL` | E-mail | **0.05 %** (7 rows, 1 valid) | str | `Patient.email` `:227` | YES | trim, lower, `''`→NULL | `.email()` | NO | PII | `IMPORT_AFTER_NORMALIZATION` | ~6 of 7 will fail. **Unusable as identity** | MIG-005 |
 | `ADRESI` | Street address | UNKNOWN | str | `Patient.address` `:230` | YES | trim | — | NO | PII | `IMPORT_DIRECT` | — | MIG-005 |
-| `ADRES_KODU` | Address code | **0.00 % (0/14,890) — R3** | — | `Patient.postalCode` `:232` | **field YES / semantics UNRESOLVED** | n/a | 5-digit posta kodu vs 10-digit UAVT — **still unresolved, no data to examine** | NO | PII | `IMPORT_DIRECT` | **C-12 (closes C-2 for this workbook) — 0 rows would ever be written, so there is no corruption risk here.** The UAVT-vs-postal-code question remains open and MUST be re-measured before import from any future source that shows non-zero `ADRES_KODU` fill | MIG-001 |
+| `ADRES_KODU` | Address code | **0.00 % (0/14,890) — R3** | — | `Patient.postalCode` `:232` | **field YES / semantics UNRESOLVED** | n/a | 5-digit posta kodu vs 10-digit UAVT — **still unresolved, no data to examine** | NO | PII | `MANUAL_REVIEW` | **C-12 (closes the measurement gap from C-2 for this workbook, R4-corrected) — 0.00 % fill closes the measurement, not the semantic question.** Disposition stays `MANUAL_REVIEW`; 0.00 % fill does not establish a direct mapping, and absence of data must never be encoded as a future `IMPORT_DIRECT`. 0 rows would be written for this source (no corruption risk here), but the UAVT-vs-postal-code question remains open and MUST be resolved — with a digit-length histogram — before import from any future source that shows non-zero `ADRES_KODU` fill | MIG-001 |
 | `IL` | Province | UNKNOWN | str | `Patient.city` `:231` | YES | trim | — | NO | PII | `IMPORT_DIRECT` | no canonicalization exists | MIG-005 |
 | `ILCE` | District | ≈13 rows | str | — | **NO** | — | — | NO | PII | `BLOCKED_NO_DESTINATION` | G-E7 | MIG-002 |
 | `MAHALLE` | Neighbourhood | UNKNOWN | str | `Patient.address` `:230` (**composed**) | via composition | documented `MAHALLE`+`ADRESI` → `address` | — | NO | PII | `IMPORT_AFTER_NORMALIZATION` | composition rule must be **stable across reruns** or idempotency breaks | MIG-005 |
 | `KANGURUBU` | Blood group | 1 row | str | — | **NO** | — | ABO/Rh | NO | **SPECIAL** | `BLOCKED_NO_DESTINATION` | G-E11 + Art. 6 legal gate | MIG-002 |
 | `ONEMLINOT` | Important clinical note | **45.70 % (6,805/14,890) — R3** | str 6,796 / num 6 / date 3 | `Patient.notes` `:236` | **YES** | composition | length bound | NO | **SPECIAL** | `BLOCKED_LEGAL_DECISION` | **C-13 (closes C-7 for this field) — measured a substantial, materially large free-text corpus** (95 duplicate-text groups aside, 706 of the 6,805 filled rows exceed 200 characters). This *strengthens* the legal-decision blocker: it is not "empty in this file" (the withdrawn original claim) and not merely "unmeasured" (C-7's holding pattern) — it is confirmed, sized, real clinical free text | MIG-002 |
 | `UZUNNOT` | Long note | **0 %** | — | `Patient.notes` `:236` | **YES** | — | — | NO | **SPECIAL** | `BLOCKED_LEGAL_DECISION` | 0 % here; gate applies to next customer | MIG-002 |
-| `KONTROLNOTU` | Recall note | **0.01 % (2/14,890) — R3** | str | `Patient.notes` `:236` | **YES** | composition | length bound | NO | **SPECIAL** | `MANUAL_REVIEW` | **C-14 (closes C-7 for this field) — near-vestigial, unlike `ONEMLINOT`.** Downgraded from a field-wide legal gate to individual review of the 2 affected rows; a blanket `BLOCKED_LEGAL_DECISION` is no longer proportionate to 2/14,890 rows | MIG-002 |
+| `KONTROLNOTU` | Recall note | **0.01 % (2/14,890) — R3** | str | `Patient.notes` `:236` | **YES** | composition | length bound | NO | **SPECIAL** | `BLOCKED_LEGAL_DECISION` | **C-14 (closes the measurement gap from C-7 for this field, R4-corrected) — measured 0.01 % (2/14,890) filled, near-vestigial, unlike `ONEMLINOT`.** Low volume does not remove the KVKK Art. 6 special-category gate — disposition stays `BLOCKED_LEGAL_DECISION`. Row-level `MANUAL_REVIEW` of the 2 affected rows may be an additional operational step once the legal basis/domain decision is made; it does not replace that decision | MIG-002 |
 | `TEDAVIDURUMU` | Treatment status | **0.02 %** (3 rows) | num | — | **NO** | — | — | NO | OPS | `IGNORE_SUMMARY_NOT_TRANSACTION` | 3/14,890 proves no treatment history | MIG-001 |
 | `SUBE_ID` | Branch id | 61 % / **1 distinct** | str | — | **NO** (deliberate) | — | — | NO | VENDOR | `IGNORE_VENDOR_INTERNAL` | cannot derive destination clinic; operator-selected | MIG-013 |
 | `HASTADOKTOR` | Assigned doctor label | **99.5 %** / 25 distinct | str | `User.id` via map — **and no `Patient` field to hold it** | **NO** (both) | exact match only | must resolve | **YES (25)** | OPS | `IMPORT_AFTER_REFERENCE_MAPPING` | **C-8** — G-E2 (map store) + G-E3 (destination column) | MIG-006 |
@@ -402,37 +402,39 @@ transform.
 
 | IMPORT_DECISION | Count | R3 change |
 | --- | --- | --- |
-| `IMPORT_DIRECT` | **6** | +1 (`ADRES_KODU`, C-12) |
+| `IMPORT_DIRECT` | **5** | — (`ADRES_KODU` stays `MANUAL_REVIEW`, R4-corrected) |
 | `IMPORT_AFTER_NORMALIZATION` | **5** | — |
 | `IMPORT_AFTER_REFERENCE_MAPPING` | **1** | — |
 | `IMPORT_AFTER_SCHEMA_FIELD` | **1** | — |
 | `HISTORICAL_METADATA_ONLY` | **4** | — |
-| `MANUAL_REVIEW` | **2** | −1 (`ADRES_KODU` out) +1 (`KONTROLNOTU` in, C-14) −1 (`UNENUMERATED_COLUMN_91` slot closed, C-11) |
+| `MANUAL_REVIEW` | **2** | −1 (`UNENUMERATED_COLUMN_91` slot closed, C-11) — `ADRES_KODU` stays in, `KONTROLNOTU` stays out (R4-corrected) |
 | `IGNORE_VENDOR_INTERNAL` | **12** | +1 (`AILEGURUBU`, C-16) |
 | `IGNORE_SUMMARY_NOT_TRANSACTION` | **16** | — |
-| `BLOCKED_LEGAL_DECISION` | **4** | −1 (`KONTROLNOTU` out, C-14) |
+| `BLOCKED_LEGAL_DECISION` | **5** | — (`KONTROLNOTU` stays in, R4-corrected) |
 | `BLOCKED_INVALID_SOURCE` | **0** | — |
 | `BLOCKED_NO_DESTINATION` | **40** | −1 (`AILEGURUBU` out) +1 (`YAKINLIKKODU` in, C-11) |
 | **Total** | **91** | net 0 — same 91 named columns, now all individually measured or explicitly still-`UNKNOWN` |
 
-`6+5+1+1+4+2+12+16+4+0+40 = 91` ✓ (pre-R3: `5+5+1+1+4+3+11+16+5+0+40 = 91`)
+`5+5+1+1+4+2+12+16+5+0+40 = 91` ✓ (pre-R3: `5+5+1+1+4+3+11+16+5+0+40 = 91`)
 
-**Rolled up to the report's requested buckets:** `IMPORT_DIRECT` 6 · `IMPORT_AFTER_NORMALIZATION` 5 ·
+**Rolled up to the report's requested buckets:** `IMPORT_DIRECT` 5 · `IMPORT_AFTER_NORMALIZATION` 5 ·
 `IMPORT_AFTER_REFERENCE_MAPPING` 1 · `IMPORT_AFTER_SCHEMA_FIELD` 1 · `HISTORICAL_METADATA_ONLY` 4 ·
-`IGNORE` **28** (12 vendor-internal + 16 summary) · `BLOCKED` **44** (40 no-destination + 4 legal) ·
+`IGNORE` **28** (12 vendor-internal + 16 summary) · `BLOCKED` **45** (40 no-destination + 5 legal) ·
 `MANUAL_REVIEW` 2.
 
 **`BLOCKED_INVALID_SOURCE` is deliberately 0.** `TCNO`'s 8.5 % malformed values are a **row-level**
 classification, not a column-level one — the column itself is valid and migratable.
 
 **Headline (pre-R3, not recomputed by this task): "12 of 91 columns (13.2 %) reach a NoraMedi field
-today."** R3 changed three dispositions (`ADRES_KODU`, `KONTROLNOTU`, `AILEGURUBU`) and closed the
-placeholder row (`YAKINLIKKODU`), which shifts this headline's inputs, but a full recount of "reaches
-a field" (which the pre-R3 text applies inconsistently — compare 10 unconditional + 3 legal-gated = 13
-against the stated 12) was out of this task's six-item scope and is **not asserted here**. The bucket
-counts immediately above are the mechanically verified, current numbers; treat the "12 of 91" prose as
-historical until a future task recounts it. **40 columns (44 %) have no destination at all — unchanged
-by R3** (`AILEGURUBU` left that bucket, `YAKINLIKKODU` entered it).
+today."** R3 measured `ADRES_KODU` and `KONTROLNOTU` (both retain their pre-R3 dispositions,
+`MANUAL_REVIEW` and `BLOCKED_LEGAL_DECISION` respectively — R4-corrected), changed one disposition
+(`AILEGURUBU`), and closed the placeholder row (`YAKINLIKKODU`), which shifts this headline's inputs,
+but a full recount of "reaches a field" (which the pre-R3 text applies inconsistently — compare 10
+unconditional + 3 legal-gated = 13 against the stated 12) was out of this task's six-item scope and is
+**not asserted here**. The bucket counts immediately above are the mechanically verified, current
+numbers; treat the "12 of 91" prose as historical until a future task recounts it. **40 columns (44 %)
+have no destination at all — unchanged by R3** (`AILEGURUBU` left that bucket, `YAKINLIKKODU` entered
+it).
 
 ---
 
@@ -1397,9 +1399,11 @@ Only genuine owner decisions. Everything else above is a recommendation with evi
 
 ## 18. Next implementation task
 
-**R3 status (2026-08-18): the targeted re-profiling recommended below was executed.** Five of the six
-gaps in the table below are `CLOSED`; the sixth (`EK_ACIKLAMA`/`CHECKBOX`) remains open. See
-§19's R3 record for the full evidence and §2a for the corrections it produced (C-11…C-16).
+**R3 status (2026-08-18): the targeted re-profiling recommended below was executed.** All six of the
+requested measurements in the table below are `CLOSED`. `EK_ACIKLAMA`/`CHECKBOX` was never one of the
+six-item scope and remains open as a separate, out-of-scope item (R4-corrected — an earlier revision
+of this table incorrectly counted `EK_ACIKLAMA`/`CHECKBOX` as the sixth targeted item). See §19's R3
+record for the full evidence and §2a for the corrections it produced (C-11…C-16).
 
 **Recommended next: `F3-DATA-MIG-PR0`** (Platform Admin intake safety foundation — no schema, no
 domain writes). A further short re-profiling pass for `EK_ACIKLAMA`/`CHECKBOX` is optional and does
@@ -1415,17 +1419,21 @@ pass is done**, and several dispositions above are explicitly gated on it:
 | Must measure | Unblocks | Status (R3, 2026-08-18) |
 | --- | --- | --- |
 | **The verbatim 91-column header row** | C-1 — no mapping profile can be frozen while one column is unnamed | **CLOSED** — `YAKINLIKKODU`, 0.00 % filled (C-11) |
-| `ADRES_KODU` digit-length histogram | C-2 — `postalCode` mapping, currently `MANUAL_REVIEW` | **CLOSED for this workbook** — 0.00 % filled, no data to histogram; disposition moot (C-12). Semantic question stays open for future sources |
-| `ONEMLINOT`, `KONTROLNOTU` fill | C-7 — sizes the special-category legal question before it is asked | **CLOSED** — `ONEMLINOT` 45.70 %, `KONTROLNOTU` 0.01 % (C-13, C-14) |
+| `ADRES_KODU` digit-length histogram | C-2 — `postalCode` mapping, currently `MANUAL_REVIEW` | **Measurement CLOSED for this workbook** — 0.00 % filled, no data to histogram; disposition stays `MANUAL_REVIEW` (C-12, R4-corrected). Semantic question stays open for future sources |
+| `ONEMLINOT`, `KONTROLNOTU` fill | C-7 — sizes the special-category legal question before it is asked | **CLOSED** — `ONEMLINOT` 45.70 % (strengthens the legal gate); `KONTROLNOTU` 0.01 % but stays `BLOCKED_LEGAL_DECISION` (C-13, C-14, R4-corrected) |
 | `DOSYANO` fill + collisions | G-E6's priority, currently P1-conditional | **CLOSED** — 98.84 % fill, 99.88 % distinct (C-15) |
 | `AILEGURUBU` fill + correlation with shared phones | G-E20 — could materially improve the dedup report | **CLOSED — hypothesis refuted, not confirmed** (C-16) |
-| `EK_ACIKLAMA`, `CHECKBOX` content shape | Their `MANUAL_REVIEW` dispositions | **STILL OPEN** — out of this task's six-item scope |
+
+`EK_ACIKLAMA`/`CHECKBOX` content shape was never part of this six-item scope. It remains **STILL OPEN**
+and still `MANUAL_REVIEW` — a separate, optional future re-profiling target, not the sixth item of the
+table above (R4-corrected — an earlier revision of this table incorrectly listed it as such).
 
 This was a **read-only profiling pass over a file that is already available** (`F3-DATA-MIG-001`
 targeted re-profiling, executed 2026-08-18), using a scratchpad-only Python/`xlrd` reader — no code,
 schema or PR risk to the product, and no raw PII/PHI value was printed, logged or committed at any
-point. It converted five of the six "UNMEASURED" cells into rankable evidence and closed C-1; a sixth
-item (`EK_ACIKLAMA`/`CHECKBOX`) remains unmeasured and is the natural next re-profiling target.
+point. It converted all six requested "UNMEASURED" cells into rankable evidence and closed C-1.
+`EK_ACIKLAMA`/`CHECKBOX` — never part of this six-item scope — remains unmeasured and is a natural,
+optional next re-profiling target.
 
 **Then `F3-DATA-MIG-PR0`** (Platform Admin intake safety foundation — no schema, no domain writes),
 followed by PR 1 once the parser dependency is decided. A further short re-profiling pass for
@@ -1521,9 +1529,9 @@ computed aggregate counts, type breakdowns, length/digit histograms and distinct
 | # | Correction | Where |
 | --- | --- | --- |
 | **C-11** | Closes **C-1**. The genuinely missing 91st name is `YAKINLIKKODU` (relationship/kinship code), physical position 12, omitted from every prior transcription. Measured 0.00 % (0/14,890) filled | §5 matrix, §5 intro note |
-| **C-12** | Closes **C-2** for this workbook. `ADRES_KODU` measured 0.00 % (0/14,890) filled — no data exists to resolve UAVT-vs-postal-code. Disposition moved `MANUAL_REVIEW` → `IMPORT_DIRECT` (vacuous — 0 rows written); the semantic question itself remains **open** for any future source with non-zero fill | §5 matrix (`ADRES_KODU`), §18 |
+| **C-12** | Closes the **measurement gap** from **C-2** for this workbook (R4-corrected). `ADRES_KODU` measured 0.00 % (0/14,890) filled — no data exists to resolve UAVT-vs-postal-code. **Disposition stays `MANUAL_REVIEW`** — 0.00 % fill closes the measurement, not the semantic question, and must never be read as evidence for a direct mapping. 0 rows would be written for this source (no corruption risk here); the semantic question itself remains **open** for any future source with non-zero fill and MUST be resolved, with a digit-length histogram, before import | §5 matrix (`ADRES_KODU`), §18 |
 | **C-13** | Closes **C-7** for `ONEMLINOT`. Measured 45.70 % (6,805/14,890) filled, free text, up to 706 rows over 200 characters. Strengthens (does not weaken) `BLOCKED_LEGAL_DECISION` — this is confirmed, sized clinical free text, not "empty" or "unmeasured" | §5 matrix (`ONEMLINOT`) |
-| **C-14** | Closes **C-7** for `KONTROLNOTU`. Measured 0.01 % (2/14,890) filled — near-vestigial, unlike `ONEMLINOT`. Downgraded from field-wide `BLOCKED_LEGAL_DECISION` to `MANUAL_REVIEW` of the 2 affected rows | §5 matrix (`KONTROLNOTU`) |
+| **C-14** | Closes the **measurement gap** from **C-7** for `KONTROLNOTU` (R4-corrected). Measured 0.01 % (2/14,890) filled — near-vestigial, unlike `ONEMLINOT`. **Disposition stays `BLOCKED_LEGAL_DECISION`** — low volume does not remove the KVKK Art. 6 special-category gate. Row-level `MANUAL_REVIEW` of the 2 affected rows may be an additional operational step once the legal basis/domain decision is made; it does not replace that decision | §5 matrix (`KONTROLNOTU`) |
 | **C-15** | Closes G-E6's measurement gap. `DOSYANO` measured 98.84 % (14,718/14,890) filled, 99.88 % distinct among filled (14,701/14,718; 17 duplicate pairs = 34 rows), digit length concentrated at 4–5 digits (98.5 % of filled). Disposition unchanged (`BLOCKED_NO_DESTINATION` — no schema field created by this task), priority confirmed P1 | §5 matrix (`DOSYANO`), §14 (`G-E6`), §15 |
 | **C-16** | **Refutes** G-E20's family-group-key hypothesis for `AILEGURUBU`. Measured 100.00 % (14,890/14,890) filled, fixed 24-character all-digit text, **100 % distinct** — including inside all 1,557 shared-`CEPTELEFONU` groups (3,512 rows), where distinct-`AILEGURUBU` count always equals group size. A real household key would produce repeats among family members; none exist. Reclassified `BLOCKED_NO_DESTINATION` → `IGNORE_VENDOR_INTERNAL`; G-E20 **withdrawn**, not merely left open | §5 matrix (`AILEGURUBU`), §14 (`G-E20`), §15 |
 
@@ -1545,6 +1553,23 @@ none of them in this task's scope.
 code was touched. The scratchpad-only Python/`xlrd` reader used to compute these aggregates was never
 committed to this repository.
 
+### R4 architecture-review correction record (this revision, PR #444, 2026-08-18)
+
+Program-owner architecture review of PR #444 found two classification defects and one bookkeeping
+defect in the R3 record above, all corrected on the same branch/PR. Documentation-only; no schema,
+migration, parser, route, UI, or existing-importer code was touched.
+
+| # | Correction | Where |
+| --- | --- | --- |
+| 1 | `ADRES_KODU`: 0.00 % fill closes the **measurement** gap (C-2/C-12), but does not establish a direct mapping. `IMPORT_DIRECT` was misleading — reverted to `MANUAL_REVIEW`, explicit `0 rows to write` for this source; the semantic UAVT-vs-postal-code question stays open and unresolved by absence of data | §5 matrix (`ADRES_KODU`), §5.1 counts, §18 |
+| 2 | `KONTROLNOTU`: 2 populated rows does not remove the KVKK Art. 6 legal/special-category gate. Reverted `MANUAL_REVIEW` → `BLOCKED_LEGAL_DECISION`; row-level `MANUAL_REVIEW` of the 2 rows may follow as an additional operational step **after** the legal basis/domain decision, not as a replacement for it | §5 matrix (`KONTROLNOTU`), §5.1 counts |
+| 3 | R3 bookkeeping: the six user-requested measurements (header, `ADRES_KODU`, `ONEMLINOT`, `KONTROLNOTU`, `DOSYANO`, `AILEGURUBU`) were all six measured/closed. `EK_ACIKLAMA`/`CHECKBOX` was never one of those six and had been incorrectly listed as the "sixth" item in one historical table — removed from that table and reworded throughout as an out-of-scope item. The full 91-column matrix remains `NOT YET FULLY FROZEN` | §18 (`Must measure` table and surrounding prose), §19 lifecycle block |
+
+**Preserved, not reopened by R4:** `YAKINLIKKODU` identification (C-11); `ONEMLINOT` measured and
+remains `BLOCKED_LEGAL_DECISION` (C-13); `DOSYANO` P1 evidence (C-15); `AILEGURUBU` hypothesis
+withdrawal (C-16); no real workbook in Git; no runtime/schema/migration/parser/UI code changed;
+program state unchanged (§ above).
+
 ### Lifecycle
 
 ```text
@@ -1556,6 +1581,7 @@ MERGED                             = NO
 DEPLOYED                           = NO
 PRODUCTION_VERIFIED                = NO
 R1_CORRECTIONS_APPLIED             = YES
-R3_TARGETED_REPROFILING_APPLIED    = YES  (F3-DATA-MIG-001, real workbook opened, 5/6 gaps closed)
+R3_TARGETED_REPROFILING_APPLIED    = YES  (F3-DATA-MIG-001, real workbook opened, 6/6 requested gaps closed)
+R4_ARCHITECTURE_REVIEW_CORRECTIONS_APPLIED = YES  (ADRES_KODU and KONTROLNOTU dispositions restored; 5/6 bookkeeping error fixed)
 FIELD_MATRIX_FULLY_FROZEN          = NO  (EK_ACIKLAMA/CHECKBOX and ~25 other columns still unmeasured)
 ```

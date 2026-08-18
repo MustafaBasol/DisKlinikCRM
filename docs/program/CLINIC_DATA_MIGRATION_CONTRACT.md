@@ -1127,8 +1127,8 @@ read in isolation:
 | # | R3 correction | Companion §§ |
 | --- | --- | --- |
 | 1 | **C-1 closed.** The missing 91st column name is `YAKINLIKKODU` (relationship/kinship code), omitted from every prior transcription including this contract's own §3. Measured 0.00 % filled | §5 matrix, C-11 |
-| 2 | **C-2 closed for this workbook.** `ADRES_KODU` measured 0.00 % filled — no data exists to resolve the UAVT-vs-postal-code question. Import disposition is now moot (nothing to write); the semantic question itself remains open for any future source | §5 matrix, C-12 |
-| 3 | **C-7 closed.** `ONEMLINOT` measured 45.70 % filled with substantial free text (confirms and strengthens the legal-decision blocker); `KONTROLNOTU` measured 0.01 % filled (near-vestigial, downgraded from a field-wide legal gate to 2-row manual review) | §5 matrix, C-13/C-14 |
+| 2 | **C-2's measurement gap closed for this workbook.** `ADRES_KODU` measured 0.00 % filled — no data exists to resolve the UAVT-vs-postal-code question. **Disposition stays `MANUAL_REVIEW` (R4-corrected)** — 0 rows would be written for this source, but 0 % fill does not establish a direct mapping, and the semantic question itself remains open for any future source | §5 matrix, C-12 |
+| 3 | **C-7 closed.** `ONEMLINOT` measured 45.70 % filled with substantial free text (confirms and strengthens the legal-decision blocker); `KONTROLNOTU` measured 0.01 % filled (near-vestigial). **Disposition stays `BLOCKED_LEGAL_DECISION` (R4-corrected)** — low volume does not remove the KVKK Art. 6 gate; row-level manual review of the 2 affected rows may follow as an additional step after the legal decision, not in place of it | §5 matrix, C-13/C-14 |
 | 4 | **G-E6's measurement gap closed.** `DOSYANO` measured 98.84 % filled, 99.88 % distinct among filled (17 duplicate pairs). Confirms — does not merely restate — C-6's "clinic-facing, not vendor-internal" conclusion | §5 matrix, §14, C-15 |
 | 5 | **G-E20 withdrawn.** `AILEGURUBU` measured 100 % filled, 100 % distinct, and never repeats even inside groups of rows sharing the same phone number — this refutes, not confirms, the family/household-key hypothesis that motivated G-E20. Reclassified vendor-internal | §5 matrix, §14, C-16 |
 
@@ -1136,12 +1136,29 @@ read in isolation:
 the more plausible relationship-code candidate than `AILEGURUBU` if a family/household key is ever
 needed again, but this workbook carries no data in it either.
 
-**Not measured by R3, still open:** `EK_ACIKLAMA`/`CHECKBOX` content shape, and roughly 25 other
-columns whose fill was never profiled. **The full 91-column matrix is therefore not yet fully frozen**,
-though the six gaps this task was scoped to close are.
+**Not measured by R3, still open** (never part of this task's six-item scope, not a sixth targeted
+item): `EK_ACIKLAMA`/`CHECKBOX` content shape, and roughly 25 other columns whose fill was never
+profiled. **The full 91-column matrix is therefore not yet fully frozen**, though all six gaps this
+task was scoped to close were measured and closed.
 
 **No program state changed. No schema, migration, parser, route, permission, UI or existing-importer
 code was created or modified.** `SCHEMA_CHANGE_AUTHORIZED = NO`. The scratchpad-only Python/`xlrd`
 reader used for this measurement was never committed to this repository; the real workbook itself was
 never copied into the worktree, committed, or attached anywhere, and no raw PII/PHI cell value was
 printed or logged.
+
+### 21.3 R4 architecture-review corrections (PR #444, 2026-08-18) — additive, nothing above withdrawn
+
+Program-owner architecture review of PR #444 found two classification defects and one bookkeeping
+defect in §21.2 above, corrected on the same branch/PR. Full evidence in the companion document's
+"R4 architecture-review correction record"; summarized here so this contract is not read in isolation:
+
+| # | R4 correction | Companion §§ |
+| --- | --- | --- |
+| 1 | `ADRES_KODU`: 0.00 % fill closes the measurement gap, not the semantic question. `IMPORT_DIRECT` was misleading — reverted to `MANUAL_REVIEW`, explicit `0 rows to write` for this source; the UAVT-vs-postal-code question stays open | §5 matrix, §5.1 counts |
+| 2 | `KONTROLNOTU`: 2 populated rows does not remove the KVKK Art. 6 legal/special-category gate. Reverted `MANUAL_REVIEW` → `BLOCKED_LEGAL_DECISION`; row-level manual review may be an additional step **after** the legal basis/domain decision, not a replacement for it | §5 matrix, §5.1 counts |
+| 3 | R3 bookkeeping corrected: the six user-requested measurements (header, `ADRES_KODU`, `ONEMLINOT`, `KONTROLNOTU`, `DOSYANO`, `AILEGURUBU`) were all six measured/closed. `EK_ACIKLAMA`/`CHECKBOX` was never one of those six and is no longer counted as the sixth item in the "must measure" table. The full 91-column matrix remains `NOT YET FULLY FROZEN` | §18, §19 lifecycle block |
+
+**Preserved, not reopened by R4:** `YAKINLIKKODU` identification; `ONEMLINOT` measured and remains
+`BLOCKED_LEGAL_DECISION`; `DOSYANO` P1 evidence; `AILEGURUBU` hypothesis withdrawal; no real workbook
+in Git; no runtime/schema/migration/parser/UI code changed; program state unchanged.
