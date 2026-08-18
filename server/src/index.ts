@@ -39,6 +39,7 @@ import treatmentPlanProceduresRoutes from './routes/treatmentPlanProcedures.js';
 import platformAdminRoutes from './routes/platformAdmin.js';
 import platformSecurityIncidentsRoutes from './routes/platformSecurityIncidents.js';
 import platformExternalCalendarRoutes from './routes/platformExternalCalendar.js';
+import platformMigrationRoutes from './routes/platformMigration.js';
 import externalCalendarOutboundSyncStatusRoutes from './routes/externalCalendarOutboundSyncStatus.js';
 import clinicRegistrationRoutes from './routes/clinicRegistration.js';
 import gdprExportRoutes from './routes/gdprExport.js';
@@ -229,6 +230,12 @@ app.use('/api/platform', platformSecurityIncidentsRoutes);
 // External calendar integration (DigiDentiS + future providers) — own
 // authenticatePlatformAdmin gate, kept separate for the same reason.
 app.use('/api/platform', platformExternalCalendarRoutes);
+// F3-DATA-MIG-TODAY-001 — Platform Admin clinic data migration. Own
+// authenticatePlatformAdmin + csrfProtection('platform') gate, mounted here
+// (BEFORE the global clinic `authenticate` below) so a clinic session can
+// never reach it. Entirely separate from the clinic-facing basic patient
+// importer at /api/patients/import-*, which is unchanged.
+app.use('/api/platform', platformMigrationRoutes);
 
 // Self-service klinik kaydı (public)
 app.use('/api/register', clinicRegistrationRoutes);

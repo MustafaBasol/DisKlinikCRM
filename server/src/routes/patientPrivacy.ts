@@ -38,6 +38,7 @@ import {
 import { inspectOrphans } from '../services/privacy/orphanFileInspection.js';
 import { openFileStream } from '../services/fileStorage.js';
 import { safeErrorFields } from '../utils/safeError.js';
+import { decryptIdentityValue } from '../utils/patientIdentityCrypto.js';
 
 /** Header carrying the one-time export-download token (never a query param — see PR #160 review). */
 const EXPORT_DOWNLOAD_TOKEN_HEADER = 'x-export-download-token';
@@ -95,6 +96,7 @@ async function collectStructuredExportData(
 ) {
   const [
         patientFull,
+        identityDocumentRows,
         appointments,
         appointmentRequests,
         contactRequests,
@@ -129,6 +131,10 @@ async function collectStructuredExportData(
             patientStatus: true,
             source: true,
             notes: true,
+            // F3-DATA-MIG-TODAY-001 (G-E5/G-E6): personal data held about the
+            // subject, so KVKK Art. 11 / GDPR Art. 15 cover them.
+            gender: true,
+            chartNumber: true,
             communicationConsent: true,
             marketingConsent: true,
             isAnonymized: true,
@@ -136,6 +142,23 @@ async function collectStructuredExportData(
             createdAt: true,
             updatedAt: true,
           },
+        }),
+        // F3-DATA-MIG-003 / G-E4: the data subject is entitled to the identity
+        // number held about them. lookupHash and valueEncrypted are NEVER
+        // selected — the hash is a tenant correlation token (not the subject's
+        // data) and the ciphertext is an internal storage artifact; the subject
+        // gets the plaintext instead, decrypted below.
+        prisma.patientIdentityDocument.findMany({
+          where: { patientId, clinicId, organizationId },
+          select: {
+            id: true,
+            docType: true,
+            isVerified: true,
+            cryptoVersion: true,
+            valueEncrypted: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
         }),
         prisma.appointment.findMany({
           where: { patientId, clinicId, deletedAt: null },
@@ -358,10 +381,42 @@ async function collectStructuredExportData(
         }),
       ]);
 
+      // F3-DATA-MIG-003 / G-E4. Decryption is per-document and fail-SOFT: a
+      // crypto failure (missing/rotated key material, corrupt ciphertext)
+      // degrades that ONE document to `value: null, valueStatus:
+      // 'unavailable'` instead of throwing and collapsing the whole subject
+      // -access export into a 500. A KVKK Art. 11 request has a statutory
+      // response deadline; denying the subject their appointments, payments
+      // and medical history because one identity record cannot be decrypted
+      // would be the worse failure, and the 'unavailable' marker makes the
+      // gap explicit and auditable rather than silently absent. Nothing about
+      // the value — not the error, not the docType, not a length — is logged:
+      // the identity number is the most sensitive field in the product and no
+      // log sink is an appropriate destination for anything derived from it.
+      const identityDocuments = identityDocumentRows.map((doc) => {
+        let value: string | null = null;
+        let valueStatus: 'available' | 'unavailable' = 'available';
+        try {
+          value = decryptIdentityValue(doc.valueEncrypted, doc.cryptoVersion);
+        } catch {
+          value = null;
+          valueStatus = 'unavailable';
+        }
+        return {
+          id: doc.id,
+          docType: doc.docType,
+          isVerified: doc.isVerified,
+          createdAt: doc.createdAt,
+          value,
+          valueStatus,
+        };
+      });
+
       return {
         exportedAt: new Date().toISOString(),
         exportedBy: exportedByUserId,
         dataSubject: patientFull,
+        identityDocuments,
         appointments,
         appointmentRequests,
         contactRequests,

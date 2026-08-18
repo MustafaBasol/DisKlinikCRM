@@ -6,6 +6,8 @@
  *
  * Design rules:
  * - Never hard-deletes patient row or medical/financial records.
+ * - PatientIdentityDocument is the ONE hard-deleted child (pure identifier,
+ *   zero clinical value) — see deletePatientIdentityDocuments below.
  * - Linked communication records (ContactRequest, WhatsApp, Instagram) have
  *   their contact-identifying fields cleared.
  * - Audit log is written without full patient PII.
@@ -46,6 +48,12 @@ export type AnonymizePatientResult = {
   attachmentResults: RedactionCounters;
   /** Per-object redaction counts for ImagingImage rows (via the patient's ImagingStudy records). */
   imagingResults: RedactionCounters;
+  /**
+   * F3-DATA-MIG-003 / G-E4. Number of PatientIdentityDocument rows HARD
+   * DELETED for this patient. 0 on a patient that never had one, and 0 on an
+   * idempotent re-run (the first run already destroyed them).
+   */
+  identityDocumentsDeleted: number;
   /**
    * True if any attachment or imaging redaction failed. Callers (the privacy
    * route) MUST surface this — never report unconditional success when this
@@ -191,6 +199,37 @@ async function redactPatientMedicalHistory(clinicId: string, patientId: string):
   });
 }
 
+/**
+ * F3-DATA-MIG-003 / G-E4 (PatientIdentityDocument): HARD DELETE, not redaction.
+ *
+ * Every other pass in this service preserves the row and clears the
+ * identifying fields, because the row itself carries clinical, financial or
+ * audit value that KVKK/GDPR anonymization must not destroy (medical history
+ * versions, attachments, imaging metadata). A national/travel identity number
+ * has NO such value: it is a pure identifier, never a clinical fact, so there
+ * is nothing left to preserve once the patient is anonymized. It is therefore
+ * destroyed outright rather than nulled or redacted — and destroying the
+ * ciphertext also removes the only artifact a future key compromise could
+ * retroactively unlock.
+ *
+ * Under the child-model design this is ONE reviewable deleteMany. Had
+ * valueEncrypted/lookupHash/cryptoVersion been Patient scalars, they would
+ * have become three more keys in the hand-enumerated deny-list payload below —
+ * a list this sprint demonstrably drifted (gender/chartNumber were silently
+ * absent from it, from the KVKK export and from the bulk export allow-list
+ * simultaneously).
+ *
+ * Scoped by patientId ALONE, deliberately: the patient row was already
+ * resolved under clinicId + organizationId scope by the caller, and adding
+ * clinicId here would fail OPEN — an identity document whose clinicId drifted
+ * from the patient's (e.g. after a branch transfer) would silently survive
+ * anonymization. Idempotent by construction: a second run deletes 0 rows.
+ */
+async function deletePatientIdentityDocuments(patientId: string): Promise<number> {
+  const { count } = await prisma.patientIdentityDocument.deleteMany({ where: { patientId } });
+  return count;
+}
+
 const ANON_FIRST = 'Anonim';
 const ANON_LAST  = 'Hasta';
 const ANON_TEXT  = '[ANONYMIZED]';
@@ -254,6 +293,15 @@ export async function anonymizePatientData(
       select: { id: true },
       orderBy: { createdAt: 'desc' },
     });
+    // Same reason the passes below are re-run: an anonymization performed
+    // before gender/chartNumber were added to this payload (F3-DATA-MIG-TODAY-001,
+    // G-E5/G-E6) never nulled them, and the isAnonymized guard above means the
+    // main patient.update() block never runs again to backfill them. Blind and
+    // idempotent — nulling an already-null column is a no-op.
+    await prisma.patient.updateMany({
+      where: { id: patientId, clinicId },
+      data: { gender: null, chartNumber: null },
+    });
     // Still run the attachment/imaging/emergency-contact redaction passes —
     // re-running must be a safe no-op (already-redacted rows are skipped, see
     // redactPatientAttachments; the emergency-contact updateMany is
@@ -266,12 +314,17 @@ export async function anonymizePatientData(
       data: { fullName: ANON_TEXT, phone: null, phoneCountryCode: null, email: null, occupation: null },
     });
     await redactPatientMedicalHistory(clinicId, patientId);
+    // Same reason the passes above are re-run: an anonymization performed
+    // before identity documents shipped never destroyed them. Deletes 0 rows
+    // on a patient the current code path already handled.
+    const identityDocumentsDeleted = await deletePatientIdentityDocuments(patientId);
     return {
       alreadyAnonymized: true,
       patientId,
       privacyRequestId: existing?.id ?? '',
       attachmentResults,
       imagingResults,
+      identityDocumentsDeleted,
       partialFailure: attachmentResults.failed > 0 || imagingResults.failed > 0,
     };
   }
@@ -293,6 +346,24 @@ export async function anonymizePatientData(
       postalCode: null,
       country: null,
       notes: null,
+      // F3-DATA-MIG-TODAY-001 (G-E5): demographic PII, and a quasi-identifier
+      // that narrows a re-identification search alongside the surviving
+      // operational record. NULL is already its "not recorded" state, so
+      // nulling loses no distinguishable information.
+      gender: null,
+      // F3-DATA-MIG-TODAY-001 (G-E6): the number written on the clinic's
+      // PAPER chart, which still bears the patient's name. Leaving it here
+      // would make the anonymized row directly re-identifiable by anyone with
+      // access to the physical archive — the strongest re-identification
+      // vector among these fields, despite looking like an innocuous internal
+      // reference.
+      chartNumber: null,
+      // primaryPractitionerId is DELIBERATELY NOT nulled: it identifies a
+      // STAFF member, not the patient, so clearing it reduces patient
+      // re-identification risk by nothing while destroying clinically and
+      // operationally relevant history (who treated this case, practitioner
+      // workload/earnings attribution). Anonymization preserves operational
+      // records by design — see this file's header.
       communicationConsent: false,
       marketingConsent: false,
       isAnonymized: true,
@@ -301,6 +372,9 @@ export async function anonymizePatientData(
       anonymizationReason: safeReason,
     },
   });
+
+  // ── 1b. PatientIdentityDocument: HARD DELETE (see helper for why) ─────────
+  const identityDocumentsDeleted = await deletePatientIdentityDocuments(patientId);
 
   // ── 2. ContactRequests: clear contact PII ─────────────────────────────────
   await prisma.contactRequest.updateMany({
@@ -471,6 +545,8 @@ export async function anonymizePatientData(
       reasonProvided: !!safeReason,
       attachmentResults,
       imagingResults,
+      // Count only — never the identifier, never its docType/value.
+      identityDocumentsDeleted,
       partialFailure,
     },
   });
@@ -492,6 +568,7 @@ export async function anonymizePatientData(
     privacyRequestId: privacyRequest.id,
     attachmentResults,
     imagingResults,
+    identityDocumentsDeleted,
     partialFailure,
   };
 }

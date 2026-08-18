@@ -117,12 +117,37 @@ const MESSAGE_CONTENT_BASE_NAMES = new Set([
 ]);
 const MESSAGE_CONTENT_PROP_NAMES = new Set(['text', 'body']);
 
-// Deliberately limited to the two PII fields this codebase already has a
-// dedicated, well-established redaction helper for (redactPhone) or an
-// unambiguous always-PII name (email) — see evidence doc §3D for why
-// firstName/lastName/patientName were judged too false-positive-prone for
-// name-only matching and were left out of this automated rule.
-const DIRECT_PII_IDENTIFIER_NAMES = new Set(['email', 'phone']);
+// Names whose VALUE is direct PII and must never reach a log sink raw.
+//
+// Originally limited to the two fields this codebase already has a dedicated,
+// well-established redaction helper for (redactPhone) or an unambiguous
+// always-PII name (email) — see evidence doc §3D for why firstName/lastName/
+// patientName were judged too false-positive-prone for name-only matching and
+// remain deliberately EXCLUDED from this automated rule (that reasoning is
+// unchanged: a `firstName` on a staff/user/template object is common enough
+// that name-only matching would produce noise the gate cannot act on).
+//
+// F3-DATA-MIG-003 / G-E4 extends the set with national/travel identity and
+// clinic chart identifiers. A T.C. Kimlik No is the most sensitive field in
+// the product — immutable, lifelong, government-issued, and unreissuable if
+// leaked — yet this guard was SILENTLY GREEN on it: none of these names
+// existed in the set, so `console.error('lookup failed', tcNo)` would have
+// passed the gate. chartNumber joins them because it is a re-identification
+// vector against the clinic's physical paper archive. Unlike firstName, every
+// one of these names is unambiguously an identity value in this codebase —
+// there is no benign object property called `tckn` — so they carry the same
+// low false-positive profile as `email`/`phone`.
+const DIRECT_PII_IDENTIFIER_NAMES = new Set([
+  'email',
+  'phone',
+  'nationalId',
+  'nationalIdNumber',
+  'tcNo',
+  'tckn',
+  'identityNumber',
+  'passportNumber',
+  'chartNumber',
+]);
 
 const CONSOLE_SINK_METHODS = new Set(['log', 'info', 'warn', 'error', 'debug']);
 const LOGGER_SINK_METHODS = new Set(['log', 'info', 'warn', 'error', 'debug', 'fatal', 'trace']);
