@@ -145,7 +145,15 @@ export function isUuid(value: unknown): value is string {
 export interface TransitionOptions {
   actorPlatformAdminId: string | null;
   action: string;
-  data?: Prisma.MigrationRunUpdateInput;
+  /**
+   * Scalar column writes to apply along with the status change.
+   *
+   * Deliberately the `UpdateMany` input type, not `UpdateInput`: the status
+   * change is a conditional UPDATE (see below), which cannot carry nested
+   * relation writes. Typing it this way makes that a compile error rather than
+   * a runtime surprise for a future caller.
+   */
+  data?: Prisma.MigrationRunUncheckedUpdateManyInput;
   safeMetadata?: Record<string, unknown>;
   outcome?: string;
 }
