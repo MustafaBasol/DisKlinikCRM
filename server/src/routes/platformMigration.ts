@@ -400,11 +400,18 @@ router.post('/migrations/runs/:id/analyze', async (req: PlatformAdminRequest, re
         .map((s) => [s.sourceIndex, getDestinationField(s.destinationField as string)?.type]),
     );
     const maxLengthByIndex = new Map(profiles.map((p) => [p.index, p.maxLength]));
+    // Fail-closed: a column the mapping engine has already decided is
+    // LEGAL_BLOCKED (KVKK Art. 6 special-category, e.g. KANGURUBU) must be
+    // masked regardless of destination type or header-keyword heuristics —
+    // those alone missed KANGURUBU (no destination, unrecognized header, and
+    // short values like "A Rh+" that read as low-risk). See columnPreview.ts.
+    const mappingStateByIndex = new Map(suggestions.map((s) => [s.sourceIndex, s.mappingState]));
     const columnPreviews = buildColumnPreviews(
       workbook.headers,
       workbook.rows,
       destinationTypeByIndex,
       maxLengthByIndex,
+      mappingStateByIndex,
     );
 
     const unresolved = suggestions.filter(

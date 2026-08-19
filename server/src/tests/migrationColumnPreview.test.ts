@@ -13,11 +13,12 @@
 
 import assert from 'node:assert/strict';
 
-import type { CanonicalCell, CanonicalHeader, CanonicalRow } from '../services/migration/contracts.js';
+import type { CanonicalCell, CanonicalHeader, CanonicalRow, MappingState } from '../services/migration/contracts.js';
 import {
   buildColumnPreviews,
   classifyColumnSensitivity,
 } from '../services/migration/mapping/columnPreview.js';
+import { FIRST_CUSTOMER_MATRIX } from '../services/migration/mapping/firstCustomerMatrix.js';
 
 let passed = 0;
 let failed = 0;
@@ -51,12 +52,19 @@ function makeRow(rowNumber: number, values: string[]): CanonicalRow {
 }
 
 /** One column, N sample rows, no destination proposed and a small max length. */
-function previewForSingleColumn(header: string, values: string[], destType?: any, maxLength = 10) {
+function previewForSingleColumn(
+  header: string,
+  values: string[],
+  destType?: any,
+  maxLength = 10,
+  mappingState?: MappingState,
+) {
   const headers = [makeHeader(header, 0)];
   const rows = values.map((v, i) => makeRow(i + 1, [v]));
   const destByIndex = new Map<number, any>([[0, destType]]);
   const maxLenByIndex = new Map<number, number>([[0, maxLength]]);
-  return buildColumnPreviews(headers, rows, destByIndex, maxLenByIndex)[0]!;
+  const stateByIndex = new Map<number, MappingState | undefined>([[0, mappingState]]);
+  return buildColumnPreviews(headers, rows, destByIndex, maxLenByIndex, stateByIndex)[0]!;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -213,6 +221,78 @@ await test('two independent calls with different data never mix samples — buil
   assert.deepEqual(first.samples, ['TenantA-Ahmet']);
   assert.deepEqual(second.samples, ['TenantB-Elif']);
   assert.ok(!second.samples.some((s) => s.includes('TenantA')), 'a later call must not see an earlier call\'s data');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// D. Fail-closed masking for LEGAL_BLOCKED mappings (F3-DATA-MIG-TODAY-001-UI-002-R2)
+// ══════════════════════════════════════════════════════════════════════════
+//
+// KANGURUBU (blood group) is BLOCKED_LEGAL_DECISION in firstCustomerMatrix.ts
+// because blood group is KVKK Art. 6 special-category health data — but it
+// has no destination and no header keyword the classifier recognizes, and
+// its values ("A Rh+") are short. Before this fix, that combination fell
+// through every heuristic to 'low' and was returned RAW. mappingState must
+// be checked first and override every other signal.
+
+section('D. Fail-closed masking for LEGAL_BLOCKED mappings');
+
+const LEGAL_BLOCKED_ENTRIES = FIRST_CUSTOMER_MATRIX.filter(
+  (e) => e.disposition === 'BLOCKED_LEGAL_DECISION',
+);
+
+await test('firstCustomerMatrix.ts actually contains BLOCKED_LEGAL_DECISION entries (sanity check the test below is not vacuous)', () => {
+  assert.ok(LEGAL_BLOCKED_ENTRIES.length > 0, 'expected at least one BLOCKED_LEGAL_DECISION entry to exist');
+  assert.ok(
+    LEGAL_BLOCKED_ENTRIES.some((e) => e.sourceField === 'KANGURUBU'),
+    'KANGURUBU must be one of the legal-blocked entries this suite is guarding',
+  );
+});
+
+await test('KANGURUBU (blood group) with a real-shaped sample "A Rh+" is fully hidden, never returned raw', () => {
+  const entry = LEGAL_BLOCKED_ENTRIES.find((e) => e.sourceField === 'KANGURUBU')!;
+  const preview = previewForSingleColumn('KANGURUBU', ['A Rh+'], undefined, 5, entry.mappingState);
+  assert.equal(preview.samples[0], '[KVKK Madde 6 — hukuki gerekçeyle gizlendi]');
+  assert.ok(!preview.samples.some((s) => s.includes('A Rh+')), 'raw blood-group value must never appear');
+});
+
+await test('every BLOCKED_LEGAL_DECISION field in firstCustomerMatrix.ts is fully hidden, never returned raw', () => {
+  for (const entry of LEGAL_BLOCKED_ENTRIES) {
+    const rawValue = `RAW-${entry.sourceField}-VALUE`;
+    const preview = previewForSingleColumn(entry.sourceField, [rawValue], undefined, 5, entry.mappingState);
+    assert.equal(
+      preview.samples[0],
+      '[KVKK Madde 6 — hukuki gerekçeyle gizlendi]',
+      `${entry.sourceField} must render the fixed legal-hold literal`,
+    );
+    assert.ok(
+      !preview.samples.some((s) => s.includes(rawValue)),
+      `${entry.sourceField} must never leak its raw value into a preview`,
+    );
+  }
+});
+
+await test('contract: mappingState LEGAL_BLOCKED forces hidden classification regardless of header text, destination type, or value length', () => {
+  // Every one of these would normally classify as 'low' (short value,
+  // unrecognized header, no destination) or even resolve a destination type
+  // — mappingState must win over all of them.
+  assert.equal(classifyColumnSensitivity('KANGURUBU', undefined, 5, 'LEGAL_BLOCKED'), 'legalBlocked');
+  assert.equal(classifyColumnSensitivity('COMPLETELY_UNRECOGNIZED_HEADER', undefined, 3, 'LEGAL_BLOCKED'), 'legalBlocked');
+  assert.equal(classifyColumnSensitivity('AD', 'identity', 5, 'LEGAL_BLOCKED'), 'legalBlocked');
+  assert.equal(classifyColumnSensitivity('HASTA_ID', undefined, 500, 'LEGAL_BLOCKED'), 'legalBlocked');
+  // Sanity: without LEGAL_BLOCKED, the same short/unrecognized header is 'low' —
+  // proving the override above is actually doing something, not a no-op.
+  assert.equal(classifyColumnSensitivity('KANGURUBU', undefined, 5, undefined), 'low');
+});
+
+await test('mappingState LEGAL_BLOCKED on one column does not affect an unrelated column in the same workbook', () => {
+  const headers = [makeHeader('KANGURUBU', 0), makeHeader('AD', 1)];
+  const rows = [makeRow(1, ['A Rh+', 'Ahmet'])];
+  const destByIndex = new Map<number, any>();
+  const maxLenByIndex = new Map<number, number>([[0, 5], [1, 5]]);
+  const stateByIndex = new Map<number, MappingState | undefined>([[0, 'LEGAL_BLOCKED'], [1, 'AUTO_CONFIDENT']]);
+  const previews = buildColumnPreviews(headers, rows, destByIndex, maxLenByIndex, stateByIndex);
+  assert.equal(previews[0]!.samples[0], '[KVKK Madde 6 — hukuki gerekçeyle gizlendi]');
+  assert.deepEqual(previews[1]!.samples, ['Ahmet']);
 });
 
 // ─────────────────────────────────────────────────────────────────────────

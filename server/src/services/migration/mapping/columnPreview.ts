@@ -15,7 +15,7 @@
  * value escape the single HTTP response it was computed for.
  */
 
-import type { CanonicalHeader, CanonicalRow, DestinationValueType } from '../contracts.js';
+import type { CanonicalHeader, CanonicalRow, DestinationValueType, MappingState } from '../contracts.js';
 import { normalizeHeader } from './normalizeHeader.js';
 
 /** First N data rows only — "representative", not exhaustive, and bounded
@@ -31,8 +31,17 @@ const FREETEXT_LENGTH_HINT = 80;
 const BLANK_LABEL = 'boş';
 const HIDDEN_FREETEXT_LABEL = '[Hassas içerik — önizleme gizlendi]';
 const HIDDEN_ADDRESS_LABEL = '[Adres içeriği — önizleme gizlendi]';
+/**
+ * Distinct from HIDDEN_FREETEXT_LABEL on purpose: this is not a heuristic
+ * guess about content shape, it is a decided legal/policy exclusion
+ * (mapping state LEGAL_BLOCKED — see validateMapping.ts's
+ * NON_WRITING_DECIDED_STATES). A reviewer reading the label should be able
+ * to tell "we masked this because it looks sensitive" apart from "this
+ * column is under a KVKK Art. 6 legal hold and is never written".
+ */
+const HIDDEN_LEGAL_BLOCKED_LABEL = '[KVKK Madde 6 — hukuki gerekçeyle gizlendi]';
 
-export type ColumnSensitivity = 'tckn' | 'phone' | 'email' | 'address' | 'freetext' | 'low';
+export type ColumnSensitivity = 'tckn' | 'phone' | 'email' | 'address' | 'freetext' | 'low' | 'legalBlocked';
 
 export interface ColumnPreview {
   index: number;
@@ -48,12 +57,19 @@ export interface ColumnPreview {
  * named columns (see firstCustomerMatrix.ts, which this module intentionally
  * does NOT depend on: sample masking must hold for every future source,
  * not only the one profile already reviewed).
+ *
+ * `mappingState` is checked FIRST and short-circuits every other signal: a
+ * column the mapping layer has already decided is LEGAL_BLOCKED (a policy
+ * decision, not a guess) must never be un-hidden by a destination type, a
+ * header keyword miss, or a short value — fail closed, not "usually safe".
  */
 export function classifyColumnSensitivity(
   headerOriginal: string,
   destinationType: DestinationValueType | undefined,
   maxLength: number,
+  mappingState?: MappingState,
 ): ColumnSensitivity {
+  if (mappingState === 'LEGAL_BLOCKED') return 'legalBlocked';
   if (destinationType === 'identity') return 'tckn';
   if (destinationType === 'phone') return 'phone';
   if (destinationType === 'email') return 'email';
@@ -118,6 +134,8 @@ function formatSample(text: string, sensitivity: ColumnSensitivity): string {
       return HIDDEN_ADDRESS_LABEL;
     case 'freetext':
       return HIDDEN_FREETEXT_LABEL;
+    case 'legalBlocked':
+      return HIDDEN_LEGAL_BLOCKED_LABEL;
     case 'low':
     default:
       return trimmed.length > LOW_RISK_MAX_CHARS ? `${trimmed.slice(0, LOW_RISK_MAX_CHARS)}…` : trimmed;
@@ -136,6 +154,7 @@ export function buildColumnPreviews(
   rows: readonly CanonicalRow[],
   destinationTypeByIndex: ReadonlyMap<number, DestinationValueType | undefined>,
   maxLengthByIndex: ReadonlyMap<number, number>,
+  mappingStateByIndex: ReadonlyMap<number, MappingState | undefined> = new Map(),
 ): ColumnPreview[] {
   const sampleRows = rows.slice(0, MAX_SAMPLES_PER_COLUMN);
 
@@ -144,6 +163,7 @@ export function buildColumnPreviews(
       header.original,
       destinationTypeByIndex.get(header.index),
       maxLengthByIndex.get(header.index) ?? 0,
+      mappingStateByIndex.get(header.index),
     );
     const samples = sampleRows.map((row) => {
       const cell = row.cells[header.index];
