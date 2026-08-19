@@ -399,6 +399,40 @@ const composeAddress: TransformFn = (input) => {
 };
 
 // ---------------------------------------------------------------------------
+// clinical notes composition
+// ---------------------------------------------------------------------------
+
+/**
+ * Compose several clinical free-text source columns into `patient.notes`.
+ *
+ * Same contract as `composeAddress` and for the same reason: a PURE function
+ * of the ordered inputs, stable across reruns forever. It does not skip a part
+ * on a length threshold, does not de-duplicate, does not reorder and does not
+ * consult any other column, so a rerun of the SAME workbook produces a
+ * byte-identical string and idempotent re-import is preserved.
+ *
+ * Parts are joined with a NEWLINE rather than ', ' (the address join): these
+ * are independent clinical statements written at different times by different
+ * people, and running them together on one line would read as a single
+ * sentence and change their clinical meaning. Each part is trimmed, and empty
+ * parts are omitted — an omission that is itself stable because it depends
+ * only on the cell being empty.
+ *
+ * NO VALUE IS EVER LOGGED OR RETURNED IN A WARNING by this transform. The
+ * content is KVKK Art. 6 special-category by assumption, so it stays inside
+ * the value channel and never reaches a message, a code or a report.
+ */
+const composeNotes: TransformFn = (input) => {
+  const parts: string[] = [];
+  for (const cell of input.cells) {
+    const t = cell.text.trim();
+    if (t !== '') parts.push(t);
+  }
+  if (parts.length === 0) return ok(null);
+  return ok(parts.join('\n'));
+};
+
+// ---------------------------------------------------------------------------
 // chart number
 // ---------------------------------------------------------------------------
 
@@ -550,6 +584,7 @@ export const TRANSFORMS: Record<TransformName, TransformFn> = {
   gender_tr: genderTr,
   deleted_to_status: deletedToStatus,
   compose_address: composeAddress,
+  compose_notes: composeNotes,
   chart_number: chartNumber,
   identity_tckn: identityTckn,
   provenance_source_id: provenanceSourceId,

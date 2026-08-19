@@ -363,7 +363,21 @@ await test('the basic importer still declares its own unchanged role matrix', ()
   );
 });
 
-await test('the migration feature never writes consent, notes, postalCode or createdAt', () => {
+/**
+ * `notes:` LEFT THIS FORBIDDEN LIST IN F3-DATA-MIG-TODAY-001-FINAL-R7, and
+ * the test below replaces it with a NARROWER guard rather than simply
+ * dropping the check.
+ *
+ * Why it left: the four columns that fed it (ONEMLINOT / KONTROLNOTU /
+ * UZUNNOT / KANGURUBU) were withheld ONLY for being KVKK Art. 6
+ * special-category, and that disposition is now rejected for an incumbent
+ * clinic's own operational record. Sensitivity governs HOW the data moves,
+ * not WHETHER it may.
+ *
+ * Why the guard stays: the consent fields are a DIFFERENT rule. A migration
+ * may never manufacture a lawful basis, and nothing about R7 touches that.
+ */
+await test('the migration feature never writes consent, postalCode, source or createdAt', () => {
   const executorSrc = src('../services/migration/executor.ts');
   const createBlock = executorSrc.slice(
     executorSrc.indexOf('tx.patient.create('),
@@ -373,7 +387,6 @@ await test('the migration feature never writes consent, notes, postalCode or cre
     'communicationConsent:',
     'marketingConsent:',
     'smsOptOut:',
-    'notes:',
     'postalCode:',
     'createdAt:',
     'deletedAt:',
@@ -385,6 +398,51 @@ await test('the migration feature never writes consent, notes, postalCode or cre
       `the migration must not set ${forbidden} on a patient`,
     );
   }
+});
+
+await test('R7: patient.notes is written ONLY from the reviewed draft, never from a literal or a source value', () => {
+  const executorSrc = src('../services/migration/executor.ts');
+  const createBlock = executorSrc.slice(
+    executorSrc.indexOf('tx.patient.create('),
+    executorSrc.indexOf('tx.migrationRecord.create('),
+  );
+  // Exactly one assignment, and it is the vendor-neutral draft field. A
+  // literal, a workbook cell or a vendor column name here would mean the
+  // executor had learned source semantics it must not have.
+  const assignments = createBlock.match(/(^|[^A-Za-z0-9_.])notes:\s*([^,]+),/gm) ?? [];
+  assert.equal(assignments.length, 1, 'expected exactly one notes: assignment in the patient create');
+  assert.ok(
+    /notes:\s*row\.draft\.notes,/.test(createBlock),
+    'notes must come from row.draft.notes and nothing else',
+  );
+
+  // And the draft field itself may only be populated through the destination
+  // catalog key, i.e. through a mapping an operator resolved.
+  const rowBuilderSrc = src('../services/migration/rowBuilder.ts');
+  assert.ok(
+    rowBuilderSrc.includes("notes: asString(read('patient.notes')),"),
+    'the draft may only take notes from the patient.notes destination mapping',
+  );
+
+  // compileMapping only compiles WRITING states, so a column still sitting in
+  // SENSITIVE_REVIEW_REQUIRED contributes nothing. Guard that too: if this
+  // set ever grew to include the review state, unapproved special-category
+  // text would start importing itself.
+  const writingStates = rowBuilderSrc.match(/const WRITING_STATES = new Set\(\[([^\]]*)\]\)/);
+  assert.ok(writingStates, 'WRITING_STATES not found in rowBuilder.ts');
+  const states = writingStates[1]!
+    .split(',')
+    .map((x) => x.trim().replace(/['\"]/g, ''))
+    .filter(Boolean);
+  assert.deepEqual(
+    states.sort(),
+    ['AUTO_CONFIDENT', 'RESOLVED'],
+    'only an explicitly decided mapping may ever be written',
+  );
+  assert.ok(
+    !states.includes('SENSITIVE_REVIEW_REQUIRED'),
+    'a merely-proposed special-category mapping must never be compiled into a write',
+  );
 });
 
 /**

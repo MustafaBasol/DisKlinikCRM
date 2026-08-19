@@ -567,9 +567,16 @@ async function executeOneBatch(input: BatchInput): Promise<BatchResult> {
               patientStatus: row.draft.patientStatus,
               gender: row.draft.gender,
               chartNumber: row.draft.chartNumber,
+              // KVKK Art. 6 special-category clinical free text. Null unless a
+              // Platform Admin explicitly RESOLVED a source column onto
+              // patient.notes (F3-DATA-MIG-TODAY-001-FINAL-R7): the mapping
+              // engine only ever PROPOSES this destination, in the undecided
+              // state SENSITIVE_REVIEW_REQUIRED, and compileMapping() ignores
+              // every non-writing state — so no unreviewed clinical text can
+              // reach this line. The value is written and never logged.
+              notes: row.draft.notes,
               primaryPractitionerId,
               // Deliberately NOT set, each for a recorded reason:
-              //   notes            — special-category legal gate unresolved
               //   postalCode       — ADRES_KODU semantics unresolved
               //   source           — enum-constrained; free-text referrer would
               //                      pollute a typed marketing enum

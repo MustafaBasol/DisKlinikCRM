@@ -66,6 +66,8 @@ import {
   type CanonicalCell,
   type CanonicalHeader,
   type SourceColumnProfile,
+  EXECUTABLE_MAPPING_STATES,
+  MAPPING_STATES,
 } from '../services/migration/contracts.js';
 import {
   FIRST_CUSTOMER_MATRIX,
@@ -74,6 +76,7 @@ import {
   type MatrixDisposition,
 } from '../services/migration/mapping/firstCustomerMatrix.js';
 import { suggestMappings, hasTypeConflict } from '../services/migration/mapping/mappingEngine.js';
+import { classifyColumnSensitivity } from '../services/migration/mapping/columnPreview.js';
 import { applyTransform } from '../services/migration/mapping/transforms.js';
 import { validateMappings, type MappingRecordLike } from '../services/migration/mapping/validateMapping.js';
 
@@ -145,21 +148,33 @@ await test('matrixDecisionCounts() sums to 91 and matches the sprint-adjusted ba
   //     destinations; explicitly in scope per this task's brief)
   //   ADRESI                   -> IMPORT_AFTER_NORMALIZATION (was IMPORT_DIRECT)
   //   HATIRLAT                 -> IGNORE_VENDOR_INTERNAL (was BLOCKED_NO_DESTINATION)
-  //   KANGURUBU                -> BLOCKED_LEGAL_DECISION (was BLOCKED_NO_DESTINATION)
-  // The last three are OUTSIDE the task brief's anticipated 3-column delta —
-  // see the FINDING note at the top of this file. Asserted here as the
-  // actual, self-consistent, on-disk state; NOT silently reconciled to the
-  // brief's stricter expectation.
+  //   KANGURUBU                -> (see the R7 note below)
+  // Those are OUTSIDE the task brief's anticipated 3-column delta — see the
+  // FINDING note at the top of this file. Asserted here as the actual,
+  // self-consistent, on-disk state; NOT silently reconciled to the brief's
+  // stricter expectation.
+  //
+  // F3-DATA-MIG-TODAY-001-FINAL-R7 then moved FOUR columns off
+  // BLOCKED_LEGAL_DECISION (6 -> 2), because they were blocked ONLY for being
+  // KVKK Art. 6 special-category — a disposition this program has now rejected
+  // for an incumbent clinic's own operational data:
+  //   ONEMLINOT, KONTROLNOTU, UZUNNOT -> IMPORT_AFTER_SENSITIVE_REVIEW
+  //   KANGURUBU                       -> SENSITIVE_REVIEW_NO_DESTINATION
+  // KVKKONAYKODU and KVKKSMS REMAIN BLOCKED_LEGAL_DECISION and that is
+  // correct: they were never blocked for sensitivity, they are blocked because
+  // writing them would fabricate consent that no patient ever gave.
   const expected: Record<MatrixDisposition, number> = {
     IMPORT_DIRECT: 4,
     IMPORT_AFTER_NORMALIZATION: 6,
     IMPORT_AFTER_REFERENCE_MAPPING: 1,
     IMPORT_AFTER_SCHEMA_FIELD: 4,
+    IMPORT_AFTER_SENSITIVE_REVIEW: 3,
+    SENSITIVE_REVIEW_NO_DESTINATION: 1,
     HISTORICAL_METADATA_ONLY: 4,
     MANUAL_REVIEW: 2,
     IGNORE_VENDOR_INTERNAL: 13,
     IGNORE_SUMMARY_NOT_TRANSACTION: 16,
-    BLOCKED_LEGAL_DECISION: 6,
+    BLOCKED_LEGAL_DECISION: 2,
     BLOCKED_NO_DESTINATION: 35,
   };
   assert.deepEqual(counts, expected);
@@ -779,6 +794,309 @@ await test('R5 #11: continue-gate blocks only genuinely unresolved decisions, no
   const blockedResult = validateMappings(withOneUnresolved, headersWithExtra);
   assert.equal(blockedResult.valid, false);
   assert.equal(blockedResult.unresolvedCount, 1);
+});
+
+
+// ==========================================================================
+// R7. F3-DATA-MIG-TODAY-001-FINAL-R7 - sensitive-data migration policy
+//
+// The rejected model:  SPECIAL_CATEGORY -> LEGAL_BLOCKED -> never importable.
+// The accepted model:  SPECIAL_CATEGORY -> appropriate destination ->
+//                      controlled, REVIEWED migration -> tenant scope + audit.
+//
+// Everything below is synthetic. No real workbook value appears in this file.
+// ==========================================================================
+
+section('R7. sensitive-data migration policy (F3-DATA-MIG-TODAY-001-FINAL-R7)');
+
+/** The four columns that were LEGAL_BLOCKED for sensitivity alone. */
+const R7_RECLASSIFIED = ['KANGURUBU', 'ONEMLINOT', 'UZUNNOT', 'KONTROLNOTU'] as const;
+/** The two that remain LEGAL_BLOCKED, for consent fabrication - not sensitivity. */
+const R7_STILL_LEGAL_BLOCKED = ['KVKKONAYKODU', 'KVKKSMS'] as const;
+
+await test('R7 #1: no column is LEGAL_BLOCKED merely for being special-category health data', () => {
+  for (const field of R7_RECLASSIFIED) {
+    const e = FIRST_CUSTOMER_MATRIX.find((x) => x.sourceField === field);
+    assert.ok(e, `${field} missing from the matrix`);
+    assert.notEqual(
+      e.mappingState,
+      'LEGAL_BLOCKED',
+      `${field} is health/special-category clinic-operational data and must not be permanently blocked for that reason alone`,
+    );
+    assert.equal(e.mappingState, 'SENSITIVE_REVIEW_REQUIRED');
+  }
+});
+
+await test('R7 #2: sensitivity classification is PRESERVED, not discarded, by the reclassification', () => {
+  // The point of the policy change is that sensitivity stops meaning "delete
+  // it" and starts meaning "control it". If the reclassification also erased
+  // the sensitivity signal it would be a downgrade, not a fix.
+  for (const field of R7_RECLASSIFIED) {
+    const e = FIRST_CUSTOMER_MATRIX.find((x) => x.sourceField === field)!;
+    assert.equal(e.reason, 'SPECIAL_CATEGORY_REVIEW', `${field} must still declare WHY it needs review`);
+    assert.ok(e.note && e.note.length > 0, `${field} must carry its recorded reasoning`);
+  }
+  // And the preview classifier must still fail closed on the new state - the
+  // masking is exactly as strong as it was under LEGAL_BLOCKED.
+  const masked = classifyColumnSensitivity('KANGURUBU', undefined, 5, 'SENSITIVE_REVIEW_REQUIRED');
+  assert.equal(masked, 'sensitiveReview');
+  // KANGURUBU is the standing example of why state must short-circuit the
+  // heuristics: no destination, unrecognized header, short values.
+  const heuristicOnly = classifyColumnSensitivity('KANGURUBU', undefined, 5, undefined);
+  assert.equal(heuristicOnly, 'low', 'baseline: the heuristics alone would NOT have masked this');
+});
+
+await test('R7 #3: a special-category column with a valid destination CAN be mapped through the controlled path', () => {
+  const e = FIRST_CUSTOMER_MATRIX.find((x) => x.sourceField === 'ONEMLINOT')!;
+  assert.equal(e.destinationField, 'patient.notes', 'the destination must actually be proposed');
+  const dest = getDestinationField('patient.notes');
+  assert.ok(dest, 'patient.notes must exist in the destination catalog');
+  assert.ok(dest.allowedTransforms.includes(e.transform!), 'the proposed transform must be allowed');
+
+  // The controlled path: the operator RESOLVES it. That must validate cleanly.
+  const headers = [makeHeader('HASTA_ID', 0), makeHeader('ADI', 1), makeHeader('SOYADI', 2), makeHeader('ONEMLINOT', 3)];
+  const resolved = [
+    record({ sourceField: 'HASTA_ID', sourceIndex: 0, state: 'AUTO_CONFIDENT', destinationField: 'provenance.sourceId', transform: 'provenance_source_id' }),
+    record({ sourceField: 'ADI', sourceIndex: 1, state: 'AUTO_CONFIDENT', destinationField: 'patient.firstName', transform: 'trim_collapse' }),
+    record({ sourceField: 'SOYADI', sourceIndex: 2, state: 'AUTO_CONFIDENT', destinationField: 'patient.lastName', transform: 'trim_collapse' }),
+    record({ sourceField: 'ONEMLINOT', sourceIndex: 3, state: 'RESOLVED', destinationField: 'patient.notes', transform: 'compose_notes', composeOrder: 1 }),
+  ];
+  const okResult = validateMappings(resolved, headers);
+  assert.deepEqual(okResult.issues, [], 'an operator-approved sensitive mapping must be accepted');
+  assert.equal(okResult.valid, true);
+});
+
+await test('R7 #4: an UNAPPROVED sensitive column BLOCKS the run - it is never imported silently', () => {
+  const headers = [makeHeader('HASTA_ID', 0), makeHeader('ADI', 1), makeHeader('SOYADI', 2), makeHeader('ONEMLINOT', 3)];
+  const pending = [
+    record({ sourceField: 'HASTA_ID', sourceIndex: 0, state: 'AUTO_CONFIDENT', destinationField: 'provenance.sourceId', transform: 'provenance_source_id' }),
+    record({ sourceField: 'ADI', sourceIndex: 1, state: 'AUTO_CONFIDENT', destinationField: 'patient.firstName', transform: 'trim_collapse' }),
+    record({ sourceField: 'SOYADI', sourceIndex: 2, state: 'AUTO_CONFIDENT', destinationField: 'patient.lastName', transform: 'trim_collapse' }),
+    record({ sourceField: 'ONEMLINOT', sourceIndex: 3, state: 'SENSITIVE_REVIEW_REQUIRED', destinationField: 'patient.notes', transform: 'compose_notes', composeOrder: 1 }),
+  ];
+  const result = validateMappings(pending, headers);
+  assert.equal(result.valid, false, 'a merely-proposed sensitive destination must not let the run execute');
+  assert.equal(result.unresolvedCount, 1);
+  assert.equal(result.sensitiveReviewCount, 1, 'and it must be reported as a SENSITIVE review, not generic unresolved');
+  assert.equal(result.issues.length, 1, 'exactly one issue - undecided rows are never also destination-checked');
+  assert.equal(result.issues[0]!.code, 'MAPPING_REQUIRED');
+  assert.equal(result.issues[0]!.sourceField, 'ONEMLINOT');
+});
+
+await test('R7 #5: SENSITIVE_REVIEW_REQUIRED is NOT executable, so no auto-accept path can sweep it in', () => {
+  assert.ok(
+    !EXECUTABLE_MAPPING_STATES.includes('SENSITIVE_REVIEW_REQUIRED'),
+    'a run must never execute from a merely-proposed special-category mapping',
+  );
+  // Confidence must sit below any auto-accept threshold too, so an
+  // "accept all safe suggestions" action cannot pick it up.
+  for (const field of ['ONEMLINOT', 'UZUNNOT', 'KONTROLNOTU'] as const) {
+    const e = FIRST_CUSTOMER_MATRIX.find((x) => x.sourceField === field)!;
+    assert.ok(e.confidence < 100, `${field} must never report full confidence in an unapproved destination`);
+  }
+});
+
+await test('R7 #6: the two consent columns REMAIN legally blocked - that block was never about sensitivity', () => {
+  for (const field of R7_STILL_LEGAL_BLOCKED) {
+    const e = FIRST_CUSTOMER_MATRIX.find((x) => x.sourceField === field)!;
+    assert.equal(e.mappingState, 'LEGAL_BLOCKED', `${field} would fabricate consent nobody gave`);
+    assert.equal(e.destinationField, null);
+  }
+  // And the catalog still refuses to define anywhere for them to go.
+  const consentLike = DESTINATION_FIELDS.find((d) => /consent|optout|opt_out/i.test(d.key));
+  assert.equal(consentLike, undefined);
+});
+
+await test('R7 #7: a truly unresolved semantic target requires review rather than a silent drop', () => {
+  // KANGURUBU carries real data but the product has NO blood-group column. It
+  // must surface as a review item, never as IGNORE/BLOCKED (silent) and never
+  // guessed into an unrelated destination such as patient.notes.
+  const e = FIRST_CUSTOMER_MATRIX.find((x) => x.sourceField === 'KANGURUBU')!;
+  assert.equal(e.mappingState, 'SENSITIVE_REVIEW_REQUIRED');
+  assert.equal(e.destinationField, null, 'no destination may be invented for it');
+  // Same rule for the two genuinely-unknown-semantics columns.
+  for (const field of ['ADRES_KODU', 'EK_ACIKLAMA'] as const) {
+    const m = FIRST_CUSTOMER_MATRIX.find((x) => x.sourceField === field)!;
+    assert.equal(m.mappingState, 'MANUAL_REQUIRED', `${field} must stay an unanswered question, not a guess`);
+    assert.equal(m.destinationField, null);
+  }
+});
+
+await test('R7 #8: patient.notes composition is stable across reruns (idempotency)', () => {
+  const cells = (...texts: string[]): CanonicalCell[] =>
+    texts.map((t) => makeCell({ type: t === '' ? 'empty' : 'string', text: t }));
+
+  // Synthetic placeholders only - never anything resembling clinical content.
+  const first = applyTransform('compose_notes', { cells: cells('AAA', '', 'BBB'), rowNumber: 7 });
+  const second = applyTransform('compose_notes', { cells: cells('AAA', '', 'BBB'), rowNumber: 7 });
+  assert.equal(first.value, second.value, 'same cells in, same string out - forever');
+  assert.equal(first.value, 'AAA\nBBB', 'empty parts omitted; order preserved; newline-joined');
+  assert.deepEqual(first.warnings, [], 'the transform must never emit a value in a warning');
+  assert.equal(applyTransform('compose_notes', { cells: cells('', ''), rowNumber: 1 }).value, null);
+});
+
+// ==========================================================================
+// R7-GATE. FIRST-CUSTOMER DATA-LOSS GATE
+//
+// Every source column that carries MEANINGFUL data must end in exactly one
+// accounted disposition. No unexplained remainder is tolerated.
+// ==========================================================================
+
+section('R7-GATE. source-column accounting invariant (data-loss gate)');
+
+/**
+ * Bucket a mapping state into exactly one accounting class.
+ *
+ * `explicitlyExcluded` covers IGNORE / BLOCKED / LEGAL_BLOCKED: each is an
+ * AFFIRMATIVE recorded decision not to write, carrying its own reason, not an
+ * omission. `null` means the state is not accounted for at all - which is the
+ * failure this gate exists to catch.
+ */
+function accountingClassOf(
+  state: string,
+): 'resolved' | 'manualReview' | 'sensitiveReview' | 'explicitlyExcluded' | null {
+  switch (state) {
+    case 'AUTO_CONFIDENT':
+    case 'RESOLVED':
+      return 'resolved';
+    case 'MANUAL_REQUIRED':
+    case 'AUTO_REVIEW':
+      return 'manualReview';
+    case 'SENSITIVE_REVIEW_REQUIRED':
+      return 'sensitiveReview';
+    case 'IGNORE':
+    case 'BLOCKED':
+    case 'LEGAL_BLOCKED':
+      return 'explicitlyExcluded';
+    default:
+      return null;
+  }
+}
+
+await test('GATE #1: every MAPPING_STATE is accounted for by exactly one class', () => {
+  // A state added later without a class would let a whole column slip through
+  // the accounting below unnoticed, so the enum itself is the gate's input.
+  for (const state of MAPPING_STATES) {
+    assert.notEqual(
+      accountingClassOf(state),
+      null,
+      `mapping state "${state}" has no accounting class - a column in it would be silently unaccounted`,
+    );
+  }
+});
+
+await test('GATE #2: meaningful columns = resolved + manualReview + sensitiveReview + explicitlyExcluded, no remainder', () => {
+  // Synthetic stand-in for an analyzed workbook: every one of the 91 matrix
+  // columns, each given a fill count. Zero-data columns are accounted
+  // SEPARATELY, exactly as the gate requires.
+  //
+  // Fill counts here are DELIBERATELY chosen so that the columns whose
+  // disposition this task changed are treated as data-bearing, including the
+  // near-vestigial ones: a column with one meaningful value on row 14,889 is
+  // still a DATA-BEARING column.
+  const ZERO_DATA = new Set(['UZUNNOT', 'KVKKONAYKODU', 'KVKKSMS', 'ADRES_KODU']);
+
+  const tally = { resolved: 0, manualReview: 0, sensitiveReview: 0, explicitlyExcluded: 0 };
+  let meaningful = 0;
+  let zeroData = 0;
+  const unaccounted: string[] = [];
+
+  for (const e of FIRST_CUSTOMER_MATRIX) {
+    const filledCount = ZERO_DATA.has(e.sourceField) ? 0 : 1;
+    if (filledCount === 0) {
+      zeroData++;
+      continue;
+    }
+    meaningful++;
+    const cls = accountingClassOf(e.mappingState);
+    if (cls === null) {
+      unaccounted.push(`${e.sourceField} (${e.mappingState})`);
+      continue;
+    }
+    tally[cls]++;
+  }
+
+  assert.deepEqual(unaccounted, [], 'no meaningful source column may end in an unaccounted state');
+  assert.equal(
+    meaningful,
+    tally.resolved + tally.manualReview + tally.sensitiveReview + tally.explicitlyExcluded,
+    'the accounting must balance with NO unexplained remainder',
+  );
+  assert.equal(meaningful + zeroData, FIRST_CUSTOMER_MATRIX.length, 'every column is in exactly one bucket');
+  assert.equal(zeroData, ZERO_DATA.size, 'zero-data columns are accounted separately, not folded in');
+
+  console.log(
+    `    meaningful ${meaningful} = resolved ${tally.resolved} + manualReview ${tally.manualReview}` +
+      ` + sensitiveReview ${tally.sensitiveReview} + explicitlyExcluded ${tally.explicitlyExcluded}` +
+      `   (zero-data, accounted separately: ${zeroData})`,
+  );
+});
+
+await test('GATE #3: no meaningful column is BLOCKED *solely* because it is special-category', () => {
+  // The precise defect this task exists to remove. A column may still be
+  // LEGAL_BLOCKED - but not for sensitivity alone.
+  for (const e of FIRST_CUSTOMER_MATRIX) {
+    if (e.mappingState !== 'LEGAL_BLOCKED') continue;
+    assert.ok(
+      (R7_STILL_LEGAL_BLOCKED as readonly string[]).includes(e.sourceField),
+      `"${e.sourceField}" is LEGAL_BLOCKED but is not one of the two consent-fabrication columns. ` +
+        'If it is blocked for sensitivity alone, that is the rejected policy; move it to ' +
+        'SENSITIVE_REVIEW_REQUIRED and record why.',
+    );
+  }
+});
+
+await test('GATE #4: a data-bearing headerless column is NEVER auto-ignored', () => {
+  // The R6 meaningful-preview invariant must survive R7. One real value
+  // anywhere in the sheet is enough to make the column a decision, not a drop.
+  const header = { original: 'COLUMN_43', normalized: 'COLUMN_43', index: 43, headerWasBlank: true };
+  const [sparse] = suggestMappings([header], [nonEmptyProfile(43, 'COLUMN_43', 1)], {
+    sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM,
+  });
+  assert.notEqual(sparse.mappingState, 'IGNORE', 'one meaningful value must not be swept into IGNORE');
+  assert.equal(sparse.mappingState, 'MANUAL_REQUIRED');
+  assert.equal(accountingClassOf(sparse.mappingState), 'manualReview');
+
+  // ...and the genuinely empty one still IS auto-ignorable.
+  const [empty] = suggestMappings([header], [emptyProfile(43, 'COLUMN_43')], {
+    sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM,
+  });
+  assert.equal(empty.mappingState, 'IGNORE');
+  assert.equal(empty.reason, 'EMPTY_SOURCE_COLUMN');
+});
+
+// ==========================================================================
+// R7-HDR. Original source header preservation
+// ==========================================================================
+
+section('R7-HDR. original source header is preserved as a distinct concept');
+
+await test('HDR #1: a named column reports its ORIGINAL header, byte-exact', () => {
+  const header = { original: 'EK_ACIKLAMA', normalized: 'EK_ACIKLAMA', index: 42 };
+  const [s] = suggestMappings([header], [nonEmptyProfile(42, 'EK_ACIKLAMA', 120)], {
+    sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM,
+  });
+  assert.equal(s.sourceHeader, 'EK_ACIKLAMA');
+  assert.equal(s.sourceField, 'EK_ACIKLAMA', 'the stored key stays byte-exact');
+});
+
+await test('HDR #2: a headerless column reports sourceHeader === null, NOT the synthesized name', () => {
+  const header = { original: 'COLUMN_43', normalized: 'COLUMN_43', index: 43, headerWasBlank: true };
+  const [s] = suggestMappings([header], [nonEmptyProfile(43, 'COLUMN_43', 1)], {
+    sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM,
+  });
+  assert.equal(s.sourceHeader, null, 'a synthesized name must never masquerade as a real workbook header');
+  assert.equal(s.sourceField, 'COLUMN_43', 'but the synthesized name is still the stored key');
+});
+
+await test('HDR #3: a REAL vendor header that happens to read "COLUMN_<n>" is NOT reported as headerless', () => {
+  // The exact collision CanonicalHeader.headerWasBlank exists to prevent, and
+  // the reason the flag - not a string match - is the authoritative signal.
+  const header = { original: 'COLUMN_43', normalized: 'COLUMN_43', index: 43 }; // headerWasBlank absent
+  const [s] = suggestMappings([header], [nonEmptyProfile(43, 'COLUMN_43', 9)], {
+    sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM,
+  });
+  assert.equal(s.sourceHeader, 'COLUMN_43', 'a real header must survive even when it looks synthesized');
 });
 
 // ─── Sonuç ────────────────────────────────────────────────────────────────

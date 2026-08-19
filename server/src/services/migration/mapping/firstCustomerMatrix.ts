@@ -30,13 +30,47 @@
  *   IMPORT_AFTER_NORMALIZATION             5              6          +1
  *   IMPORT_AFTER_REFERENCE_MAPPING         1              1           0
  *   IMPORT_AFTER_SCHEMA_FIELD              1              4          +3
+ *   IMPORT_AFTER_SENSITIVE_REVIEW          0              3          +3   (R7)
+ *   SENSITIVE_REVIEW_NO_DESTINATION        0              1          +1   (R7)
  *   HISTORICAL_METADATA_ONLY               4              4           0
  *   MANUAL_REVIEW                          2              2           0
  *   IGNORE_VENDOR_INTERNAL                12             13          +1
  *   IGNORE_SUMMARY_NOT_TRANSACTION        16             16           0
- *   BLOCKED_LEGAL_DECISION                 5              6          +1
+ *   BLOCKED_LEGAL_DECISION                 5              2          -3
  *   BLOCKED_NO_DESTINATION                40             35          -5
  *   TOTAL                                 91             91           0
+ *
+ * ---------------------------------------------------------------------------
+ * R7 POLICY CORRECTION (F3-DATA-MIG-TODAY-001-FINAL-R7)
+ * ---------------------------------------------------------------------------
+ * The rejected model was:
+ *     SPECIAL_CATEGORY -> LEGAL_BLOCKED -> CAN NEVER BE IMPORTED
+ * The accepted model is:
+ *     SPECIAL_CATEGORY -> appropriate destination -> controlled, REVIEWED
+ *     migration -> tenant scope + audit + existing authorization
+ *
+ * This export comes from the clinic's incumbent practice-management system and
+ * is being migrated so the clinic can keep operating. Special-category status
+ * must constrain HOW its own operational record moves, not delete it.
+ *
+ * Four of the six BLOCKED_LEGAL_DECISION columns were blocked ONLY because
+ * their content is health data, and they move:
+ *   ONEMLINOT   -> IMPORT_AFTER_SENSITIVE_REVIEW  (patient.notes, order 1)
+ *   KONTROLNOTU -> IMPORT_AFTER_SENSITIVE_REVIEW  (patient.notes, order 2)
+ *   UZUNNOT     -> IMPORT_AFTER_SENSITIVE_REVIEW  (patient.notes, order 3)
+ *   KANGURUBU   -> SENSITIVE_REVIEW_NO_DESTINATION (no blood-group column
+ *                  exists in the product; structurally blocked, not dropped)
+ *
+ * TWO REMAIN BLOCKED_LEGAL_DECISION AND THAT IS CORRECT — they were never
+ * blocked for sensitivity:
+ *   KVKKONAYKODU, KVKKSMS — writing these would FABRICATE consent that no
+ *   patient gave. "A migration may not manufacture a lawful basis" is a
+ *   different rule from "special-category data may never move", and only the
+ *   second one is being retired. Both are 0 % filled, so nothing is lost.
+ *
+ * NONE of the four reclassified columns is auto-applied. All land in mapping
+ * state SENSITIVE_REVIEW_REQUIRED, which is UNDECIDED: the run cannot execute
+ * until a Platform Admin resolves each column individually.
  *
  * The six deltas, each with its reason:
  *
@@ -66,7 +100,7 @@
  *     halves of the composition carry IMPORT_AFTER_NORMALIZATION.
  *
  * Rolled-up buckets encoded here: IMPORT 15 · HISTORICAL 4 · IGNORE 29 ·
- * BLOCKED 41 · MANUAL_REVIEW 2  =  91.
+ * BLOCKED 37 · MANUAL_REVIEW 2 · SENSITIVE_REVIEW 4  =  91.
  */
 
 import {
@@ -92,6 +126,22 @@ export type MatrixDisposition =
   | 'IMPORT_AFTER_SCHEMA_FIELD'
   | 'HISTORICAL_METADATA_ONLY'
   | 'MANUAL_REVIEW'
+  /**
+   * KVKK Art. 6 special-category content WITH a valid destination in the
+   * catalog. The destination is PROPOSED, never applied automatically: a
+   * Platform Admin approves each column individually. See MappingState
+   * 'SENSITIVE_REVIEW_REQUIRED' in contracts.ts for why this is not
+   * BLOCKED_LEGAL_DECISION.
+   */
+  | 'IMPORT_AFTER_SENSITIVE_REVIEW'
+  /**
+   * KVKK Art. 6 special-category content that carries MEANINGFUL clinic data
+   * but has NO valid destination anywhere in the product. It must not be
+   * dropped and must not be guessed into an unrelated field, so it surfaces as
+   * a review item with no proposal until a program owner decides on a
+   * destination. Distinct from BLOCKED_NO_DESTINATION, which is silent.
+   */
+  | 'SENSITIVE_REVIEW_NO_DESTINATION'
   | 'IGNORE_VENDOR_INTERNAL'
   | 'IGNORE_SUMMARY_NOT_TRANSACTION'
   | 'BLOCKED_LEGAL_DECISION'
@@ -132,6 +182,9 @@ function stateFor(d: MatrixDisposition): MappingState {
     case 'IGNORE_SUMMARY_NOT_TRANSACTION':
     case 'HISTORICAL_METADATA_ONLY':
       return 'IGNORE';
+    case 'IMPORT_AFTER_SENSITIVE_REVIEW':
+    case 'SENSITIVE_REVIEW_NO_DESTINATION':
+      return 'SENSITIVE_REVIEW_REQUIRED';
     case 'BLOCKED_LEGAL_DECISION':
       return 'LEGAL_BLOCKED';
     case 'BLOCKED_NO_DESTINATION':
@@ -158,6 +211,9 @@ function reasonFor(d: MatrixDisposition): MappingReason {
     // legitimate, so the reason is VENDOR_INTERNAL per the accepted mapping.
     case 'HISTORICAL_METADATA_ONLY':
       return 'VENDOR_INTERNAL';
+    case 'IMPORT_AFTER_SENSITIVE_REVIEW':
+    case 'SENSITIVE_REVIEW_NO_DESTINATION':
+      return 'SPECIAL_CATEGORY_REVIEW';
     case 'BLOCKED_LEGAL_DECISION':
       return 'LEGAL_GATE';
     case 'BLOCKED_NO_DESTINATION':
@@ -186,6 +242,15 @@ function confidenceFor(d: MatrixDisposition): number {
     case 'IGNORE_SUMMARY_NOT_TRANSACTION':
     case 'HISTORICAL_METADATA_ONLY':
       return 100;
+    // A proposed-but-unapproved destination. Deliberately BELOW every
+    // auto-accept path so "accept all safe suggestions" can never sweep a
+    // special-category column into the import without a human looking at it,
+    // while still being non-zero: there IS a destination proposal here, unlike
+    // a blocked or manual-review column, and reporting 0 would tell the
+    // operator we have no opinion when in fact we have a documented one.
+    case 'IMPORT_AFTER_SENSITIVE_REVIEW':
+      return 70;
+    case 'SENSITIVE_REVIEW_NO_DESTINATION':
     case 'BLOCKED_LEGAL_DECISION':
     case 'BLOCKED_NO_DESTINATION':
     case 'MANUAL_REVIEW':
@@ -508,40 +573,73 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'KANGURUBU',
     meaning: 'Blood group',
-    disposition: 'BLOCKED_LEGAL_DECISION',
+    disposition: 'SENSITIVE_REVIEW_NO_DESTINATION',
     note:
-      '§5 names the blocker as "G-E11 + Art. 6 legal gate". Blood group is KVKK Art. 6 ' +
-      'special-category health data, so the binding blocker is LEGAL, not structural. Recorded as ' +
-      'LEGAL_BLOCKED rather than NO_DESTINATION so that merely adding a destination column can ' +
-      'never unblock it — only a legal decision can. 1 filled row.',
+      'KVKK Art. 6 special-category health data. R7 CORRECTION: sensitivity alone no longer ' +
+      'makes this permanently unimportable — it now requires operator review instead of a ' +
+      'standing legal block. BUT the review currently has nothing to approve: there is NO ' +
+      'blood-group column anywhere in the product (no bloodType / bloodGroup / kanGrubu on ' +
+      'Patient or any child model) and no blood-group normalization transform, so unlike the ' +
+      'clinical-note columns this one is STRUCTURALLY blocked as well as sensitive. 1 filled ' +
+      'row out of 14,890. It is deliberately NOT folded into patient.notes: a structured ' +
+      'clinical attribute written into free text is not the same datum and could not be read ' +
+      'back as a blood group. It stays visible as a review item — never silently ignored — ' +
+      'until a program owner decides on a destination.',
   }),
   entry({
     sourceField: 'ONEMLINOT',
     meaning: 'Important clinical note',
-    disposition: 'BLOCKED_LEGAL_DECISION',
+    disposition: 'IMPORT_AFTER_SENSITIVE_REVIEW',
+    destinationField: 'patient.notes',
+    transform: 'compose_notes',
+    composeOrder: 1,
     note:
-      'C-13. 45.70 % filled (6,805/14,890); 706 of those exceed 200 characters. Confirmed, sized, ' +
-      'real clinical free text under KVKK Art. 6. patient.notes exists in the schema — the ' +
-      'blocker is PURELY LEGAL, which makes it more dangerous, not less. Also write-only from the ' +
-      'UI, so imported clinical text could not be rectified or erased by staff, making a KVKK ' +
-      'request unserviceable.',
+      'C-13. 45.70 % filled (6,805/14,890) — by volume the single largest body of clinical ' +
+      'content in this export, and the clinic needs it to keep treating these patients. ' +
+      'R7 CORRECTION: previously LEGAL_BLOCKED, which discarded it outright for being ' +
+      'special-category. Two things changed. (1) The policy: KVKK Art. 6 status governs HOW ' +
+      'this migrates — masked preview, explicit per-column approval, tenant scope, audit — not ' +
+      'WHETHER an incumbent clinic may migrate its own operational record. (2) The stated ' +
+      'factual justification did not survive verification: "write-only from the UI, so a KVKK ' +
+      'request would be unserviceable" is wrong. patient.notes is READ and rendered as the ' +
+      'patient-detail Clinical Alerts card, exported for subject access (patientPrivacy.ts), ' +
+      'accepted on PUT /patients/:id (schemas/index.ts + routes/patients.ts) and already ' +
+      'cleared by patientAnonymization.ts. Access, rectification and erasure are therefore all ' +
+      'serviceable today; the only real gap is a missing edit control in the clinic UI. ' +
+      'First of the documented ONEMLINOT -> KONTROLNOTU -> UZUNNOT composition into ' +
+      'patient.notes. NOT auto-applied: SENSITIVE_REVIEW_REQUIRED, so a Platform Admin must ' +
+      'approve it before the run can execute.',
   }),
   entry({
     sourceField: 'UZUNNOT',
     meaning: 'Long note',
-    disposition: 'BLOCKED_LEGAL_DECISION',
+    disposition: 'IMPORT_AFTER_SENSITIVE_REVIEW',
+    destinationField: 'patient.notes',
+    transform: 'compose_notes',
+    composeOrder: 3,
     note:
-      '0 % filled here, but the KVKK Art. 6 gate is a COLUMN-level decision and applies to the ' +
-      'next customer. Do not downgrade on this fill rate.',
+      '0 % filled in THIS workbook, so nothing is at stake for the first customer either way. ' +
+      'R7 CORRECTION: it still moves off LEGAL_BLOCKED, because the disposition is a ' +
+      'COLUMN-level decision that applies to the NEXT customer too — and the reasoning that ' +
+      'blocked it (special-category => never importable) is the reasoning being retired. ' +
+      'Last in the composition order, so on an export where it IS filled it appends after ' +
+      'ONEMLINOT and KONTROLNOTU rather than displacing them. Zero fill means the operator ' +
+      'reviewing it will see an empty preview and can resolve it to IGNORE in one click; that ' +
+      'is a deliberate operator decision, which is exactly the point.',
   }),
   entry({
     sourceField: 'KONTROLNOTU',
     meaning: 'Recall / check-up note',
-    disposition: 'BLOCKED_LEGAL_DECISION',
+    disposition: 'IMPORT_AFTER_SENSITIVE_REVIEW',
+    destinationField: 'patient.notes',
+    transform: 'compose_notes',
+    composeOrder: 2,
     note:
-      'C-14. 0.01 % filled (2/14,890), near-vestigial. Low volume does NOT remove the KVKK Art. 6 ' +
-      'special-category gate. Row-level manual review of those 2 rows may be an additional ' +
-      'operational step once the legal basis exists; it does not replace the legal decision.',
+      'C-14. 0.01 % filled (2/14,890), near-vestigial — but 2 real values is DATA-BEARING, not ' +
+      'empty, and the R7 data-loss gate counts it as meaningful. R7 CORRECTION: same reasoning ' +
+      'as ONEMLINOT. Low volume never justified the block and low volume does not justify ' +
+      'dropping it now either; it simply means the reviewing operator has very little to read. ' +
+      'Second in the ONEMLINOT -> KONTROLNOTU -> UZUNNOT composition.',
   }),
   entry({
     sourceField: 'TEDAVIDURUMU',
@@ -769,7 +867,12 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
       '0 % filled. CONSENT IS NEVER INVENTED. PatientCommunicationPreference is service-owned and ' +
       'evidence-gated (evidence_required is enforced); PatientCommunicationConsentEvent is ' +
       'append-only and must never be written by a migration. All migrated patients arrive ' +
-      'non-messageable.',
+      'non-messageable. ' +
+      'R7: DELIBERATELY UNCHANGED. This column is NOT blocked for being sensitive — it is ' +
+      'blocked because writing it would FABRICATE a lawful basis that no one ever gave. The R7 ' +
+      'policy retires "special-category => never importable"; it does not touch "a migration ' +
+      'may not manufacture consent evidence", which is a different and still-binding rule. ' +
+      'Nothing is lost by holding it: 0 filled values.',
   }),
   entry({
     sourceField: 'KVKKILKKODU',
@@ -783,7 +886,10 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
     sourceField: 'KVKKSMS',
     meaning: 'KVKK SMS flag',
     disposition: 'BLOCKED_LEGAL_DECISION',
-    note: '0 % filled. Same consent gate as KVKKONAYKODU. Consent is never inferred from a legacy flag.',
+    note:
+      '0 % filled. Same consent gate as KVKKONAYKODU. Consent is never inferred from a legacy ' +
+      'flag. R7: DELIBERATELY UNCHANGED, for the same reason — the block is consent ' +
+      'fabrication, not sensitivity, and 0 filled values means nothing is lost by holding it.',
   }),
   entry({
     sourceField: 'MESAJOK',
@@ -1041,6 +1147,8 @@ export function matrixDecisionCounts(): Record<MatrixDisposition, number> {
     IMPORT_AFTER_SCHEMA_FIELD: 0,
     HISTORICAL_METADATA_ONLY: 0,
     MANUAL_REVIEW: 0,
+    IMPORT_AFTER_SENSITIVE_REVIEW: 0,
+    SENSITIVE_REVIEW_NO_DESTINATION: 0,
     IGNORE_VENDOR_INTERNAL: 0,
     IGNORE_SUMMARY_NOT_TRANSACTION: 0,
     BLOCKED_LEGAL_DECISION: 0,

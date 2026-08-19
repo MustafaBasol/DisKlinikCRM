@@ -216,6 +216,7 @@ export const TRANSFORM_NAMES = [
   'gender_tr',
   'deleted_to_status',
   'compose_address',
+  'compose_notes',
   'chart_number',
   'identity_tckn',
   'provenance_source_id',
@@ -247,6 +248,13 @@ export const MAPPING_STATES = [
   'BLOCKED',
   'IGNORE',
   'LEGAL_BLOCKED',
+  /**
+   * Special-category (KVKK Art. 6 / GDPR Art. 9) content the engine refuses to
+   * auto-map, but which an operator MAY consciously route to a destination.
+   * Deliberately distinct from LEGAL_BLOCKED: this is "a human must decide",
+   * not "forbidden" — the destination control stays ENABLED for these rows.
+   */
+  'SENSITIVE_REVIEW_REQUIRED',
   'RESOLVED',
 ] as const;
 
@@ -266,6 +274,8 @@ export const MAPPING_REASONS = [
   'SEMANTICS_UNRESOLVED',
   'UNKNOWN_HEADER',
   'EMPTY_SOURCE_COLUMN',
+  /** Special-category content — an operator, not the engine, must decide. */
+  'SPECIAL_CATEGORY_REVIEW',
 ] as const;
 
 export type MappingReason = (typeof MAPPING_REASONS)[number];
@@ -281,6 +291,29 @@ export type MappingReason = (typeof MAPPING_REASONS)[number];
  */
 export interface MappingDto {
   sourceField: string;
+  /**
+   * The ORIGINAL workbook header text for this column, byte-exact.
+   * `null` when and only when the workbook's header CELL was blank.
+   *
+   * This is AUTHORITATIVE: it is persisted server-side from the parser's
+   * `CanonicalHeader.headerWasBlank` (server/src/services/migration/contracts.ts),
+   * NOT inferred from the shape of `sourceField`. Prefer it over every other
+   * identity field for display — a real vendor header can legitimately BE the
+   * string `COLUMN_43`, so the synthesized-name shape can never be trusted to
+   * tell a headerless column apart from a named one.
+   *
+   * A backend older than F3-DATA-MIG-TODAY-001-FINAL-R7 omits the property
+   * entirely; `normalizeMapping()` derives a best-effort value in that case so
+   * the field is never `undefined` in the UI.
+   */
+  sourceHeader: string | null;
+  /**
+   * What to show an operator when a single string is all there is room for:
+   * `sourceHeader ?? sourceField`. Always a string — never `undefined`, never
+   * the literal text "undefined". Normalized client-side too, because the
+   * mappings GET returned raw persisted rows (which carry no such column)
+   * before R7.
+   */
   sourceLabel: string;
   sourceIndex: number;
   sourceNormalized: string;
@@ -317,6 +350,12 @@ export interface MappingValidationDto {
   legalBlockedCount: number;
   ignoredCount: number;
   mappedCount: number;
+  /**
+   * How many columns are in SENSITIVE_REVIEW_REQUIRED. Absent on a backend
+   * older than R7 — `normalizeValidation()` defaults it to 0 so the summary
+   * bar renders a truthful "0" instead of "undefined".
+   */
+  sensitiveReviewCount: number;
 }
 
 export interface MappingsResponse {
@@ -629,17 +668,50 @@ export interface MigrationAuditEventDto {
 // Normalizers (tolerant reads — the UI must never crash on a shape drift)
 // ---------------------------------------------------------------------------
 
-/** Accepts `state` or the server-side `mappingState` spelling. */
-export function normalizeMapping(raw: MappingDto & { mappingState?: MappingState }): MappingDto {
+/**
+ * What a mapping row can look like ON THE WIRE: a backend older than R7 sends
+ * neither `sourceHeader` nor `sourceLabel` (the mappings GET echoed raw
+ * persisted rows, and the table has no such columns), and the server-side
+ * `MappingSuggestion` spells `state` as `mappingState`.
+ */
+export type RawMappingDto = Omit<MappingDto, 'sourceHeader' | 'sourceLabel'> &
+  Partial<Pick<MappingDto, 'sourceHeader' | 'sourceLabel'>> & { mappingState?: MappingState };
+
+/**
+ * Legacy-only fallback for `sourceHeader` when the property is absent from the
+ * payload entirely. INDEX-ANCHORED on purpose: a synthesized headerless column
+ * is named `COLUMN_<physicalIndex>` (canonicalParser.ts, UNNAMED_COLUMN_PREFIX),
+ * so `COLUMN_7` at index 7 is almost certainly synthesized while `COLUMN_7` at
+ * index 3 is a real vendor header that merely looks like one. This mirrors
+ * `isHeaderlessMapping`'s legacy branch in platformMigrationHelpers.ts; the
+ * authoritative signal is always the server's own `headerWasBlank`-derived
+ * `sourceHeader`, never this shape guess.
+ */
+function deriveLegacySourceHeader(raw: Pick<MappingDto, 'sourceField' | 'sourceIndex'>): string | null {
+  const match = /^COLUMN_(\d+)$/.exec(raw.sourceField ?? '');
+  if (match && Number(match[1]) === raw.sourceIndex) return null;
+  return raw.sourceField ?? null;
+}
+
+/**
+ * Accepts `state` or the server-side `mappingState` spelling, and guarantees
+ * the two identity fields the mapping screen renders (`sourceHeader`,
+ * `sourceLabel`) exist. An older/partial backend response must degrade to a
+ * best-effort label — never to `undefined` (which crashed
+ * `mappingMatchesQuery`) and never to the string "undefined".
+ */
+export function normalizeMapping(raw: RawMappingDto): MappingDto {
+  const headerProvided = raw != null && Object.prototype.hasOwnProperty.call(raw, 'sourceHeader');
+  const sourceHeader = headerProvided ? (raw.sourceHeader ?? null) : deriveLegacySourceHeader(raw);
   return {
     ...raw,
+    sourceHeader,
+    sourceLabel: raw.sourceLabel ?? raw.sourceHeader ?? raw.sourceField,
     state: raw.state ?? raw.mappingState ?? 'MANUAL_REQUIRED',
   };
 }
 
-export function normalizeMappings(
-  raw: (MappingDto & { mappingState?: MappingState })[] | null | undefined,
-): MappingDto[] {
+export function normalizeMappings(raw: RawMappingDto[] | null | undefined): MappingDto[] {
   return Array.isArray(raw) ? raw.map(normalizeMapping) : [];
 }
 
@@ -652,6 +724,7 @@ export const EMPTY_MAPPING_VALIDATION: MappingValidationDto = {
   legalBlockedCount: 0,
   ignoredCount: 0,
   mappedCount: 0,
+  sensitiveReviewCount: 0,
 };
 
 export function normalizeValidation(raw: MappingValidationDto | null | undefined): MappingValidationDto {
@@ -664,6 +737,7 @@ export function normalizeValidation(raw: MappingValidationDto | null | undefined
     legalBlockedCount: raw.legalBlockedCount ?? 0,
     ignoredCount: raw.ignoredCount ?? 0,
     mappedCount: raw.mappedCount ?? 0,
+    sensitiveReviewCount: raw.sensitiveReviewCount ?? 0,
   };
 }
 

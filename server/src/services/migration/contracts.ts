@@ -333,6 +333,7 @@ export const TRANSFORM_NAMES = [
   'gender_tr',
   'deleted_to_status',
   'compose_address',
+  'compose_notes',
   'chart_number',
   'identity_tckn',
   'provenance_source_id',
@@ -347,12 +348,8 @@ export type TransformName = (typeof TRANSFORM_NAMES)[number];
  * Deliberately NOT present, and why (each is an accepted program decision, not
  * an oversight — see docs/program/PATIENT_FIELD_GAP_AND_IDENTITY_DECISION_PACKAGE.md):
  *
- *  - patient.notes                — KVKK Art. 6 special-category gate is
- *    unresolved for ONEMLINOT (45.70 % filled) / KONTROLNOTU / UZUNNOT /
- *    KANGURUBU. The destination exists in the schema; the blocker is purely
- *    LEGAL, which makes it more dangerous, not less. Also write-only from the
- *    UI — imported clinical text could not be rectified or erased by staff
- *    through any interface, making a KVKK request unserviceable.
+ *  - (patient.notes WAS listed here and is now PRESENT — see below. The
+ *    exclusion is retired by F3-DATA-MIG-TODAY-001-FINAL-R7.)
  *  - patient.postalCode           — ADRES_KODU semantics (5-digit posta kodu
  *    vs 10-digit UAVT address code) remain UNRESOLVED. 0.00 % filled in this
  *    workbook, so absence of data must never be encoded as a direct mapping.
@@ -472,6 +469,41 @@ export const DESTINATION_FIELDS: readonly DestinationFieldDef[] = [
       'would break idempotency.',
   },
   {
+    key: 'patient.notes',
+    label: 'Clinical note',
+    group: 'clinical',
+    type: 'string',
+    required: false,
+    allowedTransforms: ['compose_notes', 'trim_collapse', 'trim'],
+    allowsComposition: true,
+    note:
+      'KVKK Art. 6 SPECIAL-CATEGORY. Added by F3-DATA-MIG-TODAY-001-FINAL-R7. ' +
+      'Sensitivity restricts HOW this is migrated, never WHETHER incumbent-clinic ' +
+      'operational data may be migrated at all: no source column reaches this ' +
+      'destination automatically. Every column proposing it is emitted as ' +
+      'SENSITIVE_REVIEW_REQUIRED, which is an UNDECIDED state — a Platform Admin ' +
+      'must explicitly resolve each one before the run can execute, and the ' +
+      'preview stays server-masked throughout (columnPreview.ts). ' +
+      'The KVKK data-subject rights this destination has to be able to service ' +
+      'were VERIFIED against the code before it was added, not assumed: ACCESS — ' +
+      'routes/patientPrivacy.ts selects notes for the Art. 11 subject-access ' +
+      'export; RECTIFICATION — schemas/index.ts admits notes on patientUpdateSchema ' +
+      'and routes/patients.ts persists it on PUT /patients/:id; ERASURE — ' +
+      'services/privacy/patientAnonymization.ts already clears notes alongside ' +
+      'every other patient scalar. The earlier "write-only from the UI, so a KVKK ' +
+      'request would be unserviceable" justification for excluding this ' +
+      'destination did not survive that check: notes is READ and displayed as the ' +
+      'patient-detail Clinical Alerts card, and the only real gap is a missing ' +
+      'edit control in the clinic UI, which is a UI gap and not an ' +
+      'architectural bar to servicing a request. ' +
+      'Composition is allowed because the first-customer export splits clinical ' +
+      'free text across several columns (ONEMLINOT / KONTROLNOTU / UZUNNOT); ' +
+      'without it, preserving the second and third columns would require either ' +
+      'discarding them or inventing a new schema column. The compose order is ' +
+      'fixed and the join rule is stable across reruns, so composition cannot ' +
+      'break idempotency.',
+  },
+  {
     key: 'patient.city',
     label: 'City / province',
     group: 'address',
@@ -567,6 +599,33 @@ export const MAPPING_STATES = [
   'AUTO_CONFIDENT',
   'AUTO_REVIEW',
   'MANUAL_REQUIRED',
+  /**
+   * KVKK Art. 6 special-category source data that a Platform Admin must review
+   * and resolve column by column. Added by F3-DATA-MIG-TODAY-001-FINAL-R7.
+   *
+   * WHY THIS IS NOT `LEGAL_BLOCKED`. `LEGAL_BLOCKED` is a DECIDED, permanent
+   * exclusion: validateMapping.ts Rule 4 forbids it from carrying a destination
+   * at all, so nothing in it can ever be migrated by an operator decision.
+   * Applying that to an incumbent clinic's own operational clinical data —
+   * data the clinic is migrating precisely so it can keep treating those
+   * patients — would discard it for being sensitive, which is the outcome this
+   * task rejects. Special-category status must drive HOW data moves
+   * (masking, explicit review, restricted destination, tenant scope, audit),
+   * never WHETHER it may move at all.
+   *
+   * WHY THIS IS NOT `MANUAL_REQUIRED` EITHER. Both are undecided and both
+   * block execution, but they are undecided for different reasons and the
+   * operator needs to see which: MANUAL_REQUIRED means "we could not work out
+   * what this column means"; SENSITIVE_REVIEW_REQUIRED means "we know what it
+   * means, and it is special-category, so a human must approve the
+   * destination". Collapsing them would hide the sensitivity from the very
+   * screen where the decision is taken.
+   *
+   * It is deliberately absent from EXECUTABLE_MAPPING_STATES: a run cannot
+   * execute while any column is still merely proposed. The operator resolves
+   * each one to RESOLVED (with a destination), IGNORE or BLOCKED.
+   */
+  'SENSITIVE_REVIEW_REQUIRED',
   'BLOCKED',
   'IGNORE',
   'LEGAL_BLOCKED',
@@ -594,6 +653,8 @@ export const MAPPING_REASONS = [
   'VENDOR_INTERNAL',
   'SUMMARY_NOT_TRANSACTION',
   'SEMANTICS_UNRESOLVED',
+  /** Special-category (KVKK Art. 6) content: destination proposed, human approval required. */
+  'SPECIAL_CATEGORY_REVIEW',
   'UNKNOWN_HEADER',
   'EMPTY_SOURCE_COLUMN',
 ] as const;
@@ -603,6 +664,17 @@ export type MappingReason = (typeof MAPPING_REASONS)[number];
 export interface MappingSuggestion {
   sourceField: string;
   sourceLabel: string;
+  /**
+   * The workbook header EXACTLY as exported, or `null` when the header CELL
+   * itself was blank and `sourceField`/`sourceLabel` therefore hold the
+   * synthesized `COLUMN_<index>` name (canonicalParser.ts).
+   *
+   * This is the authoritative headerless signal on the wire. It exists so that
+   * nothing downstream has to re-derive the fact by string-matching the
+   * synthesized name — the exact inference CanonicalHeader.headerWasBlank's
+   * contract forbids, because a real vendor header could collide with it.
+   */
+  sourceHeader: string | null;
   sourceIndex: number;
   sourceNormalized: string;
   destinationField: string | null;
@@ -626,6 +698,12 @@ export interface MappingValidationResult {
   valid: boolean;
   issues: MappingValidationIssue[];
   unresolvedCount: number;
+  /**
+   * Subset of `unresolvedCount`: columns awaiting a special-category review
+   * decision. Reported separately so the operator can see how much of the
+   * remaining work is sensitive-data review rather than unknown semantics.
+   */
+  sensitiveReviewCount: number;
   blockedCount: number;
   legalBlockedCount: number;
   ignoredCount: number;

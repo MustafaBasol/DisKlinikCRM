@@ -119,6 +119,15 @@ export interface PatientDraft {
   patientStatus: string;
   gender: string | null;
   chartNumber: string | null;
+  /**
+   * KVKK Art. 6 special-category clinical free text. Only ever non-null when a
+   * Platform Admin has explicitly RESOLVED a source column onto
+   * `patient.notes` — the matrix proposes that destination in mapping state
+   * SENSITIVE_REVIEW_REQUIRED, which compileMapping() does not treat as a
+   * writing state, so an unapproved proposal contributes nothing here.
+   * NEVER logged, never placed in a warning, never in a row outcome message.
+   */
+  notes: string | null;
 }
 
 export interface RowFailure {
@@ -255,6 +264,7 @@ export function buildRow(
           patientStatus: patientStatusValue ?? 'new',
           gender: asString(read('patient.gender')),
           chartNumber: asString(read('patient.chartNumber')),
+          notes: asString(read('patient.notes')),
         }
       : null;
 

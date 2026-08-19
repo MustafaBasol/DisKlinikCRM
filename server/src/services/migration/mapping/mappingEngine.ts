@@ -297,6 +297,19 @@ interface BuildArgs {
   keepOnConflict: boolean;
 }
 
+/**
+ * The ORIGINAL workbook header, or `null` when the header CELL was blank and
+ * `header.original` therefore holds the synthesized `COLUMN_<index>` name.
+ *
+ * Reads `headerWasBlank` — the parser's authoritative flag — and never a string
+ * match on the synthesized name, exactly as CanonicalHeader's contract in
+ * contracts.ts requires: a real vendor column could legitimately be called
+ * "COLUMN_7" and must not be mistaken for a nameless one.
+ */
+function sourceHeaderOf(header: CanonicalHeader): string | null {
+  return header.headerWasBlank ? null : header.original;
+}
+
 function build(args: BuildArgs): EngineSuggestion | null {
   const dest = args.destinationKey === null ? undefined : getDestinationField(args.destinationKey);
   const conflict = dest ? typeConflictFor(dest, args.profile) : undefined;
@@ -306,6 +319,7 @@ function build(args: BuildArgs): EngineSuggestion | null {
   const suggestion: EngineSuggestion = {
     sourceField: args.header.original,
     sourceLabel: args.header.original,
+    sourceHeader: sourceHeaderOf(args.header),
     sourceIndex: args.header.index,
     sourceNormalized: args.normalized,
     destinationField: dest ? dest.key : null,
@@ -321,7 +335,16 @@ function build(args: BuildArgs): EngineSuggestion | null {
     // Keep the MEANING, surface the SHAPE disagreement, and force a human to
     // look at it. Never silently resolve one against the other.
     suggestion.typeConflict = conflict;
-    suggestion.mappingState = 'AUTO_REVIEW';
+    // SENSITIVE_REVIEW_REQUIRED already forces a human and already carries the
+    // stronger claim (this is special-category content). Rewriting it to
+    // AUTO_REVIEW would DOWNGRADE it: the row would stop reporting its
+    // sensitivity on the very screen where the operator decides its
+    // destination, and it would start looking like an ordinary low-confidence
+    // suggestion. A shape disagreement on a sensitive column is a reason to
+    // review it harder, never a reason to reclassify why it needs review.
+    if (suggestion.mappingState !== 'SENSITIVE_REVIEW_REQUIRED') {
+      suggestion.mappingState = 'AUTO_REVIEW';
+    }
     suggestion.confidence = Math.min(suggestion.confidence, 50);
   }
 
@@ -508,6 +531,7 @@ export function suggestMappings(
       out.push({
         sourceField: header.original,
         sourceLabel: header.original,
+        sourceHeader: sourceHeaderOf(header),
         sourceIndex: header.index,
         sourceNormalized: normalized,
         destinationField: null,
@@ -528,6 +552,7 @@ export function suggestMappings(
     out.push({
       sourceField: header.original,
       sourceLabel: header.original,
+      sourceHeader: sourceHeaderOf(header),
       sourceIndex: header.index,
       sourceNormalized: normalized,
       destinationField: null,

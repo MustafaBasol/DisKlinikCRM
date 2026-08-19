@@ -3936,6 +3936,21 @@ model MigrationFieldMapping {
   sourceIndex      Int
   /// Normalized form used for matching only - never the stored key.
   sourceNormalized String
+  /// TRUE when the worksheet's header CELL for this column was blank, so
+  /// `sourceField` holds the synthesized `COLUMN_<sourceIndex>` name
+  /// (canonicalParser.ts, UNNAMED_COLUMN_PREFIX) rather than a real vendor
+  /// header. Mirrors CanonicalHeader.headerWasBlank, whose contract states
+  /// that a headerless column must be identified by THIS flag and never by
+  /// string-matching the synthesized name - a real vendor header could
+  /// legitimately be "COLUMN_7". Persisting it is what lets the mapping API
+  /// answer "does this column have an original header?" authoritatively after
+  /// the workbook has been put away; without it the flag died at analyze time
+  /// and every consumer was forced back onto the forbidden string match.
+  /// ADDITIVE + NULLABLE: NULL means "recorded before this column existed",
+  /// which readers treat as "unknown, fall back to the legacy inference", so
+  /// no backfill is required and the previous application release runs
+  /// unchanged against this schema.
+  sourceHeaderWasBlank Boolean?
 
   destinationField String?
   /// Named transform contract applied between source and destination, e.g.

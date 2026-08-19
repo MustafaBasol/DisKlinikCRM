@@ -69,8 +69,37 @@ const WRITING_STATES = new Set(['AUTO_CONFIDENT', 'RESOLVED']);
  */
 const NON_WRITING_DECIDED_STATES = new Set(['IGNORE', 'BLOCKED', 'LEGAL_BLOCKED']);
 
-/** States that still need a human. A run may not execute while any remain. */
-const UNDECIDED_STATES = new Set(['MANUAL_REQUIRED', 'AUTO_REVIEW']);
+/**
+ * States that still need a human. A run may not execute while any remain.
+ *
+ * SENSITIVE_REVIEW_REQUIRED is UNDECIDED, not decided-and-excluded. That is
+ * the whole point of the state: a KVKK Art. 6 special-category column is no
+ * longer permanently unimportable for being sensitive, but it is also never
+ * imported without a Platform Admin explicitly resolving it. Putting it in
+ * NON_WRITING_DECIDED_STATES instead would silently drop the column; putting
+ * it in WRITING_STATES would import special-category data with no human
+ * approval. Both are exactly what this state exists to prevent.
+ */
+const UNDECIDED_STATES = new Set([
+  'MANUAL_REQUIRED',
+  'AUTO_REVIEW',
+  'SENSITIVE_REVIEW_REQUIRED',
+]);
+
+/**
+ * Does this mapping state still need a human?
+ *
+ * Exported so every caller derives 'is this run still unresolved?' from ONE
+ * definition. The analyze route previously hard-coded its own list, which
+ * meant adding a state to UNDECIDED_STATES here silently left that route
+ * believing the run was ready: the run status said MAPPING_READY while
+ * validateMappings() said the mapping was invalid. A status that describes a
+ * mapping the database does not hold is the exact defect class this module
+ * exists to prevent.
+ */
+export function isUndecidedMappingState(state: string): boolean {
+  return UNDECIDED_STATES.has(state);
+}
 
 function issue(
   code: MigrationErrorCode,
@@ -130,6 +159,7 @@ export function validateMappings(
 
   // ---- per-record rules ---------------------------------------------------
   let unresolvedCount = 0;
+  let sensitiveReviewCount = 0;
   let blockedCount = 0;
   let legalBlockedCount = 0;
   let ignoredCount = 0;
@@ -143,10 +173,13 @@ export function validateMappings(
 
     if (UNDECIDED_STATES.has(state)) {
       unresolvedCount++;
+      if (state === 'SENSITIVE_REVIEW_REQUIRED') sensitiveReviewCount++;
       issues.push(
         issue(
           'MAPPING_REQUIRED',
-          `Source column "${sourceField}" is still awaiting review (${state}). Confirm or change the suggestion before executing.`,
+          state === 'SENSITIVE_REVIEW_REQUIRED'
+            ? `Source column "${sourceField}" holds special-category (KVKK Art. 6) content and needs an explicit review decision. Approve a destination, or mark it ignored/blocked — it will not be imported until you do.`
+            : `Source column "${sourceField}" is still awaiting review (${state}). Confirm or change the suggestion before executing.`,
           sourceField,
           destinationField ?? undefined,
         ),
@@ -353,6 +386,7 @@ export function validateMappings(
     valid: issues.length === 0,
     issues,
     unresolvedCount,
+    sensitiveReviewCount,
     blockedCount,
     legalBlockedCount,
     ignoredCount,
