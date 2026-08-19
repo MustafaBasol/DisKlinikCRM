@@ -46,7 +46,11 @@
     "appointmentTrend": "7 derniers jours - tendance des rendez-vous",
     "serviceDistribution": "Ce mois-ci - répartition des services",
     "revenueTrend": "6 derniers mois - tendance du revenu",
-    "revenue": "Revenu"
+    "revenue": "Revenu",
+    "noAppointmentTrend": "Aucune donnée de rendez-vous pour les 7 derniers jours.",
+    "noAppointmentTrendHint": "Les tendances de rendez-vous apparaîtront ici au fur et à mesure de l'activité.",
+    "noRevenueTrend": "Aucune donnée de revenus pour les 6 derniers mois.",
+    "noRevenueTrendHint": "Les tendances de revenus apparaîtront ici au fur et à mesure des paiements."
   },
   "stats": {
     "weekTotal": "{{count}} rendez-vous cette semaine",

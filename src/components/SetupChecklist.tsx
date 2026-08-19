@@ -53,8 +53,9 @@ const SetupChecklist: React.FC = () => {
 
   const role = user ? normalizeRole(user.role, user.canAccessAllClinics) : null;
   const canSee = role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+  const allStepsDone = STEPS.every((step) => state.done.includes(step.key));
 
-  if (!canSee || state.dismissed) return null;
+  if (!canSee || state.dismissed || allStepsDone) return null;
 
   const persist = (next: ChecklistState) => {
     setState(next);

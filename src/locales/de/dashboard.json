@@ -46,7 +46,11 @@
     "appointmentTrend": "Letzte 7 Tage - Termintrend",
     "serviceDistribution": "Dieser Monat - Leistungsverteilung",
     "revenueTrend": "Letzte 6 Monate - Umsatztrend",
-    "revenue": "Umsatz"
+    "revenue": "Umsatz",
+    "noAppointmentTrend": "Noch keine Termindaten für die letzten 7 Tage.",
+    "noAppointmentTrendHint": "Termintrends werden hier angezeigt, sobald Aktivitäten erfasst werden.",
+    "noRevenueTrend": "Noch keine Umsatzdaten für die letzten 6 Monate.",
+    "noRevenueTrendHint": "Umsatztrends werden hier angezeigt, sobald Zahlungen erfasst werden."
   },
   "stats": {
     "weekTotal": "{{count}} Termine diese Woche",

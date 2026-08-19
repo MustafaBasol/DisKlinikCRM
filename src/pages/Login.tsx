@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link, type Location } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/api';
 import { Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
@@ -14,6 +14,11 @@ const Login: React.FC = () => {
   const [emailNotVerified, setEmailNotVerified] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Deep-link intent wins over last-visited-route restoration (UX-001D):
+  // ProtectedRoute attaches the originally requested location before
+  // bouncing an unauthenticated user here.
+  const from = (location.state as { from?: Location } | null)?.from;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +29,7 @@ const Login: React.FC = () => {
     try {
       const response = await authService.login({ email, password });
       login(response.data.user);
-      navigate('/dashboard');
+      navigate(from ? `${from.pathname}${from.search}` : '/dashboard', { replace: true });
     } catch (err: any) {
       if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
         setEmailNotVerified(true);

@@ -1,8 +1,9 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PlatformAuthProvider, usePlatformAuth } from './context/PlatformAuthContext';
-import { ClinicProvider } from './context/ClinicContext';
+import { ClinicProvider, useClinic } from './context/ClinicContext';
+import { getValidatedLastRoute } from './utils/lastRoute';
 import { ClinicPreferencesProvider } from './context/ClinicPreferencesContext';
 
 import { useTranslation } from 'react-i18next';
@@ -85,7 +86,33 @@ const RouteFallback = () => (
 
 const ProtectedRoute = () => {
   const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+  const location = useLocation();
+  return isAuthenticated ? <Outlet /> : <Navigate to="/login" state={{ from: location }} replace />;
+};
+
+// Restores the user's last valid authorized route (UX-001D) when they land
+// on the generic dashboard entry with no more specific deep link/redirect
+// intent. Runs at most once per page load — a manual click on "Dashboard"
+// mid-session must not hijack the user back to where they were before.
+let hasAttemptedLastRouteRestore = false;
+
+const DashboardEntry: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const { selectedClinicId } = useClinic();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (hasAttemptedLastRouteRestore) return;
+    hasAttemptedLastRouteRestore = true;
+    const target = getValidatedLastRoute(user?.id, selectedClinicId, user);
+    if (target && target !== location.pathname + location.search) {
+      navigate(target, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return <>{children}</>;
 };
 
 const PlatformRoute = () => {
@@ -183,8 +210,8 @@ const ProductApplication: React.FC = () => {
 
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<MainLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="dashboard" element={<Dashboard />} />
+              <Route index element={<DashboardEntry><Dashboard /></DashboardEntry>} />
+              <Route path="dashboard" element={<DashboardEntry><Dashboard /></DashboardEntry>} />
               <Route path="patients" element={<Patients />} />
               <Route path="patients/:id" element={<PatientDetail />} />
               <Route path="appointments" element={<Appointments />} />
