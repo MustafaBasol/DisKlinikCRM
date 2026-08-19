@@ -289,11 +289,22 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
     );
   }
 
+  // A legally-gated column that the operator has already excluded from the
+  // mapping (mapping state LEGAL_BLOCKED — see validateMapping.ts, where this
+  // is one of the NON_WRITING_DECIDED_STATES, the same tier as IGNORE) writes
+  // nothing to the destination. It must stay prominently visible, but it is a
+  // DECIDED exclusion, not an unresolved problem — so unlike every other entry
+  // in `blockers`, it must never suppress `executable` on its own. A legally
+  // blocked column that a required destination invariant actually depends on
+  // is caught upstream: validateMappings' Rule 5 fails the mapping step itself
+  // when a required destination has no mapped source, before a run can reach
+  // this dry run at all.
+  const legalExclusions = new BlockerTally();
   for (const field of legalBlockedFields) {
-    blockers.add({
+    legalExclusions.add({
       code: 'LEGAL_BLOCKED',
       message:
-        'This source column holds special-category (KVKK Art. 6) content whose legal basis is unresolved. It is not imported, and lifting the gate is a program-owner decision.',
+        'This source column holds special-category (KVKK Art. 6) content whose legal basis is unresolved. It is excluded from the import; lifting the gate is a program-owner decision.',
       fieldName: field,
     });
   }
@@ -341,6 +352,7 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
     identityClassifications: identityCounts,
     rowClasses,
     blockers: blockerList,
+    legalExclusions: legalExclusions.list(),
     warnings: warnings.list(),
     planLimit,
     sharedPhoneImpact,

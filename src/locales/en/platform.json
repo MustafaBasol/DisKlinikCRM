@@ -667,11 +667,28 @@
       "cannotContinue": "The mapping is invalid — resolve the issues above before continuing.",
       "continue": "Continue to Reference Mapping",
       "columnIndex": "Column {{n}}",
+      "unnamedColumn": "Unnamed column {{n}}",
       "distinctCount": "{{n}} distinct values",
       "maxLength": "max {{n}} chars",
       "legalGate": "Legal gate — not selectable",
       "noDestination": "No destination / skip",
       "composeOrder": "order",
+      "destinationLabels": {
+        "provenance.sourceId": "Source record ID",
+        "patient.firstName": "First name",
+        "patient.lastName": "Last name",
+        "patient.phone": "Mobile phone",
+        "patient.email": "E-mail",
+        "patient.dateOfBirth": "Date of birth",
+        "patient.gender": "Gender",
+        "patient.address": "Address",
+        "patient.city": "City / province",
+        "patient.country": "Country",
+        "patient.patientStatus": "Patient status",
+        "patient.chartNumber": "Legacy chart / file number",
+        "patient.primaryPractitionerId": "Assigned practitioner",
+        "patient.identity.tckn": "National identity number"
+      },
       "groups": {
         "provenance": "Provenance",
         "identity": "Identity",
@@ -800,6 +817,21 @@
       "affectedRows": "affects {{n}} rows",
       "executableYes": "This migration is executable",
       "executableNo": "This migration cannot be executed right now",
+      "notExecutable": {
+        "summary": "Cannot proceed to confirm: {{detail}}.",
+        "generic": "Cannot proceed to confirm: there are unresolved issues blocking this run. See the blockers list below.",
+        "mappingClause": "{{n}} unresolved mapping(s)",
+        "referenceClause": "{{n}} reference mapping blocker(s)",
+        "otherClause": "{{n}} other blocking issue(s)",
+        "noValidRowsClause": "no valid rows to import",
+        "and": "and",
+        "backToMapping": "Back to Field Mapping",
+        "backToReference": "Back to Reference Mapping"
+      },
+      "legalExclusions": {
+        "title": "{{n}} field(s) excluded under legal policy",
+        "note": "These columns hold special-category data under KVKK Art. 6 and are excluded from the import. Nothing is written to them, and this does not block the rest of the run."
+      },
       "fields": {
         "totalSourceRows": "Total Source Rows",
         "parsedRows": "Parsed Rows",

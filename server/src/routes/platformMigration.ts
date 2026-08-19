@@ -42,6 +42,7 @@ import {
   MigrationError,
   SOURCE_SYSTEM_DEFAULT,
   DESTINATION_FIELDS,
+  getDestinationField,
   type DryRunSummary,
   type MigrationRunStatus,
 } from '../services/migration/contracts.js';
@@ -70,6 +71,7 @@ import {
 import { suggestMappings } from '../services/migration/mapping/mappingEngine.js';
 import { validateMappings } from '../services/migration/mapping/validateMapping.js';
 import { normalizeHeader } from '../services/migration/mapping/normalizeHeader.js';
+import { buildColumnPreviews } from '../services/migration/mapping/columnPreview.js';
 import { runDryRun, assertExecutable } from '../services/migration/dryRun.js';
 import {
   executeMigrationRun,
@@ -387,6 +389,24 @@ router.post('/migrations/runs/:id/analyze', async (req: PlatformAdminRequest, re
 
     const profileByIndex = new Map(profiles.map((p) => [p.index, p]));
 
+    // Sanitized sample-value previews for the mapping screen (Objective C).
+    // Sensitivity is derived from the PROPOSED destination type where the
+    // engine already suggests one, so a column headed toward
+    // `patient.identity.tckn` / `.phone` / `.email` is masked even before the
+    // operator confirms the mapping. See columnPreview.ts for the full policy.
+    const destinationTypeByIndex = new Map(
+      suggestions
+        .filter((s) => s.destinationField)
+        .map((s) => [s.sourceIndex, getDestinationField(s.destinationField as string)?.type]),
+    );
+    const maxLengthByIndex = new Map(profiles.map((p) => [p.index, p.maxLength]));
+    const columnPreviews = buildColumnPreviews(
+      workbook.headers,
+      workbook.rows,
+      destinationTypeByIndex,
+      maxLengthByIndex,
+    );
+
     const unresolved = suggestions.filter(
       (s) => s.mappingState === 'MANUAL_REQUIRED' || s.mappingState === 'AUTO_REVIEW',
     ).length;
@@ -479,6 +499,7 @@ router.post('/migrations/runs/:id/analyze', async (req: PlatformAdminRequest, re
         warnings: workbook.metadata.warnings,
         headers: workbook.headers,
         profiles,
+        columnPreviews,
       },
     });
   } catch (error) {

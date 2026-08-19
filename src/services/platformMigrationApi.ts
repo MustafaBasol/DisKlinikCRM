@@ -142,6 +142,18 @@ export interface SourceColumnProfileDto {
   maxLength: number;
 }
 
+/**
+ * Sanitized, server-masked sample values for one source column — the one
+ * deliberate exception to this file's "nothing here carries PII/PHI" rule.
+ * Masking is applied server-side (columnPreview.ts) before this DTO exists;
+ * the UI must render `samples` as-is and must never fetch or display a raw
+ * cell value through any other channel.
+ */
+export interface AnalysisColumnPreviewDto {
+  index: number;
+  samples: string[];
+}
+
 export interface MigrationAnalysisDto {
   sheetName: string;
   sheetIndex: number;
@@ -153,6 +165,7 @@ export interface MigrationAnalysisDto {
   warnings: string[];
   headers: AnalysisHeaderDto[];
   profiles: SourceColumnProfileDto[];
+  columnPreviews: AnalysisColumnPreviewDto[];
 }
 
 // ---------------------------------------------------------------------------
@@ -419,6 +432,8 @@ export interface DryRunSummaryDto {
   identityClassifications: Record<IdentityClassification, number>;
   rowClasses: Record<DryRunRowClass, number>;
   blockers: DryRunBlockerDto[];
+  /** Decided legal-policy exclusions — never counted toward `executable=false`. */
+  legalExclusions: DryRunBlockerDto[];
   warnings: DryRunBlockerDto[];
   planLimit: PlanLimitReportDto;
   sharedPhoneImpact: SharedPhoneImpactDto;

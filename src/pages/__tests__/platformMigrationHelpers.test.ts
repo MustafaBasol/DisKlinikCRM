@@ -16,6 +16,7 @@ import {
   mappingMatchesFilter,
   mappingMatchesQuery,
   mappingRowVisible,
+  parseUnnamedColumnIndex,
   isReconciliationBalanced,
   formatByteSize,
   formatPercent,
@@ -157,6 +158,19 @@ async function main() {
     assert.equal(mappingRowVisible(row, 'blocked', 'adres'), true);
     assert.equal(mappingRowVisible(row, 'blocked', 'zzz'), false, 'wrong query excludes despite matching filter');
     assert.equal(mappingRowVisible(row, 'legal', 'adres'), false, 'wrong filter excludes despite matching query');
+  });
+
+  section('── parseUnnamedColumnIndex (F3-DATA-MIG-TODAY-001-UI-002) ────────');
+
+  await test('a COLUMN_<n> synthesized field name yields its numeric index', () => {
+    assert.equal(parseUnnamedColumnIndex('COLUMN_0'), 0);
+    assert.equal(parseUnnamedColumnIndex('COLUMN_17'), 17);
+  });
+
+  await test('a real header (including one that merely contains "COLUMN") is not misread as synthesized', () => {
+    assert.equal(parseUnnamedColumnIndex('HASTA_ID'), null);
+    assert.equal(parseUnnamedColumnIndex('COLUMN_NAME'), null, 'must anchor to digits only, not any COLUMN_ prefix');
+    assert.equal(parseUnnamedColumnIndex('MY_COLUMN_3'), null, 'must anchor to the START of the string');
   });
 
   section('── reconciliation balance invariant ─────────────────────────────');

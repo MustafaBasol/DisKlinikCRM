@@ -667,11 +667,28 @@
       "cannotContinue": "La correspondance n'est pas valide — résolvez les problèmes ci-dessus pour continuer.",
       "continue": "Passer à la correspondance des références",
       "columnIndex": "Colonne {{n}}",
+      "unnamedColumn": "Colonne sans titre {{n}}",
       "distinctCount": "{{n}} valeurs distinctes",
       "maxLength": "{{n}} caractères max.",
       "legalGate": "Blocage légal — non sélectionnable",
       "noDestination": "Aucune destination / ignorer",
       "composeOrder": "ordre",
+      "destinationLabels": {
+        "provenance.sourceId": "ID d'enregistrement source",
+        "patient.firstName": "Prénom",
+        "patient.lastName": "Nom",
+        "patient.phone": "Téléphone mobile",
+        "patient.email": "E-mail",
+        "patient.dateOfBirth": "Date de naissance",
+        "patient.gender": "Sexe",
+        "patient.address": "Adresse",
+        "patient.city": "Ville / région",
+        "patient.country": "Pays",
+        "patient.patientStatus": "Statut du patient",
+        "patient.chartNumber": "Ancien numéro de dossier",
+        "patient.primaryPractitionerId": "Praticien assigné",
+        "patient.identity.tckn": "Numéro d'identité national"
+      },
       "groups": {
         "provenance": "Provenance",
         "identity": "Identité",
@@ -800,6 +817,21 @@
       "affectedRows": "concerne {{n}} lignes",
       "executableYes": "Cette migration est exécutable",
       "executableNo": "Cette migration ne peut pas être exécutée pour le moment",
+      "notExecutable": {
+        "summary": "Impossible de passer à la confirmation : {{detail}}.",
+        "generic": "Impossible de passer à la confirmation : des problèmes non résolus bloquent cette exécution. Voir la liste des blocages ci-dessous.",
+        "mappingClause": "{{n}} correspondance(s) non résolue(s)",
+        "referenceClause": "{{n}} blocage(s) de correspondance de référence",
+        "otherClause": "{{n}} autre(s) problème(s) bloquant(s)",
+        "noValidRowsClause": "aucune ligne valide à importer",
+        "and": "et",
+        "backToMapping": "Retour à la correspondance des champs",
+        "backToReference": "Retour à la correspondance de référence"
+      },
+      "legalExclusions": {
+        "title": "{{n}} champ(s) exclu(s) pour motif juridique",
+        "note": "Ces colonnes contiennent des données à caractère particulier au sens de l'article 6 du KVKK et sont exclues de l'import. Rien n'y est écrit, et cela ne bloque pas le reste de l'exécution."
+      },
       "fields": {
         "totalSourceRows": "Total des lignes sources",
         "parsedRows": "Lignes analysées",

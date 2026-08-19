@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Loader2, AlertCircle, AlertTriangle, PlayCircle, ArrowRight, ShieldCheck,
-  Users, PhoneCall, Scale, Lock, CheckCircle2, XCircle,
+  Users, PhoneCall, Scale, Lock, CheckCircle2, XCircle, ArrowLeft,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { MigrationStepProps } from './types';
 import type { DryRunSummaryDto, DryRunRowClass, IdentityClassification } from '../../../services/platformMigrationApi';
 import { getErrorMessage } from '../../../utils/errors';
-import { isRunInFlight } from '../../../pages/platformMigrationHelpers';
+import { isRunInFlight, MIGRATION_STEPS } from '../../../pages/platformMigrationHelpers';
 
 const ROW_CLASS_ORDER: DryRunRowClass[] = [
   'VALID_NEW', 'VALID_MATCHED', 'NORMALIZED', 'AMBIGUOUS', 'MAPPING_REQUIRED',
@@ -50,7 +50,18 @@ const BreakdownList: React.FC<{ title: string; entries: [string, number][]; tran
   );
 };
 
-const MigrationDryRunStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpdated, onNext, nextStep }) => {
+/**
+ * Turkish list join: "A", "A ve B", "A, B ve C". Not i18n-driven — every
+ * locale this product ships (tr/en/de/fr) uses the same comma-then-"and"
+ * shape, only the conjunction word differs, which the caller passes in.
+ */
+function joinClauses(parts: string[], conjunction: string): string {
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(', ')} ${conjunction} ${parts[parts.length - 1]}`;
+}
+
+const MigrationDryRunStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpdated, onNext, nextStep, onBack }) => {
   const { t } = useTranslation(['platform']);
   const [dryRun, setDryRun] = useState<DryRunSummaryDto | null>(null);
   const [status, setStatus] = useState(run.status);
@@ -249,6 +260,29 @@ const MigrationDryRunStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpda
             </div>
           )}
 
+          {/* Legal-policy exclusions: a DECIDED, non-blocking state — never
+              styled or worded like a technical error (see dryRun.legalExclusions). */}
+          {dryRun.legalExclusions.length > 0 && (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Lock size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                  {t('platform:migration.dryRun.legalExclusions.title', { n: dryRun.legalBlockers })}
+                </h3>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mb-2.5">
+                {t('platform:migration.dryRun.legalExclusions.note')}
+              </p>
+              <ul className="space-y-1">
+                {dryRun.legalExclusions.map((b, idx) => (
+                  <li key={`${b.fieldName ?? b.code}-${idx}`} className="text-xs text-amber-800 dark:text-amber-300 font-mono">
+                    {b.fieldName ?? b.code}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Plan-limit panel */}
           <div className={`rounded-xl border p-4 ${dryRun.planLimit.allowed ? 'border-gray-100 dark:border-gray-800' : 'border-red-300 dark:border-red-700 bg-red-50/60 dark:bg-red-900/10'}`}>
             <div className="flex items-center gap-2 mb-3">
@@ -303,12 +337,73 @@ const MigrationDryRunStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpda
             {dryRun.executable ? t('platform:migration.dryRun.executableYes') : t('platform:migration.dryRun.executableNo')}
           </div>
 
+          {!dryRun.executable && (() => {
+            const otherBlockerCount = dryRun.blockers.filter(
+              (b) => b.code !== 'MAPPING_REQUIRED' && b.code !== 'REFERENCE_UNRESOLVED',
+            ).length;
+            const clauses: string[] = [];
+            if (dryRun.unresolvedMappings > 0) {
+              clauses.push(t('platform:migration.dryRun.notExecutable.mappingClause', { n: dryRun.unresolvedMappings }));
+            }
+            if (dryRun.referenceMappingBlockers > 0) {
+              clauses.push(t('platform:migration.dryRun.notExecutable.referenceClause', { n: dryRun.referenceMappingBlockers }));
+            }
+            if (otherBlockerCount > 0) {
+              clauses.push(t('platform:migration.dryRun.notExecutable.otherClause', { n: otherBlockerCount }));
+            }
+            if (clauses.length === 0 && dryRun.validRows === 0) {
+              clauses.push(t('platform:migration.dryRun.notExecutable.noValidRowsClause'));
+            }
+            const sentence = clauses.length > 0
+              ? t('platform:migration.dryRun.notExecutable.summary', {
+                  detail: joinClauses(clauses, t('platform:migration.dryRun.notExecutable.and')),
+                })
+              : t('platform:migration.dryRun.notExecutable.generic');
+
+            return (
+              <div className="rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/10 p-3.5 space-y-2.5">
+                <p className="text-sm font-semibold text-red-700 dark:text-red-300 flex items-start gap-2">
+                  <XCircle size={16} className="shrink-0 mt-0.5" />
+                  {sentence}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {dryRun.unresolvedMappings > 0 && (
+                    <button
+                      type="button"
+                      className="btn-secondary text-xs"
+                      onClick={() => onBack(MIGRATION_STEPS.MAPPING)}
+                    >
+                      <ArrowLeft size={13} />
+                      {t('platform:migration.dryRun.notExecutable.backToMapping')}
+                    </button>
+                  )}
+                  {dryRun.referenceMappingBlockers > 0 && (
+                    <button
+                      type="button"
+                      className="btn-secondary text-xs"
+                      onClick={() => onBack(MIGRATION_STEPS.REFERENCE)}
+                    >
+                      <ArrowLeft size={13} />
+                      {t('platform:migration.dryRun.notExecutable.backToReference')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="flex gap-2">
             <button type="button" className="btn-secondary" disabled={running} onClick={handleRunDryRun}>
               {running ? <Loader2 size={16} className="animate-spin" /> : <PlayCircle size={16} />}
               {t('platform:migration.dryRun.rerun')}
             </button>
-            <button type="button" className="btn-primary flex-1 justify-center" disabled={!dryRun.executable || advancing} onClick={handleContinue}>
+            <button
+              type="button"
+              className="btn-primary flex-1 justify-center disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed disabled:hover:bg-primary-600"
+              disabled={!dryRun.executable || advancing}
+              aria-disabled={!dryRun.executable || advancing}
+              onClick={handleContinue}
+            >
               {advancing ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
               {t('platform:migration.dryRun.continue')}
             </button>
