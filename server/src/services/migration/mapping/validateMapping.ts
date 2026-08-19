@@ -151,8 +151,15 @@ export function validateMappings(
           destinationField ?? undefined,
         ),
       );
-      // Fall through: still validate the destination it is pointing at, so the
-      // operator sees every problem at once rather than one per round-trip.
+      // An UNDECIDED row gets exactly this one issue and nothing more. The
+      // destination/transform/composition checks below apply only to a row
+      // that has DECIDED to write (a WRITING_STATE) — MANUAL_REQUIRED never
+      // carries a destination by contract (mappingEngine.ts rule 7), so
+      // running those checks here would ALSO report it as "decided but has
+      // no destination": the same column simultaneously undecided and
+      // decided, which is the exact contradiction this state machine must
+      // never produce.
+      continue;
     }
 
     if (state === 'LEGAL_BLOCKED') {
@@ -201,7 +208,9 @@ export function validateMappings(
       continue;
     }
 
-    if (!WRITING_STATES.has(state) && !UNDECIDED_STATES.has(state)) {
+    if (!WRITING_STATES.has(state)) {
+      // UNDECIDED_STATES already `continue`d above, so anything reaching here
+      // is neither a recognised writing state nor a recognised undecided one.
       issues.push(
         issue(
           'MAPPING_INVALID',

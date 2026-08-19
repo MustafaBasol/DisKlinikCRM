@@ -28,6 +28,15 @@ export interface FixtureCell {
   /** `null` emits a BLANK cell. A number with `date: true` is an Excel serial. */
   v: string | number | boolean | null;
   date?: boolean;
+  /**
+   * When set, `v` is ignored and this emits a genuine Excel ERROR cell
+   * (BOOLERR with fError=1) carrying this [MS-XLS] error code — e.g. 0x2A
+   * for #N/A, 0x17 for #REF!. Lets a test reproduce a stale-formula column
+   * that reads as "has some raw cell content" at the sheet level while
+   * carrying zero migratable text (biff8Reader.ts projects every error cell
+   * to `text: ''`).
+   */
+  errorCode?: number;
 }
 
 export interface FixtureSheet {
@@ -336,7 +345,7 @@ function buildSheetSubstream(
     while (c < row.length) {
       const cell = row[c] as FixtureCell;
 
-      if (preferMulti && cell.v === null) {
+      if (preferMulti && cell.v === null && cell.errorCode === undefined) {
         let end = c;
         while (end < row.length && (row[end] as FixtureCell).v === null) end += 1;
         if (end - c >= 2) {
@@ -390,6 +399,16 @@ function encodeSingleCell(
   cell: FixtureCell,
   sstIndex: Map<string, number>,
 ): Buffer {
+  if (cell.errorCode !== undefined) {
+    const payload = Buffer.alloc(8);
+    payload.writeUInt16LE(row, 0);
+    payload.writeUInt16LE(col, 2);
+    payload.writeUInt16LE(XF_GENERAL, 4);
+    payload.writeUInt8(cell.errorCode & 0xff, 6);
+    payload.writeUInt8(1, 7); // fError = 1 -> BIFF8 error cell, not a boolean
+    return record(REC_BOOLERR, payload);
+  }
+
   if (cell.v === null || cell.v === undefined) {
     const payload = Buffer.alloc(6);
     payload.writeUInt16LE(row, 0);

@@ -732,7 +732,8 @@
         "VENDOR_INTERNAL": "Vendor-internal column",
         "SUMMARY_NOT_TRANSACTION": "Summary column, not transactional",
         "SEMANTICS_UNRESOLVED": "Semantics unresolved",
-        "UNKNOWN_HEADER": "Unrecognized header"
+        "UNKNOWN_HEADER": "Unrecognized header",
+        "EMPTY_SOURCE_COLUMN": "Empty source column (automatically ignored)"
       },
       "states": {
         "AUTO_CONFIDENT": "Automatic (High Confidence)",

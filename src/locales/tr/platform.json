@@ -732,7 +732,8 @@
         "VENDOR_INTERNAL": "Tedarikçiye özel sütun",
         "SUMMARY_NOT_TRANSACTION": "Özet sütun, işlem değil",
         "SEMANTICS_UNRESOLVED": "Anlamı çözülemedi",
-        "UNKNOWN_HEADER": "Tanınmayan başlık"
+        "UNKNOWN_HEADER": "Tanınmayan başlık",
+        "EMPTY_SOURCE_COLUMN": "Boş kaynak sütunu (otomatik yok sayıldı)"
       },
       "states": {
         "AUTO_CONFIDENT": "Otomatik (Yüksek Güven)",
