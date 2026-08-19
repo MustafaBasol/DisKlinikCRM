@@ -46,7 +46,11 @@
     "appointmentTrend": "Last 7 Days - Appointment Trend",
     "serviceDistribution": "This Month - Service Distribution",
     "revenueTrend": "Last 6 Months - Revenue Trend",
-    "revenue": "Revenue"
+    "revenue": "Revenue",
+    "noAppointmentTrend": "No appointment data yet for the last 7 days.",
+    "noAppointmentTrendHint": "Appointment trends will appear here as activity is recorded.",
+    "noRevenueTrend": "No revenue data yet for the last 6 months.",
+    "noRevenueTrendHint": "Revenue trends will appear here as payments are recorded."
   },
   "stats": {
     "weekTotal": "{{count}} appointments this week",

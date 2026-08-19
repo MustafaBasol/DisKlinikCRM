@@ -674,17 +674,24 @@ const Dashboard: React.FC = () => {
               <BarChart2 size={18} className="text-primary-600" />
               {t('dashboard:charts.appointmentTrend')}
             </h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={data.charts.dailyTrend} barSize={28}>
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={28} />
-                <Tooltip
-                  contentStyle={{ borderRadius: 8, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
-                  cursor={{ fill: '#f3f4f6' }}
-                />
-                <Bar dataKey="count" name={t('common:appointments')} fill="#6366f1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {data.charts.dailyTrend?.some((d: any) => d.count > 0) ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={data.charts.dailyTrend} barSize={28}>
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={28} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 8, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
+                    cursor={{ fill: '#f3f4f6' }}
+                  />
+                  <Bar dataKey="count" name={t('common:appointments')} fill="#6366f1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[200px] flex flex-col items-center justify-center text-center text-gray-400 text-sm px-4">
+                <p>{t('dashboard:charts.noAppointmentTrend')}</p>
+                <p className="text-xs mt-1 opacity-75">{t('dashboard:charts.noAppointmentTrendHint')}</p>
+              </div>
+            )}
           </div>
 
           {/* Hizmet bazlı dağılım */}
@@ -727,25 +734,32 @@ const Dashboard: React.FC = () => {
               <DollarSign size={18} className="text-primary-600" />
               {t('dashboard:charts.revenueTrend')}
             </h2>
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={data.charts.monthlyRevenueTrend}>
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} width={55} tickFormatter={(v) => formatNumber(Number(v))} />
-                <Tooltip
-                  contentStyle={{ borderRadius: 8, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
-                  formatter={(v: any) => [formatCurrency(Number(v)), t('dashboard:charts.revenue')]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  name={t('dashboard:charts.revenue')}
-                  stroke="#10b981"
-                  strokeWidth={2.5}
-                  dot={{ fill: '#10b981', r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {data.charts.monthlyRevenueTrend?.some((d: any) => d.revenue > 0) ? (
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={data.charts.monthlyRevenueTrend}>
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} width={55} tickFormatter={(v) => formatNumber(Number(v))} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 8, fontSize: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}
+                    formatter={(v: any) => [formatCurrency(Number(v)), t('dashboard:charts.revenue')]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="revenue"
+                    name={t('dashboard:charts.revenue')}
+                    stroke="#10b981"
+                    strokeWidth={2.5}
+                    dot={{ fill: '#10b981', r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[180px] flex flex-col items-center justify-center text-center text-gray-400 text-sm px-4">
+                <p>{t('dashboard:charts.noRevenueTrend')}</p>
+                <p className="text-xs mt-1 opacity-75">{t('dashboard:charts.noRevenueTrendHint')}</p>
+              </div>
+            )}
           </div>
         </div>
       )}

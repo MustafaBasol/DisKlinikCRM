@@ -43,6 +43,7 @@ import { useAuth } from '../context/AuthContext';
 import { useClinic } from '../context/ClinicContext';
 import ClinicSwitcher from '../components/ClinicSwitcher';
 import TaskForm from '../components/TaskForm';
+import { recordLastRoute } from '../utils/lastRoute';
 import NotificationBell from '../components/NotificationBell';
 import { authService, contactRequestService, appointmentRequestService } from '../services/api';
 import { useDarkMode } from '../utils/darkMode';
@@ -318,6 +319,13 @@ const MainLayoutInner: React.FC = () => {
     setIsUserMenuOpen(false);
   }, [location.pathname]);
 
+  // Session continuity (UX-001D): remember the current in-app route so a
+  // reopened/re-authenticated session can restore it. Route/query only —
+  // never tokens or patient content. See src/utils/lastRoute.ts.
+  useEffect(() => {
+    recordLastRoute(user?.id, selectedClinicId, location.pathname, location.search);
+  }, [user?.id, selectedClinicId, location.pathname, location.search]);
+
   // Fetch unresolved contact request count for sidebar badge
   // (only when the role can actually see the Contact Requests module — avoids 403s)
   useEffect(() => {
@@ -405,7 +413,7 @@ const MainLayoutInner: React.FC = () => {
     navGroups.push({ id: 'genel', label: t('common:navGroups.general'), collapsible: false, items });
   }
 
-  // Hasta Yönetimi
+  // Hasta ve Klinik
   {
     const items: NavItem[] = [];
     if (canViewPatients(user)) {
@@ -418,11 +426,19 @@ const MainLayoutInner: React.FC = () => {
       items.push({ path: '/treatment-cases', icon: <Briefcase size={18} />, label: t('common:treatmentCases') });
       items.push({ path: '/tasks', icon: <CheckSquare size={18} />, label: t('common:tasks') });
     }
-    if (canViewPayments(user)) {
-      items.push({ path: '/insurance-provisions', icon: <ShieldCheck size={18} />, label: t('common:insurance') });
+    if (items.length > 0) {
+      navGroups.push({ id: 'hasta', label: t('common:navGroups.patientManagement'), collapsible: true, items });
     }
+  }
+
+  // Operasyon (no-show/recall, laboratuvar, görüntüleme, sigorta)
+  {
+    const items: NavItem[] = [];
     if (canViewNoShowDashboard(user)) {
       items.push({ path: '/no-shows', icon: <UserX size={18} />, label: t('common:noShowTracking') });
+    }
+    if (canViewRecallDashboard(user)) {
+      items.push({ path: '/recall', icon: <RotateCcw size={18} />, label: t('recall:nav') });
     }
     if (canViewLabOrders(user)) {
       items.push({ path: '/lab-orders', icon: <FlaskConical size={18} />, label: t('common:labOrders') });
@@ -430,11 +446,11 @@ const MainLayoutInner: React.FC = () => {
     if (canViewImaging(user)) {
       items.push({ path: '/imaging/queue', icon: <ScanLine size={18} />, label: t('imaging:queue.nav') });
     }
-    if (canViewRecallDashboard(user)) {
-      items.push({ path: '/recall', icon: <RotateCcw size={18} />, label: t('recall:nav') });
+    if (canViewPayments(user)) {
+      items.push({ path: '/insurance-provisions', icon: <ShieldCheck size={18} />, label: t('common:insurance') });
     }
     if (items.length > 0) {
-      navGroups.push({ id: 'hasta', label: t('common:navGroups.patientManagement'), collapsible: true, items });
+      navGroups.push({ id: 'operasyon', label: t('common:navGroups.operations'), collapsible: true, items });
     }
   }
 
@@ -485,7 +501,6 @@ const MainLayoutInner: React.FC = () => {
       items.push({ path: '/payment-plans', icon: <CreditCard size={18} />, label: t('common:paymentPlans') });
     }
     if (canViewReports(user)) {
-      items.push({ path: '/reports', icon: <BarChart2 size={18} />, label: t('common:reports') });
       items.push({ path: '/practitioner-earnings', icon: <TrendingUp size={18} />, label: t('common:practitionerEarnings') });
     }
     if (userRole === 'DENTIST') {
@@ -520,6 +535,9 @@ const MainLayoutInner: React.FC = () => {
     }
     if (canViewOperations(user)) {
       items.push({ path: '/operations', icon: <Activity size={18} />, label: t('common:operationsMonitoring') });
+    }
+    if (canViewReports(user)) {
+      items.push({ path: '/reports', icon: <BarChart2 size={18} />, label: t('common:reports') });
     }
     if (items.length > 0) {
       navGroups.push({ id: 'yonetim', label: t('common:navGroups.management'), collapsible: true, items });

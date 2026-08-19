@@ -46,7 +46,11 @@
     "appointmentTrend": "Son 7 Gün - Randevu Trendi",
     "serviceDistribution": "Bu Ay - Hizmet Dağılımı",
     "revenueTrend": "Son 6 Ay - Gelir Trendi",
-    "revenue": "Gelir"
+    "revenue": "Gelir",
+    "noAppointmentTrend": "Son 7 gün için henüz randevu verisi yok.",
+    "noAppointmentTrendHint": "Aktivite kaydedildikçe randevu eğilimleri burada görünecek.",
+    "noRevenueTrend": "Son 6 ay için henüz gelir verisi yok.",
+    "noRevenueTrendHint": "Ödemeler kaydedildikçe gelir eğilimleri burada görünecek."
   },
   "stats": {
     "weekTotal": "Bu hafta {{count}} randevu",
