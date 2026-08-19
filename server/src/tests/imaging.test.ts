@@ -250,7 +250,7 @@ async function main() {
   await test('no public/static file serving — streams only', () => {
     assert.equal(routeSrc.includes('express.static'), false);
     assert.equal(routeSrc.includes('sendFile'), false);
-    assert.ok(routeSrc.includes('openFileStream('), 'files must be streamed from storage behind auth');
+    assert.ok(routeSrc.includes('openImagingFileStream('), 'files must be streamed from storage behind auth (F4-IMAGING-001: routed through the imaging-specific wrapper, which itself always delegates to openFileStream when VPS2 mode is off)');
   });
 
   await test('originals are immutable — no binary replace/delete endpoints', () => {
@@ -668,9 +668,15 @@ async function main() {
     // generic failure path and the P2002 duplicate-race path (any thrown
     // transaction error), so the route itself no longer needs its own
     // deleteFile(storageKey) call at all.
-    const coreDeleteCalls = ingestCoreSrc.match(/deleteFile\(storageKey\)/g) ?? [];
+    // F4-IMAGING-001: the core's compensation call was renamed from
+    // deleteFile(storageKey) to deleteImagingFile(storageKey) — same
+    // compensation semantics, now routed through the imaging-specific
+    // wrapper (which itself calls deleteFile when VPS2 mode is off).
+    const coreDeleteCalls = ingestCoreSrc.match(/deleteImagingFile\(storageKey\)/g) ?? [];
     assert.ok(coreDeleteCalls.length >= 1, 'expected the shared ingest core to compensate a failed transaction');
     assert.equal(bridgePublicSrc.includes('deleteFile('), false,
+      'the bridge route must no longer perform its own storage compensation — that is now the core\'s job');
+    assert.equal(bridgePublicSrc.includes('deleteImagingFile('), false,
       'the bridge route must no longer perform its own storage compensation — that is now the core\'s job');
   });
 

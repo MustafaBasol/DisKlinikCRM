@@ -25,7 +25,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { isInlinePreviewable } from '../utils/filePreview.js';
-import { openFileStream } from '../services/fileStorage.js';
+import { openImagingFileStream } from '../services/fileStorage.js';
 import { getParam, createRateLimiter } from '../utils/helpers.js';
 import { logActivity } from '../utils/activity.js';
 import { writeAuditLog } from '../utils/auditLog.js';
@@ -845,7 +845,7 @@ async function streamStudyImage(req: AuthRequest, res: Response, mode: 'preview'
       return res.status(415).json({ error: 'Bu dosya türü tarayıcıda önizlenemez; indirerek görüntüleyin' });
     }
 
-    const stream = await openFileStream(image.filePath);
+    const stream = await openImagingFileStream(image.filePath);
     if (!stream) return res.status(404).json({ error: 'File not found in storage' });
 
     await auditImaging(req, image.clinicId, 'imaging_study_viewed', 'imaging_study', studyId, {

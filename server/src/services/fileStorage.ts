@@ -37,6 +37,13 @@ import {
 import { Upload } from '@aws-sdk/lib-storage';
 import prisma from '../db.js';
 import { safeErrorFields } from '../utils/safeError.js';
+import {
+  isImagingRemoteStorageEnabled,
+  putImagingObject,
+  getImagingObjectStream,
+  imagingObjectExists,
+  deleteImagingObject,
+} from './imagingRemoteStorage.js';
 
 const BASE_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 
@@ -732,4 +739,86 @@ export async function cleanupStaleLocalExportPartialFiles(
     }
   }
   return deleted;
+}
+
+// ── F4-IMAGING-001: imaging-only VPS2 storage routing (additive) ───────────
+//
+// Every function below is a thin routing wrapper around the module-level
+// primitives above (unchanged) plus imagingRemoteStorage.ts's VPS2 client.
+// None of the functions above this section were modified to add this.
+//
+// Default (IMAGING_STORAGE_BACKEND unset): isImagingRemoteStorageEnabled()
+// is false, so every wrapper below degrades to calling the exact existing
+// function (saveFile/openFileStream/fileExists/deleteFile) with no branch
+// taken — current production behavior for imaging is unchanged until an
+// operator explicitly sets IMAGING_STORAGE_BACKEND=vps2.
+//
+// Only 'imaging-image' kind objects route through these; patient
+// attachments, lab attachments and export archives keep calling
+// saveFile/openFileStream/fileExists/deleteFile directly, exactly as before
+// (see routes/attachments.ts, routes/labOrders.ts, patientPrivacyExportPackage.ts).
+
+/**
+ * Write path. When VPS2 mode is active, writes go ONLY to VPS2 — never
+ * silently mirrored or falling back to local/legacy S3 on failure (an
+ * activated operator expects a deterministic write target; a silent
+ * fallback would create untracked split-brain object placement, since no
+ * DB column records which backend holds a given key). A write failure
+ * propagates unchanged, exactly like every existing saveFile() caller
+ * already handles (see imagingIngestCore.ts's outer catch).
+ */
+export async function saveImagingFile(key: string, body: Buffer, contentType: string): Promise<void> {
+  if (isImagingRemoteStorageEnabled()) {
+    await putImagingObject(key, body, contentType);
+    return;
+  }
+  await saveFile(key, body, contentType);
+}
+
+/**
+ * Delete path for the imaging ingest rollback compensation (see
+ * imagingIngestCore.ts) — targets whichever backend the paired
+ * saveImagingFile() call just wrote to, using the same active-backend
+ * check, never a lookup. Not a general-purpose imaging delete (no such
+ * route exists today — see routes/imaging.ts, which has archive/unarchive
+ * but no delete).
+ */
+export async function deleteImagingFile(key: string): Promise<void> {
+  if (isImagingRemoteStorageEnabled()) {
+    await deleteImagingObject(key);
+    return;
+  }
+  await deleteFile(key);
+}
+
+/**
+ * Read path. `new object -> VPS2; legacy object -> VPS2 lookup, then
+ * controlled legacy fallback if necessary` (F4-IMAGING-001 storage
+ * contract): a CONFIRMED-absent VPS2 lookup (getImagingObjectStream
+ * resolves null on 404/NoSuchKey) falls back to the existing
+ * openFileStream() — the only scenario in which this reads from
+ * local/legacy S3 while VPS2 mode is active, and it is exactly the
+ * "object was written before VPS2 was ever activated" case. A VPS2
+ * lookup that instead THROWS (network/auth/other failure — "can't tell"
+ * rather than "confirmed not here") is never treated as a fallback
+ * trigger: it propagates, so a VPS2 outage surfaces as a failed
+ * request rather than silently substituting unrelated legacy content or
+ * masking the outage as a 404.
+ */
+export async function openImagingFileStream(ref: string): Promise<Readable | null> {
+  if (isImagingRemoteStorageEnabled() && isSafeStorageKey(ref)) {
+    const remote = await getImagingObjectStream(ref);
+    if (remote) return remote;
+    return openFileStream(ref);
+  }
+  return openFileStream(ref);
+}
+
+/** Same VPS2-first/legacy-fallback/unavailable-propagates contract as openImagingFileStream, for existence checks. */
+export async function imagingFileExists(ref: string): Promise<boolean> {
+  if (isImagingRemoteStorageEnabled() && isSafeStorageKey(ref)) {
+    if (await imagingObjectExists(ref)) return true;
+    return fileExists(ref);
+  }
+  return fileExists(ref);
 }
