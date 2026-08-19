@@ -43,9 +43,16 @@ const HIDDEN_LEGAL_BLOCKED_LABEL = '[KVKK Madde 6 — hukuki gerekçeyle gizlend
 
 export type ColumnSensitivity = 'tckn' | 'phone' | 'email' | 'address' | 'freetext' | 'low' | 'legalBlocked';
 
+export interface ColumnPreviewSample {
+  /** 1-based data-row number (CanonicalRow.rowNumber), so an operator can
+   * locate the value in the source workbook, not just see that it exists. */
+  rowNumber: number;
+  value: string;
+}
+
 export interface ColumnPreview {
   index: number;
-  samples: string[];
+  samples: ColumnPreviewSample[];
 }
 
 /**
@@ -143,11 +150,42 @@ function formatSample(text: string, sensitivity: ColumnSensitivity): string {
 }
 
 /**
+ * Rows scanned looking for a non-empty cell, independent per column search.
+ * Bounded regardless of workbook size (the real first-customer file has
+ * 14,890 rows) so a pathological "all data past row 50,000" sheet cannot make
+ * this scan unbounded — a defensive ceiling, not a realistic limit for any
+ * workbook this feature actually processes.
+ */
+const MAX_PREVIEW_SCAN_ROWS = 50_000;
+
+/**
  * Build one sanitized preview per header: the first `MAX_SAMPLES_PER_COLUMN`
- * data rows, masked according to the column's classified sensitivity. Blank
- * cells are shown as "boş" — sequential (not "first N non-empty") is
- * deliberate: a column's blank rate is itself something the operator should
- * see in the preview, not something the preview hides.
+ * MEANINGFUL (non-empty) values for that column, each paired with its source
+ * row number, masked according to the column's classified sensitivity.
+ *
+ * Deliberately "first N non-empty" rather than "first N physical rows"
+ * (F3-DATA-MIG-TODAY-001-UI-006-R6): a sparse column's one real value can sit
+ * anywhere in the sheet, and showing only the physically-first rows meant an
+ * operator staring at a column with `fillRate ≈ 0%` and `distinctCount = 1`
+ * saw nothing but "boş" — unable to tell whether that one real value was safe
+ * to map, ignore, or block. The column's blank rate is already visible via
+ * `SourceColumnProfile.fillRate`, so this preview no longer needs to double as
+ * a blank-rate indicator; it exists to answer "what IS the data", so it must
+ * show data when there is any (`filledCount > 0`).
+ *
+ * One pass over the workbook, not one pass per column: for every row (up to
+ * `MAX_PREVIEW_SCAN_ROWS`), each header still short of its sample quota takes
+ * this row's cell if non-empty. The scan stops early once every header has
+ * reached quota.
+ *
+ * If a column's `filledCount > 0` but the scan cap is reached before finding
+ * a non-empty cell for it (only possible on a pathological sheet with more
+ * than `MAX_PREVIEW_SCAN_ROWS` rows and its one meaningful value past that
+ * point), this returns an empty `samples` array for that column. The caller
+ * must not render that as "boş" — it is "not found within the preview
+ * window", a different and narrower claim; the mapping UI shows an explicit
+ * "preview unavailable" state instead of silently implying the column is
+ * empty.
  */
 export function buildColumnPreviews(
   headers: readonly CanonicalHeader[],
@@ -156,7 +194,25 @@ export function buildColumnPreviews(
   maxLengthByIndex: ReadonlyMap<number, number>,
   mappingStateByIndex: ReadonlyMap<number, MappingState | undefined> = new Map(),
 ): ColumnPreview[] {
-  const sampleRows = rows.slice(0, MAX_SAMPLES_PER_COLUMN);
+  const collected = new Map<number, { rowNumber: number; text: string }[]>(
+    headers.map((h) => [h.index, []]),
+  );
+  let stillSearching = headers.length;
+
+  scanRows: for (const row of rows) {
+    if (row.rowNumber > MAX_PREVIEW_SCAN_ROWS) break;
+    for (const header of headers) {
+      const bucket = collected.get(header.index)!;
+      if (bucket.length >= MAX_SAMPLES_PER_COLUMN) continue;
+      const text = row.cells[header.index]?.text ?? '';
+      if (text === '') continue;
+      bucket.push({ rowNumber: row.rowNumber, text });
+      if (bucket.length === MAX_SAMPLES_PER_COLUMN) {
+        stillSearching -= 1;
+        if (stillSearching <= 0) break scanRows;
+      }
+    }
+  }
 
   return headers.map((header) => {
     const sensitivity = classifyColumnSensitivity(
@@ -165,10 +221,10 @@ export function buildColumnPreviews(
       maxLengthByIndex.get(header.index) ?? 0,
       mappingStateByIndex.get(header.index),
     );
-    const samples = sampleRows.map((row) => {
-      const cell = row.cells[header.index];
-      return formatSample(cell?.text ?? '', sensitivity);
-    });
+    const samples = (collected.get(header.index) ?? []).map((s) => ({
+      rowNumber: s.rowNumber,
+      value: formatSample(s.text, sensitivity),
+    }));
     return { index: header.index, samples };
   });
 }

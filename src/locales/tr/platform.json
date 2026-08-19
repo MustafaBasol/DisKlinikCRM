@@ -666,8 +666,11 @@
       "noRows": "Filtreyle eşleşen sütun yok.",
       "cannotContinue": "Eşleme geçersiz olduğu için devam edilemiyor — yukarıdaki sorunları çözün.",
       "continue": "Referans Eşlemeye Geç",
-      "columnIndex": "Sütun {{n}}",
-      "unnamedColumn": "Başlıksız sütun {{n}}",
+      "headerless": "Başlık yok",
+      "excelColumn": "Excel sütunu: {{n}} / {{letter}}",
+      "sampleRow": "Satır {{row}}: {{value}}",
+      "previewUnavailable": "Bu sütunda veri var ama önizleme penceresinde bulunamadı — dikkatli inceleyin.",
+      "legalReason": "Yasal nedenle otomatik aktarılamaz. Neden: {{reason}}",
       "distinctCount": "{{n}} farklı değer",
       "maxLength": "maks. {{n}} karakter",
       "legalGate": "Yasal engel — seçilemez",
@@ -749,6 +752,7 @@
         "unresolved": "Sadece çözülmemiş",
         "blocked": "Sadece engellenmiş",
         "legal": "Sadece yasal engelliler",
+        "headerless": "Başlıksız sütunlar",
         "ignored": "Yok sayılanlar",
         "auto": "Otomatik güvenli"
       },
@@ -760,7 +764,14 @@
         "state": "Durum",
         "actions": "İşlemler"
       },
-      "actions": { "ignore": "Yok say", "block": "Engelle", "reset": "Otomatiğe sıfırla" },
+      "actions": {
+        "ignore": "Yok say",
+        "block": "Engelle",
+        "reset": "Otomatiğe sıfırla",
+        "ignoreHint": "Bu sütunu yok say — hiçbir hedefe yazılmaz",
+        "blockHint": "Bu sütunu engelle — inceleme için işaretle",
+        "resetHint": "Otomatik öneriye sıfırla"
+      },
       "summary": {
         "mapped": "Eşlenen",
         "unresolved": "Çözülmemiş",
