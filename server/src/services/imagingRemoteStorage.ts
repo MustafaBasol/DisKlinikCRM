@@ -31,10 +31,15 @@
  * Production S3-mode safety (identical rationale/shape to
  * fileBackupDestination.ts's validateFileBackupS3Config — see that file's
  * header for the full write-up; not re-derived here):
- *   - `IMAGING_S3_ENDPOINT`, when set, must be `https://` in production
- *     (`NODE_ENV=production`) unless `IMAGING_S3_ALLOW_INSECURE_ENDPOINT=true`
- *     is explicitly set (e.g. a private-network endpoint with TLS terminated
- *     upstream of this process).
+ *   - `IMAGING_S3_ENDPOINT` is REQUIRED in every environment whenever the
+ *     backend is `vps2` (R3 data-residency correction). It must parse as an
+ *     absolute `http://`/`https://` URL, and in production it must be
+ *     `https://` unless `IMAGING_S3_ALLOW_INSECURE_ENDPOINT=true` is
+ *     explicitly set (e.g. a private-network endpoint with TLS terminated
+ *     upstream of this process). Unlike `FILE_BACKUP_S3_ENDPOINT`, an unset
+ *     value is NOT a legitimate "use real AWS S3" configuration here — it
+ *     would silently ship KVKK health data out of Türkiye. See
+ *     `resolveImagingS3Endpoint()`.
  *   - In production, `IMAGING_S3_SSE` must be set ("AES256" or "aws:kms") —
  *     imaging-primary storage refuses to start with no server-side-encryption
  *     mode requested. This REQUESTS encryption on every write via the
@@ -138,14 +143,79 @@ function getImagingS3SseParams(): { ServerSideEncryption?: ImagingS3SseMode; SSE
 }
 
 /**
+ * Resolves and validates `IMAGING_S3_ENDPOINT`. REQUIRED in every environment
+ * whenever `IMAGING_STORAGE_BACKEND=vps2` — see the residency rationale below.
+ *
+ * R3 correction (data-residency fail-closed). This deliberately DIVERGES from
+ * fileBackupDestination.ts, where leaving `FILE_BACKUP_S3_ENDPOINT` unset is a
+ * legitimate configuration meaning "use real AWS S3". That is a valid choice
+ * for a generic backup destination; it is NOT a valid choice here. The literal
+ * meaning of `IMAGING_STORAGE_BACKEND=vps2` is "route imaging bytes to the
+ * VPS2 host in Türkiye". If the endpoint were omitted, the AWS SDK would
+ * silently resolve its own default public AWS endpoint and imaging objects —
+ * KVKK special-category health data — would be written to a non-Türkiye
+ * region with no error, no log line, and no signal that VPS2 was never
+ * involved. A missing endpoint must therefore be a startup failure, never an
+ * implicit default. Same principle as the R1 `IMAGING_STORAGE_BACKEND` enum
+ * correction: a configuration gap must never be indistinguishable from a
+ * deliberate, silently-different destination.
+ *
+ * Checks, in order:
+ *   - always: must be set and non-empty after trim.
+ *   - always: must parse as a URL with an `http:` or `https:` scheme (a
+ *     bare host like "vps2.example.com" is rejected — the SDK would not treat
+ *     it as an endpoint override the way an operator would expect).
+ *   - production only: must be `https://` unless
+ *     `IMAGING_S3_ALLOW_INSECURE_ENDPOINT=true` is explicitly set.
+ */
+function resolveImagingS3Endpoint(): string {
+  const endpoint = process.env.IMAGING_S3_ENDPOINT?.trim();
+
+  if (!endpoint) {
+    throw new Error(
+      'IMAGING_STORAGE_BACKEND=vps2 requires IMAGING_S3_ENDPOINT to be set — refusing to start (fail closed). Without an explicit endpoint the AWS SDK would fall back to its default public AWS S3 endpoint, silently writing imaging data outside Türkiye and breaking the KVKK/data-residency contract that "vps2" is meant to express.',
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new Error(
+      `IMAGING_S3_ENDPOINT must be an absolute URL including scheme (e.g. "https://imaging.vps2.example:9000"), got ${JSON.stringify(endpoint)} — refusing to start (fail closed)`,
+    );
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(
+      `IMAGING_S3_ENDPOINT must use the http:// or https:// scheme, got ${JSON.stringify(parsed.protocol)} — refusing to start (fail closed)`,
+    );
+  }
+
+  if (isProductionEnv()) {
+    const allowInsecure = process.env.IMAGING_S3_ALLOW_INSECURE_ENDPOINT === 'true';
+    if (parsed.protocol !== 'https:' && !allowInsecure) {
+      throw new Error(
+        'IMAGING_S3_ENDPOINT must use https:// in production (set IMAGING_S3_ALLOW_INSECURE_ENDPOINT=true to explicitly override for a non-TLS-terminated, private-network endpoint)',
+      );
+    }
+  }
+
+  return endpoint;
+}
+
+/**
  * Fail-closed pre-flight check. A no-op when the backend isn't switched on.
  * Called from `getImagingS3()` before the client is constructed, so a
  * misconfigured production imaging backend is refused before the first
  * upload is attempted — not discovered mid-request.
  *
  *   - always: `IMAGING_S3_BUCKET` must be set when the backend is enabled.
- *   - production only: `IMAGING_S3_ENDPOINT`, if set, must be `https://`
- *     unless `IMAGING_S3_ALLOW_INSECURE_ENDPOINT=true`.
+ *   - always: `IMAGING_S3_SSE`, if set, must be a recognized mode.
+ *   - always: `IMAGING_S3_ENDPOINT` must be set and be a valid http/https URL
+ *     (R3 data-residency correction — see `resolveImagingS3Endpoint()`).
+ *   - production only: that endpoint must be `https://` unless
+ *     `IMAGING_S3_ALLOW_INSECURE_ENDPOINT=true`.
  *   - production only: `IMAGING_S3_SSE` must be set to a recognized mode.
  */
 export function validateImagingS3Config(): void {
@@ -161,15 +231,11 @@ export function validateImagingS3Config(): void {
   // never silently degrade to "no encryption requested".
   const sseMode = getImagingS3SseMode();
 
-  if (!isProductionEnv()) return;
+  // Always validated, even outside production: an absent endpoint must never
+  // resolve to the SDK's default public AWS endpoint (residency, see above).
+  resolveImagingS3Endpoint();
 
-  const endpoint = process.env.IMAGING_S3_ENDPOINT?.trim();
-  const allowInsecure = process.env.IMAGING_S3_ALLOW_INSECURE_ENDPOINT === 'true';
-  if (endpoint && !endpoint.startsWith('https://') && !allowInsecure) {
-    throw new Error(
-      'IMAGING_S3_ENDPOINT must use https:// in production (set IMAGING_S3_ALLOW_INSECURE_ENDPOINT=true to explicitly override for a non-TLS-terminated, private-network endpoint)',
-    );
-  }
+  if (!isProductionEnv()) return;
 
   if (!sseMode) {
     throw new Error(
@@ -185,9 +251,14 @@ function getImagingS3(): S3Client {
   validateImagingS3Config();
   const accessKeyId = process.env.IMAGING_S3_ACCESS_KEY_ID?.trim();
   const secretAccessKey = process.env.IMAGING_S3_SECRET_ACCESS_KEY?.trim();
+  // `endpoint` is passed UNCONDITIONALLY (R3): validateImagingS3Config() above
+  // has already refused an unset/invalid endpoint, so there is no longer any
+  // path that constructs a client which could resolve the SDK's default public
+  // AWS endpoint. The previous conditional spread was the mechanism by which a
+  // missing endpoint silently became "real AWS S3" instead of VPS2.
   imagingS3Client = new S3Client({
     region: process.env.IMAGING_S3_REGION?.trim() || 'auto',
-    ...(process.env.IMAGING_S3_ENDPOINT?.trim() ? { endpoint: process.env.IMAGING_S3_ENDPOINT.trim() } : {}),
+    endpoint: resolveImagingS3Endpoint(),
     ...(process.env.IMAGING_S3_FORCE_PATH_STYLE === 'true' ? { forcePathStyle: true } : {}),
     ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
   });

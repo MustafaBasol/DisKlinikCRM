@@ -209,6 +209,10 @@ async function main() {
     clearImagingEnv();
     process.env.IMAGING_STORAGE_BACKEND = 'vps2';
     process.env.IMAGING_S3_BUCKET = 'imaging-test';
+    // R3: an endpoint is now required in every environment, so it must be set
+    // here to isolate this test on the SSE rule it is actually asserting
+    // (otherwise the endpoint check would throw first and mask it).
+    process.env.IMAGING_S3_ENDPOINT = 'https://imaging.vps2.example';
     process.env.NODE_ENV = 'production';
     assert.throws(() => validateImagingS3Config(), /IMAGING_S3_SSE must be set/);
   });
@@ -240,6 +244,89 @@ async function main() {
     process.env.IMAGING_S3_BUCKET = 'imaging-test';
     process.env.IMAGING_S3_ENDPOINT = 'http://localhost:19000';
     process.env.NODE_ENV = 'test';
+    assert.doesNotThrow(() => validateImagingS3Config());
+  });
+
+  // ── 2b. R3: IMAGING_S3_ENDPOINT is REQUIRED, in every environment ────────
+  //
+  // Regression cover for the R3 data-residency defect. Before this fix,
+  // `IMAGING_STORAGE_BACKEND=vps2` with `IMAGING_S3_ENDPOINT` unset passed
+  // validation and constructed an S3Client with no endpoint override, so the
+  // AWS SDK resolved its own default public AWS endpoint: imaging bytes (KVKK
+  // special-category health data) would have left Türkiye silently, with the
+  // config still claiming "vps2". A missing endpoint must fail closed, not
+  // default to a different continent.
+  section('2b. R3 residency: IMAGING_S3_ENDPOINT required + scheme-validated');
+
+  await test('enabled + bucket + NO endpoint -> throws in production (never defaults to AWS)', () => {
+    clearImagingEnv();
+    process.env.IMAGING_STORAGE_BACKEND = 'vps2';
+    process.env.IMAGING_S3_BUCKET = 'imaging-test';
+    process.env.IMAGING_S3_SSE = 'AES256';
+    process.env.NODE_ENV = 'production';
+    assert.throws(() => validateImagingS3Config(), /IMAGING_S3_ENDPOINT/);
+  });
+
+  await test('enabled + bucket + NO endpoint -> throws in dev/test too (not production-only)', () => {
+    clearImagingEnv();
+    process.env.IMAGING_STORAGE_BACKEND = 'vps2';
+    process.env.IMAGING_S3_BUCKET = 'imaging-test';
+    process.env.NODE_ENV = 'test';
+    assert.throws(() => validateImagingS3Config(), /IMAGING_S3_ENDPOINT/);
+  });
+
+  await test('empty / whitespace-only endpoint is treated as unset -> throws', () => {
+    for (const value of ['', '   ', '\t\n']) {
+      clearImagingEnv();
+      process.env.IMAGING_STORAGE_BACKEND = 'vps2';
+      process.env.IMAGING_S3_BUCKET = 'imaging-test';
+      process.env.IMAGING_S3_ENDPOINT = value;
+      process.env.NODE_ENV = 'test';
+      assert.throws(
+        () => validateImagingS3Config(),
+        /IMAGING_S3_ENDPOINT/,
+        `expected whitespace endpoint ${JSON.stringify(value)} to be rejected`,
+      );
+    }
+  });
+
+  await test('scheme-less endpoint (bare host) -> throws, not silently accepted', () => {
+    clearImagingEnv();
+    process.env.IMAGING_STORAGE_BACKEND = 'vps2';
+    process.env.IMAGING_S3_BUCKET = 'imaging-test';
+    process.env.IMAGING_S3_ENDPOINT = 'imaging.vps2.example:9000';
+    process.env.NODE_ENV = 'test';
+    assert.throws(() => validateImagingS3Config(), /absolute URL|scheme/);
+  });
+
+  await test('non-http(s) scheme (e.g. ftp://, file://) -> throws', () => {
+    for (const value of ['ftp://imaging.vps2.example', 'file:///srv/noramedi-imaging']) {
+      clearImagingEnv();
+      process.env.IMAGING_STORAGE_BACKEND = 'vps2';
+      process.env.IMAGING_S3_BUCKET = 'imaging-test';
+      process.env.IMAGING_S3_ENDPOINT = value;
+      process.env.NODE_ENV = 'test';
+      assert.throws(
+        () => validateImagingS3Config(),
+        /scheme/,
+        `expected non-http(s) endpoint ${JSON.stringify(value)} to be rejected`,
+      );
+    }
+  });
+
+  await test('valid https:// endpoint in production -> does not throw', () => {
+    clearImagingEnv();
+    process.env.IMAGING_STORAGE_BACKEND = 'vps2';
+    process.env.IMAGING_S3_BUCKET = 'imaging-test';
+    process.env.IMAGING_S3_SSE = 'AES256';
+    process.env.IMAGING_S3_ENDPOINT = 'https://imaging.vps2.example:9000';
+    process.env.NODE_ENV = 'production';
+    assert.doesNotThrow(() => validateImagingS3Config());
+  });
+
+  await test('endpoint requirement does not apply when backend is unset (rollback path stays clean)', () => {
+    clearImagingEnv();
+    process.env.NODE_ENV = 'production';
     assert.doesNotThrow(() => validateImagingS3Config());
   });
 
