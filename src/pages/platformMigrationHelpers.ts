@@ -76,15 +76,22 @@ export function stepForStatus(status: MigrationRunStatus): MigrationStepNumber {
 // Mapping screen: filter chips
 // ---------------------------------------------------------------------------
 
-export const MAPPING_FILTER_IDS = ['all', 'unresolved', 'blocked', 'legal', 'ignored', 'auto'] as const;
+export const MAPPING_FILTER_IDS = ['all', 'unresolved', 'blocked', 'legal', 'headerless', 'ignored', 'auto'] as const;
 export type MappingFilterId = (typeof MAPPING_FILTER_IDS)[number];
 
 /**
  * Chip predicate. `unresolved` covers both MANUAL_REQUIRED (no destination
  * chosen yet) and AUTO_REVIEW (a suggestion exists but confidence was too low
  * to auto-accept) — both need an operator decision before Continue unblocks.
+ * `headerless` covers every column whose workbook header cell was blank
+ * (state-independent — a headerless column can land in any mapping state),
+ * so an operator can review every synthesized-name column as a group
+ * regardless of what the engine decided about each one individually.
  */
-export function mappingMatchesFilter(mapping: Pick<MappingDto, 'state'>, filter: MappingFilterId): boolean {
+export function mappingMatchesFilter(
+  mapping: Pick<MappingDto, 'state' | 'sourceField'>,
+  filter: MappingFilterId,
+): boolean {
   switch (filter) {
     case 'all':
       return true;
@@ -94,6 +101,8 @@ export function mappingMatchesFilter(mapping: Pick<MappingDto, 'state'>, filter:
       return mapping.state === 'BLOCKED';
     case 'legal':
       return mapping.state === 'LEGAL_BLOCKED';
+    case 'headerless':
+      return parseUnnamedColumnIndex(mapping.sourceField) !== null;
     case 'ignored':
       return mapping.state === 'IGNORE';
     case 'auto':
@@ -117,6 +126,25 @@ export function parseUnnamedColumnIndex(sourceField: string): number | null {
   const match = /^COLUMN_(\d+)$/.exec(sourceField);
   if (!match) return null;
   return Number(match[1]);
+}
+
+/**
+ * Physical workbook column identity: 0-based index -> Excel-style letter
+ * (0 -> 'A', 25 -> 'Z', 26 -> 'AA', 701 -> 'ZZ', 702 -> 'AAA', ...). Standard
+ * bijective base-26 conversion (no zero digit), deliberately independent of
+ * the source column's header text — a synthesized or duplicate header must
+ * never change what physical column an operator thinks they are looking at
+ * (F3-DATA-MIG-TODAY-001-UI-006-R6, requirement A).
+ */
+export function excelColumnLetter(zeroBasedIndex: number): string {
+  let n = zeroBasedIndex + 1;
+  let letters = '';
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
+    letters = String.fromCharCode(65 + remainder) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters;
 }
 
 /** Case-insensitive substring match over the source column's identifying text. */

@@ -143,15 +143,28 @@ export interface SourceColumnProfileDto {
 }
 
 /**
+ * One sanitized, server-masked sample value for a source column, paired with
+ * its 1-based source row number so an operator can locate it in the workbook.
+ */
+export interface ColumnPreviewSampleDto {
+  rowNumber: number;
+  value: string;
+}
+
+/**
  * Sanitized, server-masked sample values for one source column — the one
  * deliberate exception to this file's "nothing here carries PII/PHI" rule.
  * Masking is applied server-side (columnPreview.ts) before this DTO exists;
  * the UI must render `samples` as-is and must never fetch or display a raw
- * cell value through any other channel.
+ * cell value through any other channel. First MEANINGFUL (non-empty) values
+ * found in source-row order, not merely the physically-first rows — see
+ * columnPreview.ts's buildColumnPreviews for why. May be empty even when the
+ * column has data (see AnalysisColumnPreviewDto docs on that module) — the UI
+ * must not render an empty array as "this column is empty".
  */
 export interface AnalysisColumnPreviewDto {
   index: number;
-  samples: string[];
+  samples: ColumnPreviewSampleDto[];
 }
 
 export interface MigrationAnalysisDto {
@@ -279,6 +292,14 @@ export interface MappingDto {
   confidence: number;
   reason: MappingReason;
   state: MappingState;
+  /**
+   * Deterministic, human-readable WHY behind a LEGAL_BLOCKED state, sourced
+   * server-side from the first-customer matrix's own policy note — never a
+   * client-invented legal conclusion. `null`/absent when the state isn't
+   * LEGAL_BLOCKED, or when the source system has no matrix entry to explain
+   * it (the UI falls back to the `reason` label in that case).
+   */
+  policyNote?: string | null;
 }
 
 export interface MappingValidationIssueDto {

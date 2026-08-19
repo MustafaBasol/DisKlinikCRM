@@ -666,8 +666,11 @@
       "noRows": "No columns match this filter.",
       "cannotContinue": "The mapping is invalid — resolve the issues above before continuing.",
       "continue": "Continue to Reference Mapping",
-      "columnIndex": "Column {{n}}",
-      "unnamedColumn": "Unnamed column {{n}}",
+      "headerless": "No header",
+      "excelColumn": "Excel column: {{n}} / {{letter}}",
+      "sampleRow": "Row {{row}}: {{value}}",
+      "previewUnavailable": "This column has data but none was found within the preview window — review carefully.",
+      "legalReason": "Cannot be transferred automatically for legal reasons. Reason: {{reason}}",
       "distinctCount": "{{n}} distinct values",
       "maxLength": "max {{n}} chars",
       "legalGate": "Legal gate — not selectable",
@@ -749,6 +752,7 @@
         "unresolved": "Unresolved only",
         "blocked": "Blocked only",
         "legal": "Legal blockers only",
+        "headerless": "Headerless columns",
         "ignored": "Ignored",
         "auto": "Auto-confident"
       },
@@ -760,7 +764,14 @@
         "state": "State",
         "actions": "Actions"
       },
-      "actions": { "ignore": "Ignore", "block": "Block", "reset": "Reset to auto" },
+      "actions": {
+        "ignore": "Ignore",
+        "block": "Block",
+        "reset": "Reset to auto",
+        "ignoreHint": "Ignore this column — nothing will be written to any destination",
+        "blockHint": "Block this column — flag it for review",
+        "resetHint": "Reset to the automatic suggestion"
+      },
       "summary": {
         "mapped": "Mapped",
         "unresolved": "Unresolved",

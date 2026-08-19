@@ -72,6 +72,7 @@ import { suggestMappings } from '../services/migration/mapping/mappingEngine.js'
 import { validateMappings } from '../services/migration/mapping/validateMapping.js';
 import { normalizeHeader } from '../services/migration/mapping/normalizeHeader.js';
 import { buildColumnPreviews } from '../services/migration/mapping/columnPreview.js';
+import { FIRST_CUSTOMER_MATRIX_BY_FIELD } from '../services/migration/mapping/firstCustomerMatrix.js';
 import { runDryRun, assertExecutable } from '../services/migration/dryRun.js';
 import {
   executeMigrationRun,
@@ -541,12 +542,33 @@ async function loadMappingState(db: Prisma.TransactionClient, runId: string) {
   return { mappings, headers, headerColumnCount: run?.headerColumnCount ?? headers.length };
 }
 
+/**
+ * Attach a wire-only, deterministic explanation to every LEGAL_BLOCKED row so
+ * the mapping screen can tell an operator WHY, not just THAT, a column is
+ * locked (F3-DATA-MIG-TODAY-001-UI-006-R6). Sourced from the first-customer
+ * matrix's own `note` field (firstCustomerMatrix.ts) — the same deterministic
+ * policy record that decided LEGAL_BLOCKED in the first place — never a new
+ * legal conclusion invented at this layer. Computed at response time only:
+ * NOT a database column, so no schema migration is needed and nothing new is
+ * persisted. A source system the matrix doesn't cover (or a byte-exact header
+ * the matrix doesn't have an entry for) simply gets `policyNote: null`; the
+ * UI falls back to the existing `reason` label in that case.
+ */
+function withPolicyNote<T extends { sourceField: string; state: string }>(
+  mappings: readonly T[],
+): (T & { policyNote: string | null })[] {
+  return mappings.map((m) => ({
+    ...m,
+    policyNote: m.state === 'LEGAL_BLOCKED' ? FIRST_CUSTOMER_MATRIX_BY_FIELD.get(m.sourceField)?.note ?? null : null,
+  }));
+}
+
 router.get('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, res: Response) => {
   try {
     await loadRunOrThrow(runIdParam(req));
     const { mappings, headers } = await loadMappingState(prisma, runIdParam(req));
     res.json({
-      mappings,
+      mappings: withPolicyNote(mappings),
       destinations: DESTINATION_FIELDS,
       validation: validateMappings(mappings, headers),
     });
@@ -702,7 +724,7 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
       return { updated: moved, mappings: state.mappings, validation: result };
     }, TX_OPTIONS);
 
-    res.json({ run: updated, mappings, validation });
+    res.json({ run: updated, mappings: withPolicyNote(mappings), validation });
   } catch (error) {
     fail(res, error);
   }
@@ -771,7 +793,7 @@ router.post(
         };
       });
 
-      res.json({ run: updated, mappings, validation, accepted });
+      res.json({ run: updated, mappings: withPolicyNote(mappings), validation, accepted });
     } catch (error) {
       fail(res, error);
     }

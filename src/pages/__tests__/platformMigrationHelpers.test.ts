@@ -17,6 +17,7 @@ import {
   mappingMatchesQuery,
   mappingRowVisible,
   parseUnnamedColumnIndex,
+  excelColumnLetter,
   isReconciliationBalanced,
   formatByteSize,
   formatPercent,
@@ -99,7 +100,7 @@ async function main() {
 
   section('── mapping filter chips ─────────────────────────────────────────');
 
-  assert.deepEqual(MAPPING_FILTER_IDS, ['all', 'unresolved', 'blocked', 'legal', 'ignored', 'auto']);
+  assert.deepEqual(MAPPING_FILTER_IDS, ['all', 'unresolved', 'blocked', 'legal', 'headerless', 'ignored', 'auto']);
 
   const rowManualRequired = makeMapping({ state: 'MANUAL_REQUIRED' });
   const rowAutoReview = makeMapping({ state: 'AUTO_REVIEW' });
@@ -144,6 +145,16 @@ async function main() {
     assert.equal(mappingMatchesFilter(rowAutoReview, 'auto'), false);
   });
 
+  await test('"headerless" matches a synthesized COLUMN_<n> sourceField regardless of state, and nothing else', () => {
+    const headerlessManual = makeMapping({ sourceField: 'COLUMN_42', state: 'MANUAL_REQUIRED' });
+    const headerlessAutoConfident = makeMapping({ sourceField: 'COLUMN_0', state: 'AUTO_CONFIDENT' });
+    assert.equal(mappingMatchesFilter(headerlessManual, 'headerless'), true);
+    assert.equal(mappingMatchesFilter(headerlessAutoConfident, 'headerless'), true);
+    for (const row of allRows) {
+      assert.equal(mappingMatchesFilter(row, 'headerless'), false, `${row.sourceField} is not headerless`);
+    }
+  });
+
   await test('mappingMatchesQuery: case-insensitive substring over source identifiers', () => {
     const row = makeMapping({ sourceField: 'CEPTELEFONU', sourceLabel: 'Cep Telefonu', sourceNormalized: 'CEPTELEFONU' });
     assert.equal(mappingMatchesQuery(row, 'cep'), true);
@@ -171,6 +182,25 @@ async function main() {
     assert.equal(parseUnnamedColumnIndex('HASTA_ID'), null);
     assert.equal(parseUnnamedColumnIndex('COLUMN_NAME'), null, 'must anchor to digits only, not any COLUMN_ prefix');
     assert.equal(parseUnnamedColumnIndex('MY_COLUMN_3'), null, 'must anchor to the START of the string');
+  });
+
+  section('── excelColumnLetter (F3-DATA-MIG-TODAY-001-UI-006-R6) ───────────');
+
+  await test('0-based index converts to the correct Excel-style column letter', () => {
+    const cases: [number, string][] = [
+      [0, 'A'],
+      [25, 'Z'],
+      [26, 'AA'],
+      [27, 'AB'],
+      [42, 'AQ'],
+      [51, 'AZ'],
+      [52, 'BA'],
+      [701, 'ZZ'],
+      [702, 'AAA'],
+    ];
+    for (const [index, expectedLetter] of cases) {
+      assert.equal(excelColumnLetter(index), expectedLetter, `index ${index}`);
+    }
   });
 
   section('── reconciliation balance invariant ─────────────────────────────');
