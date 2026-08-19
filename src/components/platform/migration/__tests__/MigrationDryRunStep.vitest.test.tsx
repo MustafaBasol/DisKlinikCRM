@@ -145,9 +145,10 @@ describe('MigrationDryRunStep — legacy DryRunSummary backward compatibility', 
 
     render(<MigrationDryRunStep run={RUN} api={api} onRunUpdated={noop} onNext={noop} nextStep={7} onBack={noop} />);
 
-    await waitFor(() => expect(api.getRun).toHaveBeenCalled());
-
-    expect(screen.getByText('platform:migration.dryRun.executableNo')).toBeInTheDocument();
+    // Wait for the actual post-load UI (not just "request started") before
+    // asserting: the dry-run summary only reaches the DOM after the
+    // getRun() promise resolves and React re-renders with loading=false.
+    expect(await screen.findByText('platform:migration.dryRun.executableNo')).toBeInTheDocument();
     const continueBtn = screen.getByRole('button', { name: /platform:migration.dryRun.continue/ });
     expect(continueBtn).toBeDisabled();
     expect(screen.getByText('platform:migration.dryRun.blockers')).toBeInTheDocument();
