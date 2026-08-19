@@ -214,6 +214,16 @@ export interface CanonicalHeader {
   normalized: string;
   /** Physical 0-based column index in the worksheet. */
   index: number;
+  /**
+   * true when the workbook's header cell for this column was blank and
+   * `original`/`normalized` were synthesized as `COLUMN_<index>`
+   * (canonicalParser.ts, UNNAMED_COLUMN_PREFIX) rather than read from the
+   * sheet. Absent/false for every ordinary named header. The mapping engine
+   * uses this — never a string match on the synthesized name, which a real
+   * vendor header could coincidentally collide with — to tell a genuinely
+   * headerless column apart from one that merely normalizes to the same text.
+   */
+  headerWasBlank?: boolean;
 }
 
 export interface CanonicalRow {
@@ -585,6 +595,7 @@ export const MAPPING_REASONS = [
   'SUMMARY_NOT_TRANSACTION',
   'SEMANTICS_UNRESOLVED',
   'UNKNOWN_HEADER',
+  'EMPTY_SOURCE_COLUMN',
 ] as const;
 
 export type MappingReason = (typeof MAPPING_REASONS)[number];

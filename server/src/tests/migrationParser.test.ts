@@ -38,6 +38,7 @@ import {
   PARSER_WARNINGS,
   UNNAMED_COLUMN_PREFIX,
 } from '../services/migration/parser/canonicalParser.js';
+import { suggestMappings } from '../services/migration/mapping/mappingEngine.js';
 import {
   deleteSourceFile,
   getMigrationSourceRoot,
@@ -418,6 +419,39 @@ await test('a column with an empty header but SOME data is NOT dropped: it becom
   assert.ok(wb.metadata.warnings.includes(PARSER_WARNINGS.UNNAMED_COLUMN_PRESENT));
   assert.ok(!wb.metadata.warnings.includes(PARSER_WARNINGS.EMPTY_LEADING_COLUMN_DROPPED));
   assert.equal(wb.rows[0]!.cells[unnamed.index]!.text, 'Y1');
+});
+
+await test('F3-DATA-MIG-TODAY-001-UI-005-R5 #12: a headerless column of stale Excel ERROR cells end-to-end (parse -> profile -> suggest) is auto-ignored, not MANUAL_REQUIRED', async () => {
+  // Reproduces the exact shape hypothesized for the reported "Sütun 43"
+  // production defect: a stale-formula export column with a blank header and
+  // every DATA row an Excel error cell (#N/A/#REF!, never real content). At
+  // the raw sheet level the column is NOT empty (an error cell is not the
+  // 'empty' kind), so it survives the parser's fully-empty-column drop and is
+  // kept as COLUMN_<index> — but biff8Reader.ts/canonicalParser.ts project
+  // every error cell to text: '', so profileColumns() (the SAME measurement
+  // the mapping screen's fill-rate bar shows the operator) correctly reports
+  // filledCount 0. That combination must resolve to a safe, non-blocking
+  // IGNORE, never a dead-end MANUAL_REQUIRED with no explanation.
+  const NA = 0x2a; // #N/A
+  const headerRow: FixtureCell[] = [{ v: 'ID' }, { v: null }, { v: 'NAME' }];
+  const dataRow1: FixtureCell[] = [{ v: 'X1' }, { v: null, errorCode: NA }, { v: 'Alice' }];
+  const dataRow2: FixtureCell[] = [{ v: 'X2' }, { v: null, errorCode: NA }, { v: 'Bob' }];
+
+  const buf = buildBiff8Fixture([{ name: 'Sheet1', rows: [headerRow, dataRow1, dataRow2] }]);
+  const wb = await parseSourceWorkbook(buf, 'xls');
+
+  const unnamed = wb.headers.find((h) => h.original === `${UNNAMED_COLUMN_PREFIX}1`)!;
+  assert.ok(unnamed, 'the column must survive parsing (it is not fully empty at the raw-cell level)');
+  assert.equal(unnamed.headerWasBlank, true, 'canonicalParser must flag this header as synthesized');
+
+  const profiles = profileColumns(wb);
+  const profile = profiles.find((p) => p.index === unnamed.index)!;
+  assert.equal(profile.filledCount, 0, 'whitespace-only cells must not count as filled');
+
+  const [suggestion] = suggestMappings([unnamed], [profile], { sourceSystem: 'legacy-dental-tr-v1' });
+  assert.equal(suggestion.mappingState, 'IGNORE');
+  assert.equal(suggestion.reason, 'EMPTY_SOURCE_COLUMN');
+  assert.equal(suggestion.sourceIndex, unnamed.index, 'physical column position preserved for auditability');
 });
 
 await test('byte-identical duplicate headers throw MigrationError HEADER_DUPLICATE', async () => {
