@@ -1,0 +1,9 @@
+{
+  "title": "Inbox",
+  "tabs": {
+    "all": "All",
+    "whatsapp": "WhatsApp",
+    "instagram": "Instagram"
+  },
+  "allComingSoon": "A unified view across all channels is coming soon. For now, pick a channel above."
+}

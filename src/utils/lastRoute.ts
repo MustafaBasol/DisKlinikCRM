@@ -64,6 +64,9 @@ const UNSORTED_ROUTE_CHECKS: Array<[string, RouteCheck]> = [
   ['/imaging', canViewImaging],
   ['/recall', canViewRecallDashboard],
   ['/whatsapp-inbox', canViewWhatsAppInbox],
+  // UX-001 Wave 2: unified inbox shell — permitted if the user can see
+  // either channel it wraps (mirrors Inbox.tsx's own redirect logic).
+  ['/inbox', (u) => canViewWhatsAppInbox(u) || canViewInstagramInbox(u)],
   ['/appointment-requests', canViewAppointmentRequests],
   ['/contact-requests', canViewContactRequests],
   ['/messages', canViewPatients],

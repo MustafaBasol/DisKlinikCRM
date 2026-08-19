@@ -43,6 +43,7 @@ import patientPrivacyEn from '../locales/en/patientPrivacy.json';
 import communicationConsentEn from '../locales/en/communicationConsent.json';
 import clinicBulkExportEn from '../locales/en/clinicBulkExport.json';
 import securityIncidentsEn from '../locales/en/securityIncidents.json';
+import inboxEn from '../locales/en/inbox.json';
 
 import commonTr from '../locales/tr/common.json';
 import authTr from '../locales/tr/auth.json';
@@ -84,6 +85,7 @@ import patientPrivacyTr from '../locales/tr/patientPrivacy.json';
 import communicationConsentTr from '../locales/tr/communicationConsent.json';
 import clinicBulkExportTr from '../locales/tr/clinicBulkExport.json';
 import securityIncidentsTr from '../locales/tr/securityIncidents.json';
+import inboxTr from '../locales/tr/inbox.json';
 
 import commonFr from '../locales/fr/common.json';
 import authFr from '../locales/fr/auth.json';
@@ -125,6 +127,7 @@ import patientPrivacyFr from '../locales/fr/patientPrivacy.json';
 import communicationConsentFr from '../locales/fr/communicationConsent.json';
 import clinicBulkExportFr from '../locales/fr/clinicBulkExport.json';
 import securityIncidentsFr from '../locales/fr/securityIncidents.json';
+import inboxFr from '../locales/fr/inbox.json';
 
 import commonDe from '../locales/de/common.json';
 import authDe from '../locales/de/auth.json';
@@ -166,6 +169,7 @@ import patientPrivacyDe from '../locales/de/patientPrivacy.json';
 import communicationConsentDe from '../locales/de/communicationConsent.json';
 import clinicBulkExportDe from '../locales/de/clinicBulkExport.json';
 import securityIncidentsDe from '../locales/de/securityIncidents.json';
+import inboxDe from '../locales/de/inbox.json';
 
 const namespaces = [
   'common',
@@ -206,6 +210,7 @@ const namespaces = [
   'communicationConsent',
   'clinicBulkExport',
   'securityIncidents',
+  'inbox',
   'validation',
   'errors',
 ];
@@ -250,6 +255,7 @@ const resources = {
     communicationConsent: communicationConsentEn,
     clinicBulkExport: clinicBulkExportEn,
     securityIncidents: securityIncidentsEn,
+    inbox: inboxEn,
     validation: validationEn,
     errors: errorsEn,
   },
@@ -292,6 +298,7 @@ const resources = {
     communicationConsent: communicationConsentTr,
     clinicBulkExport: clinicBulkExportTr,
     securityIncidents: securityIncidentsTr,
+    inbox: inboxTr,
     validation: validationTr,
     errors: errorsTr,
   },
@@ -334,6 +341,7 @@ const resources = {
     communicationConsent: communicationConsentFr,
     clinicBulkExport: clinicBulkExportFr,
     securityIncidents: securityIncidentsFr,
+    inbox: inboxFr,
     validation: validationFr,
     errors: errorsFr,
   },
@@ -376,6 +384,7 @@ const resources = {
     communicationConsent: communicationConsentDe,
     clinicBulkExport: clinicBulkExportDe,
     securityIncidents: securityIncidentsDe,
+    inbox: inboxDe,
     validation: validationDe,
     errors: errorsDe,
   }
