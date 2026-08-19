@@ -25,6 +25,7 @@ import {
   canViewPatients,
   canViewAppointments,
   canViewFinanceDashboard,
+  canViewPayments,
   canViewReports,
   canViewUsers,
   canCreatePatient,
@@ -114,7 +115,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const { t } = useTranslation('common');
   const { formatDate } = useClinicPreferences();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   useEffect(() => {
     if (isOpen) {
@@ -125,6 +126,24 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
+
+  // UX-001-PROD-SMOKE-R2 (finding 3): close at the auth boundary itself
+  // (authenticated -> unauthenticated) rather than reacting to the /login
+  // route name — GlobalSearch is mounted independently of routing (see
+  // App.tsx, which gates it on its own `searchOpen` state, not on location),
+  // so a route change to /login alone would never unmount it. Bumping
+  // searchSeqRef also means an entity search that was in flight when the
+  // session ended can never land results (stale or otherwise) after this.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      searchSeqRef.current += 1;
+      setQuery('');
+      setEntityResults([]);
+      setActiveIndex(0);
+      onClose();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   const search = useCallback(async (q: string) => {
     const seq = ++searchSeqRef.current;
@@ -140,7 +159,16 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
     // that gate the corresponding page in PAGE_DEFS above. Treatment cases
     // have no dedicated capability function; PAGE_DEFS gates that page on
     // canViewPatients too, so entity search mirrors it here.
-    const canSearchPatients = canViewPatients(user);
+    const canSearchPatientsClinical = canViewPatients(user);
+    // UX-001-PROD-SMOKE-R2 (finding 1): BILLING is deliberately excluded from
+    // canViewPatients (no clinical Patient Detail), but GET /patients already
+    // authorizes BILLING and returns only patientListSelect fields (identity +
+    // contact, no clinical data) — see server/src/routes/patients.ts. Reuse
+    // that existing, already-minimized contract instead of inventing a new
+    // endpoint; results route to /payments?patientId= (finding 1's mapping
+    // below), never to the clinical /patients/:id detail route.
+    const canSearchPatientsBillingSafe = !canSearchPatientsClinical && canViewPayments(user);
+    const canSearchPatients = canSearchPatientsClinical || canSearchPatientsBillingSafe;
     const canSearchAppointments = canViewAppointments(user);
     const canSearchTreatments = canViewPatients(user);
 
@@ -167,7 +195,10 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
             kind: 'patient',
             title: `${p.firstName} ${p.lastName}`,
             subtitle: p.phone || p.email || '',
-            path: `/patients/${p.id}`,
+            // BILLING-safe results never link to the clinical Patient Detail
+            // route — they route to the existing /payments patientId filter
+            // instead (Payments.tsx already reads it to prefilter the list).
+            path: canSearchPatientsClinical ? `/patients/${p.id}` : `/payments?patientId=${p.id}`,
             icon: <User size={16} className="text-blue-500" />,
             badge: t('globalSearch.types.patient'),
           });

@@ -36,7 +36,7 @@ const treatmentCaseInclude = {
 // GET /api/treatment-cases
 router.get('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'DENTIST', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   const { normalizedRole, id: userId } = req.user!;
-  const { status, patientId, practitionerId, clinicId: selectedClinicId } = req.query;
+  const { status, search, patientId, practitionerId, clinicId: selectedClinicId, limit } = req.query;
 
   try {
     const scope = await validateAndGetClinicIdScope(req.user!, selectedClinicId as string | undefined, res);
@@ -50,10 +50,29 @@ router.get('/treatment-cases', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
     if (patientId) where.patientId = String(patientId);
     if (status) where.status = String(status);
 
+    // UX-001-PROD-SMOKE-R2 (finding 2): `search` was previously accepted by
+    // callers (GlobalSearch, TreatmentCases.tsx) but silently ignored here,
+    // so a query like "mustafa" returned the role's entire unfiltered/most
+    // recent case list instead of matches — surfacing unrelated patients'
+    // treatment cases. Match against the same user-visible fields the UI
+    // renders: treatment title, patient first/last name.
+    if (search) {
+      const s = String(search);
+      where.OR = [
+        { title: { contains: s, mode: 'insensitive' } },
+        { patient: { firstName: { contains: s, mode: 'insensitive' } } },
+        { patient: { lastName: { contains: s, mode: 'insensitive' } } },
+      ];
+    }
+
+    const parsedLimit = Number(limit);
+    const take = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(Math.floor(parsedLimit), 500) : undefined;
+
     const cases = await prisma.treatmentCase.findMany({
       where,
       include: treatmentCaseInclude,
       orderBy: { createdAt: 'desc' },
+      ...(take !== undefined ? { take } : {}),
     });
 
     res.json(cases);
