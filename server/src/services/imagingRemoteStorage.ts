@@ -71,9 +71,42 @@ import {
 import { Upload } from '@aws-sdk/lib-storage';
 import type { Readable } from 'stream';
 
-/** True only when the imaging-primary write/read path is explicitly switched to VPS2. Default (unset) = disabled, i.e. current production behavior. */
+export type ImagingStorageBackend = 'legacy' | 'vps2';
+
+/**
+ * Single authoritative parser/validator for `IMAGING_STORAGE_BACKEND`. Fail-closed
+ * contract (R1 correction — the original version silently treated any
+ * unrecognized value as "disabled", which meant a typo in production would
+ * quietly keep routing new imaging writes to the legacy path with no signal
+ * that VPS2 was never actually activated):
+ *
+ *   - unset, or empty/whitespace-only after trim => `'legacy'` (current
+ *     production behavior — this is the only value that means "disabled").
+ *   - `"vps2"` (exact match after trim; case-sensitive) => `'vps2'`.
+ *   - any other non-empty value — a typo (`"vps2-typo"`), a different case
+ *     (`"VPS2"`, `"Vps2"`), or anything else including `"local"` (not a
+ *     supported backend name; there is no explicit "local" selector, only
+ *     "unset means legacy") — throws.
+ *
+ * Every call site below (and `validateImagingS3Config()`) calls this before
+ * doing anything else, so a misconfigured `IMAGING_STORAGE_BACKEND` fails the
+ * request/startup outright instead of silently falling back to legacy
+ * storage. A typo must never be indistinguishable from "VPS2 intentionally
+ * not activated".
+ */
+export function getImagingStorageBackend(): ImagingStorageBackend {
+  const raw = process.env.IMAGING_STORAGE_BACKEND;
+  const trimmed = raw?.trim() ?? '';
+  if (trimmed === '') return 'legacy';
+  if (trimmed === 'vps2') return 'vps2';
+  throw new Error(
+    `Invalid IMAGING_STORAGE_BACKEND value ${JSON.stringify(raw)} — must be unset/empty (legacy storage) or exactly "vps2" (VPS2 storage). Refusing to guess (fail closed): a typo must never silently keep routing imaging writes to legacy storage.`,
+  );
+}
+
+/** True only when the imaging-primary write/read path is explicitly switched to VPS2. Throws on any unrecognized non-empty `IMAGING_STORAGE_BACKEND` value — see `getImagingStorageBackend()`. */
 export function isImagingRemoteStorageEnabled(): boolean {
-  return process.env.IMAGING_STORAGE_BACKEND?.trim() === 'vps2';
+  return getImagingStorageBackend() === 'vps2';
 }
 
 function isProductionEnv(): boolean {

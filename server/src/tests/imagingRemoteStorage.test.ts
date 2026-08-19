@@ -48,6 +48,7 @@ import {
 } from '../services/fileStorage.js';
 import {
   isImagingRemoteStorageEnabled,
+  getImagingStorageBackend,
   validateImagingS3Config,
   __resetImagingS3ClientForTest,
 } from '../services/imagingRemoteStorage.js';
@@ -120,27 +121,66 @@ async function main() {
   // ── 1. Backend selection (pure) ─────────────────────────────────────────
   section('1. Backend selection (IMAGING_STORAGE_BACKEND)');
 
-  await test('unset -> disabled (current production default)', () => {
+  await test('unset -> legacy/disabled (current production default)', () => {
     clearImagingEnv();
+    assert.equal(getImagingStorageBackend(), 'legacy');
     assert.equal(isImagingRemoteStorageEnabled(), false);
   });
 
-  await test('"local" -> disabled', () => {
+  await test('empty string -> legacy/disabled', () => {
     clearImagingEnv();
-    process.env.IMAGING_STORAGE_BACKEND = 'local';
+    process.env.IMAGING_STORAGE_BACKEND = '';
+    assert.equal(getImagingStorageBackend(), 'legacy');
     assert.equal(isImagingRemoteStorageEnabled(), false);
   });
 
-  await test('unrecognized value -> disabled (fail closed, not fail open)', () => {
+  await test('whitespace-only -> legacy/disabled', () => {
     clearImagingEnv();
-    process.env.IMAGING_STORAGE_BACKEND = 'vps2-typo';
+    process.env.IMAGING_STORAGE_BACKEND = '   ';
+    assert.equal(getImagingStorageBackend(), 'legacy');
     assert.equal(isImagingRemoteStorageEnabled(), false);
   });
 
   await test('"vps2" -> enabled', () => {
     clearImagingEnv();
     process.env.IMAGING_STORAGE_BACKEND = 'vps2';
+    assert.equal(getImagingStorageBackend(), 'vps2');
     assert.equal(isImagingRemoteStorageEnabled(), true);
+  });
+
+  await test('"vps2" with surrounding whitespace -> enabled (trimmed)', () => {
+    clearImagingEnv();
+    process.env.IMAGING_STORAGE_BACKEND = '  vps2  ';
+    assert.equal(getImagingStorageBackend(), 'vps2');
+    assert.equal(isImagingRemoteStorageEnabled(), true);
+  });
+
+  await test('"local" -> throws (not a supported backend selector; only unset means legacy)', () => {
+    clearImagingEnv();
+    process.env.IMAGING_STORAGE_BACKEND = 'local';
+    assert.throws(() => getImagingStorageBackend(), /Invalid IMAGING_STORAGE_BACKEND/);
+    assert.throws(() => isImagingRemoteStorageEnabled(), /Invalid IMAGING_STORAGE_BACKEND/);
+  });
+
+  await test('typo -> throws (fail closed, NOT silently disabled — a typo must never quietly route imaging writes to legacy storage)', () => {
+    clearImagingEnv();
+    process.env.IMAGING_STORAGE_BACKEND = 'vps2-typo';
+    assert.throws(() => getImagingStorageBackend(), /Invalid IMAGING_STORAGE_BACKEND/);
+    assert.throws(() => isImagingRemoteStorageEnabled(), /Invalid IMAGING_STORAGE_BACKEND/);
+  });
+
+  await test('uppercase/mixed case -> throws (exact-case "vps2" only)', () => {
+    clearImagingEnv();
+    for (const bad of ['VPS2', 'Vps2', 'VPS2 ']) {
+      process.env.IMAGING_STORAGE_BACKEND = bad;
+      assert.throws(() => getImagingStorageBackend(), /Invalid IMAGING_STORAGE_BACKEND/, `expected ${JSON.stringify(bad)} to be rejected`);
+    }
+  });
+
+  await test('a typo propagates through validateImagingS3Config() too, not just isImagingRemoteStorageEnabled()', () => {
+    clearImagingEnv();
+    process.env.IMAGING_STORAGE_BACKEND = 'vps2-typo';
+    assert.throws(() => validateImagingS3Config(), /Invalid IMAGING_STORAGE_BACKEND/);
   });
 
   // ── 2. Invalid configuration (fail closed) ──────────────────────────────
@@ -260,6 +300,15 @@ async function main() {
 
   if (minioAvailable) {
     // ── 4. Write, read-back, checksum ─────────────────────────────────────
+    // Classification (R1 correction — see docs/program/NORAMEDI_MASTER_TRACKER.md's
+    // F4-IMAGING-001 entry): the two assertions below are
+    // SYNTHETIC_WRITE_READ_BYTE_EQUALITY = VERIFIED and
+    // SYNTHETIC_SHA256_COMPARISON = VERIFIED — this test suite computing
+    // SHA-256 over synthetic bytes it wrote and read back itself, in the
+    // untampered case. It does NOT establish any application-level
+    // integrity/corruption-detection capability — the app persists no
+    // expected checksum and verifies none on read. See the tampered-object
+    // test below (RUNTIME_CORRUPTION_DETECTION = NOT_IMPLEMENTED).
     section('4. VPS2 write + read-back: byte equality and SHA-256 equality (never object-count-only)');
 
     await test('write then read-back is byte-identical and hash-identical', async () => {
@@ -281,22 +330,37 @@ async function main() {
       assert.equal(await imagingFileExists(key), true);
     });
 
-    await test('a corrupted object is detected by checksum mismatch (never silently accepted)', async () => {
+    // NOTE — classification (R1 correction): this test does NOT prove
+    // application-level corruption detection. `openImagingFileStream` does
+    // not persist an expected checksum anywhere and performs no
+    // verification on read — it returns whatever bytes the backend hands
+    // back, tampered or not. This test only proves that (a) a
+    // destination-side bit-flip really does change the retrievable bytes
+    // (the MinIO target isn't silently normalizing/ignoring the admin
+    // overwrite) and (b) this suite's own SHA-256 comparison correctly
+    // discriminates tampered bytes from the original, i.e. it isn't
+    // vacuously true. RUNTIME_CORRUPTION_DETECTION = NOT_IMPLEMENTED;
+    // PRODUCTION_CHECKSUM_INTEGRITY_GATE = OPEN — see
+    // docs/program/NORAMEDI_MASTER_TRACKER.md's F4-IMAGING-001 entry.
+    await test('SYNTHETIC: a destination-side tamper changes the read-back bytes/hash (app performs NO runtime checksum verification — this is a test-harness sanity check, not corruption detection)', async () => {
       activateVps2();
       const key = `clinic-a/${crypto.randomUUID()}.dcm`;
       const original = crypto.randomBytes(2048);
       await saveImagingFile(key, original, 'application/dicom');
 
-      // Simulate corruption at the destination (bit-flip via a direct admin overwrite) —
-      // this is what a real corrupt-object detection path must catch.
+      // Simulate corruption at the destination (bit-flip via a direct admin overwrite).
       const tampered = Buffer.from(original);
       tampered[0] = tampered[0] ^ 0xff;
       const { PutObjectCommand } = await import('@aws-sdk/client-s3');
       await adminS3.send(new PutObjectCommand({ Bucket: bucketName, Key: key, Body: tampered }));
 
+      // The app read path returns the tampered bytes without complaint —
+      // no error, no rejection. It is this test, not the application, that
+      // notices the hash no longer matches.
       const stream = await openImagingFileStream(key);
       const readBack = await readStreamToBuffer(stream!);
-      assert.notEqual(sha256(readBack), sha256(original), 'tampered object must NOT hash-match the original — proves the checksum check is actually discriminating, not vacuously true');
+      assert.equal(readBack.equals(tampered), true, 'app read path returns the tampered bytes verbatim — no runtime integrity check exists to intercept them');
+      assert.notEqual(sha256(readBack), sha256(original), 'sanity check: this test\'s own SHA-256 comparison is discriminating, not vacuously true (confirms the destination-side tamper actually took effect)');
     });
 
     await test('missing object behavior: a key never written anywhere resolves to null, not an error', async () => {
