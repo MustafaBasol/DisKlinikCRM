@@ -57,6 +57,15 @@ export const patientSchema = patientBaseSchema;
 
 export const patientUpdateSchema = patientBaseSchema.partial();
 
+// F3-DATA-MIG-TODAY-001-UI-001-R1: PUT /api/patients/:id/identity request
+// body. `value` is the RAW (un-normalized) T.C. Kimlik No as typed by staff —
+// normalization/checksum validation happens in patientIdentityService.ts,
+// which also owns the "never log/echo the submitted value" contract. This
+// schema only guards the request shape (a non-empty string was sent at all).
+export const patientIdentityWriteSchema = z.object({
+  value: z.string().min(1, 'Identity value is required'),
+});
+
 // --- Appointment Type / Service ---
 
 export const appointmentTypeSchema = z.object({

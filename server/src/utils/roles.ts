@@ -143,6 +143,18 @@ export function canManageClinicSettings(user: UserForRole): boolean {
 }
 
 /**
+ * Hasta kimlik belgesi (T.C. Kimlik No) okuma/yazma — F3-DATA-MIG-TODAY-001-UI-001-R1.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST.
+ * DENTIST (klinik rol, kimlik yönetimi değil) ve BILLING (finansal rol) hariç —
+ * her ikisi de bu yüksek riskli kişisel veriye ne yazabilir ne de (maskelenmiş
+ * haliyle bile) okuyabilir. server/src/routes/patientIdentity.ts ile senkron.
+ */
+export function canManagePatientIdentity(user: UserForRole): boolean {
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER' || role === 'RECEPTIONIST';
+}
+
+/**
  * Hasta silme: yalnızca yönetici/yönetim rolleri
  * RECEPTIONIST ve DENTIST silemez (soft-delete bile olsa)
  */

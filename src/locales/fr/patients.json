@@ -197,7 +197,19 @@
     "chartNumberPlaceholder": "ex. 10423",
     "primaryPractitioner": "Praticien principal",
     "primaryPractitionerUnassigned": "Non assigné",
-    "primaryPractitionerReadOnlyHint": "(lecture seule — assigné par la réception/la direction)"
+    "primaryPractitionerReadOnlyHint": "(lecture seule — assigné par la réception/la direction)",
+    "identity": {
+      "label": "Numéro d'identité turc (T.C. Kimlik No)",
+      "sensitiveHint": "(sensible, facultatif)",
+      "placeholder": "T.C. Kimlik No à 11 chiffres",
+      "notProvided": "Non renseigné",
+      "change": "Modifier",
+      "cancelChange": "Annuler",
+      "remove": "Supprimer",
+      "removeConfirm": "Supprimer le numéro d'identité de ce patient ?",
+      "removeFailed": "Impossible de supprimer les données d'identité.",
+      "saveFailed": "Impossible d'enregistrer les données d'identité."
+    }
   },
   "gender": {
     "male": "Homme",

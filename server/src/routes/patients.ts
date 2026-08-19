@@ -7,8 +7,14 @@ import { patientSchema, patientUpdateSchema } from '../schemas/index.js';
 import { checkPatientLimit } from '../middleware/planLimits.js';
 import { validateAndGetScope } from '../utils/clinicScope.js';
 import { patientListSelect, userNameRoleSelect, userNameSelect } from '../utils/prismaSelects.js';
-import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
+import { writeAuditLog, writeAuditLogInTx, extractRequestMeta } from '../utils/auditLog.js';
 import { safeErrorFields } from '../utils/safeError.js';
+import {
+  PATIENT_IDENTITY_DOC_TYPE,
+  PatientIdentityError,
+  safeIdentityErrorMessage,
+  writeIdentityInTx,
+} from '../services/patientIdentityService.js';
 
 const router = express.Router();
 
@@ -304,17 +310,68 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
 });
 
 // POST /api/patients
+// F3-DATA-MIG-TODAY-001-UI-001-R1: an optional `tckn` in the body is a raw
+// identity value, never a Patient scalar (patientSchema doesn't declare one,
+// so it is silently stripped from `validation.data` regardless — see
+// patientIdentityUxFieldValidation.test.ts). When present, the patient row
+// and its PatientIdentityDocument are created inside ONE prisma.$transaction
+// via writeIdentityInTx (services/patientIdentityService.ts): an invalid or
+// same-org-duplicate TCKN rolls the whole create back — no patient is left
+// behind without its identity, and no identity is ever attached to a patient
+// that doesn't exist. Absent/empty `tckn` keeps the original non-transactional
+// create path untouched.
 router.post('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), checkPatientLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
   // checkPatientLimit already resolved and validated the creation-target clinic (org + access checked).
   const clinicId = req.targetClinicId!;
   const validation = patientSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
+  const rawTckn = typeof req.body?.tckn === 'string' ? req.body.tckn.trim() : '';
+
   try {
     const practitionerError = await validatePrimaryPractitioner(validation.data.primaryPractitionerId, clinicId);
     if (practitionerError) return res.status(400).json(practitionerError);
 
-    const patient = await prisma.patient.create({ data: { ...validation.data, clinicId, organizationId: req.user!.organizationId } });
+    const organizationId = req.user!.organizationId;
+    let patient;
+
+    if (rawTckn) {
+      try {
+        patient = await prisma.$transaction(async (tx) => {
+          const created = await tx.patient.create({ data: { ...validation.data, clinicId, organizationId } });
+
+          const identity = await writeIdentityInTx(tx, {
+            patientId: created.id,
+            clinicId,
+            organizationId,
+            rawValue: rawTckn,
+          });
+
+          await writeAuditLogInTx(tx, {
+            organizationId,
+            clinicId,
+            actorUserId: req.user!.id,
+            actorRole: req.user!.role,
+            action: identity.created ? 'patient_identity_added' : 'patient_identity_replaced',
+            entityType: 'patient_identity',
+            entityId: created.id,
+            metadata: { patientId: created.id, docType: PATIENT_IDENTITY_DOC_TYPE },
+          });
+
+          return created;
+        });
+      } catch (txErr: unknown) {
+        if (txErr instanceof PatientIdentityError) {
+          return res.status(txErr.httpStatus).json({
+            error: { tckn: { _errors: [safeIdentityErrorMessage(txErr.code)] } },
+            code: txErr.code,
+          });
+        }
+        throw txErr;
+      }
+    } else {
+      patient = await prisma.patient.create({ data: { ...validation.data, clinicId, organizationId } });
+    }
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'patient', entityId: patient.id,

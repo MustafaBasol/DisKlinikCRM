@@ -99,6 +99,11 @@ export const patientService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  // F3-DATA-MIG-TODAY-001-UI-001-R1: masked identity metadata only — never
+  // the plaintext T.C. Kimlik No. See server/src/routes/patientIdentity.ts.
+  getIdentity: (patientId: string) => api.get(`/patients/${patientId}/identity`),
+  putIdentity: (patientId: string, value: string) => api.put(`/patients/${patientId}/identity`, { value }),
+  deleteIdentity: (patientId: string) => api.delete(`/patients/${patientId}/identity`),
 };
 
 export const patientPrivacyService = {

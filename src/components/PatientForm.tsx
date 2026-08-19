@@ -4,7 +4,7 @@ import { patientService, userService } from '../services/api';
 import { useTranslation } from 'react-i18next';
 import { useClinic } from '../context/ClinicContext';
 import { useAuth } from '../context/AuthContext';
-import { normalizeRole } from '../utils/permissions';
+import { normalizeRole, canManagePatientIdentity } from '../utils/permissions';
 
 interface PatientFormProps {
   patient?: any;
@@ -46,6 +46,44 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
+
+  // F3-DATA-MIG-TODAY-001-UI-001-R1: T.C. Kimlik No is never part of
+  // `formData` / patientService.update() — it goes through the separate,
+  // narrowly role-gated identity endpoints. `identityValue` only ever holds
+  // what the user is actively typing (create, or an explicit "change" on
+  // edit) and is never persisted anywhere client-side (no localStorage).
+  const canManageIdentity = canManagePatientIdentity(user);
+  const [identityValue, setIdentityValue] = useState('');
+  const [identityChangeMode, setIdentityChangeMode] = useState(false);
+  const [existingIdentity, setExistingIdentity] = useState<{ present: boolean; maskedValue: string | null } | null>(null);
+  const [identityError, setIdentityError] = useState('');
+  const [identityRemoving, setIdentityRemoving] = useState(false);
+
+  useEffect(() => {
+    if (!patient?.id || !canManageIdentity) { setExistingIdentity(null); return; }
+    let cancelled = false;
+    patientService.getIdentity(patient.id)
+      .then(res => { if (!cancelled) setExistingIdentity(res.data); })
+      .catch(() => { if (!cancelled) setExistingIdentity(null); });
+    return () => { cancelled = true; };
+  }, [patient?.id, canManageIdentity]);
+
+  const handleRemoveIdentity = async () => {
+    if (!patient?.id) return;
+    if (!window.confirm(t('patients:form.identity.removeConfirm'))) return;
+    setIdentityRemoving(true);
+    setIdentityError('');
+    try {
+      await patientService.deleteIdentity(patient.id);
+      setExistingIdentity({ present: false, maskedValue: null });
+      setIdentityChangeMode(false);
+      setIdentityValue('');
+    } catch {
+      setIdentityError(t('patients:form.identity.removeFailed'));
+    } finally {
+      setIdentityRemoving(false);
+    }
+  };
 
   // The clinic the practitioner picker (and its tenant-scoped fetch) is
   // bound to: the patient's own clinic when editing, or the currently
@@ -142,16 +180,43 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
 
     setLoading(true);
     setErrors({});
+    setIdentityError('');
 
     try {
       if (patient) {
         await patientService.update(patient.id, formData);
+
+        // T.C. Kimlik No change is a SEPARATE request against the identity
+        // sub-resource, deliberately not bundled into the patient PATCH —
+        // an unrelated field edit (e.g. phone) never touches the identity
+        // document because this block only runs when the user explicitly
+        // opened "change identity number" and typed something.
+        if (canManageIdentity && identityChangeMode && identityValue.trim()) {
+          try {
+            const identityRes = await patientService.putIdentity(patient.id, identityValue.trim());
+            setExistingIdentity(identityRes.data);
+            setIdentityChangeMode(false);
+            setIdentityValue('');
+          } catch (identityErr: any) {
+            setIdentityError(
+              typeof identityErr.response?.data?.error === 'string'
+                ? identityErr.response.data.error
+                : t('patients:form.identity.saveFailed'),
+            );
+            setLoading(false);
+            return;
+          }
+        }
       } else {
-        await patientService.create(formData);
+        const payload = canManageIdentity && identityValue.trim()
+          ? { ...formData, tckn: identityValue.trim() }
+          : formData;
+        await patientService.create(payload);
       }
       onSuccess();
     } catch (err: any) {
-      if (err.response?.status === 400) {
+      const status = err.response?.status;
+      if ((status === 400 || status === 409) && err.response?.data?.error && typeof err.response.data.error === 'object') {
         setErrors(err.response.data.error);
       } else {
         setErrors({ general: t('common:errorGeneric') });
@@ -295,6 +360,75 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
               />
             </div>
           </div>
+
+          {/* T.C. Kimlik No — F3-DATA-MIG-TODAY-001-UI-001-R1. Sensitive
+              identity field: never persisted client-side, autoComplete off,
+              read/write gated to canManagePatientIdentity roles only. */}
+          {canManageIdentity && (
+            <div>
+              <label className="label">
+                {t('patients:form.identity.label')}
+                <span className="ml-2 text-xs font-normal text-gray-400">{t('patients:form.identity.sensitiveHint')}</span>
+              </label>
+              {!patient ? (
+                <input
+                  name="tckn"
+                  value={identityValue}
+                  onChange={(e) => setIdentityValue(e.target.value)}
+                  className={`input-field ${errors.tckn ? 'border-red-500' : ''}`}
+                  placeholder={t('patients:form.identity.placeholder')}
+                  autoComplete="off"
+                  inputMode="numeric"
+                  maxLength={11}
+                />
+              ) : identityChangeMode ? (
+                <div className="space-y-2">
+                  <input
+                    name="tckn"
+                    value={identityValue}
+                    onChange={(e) => setIdentityValue(e.target.value)}
+                    className="input-field"
+                    placeholder={t('patients:form.identity.placeholder')}
+                    autoComplete="off"
+                    inputMode="numeric"
+                    maxLength={11}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setIdentityChangeMode(false); setIdentityValue(''); setIdentityError(''); }}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    {t('patients:form.identity.cancelChange')}
+                  </button>
+                </div>
+              ) : (
+                <div className="input-field bg-gray-50 flex items-center justify-between gap-3">
+                  <span className="text-sm text-gray-600">
+                    {existingIdentity?.present
+                      ? existingIdentity.maskedValue
+                      : t('patients:form.identity.notProvided')}
+                  </span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button type="button" onClick={() => setIdentityChangeMode(true)} className="text-xs text-primary-600 hover:text-primary-700">
+                      {t('patients:form.identity.change')}
+                    </button>
+                    {existingIdentity?.present && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveIdentity}
+                        disabled={identityRemoving}
+                        className="text-xs text-red-600 hover:text-red-700"
+                      >
+                        {t('patients:form.identity.remove')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+              {errors.tckn && <p className="text-xs text-red-500 mt-1">{errors.tckn._errors[0]}</p>}
+              {identityError && <p className="text-xs text-red-500 mt-1">{identityError}</p>}
+            </div>
+          )}
 
           <div>
             <label className="label">{t('patients:form.primaryPractitioner')}</label>

@@ -197,7 +197,19 @@
     "chartNumberPlaceholder": "örn. 10423",
     "primaryPractitioner": "Sorumlu Hekim",
     "primaryPractitionerUnassigned": "Atanmadı",
-    "primaryPractitionerReadOnlyHint": "(salt okunur — resepsiyon/yönetim tarafından atanır)"
+    "primaryPractitionerReadOnlyHint": "(salt okunur — resepsiyon/yönetim tarafından atanır)",
+    "identity": {
+      "label": "T.C. Kimlik No",
+      "sensitiveHint": "(hassas veri, isteğe bağlı)",
+      "placeholder": "11 haneli T.C. Kimlik No",
+      "notProvided": "Girilmedi",
+      "change": "Değiştir",
+      "cancelChange": "Vazgeç",
+      "remove": "Kaldır",
+      "removeConfirm": "Bu hastanın T.C. Kimlik No kaydı kaldırılsın mı?",
+      "removeFailed": "Kimlik bilgisi kaldırılamadı.",
+      "saveFailed": "Kimlik bilgisi kaydedilemedi."
+    }
   },
   "gender": {
     "male": "Erkek",
