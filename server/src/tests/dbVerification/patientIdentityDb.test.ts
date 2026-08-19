@@ -1,13 +1,20 @@
 /**
- * patientIdentityDb.test.ts — F3-DATA-MIG-TODAY-001-UI-001-R1
+ * patientIdentityDb.test.ts — F3-DATA-MIG-TODAY-001-UI-001-R1/R2
  *
  * DB-BACKED proofs for the clinic-facing patient identity (T.C. Kimlik No)
- * write/read/remove contract (server/src/services/patientIdentityService.ts,
+ * write/read contract (server/src/services/patientIdentityService.ts,
  * server/src/routes/patientIdentity.ts, and the optional identity-at-create
  * path in routes/patients.ts POST /patients). Requires DATABASE_URL to point
  * at a DISPOSABLE Postgres plus PATIENT_IDENTITY_ENCRYPTION_KEY /
  * PATIENT_IDENTITY_LOOKUP_SECRET — registered under
  * `server:test:disposable-db`, never under `server:test:non-disposable`.
+ *
+ * R2: there is deliberately no DELETE / remove() coverage here — the R2
+ * architecture review found no accepted product/legal contract authorizing
+ * clinic-facing deletion of a government identity document, so the DELETE
+ * endpoint, removeIdentityInTx(), and this suite's former remove tests were
+ * all removed together. Correction is still fully covered via the
+ * replace-not-duplicate section below (PUT semantics).
  *
  * These are the claims that cannot honestly be proved without a database,
  * because each one is a property of real transactions, real tenant-scoped
@@ -30,8 +37,8 @@
  *      unaffected — no PatientIdentityDocument row ever exists for it.
  *   14. Updating an unrelated Patient field (phone) never touches that
  *      patient's identity document.
- *   15. The AuditLog row written for an identity write/remove never contains
- *      the raw TCKN, the ciphertext, or the lookup hash anywhere in its
+ *   15. The AuditLog row written for an identity write never contains the
+ *      raw TCKN, the ciphertext, or the lookup hash anywhere in its
  *      persisted columns.
  *   16. The Patient Prisma model has no tcNo/tckn scalar at all — a
  *      client-supplied one has no column to land in, DB-schema-verified
@@ -61,7 +68,6 @@ import prisma from '../../db.js';
 import { Prisma } from '@prisma/client';
 import {
   writeIdentityInTx,
-  removeIdentityInTx,
   getMaskedIdentityForPatient,
   PatientIdentityError,
   PATIENT_IDENTITY_DOC_TYPE,
@@ -328,6 +334,115 @@ await test('a valid TCKN at create time commits BOTH the Patient row and its ide
 });
 
 // ---------------------------------------------------------------------------
+section('R2 — POST /patients `tckn` PRESENCE validation (malformed type must not silently mean "absent")');
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors routes/patients.ts POST /patients's presence-validation gate
+ * VERBATIM (same duplication rationale as createPatientWithIdentity above —
+ * the route is wired to Express, not a standalone function). Before R2, the
+ * route did `typeof req.body?.tckn === 'string' ? req.body.tckn.trim() : ''`,
+ * which silently coerced a present-but-wrong-typed value (number, object,
+ * array, null) into '' — i.e. "no identity requested" — and created the
+ * Patient anyway with zero validation error. R2 requires: property ABSENT ->
+ * ordinary create; property PRESENT but not a well-formed non-empty string ->
+ * rejected before any write; valid non-empty string -> the existing atomic
+ * transaction.
+ */
+async function createPatientFromRequestBody(tenant: { organizationId: string; clinicAId: string }, body: unknown) {
+  const hasTcknProperty = Object.prototype.hasOwnProperty.call((body ?? {}) as object, 'tckn');
+  const tcknRawValue: unknown = (body as Record<string, unknown> | undefined)?.tckn;
+  const tcknIsWellFormedString = typeof tcknRawValue === 'string' && tcknRawValue.trim().length > 0;
+
+  if (hasTcknProperty && !tcknIsWellFormedString) {
+    throw new PatientIdentityError('IDENTITY_TCKN_INVALID', { httpStatus: 400 });
+  }
+  const rawTckn = tcknIsWellFormedString ? (tcknRawValue as string).trim() : '';
+
+  if (rawTckn) {
+    return prisma.$transaction(async (tx) => {
+      const created = await tx.patient.create({
+        data: { organizationId: tenant.organizationId, clinicId: tenant.clinicAId, firstName: 'Body', lastName: `Create${randomUUID().slice(0, 8)}` },
+      });
+      await writeIdentityInTx(tx, { patientId: created.id, clinicId: tenant.clinicAId, organizationId: tenant.organizationId, rawValue: rawTckn });
+      return created;
+    });
+  }
+  return prisma.patient.create({
+    data: { organizationId: tenant.organizationId, clinicId: tenant.clinicAId, firstName: 'Body', lastName: `Create${randomUUID().slice(0, 8)}` },
+  });
+}
+
+async function assertBodyRejectedWithZeroWrites(label: string, body: unknown) {
+  const tenant = await makeTenant(label);
+  const patientCountBefore = await prisma.patient.count({ where: { organizationId: tenant.organizationId } });
+  const identityCountBefore = await prisma.patientIdentityDocument.count({ where: { organizationId: tenant.organizationId } });
+
+  await assert.rejects(
+    () => createPatientFromRequestBody(tenant, body),
+    (err: unknown) => err instanceof PatientIdentityError && err.code === 'IDENTITY_TCKN_INVALID',
+  );
+
+  const patientCountAfter = await prisma.patient.count({ where: { organizationId: tenant.organizationId } });
+  const identityCountAfter = await prisma.patientIdentityDocument.count({ where: { organizationId: tenant.organizationId } });
+  assert.equal(patientCountAfter, patientCountBefore, `${label}: zero Patient rows must be written`);
+  assert.equal(identityCountAfter, identityCountBefore, `${label}: zero PatientIdentityDocument rows must be written`);
+}
+
+await test('1. tckn present as a number is rejected — zero Patient, zero identity writes', async () => {
+  await assertBodyRejectedWithZeroWrites('tckn-number', { tckn: 12345678900 });
+});
+
+await test('2. tckn present as an object is rejected — zero writes', async () => {
+  await assertBodyRejectedWithZeroWrites('tckn-object', { tckn: { value: TCKN_A } });
+});
+
+await test('3. tckn present as an array is rejected — zero writes', async () => {
+  await assertBodyRejectedWithZeroWrites('tckn-array', { tckn: [TCKN_A] });
+});
+
+await test('4. tckn present as null (property explicitly present) is rejected — zero writes', async () => {
+  await assertBodyRejectedWithZeroWrites('tckn-null', { tckn: null });
+});
+
+await test('5. tckn present as a malformed string is rejected — zero writes', async () => {
+  await assertBodyRejectedWithZeroWrites('tckn-malformed-string', { tckn: MALFORMED_TCKN });
+});
+
+await test('6. tckn property absent — ordinary Patient create still succeeds', async () => {
+  const tenant = await makeTenant('tckn-absent');
+  const created = await createPatientFromRequestBody(tenant, {});
+  assert.ok(created.id);
+  const identity = await getMaskedIdentityForPatient(prisma, created.id);
+  assert.equal(identity.present, false);
+});
+
+await test('7. tckn present as a valid non-empty string — Patient + identity commit atomically', async () => {
+  const tenant = await makeTenant('tckn-valid-string');
+  const created = await createPatientFromRequestBody(tenant, { tckn: TCKN_A });
+  const identity = await getMaskedIdentityForPatient(prisma, created.id);
+  assert.equal(identity.present, true);
+  assert.equal(identity.maskedValue!.slice(-4), TCKN_A.slice(-4));
+});
+
+await test('8. a duplicate valid tckn via the request-body path creates zero new Patient rows', async () => {
+  const tenant = await makeTenant('tckn-body-duplicate');
+  const existing = await makePatient(tenant.organizationId, tenant.clinicAId, 'Existing');
+  await prisma.$transaction((tx) =>
+    writeIdentityInTx(tx, { patientId: existing.id, clinicId: tenant.clinicAId, organizationId: tenant.organizationId, rawValue: TCKN_A }),
+  );
+  const patientCountBefore = await prisma.patient.count({ where: { organizationId: tenant.organizationId } });
+
+  await assert.rejects(
+    () => createPatientFromRequestBody(tenant, { tckn: TCKN_A }),
+    (err: unknown) => err instanceof PatientIdentityError && err.code === 'IDENTITY_ALREADY_ASSIGNED',
+  );
+
+  const patientCountAfter = await prisma.patient.count({ where: { organizationId: tenant.organizationId } });
+  assert.equal(patientCountAfter, patientCountBefore, 'no new patient row for a request-body duplicate tckn');
+});
+
+// ---------------------------------------------------------------------------
 section('10-11. Tenant / clinic isolation — no cross-boundary access or correlation');
 // ---------------------------------------------------------------------------
 
@@ -472,47 +587,6 @@ await test('the AuditLog row for an identity write never contains the raw TCKN, 
   assert.equal(containsRaw(auditRow, row!.lookupHash), false, 'audit row must not contain the lookup hash');
   assert.equal(auditRow!.action, 'patient_identity_added');
   assert.deepEqual(auditRow!.metadata, { patientId: patient.id, docType: PATIENT_IDENTITY_DOC_TYPE });
-});
-
-await test('remove() deletes the row and its audit trail also carries no raw value', async () => {
-  const tenant = await makeTenant('audit-remove');
-  const patient = await makePatient(tenant.organizationId, tenant.clinicAId, 'A');
-  await prisma.$transaction((tx) =>
-    writeIdentityInTx(tx, { patientId: patient.id, clinicId: tenant.clinicAId, organizationId: tenant.organizationId, rawValue: TCKN_A }),
-  );
-
-  const removed = await prisma.$transaction(async (tx) => {
-    const wasRemoved = await removeIdentityInTx(tx, { patientId: patient.id });
-    if (wasRemoved) {
-      await writeAuditLogInTx(tx, {
-        organizationId: tenant.organizationId,
-        clinicId: tenant.clinicAId,
-        actorUserId: randomUUID(),
-        actorRole: 'OWNER',
-        action: 'patient_identity_removed',
-        entityType: 'patient_identity',
-        entityId: patient.id,
-        metadata: { patientId: patient.id, docType: PATIENT_IDENTITY_DOC_TYPE },
-      });
-    }
-    return wasRemoved;
-  });
-  assert.equal(removed, true);
-
-  const row = await prisma.patientIdentityDocument.findUnique({ where: { patientId_docType: { patientId: patient.id, docType: PATIENT_IDENTITY_DOC_TYPE } } });
-  assert.equal(row, null);
-
-  const auditRow = await prisma.auditLog.findFirst({ where: { organizationId: tenant.organizationId, entityId: patient.id, action: 'patient_identity_removed' } });
-  assert.ok(auditRow);
-  assert.equal(containsRaw(auditRow, TCKN_A), false);
-});
-
-await test('remove() on a patient with no identity document is a safe no-op (returns false, writes no audit)', async () => {
-  const tenant = await makeTenant('remove-noop');
-  const patient = await makePatient(tenant.organizationId, tenant.clinicAId, 'A');
-
-  const removed = await prisma.$transaction((tx) => removeIdentityInTx(tx, { patientId: patient.id }));
-  assert.equal(removed, false);
 });
 
 // ---------------------------------------------------------------------------

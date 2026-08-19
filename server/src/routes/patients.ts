@@ -310,7 +310,7 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
 });
 
 // POST /api/patients
-// F3-DATA-MIG-TODAY-001-UI-001-R1: an optional `tckn` in the body is a raw
+// F3-DATA-MIG-TODAY-001-UI-001-R1/R2: an optional `tckn` in the body is a raw
 // identity value, never a Patient scalar (patientSchema doesn't declare one,
 // so it is silently stripped from `validation.data` regardless — see
 // patientIdentityUxFieldValidation.test.ts). When present, the patient row
@@ -318,15 +318,29 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
 // via writeIdentityInTx (services/patientIdentityService.ts): an invalid or
 // same-org-duplicate TCKN rolls the whole create back — no patient is left
 // behind without its identity, and no identity is ever attached to a patient
-// that doesn't exist. Absent/empty `tckn` keeps the original non-transactional
-// create path untouched.
+// that doesn't exist. Property ABSENT keeps the original non-transactional
+// create path untouched. Property PRESENT but not a well-formed non-empty
+// string (number, object, array, null, or '') is rejected up front — before
+// any write — so a malformed *type* can never be silently coerced into "no
+// identity requested" the way `typeof x === 'string' ? x : ''` used to.
 router.post('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), checkPatientLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
   // checkPatientLimit already resolved and validated the creation-target clinic (org + access checked).
   const clinicId = req.targetClinicId!;
   const validation = patientSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
-  const rawTckn = typeof req.body?.tckn === 'string' ? req.body.tckn.trim() : '';
+  const hasTcknProperty = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'tckn');
+  const tcknRawValue: unknown = (req.body as Record<string, unknown> | undefined)?.tckn;
+  const tcknIsWellFormedString = typeof tcknRawValue === 'string' && tcknRawValue.trim().length > 0;
+
+  if (hasTcknProperty && !tcknIsWellFormedString) {
+    return res.status(400).json({
+      error: { tckn: { _errors: [safeIdentityErrorMessage('IDENTITY_TCKN_INVALID')] } },
+      code: 'IDENTITY_TCKN_INVALID',
+    });
+  }
+
+  const rawTckn = tcknIsWellFormedString ? (tcknRawValue as string).trim() : '';
 
   try {
     const practitionerError = await validatePrimaryPractitioner(validation.data.primaryPractitionerId, clinicId);

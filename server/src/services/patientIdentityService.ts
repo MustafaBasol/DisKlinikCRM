@@ -211,17 +211,6 @@ export async function writeIdentityInTx(
   return { maskedValue: maskIdentityValue(normalized), created: !existing };
 }
 
-/**
- * Removes the patient's TCKN document, if one exists. Returns whether a row
- * was actually deleted (false = there was nothing to remove — not an error).
- */
-export async function removeIdentityInTx(tx: IdentityWriteClient, params: { patientId: string }): Promise<boolean> {
-  const result = await tx.patientIdentityDocument.deleteMany({
-    where: { patientId: params.patientId, docType: PATIENT_IDENTITY_DOC_TYPE },
-  });
-  return result.count > 0;
-}
-
 // ---------------------------------------------------------------------------
 // Read path
 // ---------------------------------------------------------------------------

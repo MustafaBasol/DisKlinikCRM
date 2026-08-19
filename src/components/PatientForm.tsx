@@ -57,7 +57,6 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
   const [identityChangeMode, setIdentityChangeMode] = useState(false);
   const [existingIdentity, setExistingIdentity] = useState<{ present: boolean; maskedValue: string | null } | null>(null);
   const [identityError, setIdentityError] = useState('');
-  const [identityRemoving, setIdentityRemoving] = useState(false);
 
   useEffect(() => {
     if (!patient?.id || !canManageIdentity) { setExistingIdentity(null); return; }
@@ -67,23 +66,6 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
       .catch(() => { if (!cancelled) setExistingIdentity(null); });
     return () => { cancelled = true; };
   }, [patient?.id, canManageIdentity]);
-
-  const handleRemoveIdentity = async () => {
-    if (!patient?.id) return;
-    if (!window.confirm(t('patients:form.identity.removeConfirm'))) return;
-    setIdentityRemoving(true);
-    setIdentityError('');
-    try {
-      await patientService.deleteIdentity(patient.id);
-      setExistingIdentity({ present: false, maskedValue: null });
-      setIdentityChangeMode(false);
-      setIdentityValue('');
-    } catch {
-      setIdentityError(t('patients:form.identity.removeFailed'));
-    } finally {
-      setIdentityRemoving(false);
-    }
-  };
 
   // The clinic the practitioner picker (and its tenant-scoped fetch) is
   // bound to: the patient's own clinic when editing, or the currently
@@ -412,16 +394,6 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
                     <button type="button" onClick={() => setIdentityChangeMode(true)} className="text-xs text-primary-600 hover:text-primary-700">
                       {t('patients:form.identity.change')}
                     </button>
-                    {existingIdentity?.present && (
-                      <button
-                        type="button"
-                        onClick={handleRemoveIdentity}
-                        disabled={identityRemoving}
-                        className="text-xs text-red-600 hover:text-red-700"
-                      >
-                        {t('patients:form.identity.remove')}
-                      </button>
-                    )}
                   </div>
                 </div>
               )}

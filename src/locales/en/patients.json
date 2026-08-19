@@ -205,9 +205,6 @@
       "notProvided": "Not provided",
       "change": "Change",
       "cancelChange": "Cancel",
-      "remove": "Remove",
-      "removeConfirm": "Remove this patient's national ID record?",
-      "removeFailed": "Could not remove identity record.",
       "saveFailed": "Could not save identity record."
     }
   },

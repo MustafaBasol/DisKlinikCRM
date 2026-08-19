@@ -3,9 +3,15 @@
  * TCKN support.
  *
  * Endpoints:
- *   GET    /api/patients/:patientId/identity — masked metadata only
- *   PUT    /api/patients/:patientId/identity — create/replace the TCKN
- *   DELETE /api/patients/:patientId/identity — remove the TCKN
+ *   GET /api/patients/:patientId/identity — masked metadata only
+ *   PUT /api/patients/:patientId/identity — create/replace the TCKN
+ *
+ * There is deliberately NO DELETE endpoint (F3-DATA-MIG-TODAY-001-UI-001-R2):
+ * no accepted product/legal contract in this repository authorizes clinic
+ * staff to physically remove a government identity document. Correcting a
+ * mis-entered value is supported through PUT replacement. If clinic-facing
+ * deletion is ever required, that needs its own explicit product decision —
+ * do not add it back here without one.
  *
  * All persistence, validation, tenant-bound lookup and duplicate-rejection
  * logic lives in services/patientIdentityService.ts — this file is
@@ -53,7 +59,6 @@ import {
   PATIENT_IDENTITY_ROLES,
   PatientIdentityError,
   getMaskedIdentityForPatient,
-  removeIdentityInTx,
   safeIdentityErrorMessage,
   writeIdentityInTx,
 } from '../services/patientIdentityService.js';
@@ -166,55 +171,6 @@ router.put(
     } catch (err: any) {
       console.error('[patientIdentity] put error:', safeErrorFields(err));
       res.status(500).json({ error: 'Failed to save identity document' });
-    }
-  },
-);
-
-// ── DELETE /api/patients/:patientId/identity ─────────────────────────────
-
-router.delete(
-  '/patients/:patientId/identity',
-  authorize(PATIENT_IDENTITY_ROLES),
-  async (req: AuthRequest, res: Response) => {
-    const patientId = getParam(req, 'patientId');
-
-    try {
-      const patient = await resolvePatientScope(req, patientId);
-      if (!patient) return res.status(404).json({ error: 'Patient not found' });
-
-      const deleted = await prisma.$transaction(async (tx) => {
-        const removed = await removeIdentityInTx(tx, { patientId: patient.id });
-        if (removed) {
-          await writeAuditLogInTx(tx, {
-            organizationId: patient.organizationId,
-            clinicId: patient.clinicId,
-            actorUserId: req.user!.id,
-            actorRole: req.user!.role,
-            action: 'patient_identity_removed',
-            entityType: 'patient_identity',
-            entityId: patient.id,
-            metadata: { patientId: patient.id, docType: PATIENT_IDENTITY_DOC_TYPE },
-          });
-        }
-        return removed;
-      });
-
-      if (deleted) {
-        await logActivity({
-          clinicId: patient.clinicId,
-          userId: req.user!.id,
-          entityType: 'patient_identity',
-          entityId: patient.id,
-          patientId: patient.id,
-          action: 'identity_removed',
-          description: 'Kimlik belgesi kaldırıldı',
-        });
-      }
-
-      res.json({ present: false, type: PATIENT_IDENTITY_DOC_TYPE, maskedValue: null });
-    } catch (err: any) {
-      console.error('[patientIdentity] delete error:', safeErrorFields(err));
-      res.status(500).json({ error: 'Failed to remove identity document' });
     }
   },
 );

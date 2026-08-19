@@ -205,9 +205,6 @@
       "notProvided": "Non renseigné",
       "change": "Modifier",
       "cancelChange": "Annuler",
-      "remove": "Supprimer",
-      "removeConfirm": "Supprimer le numéro d'identité de ce patient ?",
-      "removeFailed": "Impossible de supprimer les données d'identité.",
       "saveFailed": "Impossible d'enregistrer les données d'identité."
     }
   },

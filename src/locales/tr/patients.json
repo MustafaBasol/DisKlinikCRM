@@ -205,9 +205,6 @@
       "notProvided": "Girilmedi",
       "change": "Değiştir",
       "cancelChange": "Vazgeç",
-      "remove": "Kaldır",
-      "removeConfirm": "Bu hastanın T.C. Kimlik No kaydı kaldırılsın mı?",
-      "removeFailed": "Kimlik bilgisi kaldırılamadı.",
       "saveFailed": "Kimlik bilgisi kaydedilemedi."
     }
   },

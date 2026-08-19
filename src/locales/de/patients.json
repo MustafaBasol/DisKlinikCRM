@@ -205,9 +205,6 @@
       "notProvided": "Nicht angegeben",
       "change": "Ändern",
       "cancelChange": "Abbrechen",
-      "remove": "Entfernen",
-      "removeConfirm": "Identitätsnummer dieses Patienten entfernen?",
-      "removeFailed": "Identitätsdaten konnten nicht entfernt werden.",
       "saveFailed": "Identitätsdaten konnten nicht gespeichert werden."
     }
   },
