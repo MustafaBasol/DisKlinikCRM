@@ -31,6 +31,7 @@ import {
   type MappingFilterId,
   mappingRowVisible,
   formatPercent,
+  parseUnnamedColumnIndex,
 } from '../../../pages/platformMigrationHelpers';
 
 // ── State badge ──────────────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ const STATE_BADGE: Record<MappingState, string> = {
 interface RowProps {
   mapping: MappingDto;
   profile: SourceColumnProfileDto | undefined;
+  samples: string[] | undefined;
   destinations: DestinationFieldDto[];
   destinationGroups: readonly string[];
   saving: boolean;
@@ -63,7 +65,7 @@ interface RowProps {
 }
 
 const MappingRow: React.FC<RowProps> = React.memo(({
-  mapping, profile, destinations, destinationGroups, saving, canReset,
+  mapping, profile, samples, destinations, destinationGroups, saving, canReset,
   onDestinationChange, onTransformChange, onComposeOrderChange, onMarkIgnore, onMarkBlocked, onResetAuto,
 }) => {
   const { t } = useTranslation(['platform']);
@@ -75,13 +77,33 @@ const MappingRow: React.FC<RowProps> = React.memo(({
   const nonZeroTypes = profile
     ? CANONICAL_CELL_TYPES.filter((ct) => (profile.typeCounts[ct] ?? 0) > 0)
     : [];
+  const destinationDisplayLabel = (key: string, fallback: string) =>
+    t(`platform:migration.mapping.destinationLabels.${key}`, { defaultValue: fallback });
+  const unnamedIndex = parseUnnamedColumnIndex(mapping.sourceField);
+  const displayHeader = unnamedIndex !== null
+    ? t('platform:migration.mapping.unnamedColumn', { n: unnamedIndex + 1 })
+    : mapping.sourceLabel;
 
   return (
     <tr className={`border-b border-gray-50 dark:border-gray-800 align-top ${isLegalBlocked ? 'bg-amber-50/60 dark:bg-amber-900/10' : isBlocked ? 'bg-red-50/60 dark:bg-red-900/10' : isIgnored ? 'opacity-60' : ''}`}>
       {/* Source */}
-      <td className="px-3 py-3 min-w-[160px]">
-        <p className="font-mono text-xs font-semibold text-gray-900 dark:text-white break-all">{mapping.sourceLabel}</p>
+      <td className="px-3 py-3 min-w-[180px]">
+        <p
+          className={`text-xs font-semibold break-all ${unnamedIndex !== null ? 'italic text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}
+          title={mapping.sourceField}
+        >
+          {displayHeader}
+        </p>
         <p className="text-[11px] text-gray-400 mt-0.5">{t('platform:migration.mapping.columnIndex', { n: mapping.sourceIndex + 1 })}</p>
+        {samples && samples.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5 border-l-2 border-gray-100 dark:border-gray-800 pl-1.5">
+            {samples.map((s, idx) => (
+              <li key={idx} className="text-[11px] text-gray-500 dark:text-gray-400 font-mono truncate max-w-[220px]" title={s}>
+                {s}
+              </li>
+            ))}
+          </ul>
+        )}
       </td>
 
       {/* Profile */}
@@ -129,7 +151,7 @@ const MappingRow: React.FC<RowProps> = React.memo(({
               return (
                 <optgroup key={group} label={t(`platform:migration.mapping.groups.${group}`)}>
                   {inGroup.map((d) => (
-                    <option key={d.key} value={d.key}>{d.label}{d.required ? ' *' : ''}</option>
+                    <option key={d.key} value={d.key}>{destinationDisplayLabel(d.key, d.label)}{d.required ? ' *' : ''}</option>
                   ))}
                 </optgroup>
               );
@@ -238,6 +260,7 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
   const [destinations, setDestinations] = useState<DestinationFieldDto[]>([]);
   const [validation, setValidation] = useState<MappingValidationDto | null>(null);
   const [profiles, setProfiles] = useState<Record<number, SourceColumnProfileDto>>({});
+  const [previews, setPreviews] = useState<Record<number, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingField, setSavingField] = useState<string | null>(null);
@@ -276,6 +299,9 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
         const byIndex: Record<number, SourceColumnProfileDto> = {};
         for (const p of analysisRes.value.analysis.profiles) byIndex[p.index] = p;
         setProfiles(byIndex);
+        const previewByIndex: Record<number, string[]> = {};
+        for (const p of analysisRes.value.analysis.columnPreviews ?? []) previewByIndex[p.index] = p.samples;
+        setPreviews(previewByIndex);
         onRunUpdated(analysisRes.value.run);
       }
     }).finally(() => setLoading(false));
@@ -483,6 +509,7 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
                     key={m.sourceField}
                     mapping={m}
                     profile={profiles[m.sourceIndex]}
+                    samples={previews[m.sourceIndex]}
                     destinations={destinations}
                     destinationGroups={DESTINATION_GROUPS}
                     saving={savingField === m.sourceField}

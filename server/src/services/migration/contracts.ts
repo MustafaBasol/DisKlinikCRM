@@ -759,6 +759,15 @@ export interface DryRunSummary {
   identityClassifications: Record<IdentityClassification, number>;
   rowClasses: Record<DryRunRowClass, number>;
   blockers: DryRunBlocker[];
+  /**
+   * Legally-gated source columns the operator has already decided to exclude
+   * (mapping state LEGAL_BLOCKED). Distinct from `blockers`: these are decided
+   * exclusions, not unresolved problems, so they never suppress `executable`
+   * on their own — see dryRun.ts. Kept separate (not folded into `warnings`)
+   * so the UI can label them as a legal-policy exclusion, not a technical
+   * warning, without inventing a client-side heuristic over `blockers[].code`.
+   */
+  legalExclusions: DryRunBlocker[];
   warnings: DryRunBlocker[];
   planLimit: PlanLimitReport;
   sharedPhoneImpact: SharedPhoneImpact;

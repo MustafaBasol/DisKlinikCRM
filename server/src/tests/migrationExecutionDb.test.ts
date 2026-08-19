@@ -357,6 +357,65 @@ async function main() {
     });
 
     // ---------------------------------------------------------------------
+    // F3-DATA-MIG-TODAY-001-UI-002 — Objective A: a legally-excluded column
+    // is a DECIDED, non-writing state (same tier as IGNORE at the mapping
+    // layer — validateMapping.ts NON_WRITING_DECIDED_STATES) and must not by
+    // itself make an otherwise-clean run non-executable.
+    section('1b. Legal-policy exclusions do not block an otherwise-clean run');
+
+    await test('legalBlockedFields > 0 does not suppress executable when there are no other blockers', async () => {
+      const tenant = await makeTenant('legal');
+      const rows = syntheticRows(5, 3);
+      const { run, workbook, mappings } = await prepareRun(tenant, rows);
+
+      const summary = await runDryRun({
+        runId: run.id,
+        organizationId: tenant.organizationId,
+        clinicId: tenant.clinicId,
+        sourceSystem: SOURCE_SYSTEM_DEFAULT,
+        workbook,
+        mappings,
+        unresolvedReferenceValues: new Set(),
+        legalBlockedFields: ['ONEMLINOT', 'KONTROLNOTU'],
+        unresolvedMappingCount: 0,
+      });
+
+      assert.equal(summary.legalBlockers, 2, 'the count stays visible');
+      assert.deepEqual(
+        summary.legalExclusions.map((b) => b.fieldName).sort(),
+        ['KONTROLNOTU', 'ONEMLINOT'],
+        'each excluded field is named in legalExclusions',
+      );
+      assert.ok(
+        summary.blockers.every((b) => b.code !== 'LEGAL_BLOCKED'),
+        'a legal exclusion must never appear in the executable-gating blockers list',
+      );
+      assert.equal(summary.executable, true, 'a legal exclusion alone must not block an otherwise-executable run');
+    });
+
+    await test('a real blocker (unresolved mapping) still suppresses executable even alongside a legal exclusion', async () => {
+      const tenant = await makeTenant('legal2');
+      const rows = syntheticRows(5, 4);
+      const { run, workbook, mappings } = await prepareRun(tenant, rows);
+
+      const summary = await runDryRun({
+        runId: run.id,
+        organizationId: tenant.organizationId,
+        clinicId: tenant.clinicId,
+        sourceSystem: SOURCE_SYSTEM_DEFAULT,
+        workbook,
+        mappings,
+        unresolvedReferenceValues: new Set(),
+        legalBlockedFields: ['ONEMLINOT'],
+        unresolvedMappingCount: 1,
+      });
+
+      assert.equal(summary.legalBlockers, 1);
+      assert.equal(summary.executable, false, 'a genuine unresolved-mapping blocker must still gate execution');
+      assert.ok(summary.blockers.some((b) => b.code === 'MAPPING_REQUIRED'));
+    });
+
+    // ---------------------------------------------------------------------
     section('2. Execution is idempotent through provenance');
 
     await test('rerunning the same source creates patients once and MATCHES the second time', async () => {

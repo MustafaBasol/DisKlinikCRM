@@ -667,11 +667,28 @@
       "cannotContinue": "Die Zuordnung ist ungültig — beheben Sie die obigen Probleme, um fortzufahren.",
       "continue": "Weiter zur Referenzzuordnung",
       "columnIndex": "Spalte {{n}}",
+      "unnamedColumn": "Unbenannte Spalte {{n}}",
       "distinctCount": "{{n}} verschiedene Werte",
       "maxLength": "max. {{n}} Zeichen",
       "legalGate": "Rechtliche Sperre — nicht auswählbar",
       "noDestination": "Kein Ziel / überspringen",
       "composeOrder": "Reihenfolge",
+      "destinationLabels": {
+        "provenance.sourceId": "Quelldatensatz-ID",
+        "patient.firstName": "Vorname",
+        "patient.lastName": "Nachname",
+        "patient.phone": "Mobiltelefon",
+        "patient.email": "E-Mail",
+        "patient.dateOfBirth": "Geburtsdatum",
+        "patient.gender": "Geschlecht",
+        "patient.address": "Adresse",
+        "patient.city": "Stadt / Provinz",
+        "patient.country": "Land",
+        "patient.patientStatus": "Patientenstatus",
+        "patient.chartNumber": "Alte Karten-/Aktennummer",
+        "patient.primaryPractitionerId": "Zugewiesener Behandler",
+        "patient.identity.tckn": "Nationale Identitätsnummer"
+      },
       "groups": {
         "provenance": "Herkunft",
         "identity": "Identität",
@@ -800,6 +817,21 @@
       "affectedRows": "betrifft {{n}} Zeilen",
       "executableYes": "Diese Migration ist ausführbar",
       "executableNo": "Diese Migration kann derzeit nicht ausgeführt werden",
+      "notExecutable": {
+        "summary": "Bestätigung nicht möglich: {{detail}}.",
+        "generic": "Bestätigung nicht möglich: Es gibt ungelöste Probleme, die diesen Lauf blockieren. Siehe die Liste der Blockierer unten.",
+        "mappingClause": "{{n}} ungelöste Zuordnung(en)",
+        "referenceClause": "{{n}} Referenzzuordnungs-Blockierer",
+        "otherClause": "{{n}} weitere(s) blockierende(s) Problem(e)",
+        "noValidRowsClause": "keine gültigen Zeilen zum Importieren",
+        "and": "und",
+        "backToMapping": "Zurück zur Feldzuordnung",
+        "backToReference": "Zurück zur Referenzzuordnung"
+      },
+      "legalExclusions": {
+        "title": "{{n}} Feld(er) aus rechtlichen Gründen ausgeschlossen",
+        "note": "Diese Spalten enthalten besondere Kategorien personenbezogener Daten nach KVKK Art. 6 und sind vom Import ausgeschlossen. Es wird nichts in sie geschrieben, und dies blockiert den restlichen Lauf nicht."
+      },
       "fields": {
         "totalSourceRows": "Quellzeilen gesamt",
         "parsedRows": "Verarbeitete Zeilen",

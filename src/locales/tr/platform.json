@@ -667,11 +667,28 @@
       "cannotContinue": "Eşleme geçersiz olduğu için devam edilemiyor — yukarıdaki sorunları çözün.",
       "continue": "Referans Eşlemeye Geç",
       "columnIndex": "Sütun {{n}}",
+      "unnamedColumn": "Başlıksız sütun {{n}}",
       "distinctCount": "{{n}} farklı değer",
       "maxLength": "maks. {{n}} karakter",
       "legalGate": "Yasal engel — seçilemez",
       "noDestination": "Hedef yok / atla",
       "composeOrder": "sıra",
+      "destinationLabels": {
+        "provenance.sourceId": "Kaynak kayıt ID'si",
+        "patient.firstName": "Ad",
+        "patient.lastName": "Soyad",
+        "patient.phone": "Cep Telefonu",
+        "patient.email": "E-posta",
+        "patient.dateOfBirth": "Doğum Tarihi",
+        "patient.gender": "Cinsiyet",
+        "patient.address": "Adres",
+        "patient.city": "Şehir / İl",
+        "patient.country": "Ülke",
+        "patient.patientStatus": "Hasta Durumu",
+        "patient.chartNumber": "Eski dosya / protokol numarası",
+        "patient.primaryPractitionerId": "Atanan Hekim",
+        "patient.identity.tckn": "T.C. Kimlik No"
+      },
       "groups": {
         "provenance": "Köken Bilgisi",
         "identity": "Kimlik",
@@ -800,6 +817,21 @@
       "affectedRows": "{{n}} satırı etkiliyor",
       "executableYes": "Aktarım çalıştırılabilir",
       "executableNo": "Aktarım şu an çalıştırılamaz",
+      "notExecutable": {
+        "summary": "Onaya geçilemiyor: {{detail}} var.",
+        "generic": "Onaya geçilemiyor: aktarımı engelleyen sorunlar var. Aşağıdaki engelleyiciler listesine bakın.",
+        "mappingClause": "{{n}} çözülmemiş eşleme",
+        "referenceClause": "{{n}} referans eşleme engeli",
+        "otherClause": "{{n}} başka engelleyici sorun",
+        "noValidRowsClause": "aktarılabilecek geçerli satır yok",
+        "and": "ve",
+        "backToMapping": "Alan Eşleme'ye Dön",
+        "backToReference": "Referans Eşleme'ye Dön"
+      },
+      "legalExclusions": {
+        "title": "{{n}} alan hukuki politika gereği aktarım dışı",
+        "note": "Bu alanlar KVKK Madde 6 kapsamında özel nitelikli veri taşıdığı için aktarım dışı bırakılmıştır. Bu sütunlara hiçbir veri yazılmaz; bu durum aktarımın devamını engellemez."
+      },
       "fields": {
         "totalSourceRows": "Toplam Kaynak Satır",
         "parsedRows": "Ayrıştırılan Satır",

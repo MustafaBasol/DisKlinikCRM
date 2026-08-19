@@ -103,6 +103,22 @@ export function mappingMatchesFilter(mapping: Pick<MappingDto, 'state'>, filter:
   }
 }
 
+/**
+ * A source column whose header cell was blank but which carries data is
+ * synthesized server-side as `COLUMN_<physicalIndex>` (canonicalParser.ts,
+ * `UNNAMED_COLUMN_PREFIX`) rather than dropped, so it is never silently lost.
+ * That technical name is not something an operator should read as-is; the
+ * mapping screen shows a Turkish "Başlıksız sütun N" label instead whenever
+ * this returns non-null. Mirrors the server's prefix by string literal (not
+ * an import — this module stays framework/runtime-free) since the prefix is
+ * a public, stable part of the wire contract's column-naming convention.
+ */
+export function parseUnnamedColumnIndex(sourceField: string): number | null {
+  const match = /^COLUMN_(\d+)$/.exec(sourceField);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
 /** Case-insensitive substring match over the source column's identifying text. */
 export function mappingMatchesQuery(
   mapping: Pick<MappingDto, 'sourceField' | 'sourceLabel' | 'sourceNormalized'>,

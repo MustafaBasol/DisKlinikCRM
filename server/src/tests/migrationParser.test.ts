@@ -524,6 +524,71 @@ await test('profileColumns returns aggregates ONLY — no property carries a sam
   assert.equal(idProfile.maxLength, 1);
 });
 
+// ─── F3-DATA-MIG-TODAY-001-UI-002 Objective D: header fidelity ─────────────
+//
+// Production observed generic "Sütun 1…Sütun 6" labels on the mapping
+// screen for a synthetic smoke-test file. These tests establish, with real
+// parsed output (not inference), that the parser and its header contract
+// preserve a real header byte-exact for both file formats — so that
+// observation traces to the SYNTHETIC FIXTURE's own header text, not to a
+// header-loss defect here. See columnPreview.ts / MigrationMappingStep.tsx
+// for the separate, genuine gap this task closes: no sample values were
+// ever shown alongside the header.
+
+await test('valid .xlsx with explicit headers: original header text round-trips byte-exact', async () => {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Sheet1');
+  ws.addRow(['HASTA_ID', 'AD', 'SOYAD']);
+  ws.addRow([100284, 'Ahmet', 'Yılmaz']);
+  const buf = Buffer.from((await wb.xlsx.writeBuffer()) as ArrayBuffer);
+
+  const parsed = await parseSourceWorkbook(buf, 'xlsx');
+  assert.deepEqual(
+    parsed.headers.map((h) => h.original),
+    ['HASTA_ID', 'AD', 'SOYAD'],
+  );
+  assert.equal(parsed.rows[0]!.cells[1]!.text, 'Ahmet');
+});
+
+await test('valid .xls (BIFF8) with explicit headers: original header text round-trips byte-exact', async () => {
+  const headerRow: FixtureCell[] = [{ v: 'HASTA_ID' }, { v: 'DOSYANO' }];
+  const dataRow: FixtureCell[] = [{ v: 100284 }, { v: '4821' }];
+  const buf = buildBiff8Fixture([{ name: 'Sheet1', rows: [headerRow, dataRow] }]);
+
+  const wb = await parseSourceWorkbook(buf, 'xls');
+  assert.deepEqual(wb.headers.map((h) => h.original), ['HASTA_ID', 'DOSYANO']);
+  assert.equal(wb.rows[0]!.cells[1]!.text, '4821');
+});
+
+await test('Turkish / non-ASCII headers round-trip byte-exact in `original`, and normalize predictably', async () => {
+  const headerRow: FixtureCell[] = [{ v: 'ÖNEMLİ NOT' }, { v: 'T.C. Kimlik No' }, { v: 'İlçe' }];
+  const dataRow: FixtureCell[] = [{ v: 'x' }, { v: '12345678901' }, { v: 'Kadıköy' }];
+  const buf = buildBiff8Fixture([{ name: 'Sheet1', rows: [headerRow, dataRow] }]);
+
+  const wb = await parseSourceWorkbook(buf, 'xls');
+  assert.deepEqual(
+    wb.headers.map((h) => h.original),
+    ['ÖNEMLİ NOT', 'T.C. Kimlik No', 'İlçe'],
+    'the byte-exact original must never be transliterated or upper-cased',
+  );
+  assert.equal(wb.headers[1]!.normalized, 'T_C_KIMLIK_NO');
+});
+
+await test('near-duplicate headers (differ only by case) are both kept byte-exact; only `normalized` is disambiguated', async () => {
+  // Header text is trimmed at parse time (projectText), so the differentiator
+  // here is CASE, not surrounding whitespace — a whitespace-only difference
+  // would already collapse to the same `original` before this rule ever runs.
+  const headerRow: FixtureCell[] = [{ v: 'Ad' }, { v: 'AD' }];
+  const dataRow: FixtureCell[] = [{ v: 'Ahmet' }, { v: 'Elif' }];
+  const buf = buildBiff8Fixture([{ name: 'Sheet1', rows: [headerRow, dataRow] }]);
+
+  const wb = await parseSourceWorkbook(buf, 'xls');
+  assert.deepEqual(wb.headers.map((h) => h.original), ['Ad', 'AD'], 'original text for both columns is untouched');
+  assert.equal(wb.headers[0]!.normalized, 'AD');
+  assert.notEqual(wb.headers[1]!.normalized, wb.headers[0]!.normalized, 'the second occurrence must be disambiguated');
+  assert.ok(wb.metadata.warnings.includes(PARSER_WARNINGS.DUPLICATE_HEADER));
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // D. sourceFileStore
 // ══════════════════════════════════════════════════════════════════════════
