@@ -4,12 +4,17 @@
  * and arrow-key navigation must move through all groups as one continuous
  * list. Hard security requirement: BILLING must never see a clinical-workflow
  * shortcut (New Patient / New Appointment) through the command palette.
+ *
+ * UX-001 R1: entity search (patients/appointments/treatment cases) must be
+ * permission-aware at the *request* level, not just the rendered-result
+ * level — an unauthorized role must never call the underlying service.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import React from 'react';
 import GlobalSearch from './GlobalSearch';
+import { patientService, appointmentService, treatmentCaseService } from '../services/api';
 
 const mockT = (key: string, opts?: any) => {
   if (opts && typeof opts === 'object' && 'query' in opts) {
@@ -46,6 +51,9 @@ const noop = () => {};
 beforeEach(() => {
   mockNavigate.mockClear();
   mockUser = null;
+  (patientService.getAll as any).mockReset().mockImplementation(() => Promise.resolve({ data: [] }));
+  (appointmentService.getAll as any).mockReset().mockImplementation(() => Promise.resolve({ data: [] }));
+  (treatmentCaseService.getAll as any).mockReset().mockImplementation(() => Promise.resolve({ data: [] }));
 });
 
 describe('GlobalSearch', () => {
@@ -116,5 +124,104 @@ describe('GlobalSearch', () => {
     fireEvent.keyDown(input, { key: 'Escape' });
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  describe('permission-aware entity search requests', () => {
+    it('BILLING: does not call patient, appointment, or treatment-case search APIs for a 2+ char query', async () => {
+      mockUser = { role: 'billing', canAccessAllClinics: false };
+      render(<GlobalSearch isOpen onClose={noop} />);
+      // Permitted Actions (e.g. Open Finance) are reachable on open, before
+      // any query narrows the Pages/Actions groups by label text.
+      expect(screen.getByText('globalSearch.actions.openFinance')).toBeTruthy();
+
+      const input = screen.getByPlaceholderText('globalSearch.placeholder');
+      fireEvent.change(input, { target: { value: 'ja' } });
+      // Let the 300ms debounce (and any request it would fire) settle.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      });
+
+      expect(patientService.getAll).not.toHaveBeenCalled();
+      expect(appointmentService.getAll).not.toHaveBeenCalled();
+      expect(treatmentCaseService.getAll).not.toHaveBeenCalled();
+    });
+
+    it('BILLING: unauthorized entity results cannot appear even if the underlying service would return data', async () => {
+      mockUser = { role: 'billing', canAccessAllClinics: false };
+      (patientService.getAll as any).mockImplementation(() =>
+        Promise.resolve({ data: [{ id: 'p1', firstName: 'Jane', lastName: 'Doe' }] }),
+      );
+      render(<GlobalSearch isOpen onClose={noop} />);
+      const input = screen.getByPlaceholderText('globalSearch.placeholder');
+
+      fireEvent.change(input, { target: { value: 'ja' } });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      });
+
+      expect(patientService.getAll).not.toHaveBeenCalled();
+      expect(screen.queryByText('Jane Doe')).toBeNull();
+    });
+
+    it('RECEPTIONIST: calls patient, appointment, and treatment-case search (all permitted workflows)', async () => {
+      mockUser = { role: 'receptionist', canAccessAllClinics: false };
+      render(<GlobalSearch isOpen onClose={noop} />);
+      const input = screen.getByPlaceholderText('globalSearch.placeholder');
+
+      fireEvent.change(input, { target: { value: 'ja' } });
+
+      await waitFor(() => {
+        expect(patientService.getAll).toHaveBeenCalledTimes(1);
+        expect(appointmentService.getAll).toHaveBeenCalledTimes(1);
+        expect(treatmentCaseService.getAll).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('OWNER/management: calls patient, appointment, and treatment-case search', async () => {
+      mockUser = { role: 'owner', canAccessAllClinics: true };
+      render(<GlobalSearch isOpen onClose={noop} />);
+      const input = screen.getByPlaceholderText('globalSearch.placeholder');
+
+      fireEvent.change(input, { target: { value: 'ja' } });
+
+      await waitFor(() => {
+        expect(patientService.getAll).toHaveBeenCalledTimes(1);
+        expect(appointmentService.getAll).toHaveBeenCalledTimes(1);
+        expect(treatmentCaseService.getAll).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('does not let a slower in-flight search response overwrite a newer query\'s results (stale-response race)', async () => {
+      mockUser = { role: 'owner', canAccessAllClinics: true };
+
+      let resolveSlow: (value: any) => void = () => {};
+      const slow = new Promise((resolve) => {
+        resolveSlow = resolve;
+      });
+      (patientService.getAll as any)
+        .mockImplementationOnce(() => slow)
+        .mockImplementationOnce(() =>
+          Promise.resolve({ data: [{ id: 'new-1', firstName: 'New', lastName: 'Result' }] }),
+        );
+
+      render(<GlobalSearch isOpen onClose={noop} />);
+      const input = screen.getByPlaceholderText('globalSearch.placeholder');
+
+      fireEvent.change(input, { target: { value: 'ab' } });
+      await waitFor(() => expect(patientService.getAll).toHaveBeenCalledTimes(1));
+
+      fireEvent.change(input, { target: { value: 'abc' } });
+      await waitFor(() => expect(patientService.getAll).toHaveBeenCalledTimes(2));
+
+      // Resolve the OLDER request only after the NEWER one has already been
+      // issued — it must not clobber the newer results once it lands late.
+      await act(async () => {
+        resolveSlow({ data: [{ id: 'old-1', firstName: 'Old', lastName: 'Result' }] });
+        await Promise.resolve();
+      });
+
+      await waitFor(() => expect(screen.queryByText('New Result')).toBeTruthy());
+      expect(screen.queryByText('Old Result')).toBeNull();
+    });
   });
 });

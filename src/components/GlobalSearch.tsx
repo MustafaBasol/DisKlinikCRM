@@ -108,6 +108,9 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Monotonic request sequence guarding against an older in-flight entity
+  // search resolving after a newer one and overwriting fresher results.
+  const searchSeqRef = useRef(0);
   const navigate = useNavigate();
   const { t } = useTranslation('common');
   const { formatDate } = useClinicPreferences();
@@ -115,6 +118,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen) {
+      searchSeqRef.current += 1;
       setQuery('');
       setEntityResults([]);
       setActiveIndex(0);
@@ -123,21 +127,37 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
   }, [isOpen]);
 
   const search = useCallback(async (q: string) => {
+    const seq = ++searchSeqRef.current;
     if (q.trim().length < 2) {
       setEntityResults([]);
       return;
     }
     setLoading(true);
+
+    // Entity search must stay permission-aware: an unauthorized role must
+    // never issue the underlying list request at all (not merely have the
+    // result hidden afterwards) — this mirrors the same capability checks
+    // that gate the corresponding page in PAGE_DEFS above. Treatment cases
+    // have no dedicated capability function; PAGE_DEFS gates that page on
+    // canViewPatients too, so entity search mirrors it here.
+    const canSearchPatients = canViewPatients(user);
+    const canSearchAppointments = canViewAppointments(user);
+    const canSearchTreatments = canViewPatients(user);
+
     try {
       const [patientsRes, appointmentsRes, casesRes] = await Promise.allSettled([
-        patientService.getAll({ search: q, limit: 5 }),
-        appointmentService.getAll({ search: q, limit: 5 }),
-        treatmentCaseService.getAll({ search: q, limit: 5 }),
+        canSearchPatients ? patientService.getAll({ search: q, limit: 5 }) : Promise.resolve(null),
+        canSearchAppointments ? appointmentService.getAll({ search: q, limit: 5 }) : Promise.resolve(null),
+        canSearchTreatments ? treatmentCaseService.getAll({ search: q, limit: 5 }) : Promise.resolve(null),
       ]);
+
+      // A newer keystroke already started another search while this one was
+      // in flight — discard this stale response instead of overwriting it.
+      if (seq !== searchSeqRef.current) return;
 
       const combined: FlatItem[] = [];
 
-      if (patientsRes.status === 'fulfilled') {
+      if (canSearchPatients && patientsRes.status === 'fulfilled' && patientsRes.value) {
         const patients = Array.isArray(patientsRes.value.data)
           ? patientsRes.value.data
           : patientsRes.value.data?.data ?? [];
@@ -154,7 +174,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
         });
       }
 
-      if (appointmentsRes.status === 'fulfilled') {
+      if (canSearchAppointments && appointmentsRes.status === 'fulfilled' && appointmentsRes.value) {
         const appointments = Array.isArray(appointmentsRes.value.data)
           ? appointmentsRes.value.data
           : appointmentsRes.value.data?.data ?? [];
@@ -171,7 +191,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
         });
       }
 
-      if (casesRes.status === 'fulfilled') {
+      if (canSearchTreatments && casesRes.status === 'fulfilled' && casesRes.value) {
         const cases = Array.isArray(casesRes.value.data)
           ? casesRes.value.data
           : casesRes.value.data?.data ?? [];
@@ -193,9 +213,9 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) => {
     } catch {
       // silent
     } finally {
-      setLoading(false);
+      if (seq === searchSeqRef.current) setLoading(false);
     }
-  }, [formatDate, t]);
+  }, [formatDate, t, user]);
 
   useEffect(() => {
     const timer = setTimeout(() => search(query), 300);
