@@ -446,6 +446,25 @@ jobs:
       - name: server npm ci (server:test:disposable-db + prisma live under server/)
         run: npm ci
         working-directory: server
+      - name: Generate ephemeral patient-identity crypto keys for this job
+        # server:test:disposable-db includes migration suites that reach
+        # patientIdentityCrypto, which FAILS CLOSED with
+        # IDENTITY_CRYPTO_NOT_CONFIGURED when these are unset - there is
+        # deliberately no development fallback key. Without them the chain dies
+        # at test:migration-execution-db and every suite registered after it
+        # never runs at all.
+        #
+        # These are throwaway values: generated per job, used only against the
+        # disposable Postgres this job provisions and tears down, never written
+        # to a file, and never reused. They are NOT secrets and must never be
+        # promoted into one - the point is to exercise the crypto path, not to
+        # protect anything.
+        run: |
+          set -euo pipefail
+          {
+            echo "PATIENT_IDENTITY_ENCRYPTION_KEY=$(openssl rand -hex 32)"
+            echo "PATIENT_IDENTITY_LOOKUP_SECRET=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
       - name: Provision disposable PostgreSQL, run server:test:disposable-db, tear down
         # --summary-file writes a genuine, standalone JSON file (F1-003-P3-R1)
         # separate from this step's own combined human-readable stdout log
