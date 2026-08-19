@@ -32,6 +32,13 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
   const selectedClinicId = req.query.clinicId as string | undefined;
   const canViewPatientAgenda = normalizedRole !== 'BILLING';
   const canViewApptRequests = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST'].includes(normalizedRole);
+  // UX-001 Wave 2: the analytics charts (appointment trend / service mix / revenue
+  // trend) are management KPIs — RECEPTIONIST and BILLING never render them
+  // (Dashboard.tsx redirects BILLING to /finance before charts would show, and
+  // the generic dashboard only renders the charts block for management roles).
+  // Skipping the query work here (not just hiding it client-side) keeps the
+  // role-aware data-loading contract narrow, per UX-001 role-aware dashboards.
+  const canViewManagementCharts = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'].includes(normalizedRole);
 
   try {
     const scope = await validateAndGetScope(req.user!, selectedClinicId, res);
@@ -269,7 +276,7 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
       alerts,
       activities,
       doctorExtras,
-      charts: normalizedRole !== 'DENTIST' ? await getChartDataCached(clinicIdWhere, today, tomorrow, firstDayOfMonth, chartPreferenceClinicId) : null,
+      charts: canViewManagementCharts ? await getChartDataCached(clinicIdWhere, today, tomorrow, firstDayOfMonth, chartPreferenceClinicId) : null,
     });
   } catch (error: any) {
     console.error('[dashboard] stats error:', error?.message ?? error);
