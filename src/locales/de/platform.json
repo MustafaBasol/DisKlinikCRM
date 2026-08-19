@@ -692,7 +692,8 @@
         "patient.chartNumber": "Alte Karten-/Aktennummer",
         "patient.primaryPractitionerId": "Zugewiesener Behandler",
         "patient.identity.tckn": "Nationale Identitätsnummer",
-        "patient.notes": "Klinische Notiz"
+        "patient.notes": "Klinische Notiz",
+        "patient.bloodGroup": "Blutgruppe"
       },
       "groups": {
         "provenance": "Herkunft",
@@ -713,6 +714,7 @@
         "deleted_to_status": "Gelöscht-Kennzeichen → Status",
         "compose_address": "Adresszusammensetzung",
         "compose_notes": "Notizen-Komposition",
+        "blood_group_tr": "Blutgruppen-Normalisierung",
         "chart_number": "Kartennummer",
         "identity_tckn": "Validierung der Personenkennziffer",
         "provenance_source_id": "Herkunfts-Quellkennung",

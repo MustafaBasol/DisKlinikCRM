@@ -294,13 +294,13 @@ export async function anonymizePatientData(
       orderBy: { createdAt: 'desc' },
     });
     // Same reason the passes below are re-run: an anonymization performed
-    // before gender/chartNumber were added to this payload (F3-DATA-MIG-TODAY-001,
-    // G-E5/G-E6) never nulled them, and the isAnonymized guard above means the
+    // before gender/chartNumber (F3-DATA-MIG-TODAY-001, G-E5/G-E6) or
+    // bloodGroup (R8) were added to this payload never nulled them, and the isAnonymized guard above means the
     // main patient.update() block never runs again to backfill them. Blind and
     // idempotent — nulling an already-null column is a no-op.
     await prisma.patient.updateMany({
       where: { id: patientId, clinicId },
-      data: { gender: null, chartNumber: null },
+      data: { gender: null, chartNumber: null, bloodGroup: null },
     });
     // Still run the attachment/imaging/emergency-contact redaction passes —
     // re-running must be a safe no-op (already-redacted rows are skipped, see
@@ -378,6 +378,15 @@ export async function anonymizePatientData(
       // vector among these fields, despite looking like an innocuous internal
       // reference.
       chartNumber: null,
+      // F3-DATA-MIG-TODAY-001-R8: KVKK Art. 6 special-category HEALTH data,
+      // and a quasi-identifier — ABO/Rh partitions a population into eight
+      // buckets, so retaining it materially narrows a re-identification search
+      // against the surviving operational record. Anonymization preserves
+      // OPERATIONAL history, not the patient's clinical attributes, and no
+      // operational query in this product reads bloodGroup. NULL is already
+      // its "not recorded" state, so nulling destroys no distinguishable
+      // information beyond the datum itself.
+      bloodGroup: null,
       // primaryPractitionerId is DELIBERATELY NOT nulled: it identifies a
       // STAFF member, not the patient, so clearing it reduces patient
       // re-identification risk by nothing while destroying clinically and

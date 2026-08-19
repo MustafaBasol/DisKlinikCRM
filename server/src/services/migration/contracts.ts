@@ -316,6 +316,30 @@ export interface DestinationFieldDef {
   allowsComposition: boolean;
   /** Allowed values when type === 'enum'. */
   enumValues?: readonly string[];
+  /**
+   * KVKK Art. 6 special-category data (F3-DATA-MIG-TODAY-001-R8).
+   *
+   * A destination marked here may NEVER be proposed by a HEURISTIC. The
+   * mapping engine derives two heuristics automatically from this catalog -
+   * an exact match on the destination key or its last path segment, and the
+   * vendor-neutral alias table - and both land in AUTO_REVIEW. AUTO_REVIEW
+   * is not itself executable, but POST .../mappings/accept-auto promotes
+   * every AUTO_REVIEW row that has a destination straight to RESOLVED,
+   * which IS a writing state. So without this flag, adding a
+   * special-category destination to the catalog would silently make an
+   * arbitrary customer's column named e.g. 'NOTES' or 'BLOODGROUP'
+   * importable by one 'accept all safe suggestions' click, with nobody
+   * having reviewed that column individually.
+   *
+   * These destinations are reachable in exactly two ways, both of which are
+   * a decision by a person or a reviewed document:
+   *   1. a REVIEWED customer profile (firstCustomerMatrix.ts), which
+   *      proposes them only in SENSITIVE_REVIEW_REQUIRED - an undecided,
+   *      non-executable state a Platform Admin must resolve column by
+   *      column;
+   *   2. a Platform Admin choosing the destination by hand.
+   */
+  specialCategory?: boolean;
   /** Short reviewer-facing note rendered in the mapping UI. */
   note?: string;
 }
@@ -334,6 +358,7 @@ export const TRANSFORM_NAMES = [
   'deleted_to_status',
   'compose_address',
   'compose_notes',
+  'blood_group_tr',
   'chart_number',
   'identity_tckn',
   'provenance_source_id',
@@ -456,6 +481,50 @@ export const DESTINATION_FIELDS: readonly DestinationFieldDef[] = [
       'plus a row warning — never to "other" and never to a guess.',
   },
   {
+    key: 'patient.bloodGroup',
+    label: 'Blood group',
+    group: 'clinical',
+    type: 'enum',
+    required: false,
+    allowedTransforms: ['blood_group_tr'],
+    allowsComposition: false,
+    specialCategory: true,
+    enumValues: [
+      'A_POSITIVE',
+      'A_NEGATIVE',
+      'B_POSITIVE',
+      'B_NEGATIVE',
+      'AB_POSITIVE',
+      'AB_NEGATIVE',
+      'O_POSITIVE',
+      'O_NEGATIVE',
+    ],
+    note:
+      'KVKK Art. 6 SPECIAL-CATEGORY health data. Added by ' +
+      'F3-DATA-MIG-TODAY-001-R8 so that a structured clinical attribute has a ' +
+      'STRUCTURED destination: blood group is deliberately NOT routed through ' +
+      'patient.notes, because a coded value buried in free text is a different ' +
+      'datum that nothing can read back as a blood group. ' +
+      'Sensitivity restricts HOW this migrates, never WHETHER it may: no source ' +
+      'column reaches this destination automatically. It is absent from the ' +
+      "mapping engine's generic header dictionary on purpose, so an arbitrary " +
+      'workbook can never produce an AUTO_CONFIDENT blood-group mapping; the ' +
+      'only proposer is a reviewed customer profile, which emits ' +
+      'SENSITIVE_REVIEW_REQUIRED — an UNDECIDED state a Platform Admin must ' +
+      'resolve column by column before the run can execute, with the preview ' +
+      'server-masked throughout (columnPreview.ts). ' +
+      'NULL (no blood group recorded) is the only representation of absence: ' +
+      'there is no UNKNOWN member, an unrecognized source token maps to NULL ' +
+      'plus a row warning, and Rh is NEVER inferred when the source omits it. ' +
+      'The KVKK data-subject rights were verified against the code before this ' +
+      'destination was added, not assumed: ACCESS — routes/patientPrivacy.ts ' +
+      'selects bloodGroup for the Art. 11 subject-access export; RECTIFICATION ' +
+      '— schemas/index.ts admits it on patientUpdateSchema, routes/patients.ts ' +
+      'persists it on PUT /patients/:id and the patient form offers a ' +
+      'controlled select; ERASURE — services/privacy/patientAnonymization.ts ' +
+      'nulls it, in both the first-anonymization and the repair pass.',
+  },
+  {
     key: 'patient.address',
     label: 'Street address',
     group: 'address',
@@ -476,6 +545,10 @@ export const DESTINATION_FIELDS: readonly DestinationFieldDef[] = [
     required: false,
     allowedTransforms: ['compose_notes', 'trim_collapse', 'trim'],
     allowsComposition: true,
+    // R8: closes a hole R7 left open - a customer column literally named
+    // 'NOTES' matched the auto-derived key heuristic below and would have
+    // been swept in by accept-auto. See specialCategory above.
+    specialCategory: true,
     note:
       'KVKK Art. 6 SPECIAL-CATEGORY. Added by F3-DATA-MIG-TODAY-001-FINAL-R7. ' +
       'Sensitivity restricts HOW this is migrated, never WHETHER incumbent-clinic ' +

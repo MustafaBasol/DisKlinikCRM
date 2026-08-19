@@ -635,10 +635,22 @@ async function main() {
       true,
       'provenance.sourceId must be proposed or a rerun cannot be idempotent',
     );
-    // No destination is invented for a column the product has nowhere to put:
-    // it is surfaced for review, never auto-routed somewhere plausible.
+    // R8: the fixture's KANGURUBU column now PROPOSES the structured
+    // destination Patient.bloodGroup, which R8 created for it. What must not
+    // change is the gate: a proposal is not a decision. The column is still
+    // persisted UNDECIDED, so nothing is written until an operator resolves
+    // it, and it is still not routed anywhere merely plausible (patient.notes
+    // in particular, which would turn a coded clinical attribute into free
+    // text that can never be read back).
     for (const pending of mappings.filter((m) => m.state === 'SENSITIVE_REVIEW_REQUIRED')) {
-      assert.equal(pending.destinationField, null);
+      assert.equal(
+        pending.destinationField,
+        'patient.bloodGroup',
+        'the structured destination is proposed, and only the structured one',
+      );
+      assert.equal(pending.transform, 'blood_group_tr');
+      assert.equal(pending.decidedAt, null, 'a proposal must never arrive pre-decided');
+      assert.equal(pending.decidedByPlatformAdminId, null);
     }
     // R7 header model: the persisted flag says these columns all had a real
     // header, so nothing downstream has to guess from the name's shape.

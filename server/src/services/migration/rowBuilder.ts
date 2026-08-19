@@ -128,6 +128,15 @@ export interface PatientDraft {
    * NEVER logged, never placed in a warning, never in a row outcome message.
    */
   notes: string | null;
+  /**
+   * KVKK Art. 6 special-category STRUCTURED health data. Same gate as
+   * `notes`: only ever non-null once a Platform Admin has explicitly
+   * RESOLVED a source column onto `patient.bloodGroup`. One of the eight
+   * canonical values or null - `blood_group_tr` emits nothing else, and
+   * never infers Rh.
+   * NEVER logged, never placed in a warning, never in a row outcome message.
+   */
+  bloodGroup: string | null;
 }
 
 export interface RowFailure {
@@ -265,6 +274,7 @@ export function buildRow(
           gender: asString(read('patient.gender')),
           chartNumber: asString(read('patient.chartNumber')),
           notes: asString(read('patient.notes')),
+          bloodGroup: asString(read('patient.bloodGroup')),
         }
       : null;
 

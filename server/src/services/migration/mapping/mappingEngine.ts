@@ -113,10 +113,24 @@ const MATRIX_BY_NORMALIZED: ReadonlyMap<string, MatrixEntry> = (() => {
   return m;
 })();
 
-/** normalized destination key AND normalized last path segment -> destination key. */
+/**
+ * normalized destination key AND normalized last path segment -> destination key.
+ *
+ * SPECIAL-CATEGORY DESTINATIONS ARE EXCLUDED (F3-DATA-MIG-TODAY-001-R8). This
+ * map is derived AUTOMATICALLY from the catalog, so every destination added to
+ * DESTINATION_FIELDS silently gains a heuristic that fires for EVERY customer.
+ * For a KVKK Art. 6 destination that is not acceptable: the heuristic lands in
+ * AUTO_REVIEW, and accept-auto promotes every AUTO_REVIEW row with a
+ * destination to RESOLVED, which is a writing state - so a workbook column
+ * called 'NOTES' or 'BLOODGROUP' would import special-category health data
+ * with nobody having reviewed that column. Those destinations are reachable
+ * only from a reviewed profile (in an undecided state) or by an explicit
+ * operator choice.
+ */
 const DESTINATION_BY_HEADER_FORM: ReadonlyMap<string, string> = (() => {
   const m = new Map<string, string>();
   for (const d of DESTINATION_FIELDS) {
+    if (d.specialCategory) continue;
     const segments = d.key.split('.');
     const last = segments[segments.length - 1];
     for (const form of [d.key, last]) {

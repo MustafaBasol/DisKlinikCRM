@@ -65,6 +65,10 @@ export const PATIENT_SELECT = {
   // would be an incomplete data contract.
   gender: true,
   chartNumber: true,
+  // F3-DATA-MIG-TODAY-001-R8. Clinic-owned clinical data the exporting clinic
+  // already sees on the patient record; omitting it would hand back an
+  // incomplete copy of the clinic's own chart.
+  bloodGroup: true,
   // primaryPractitionerId (G-E3) is deliberately NOT exported: it is a STAFF
   // foreign key, not patient data, and no consumer of this export package
   // reads it today. Add it only alongside a consumer that needs it.

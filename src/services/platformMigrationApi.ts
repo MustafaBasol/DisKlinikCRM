@@ -217,6 +217,7 @@ export const TRANSFORM_NAMES = [
   'deleted_to_status',
   'compose_address',
   'compose_notes',
+  'blood_group_tr',
   'chart_number',
   'identity_tckn',
   'provenance_source_id',

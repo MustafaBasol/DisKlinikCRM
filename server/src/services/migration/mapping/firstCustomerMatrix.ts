@@ -30,8 +30,8 @@
  *   IMPORT_AFTER_NORMALIZATION             5              6          +1
  *   IMPORT_AFTER_REFERENCE_MAPPING         1              1           0
  *   IMPORT_AFTER_SCHEMA_FIELD              1              4          +3
- *   IMPORT_AFTER_SENSITIVE_REVIEW          0              3          +3   (R7)
- *   SENSITIVE_REVIEW_NO_DESTINATION        0              1          +1   (R7)
+ *   IMPORT_AFTER_SENSITIVE_REVIEW          0              4          +4   (R7/R8)
+ *   SENSITIVE_REVIEW_NO_DESTINATION        0              0           0   (R8)
  *   HISTORICAL_METADATA_ONLY               4              4           0
  *   MANUAL_REVIEW                          2              2           0
  *   IGNORE_VENDOR_INTERNAL                12             13          +1
@@ -58,8 +58,22 @@
  *   ONEMLINOT   -> IMPORT_AFTER_SENSITIVE_REVIEW  (patient.notes, order 1)
  *   KONTROLNOTU -> IMPORT_AFTER_SENSITIVE_REVIEW  (patient.notes, order 2)
  *   UZUNNOT     -> IMPORT_AFTER_SENSITIVE_REVIEW  (patient.notes, order 3)
- *   KANGURUBU   -> SENSITIVE_REVIEW_NO_DESTINATION (no blood-group column
- *                  exists in the product; structurally blocked, not dropped)
+ *   KANGURUBU   -> IMPORT_AFTER_SENSITIVE_REVIEW  (patient.bloodGroup)
+ *                  R8 UPDATE: R7 left this one SENSITIVE_REVIEW_NO_DESTINATION
+ *                  because the product had nowhere to put a blood group. The
+ *                  program owner has since decided it should have a real
+ *                  structured field, and R8 created `Patient.bloodGroup`
+ *                  (eight canonical ABO/Rh values) plus the `blood_group_tr`
+ *                  normalization. The STRUCTURAL blocker is gone; the
+ *                  SENSITIVE gate is not. The state is unchanged at
+ *                  SENSITIVE_REVIEW_REQUIRED and a human still has to approve
+ *                  it, at confidence 70, below every auto-accept path.
+ *                  SENSITIVE_REVIEW_NO_DESTINATION therefore has no members
+ *                  today. The disposition is RETAINED because 'reviewed,
+ *                  sensitive, and the product genuinely has nowhere to put
+ *                  it' is a real outcome the next customer profile may need,
+ *                  and deleting it would force the next author to re-derive
+ *                  the distinction from scratch.
  *
  * TWO REMAIN BLOCKED_LEGAL_DECISION AND THAT IS CORRECT — they were never
  * blocked for sensitivity:
@@ -573,18 +587,25 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'KANGURUBU',
     meaning: 'Blood group',
-    disposition: 'SENSITIVE_REVIEW_NO_DESTINATION',
+    disposition: 'IMPORT_AFTER_SENSITIVE_REVIEW',
+    destinationField: 'patient.bloodGroup',
+    transform: 'blood_group_tr',
     note:
-      'KVKK Art. 6 special-category health data. R7 CORRECTION: sensitivity alone no longer ' +
-      'makes this permanently unimportable — it now requires operator review instead of a ' +
-      'standing legal block. BUT the review currently has nothing to approve: there is NO ' +
-      'blood-group column anywhere in the product (no bloodType / bloodGroup / kanGrubu on ' +
-      'Patient or any child model) and no blood-group normalization transform, so unlike the ' +
-      'clinical-note columns this one is STRUCTURALLY blocked as well as sensitive. 1 filled ' +
-      'row out of 14,890. It is deliberately NOT folded into patient.notes: a structured ' +
-      'clinical attribute written into free text is not the same datum and could not be read ' +
-      'back as a blood group. It stays visible as a review item — never silently ignored — ' +
-      'until a program owner decides on a destination.',
+      'KVKK Art. 6 special-category health data. 1 filled row out of 14,890. ' +
+      'R7 moved it off the standing legal block and onto operator review, but that review ' +
+      'had nothing to approve: the product had no blood-group column at all, so the column ' +
+      'was sensitive AND structurally blocked. R8 UPDATE: the program owner decided it ' +
+      'should have a real structured destination, and this sprint added Patient.bloodGroup ' +
+      'with the eight canonical ABO/Rh values plus the blood_group_tr normalization. ' +
+      'The structural blocker is resolved; the SENSITIVE gate is NOT. The state is unchanged ' +
+      'at SENSITIVE_REVIEW_REQUIRED (UNDECIDED) with confidence 70, below every auto-accept ' +
+      'path, so a Platform Admin must still approve this column individually before the run ' +
+      'can execute. It is deliberately NOT folded into patient.notes: a structured clinical ' +
+      'attribute written into free text is not the same datum and could not be read back as ' +
+      'a blood group. The single filled source value is NOT pre-judged here. If ' +
+      'blood_group_tr does not recognize it, the transform yields NULL plus a countable ' +
+      'warning and the value stays in the workbook for the operator to resolve. Rh is never ' +
+      'inferred from an ABO-only value. Nothing is discarded on any path.',
   }),
   entry({
     sourceField: 'ONEMLINOT',

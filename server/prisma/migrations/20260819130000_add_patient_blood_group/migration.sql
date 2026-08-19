@@ -1,0 +1,25 @@
+-- F3-DATA-MIG-TODAY-001-R8 — structured blood group on Patient.
+--
+-- EXPAND-ONLY, and deliberately the smallest possible change:
+--   * ADD COLUMN only. No DROP, no ALTER TYPE, no RENAME, no data statement.
+--   * NULLABLE, with NO DEFAULT. On PostgreSQL 11+ a nullable ADD COLUMN with
+--     no default is a catalog-only operation: no table rewrite, no long
+--     ACCESS EXCLUSIVE hold, safe on the production Patient table.
+--   * ZERO BACKFILL. NULL is the meaningful, correct value for every existing
+--     row: no blood group has ever been recorded for any of them. Inventing
+--     one — including a placeholder such as 'UNKNOWN' — would fabricate a
+--     clinical claim for every patient in the product.
+--
+-- TEXT, not a native enum type, matching this schema's convention for closed
+-- vocabularies (gender / patientStatus / source / pregnancyStatus). The
+-- accepted values are enforced in one place, `patientBloodGroupValues` in
+-- src/schemas/index.ts, and asserted by tests. See the Patient.bloodGroup doc
+-- comment in schema.prisma for why a Prisma enum was rejected (it would fall
+-- outside the permanent Patient privacy-surface drift guard).
+--
+-- ROLLBACK: none required. The previous application release never references
+-- this column, and because it is nullable with no default, every INSERT that
+-- release performs remains valid. If the column is ever to be retired, the
+-- contract step is a separate, later migration:
+--   ALTER TABLE "Patient" DROP COLUMN "bloodGroup";
+ALTER TABLE "Patient" ADD COLUMN "bloodGroup" TEXT;

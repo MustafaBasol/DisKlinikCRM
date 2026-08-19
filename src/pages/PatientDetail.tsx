@@ -31,7 +31,8 @@ import {
   Eye,
   ExternalLink,
   Lock,
-  LockOpen
+  LockOpen,
+  Droplet
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -61,6 +62,7 @@ import {
   type PatientDetailTab,
 } from './patientDetailTabsHelpers';
 import { normalizeRole, canViewPatients, canViewImaging, canManageLegalHold, canManagePatientIdentity } from '../utils/permissions';
+import { bloodGroupLabelKey } from '../constants/patientBloodGroup';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -394,6 +396,12 @@ const PatientDetail: React.FC = () => {
 
   const genderLabel = patient.gender ? t(`patients:gender.${patient.gender}`, { defaultValue: patient.gender }) : t('common:noData');
   const chartNumberLabel = patient.chartNumber || t('common:noData');
+  // F3-DATA-MIG-TODAY-001-R8. `defaultValue` is the raw stored token, so a
+  // value this build has no label for is still SHOWN rather than silently
+  // collapsing to "no data" - the same defensive shape as genderLabel.
+  const bloodGroupLabel = patient.bloodGroup
+    ? t(bloodGroupLabelKey(patient.bloodGroup), { defaultValue: patient.bloodGroup })
+    : t('common:noData');
   const primaryPractitionerLabel = patient.primaryPractitioner
     ? `${patient.primaryPractitioner.firstName} ${patient.primaryPractitioner.lastName}`
     : t('patients:form.primaryPractitionerUnassigned');
@@ -493,6 +501,10 @@ const PatientDetail: React.FC = () => {
               <div className="flex items-center gap-3 text-gray-600">
                 <UserIcon size={18} className="text-gray-400" />
                 <span className="text-sm">{t('patients:form.gender')}: {genderLabel}</span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-600">
+                <Droplet size={18} className="text-gray-400" />
+                <span className="text-sm">{t('patients:form.bloodGroup')}: {bloodGroupLabel}</span>
               </div>
               {patient.chartNumber && (
                 <div className="flex items-center gap-3 text-gray-600">
@@ -600,6 +612,10 @@ const PatientDetail: React.FC = () => {
                   <div className="flex items-center gap-3 text-gray-600">
                     <UserIcon size={16} className="text-gray-400 flex-shrink-0" />
                     <span className="text-sm">{t('patients:form.gender')}: {genderLabel}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Droplet size={16} className="text-gray-400 flex-shrink-0" />
+                    <span className="text-sm">{t('patients:form.bloodGroup')}: {bloodGroupLabel}</span>
                   </div>
                   {patient.chartNumber && (
                     <div className="flex items-center gap-3 text-gray-600">

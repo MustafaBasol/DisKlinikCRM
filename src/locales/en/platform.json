@@ -692,7 +692,8 @@
         "patient.chartNumber": "Legacy chart / file number",
         "patient.primaryPractitionerId": "Assigned practitioner",
         "patient.identity.tckn": "National identity number",
-        "patient.notes": "Clinical note"
+        "patient.notes": "Clinical note",
+        "patient.bloodGroup": "Blood group"
       },
       "groups": {
         "provenance": "Provenance",
@@ -713,6 +714,7 @@
         "deleted_to_status": "Deleted flag → status",
         "compose_address": "Address composition",
         "compose_notes": "Notes composition",
+        "blood_group_tr": "Blood group normalization",
         "chart_number": "Chart number",
         "identity_tckn": "National ID validation",
         "provenance_source_id": "Provenance source id",

@@ -692,7 +692,8 @@
         "patient.chartNumber": "Eski dosya / protokol numarası",
         "patient.primaryPractitionerId": "Atanan Hekim",
         "patient.identity.tckn": "T.C. Kimlik No",
-        "patient.notes": "Klinik Not / Önemli Not"
+        "patient.notes": "Klinik Not / Önemli Not",
+        "patient.bloodGroup": "Kan Grubu"
       },
       "groups": {
         "provenance": "Köken Bilgisi",
@@ -713,6 +714,7 @@
         "deleted_to_status": "Silindi → durum",
         "compose_address": "Adres bileşimi",
         "compose_notes": "Not bileşimi",
+        "blood_group_tr": "Kan grubu normalizasyonu",
         "chart_number": "Dosya numarası",
         "identity_tckn": "T.C. Kimlik No doğrulama",
         "provenance_source_id": "Köken kaynak kimliği",

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useClinic } from '../context/ClinicContext';
 import { useAuth } from '../context/AuthContext';
 import { normalizeRole, canManagePatientIdentity } from '../utils/permissions';
+import { PATIENT_BLOOD_GROUP_VALUES, bloodGroupLabelKey } from '../constants/patientBloodGroup';
 
 interface PatientFormProps {
   patient?: any;
@@ -38,6 +39,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
     source: 'other',
     notes: '',
     gender: '',
+    bloodGroup: '',
     chartNumber: '',
     primaryPractitionerId: '',
     communicationConsent: false,
@@ -103,6 +105,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
         ...patient,
         dateOfBirth: patient.dateOfBirth ? new Date(patient.dateOfBirth).toISOString().split('T')[0] : '',
         gender: patient.gender || '',
+        bloodGroup: patient.bloodGroup || '',
         chartNumber: patient.chartNumber || '',
         primaryPractitionerId: patient.primaryPractitionerId || '',
       });
@@ -329,6 +332,30 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
                 <option value="male">{t('patients:gender.male')}</option>
                 <option value="female">{t('patients:gender.female')}</option>
                 <option value="other">{t('patients:gender.other')}</option>
+              </select>
+            </div>
+            <div>
+              {/* F3-DATA-MIG-TODAY-001-R8: KVKK Art. 6 special-category health
+                  data, so a CONTROLLED select and never free text - the API
+                  rejects any token outside the eight canonical values. The
+                  empty option submits '' and is stored as NULL ("not
+                  recorded"); there is deliberately no "unknown" option, which
+                  would be a different clinical claim. Labels are localized
+                  (Turkish and German present the O group as "0 Rh+"); the
+                  value sent to the API is always the canonical letter-O
+                  token. */}
+              <label className="label" htmlFor="patient-blood-group">{t('patients:form.bloodGroup')}</label>
+              <select
+                id="patient-blood-group"
+                name="bloodGroup"
+                value={formData.bloodGroup || ''}
+                onChange={handleChange}
+                className="input-field"
+              >
+                <option value="">{t('patients:form.bloodGroupUnspecified')}</option>
+                {PATIENT_BLOOD_GROUP_VALUES.map((value) => (
+                  <option key={value} value={value}>{t(bloodGroupLabelKey(value))}</option>
+                ))}
               </select>
             </div>
             <div>

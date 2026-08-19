@@ -575,6 +575,14 @@ async function executeOneBatch(input: BatchInput): Promise<BatchResult> {
               // every non-writing state — so no unreviewed clinical text can
               // reach this line. The value is written and never logged.
               notes: row.draft.notes,
+              // KVKK Art. 6 special-category STRUCTURED health data, under
+              // the same gate as notes (F3-DATA-MIG-TODAY-001-R8): the
+              // mapping engine only ever PROPOSES patient.bloodGroup, in the
+              // undecided state SENSITIVE_REVIEW_REQUIRED, and
+              // compileMapping() compiles no non-writing state - so no
+              // unreviewed blood group can reach this line. Written, never
+              // logged.
+              bloodGroup: row.draft.bloodGroup,
               primaryPractitionerId,
               // Deliberately NOT set, each for a recorded reason:
               //   postalCode       — ADRES_KODU semantics unresolved

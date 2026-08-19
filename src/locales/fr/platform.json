@@ -692,7 +692,8 @@
         "patient.chartNumber": "Ancien numéro de dossier",
         "patient.primaryPractitionerId": "Praticien assigné",
         "patient.identity.tckn": "Numéro d'identité national",
-        "patient.notes": "Note clinique"
+        "patient.notes": "Note clinique",
+        "patient.bloodGroup": "Groupe sanguin"
       },
       "groups": {
         "provenance": "Provenance",
@@ -713,6 +714,7 @@
         "deleted_to_status": "Indicateur supprimé → statut",
         "compose_address": "Composition de l'adresse",
         "compose_notes": "Composition des notes",
+        "blood_group_tr": "Normalisation du groupe sanguin",
         "chart_number": "Numéro de dossier",
         "identity_tckn": "Validation du numéro d'identité national",
         "provenance_source_id": "Identifiant de la source de provenance",

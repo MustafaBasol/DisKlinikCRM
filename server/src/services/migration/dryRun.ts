@@ -370,6 +370,10 @@ function describeWarning(code: string): string {
   switch (bare) {
     case 'GENDER_VALUE_UNRECOGNIZED':
       return 'The source gender value was not recognised and is left unset rather than guessed. "Unknown" and "other" are deliberately different states.';
+    case 'BLOOD_GROUP_VALUE_UNRECOGNIZED':
+      return 'The source blood-group value was not recognised and is left unset rather than guessed. The value is preserved in the source column and nothing is discarded - review it there.';
+    case 'BLOOD_GROUP_RH_MISSING':
+      return 'The source recorded an ABO group with no Rh factor. Rh is never inferred, so the blood group is left unset - half a blood group is not a blood group.';
     case 'PHONE_LEADING_ZERO_RESTORED':
       return 'A leading zero destroyed by the spreadsheet was restored under a Turkish-number assumption. A 10-digit number starting with 5 is genuinely ambiguous, so it is flagged rather than silently assumed.';
     case 'PHONE_UNPARSEABLE':
