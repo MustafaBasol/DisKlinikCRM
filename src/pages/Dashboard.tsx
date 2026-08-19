@@ -375,6 +375,15 @@ const Dashboard: React.FC = () => {
     return <DoctorDashboard data={data} user={user} />;
   }
 
+  // UX-001 closure audit finding: monthlyRevenue/overdueCollections are
+  // clinic-wide financial figures gated behind canViewFinanceDashboard
+  // everywhere else (Finance Dashboard, Reports) — RECEPTIONIST reaches this
+  // generic dashboard but is denied both of those, so the two cards must not
+  // render for it either (the backend now zeroes the underlying values for
+  // the same roles, but a "₺0" card would misleadingly read as "no overdue
+  // balance" rather than "hidden" — omit the card entirely instead).
+  const canSeeFinanceFigures = Boolean(user) && canViewFinanceDashboard(user);
+
   const statCards = [
     {
       label: t('dashboard:todayAppointments'),
@@ -394,7 +403,7 @@ const Dashboard: React.FC = () => {
       trendType: "up",
       link: '/patients?createdWithin=30d',
     },
-    {
+    ...(canSeeFinanceFigures ? [{
       label: t('dashboard:monthlyRevenue'),
       value: formatCurrency(data?.stats?.monthlyRevenue || 0),
       icon: <TrendingUp size={24} />,
@@ -402,8 +411,8 @@ const Dashboard: React.FC = () => {
       trend: t('dashboard:stats.revenueGoal'),
       trendType: "up",
       link: '/finance?period=this_month',
-    },
-    {
+    }] : []),
+    ...(canSeeFinanceFigures ? [{
       label: t('dashboard:overdueCollections'),
       value: formatCurrency(data?.stats?.overdueAmount || 0),
       icon: <AlertCircle size={24} />,
@@ -411,7 +420,7 @@ const Dashboard: React.FC = () => {
       trend: t('dashboard:stats.actionRequired'),
       trendType: "warning",
       link: '/payment-plans?overdueOnly=true',
-    },
+    }] : []),
   ];
 
   // Fixed operational cards shown to the right of the "Unpaid Balances" alert —

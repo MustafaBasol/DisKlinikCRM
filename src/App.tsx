@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { PlatformAuthProvider, usePlatformAuth } from './context/PlatformAuthContext';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { getValidatedLastRoute } from './utils/lastRoute';
+import { consumeLastRouteRestoreAttempt, resetLastRouteRestoreGuard } from './utils/lastRouteRestoreGuard';
 import { ClinicPreferencesProvider } from './context/ClinicPreferencesContext';
 
 import { useTranslation } from 'react-i18next';
@@ -93,10 +94,11 @@ const ProtectedRoute = () => {
 
 // Restores the user's last valid authorized route (UX-001D) when they land
 // on the generic dashboard entry with no more specific deep link/redirect
-// intent. Runs at most once per page load — a manual click on "Dashboard"
-// mid-session must not hijack the user back to where they were before.
-let hasAttemptedLastRouteRestore = false;
-
+// intent. Runs at most once per authenticated session — a manual click on
+// "Dashboard" mid-session must not hijack the user back to where they were
+// before. See utils/lastRouteRestoreGuard.ts: the guard is explicitly reset
+// on logout (via AuthSessionBoundaryWatcher below) so the next login in the
+// same tab gets its own restore attempt.
 const DashboardEntry: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const { selectedClinicId } = useClinic();
@@ -104,8 +106,7 @@ const DashboardEntry: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const navigate = useNavigate();
 
   React.useEffect(() => {
-    if (hasAttemptedLastRouteRestore) return;
-    hasAttemptedLastRouteRestore = true;
+    if (!consumeLastRouteRestoreAttempt()) return;
     const target = getValidatedLastRoute(user?.id, selectedClinicId, user);
     if (target && target !== location.pathname + location.search) {
       navigate(target, { replace: true });
@@ -114,6 +115,22 @@ const DashboardEntry: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }, []);
 
   return <>{children}</>;
+};
+
+// Resets the last-route restore guard when a session ends, so it doesn't
+// carry over "already attempted" state into the next login in the same tab.
+const AuthSessionBoundaryWatcher: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+  const wasAuthenticatedRef = React.useRef(isAuthenticated);
+
+  React.useEffect(() => {
+    if (wasAuthenticatedRef.current && !isAuthenticated) {
+      resetLastRouteRestoreGuard();
+    }
+    wasAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  return null;
 };
 
 const PlatformRoute = () => {
@@ -172,6 +189,7 @@ const ProductApplication: React.FC = () => {
       <PlatformAuthProvider>
         <ClinicProvider>
           <ClinicPreferencesProvider>
+          <AuthSessionBoundaryWatcher />
           <ToastContainer />
           {searchOpen && (
             <React.Suspense fallback={null}>
