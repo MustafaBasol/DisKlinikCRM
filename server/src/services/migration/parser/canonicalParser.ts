@@ -336,7 +336,7 @@ function buildCanonicalSheet(
       }
       unnamedColumns.push(c);
       const synthesized = `${UNNAMED_COLUMN_PREFIX}${c}`;
-      headers.push({ original: synthesized, normalized: synthesized, index: c });
+      headers.push({ original: synthesized, normalized: synthesized, index: c, headerWasBlank: true });
       continue;
     }
     headers.push({ original: text, normalized: normalizeHeader(text), index: c });

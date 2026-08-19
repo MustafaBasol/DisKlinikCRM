@@ -732,7 +732,8 @@
         "VENDOR_INTERNAL": "Colonne interne au fournisseur",
         "SUMMARY_NOT_TRANSACTION": "Colonne récapitulative, non transactionnelle",
         "SEMANTICS_UNRESOLVED": "Sémantique non résolue",
-        "UNKNOWN_HEADER": "En-tête non reconnu"
+        "UNKNOWN_HEADER": "En-tête non reconnu",
+        "EMPTY_SOURCE_COLUMN": "Colonne source vide (ignorée automatiquement)"
       },
       "states": {
         "AUTO_CONFIDENT": "Automatique (haute confiance)",

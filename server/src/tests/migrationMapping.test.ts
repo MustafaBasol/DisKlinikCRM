@@ -303,6 +303,91 @@ await test('a savedTemplate entry wins over the matrix', () => {
   assert.equal(s.mappingState, 'AUTO_CONFIDENT');
 });
 
+// ─── F3-DATA-MIG-TODAY-001-UI-005-R5: headerless/empty-column classification ─
+
+function emptyProfile(index: number, header: string): SourceColumnProfile {
+  return {
+    index,
+    header,
+    filledCount: 0,
+    totalRows: 14890,
+    fillRate: 0,
+    distinctCount: 0,
+    typeCounts: { empty: 14890, string: 0, number: 0, date: 0, boolean: 0, error: 0 },
+    maxLength: 0,
+  };
+}
+
+function nonEmptyProfile(index: number, header: string, filledCount: number): SourceColumnProfile {
+  return {
+    index,
+    header,
+    filledCount,
+    totalRows: 14890,
+    fillRate: Math.round((filledCount / 14890) * 10_000) / 10_000,
+    distinctCount: filledCount,
+    typeCounts: { empty: 14890 - filledCount, string: filledCount, number: 0, date: 0, boolean: 0, error: 0 },
+    maxLength: 12,
+  };
+}
+
+await test('R5 #1: headerless column with CONFIRMED zero data -> IGNORE / EMPTY_SOURCE_COLUMN, does not block', () => {
+  const header = { original: 'COLUMN_43', normalized: 'COLUMN_43', index: 43, headerWasBlank: true };
+  const [s] = suggestMappings([header], [emptyProfile(43, 'COLUMN_43')], { sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM });
+  assert.equal(s.mappingState, 'IGNORE', 'a genuinely empty headerless column must not require manual mapping');
+  assert.equal(s.reason, 'EMPTY_SOURCE_COLUMN');
+  assert.equal(s.destinationField, null);
+  assert.equal(s.sourceIndex, 43, 'the physical source-column position must survive for auditability');
+
+  const mappingRecord: MappingRecordLike = {
+    sourceField: s.sourceField,
+    sourceIndex: s.sourceIndex,
+    destinationField: s.destinationField,
+    transform: s.transform,
+    composeOrder: s.composeOrder,
+    state: s.mappingState,
+  };
+  const result = validateMappings([mappingRecord], [header]);
+  // (Rule 5's separate "required destination not mapped" issues fire in this
+  // minimal single-column fixture regardless — expected and unrelated to
+  // this column's own disposition, so scope the assertion to COLUMN_43.)
+  assert.deepEqual(
+    result.issues.filter((i) => i.sourceField === 'COLUMN_43'),
+    [],
+    'an auto-ignored empty source column must not itself raise any issue',
+  );
+  assert.equal(result.unresolvedCount, 0);
+  assert.equal(result.ignoredCount, 1);
+});
+
+await test('R5 #2: headerless column with SOME data remains MANUAL_REQUIRED (never silently ignored)', () => {
+  const header = { original: 'COLUMN_7', normalized: 'COLUMN_7', index: 7, headerWasBlank: true };
+  // "approximately 0/14889" in the field report — 3 real values is enough to
+  // prove a single filled cell must never be masked as an empty column.
+  const [s] = suggestMappings([header], [nonEmptyProfile(7, 'COLUMN_7', 3)], { sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM });
+  assert.equal(s.mappingState, 'MANUAL_REQUIRED', 'even one real value must force a human decision');
+  assert.equal(s.reason, 'UNKNOWN_HEADER');
+  assert.notEqual(s.reason, 'EMPTY_SOURCE_COLUMN');
+});
+
+await test('R5: a NAMED column with zero fill is never auto-ignored (headerWasBlank must gate this, not fill alone)', () => {
+  // Same zero-fill profile as R5 #1, but this header was NOT synthesized —
+  // it is a real (if unmatched) vendor header, so it must stay MANUAL_REQUIRED.
+  const headers = [makeHeader('SOME_TOTALLY_UNRECOGNIZED_EMPTY_COLUMN', 12)];
+  const [s] = suggestMappings(headers, [emptyProfile(12, 'SOME_TOTALLY_UNRECOGNIZED_EMPTY_COLUMN')], {
+    sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM,
+  });
+  assert.equal(s.mappingState, 'MANUAL_REQUIRED');
+  assert.equal(s.reason, 'UNKNOWN_HEADER');
+});
+
+await test('R5: a headerless column with NO profile supplied stays MANUAL_REQUIRED (unknowable is never treated as empty)', () => {
+  const header = { original: 'COLUMN_99', normalized: 'COLUMN_99', index: 99, headerWasBlank: true };
+  const [s] = suggestMappings([header], [], { sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM });
+  assert.equal(s.mappingState, 'MANUAL_REQUIRED');
+  assert.equal(s.reason, 'UNKNOWN_HEADER');
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // C. transforms — table-driven, synthetic values only
 // ══════════════════════════════════════════════════════════════════════════
@@ -578,6 +663,122 @@ await test('a fully valid mapping returns valid: true, zero issues, correct coun
   assert.equal(result.blockedCount, 0);
   assert.equal(result.legalBlockedCount, 0);
   assert.equal(result.ignoredCount, 0);
+});
+
+// ─── F3-DATA-MIG-TODAY-001-UI-005-R5: state-machine contradiction fix ───────
+
+await test('R5 #7: MANUAL_REQUIRED with no destination produces EXACTLY ONE issue for that column, not a contradiction', () => {
+  const headers = [makeHeader('PENDING_COL', 0)];
+  const records = [record({ sourceField: 'PENDING_COL', state: 'MANUAL_REQUIRED' })];
+  const result = validateMappings(records, headers);
+  // (The required-destination rule (Rule 5) separately reports the missing
+  // provenance/name mappings for this minimal fixture — expected and
+  // unrelated to this defect, so this test scopes its assertion to the
+  // issues actually ABOUT "PENDING_COL", not the full issues array.)
+  const forField = result.issues.filter((i) => i.sourceField === 'PENDING_COL');
+  assert.equal(forField.length, 1, 'an undecided column must report ONE problem about itself, not two contradictory ones');
+  assert.equal(forField[0]!.code, 'MAPPING_REQUIRED');
+  assert.match(forField[0]!.message, /still awaiting review/);
+  assert.ok(
+    !forField.some((i) => /marked as decided but has no destination/.test(i.message)),
+    'MANUAL_REQUIRED is UNDECIDED, never "decided" — it must not also report the decided-but-no-destination issue',
+  );
+  assert.equal(result.unresolvedCount, 1);
+});
+
+await test('R5 #8: a WRITING state (RESOLVED) with no destination IS rejected as decided-but-no-destination', () => {
+  const headers = [makeHeader('HALF_DECIDED_COL', 0)];
+  const records = [record({ sourceField: 'HALF_DECIDED_COL', state: 'RESOLVED', destinationField: null })];
+  const result = validateMappings(records, headers);
+  assert.equal(result.valid, false);
+  assert.ok(
+    result.issues.some((i) => i.code === 'MAPPING_REQUIRED' && /marked as decided but has no destination/.test(i.message)),
+    'a genuinely WRITING state without a destination must still be caught',
+  );
+  assert.equal(result.unresolvedCount, 0, 'RESOLVED is not an UNDECIDED_STATE — it must not inflate unresolvedCount');
+});
+
+await test('R5: AUTO_REVIEW carrying a destination produces exactly one issue (no destination-check pollution)', () => {
+  const headers = [makeHeader('MAYBE_PHONE', 0)];
+  const records = [
+    record({ sourceField: 'MAYBE_PHONE', state: 'AUTO_REVIEW', destinationField: 'patient.phone', transform: 'phone_tr' }),
+  ];
+  const result = validateMappings(records, headers);
+  const forField = result.issues.filter((i) => i.sourceField === 'MAYBE_PHONE');
+  assert.equal(forField.length, 1, 'an AUTO_REVIEW row awaiting confirmation must report only the review issue');
+  assert.equal(forField[0]!.code, 'MAPPING_REQUIRED');
+  assert.match(forField[0]!.message, /still awaiting review/);
+});
+
+await test('R5 #9/#10: ADRES_KODU and EK_ACIKLAMA reproduce, then no longer reproduce, the production contradiction', () => {
+  // Real production evidence: both columns are matrix MANUAL_REVIEW entries
+  // with no destination (see firstCustomerMatrix.ts). Drive them through the
+  // ACTUAL production pipeline (suggestMappings -> validateMappings), not a
+  // hand-built fixture, so this test would have caught the real defect.
+  const fields = ['ADRES_KODU', 'EK_ACIKLAMA'];
+  const headers = fields.map((f, i) => makeHeader(f, i));
+  const suggestions = suggestMappings(headers, [], { sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM });
+
+  for (const field of fields) {
+    const s = suggestions.find((x) => x.sourceField === field)!;
+    assert.ok(s, `expected a suggestion for "${field}"`);
+    assert.equal(s.mappingState, 'MANUAL_REQUIRED', `"${field}" is an accepted MANUAL_REVIEW matrix decision`);
+    assert.equal(s.destinationField, null, `"${field}" must not carry an invented destination`);
+  }
+
+  const records: MappingRecordLike[] = suggestions.map((s) => ({
+    sourceField: s.sourceField,
+    sourceIndex: s.sourceIndex,
+    destinationField: s.destinationField,
+    transform: s.transform,
+    composeOrder: s.composeOrder,
+    state: s.mappingState,
+  }));
+  const result = validateMappings(records, headers);
+
+  for (const field of fields) {
+    const forField = result.issues.filter((i) => i.sourceField === field);
+    assert.equal(
+      forField.length,
+      1,
+      `"${field}" must report exactly one issue — the production defect reported TWO contradictory ones ` +
+        `("still awaiting review" AND "marked as decided but has no destination") for the same column`,
+    );
+    assert.match(forField[0]!.message, /still awaiting review/);
+  }
+});
+
+await test('R5 #11: continue-gate blocks only genuinely unresolved decisions, not ignored/blocked/legal/mapped ones', () => {
+  const headers = [
+    makeHeader('HASTA_ID', 0),
+    makeHeader('ADI', 1),
+    makeHeader('SOYADI', 2),
+    makeHeader('COLUMN_3', 3),
+    makeHeader('KANGURUBU', 4),
+    makeHeader('ILCE', 5),
+  ];
+  const records = [
+    record({ sourceField: 'HASTA_ID', state: 'AUTO_CONFIDENT', destinationField: 'provenance.sourceId', transform: 'provenance_source_id' }),
+    record({ sourceField: 'ADI', state: 'AUTO_CONFIDENT', destinationField: 'patient.firstName', transform: 'trim_collapse' }),
+    record({ sourceField: 'SOYADI', sourceIndex: 2, state: 'AUTO_CONFIDENT', destinationField: 'patient.lastName', transform: 'trim' }),
+    // auto-ignored empty source column (this task's fix)
+    record({ sourceField: 'COLUMN_3', sourceIndex: 3, state: 'IGNORE' }),
+    // legally blocked, correctly resolved (no destination)
+    record({ sourceField: 'KANGURUBU', sourceIndex: 4, state: 'LEGAL_BLOCKED' }),
+    // explicitly blocked, no destination
+    record({ sourceField: 'ILCE', sourceIndex: 5, state: 'BLOCKED' }),
+  ];
+  const result = validateMappings(records, headers);
+  assert.deepEqual(result.issues, [], 'ignored/legal-blocked/blocked/mapped columns must never block Continue');
+  assert.equal(result.valid, true);
+  assert.equal(result.unresolvedCount, 0);
+
+  // Now add exactly one genuinely unresolved column — Continue must block.
+  const withOneUnresolved = [...records, record({ sourceField: 'EXTRA_COL', sourceIndex: 6, state: 'MANUAL_REQUIRED' })];
+  const headersWithExtra = [...headers, makeHeader('EXTRA_COL', 6)];
+  const blockedResult = validateMappings(withOneUnresolved, headersWithExtra);
+  assert.equal(blockedResult.valid, false);
+  assert.equal(blockedResult.unresolvedCount, 1);
 });
 
 // ─── Sonuç ────────────────────────────────────────────────────────────────
