@@ -666,8 +666,11 @@
       "noRows": "Keine Spalten entsprechen diesem Filter.",
       "cannotContinue": "Die Zuordnung ist ungültig — beheben Sie die obigen Probleme, um fortzufahren.",
       "continue": "Weiter zur Referenzzuordnung",
-      "columnIndex": "Spalte {{n}}",
-      "unnamedColumn": "Unbenannte Spalte {{n}}",
+      "headerless": "Kein Header",
+      "excelColumn": "Excel-Spalte: {{n}} / {{letter}}",
+      "sampleRow": "Zeile {{row}}: {{value}}",
+      "previewUnavailable": "Diese Spalte enthält Daten, aber im Vorschaufenster wurde keine gefunden — bitte sorgfältig prüfen.",
+      "legalReason": "Kann aus rechtlichen Gründen nicht automatisch übertragen werden. Grund: {{reason}}",
       "distinctCount": "{{n}} verschiedene Werte",
       "maxLength": "max. {{n}} Zeichen",
       "legalGate": "Rechtliche Sperre — nicht auswählbar",
@@ -749,6 +752,7 @@
         "unresolved": "Nur ungelöste",
         "blocked": "Nur blockierte",
         "legal": "Nur rechtlich gesperrte",
+        "headerless": "Spalten ohne Kopfzeile",
         "ignored": "Ignorierte",
         "auto": "Automatisch sicher"
       },
@@ -760,7 +764,14 @@
         "state": "Status",
         "actions": "Aktionen"
       },
-      "actions": { "ignore": "Ignorieren", "block": "Blockieren", "reset": "Auf Automatik zurücksetzen" },
+      "actions": {
+        "ignore": "Ignorieren",
+        "block": "Blockieren",
+        "reset": "Auf Automatik zurücksetzen",
+        "ignoreHint": "Diese Spalte ignorieren — es wird nichts in ein Ziel geschrieben",
+        "blockHint": "Diese Spalte blockieren — zur Überprüfung markieren",
+        "resetHint": "Auf den automatischen Vorschlag zurücksetzen"
+      },
       "summary": {
         "mapped": "Zugeordnet",
         "unresolved": "Ungelöst",

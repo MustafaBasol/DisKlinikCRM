@@ -666,8 +666,11 @@
       "noRows": "Aucune colonne ne correspond à ce filtre.",
       "cannotContinue": "La correspondance n'est pas valide — résolvez les problèmes ci-dessus pour continuer.",
       "continue": "Passer à la correspondance des références",
-      "columnIndex": "Colonne {{n}}",
-      "unnamedColumn": "Colonne sans titre {{n}}",
+      "headerless": "Sans en-tête",
+      "excelColumn": "Colonne Excel : {{n}} / {{letter}}",
+      "sampleRow": "Ligne {{row}} : {{value}}",
+      "previewUnavailable": "Cette colonne contient des données mais aucune n'a été trouvée dans la fenêtre d'aperçu — vérifiez attentivement.",
+      "legalReason": "Ne peut pas être transféré automatiquement pour des raisons légales. Motif : {{reason}}",
       "distinctCount": "{{n}} valeurs distinctes",
       "maxLength": "{{n}} caractères max.",
       "legalGate": "Blocage légal — non sélectionnable",
@@ -749,6 +752,7 @@
         "unresolved": "Non résolues uniquement",
         "blocked": "Bloquées uniquement",
         "legal": "Blocages légaux uniquement",
+        "headerless": "Colonnes sans en-tête",
         "ignored": "Ignorées",
         "auto": "Automatiques sûres"
       },
@@ -760,7 +764,14 @@
         "state": "État",
         "actions": "Actions"
       },
-      "actions": { "ignore": "Ignorer", "block": "Bloquer", "reset": "Réinitialiser à l'automatique" },
+      "actions": {
+        "ignore": "Ignorer",
+        "block": "Bloquer",
+        "reset": "Réinitialiser à l'automatique",
+        "ignoreHint": "Ignorer cette colonne — rien ne sera écrit vers une destination",
+        "blockHint": "Bloquer cette colonne — la marquer pour révision",
+        "resetHint": "Réinitialiser à la suggestion automatique"
+      },
       "summary": {
         "mapped": "Associées",
         "unresolved": "Non résolues",

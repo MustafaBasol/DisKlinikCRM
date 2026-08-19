@@ -39,6 +39,7 @@ import {
   UNNAMED_COLUMN_PREFIX,
 } from '../services/migration/parser/canonicalParser.js';
 import { suggestMappings } from '../services/migration/mapping/mappingEngine.js';
+import { buildColumnPreviews } from '../services/migration/mapping/columnPreview.js';
 import {
   deleteSourceFile,
   getMigrationSourceRoot,
@@ -452,6 +453,58 @@ await test('F3-DATA-MIG-TODAY-001-UI-005-R5 #12: a headerless column of stale Ex
   assert.equal(suggestion.mappingState, 'IGNORE');
   assert.equal(suggestion.reason, 'EMPTY_SOURCE_COLUMN');
   assert.equal(suggestion.sourceIndex, unnamed.index, 'physical column position preserved for auditability');
+});
+
+await test('F3-DATA-MIG-TODAY-001-UI-006-R6: a headerless column with ONE meaningful value late in the workbook end-to-end (parse -> profile -> preview -> suggest) stays MANUAL_REQUIRED and its real value is previewable', async () => {
+  // The production defect this regression test exists for: a headerless
+  // column ("Sütun 43" in the operator-facing UI) with fill ≈ 0% and
+  // distinct = 1 — the system KNEW one meaningful value existed, but the old
+  // fixed-window preview (first 3 physical rows) never showed it, so an
+  // operator staring at MANUAL_REQUIRED had nothing to decide from. Here the
+  // meaningful value sits at row 31 — well past the old 3-row preview window
+  // — and MUST still surface. 30 rows (not 14,890) is enough to prove the
+  // invariant without slowing the suite down; row COUNT is not what this test
+  // is about, row ORDER relative to the (removed) fixed window is.
+  const TOTAL_ROWS = 30;
+  const LATE_VALUE = 'geç gelen tek gerçek değer';
+
+  const headerRow: FixtureCell[] = [{ v: 'ID' }, { v: null }, { v: 'NAME' }];
+  const dataRows: FixtureCell[][] = [];
+  for (let i = 1; i <= TOTAL_ROWS; i += 1) {
+    const isLastRow = i === TOTAL_ROWS;
+    dataRows.push([{ v: `X${i}` }, { v: isLastRow ? LATE_VALUE : null }, { v: `Person${i}` }]);
+  }
+
+  const buf = buildBiff8Fixture([{ name: 'Sheet1', rows: [headerRow, ...dataRows] }]);
+  const wb = await parseSourceWorkbook(buf, 'xls');
+
+  // 1. PARSE: the column survives as headerless, not dropped.
+  const unnamed = wb.headers.find((h) => h.original === `${UNNAMED_COLUMN_PREFIX}1`)!;
+  assert.ok(unnamed, 'the column must survive parsing');
+  assert.equal(unnamed.headerWasBlank, true);
+
+  // 2. PROFILE: exactly one filled row — the R5/R6 dividing line between
+  //    IGNORE (filledCount === 0) and MANUAL_REQUIRED (filledCount > 0).
+  const profiles = profileColumns(wb);
+  const profile = profiles.find((p) => p.index === unnamed.index)!;
+  assert.equal(profile.filledCount, 1, 'exactly the one late value counts as filled');
+  assert.ok(profile.filledCount > 0, 'R5/R6 invariant precondition: this column is NOT the empty-column case');
+
+  // 3. PREVIEW: the late value must be found and surfaced with its real row
+  //    number — this is the R6 fix under test.
+  const destByIndex = new Map<number, undefined>();
+  const maxLenByIndex = new Map(profiles.map((p) => [p.index, p.maxLength]));
+  const previews = buildColumnPreviews(wb.headers, wb.rows, destByIndex, maxLenByIndex);
+  const preview = previews.find((p) => p.index === unnamed.index)!;
+  assert.equal(preview.samples.length, 1, 'the one meaningful value must be found, not silently dropped');
+  assert.equal(preview.samples[0]!.value, LATE_VALUE, 'the actual late value must be shown, not "boş"');
+  assert.equal(preview.samples[0]!.rowNumber, TOTAL_ROWS, 'the sample must point at the row it actually came from');
+
+  // 4. SUGGEST: R5 invariant unchanged — headerless + data stays
+  //    MANUAL_REQUIRED, never auto-ignored and never auto-mapped.
+  const [suggestion] = suggestMappings([unnamed], [profile], { sourceSystem: 'legacy-dental-tr-v1' });
+  assert.equal(suggestion.mappingState, 'MANUAL_REQUIRED');
+  assert.equal(suggestion.destinationField, null, 'no invented mapping');
 });
 
 await test('byte-identical duplicate headers throw MigrationError HEADER_DUPLICATE', async () => {

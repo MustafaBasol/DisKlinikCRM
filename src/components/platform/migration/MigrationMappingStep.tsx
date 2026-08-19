@@ -32,7 +32,9 @@ import {
   mappingRowVisible,
   formatPercent,
   parseUnnamedColumnIndex,
+  excelColumnLetter,
 } from '../../../pages/platformMigrationHelpers';
+import type { ColumnPreviewSampleDto } from '../../../services/platformMigrationApi';
 
 // ── State badge ──────────────────────────────────────────────────────────────
 
@@ -51,7 +53,7 @@ const STATE_BADGE: Record<MappingState, string> = {
 interface RowProps {
   mapping: MappingDto;
   profile: SourceColumnProfileDto | undefined;
-  samples: string[] | undefined;
+  samples: ColumnPreviewSampleDto[] | undefined;
   destinations: DestinationFieldDto[];
   destinationGroups: readonly string[];
   saving: boolean;
@@ -79,30 +81,45 @@ const MappingRow: React.FC<RowProps> = React.memo(({
     : [];
   const destinationDisplayLabel = (key: string, fallback: string) =>
     t(`platform:migration.mapping.destinationLabels.${key}`, { defaultValue: fallback });
-  const unnamedIndex = parseUnnamedColumnIndex(mapping.sourceField);
-  const displayHeader = unnamedIndex !== null
-    ? t('platform:migration.mapping.unnamedColumn', { n: unnamedIndex + 1 })
-    : mapping.sourceLabel;
+  // Physical workbook coordinate (F3-DATA-MIG-TODAY-001-UI-006-R6, requirement
+  // A) — deterministic from sourceIndex alone, NEVER from the (possibly
+  // synthesized) header text, so a garbled or blank header can never be
+  // mistaken for the column's real identity.
+  const excelLetter = excelColumnLetter(mapping.sourceIndex);
+  const isHeaderless = parseUnnamedColumnIndex(mapping.sourceField) !== null;
+  const displayHeader = isHeaderless ? t('platform:migration.mapping.headerless') : mapping.sourceLabel;
+  const previewMissingDespiteData = !!profile && profile.filledCount > 0 && (!samples || samples.length === 0);
 
   return (
     <tr className={`border-b border-gray-50 dark:border-gray-800 align-top ${isLegalBlocked ? 'bg-amber-50/60 dark:bg-amber-900/10' : isBlocked ? 'bg-red-50/60 dark:bg-red-900/10' : isIgnored ? 'opacity-60' : ''}`}>
       {/* Source */}
       <td className="px-3 py-3 min-w-[180px]">
         <p
-          className={`text-xs font-semibold break-all ${unnamedIndex !== null ? 'italic text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}
+          className={`text-xs font-semibold break-all ${isHeaderless ? 'italic text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}
           title={mapping.sourceField}
         >
           {displayHeader}
         </p>
-        <p className="text-[11px] text-gray-400 mt-0.5">{t('platform:migration.mapping.columnIndex', { n: mapping.sourceIndex + 1 })}</p>
+        <p className="text-[11px] text-gray-400 mt-0.5">
+          {t('platform:migration.mapping.excelColumn', { n: mapping.sourceIndex + 1, letter: excelLetter })}
+        </p>
         {samples && samples.length > 0 && (
           <ul className="mt-1.5 space-y-0.5 border-l-2 border-gray-100 dark:border-gray-800 pl-1.5">
-            {samples.map((s, idx) => (
-              <li key={idx} className="text-[11px] text-gray-500 dark:text-gray-400 font-mono truncate max-w-[220px]" title={s}>
-                {s}
+            {samples.map((s) => (
+              <li
+                key={s.rowNumber}
+                className="text-[11px] text-gray-500 dark:text-gray-400 font-mono truncate max-w-[220px]"
+                title={s.value}
+              >
+                {t('platform:migration.mapping.sampleRow', { row: s.rowNumber, value: s.value })}
               </li>
             ))}
           </ul>
+        )}
+        {previewMissingDespiteData && (
+          <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 italic max-w-[220px]">
+            {t('platform:migration.mapping.previewUnavailable')}
+          </p>
         )}
       </td>
 
@@ -133,9 +150,16 @@ const MappingRow: React.FC<RowProps> = React.memo(({
       {/* Destination */}
       <td className="px-3 py-3 min-w-[220px]">
         {isLegalBlocked ? (
-          <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 text-xs font-semibold">
-            <Lock size={13} />
-            {t('platform:migration.mapping.legalGate')}
+          <div className="text-amber-700 dark:text-amber-400">
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              <Lock size={13} />
+              {t('platform:migration.mapping.legalGate')}
+            </div>
+            <p className="text-[11px] mt-1 font-normal">
+              {t('platform:migration.mapping.legalReason', {
+                reason: mapping.policyNote || t(`platform:migration.mapping.reasons.${mapping.reason}`, { defaultValue: mapping.reason }),
+              })}
+            </p>
           </div>
         ) : (
           <select
@@ -209,39 +233,45 @@ const MappingRow: React.FC<RowProps> = React.memo(({
       </td>
 
       {/* Actions */}
-      <td className="px-3 py-3 min-w-[140px]">
-        <div className="flex flex-wrap gap-1">
+      <td className="px-3 py-3 min-w-[190px]">
+        <div className="flex flex-col items-start gap-1">
           {!isIgnored && (
             <button
               type="button"
-              title={t('platform:migration.mapping.actions.ignore')}
+              aria-label={t('platform:migration.mapping.actions.ignore')}
+              title={t('platform:migration.mapping.actions.ignoreHint')}
               disabled={saving}
               onClick={() => onMarkIgnore(mapping.sourceField)}
-              className="p-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-[11px] font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
             >
-              <EyeOff size={13} />
+              <EyeOff size={12} />
+              {t('platform:migration.mapping.actions.ignore')}
             </button>
           )}
           {!isBlocked && !isLegalBlocked && (
             <button
               type="button"
-              title={t('platform:migration.mapping.actions.block')}
+              aria-label={t('platform:migration.mapping.actions.block')}
+              title={t('platform:migration.mapping.actions.blockHint')}
               disabled={saving}
               onClick={() => onMarkBlocked(mapping.sourceField)}
-              className="p-1.5 rounded border border-gray-200 dark:border-gray-700 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-[11px] font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40"
             >
-              <Ban size={13} />
+              <Ban size={12} />
+              {t('platform:migration.mapping.actions.block')}
             </button>
           )}
           {canReset && !isLegalBlocked && (
             <button
               type="button"
-              title={t('platform:migration.mapping.actions.reset')}
+              aria-label={t('platform:migration.mapping.actions.reset')}
+              title={t('platform:migration.mapping.actions.resetHint')}
               disabled={saving}
               onClick={() => onResetAuto(mapping.sourceField)}
-              className="p-1.5 rounded border border-gray-200 dark:border-gray-700 text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 disabled:opacity-40"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-[11px] font-medium text-primary-700 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 disabled:opacity-40"
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={12} />
+              {t('platform:migration.mapping.actions.reset')}
             </button>
           )}
           {saving && <Loader2 size={13} className="animate-spin text-gray-400 self-center" />}
@@ -260,7 +290,7 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
   const [destinations, setDestinations] = useState<DestinationFieldDto[]>([]);
   const [validation, setValidation] = useState<MappingValidationDto | null>(null);
   const [profiles, setProfiles] = useState<Record<number, SourceColumnProfileDto>>({});
-  const [previews, setPreviews] = useState<Record<number, string[]>>({});
+  const [previews, setPreviews] = useState<Record<number, ColumnPreviewSampleDto[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingField, setSavingField] = useState<string | null>(null);
@@ -299,7 +329,7 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
         const byIndex: Record<number, SourceColumnProfileDto> = {};
         for (const p of analysisRes.value.analysis.profiles) byIndex[p.index] = p;
         setProfiles(byIndex);
-        const previewByIndex: Record<number, string[]> = {};
+        const previewByIndex: Record<number, ColumnPreviewSampleDto[]> = {};
         for (const p of analysisRes.value.analysis.columnPreviews ?? []) previewByIndex[p.index] = p.samples;
         setPreviews(previewByIndex);
         onRunUpdated(analysisRes.value.run);
