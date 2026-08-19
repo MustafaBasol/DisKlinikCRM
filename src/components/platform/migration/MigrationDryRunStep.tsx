@@ -148,6 +148,10 @@ const MigrationDryRunStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpda
   };
 
   const inFlight = isRunInFlight(status);
+  // Defensive fallback for a pre-#454 persisted DryRunSummary: the API client
+  // normalizes this at the boundary (platformMigrationApi.ts), but this keeps
+  // the render itself safe against any other source of a legacy-shaped DTO.
+  const legalExclusions = dryRun?.legalExclusions ?? [];
 
   return (
     <div className="card p-5 max-w-4xl">
@@ -262,7 +266,7 @@ const MigrationDryRunStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpda
 
           {/* Legal-policy exclusions: a DECIDED, non-blocking state — never
               styled or worded like a technical error (see dryRun.legalExclusions). */}
-          {dryRun.legalExclusions.length > 0 && (
+          {legalExclusions.length > 0 && (
             <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10 p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Lock size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
@@ -274,7 +278,7 @@ const MigrationDryRunStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpda
                 {t('platform:migration.dryRun.legalExclusions.note')}
               </p>
               <ul className="space-y-1">
-                {dryRun.legalExclusions.map((b, idx) => (
+                {legalExclusions.map((b, idx) => (
                   <li key={`${b.fieldName ?? b.code}-${idx}`} className="text-xs text-amber-800 dark:text-amber-300 font-mono">
                     {b.fieldName ?? b.code}
                   </li>

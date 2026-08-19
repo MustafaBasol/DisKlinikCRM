@@ -645,6 +645,22 @@ export function normalizeValidation(raw: MappingValidationDto | null | undefined
   };
 }
 
+/**
+ * `legalExclusions` was added to DryRunSummary by F3-DATA-MIG-TODAY-001-UI-002.
+ * A run whose dry run was persisted before that change carries no such key —
+ * `undefined`, not `[]` — so a naive `.length`/`.map` in the UI throws.
+ * Normalizing here (the API/DTO boundary), not by scattering `?? []` over
+ * every render call site, keeps every other field exactly as stored: no
+ * historical counter, status or blocker semantics is reinterpreted.
+ */
+export function normalizeDryRunSummary(raw: DryRunSummaryDto | null | undefined): DryRunSummaryDto | null {
+  if (!raw) return null;
+  return {
+    ...raw,
+    legalExclusions: Array.isArray(raw.legalExclusions) ? raw.legalExclusions : [],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
@@ -747,7 +763,7 @@ export function createMigrationApi(api: AxiosInstance) {
       const res = await api.post<{ run: MigrationRunDto; dryRun: DryRunSummaryDto }>(
         `${BASE}/runs/${runId}/dry-run`,
       );
-      return res.data;
+      return { run: res.data.run, dryRun: normalizeDryRunSummary(res.data.dryRun) as DryRunSummaryDto };
     },
 
     async execute(runId: string, batchSize?: number): Promise<MigrationRunDto> {
@@ -785,7 +801,7 @@ export function createMigrationApi(api: AxiosInstance) {
       return {
         run: res.data.run,
         reconciliation: res.data?.reconciliation ?? null,
-        dryRun: res.data?.dryRun ?? null,
+        dryRun: normalizeDryRunSummary(res.data?.dryRun),
       };
     },
 
