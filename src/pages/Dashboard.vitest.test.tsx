@@ -53,6 +53,26 @@ const DOCTOR_STATS_RESPONSE = {
   },
 };
 
+const MANAGEMENT_STATS_RESPONSE = {
+  data: {
+    stats: {
+      todayAppointments: 0,
+      weekAppointments: 0,
+      newPatientsMonth: 0,
+      openTreatments: 0,
+      pendingTasks: 0,
+      overdueTasks: 0,
+      monthlyRevenue: 15000,
+      overdueAmount: 5000,
+    },
+    agenda: [],
+    alerts: [],
+    activities: [],
+    doctorExtras: null,
+    charts: null,
+  },
+};
+
 beforeEach(() => {
   getStats.mockReset();
   getStats.mockResolvedValue(DOCTOR_STATS_RESPONSE);
@@ -89,5 +109,42 @@ describe('Dashboard — role-aware data loading', () => {
 
     await waitFor(() => expect(getStats).toHaveBeenCalledTimes(1));
     expect(screen.getByText('dashboard:doctor.greeting')).toBeTruthy();
+  });
+});
+
+describe('Dashboard — finance stat cards are gated by canViewFinanceDashboard (closure audit fix)', () => {
+  it('RECEPTIONIST does not see the monthlyRevenue/overdueCollections stat cards', async () => {
+    mockUser = { id: 'u-reception', role: 'receptionist', canAccessAllClinics: false, firstName: 'Remi', lastName: 'Cept' };
+    getStats.mockResolvedValue(MANAGEMENT_STATS_RESPONSE);
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route path="/dashboard" element={<Dashboard />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(getStats).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('dashboard:newPatients')).toBeTruthy());
+    expect(screen.queryByText('dashboard:monthlyRevenue')).toBeNull();
+    expect(screen.queryByText('dashboard:overdueCollections')).toBeNull();
+  });
+
+  it('OWNER still sees the monthlyRevenue/overdueCollections stat cards', async () => {
+    mockUser = { id: 'u-owner', role: 'owner', canAccessAllClinics: true, firstName: 'Olive', lastName: 'Owner' };
+    getStats.mockResolvedValue(MANAGEMENT_STATS_RESPONSE);
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route path="/dashboard" element={<Dashboard />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(getStats).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('dashboard:monthlyRevenue')).toBeTruthy();
+    expect(screen.getByText('dashboard:overdueCollections')).toBeTruthy();
   });
 });

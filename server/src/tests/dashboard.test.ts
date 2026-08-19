@@ -788,6 +788,39 @@ tests.push(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BÖLÜM 7: canViewFinanceFigures — UX-001 closure audit fix
+// ─────────────────────────────────────────────────────────────────────────────
+
+section('canViewFinanceFigures — monthlyRevenue/overdueAmount yalnızca finans rollerine gider');
+
+// dashboard.ts'teki satırın inline kopyası — RECEPTIONIST/DENTIST için
+// monthlyRevenue/overdueReceivables hesaplanmamalı (klinik geneli finansal
+// rakamlar Finance Dashboard/Reports'a erişimi olmayan rollere sızmamalı,
+// UX-001 closure audit'te bulunan bulgu). BILLING zaten /finance'e
+// yönlendirildiği için bu satıra hiç gelmez, ama backend yine de
+// canViewFinanceDashboard ile aynı rol setini yetkilendirir (defense in
+// depth — bkz. dashboard.ts satır 30 yorum).
+function canViewFinanceFigures(normalizedRole: string): boolean {
+  return ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING'].includes(normalizedRole);
+}
+
+tests.push(
+  test('OWNER/ORG_ADMIN/CLINIC_MANAGER/BILLING → true (finansal rakamlar hesaplanır)', () => {
+    assert.equal(canViewFinanceFigures('OWNER'), true);
+    assert.equal(canViewFinanceFigures('ORG_ADMIN'), true);
+    assert.equal(canViewFinanceFigures('CLINIC_MANAGER'), true);
+    assert.equal(canViewFinanceFigures('BILLING'), true);
+  }),
+);
+
+tests.push(
+  test('RECEPTIONIST/DENTIST → false (klinik geneli finansal rakamlar sızdırılmaz)', () => {
+    assert.equal(canViewFinanceFigures('RECEPTIONIST'), false);
+    assert.equal(canViewFinanceFigures('DENTIST'), false);
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Sonuçlar
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -39,6 +39,13 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
   // Skipping the query work here (not just hiding it client-side) keeps the
   // role-aware data-loading contract narrow, per UX-001 role-aware dashboards.
   const canViewManagementCharts = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'].includes(normalizedRole);
+  // UX-001 closure audit finding: monthlyRevenue/overdueAmount are clinic-wide
+  // financial aggregates — mirror the frontend's canViewFinanceDashboard gate
+  // (permissions.ts) so RECEPTIONIST/DENTIST, who are denied the Finance
+  // Dashboard and Reports pages, don't receive these figures on the generic
+  // stats response either (they were previously computed and shipped
+  // regardless of role, only hidden by which UI happened to render them).
+  const canViewFinanceFigures = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'BILLING'].includes(normalizedRole);
 
   try {
     const scope = await validateAndGetScope(req.user!, selectedClinicId, res);
@@ -102,10 +109,12 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
         },
         _sum: { estimatedAmount: true, acceptedAmount: true },
       }),
-      monthlyRevenue: prisma.payment.aggregate({
-        where: { ...clinicIdWhere, paymentStatus: { in: ['paid', 'partial'] }, paidAt: { gte: firstDayOfMonth } },
-        _sum: { amount: true },
-      }),
+      monthlyRevenue: canViewFinanceFigures
+        ? prisma.payment.aggregate({
+            where: { ...clinicIdWhere, paymentStatus: { in: ['paid', 'partial'] }, paidAt: { gte: firstDayOfMonth } },
+            _sum: { amount: true },
+          })
+        : Promise.resolve({ _sum: { amount: 0 } }),
       pendingPayments: prisma.payment.aggregate({
         where: { ...clinicIdWhere, paymentStatus: 'pending' },
         _sum: { amount: true },
@@ -120,7 +129,9 @@ router.get('/dashboard/stats', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'
         : Promise.resolve(0),
       // overdueAmount: shared overdue-receivables rule (see server/src/utils/overdueReceivables.ts) —
       // overdue installments (pending/legacy-overdue, dueDate<now, unpaid) + standalone pending payments.
-      overdueReceivables: overdueReceivablesAmount(prisma, clinicIdsFromScope(clinicIdWhere), new Date()),
+      overdueReceivables: canViewFinanceFigures
+        ? overdueReceivablesAmount(prisma, clinicIdsFromScope(clinicIdWhere), new Date())
+        : Promise.resolve({ total: 0 }),
     };
 
     const results = await Promise.all(Object.values(statsPromises));
