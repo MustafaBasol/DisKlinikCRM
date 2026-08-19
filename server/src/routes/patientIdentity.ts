@@ -37,7 +37,7 @@
  *     — no ciphertext, no lookup hash/token, no cryptoVersion, no plaintext.
  *
  * Audit:
- *   Every successful write (add / replace / remove) gets a fail-closed,
+ *   Every successful write (add / replace) gets a fail-closed,
  *   transaction-scoped audit row (writeAuditLogInTx — same primitive used by
  *   clinicBulkExportPackage.ts for other KVKK-critical events) so the
  *   operation is never reported successful without a durable audit trail.
