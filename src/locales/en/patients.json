@@ -190,7 +190,28 @@
     "lastNameRequired": "Last name is required",
     "emailInvalid": "Please enter a valid email address",
     "phoneDuplicateTitle": "This phone number is already registered to other patients:",
-    "phoneDuplicateBody": "This is normal for children or family members. You can still save."
+    "phoneDuplicateBody": "This is normal for children or family members. You can still save.",
+    "gender": "Gender",
+    "genderUnspecified": "Not specified",
+    "chartNumber": "Chart / File Number",
+    "chartNumberPlaceholder": "e.g. 10423",
+    "primaryPractitioner": "Primary Practitioner",
+    "primaryPractitionerUnassigned": "Unassigned",
+    "primaryPractitionerReadOnlyHint": "(view only — assigned by reception/management)",
+    "identity": {
+      "label": "National ID Number (T.C. Kimlik No)",
+      "sensitiveHint": "(sensitive, optional)",
+      "placeholder": "11-digit T.C. Kimlik No",
+      "notProvided": "Not provided",
+      "change": "Change",
+      "cancelChange": "Cancel",
+      "saveFailed": "Could not save identity record."
+    }
+  },
+  "gender": {
+    "male": "Male",
+    "female": "Female",
+    "other": "Other"
   },
   "dentalChart": {
     "title": "Dental Chart",

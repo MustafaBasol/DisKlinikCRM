@@ -99,6 +99,10 @@ export const patientService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  // F3-DATA-MIG-TODAY-001-UI-001-R1: masked identity metadata only — never
+  // the plaintext T.C. Kimlik No. See server/src/routes/patientIdentity.ts.
+  getIdentity: (patientId: string) => api.get(`/patients/${patientId}/identity`),
+  putIdentity: (patientId: string, value: string) => api.put(`/patients/${patientId}/identity`, { value }),
 };
 
 export const patientPrivacyService = {
@@ -308,7 +312,11 @@ export const messageService = {
 };
 
 export const userService = {
-  getDoctors: () => api.get('/users', { params: { role: 'doctor' } }),
+  // clinicId scopes to a single target clinic (e.g. patient primary
+  // practitioner picker) — omit to fall back to all clinics the caller can
+  // access, as before.
+  getDoctors: (clinicId?: string) =>
+    api.get('/users', { params: { role: 'doctor', ...(clinicId && clinicId !== 'all' ? { clinicId } : {}) } }),
   getAll: () => api.get('/users'),
   create: (data: any) => api.post('/users', data),
   update: (id: string, data: any) => api.put(`/users/${id}`, data),

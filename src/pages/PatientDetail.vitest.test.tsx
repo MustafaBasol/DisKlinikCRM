@@ -52,10 +52,20 @@ const { getMockTab, setMockTab } = vi.hoisted(() => {
 
 const { setSearchParamsMock } = vi.hoisted(() => ({ setSearchParamsMock: vi.fn() }));
 
+const { getMockUserRole, setMockUserRole } = vi.hoisted(() => {
+  let role = 'DENTIST';
+  return {
+    getMockUserRole: () => role,
+    setMockUserRole: (next: string) => {
+      role = next;
+    },
+  };
+});
+
 let mockCanViewImaging = false;
 
 vi.mock('../services/api', () => ({
-  patientService: { getById: vi.fn() },
+  patientService: { getById: vi.fn(), getIdentity: vi.fn() },
   taskService: { getAll: vi.fn() },
   treatmentCaseService: { getAll: vi.fn() },
   paymentService: { getAll: vi.fn() },
@@ -80,7 +90,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: { role: 'DENTIST', canAccessAllClinics: false } }),
+  useAuth: () => ({ user: { role: getMockUserRole(), canAccessAllClinics: false } }),
 }));
 
 vi.mock('../context/ClinicPreferencesContext', () => ({
@@ -96,12 +106,24 @@ vi.mock('../context/ClinicPreferencesContext', () => ({
   }),
 }));
 
-vi.mock('../utils/permissions', () => ({
-  normalizeRole: () => 'DENTIST',
-  canViewPatients: () => true,
-  canViewImaging: () => mockCanViewImaging,
-  canManageLegalHold: () => false,
-}));
+// Partial mock: real exports (e.g. canManagePatientIdentity) pass through
+// untouched from the actual module so newly-added permission gates don't need
+// a mock update on every PatientDetail permission addition — only the four
+// checks this suite intentionally controls are overridden. canManagePatientIdentity
+// is role-driven off the REAL user.role from the AuthContext mock above
+// (getMockUserRole()), independent of the normalizeRole override below, which
+// only affects the exported binding — canManagePatientIdentity's internal role
+// resolution is a private module-level helper, not this mocked export.
+vi.mock('../utils/permissions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils/permissions')>();
+  return {
+    ...actual,
+    normalizeRole: () => 'DENTIST',
+    canViewPatients: () => true,
+    canViewImaging: () => mockCanViewImaging,
+    canManageLegalHold: () => false,
+  };
+});
 
 const patientSvc = patientService as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const taskSvc = taskService as unknown as Record<string, ReturnType<typeof vi.fn>>;
@@ -139,8 +161,10 @@ const PAYMENTS = [
 beforeEach(() => {
   vi.clearAllMocks();
   setMockTab('overview');
+  setMockUserRole('DENTIST');
   mockCanViewImaging = false;
   patientSvc.getById.mockResolvedValue({ data: BASE_PATIENT });
+  patientSvc.getIdentity.mockResolvedValue({ data: { present: false, type: 'TCKN', maskedValue: null } });
   taskSvc.getAll.mockResolvedValue({ data: [] });
   treatmentSvc.getAll.mockResolvedValue({ data: TREATMENT_CASES });
   paymentSvc.getAll.mockResolvedValue({ data: PAYMENTS });
@@ -390,5 +414,29 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
     await userEvent.tab();
 
     expect(screen.getByRole('button', { name: /^More$/ })).toHaveFocus();
+  });
+});
+
+describe('PatientDetail — patient identity (F3-DATA-MIG-TODAY-001-UI-001-R1/R3)', () => {
+  it('unauthorized role (DENTIST): never requests the identity endpoint and never renders the identity row', async () => {
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    expect(patientSvc.getIdentity).not.toHaveBeenCalled();
+    expect(screen.queryByText(/patients:form\.identity\.label/)).not.toBeInTheDocument();
+  });
+
+  it('authorized role (RECEPTIONIST): requests the identity endpoint and renders the masked value', async () => {
+    setMockUserRole('RECEPTIONIST');
+    patientSvc.getIdentity.mockResolvedValue({ data: { present: true, type: 'TCKN', maskedValue: '*******1234' } });
+
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    expect(patientSvc.getIdentity).toHaveBeenCalledWith('patient-1');
+    // Both the desktop and mobile profile blocks render this row.
+    const identityRows = screen.getAllByText(/patients:form\.identity\.label/);
+    expect(identityRows.length).toBeGreaterThan(0);
+    identityRows.forEach((row) => expect(row).toHaveTextContent('*******1234'));
   });
 });

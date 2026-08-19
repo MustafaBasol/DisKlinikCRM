@@ -190,7 +190,28 @@
     "lastNameRequired": "Nachname ist erforderlich",
     "emailInvalid": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
     "phoneDuplicateTitle": "Diese Telefonnummer ist bereits bei anderen Patienten registriert:",
-    "phoneDuplicateBody": "Das ist normal bei Kindern oder Familienmitgliedern. Sie können trotzdem speichern."
+    "phoneDuplicateBody": "Das ist normal bei Kindern oder Familienmitgliedern. Sie können trotzdem speichern.",
+    "gender": "Geschlecht",
+    "genderUnspecified": "Nicht angegeben",
+    "chartNumber": "Akten-/Patientennummer",
+    "chartNumberPlaceholder": "z. B. 10423",
+    "primaryPractitioner": "Hauptbehandler",
+    "primaryPractitionerUnassigned": "Nicht zugewiesen",
+    "primaryPractitionerReadOnlyHint": "(nur Ansicht — wird von Rezeption/Verwaltung zugewiesen)",
+    "identity": {
+      "label": "Türkische Identitätsnummer (T.C. Kimlik No)",
+      "sensitiveHint": "(sensibel, optional)",
+      "placeholder": "11-stellige T.C. Kimlik No",
+      "notProvided": "Nicht angegeben",
+      "change": "Ändern",
+      "cancelChange": "Abbrechen",
+      "saveFailed": "Identitätsdaten konnten nicht gespeichert werden."
+    }
+  },
+  "gender": {
+    "male": "Männlich",
+    "female": "Weiblich",
+    "other": "Divers"
   },
   "dentalChart": {
     "title": "Zahnstatus",

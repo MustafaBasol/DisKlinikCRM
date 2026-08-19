@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
-import { patientService } from '../services/api';
+import { patientService, userService } from '../services/api';
 import { useTranslation } from 'react-i18next';
 import { useClinic } from '../context/ClinicContext';
+import { useAuth } from '../context/AuthContext';
+import { normalizeRole, canManagePatientIdentity } from '../utils/permissions';
 
 interface PatientFormProps {
   patient?: any;
@@ -10,9 +12,16 @@ interface PatientFormProps {
   onSuccess: () => void;
 }
 
+// GET /api/users authorize() list (server/src/routes/users.ts) minus DENTIST
+// — DENTIST cannot list clinic staff, so the practitioner picker falls back
+// to a read-only display for that role. Kept local: this is a UX gate only,
+// the server is the real enforcement point.
+const PRACTITIONER_PICKER_ROLES = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST'];
+
 const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }) => {
   const { t } = useTranslation(['patients', 'common']);
   const { selectedClinicId } = useClinic();
+  const { user } = useAuth();
   const [phoneDuplicates, setPhoneDuplicates] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
   const phoneCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [formData, setFormData] = useState({
@@ -28,6 +37,9 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
     patientStatus: 'new',
     source: 'other',
     notes: '',
+    gender: '',
+    chartNumber: '',
+    primaryPractitionerId: '',
     communicationConsent: false,
     marketingConsent: false,
   });
@@ -35,11 +47,64 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
 
+  // F3-DATA-MIG-TODAY-001-UI-001-R1: T.C. Kimlik No is never part of
+  // `formData` / patientService.update() — it goes through the separate,
+  // narrowly role-gated identity endpoints. `identityValue` only ever holds
+  // what the user is actively typing (create, or an explicit "change" on
+  // edit) and is never persisted anywhere client-side (no localStorage).
+  const canManageIdentity = canManagePatientIdentity(user);
+  const [identityValue, setIdentityValue] = useState('');
+  const [identityChangeMode, setIdentityChangeMode] = useState(false);
+  const [existingIdentity, setExistingIdentity] = useState<{ present: boolean; maskedValue: string | null } | null>(null);
+  const [identityError, setIdentityError] = useState('');
+
+  useEffect(() => {
+    if (!patient?.id || !canManageIdentity) { setExistingIdentity(null); return; }
+    let cancelled = false;
+    patientService.getIdentity(patient.id)
+      .then(res => { if (!cancelled) setExistingIdentity(res.data); })
+      .catch(() => { if (!cancelled) setExistingIdentity(null); });
+    return () => { cancelled = true; };
+  }, [patient?.id, canManageIdentity]);
+
+  // The clinic the practitioner picker (and its tenant-scoped fetch) is
+  // bound to: the patient's own clinic when editing, or the currently
+  // selected branch when creating. Left undefined when creating from an
+  // "all branches" view — a picker cannot be tenant-scoped to nothing, so it
+  // stays hidden until a specific branch is known (server/src/routes/patients.ts
+  // still enforces this even if the UI gate is ever bypassed).
+  const targetClinicId: string | undefined = patient?.clinicId
+    || (selectedClinicId && selectedClinicId !== 'all' ? selectedClinicId : undefined);
+  const canPickPractitioner = PRACTITIONER_PICKER_ROLES.includes(normalizeRole(user?.role ?? '', user?.canAccessAllClinics ?? false));
+  const [practitioners, setPractitioners] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
+  const [practitionersLoading, setPractitionersLoading] = useState(false);
+
+  useEffect(() => {
+    if (!canPickPractitioner || !targetClinicId) {
+      setPractitioners([]);
+      return;
+    }
+    let cancelled = false;
+    setPractitionersLoading(true);
+    userService.getDoctors(targetClinicId)
+      .then(res => {
+        if (cancelled) return;
+        const list = (res.data ?? []).filter((u: any) => u.isActive !== false);
+        setPractitioners(list);
+      })
+      .catch(() => { if (!cancelled) setPractitioners([]); })
+      .finally(() => { if (!cancelled) setPractitionersLoading(false); });
+    return () => { cancelled = true; };
+  }, [canPickPractitioner, targetClinicId]);
+
   useEffect(() => {
     if (patient) {
       setFormData({
         ...patient,
         dateOfBirth: patient.dateOfBirth ? new Date(patient.dateOfBirth).toISOString().split('T')[0] : '',
+        gender: patient.gender || '',
+        chartNumber: patient.chartNumber || '',
+        primaryPractitionerId: patient.primaryPractitionerId || '',
       });
     }
   }, [patient]);
@@ -97,16 +162,43 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
 
     setLoading(true);
     setErrors({});
+    setIdentityError('');
 
     try {
       if (patient) {
         await patientService.update(patient.id, formData);
+
+        // T.C. Kimlik No change is a SEPARATE request against the identity
+        // sub-resource, deliberately not bundled into the patient PATCH —
+        // an unrelated field edit (e.g. phone) never touches the identity
+        // document because this block only runs when the user explicitly
+        // opened "change identity number" and typed something.
+        if (canManageIdentity && identityChangeMode && identityValue.trim()) {
+          try {
+            const identityRes = await patientService.putIdentity(patient.id, identityValue.trim());
+            setExistingIdentity(identityRes.data);
+            setIdentityChangeMode(false);
+            setIdentityValue('');
+          } catch (identityErr: any) {
+            setIdentityError(
+              typeof identityErr.response?.data?.error === 'string'
+                ? identityErr.response.data.error
+                : t('patients:form.identity.saveFailed'),
+            );
+            setLoading(false);
+            return;
+          }
+        }
       } else {
-        await patientService.create(formData);
+        const payload = canManageIdentity && identityValue.trim()
+          ? { ...formData, tckn: identityValue.trim() }
+          : formData;
+        await patientService.create(payload);
       }
       onSuccess();
     } catch (err: any) {
-      if (err.response?.status === 400) {
+      const status = err.response?.status;
+      if ((status === 400 || status === 409) && err.response?.data?.error && typeof err.response.data.error === 'object') {
         setErrors(err.response.data.error);
       } else {
         setErrors({ general: t('common:errorGeneric') });
@@ -227,6 +319,117 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
                 <option value="archived">{t('patients:status.archived')}</option>
               </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="label">{t('patients:form.gender')}</label>
+              <select name="gender" value={formData.gender || ''} onChange={handleChange} className="input-field">
+                <option value="">{t('patients:form.genderUnspecified')}</option>
+                <option value="male">{t('patients:gender.male')}</option>
+                <option value="female">{t('patients:gender.female')}</option>
+                <option value="other">{t('patients:gender.other')}</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">{t('patients:form.chartNumber')}</label>
+              <input
+                name="chartNumber"
+                value={formData.chartNumber || ''}
+                onChange={handleChange}
+                className="input-field"
+                placeholder={t('patients:form.chartNumberPlaceholder')}
+              />
+            </div>
+          </div>
+
+          {/* T.C. Kimlik No — F3-DATA-MIG-TODAY-001-UI-001-R1. Sensitive
+              identity field: never persisted client-side, autoComplete off,
+              read/write gated to canManagePatientIdentity roles only. */}
+          {canManageIdentity && (
+            <div>
+              <label className="label">
+                {t('patients:form.identity.label')}
+                <span className="ml-2 text-xs font-normal text-gray-400">{t('patients:form.identity.sensitiveHint')}</span>
+              </label>
+              {!patient ? (
+                <input
+                  name="tckn"
+                  value={identityValue}
+                  onChange={(e) => setIdentityValue(e.target.value)}
+                  className={`input-field ${errors.tckn ? 'border-red-500' : ''}`}
+                  placeholder={t('patients:form.identity.placeholder')}
+                  autoComplete="off"
+                  inputMode="numeric"
+                  maxLength={11}
+                />
+              ) : identityChangeMode ? (
+                <div className="space-y-2">
+                  <input
+                    name="tckn"
+                    value={identityValue}
+                    onChange={(e) => setIdentityValue(e.target.value)}
+                    className="input-field"
+                    placeholder={t('patients:form.identity.placeholder')}
+                    autoComplete="off"
+                    inputMode="numeric"
+                    maxLength={11}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setIdentityChangeMode(false); setIdentityValue(''); setIdentityError(''); }}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    {t('patients:form.identity.cancelChange')}
+                  </button>
+                </div>
+              ) : (
+                <div className="input-field bg-gray-50 flex items-center justify-between gap-3">
+                  <span className="text-sm text-gray-600">
+                    {existingIdentity?.present
+                      ? existingIdentity.maskedValue
+                      : t('patients:form.identity.notProvided')}
+                  </span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button type="button" onClick={() => setIdentityChangeMode(true)} className="text-xs text-primary-600 hover:text-primary-700">
+                      {t('patients:form.identity.change')}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {errors.tckn && <p className="text-xs text-red-500 mt-1">{errors.tckn._errors[0]}</p>}
+              {identityError && <p className="text-xs text-red-500 mt-1">{identityError}</p>}
+            </div>
+          )}
+
+          <div>
+            <label className="label">{t('patients:form.primaryPractitioner')}</label>
+            {canPickPractitioner && targetClinicId ? (
+              <>
+                <select
+                  name="primaryPractitionerId"
+                  value={formData.primaryPractitionerId || ''}
+                  onChange={handleChange}
+                  disabled={practitionersLoading}
+                  className={`input-field ${errors.primaryPractitionerId ? 'border-red-500' : ''}`}
+                >
+                  <option value="">{t('patients:form.primaryPractitionerUnassigned')}</option>
+                  {practitioners.map(p => (
+                    <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
+                  ))}
+                </select>
+                {errors.primaryPractitionerId && <p className="text-xs text-red-500 mt-1">{errors.primaryPractitionerId._errors[0]}</p>}
+              </>
+            ) : (
+              <p className="input-field bg-gray-50 text-gray-500 flex items-center">
+                {patient?.primaryPractitioner
+                  ? `${patient.primaryPractitioner.firstName} ${patient.primaryPractitioner.lastName}`
+                  : t('patients:form.primaryPractitionerUnassigned')}
+                {!canPickPractitioner && (
+                  <span className="ml-2 text-xs text-gray-400">{t('patients:form.primaryPractitionerReadOnlyHint')}</span>
+                )}
+              </p>
+            )}
           </div>
 
           <div>

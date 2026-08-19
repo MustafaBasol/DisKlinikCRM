@@ -190,7 +190,28 @@
     "lastNameRequired": "Soyad alanı zorunludur",
     "emailInvalid": "Geçerli bir e-posta adresi girin",
     "phoneDuplicateTitle": "Bu telefon numarası başka hastalarda da kayıtlı:",
-    "phoneDuplicateBody": "Bu durum çocuklar veya aile üyeleri için normaldir. Yine de kaydedebilirsiniz."
+    "phoneDuplicateBody": "Bu durum çocuklar veya aile üyeleri için normaldir. Yine de kaydedebilirsiniz.",
+    "gender": "Cinsiyet",
+    "genderUnspecified": "Belirtilmedi",
+    "chartNumber": "Dosya / Hasta No",
+    "chartNumberPlaceholder": "örn. 10423",
+    "primaryPractitioner": "Sorumlu Hekim",
+    "primaryPractitionerUnassigned": "Atanmadı",
+    "primaryPractitionerReadOnlyHint": "(salt okunur — resepsiyon/yönetim tarafından atanır)",
+    "identity": {
+      "label": "T.C. Kimlik No",
+      "sensitiveHint": "(hassas veri, isteğe bağlı)",
+      "placeholder": "11 haneli T.C. Kimlik No",
+      "notProvided": "Girilmedi",
+      "change": "Değiştir",
+      "cancelChange": "Vazgeç",
+      "saveFailed": "Kimlik bilgisi kaydedilemedi."
+    }
+  },
+  "gender": {
+    "male": "Erkek",
+    "female": "Kadın",
+    "other": "Diğer"
   },
   "dentalChart": {
     "title": "Diş Haritası",

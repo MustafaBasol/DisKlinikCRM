@@ -190,7 +190,28 @@
     "lastNameRequired": "Le nom est obligatoire",
     "emailInvalid": "Veuillez saisir une adresse e-mail valide",
     "phoneDuplicateTitle": "Ce numéro de téléphone est déjà enregistré pour d'autres patients :",
-    "phoneDuplicateBody": "C'est normal pour des enfants ou des membres de la famille. Vous pouvez tout de même enregistrer."
+    "phoneDuplicateBody": "C'est normal pour des enfants ou des membres de la famille. Vous pouvez tout de même enregistrer.",
+    "gender": "Genre",
+    "genderUnspecified": "Non précisé",
+    "chartNumber": "Numéro de dossier",
+    "chartNumberPlaceholder": "ex. 10423",
+    "primaryPractitioner": "Praticien principal",
+    "primaryPractitionerUnassigned": "Non assigné",
+    "primaryPractitionerReadOnlyHint": "(lecture seule — assigné par la réception/la direction)",
+    "identity": {
+      "label": "Numéro d'identité turc (T.C. Kimlik No)",
+      "sensitiveHint": "(sensible, facultatif)",
+      "placeholder": "T.C. Kimlik No à 11 chiffres",
+      "notProvided": "Non renseigné",
+      "change": "Modifier",
+      "cancelChange": "Annuler",
+      "saveFailed": "Impossible d'enregistrer les données d'identité."
+    }
+  },
+  "gender": {
+    "male": "Homme",
+    "female": "Femme",
+    "other": "Autre"
   },
   "dentalChart": {
     "title": "Schéma dentaire",

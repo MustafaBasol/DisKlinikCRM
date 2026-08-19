@@ -7,10 +7,39 @@ import { patientSchema, patientUpdateSchema } from '../schemas/index.js';
 import { checkPatientLimit } from '../middleware/planLimits.js';
 import { validateAndGetScope } from '../utils/clinicScope.js';
 import { patientListSelect, userNameRoleSelect, userNameSelect } from '../utils/prismaSelects.js';
-import { writeAuditLog, extractRequestMeta } from '../utils/auditLog.js';
+import { writeAuditLog, writeAuditLogInTx, extractRequestMeta } from '../utils/auditLog.js';
 import { safeErrorFields } from '../utils/safeError.js';
+import {
+  PATIENT_IDENTITY_DOC_TYPE,
+  PatientIdentityError,
+  safeIdentityErrorMessage,
+  writeIdentityInTx,
+} from '../services/patientIdentityService.js';
 
 const router = express.Router();
+
+/**
+ * F3-DATA-MIG-TODAY-001-UI-001: a well-formed UUID in primaryPractitionerId
+ * is not itself sufficient — it must resolve to an active practitioner in
+ * the SAME clinic the patient belongs to. Zod alone cannot express that
+ * (it has no DB access), so this runs after schema validation on every
+ * create/update. Returns null when valid, or a ready-to-send 400 body.
+ */
+export async function validatePrimaryPractitioner(primaryPractitionerId: string | null | undefined, clinicId: string) {
+  if (!primaryPractitionerId) return null;
+  const practitioner = await prisma.user.findFirst({
+    where: { id: primaryPractitionerId, clinicId, role: 'doctor', isActive: true },
+    select: { id: true },
+  });
+  if (practitioner) return null;
+  return {
+    error: {
+      primaryPractitionerId: {
+        _errors: ['Selected practitioner is not an active practitioner at this clinic.'],
+      },
+    },
+  };
+}
 
 // GET /api/patients/check-phone-duplicate
 // Returns patients in the same clinic sharing the given phone. Non-blocking — callers decide what to do.
@@ -179,6 +208,9 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
           include: { treatmentCase: true, assignedTo: { select: userNameRoleSelect } },
           orderBy: { updatedAt: 'desc' },
         },
+        // Name only — never the identityDocuments relation. See
+        // PatientIdentityDocument doc comment in prisma/schema.prisma.
+        primaryPractitioner: { select: userNameSelect },
         treatmentCases: {
           where: { deletedAt: null },
           orderBy: { updatedAt: 'desc' },
@@ -278,14 +310,82 @@ router.get('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
 });
 
 // POST /api/patients
+// F3-DATA-MIG-TODAY-001-UI-001-R1/R2: an optional `tckn` in the body is a raw
+// identity value, never a Patient scalar (patientSchema doesn't declare one,
+// so it is silently stripped from `validation.data` regardless — see
+// patientIdentityUxFieldValidation.test.ts). When present, the patient row
+// and its PatientIdentityDocument are created inside ONE prisma.$transaction
+// via writeIdentityInTx (services/patientIdentityService.ts): an invalid or
+// same-org-duplicate TCKN rolls the whole create back — no patient is left
+// behind without its identity, and no identity is ever attached to a patient
+// that doesn't exist. Property ABSENT keeps the original non-transactional
+// create path untouched. Property PRESENT but not a well-formed non-empty
+// string (number, object, array, null, or '') is rejected up front — before
+// any write — so a malformed *type* can never be silently coerced into "no
+// identity requested" the way `typeof x === 'string' ? x : ''` used to.
 router.post('/patients', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', 'RECEPTIONIST']), checkPatientLimit as express.RequestHandler, async (req: AuthRequest, res: Response) => {
   // checkPatientLimit already resolved and validated the creation-target clinic (org + access checked).
   const clinicId = req.targetClinicId!;
   const validation = patientSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.format() });
 
+  const hasTcknProperty = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'tckn');
+  const tcknRawValue: unknown = (req.body as Record<string, unknown> | undefined)?.tckn;
+  const tcknIsWellFormedString = typeof tcknRawValue === 'string' && tcknRawValue.trim().length > 0;
+
+  if (hasTcknProperty && !tcknIsWellFormedString) {
+    return res.status(400).json({
+      error: { tckn: { _errors: [safeIdentityErrorMessage('IDENTITY_TCKN_INVALID')] } },
+      code: 'IDENTITY_TCKN_INVALID',
+    });
+  }
+
+  const rawTckn = tcknIsWellFormedString ? (tcknRawValue as string).trim() : '';
+
   try {
-    const patient = await prisma.patient.create({ data: { ...validation.data, clinicId, organizationId: req.user!.organizationId } });
+    const practitionerError = await validatePrimaryPractitioner(validation.data.primaryPractitionerId, clinicId);
+    if (practitionerError) return res.status(400).json(practitionerError);
+
+    const organizationId = req.user!.organizationId;
+    let patient;
+
+    if (rawTckn) {
+      try {
+        patient = await prisma.$transaction(async (tx) => {
+          const created = await tx.patient.create({ data: { ...validation.data, clinicId, organizationId } });
+
+          const identity = await writeIdentityInTx(tx, {
+            patientId: created.id,
+            clinicId,
+            organizationId,
+            rawValue: rawTckn,
+          });
+
+          await writeAuditLogInTx(tx, {
+            organizationId,
+            clinicId,
+            actorUserId: req.user!.id,
+            actorRole: req.user!.role,
+            action: identity.created ? 'patient_identity_added' : 'patient_identity_replaced',
+            entityType: 'patient_identity',
+            entityId: created.id,
+            metadata: { patientId: created.id, docType: PATIENT_IDENTITY_DOC_TYPE },
+          });
+
+          return created;
+        });
+      } catch (txErr: unknown) {
+        if (txErr instanceof PatientIdentityError) {
+          return res.status(txErr.httpStatus).json({
+            error: { tckn: { _errors: [safeIdentityErrorMessage(txErr.code)] } },
+            code: txErr.code,
+          });
+        }
+        throw txErr;
+      }
+    } else {
+      patient = await prisma.patient.create({ data: { ...validation.data, clinicId, organizationId } });
+    }
 
     await logActivity({
       clinicId, userId: req.user!.id, entityType: 'patient', entityId: patient.id,
@@ -326,6 +426,9 @@ router.put('/patients/:id', authorize(['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER', '
       });
       if (!hasAppointment) return res.status(403).json({ error: 'Forbidden: You can only update your own patients' });
     }
+
+    const practitionerError = await validatePrimaryPractitioner(validation.data.primaryPractitionerId, clinicId);
+    if (practitionerError) return res.status(400).json(practitionerError);
 
     const patient = await prisma.patient.update({ where: { id }, data: validation.data });
 

@@ -118,6 +118,16 @@ export function canCreatePatient(user: UserForPermission | null | undefined): bo
   );
 }
 
+/**
+ * Hasta kimlik belgesi (T.C. Kimlik No) okuma/yazma — F3-DATA-MIG-TODAY-001-UI-001-R1.
+ * OWNER, ORG_ADMIN, CLINIC_MANAGER, RECEPTIONIST. DENTIST ve BILLING hariç —
+ * server/src/utils/roles.ts canManagePatientIdentity() ile birebir eşleşir.
+ */
+export function canManagePatientIdentity(user: UserForPermission | null | undefined): boolean {
+  const role = getRole(user);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER' || role === 'RECEPTIONIST';
+}
+
 /** Hasta silme: yalnızca yönetim rolleri */
 export function canDeletePatient(user: UserForPermission | null | undefined): boolean {
   if (user?.permissions?.canDeletePatient !== undefined) {

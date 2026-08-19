@@ -17,6 +17,7 @@ import {
   ClipboardList,
   MessageSquare,
   Briefcase,
+  Stethoscope,
   ShieldCheck,
   Paperclip,
   Download,
@@ -59,7 +60,7 @@ import {
   DEFAULT_PATIENT_DETAIL_TAB,
   type PatientDetailTab,
 } from './patientDetailTabsHelpers';
-import { normalizeRole, canViewPatients, canViewImaging, canManageLegalHold } from '../utils/permissions';
+import { normalizeRole, canViewPatients, canViewImaging, canManageLegalHold, canManagePatientIdentity } from '../utils/permissions';
 
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -150,6 +151,12 @@ const PatientDetail: React.FC = () => {
   const [insuranceProvisions, setInsuranceProvisions] = useState<any[]>([]);
   const [insuranceError, setInsuranceError] = useState(false);
   const [attachmentsError, setAttachmentsError] = useState(false);
+  // F3-DATA-MIG-TODAY-001-UI-001-R1: masked identity metadata only — see
+  // services/patientIdentityService.ts. Hidden entirely for roles without
+  // canManagePatientIdentity (e.g. DENTIST, BILLING never even learn whether
+  // a TCKN is on file).
+  const [identity, setIdentity] = useState<{ present: boolean; maskedValue: string | null } | null>(null);
+  const canViewIdentity = canManagePatientIdentity(user);
   const paymentCurrency = payments[0]?.currency || treatmentCases[0]?.currency || defaultCurrency;
   const patientFullName = patient
     ? String(
@@ -171,6 +178,17 @@ const PatientDetail: React.FC = () => {
     try {
       const response = await patientService.getById(id);
       setPatient(response.data);
+
+      if (canManagePatientIdentity(user)) {
+        try {
+          const identityRes = await patientService.getIdentity(id);
+          setIdentity(identityRes.data);
+        } catch {
+          setIdentity(null);
+        }
+      } else {
+        setIdentity(null);
+      }
 
       try {
         const tasksRes = await taskService.getAll({ patientId: id });
@@ -374,6 +392,12 @@ const PatientDetail: React.FC = () => {
     return `${log.user.firstName} ${log.user.lastName}`;
   };
 
+  const genderLabel = patient.gender ? t(`patients:gender.${patient.gender}`, { defaultValue: patient.gender }) : t('common:noData');
+  const chartNumberLabel = patient.chartNumber || t('common:noData');
+  const primaryPractitionerLabel = patient.primaryPractitioner
+    ? `${patient.primaryPractitioner.firstName} ${patient.primaryPractitioner.lastName}`
+    : t('patients:form.primaryPractitionerUnassigned');
+
   return (
     <div className="space-y-4 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -466,6 +490,28 @@ const PatientDetail: React.FC = () => {
                 <MapPin size={18} className="text-gray-400" />
                 <span className="text-sm">{patient.address ? `${patient.address}, ${patient.city}` : t('common:noData')}</span>
               </div>
+              <div className="flex items-center gap-3 text-gray-600">
+                <UserIcon size={18} className="text-gray-400" />
+                <span className="text-sm">{t('patients:form.gender')}: {genderLabel}</span>
+              </div>
+              {patient.chartNumber && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <ClipboardList size={18} className="text-gray-400" />
+                  <span className="text-sm">{t('patients:form.chartNumber')}: {chartNumberLabel}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-3 text-gray-600">
+                <Stethoscope size={18} className="text-gray-400" />
+                <span className="text-sm truncate">{t('patients:form.primaryPractitioner')}: {primaryPractitionerLabel}</span>
+              </div>
+              {canViewIdentity && identity && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <Lock size={18} className="text-gray-400" />
+                  <span className="text-sm">
+                    {t('patients:form.identity.label')}: {identity.present ? identity.maskedValue : t('patients:form.identity.notProvided')}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -551,6 +597,28 @@ const PatientDetail: React.FC = () => {
                     <MapPin size={16} className="text-gray-400 flex-shrink-0" />
                     <span className="text-sm">{patient.address ? `${patient.address}, ${patient.city}` : t('common:noData')}</span>
                   </div>
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <UserIcon size={16} className="text-gray-400 flex-shrink-0" />
+                    <span className="text-sm">{t('patients:form.gender')}: {genderLabel}</span>
+                  </div>
+                  {patient.chartNumber && (
+                    <div className="flex items-center gap-3 text-gray-600">
+                      <ClipboardList size={16} className="text-gray-400 flex-shrink-0" />
+                      <span className="text-sm">{t('patients:form.chartNumber')}: {chartNumberLabel}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <Stethoscope size={16} className="text-gray-400 flex-shrink-0" />
+                    <span className="text-sm truncate">{t('patients:form.primaryPractitioner')}: {primaryPractitionerLabel}</span>
+                  </div>
+                  {canViewIdentity && identity && (
+                    <div className="flex items-center gap-3 text-gray-600">
+                      <Lock size={16} className="text-gray-400 flex-shrink-0" />
+                      <span className="text-sm">
+                        {t('patients:form.identity.label')}: {identity.present ? identity.maskedValue : t('patients:form.identity.notProvided')}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className={`card p-4 ${patient.notes ? 'border-amber-200 bg-amber-50' : ''}`}>
                   <h3 className="font-bold flex items-center gap-2 mb-2 text-sm">
