@@ -8,6 +8,17 @@
  * UX-001 R1: entity search (patients/appointments/treatment cases) must be
  * permission-aware at the *request* level, not just the rendered-result
  * level — an unauthorized role must never call the underlying service.
+ *
+ * UX-001-PROD-SMOKE-R2: three production smoke findings.
+ *  1. BILLING must be able to find an existing patient through the existing
+ *     finance-safe /patients contract (patientListSelect — identity/contact
+ *     only, no clinical fields), routed to /payments?patientId=, never to
+ *     the clinical /patients/:id detail route.
+ *  2. (root cause is backend — see server/src/tests/treatmentCaseSearchScope.test.ts
+ *     for the DENTIST-unrelated-result regression coverage.)
+ *  3. Ctrl+K must close and clear itself immediately when auth transitions
+ *     authenticated -> unauthenticated, and an in-flight entity search from
+ *     the ended session must never populate results afterward.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -27,8 +38,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 let mockUser: { role: string; canAccessAllClinics?: boolean } | null = null;
+let mockIsAuthenticated = true;
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: mockUser }),
+  useAuth: () => ({ user: mockUser, isAuthenticated: mockIsAuthenticated }),
 }));
 
 vi.mock('../context/ClinicPreferencesContext', () => ({
@@ -51,6 +63,7 @@ const noop = () => {};
 beforeEach(() => {
   mockNavigate.mockClear();
   mockUser = null;
+  mockIsAuthenticated = true;
   (patientService.getAll as any).mockReset().mockImplementation(() => Promise.resolve({ data: [] }));
   (appointmentService.getAll as any).mockReset().mockImplementation(() => Promise.resolve({ data: [] }));
   (treatmentCaseService.getAll as any).mockReset().mockImplementation(() => Promise.resolve({ data: [] }));
@@ -127,7 +140,7 @@ describe('GlobalSearch', () => {
   });
 
   describe('permission-aware entity search requests', () => {
-    it('BILLING: does not call patient, appointment, or treatment-case search APIs for a 2+ char query', async () => {
+    it('BILLING: does not call appointment or treatment-case search APIs for a 2+ char query (finding 1 regression guard)', async () => {
       mockUser = { role: 'billing', canAccessAllClinics: false };
       render(<GlobalSearch isOpen onClose={noop} />);
       // Permitted Actions (e.g. Open Finance) are reachable on open, before
@@ -141,26 +154,54 @@ describe('GlobalSearch', () => {
         await new Promise((resolve) => setTimeout(resolve, 400));
       });
 
-      expect(patientService.getAll).not.toHaveBeenCalled();
       expect(appointmentService.getAll).not.toHaveBeenCalled();
       expect(treatmentCaseService.getAll).not.toHaveBeenCalled();
     });
 
-    it('BILLING: unauthorized entity results cannot appear even if the underlying service would return data', async () => {
+    it('BILLING: finds an existing patient through the finance-safe /patients contract and routes to /payments, never /patients/:id (finding 1 fix)', async () => {
       mockUser = { role: 'billing', canAccessAllClinics: false };
       (patientService.getAll as any).mockImplementation(() =>
-        Promise.resolve({ data: [{ id: 'p1', firstName: 'Jane', lastName: 'Doe' }] }),
+        // Shape matches server/src/utils/prismaSelects.ts patientListSelect —
+        // identity/contact + admin metadata only, no clinical fields.
+        Promise.resolve({
+          data: [{
+            id: 'p1',
+            firstName: 'Mustafa',
+            lastName: 'Basol',
+            phone: '5551234567',
+            email: 'mustafa@example.com',
+            clinicId: 'clinic-A',
+            patientStatus: 'active',
+          }],
+        }),
       );
       render(<GlobalSearch isOpen onClose={noop} />);
       const input = screen.getByPlaceholderText('globalSearch.placeholder');
 
-      fireEvent.change(input, { target: { value: 'ja' } });
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 400));
-      });
+      fireEvent.change(input, { target: { value: 'mustafa' } });
 
-      expect(patientService.getAll).not.toHaveBeenCalled();
-      expect(screen.queryByText('Jane Doe')).toBeNull();
+      await waitFor(() => expect(patientService.getAll).toHaveBeenCalledTimes(1));
+      const resultButton = await screen.findByText('Mustafa Basol');
+      expect(resultButton).toBeTruthy();
+
+      fireEvent.click(resultButton);
+      expect(mockNavigate).toHaveBeenCalledWith('/payments?patientId=p1');
+      expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringMatching(/^\/patients\//));
+    });
+
+    it('OWNER/management still routes patient results to the clinical /patients/:id detail route', async () => {
+      mockUser = { role: 'owner', canAccessAllClinics: true };
+      (patientService.getAll as any).mockImplementation(() =>
+        Promise.resolve({ data: [{ id: 'p1', firstName: 'Mustafa', lastName: 'Basol' }] }),
+      );
+      render(<GlobalSearch isOpen onClose={noop} />);
+      const input = screen.getByPlaceholderText('globalSearch.placeholder');
+
+      fireEvent.change(input, { target: { value: 'mustafa' } });
+      const resultButton = await screen.findByText('Mustafa Basol');
+      fireEvent.click(resultButton);
+
+      expect(mockNavigate).toHaveBeenCalledWith('/patients/p1');
     });
 
     it('RECEPTIONIST: calls patient, appointment, and treatment-case search (all permitted workflows)', async () => {
@@ -222,6 +263,85 @@ describe('GlobalSearch', () => {
 
       await waitFor(() => expect(screen.queryByText('New Result')).toBeTruthy());
       expect(screen.queryByText('Old Result')).toBeNull();
+    });
+  });
+
+  describe('logout / auth-boundary behavior (finding 3)', () => {
+    it('closes immediately and clears the query/results when auth transitions to unauthenticated', async () => {
+      mockUser = { role: 'owner', canAccessAllClinics: true };
+      mockIsAuthenticated = true;
+      (patientService.getAll as any).mockImplementation(() =>
+        Promise.resolve({ data: [{ id: 'p1', firstName: 'Mustafa', lastName: 'Basol' }] }),
+      );
+      const onClose = vi.fn();
+      const { rerender } = render(<GlobalSearch isOpen onClose={onClose} />);
+      const input = screen.getByPlaceholderText('globalSearch.placeholder');
+
+      fireEvent.change(input, { target: { value: 'mustafa' } });
+      await screen.findByText('Mustafa Basol');
+      expect((input as HTMLInputElement).value).toBe('mustafa');
+
+      // Simulate logout: AuthContext flips isAuthenticated false while the
+      // modal is still open (App.tsx would unmount it on the next render via
+      // onClose -> setSearchOpen(false), but this proves GlobalSearch itself
+      // reacts at the auth boundary, independent of that outer wiring).
+      mockIsAuthenticated = false;
+      rerender(<GlobalSearch isOpen onClose={onClose} />);
+
+      expect(onClose).toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByText('Mustafa Basol')).toBeNull());
+      expect((input as HTMLInputElement).value).toBe('');
+    });
+
+    it('an in-flight entity search from the ended session cannot populate results after logout (stale post-logout response)', async () => {
+      mockUser = { role: 'owner', canAccessAllClinics: true };
+      mockIsAuthenticated = true;
+      let resolveSearch: (value: any) => void = () => {};
+      (patientService.getAll as any).mockImplementation(
+        () => new Promise((resolve) => { resolveSearch = resolve; }),
+      );
+      const onClose = vi.fn();
+      const { rerender } = render(<GlobalSearch isOpen onClose={onClose} />);
+      const input = screen.getByPlaceholderText('globalSearch.placeholder');
+
+      fireEvent.change(input, { target: { value: 'mustafa' } });
+      await waitFor(() => expect(patientService.getAll).toHaveBeenCalledTimes(1));
+
+      // Session ends while that request is still in flight.
+      mockIsAuthenticated = false;
+      rerender(<GlobalSearch isOpen onClose={onClose} />);
+
+      // The stale request from the ended session resolves late.
+      await act(async () => {
+        resolveSearch({ data: [{ id: 'p1', firstName: 'Mustafa', lastName: 'Basol' }] });
+        await Promise.resolve();
+      });
+
+      expect(screen.queryByText('Mustafa Basol')).toBeNull();
+    });
+
+    it('reopening after a subsequent login starts a fresh, unauthenticated-free search (no reopen regression)', async () => {
+      mockUser = { role: 'owner', canAccessAllClinics: true };
+      mockIsAuthenticated = true;
+      (patientService.getAll as any).mockImplementation(() =>
+        Promise.resolve({ data: [{ id: 'p2', firstName: 'Fresh', lastName: 'Login' }] }),
+      );
+      const onClose = vi.fn();
+      const { rerender } = render(<GlobalSearch isOpen onClose={onClose} />);
+
+      // Logout closes it (App.tsx would unmount GlobalSearch on isOpen=false;
+      // simulate the reopen after a fresh login by rerendering isOpen again).
+      mockIsAuthenticated = false;
+      rerender(<GlobalSearch isOpen onClose={onClose} />);
+
+      // Next login — reopen the palette and confirm search still works.
+      mockIsAuthenticated = true;
+      rerender(<GlobalSearch isOpen={false} onClose={onClose} />);
+      rerender(<GlobalSearch isOpen onClose={onClose} />);
+
+      const input = screen.getByPlaceholderText('globalSearch.placeholder');
+      fireEvent.change(input, { target: { value: 'fresh' } });
+      await screen.findByText('Fresh Login');
     });
   });
 });
