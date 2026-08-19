@@ -760,6 +760,34 @@ tests.push(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BÖLÜM 6: canViewManagementCharts — UX-001 role-aware chart computation
+// ─────────────────────────────────────────────────────────────────────────────
+
+section('canViewManagementCharts — yalnızca yönetim rolleri grafik hesaplattırır');
+
+// dashboard.ts'teki satırın inline kopyası — RECEPTIONIST/BILLING/DENTIST için
+// getChartDataCached() hiç çağrılmamalı (role-aware data loading, UX-001).
+function canViewManagementCharts(normalizedRole: string): boolean {
+  return ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'].includes(normalizedRole);
+}
+
+tests.push(
+  test('OWNER/ORG_ADMIN/CLINIC_MANAGER → true (grafikler hesaplanır)', () => {
+    assert.equal(canViewManagementCharts('OWNER'), true);
+    assert.equal(canViewManagementCharts('ORG_ADMIN'), true);
+    assert.equal(canViewManagementCharts('CLINIC_MANAGER'), true);
+  }),
+);
+
+tests.push(
+  test('RECEPTIONIST/BILLING/DENTIST → false (gereksiz sorgu atlanır)', () => {
+    assert.equal(canViewManagementCharts('RECEPTIONIST'), false);
+    assert.equal(canViewManagementCharts('BILLING'), false);
+    assert.equal(canViewManagementCharts('DENTIST'), false);
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Sonuçlar
 // ─────────────────────────────────────────────────────────────────────────────
 

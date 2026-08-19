@@ -108,6 +108,29 @@ async function main() {
     assert.equal(getValidatedLastRoute('user-6', 'clinic-a', RECEPTIONIST), null);
   });
 
+  section('── unified /inbox route (UX-001 Wave 2) ────────────────────────');
+
+  await test('restores /inbox/whatsapp with its query string for a RECEPTIONIST', () => {
+    recordLastRoute('user-12', 'clinic-a', '/inbox/whatsapp', '?filter=open');
+    assert.equal(getValidatedLastRoute('user-12', 'clinic-a', RECEPTIONIST), '/inbox/whatsapp?filter=open');
+  });
+
+  await test('restores bare /inbox for a role permitted on either channel', () => {
+    recordLastRoute('user-13', 'clinic-a', '/inbox', '');
+    assert.equal(getValidatedLastRoute('user-13', 'clinic-a', OWNER), '/inbox');
+  });
+
+  await test('does not restore /inbox for a role with neither WhatsApp nor Instagram access (DENTIST)', () => {
+    recordLastRoute('user-14', 'clinic-a', '/inbox/whatsapp', '');
+    assert.equal(getValidatedLastRoute('user-14', 'clinic-a', DENTIST), null);
+  });
+
+  await test('legacy /whatsapp-inbox route keeps working independently of /inbox', () => {
+    recordLastRoute('user-15', 'clinic-a', '/whatsapp-inbox', '');
+    assert.equal(getValidatedLastRoute('user-15', 'clinic-a', RECEPTIONIST), '/whatsapp-inbox');
+    assert.equal(getValidatedLastRoute('user-15', 'clinic-a', DENTIST), null);
+  });
+
   section('── unknown routes are never restored ───────────────────────────');
 
   await test('an unmapped/unknown path is not restored', () => {

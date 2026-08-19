@@ -129,6 +129,17 @@
       "patient": "Patient",
       "appointment": "Appointment",
       "treatment": "Treatment"
+    },
+    "groups": {
+      "pages": "Pages",
+      "actions": "Actions"
+    },
+    "actions": {
+      "newPatient": "New Patient",
+      "newAppointment": "New Appointment",
+      "openCalendar": "Open Calendar",
+      "openInbox": "Open Inbox",
+      "openFinance": "Open Finance"
     }
   },
   "navGroups": {

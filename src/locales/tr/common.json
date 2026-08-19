@@ -129,6 +129,17 @@
       "patient": "Hasta",
       "appointment": "Randevu",
       "treatment": "Tedavi"
+    },
+    "groups": {
+      "pages": "Sayfalar",
+      "actions": "Eylemler"
+    },
+    "actions": {
+      "newPatient": "Yeni Hasta",
+      "newAppointment": "Yeni Randevu",
+      "openCalendar": "Takvimi Aç",
+      "openInbox": "Gelen Kutusunu Aç",
+      "openFinance": "Finansı Aç"
     }
   },
   "navGroups": {

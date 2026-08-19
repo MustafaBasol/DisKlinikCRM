@@ -30,7 +30,6 @@ import {
   BarChart3,
   Activity,
   UserX,
-  Instagram,
   RotateCcw,
   KeyRound,
   AlertCircle,
@@ -457,8 +456,12 @@ const MainLayoutInner: React.FC = () => {
   // İletişim
   {
     const items: NavItem[] = [];
-    if (canViewWhatsAppInbox(user)) {
-      items.push({ path: '/whatsapp-inbox', icon: <Inbox size={18} />, label: t('common:whatsappInbox') });
+    // UX-001 Wave 2: WhatsApp + Instagram inboxes are now one "Inbox" nav
+    // entry (/inbox), which lands the user on whichever channel they're
+    // permitted for. /whatsapp-inbox and /instagram-inbox remain live routes
+    // (bookmarks, session continuity) — just no longer separate nav items.
+    if (canViewWhatsAppInbox(user) || canViewInstagramInbox(user)) {
+      items.push({ path: '/inbox', icon: <Inbox size={18} />, label: t('inbox:title') });
     }
     if (canSeeAppointmentRequests) {
       items.push({
@@ -481,9 +484,6 @@ const MainLayoutInner: React.FC = () => {
     }
     if (canSeeTemplates) {
       items.push({ path: '/templates', icon: <Mail size={18} />, label: t('common:templates') });
-    }
-    if (canViewInstagramInbox(user)) {
-      items.push({ path: '/instagram-inbox', icon: <Instagram size={18} />, label: t('common:instagramInbox') });
     }
     if (items.length > 0) {
       navGroups.push({ id: 'iletisim', label: t('common:navGroups.communication'), collapsible: true, items });

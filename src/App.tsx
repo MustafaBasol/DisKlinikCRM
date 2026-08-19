@@ -60,6 +60,7 @@ const WhatsAppInbox = React.lazy(() => import('./pages/WhatsAppInbox'));
 const ContactRequests = React.lazy(() => import('./pages/ContactRequests'));
 const InstagramConnections = React.lazy(() => import('./pages/InstagramConnections'));
 const InstagramInbox = React.lazy(() => import('./pages/InstagramInbox'));
+const Inbox = React.lazy(() => import('./pages/Inbox'));
 const FinanceDashboard = React.lazy(() => import('./pages/FinanceDashboard'));
 const Operations = React.lazy(() => import('./pages/Operations'));
 const Users = React.lazy(() => import('./pages/Users'));
@@ -239,6 +240,10 @@ const ProductApplication: React.FC = () => {
               <Route path="contact-requests" element={<ContactRequests />} />
               <Route path="organization/instagram" element={<InstagramConnections />} />
               <Route path="instagram-inbox" element={<InstagramInbox />} />
+              {/* UX-001 Wave 2: unified inbox shell — /whatsapp-inbox and /instagram-inbox
+                  above stay live for backward compatibility (bookmarks, session continuity). */}
+              <Route path="inbox" element={<Inbox />} />
+              <Route path="inbox/:channel" element={<Inbox />} />
               <Route path="finance" element={<FinanceDashboard />} />
               <Route path="operations" element={<Operations />} />
               <Route path="users" element={<Users />} />

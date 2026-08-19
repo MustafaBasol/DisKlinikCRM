@@ -331,6 +331,13 @@ const Dashboard: React.FC = () => {
   const [isNewApptOpen, setIsNewApptOpen] = useState(false);
   const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
 
+  // ── BILLING: finans paneline yönlendir ─────────────────────────────────
+  // Computed before the fetch (not just before the render bail-out) so a
+  // BILLING login never issues the /dashboard/stats request at all — it
+  // redirects straight to /finance. Role-aware data loading: don't fetch
+  // what the role can't use (UX-001).
+  const isBilling = Boolean(user) && normalizeRole(user!.role, user!.canAccessAllClinics) === 'BILLING';
+
   const fetchDashboard = async () => {
     setLoading(true);
     try {
@@ -344,8 +351,16 @@ const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    if (isBilling) {
+      setLoading(false);
+      return;
+    }
     fetchDashboard();
-  }, [selectedClinicId]);
+  }, [selectedClinicId, isBilling]);
+
+  if (isBilling) {
+    return <Navigate to="/finance" replace />;
+  }
 
   if (loading && !data) {
     return (
@@ -353,11 +368,6 @@ const Dashboard: React.FC = () => {
         <Loader2 className="animate-spin text-primary-600" size={48} />
       </div>
     );
-  }
-
-  // ── BILLING: finans paneline yönlendir ─────────────────────────────────
-  if (user && normalizeRole(user.role, user.canAccessAllClinics) === 'BILLING') {
-    return <Navigate to="/finance" replace />;
   }
 
   // ── Hekim kendi özel dashboard'unu görür ──────────────────────────────────
