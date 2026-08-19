@@ -24,7 +24,8 @@
  *   3. NORMALIZED              conf 90   matrix hit on the normalized header
  *   4. EXACT_HEADER            conf 85   header equals a destination key/segment
  *   5. ALIAS                   conf 80   vendor-neutral alias table
- *   6. UNKNOWN_HEADER          conf 0    no rule matched -> MANUAL_REQUIRED
+ *   6. EMPTY_SOURCE_COLUMN     conf 100  headerless AND confirmed zero data -> IGNORE
+ *   7. UNKNOWN_HEADER          conf 0    no rule matched -> MANUAL_REQUIRED
  *
  * PERFORMANCE: O(headers). Every lookup structure is built ONCE at module
  * load; the per-header work is a handful of Map.get calls. Nothing here ever
@@ -488,7 +489,39 @@ export function suggestMappings(
       }
     }
 
-    // --- 6. nothing matched -----------------------------------------------
+    // --- 6. headerless column with CONFIRMED zero meaningful data ---------
+    // `header.headerWasBlank` (set only by canonicalParser.ts when the header
+    // CELL itself was blank) tells apart a genuinely nameless column from a
+    // named one that merely produced this same synthesized text — a plain
+    // string match on 'COLUMN_<index>' could not make that distinction.
+    // `profile.filledCount === 0` is the SAME "meaningful data" measurement
+    // the mapping screen's fill-rate bar already shows the operator, so this
+    // decision and what the operator sees can never disagree. No profile at
+    // all means unknowable, which stays MANUAL_REQUIRED below — absence of
+    // evidence is never treated as evidence of emptiness.
+    //
+    // Nuance (do not widen this without re-reading the two rules): a blank
+    // header with SOME data (however little) still falls through to rule 7 —
+    // masking one real patient value as an "empty" column would silently drop
+    // it, which is exactly what MANUAL_REQUIRED exists to prevent.
+    if (header.headerWasBlank && profile !== undefined && profile.filledCount === 0) {
+      out.push({
+        sourceField: header.original,
+        sourceLabel: header.original,
+        sourceIndex: header.index,
+        sourceNormalized: normalized,
+        destinationField: null,
+        destinationLabel: null,
+        transform: null,
+        composeOrder: null,
+        confidence: 100,
+        reason: 'EMPTY_SOURCE_COLUMN',
+        mappingState: 'IGNORE',
+      });
+      continue;
+    }
+
+    // --- 7. nothing matched -----------------------------------------------
     // MANUAL_REQUIRED, not IGNORE. An unrecognized column is an UNANSWERED
     // QUESTION; defaulting it to IGNORE would let a whole column of real
     // patient data disappear without anyone deciding that it should.

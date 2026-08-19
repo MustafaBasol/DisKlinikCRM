@@ -732,7 +732,8 @@
         "VENDOR_INTERNAL": "Anbieterinterne Spalte",
         "SUMMARY_NOT_TRANSACTION": "Zusammenfassungsspalte, keine Transaktion",
         "SEMANTICS_UNRESOLVED": "Bedeutung ungeklärt",
-        "UNKNOWN_HEADER": "Unbekannte Kopfzeile"
+        "UNKNOWN_HEADER": "Unbekannte Kopfzeile",
+        "EMPTY_SOURCE_COLUMN": "Leere Quellspalte (automatisch ignoriert)"
       },
       "states": {
         "AUTO_CONFIDENT": "Automatisch (hohe Sicherheit)",

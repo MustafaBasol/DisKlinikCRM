@@ -252,6 +252,7 @@ export const MAPPING_REASONS = [
   'SUMMARY_NOT_TRANSACTION',
   'SEMANTICS_UNRESOLVED',
   'UNKNOWN_HEADER',
+  'EMPTY_SOURCE_COLUMN',
 ] as const;
 
 export type MappingReason = (typeof MAPPING_REASONS)[number];
