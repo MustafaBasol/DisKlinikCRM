@@ -373,6 +373,11 @@ function ignorePayload(sourceField: string) {
   return [{ sourceField, destinationField: null, transform: null, composeOrder: null, state: 'IGNORE' }];
 }
 
+/** The client's "Engelle" payload shape (MigrationMappingStep.tsx handleMarkBlocked, post-fix, R12-UX-CLOSURE amendment). */
+function blockedPayload(sourceField: string) {
+  return [{ sourceField, destinationField: null, transform: null, composeOrder: null, state: 'BLOCKED' }];
+}
+
 const putMappings = (runId: string, mappings: unknown[]) =>
   runChain(mappingsPutChain, adminReq({ id: runId }, { mappings }), mockRes());
 
@@ -627,6 +632,83 @@ async function main() {
   await test('the run advanced to MAPPING_READY — "Referans Eşlemeye Geç" is reachable', async () => {
     const run = await prisma.migrationRun.findUniqueOrThrow({ where: { id: runId } });
     assert.equal(run.status, 'MAPPING_READY');
+  });
+
+  // =========================================================================
+  section('9. "ENGELLE" — destination/transform/composeOrder cleared atomically (R12-UX-CLOSURE amendment)');
+  // =========================================================================
+  // Same residue defect as the pre-fix "Yok say", found by architecture review
+  // in the same operator control group: handleMarkBlocked only wrote `state`,
+  // leaving a stale destination/transform/composeOrder that validateMapping.ts
+  // Rule (state === 'BLOCKED') reports as MAPPING_INVALID, byte-for-byte the
+  // same contradiction the IGNORE fix above closes. KONTROLNOTU is reused here
+  // — resolved in section 1/2/3 above, so it is a real row that still carries
+  // a live destination when "Engelle" is clicked.
+
+  await test('KONTROLNOTU (a RESOLVED row carrying a destination): "Engelle" returns 2xx and clears destination/transform/composeOrder in the SAME write', async () => {
+    const before = await mappingRow(runId, 'KONTROLNOTU');
+    assert.equal(
+      before.destinationField,
+      'patient.notes',
+      'fixture sanity: KONTROLNOTU must still carry a destination before blocking',
+    );
+
+    const res = await putMappings(runId, blockedPayload('KONTROLNOTU'));
+    assert.equal(res.statusCode, 200, `block failed: ${JSON.stringify(res.body)}`);
+    const row = await mappingRow(runId, 'KONTROLNOTU');
+    assert.equal(row.state, 'BLOCKED');
+    assert.equal(row.destinationField, null, 'destinationField must be cleared, not left carrying patient.notes');
+    assert.equal(row.transform, null);
+    assert.equal(row.composeOrder, null);
+    assert.equal(row.decidedByPlatformAdminId, ACTOR_ID);
+    assert.notEqual(row.decidedAt, null);
+  });
+
+  await test('no MAPPING_INVALID issue remains for the blocked KONTROLNOTU row, and it counts as blocked', async () => {
+    const res = await getMappings(runId);
+    const issues = (res.body.validation.issues as Array<{ sourceField?: string; code?: string }>).filter(
+      (i) => i.sourceField === 'KONTROLNOTU',
+    );
+    assert.deepEqual(
+      issues,
+      [],
+      `KONTROLNOTU must carry no validation issue at all once blocked, got ${JSON.stringify(issues)}`,
+    );
+    assert.equal(res.body.validation.blockedCount, 1);
+  });
+
+  await test('reload (a fresh GET) still reports the clean BLOCKED state — no destination residue survives a page refresh', async () => {
+    const res = await getMappings(runId);
+    const row = (
+      res.body.mappings as Array<{ sourceField: string; state: string; destinationField: string | null }>
+    ).find((m) => m.sourceField === 'KONTROLNOTU');
+    assert.ok(row, 'KONTROLNOTU must still be present after reload');
+    assert.equal(row!.state, 'BLOCKED');
+    assert.equal(row!.destinationField, null);
+  });
+
+  // =========================================================================
+  section('10. LEGAL_BLOCKED — a block-shaped request still fails closed');
+  // =========================================================================
+
+  await test('a hand-crafted "Engelle"-shaped PUT against the stored LEGAL_BLOCKED row is refused', async () => {
+    const before = await mappingRow(runId, 'KVKKONAYKODU');
+    const res = await putMappings(runId, [
+      {
+        sourceField: 'KVKKONAYKODU',
+        destinationField: before.destinationField,
+        transform: before.transform,
+        composeOrder: before.composeOrder,
+        state: 'BLOCKED',
+      },
+    ]);
+    assert.notEqual(res.statusCode, 200, 'relabelling a legal gate to BLOCKED must never succeed');
+    assert.equal(res.body?.code, 'MAPPING_INVALID');
+    assert.match(String(res.body?.error ?? ''), /KVKKONAYKODU/);
+
+    const after = await mappingRow(runId, 'KVKKONAYKODU');
+    assert.equal(after.state, 'LEGAL_BLOCKED', 'a legal gate must never become an operator BLOCKED decision');
+    assert.equal(after.decidedByPlatformAdminId, null);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

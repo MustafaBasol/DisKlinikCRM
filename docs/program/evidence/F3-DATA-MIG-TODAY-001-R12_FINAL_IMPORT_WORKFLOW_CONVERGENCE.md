@@ -571,3 +571,71 @@ rows while ignoring the third drives `sensitiveReviewCount` and
 
 **Real-customer Execute: not performed.** No dry-run or execute step was
 touched by this task.
+
+### 11.5 R12-UX-CLOSURE amendment — exact-head CI fix and Block-action closure (2026-08-20)
+
+Architecture review of head `1efc4bb5a147c96cdfdf262acfdfe5e68f03c666` found
+two blockers before this PR could be called merge-safe, both addressed in the
+same PR, on the same branch, with no new task opened.
+
+**CI #422 (Layer 1: frontend typecheck + build) — root cause.** The new
+`makeApprovalApi()` test-fixture factory in
+`MigrationMappingStep.vitest.test.tsx` cast its return value to
+`MigrationApiClient & { saveMappings: ReturnType<typeof vi.fn> }`, omitting
+`acceptAutoMappings` from the intersection. `renderStep()`'s parameter type is
+`ReturnType<typeof makeApi>`, whose intersection type declares BOTH
+`saveMappings` and `acceptAutoMappings` as `ReturnType<typeof vi.fn>`. Because
+`acceptAutoMappings` fell back to `MigrationApiClient`'s real method signature
+`(runId: string) => Promise<...>` under the incomplete cast, every
+`renderStep(api)` call built from `makeApprovalApi()` failed TS2345 — the
+constructed object's `acceptAutoMappings` type didn't satisfy the mock type
+`renderStep` requires. Fix: added `acceptAutoMappings:
+ReturnType<typeof vi.fn>;` to `makeApprovalApi`'s cast, matching `makeApi`'s
+existing intersection exactly. No production type was touched, no `any` was
+introduced.
+
+**Block-action residue — root cause.** `handleMarkBlocked` in
+`MigrationMappingStep.tsx` wrote only `state: 'BLOCKED'`, the exact defect
+shape `handleMarkIgnore` had before the original R12-UX-CLOSURE fix: a row
+already carrying a destination (e.g. a `RESOLVED` row an operator decides to
+block instead) kept that destination, and
+`validateMapping.ts`'s `state === 'BLOCKED'` branch already reports that
+combination as `MAPPING_INVALID` ("marked blocked but still carries
+destination"). Fix, identical in shape to the ignore fix: `handleMarkBlocked`
+now clears `destinationField`, `destinationLabel`, `transform` and
+`composeOrder` to `null` in the SAME updater passed to `persistMapping`, so
+the same PUT row and the same server `updateMany` write all four fields
+atomically. No server-side code changed — `validateMapping.ts`'s existing
+Rule for `state === 'BLOCKED'` and the legal gate's stored-state check already
+cover this shape with zero new logic.
+
+Changed files for this amendment (all within the original R12-UX-CLOSURE
+scope): `src/components/platform/migration/MigrationMappingStep.tsx`
+(`handleMarkBlocked` fix only),
+`src/components/platform/migration/__tests__/MigrationMappingStep.vitest.test.tsx`
+(`acceptAutoMappings` cast fix, plus two new tests: `6b` Block clears the
+tuple atomically, `6c` a `LEGAL_BLOCKED` row never renders "Engelle"),
+`server/src/tests/migrationMappingApprovalDb.test.ts` (two new sections: `9`
+Block clears the tuple atomically end-to-end against a real Postgres and
+survives a reload, `10` a hand-crafted Block-shaped `PUT` against a stored
+`LEGAL_BLOCKED` row is refused). No Prisma migration. No production server
+file touched.
+
+| Suite (re-run at the amended head) | Result |
+| --- | --- |
+| `test:platform-migration-helpers` | **85/85** |
+| `MigrationMappingStep.vitest.test.tsx` (10 pre-existing + 2 new) | **12/12** |
+| `server/src/tests/migrationMappingApprovalDb.test.ts` (19 pre-existing + 4 new) | **23/23** |
+| `migrationImportWorkflowConvergenceDb.test.ts` — R12 400 regression | **48/48** |
+| `migrationMapping.test.ts` | **74/74** |
+| `migrationDataLossGate.test.ts` | **19/19** |
+| Frontend `tsc -b` | clean |
+| Frontend production `npm run build` | clean |
+| Server `tsc --noEmit` | clean |
+| `git diff --check` | clean |
+
+`LEGAL_BLOCKED` behaviour is unchanged and unaffected: the client never
+renders "Engelle" for a `LEGAL_BLOCKED` row (unchanged, pre-existing
+condition in `MigrationMappingStep.tsx`), and the existing
+`legalGateGuard.ts` refuses any edit — including a Block-shaped one — against
+a stored `LEGAL_BLOCKED` row, verified directly in the new DB test section 10.

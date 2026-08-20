@@ -598,8 +598,21 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
     persistMapping(sourceField, (m) => ({ ...m, state: 'RESOLVED' }));
   }, [persistMapping]);
 
+  /**
+   * "Engelle" — same atomic-clear requirement as "Yok say" above: a BLOCKED
+   * row must not carry a leftover destination/transform/composeOrder from
+   * whatever state it was in before, or it fails MAPPING_INVALID the same
+   * way an unclear IGNORE row did. F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE.
+   */
   const handleMarkBlocked = useCallback((sourceField: string) => {
-    persistMapping(sourceField, (m) => ({ ...m, state: 'BLOCKED' }));
+    persistMapping(sourceField, (m) => ({
+      ...m,
+      state: 'BLOCKED',
+      destinationField: null,
+      destinationLabel: null,
+      transform: null,
+      composeOrder: null,
+    }));
   }, [persistMapping]);
 
   const handleResetAuto = useCallback((sourceField: string) => {

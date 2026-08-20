@@ -463,6 +463,7 @@ describe('MigrationMappingStep — "Eşlemeyi Onayla" and "Yok say" (R12-UX-CLOS
       getRun: vi.fn().mockResolvedValue({ run: RUN, reconciliation: null, dryRun: null }),
     } as unknown as import('../../../../services/platformMigrationApi').MigrationApiClient & {
       saveMappings: ReturnType<typeof vi.fn>;
+      acceptAutoMappings: ReturnType<typeof vi.fn>;
     };
   }
 
@@ -541,6 +542,39 @@ describe('MigrationMappingStep — "Eşlemeyi Onayla" and "Yok say" (R12-UX-CLOS
         state: 'IGNORE',
       },
     ]);
+  });
+
+  it('6b. KONTROLNOTU "Engelle" clears destination/transform/composeOrder atomically in the same PUT row (R12-UX-CLOSURE amendment)', async () => {
+    // Same residue defect as the pre-fix "Yok say" above, found by architecture
+    // review in the same operator control group: handleMarkBlocked used to
+    // write only `state`, leaving a destination that Rule (state === 'BLOCKED')
+    // in validateMapping.ts reports as MAPPING_INVALID.
+    const user = userEvent.setup();
+    const api = makeApprovalApi([KONTROLNOTU]);
+    renderStep(api);
+
+    await screen.findByText('KONTROLNOTU');
+    const row = screen.getByText('KONTROLNOTU').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Engelle' }));
+
+    await waitFor(() => expect(api.saveMappings).toHaveBeenCalledTimes(1));
+    expect(api.saveMappings).toHaveBeenCalledWith('run-r7-1', [
+      {
+        sourceField: 'KONTROLNOTU',
+        destinationField: null,
+        transform: null,
+        composeOrder: null,
+        state: 'BLOCKED',
+      },
+    ]);
+  });
+
+  it('6c. a LEGAL_BLOCKED row never renders "Engelle" — the legal gate is not an operator block decision', async () => {
+    const api = makeApprovalApi([LEGAL_ROW]);
+    renderStep(api);
+
+    await screen.findByText('KVKKONAYKODU');
+    expect(screen.queryByRole('button', { name: 'Engelle' })).not.toBeInTheDocument();
   });
 
   it('7. approving two rows and ignoring one drives "sizden karar bekliyor" to 0', async () => {
