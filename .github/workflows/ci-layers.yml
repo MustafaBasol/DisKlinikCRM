@@ -586,6 +586,12 @@ jobs:
           npm run test:clinic-bulk-export-selection
           npm run test:communication-consent-matrix
           npm run test:patient-detail-tabs-helpers
+          npm run test:platform-migration-helpers
+          # F3-DATA-MIG-TODAY-001-R11. Guards the frontend destination-group
+          # whitelist against the backend catalog. It reads server contracts
+          # directly, which is safe in this root-only job: contracts.ts has a
+          # single `import type`, erased at runtime, so it needs no server deps.
+          npm run test:migration-destination-group-parity
       - name: Vitest suite
         run: npm run test:vitest
 

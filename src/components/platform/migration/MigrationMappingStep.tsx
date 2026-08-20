@@ -86,9 +86,30 @@ const MappingRow: React.FC<RowProps> = React.memo(({
   const isLegalBlocked = mapping.state === 'LEGAL_BLOCKED';
   const isBlocked = mapping.state === 'BLOCKED';
   const isIgnored = mapping.state === 'IGNORE';
-  // SENSITIVE_REVIEW_REQUIRED is deliberately NOT part of this lock: the whole
-  // point of that state is that the operator picks/approves a destination.
-  const destSelectionLocked = isLegalBlocked || isBlocked;
+  /*
+   * ONLY the legal gate locks destination selection.
+   *
+   * SENSITIVE_REVIEW_REQUIRED is deliberately NOT part of this lock: the whole
+   * point of that state is that the operator picks/approves a destination.
+   *
+   * BLOCKED was removed from this lock by F3-DATA-MIG-TODAY-001-R11. BLOCKED is
+   * a SYSTEM RECOMMENDATION ("we found no destination for this column"), not a
+   * decision — and locking the dropdown turned that recommendation into an
+   * irreversible verdict. A column carrying real data (SUBEDOSYANO: 9,105
+   * values; UNVANI: 14,890) could be recommended-blocked and the operator had
+   * no way to route it anywhere, so the only path forward was silent data loss.
+   * Re-selecting a destination moves the row BLOCKED -> RESOLVED through
+   * handleDestinationChange, which the backend accepts; a BLOCKED row that
+   * still carries a destination is rejected by validateMapping, and that
+   * invariant is unchanged here.
+   *
+   * LEGAL_BLOCKED stays locked, and is not even rendered as a <select> below:
+   * lifting a legal gate is a program-owner decision, never a mapping choice.
+   * The server enforces this independently — the mapping PUT route refuses any
+   * attempt to move a stored LEGAL_BLOCKED row — so this is the UI half of a
+   * fail-closed pair, not the only guard.
+   */
+  const destSelectionLocked = isLegalBlocked;
   const selectedDest = mapping.destinationField ? destinations.find((d) => d.key === mapping.destinationField) : undefined;
   const nonZeroTypes = profile
     ? CANONICAL_CELL_TYPES.filter((ct) => (profile.typeCounts[ct] ?? 0) > 0)
@@ -262,7 +283,15 @@ const MappingRow: React.FC<RowProps> = React.memo(({
       {/* Actions */}
       <td className="px-3 py-3 min-w-[190px]">
         <div className="flex flex-col items-start gap-1">
-          {!isIgnored && (
+          {/*
+            * `!isLegalBlocked` added by F3-DATA-MIG-TODAY-001-R11. Ignoring a
+            * legally-gated column would relabel a KVKK Art. 6 exclusion as an
+            * ordinary operator exclusion and drop it from the LEGAL_BLOCKED
+            * tally the dry run reports. The mapping PUT route now refuses the
+            * write outright, so leaving the button visible would only offer an
+            * action that always fails.
+            */}
+          {!isIgnored && !isLegalBlocked && (
             <button
               type="button"
               aria-label={t('platform:migration.mapping.actions.ignore')}

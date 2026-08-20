@@ -191,6 +191,26 @@ export interface MigrationAnalysisDto {
 // Destination catalog
 // ---------------------------------------------------------------------------
 
+/**
+ * The groups the mapping screen renders, in dropdown order.
+ *
+ * THIS LIST IS A RENDER FILTER, NOT A PREFERENCE. MigrationMappingStep renders
+ * `destinationGroups.map(g => destinations.filter(d => d.group === g))`, so a
+ * backend destination whose group is absent here is silently dropped before it
+ * can become an `<option>` — the server sends it, the operator never sees it.
+ *
+ * That is exactly how R10's `legacy.preservedSourceValue` became unreachable in
+ * production: the backend catalog, validation and executor all supported it,
+ * but `legacy_preservation` was missing from this array, so the six real
+ * first-customer columns that arrive with preservation ALREADY proposed
+ * (AUTO_REVIEW + destinationField set) rendered a `<select>` holding a value
+ * with no matching option — which displays blank. The column read as unmapped
+ * and could never be mapped back.
+ *
+ * Keep in lockstep with the backend catalog's `group` values;
+ * src/pages/__tests__/migrationDestinationGroupParity.test.ts fails the build
+ * if the two ever drift again (F3-DATA-MIG-TODAY-001-R11).
+ */
 export const DESTINATION_GROUPS = [
   'provenance',
   'identity',
@@ -199,6 +219,13 @@ export const DESTINATION_GROUPS = [
   'address',
   'clinical',
   'operational',
+  /*
+   * Deliberately LAST. Preservation is the safety valve for a column with no
+   * canonical home, so it must sit below every canonical destination in the
+   * dropdown: an operator scanning the list should reach a real field first and
+   * only fall through to preservation when nothing above it fits.
+   */
+  'legacy_preservation',
 ] as const;
 
 export type DestinationGroup = (typeof DESTINATION_GROUPS)[number];

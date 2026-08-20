@@ -693,7 +693,8 @@
         "patient.primaryPractitionerId": "Assigned practitioner",
         "patient.identity.tckn": "National identity number",
         "patient.notes": "Clinical note",
-        "patient.bloodGroup": "Blood group"
+        "patient.bloodGroup": "Blood group",
+        "legacy.preservedSourceValue": "Preserved Source Value"
       },
       "groups": {
         "provenance": "Provenance",
@@ -702,7 +703,8 @@
         "contact": "Contact",
         "address": "Address",
         "clinical": "Clinical",
-        "operational": "Operational"
+        "operational": "Operational",
+        "legacy_preservation": "Preserved Source Values"
       },
       "transforms": {
         "trim": "Trim",
@@ -718,7 +720,8 @@
         "chart_number": "Chart number",
         "identity_tckn": "National ID validation",
         "provenance_source_id": "Provenance source id",
-        "practitioner_reference": "Practitioner reference"
+        "practitioner_reference": "Practitioner reference",
+        "preserve_source_value": "Preserve source value verbatim"
       },
       "cellTypes": {
         "empty": "empty",

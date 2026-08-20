@@ -693,7 +693,8 @@
         "patient.primaryPractitionerId": "Zugewiesener Behandler",
         "patient.identity.tckn": "Nationale Identitätsnummer",
         "patient.notes": "Klinische Notiz",
-        "patient.bloodGroup": "Blutgruppe"
+        "patient.bloodGroup": "Blutgruppe",
+        "legacy.preservedSourceValue": "Erhaltener Quellwert"
       },
       "groups": {
         "provenance": "Herkunft",
@@ -702,7 +703,8 @@
         "contact": "Kontakt",
         "address": "Adresse",
         "clinical": "Klinisch",
-        "operational": "Operativ"
+        "operational": "Operativ",
+        "legacy_preservation": "Erhaltene Quellwerte"
       },
       "transforms": {
         "trim": "Trimmen",
@@ -718,7 +720,8 @@
         "chart_number": "Kartennummer",
         "identity_tckn": "Validierung der Personenkennziffer",
         "provenance_source_id": "Herkunfts-Quellkennung",
-        "practitioner_reference": "Behandler-Referenz"
+        "practitioner_reference": "Behandler-Referenz",
+        "preserve_source_value": "Quellwert unverändert erhalten"
       },
       "cellTypes": {
         "empty": "leer",
