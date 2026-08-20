@@ -8,6 +8,7 @@ import type { MigrationStepProps } from './types';
 import type { DryRunSummaryDto, DryRunRowClass, IdentityClassification } from '../../../services/platformMigrationApi';
 import { getErrorMessage } from '../../../utils/errors';
 import { isRunInFlight, MIGRATION_STEPS } from '../../../pages/platformMigrationHelpers';
+import MigrationRejectedDownload from './MigrationRejectedDownload';
 
 const ROW_CLASS_ORDER: DryRunRowClass[] = [
   'VALID_NEW', 'VALID_MATCHED', 'NORMALIZED', 'AMBIGUOUS', 'MAPPING_REQUIRED',
@@ -153,6 +154,20 @@ const MigrationDryRunStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpda
   // the render itself safe against any other source of a legacy-shaped DTO.
   const legalExclusions = dryRun?.legalExclusions ?? [];
 
+  /**
+   * How many source rows the rejected-row export will contain.
+   *
+   * The SAME three buckets rowRejection.ts classifies on the server — invalid
+   * builds, duplicate provenance ids, unresolved practitioner references — so
+   * the number the operator reads here and the number of rows in the file they
+   * download are the same number. `warningRows` is deliberately NOT included: a
+   * warning row still imports, and telling the operator to go fix it in Excel
+   * would send them after something that is not broken.
+   */
+  const rejectedRows = dryRun
+    ? dryRun.invalidRows + dryRun.duplicateSourceRows + dryRun.referenceMappingBlockers
+    : 0;
+
   return (
     <div className="card p-5 max-w-4xl">
       <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">{t('platform:migration.dryRun.title')}</h2>
@@ -188,6 +203,41 @@ const MigrationDryRunStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpda
         </div>
       ) : (
         <div className="space-y-6">
+          {/*
+            * THE PLAIN-LANGUAGE ANSWER, FIRST (F3-DATA-MIG-TODAY-001-R12).
+            *
+            * The tiles below are complete and an engineer can read them, but an
+            * operator arrives at this screen with exactly two questions: how
+            * many patients will come across, and what happens to the ones that
+            * will not. Those two numbers now lead, in words, and the fix for
+            * the second is a button directly underneath rather than a support
+            * request.
+            */}
+          <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/30 p-4">
+            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+              <span className="text-sm text-gray-700 dark:text-gray-200">
+                <span className="text-2xl font-bold text-green-600 dark:text-green-400">{dryRun.validRows}</span>{' '}
+                {t('platform:migration.dryRun.plain.importable')}
+              </span>
+              <span className="text-sm text-gray-700 dark:text-gray-200">
+                <span className={`text-2xl font-bold ${rejectedRows > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}`}>{rejectedRows}</span>{' '}
+                {t('platform:migration.dryRun.plain.notImportable')}
+              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {t('platform:migration.dryRun.plain.ofTotal', { n: dryRun.totalSourceRows })}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              {rejectedRows > 0
+                ? t('platform:migration.dryRun.plain.rejectedExplain')
+                : t('platform:migration.dryRun.plain.allClear')}
+            </p>
+          </div>
+
+          {rejectedRows > 0 && (
+            <MigrationRejectedDownload runId={run.id} api={api} rejectedRowCount={rejectedRows} />
+          )}
+
           {/* Count tiles */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">{t('platform:migration.dryRun.rowTotals')}</p>

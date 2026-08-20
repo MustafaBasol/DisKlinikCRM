@@ -247,7 +247,9 @@ describe('MigrationMappingStep — source column identity (R7)', () => {
     expect(mockT('platform:migration.mapping.destinationLabels.patient.notes', { defaultValue: 'x' })).toBe(
       'Klinik Not / Önemli Not',
     );
-    expect(mockT('platform:migration.mapping.filters.unmappedWithData')).toBe('Verisi olan eşleşmemişler');
+    // R12 replaced the engine-state chips with the operator vocabulary.
+    expect(mockT('platform:migration.mapping.filters.needsReview')).toBe('Kontrol et');
+    expect(mockT('platform:migration.mapping.operatorStates.PRESERVED')).toBe('Saklanacak eski veri');
   });
 
   it('A. a named column renders its ORIGINAL header as the prominent primary line, with "AQ (43)" beneath it', async () => {
@@ -297,8 +299,9 @@ describe('MigrationMappingStep — source column identity (R7)', () => {
 
     await screen.findByText('EK_ACIKLAMA');
 
-    // Filter the target column off screen.
-    await user.click(screen.getByRole('button', { name: 'Sadece yasal engelliler' }));
+    // Filter the target column off screen. EK_ACIKLAMA is MANUAL_REQUIRED in
+    // this fixture, so the "Eşleşti" chip (the R12 operator vocabulary) hides it.
+    await user.click(screen.getByRole('button', { name: 'Eşleşti' }));
     await waitFor(() => expect(screen.queryByText('EK_ACIKLAMA')).not.toBeInTheDocument());
     expect(scrollSpy).not.toHaveBeenCalled();
 

@@ -39,6 +39,7 @@ import {
 } from './mapping/dataLossGate.js';
 import { buildPlanLimitReport, planLimitBlockerMessage } from './planLimits.js';
 import { buildRow, compileMapping, consumesPlanQuota, type BuiltRow } from './rowBuilder.js';
+import { classifyRowRejection } from './rowRejection.js';
 import type { CanonicalWorkbook } from './contracts.js';
 import type { ResolvedMapping } from './rowBuilder.js';
 
@@ -234,8 +235,24 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
       if (identity.classification === 'MANUAL_REVIEW') manualReviewRows++;
     }
 
-    // -- hard failures from the row builder --
-    if (row.failures.length > 0) {
+    /*
+     * -- the three ways a row is REJECTED ---------------------------------
+     *
+     * F3-DATA-MIG-TODAY-001-R12 moved these rules into rowRejection.ts and
+     * calls them from here. They used to live inline, and the rejected-row
+     * export added in R12 would have had to restate them — two copies of "is
+     * this row importable?" that drift the first time either is touched, so
+     * that the summary says one row failed while the downloadable workbook
+     * hands the operator a different one. There is now one implementation and
+     * both callers use it.
+     *
+     * The counters, the row classes and the aggregated blocker messages below
+     * are unchanged, including the exact English blocker text: it is asserted
+     * by existing tests and read by the dry-run screen.
+     */
+    const rejection = classifyRowRejection(row, { sourceIdCounts, unresolvedReferenceValues });
+
+    if (rejection?.kind === 'INVALID') {
       invalidRows++;
       rowClasses.INVALID++;
       for (const failure of row.failures) {
@@ -248,8 +265,7 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
       continue;
     }
 
-    // -- duplicate provenance id within the file --
-    if (row.sourceId && (sourceIdCounts.get(row.sourceId) ?? 0) > 1) {
+    if (rejection?.kind === 'DUPLICATE_SOURCE') {
       duplicateSourceRows++;
       rowClasses.DUPLICATE_SOURCE++;
       blockers.add({
@@ -261,8 +277,7 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
       continue;
     }
 
-    // -- unresolved practitioner reference --
-    if (row.practitionerSourceValue && unresolvedReferenceValues.has(row.practitionerSourceValue)) {
+    if (rejection?.kind === 'REFERENCE_UNRESOLVED') {
       referenceBlockers++;
       rowClasses.MAPPING_REQUIRED++;
       blockers.add({

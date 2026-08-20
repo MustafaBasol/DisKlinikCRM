@@ -75,7 +75,11 @@ import {
 } from '../services/migration/mapping/validateMapping.js';
 import { evaluateDataLossGate } from '../services/migration/mapping/dataLossGate.js';
 import { normalizeHeader } from '../services/migration/mapping/normalizeHeader.js';
-import { assertNoLegallyGatedEdits } from '../services/migration/mapping/legalGateGuard.js';
+import { LEGALLY_GATED_STATE } from '../services/migration/mapping/legalGateGuard.js';
+import {
+  assertPlanHasNoLegallyGatedEdits,
+  buildMappingWritePlan,
+} from '../services/migration/mapping/mappingWriteDiff.js';
 import { buildColumnPreviews } from '../services/migration/mapping/columnPreview.js';
 import { FIRST_CUSTOMER_MATRIX_BY_FIELD } from '../services/migration/mapping/firstCustomerMatrix.js';
 import { UNNAMED_COLUMN_PREFIX } from '../services/migration/parser/canonicalParser.js';
@@ -90,6 +94,7 @@ import {
   buildFailureReport,
   buildSuccessReport,
 } from '../services/migration/reports/migrationReports.js';
+import { buildRejectedRowReport } from '../services/migration/reports/rejectedRowReport.js';
 import {
   findClinicPractitioner,
   listClinicPractitioners,
@@ -682,6 +687,12 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
     );
 
     const incoming = Array.isArray(req.body?.mappings) ? req.body.mappings : [];
+    /*
+     * An EMPTY payload is still a client bug worth naming — the caller asked to
+     * save nothing. A payload whose entries all turn out to be no-ops is NOT:
+     * that is the ordinary result of re-saving an unchanged row, and it returns
+     * 200 with the current state further down. See mappingWriteDiff.ts.
+     */
     if (incoming.length === 0) {
       throw new MigrationError('MAPPING_INVALID', { message: 'No mapping changes were supplied.' });
     }
@@ -721,27 +732,34 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
       assertStatusIn(fromStatus, MAPPING_EDITABLE_STATUSES, 'Editing the field mapping');
 
       /*
-       * 1b. THE LEGAL GATE IS SERVER-ENFORCED (F3-DATA-MIG-TODAY-001-R11).
+       * 1b. THE LEGAL GATE IS SERVER-ENFORCED, AND IT FIRES ON THE DIFF
+       *     (F3-DATA-MIG-TODAY-001-R11, corrected by R12).
        *
-       * This route writes the client's `state` verbatim, so until now the only
-       * thing keeping a LEGAL_BLOCKED column blocked was that the mapping
-       * screen declined to render a control for it. validateMappings' Rule 4
-       * could not close the hole either: it forbids a LEGAL_BLOCKED row from
+       * This route writes the client's decision verbatim, so the only thing
+       * keeping a LEGAL_BLOCKED column blocked would otherwise be the mapping
+       * screen declining to render a control for it. validateMappings' Rule 4
+       * cannot close the hole either: it forbids a LEGAL_BLOCKED row from
        * carrying a destination, but it reads the state AS WRITTEN — a payload
-       * that moved the row to RESOLVED in the same request left nothing for
-       * Rule 4 to fire on, and the gate lifted silently.
+       * that moved the row to RESOLVED in the same request leaves nothing for
+       * Rule 4 to fire on, and the gate would lift silently. So the refusal
+       * lives here, at the write, against the STORED state.
        *
-       * R11 widens what an operator can reach in that dropdown, so the one
-       * destination class that must stay unreachable is pinned down here, at
-       * the write, where a hand-made request or a future UI regression meets
-       * the same refusal the screen shows. Lifting a KVKK Art. 6 gate is a
-       * program-owner decision taken in the matrix, never a mapping edit.
+       * WHAT R12 CHANGES. R11 treated the mere PRESENCE of a source column in
+       * the payload as an attempt to edit it. The shipped mapping screen saved
+       * by PUTting EVERY row, so the first customer's two stored LEGAL_BLOCKED
+       * columns were in every payload and every save — including one that
+       * touched only SUBEDOSYANO — was rejected 400. The mapping step could not
+       * progress at all. Presence is not an edit. The question the gate must
+       * ask is whether the request would CHANGE the stored row, which is a
+       * question about the diff; buildMappingWritePlan answers it here, inside
+       * this transaction, from the stored rows and never from a client claim.
        *
-       * Fail-closed and total: no state change, no destination, not even to
-       * IGNORE. IGNORE is also non-writing, so allowing it would leak no data,
-       * but it would relabel a legal exclusion as an ordinary operator
-       * exclusion and drop the column out of the LEGAL_BLOCKED tally the dry
-       * run reports and an auditor reads.
+       * Still fail-closed and still total: a genuine attempt to move a stored
+       * LEGAL_BLOCKED row — to a destination, to RESOLVED, or even to IGNORE —
+       * refuses the WHOLE request with no partial write. IGNORE is refused too
+       * because, although it writes no patient data, it would relabel a KVKK
+       * Art. 6 legal exclusion as an ordinary operator exclusion and drop the
+       * column out of the LEGAL_BLOCKED tally the dry run reports.
        *
        * This cannot strand a run: dryRun.ts deliberately keeps LEGAL_BLOCKED
        * out of the blockers that suppress `executable`, so a run reaches
@@ -750,29 +768,38 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
       const incomingFields = (incoming as Array<Record<string, unknown>>).map((e) =>
         String(e.sourceField ?? ''),
       );
-      // The STORED states, read inside this transaction — never the states the
+      // The STORED rows, read inside this transaction — never the values the
       // payload asserted, which are exactly what the guard must not trust.
-      const storedStates = await tx.migrationFieldMapping.findMany({
+      const storedRows = await tx.migrationFieldMapping.findMany({
         where: { runId: run.id, sourceField: { in: incomingFields } },
-        select: { sourceField: true, state: true },
+        select: {
+          sourceField: true,
+          destinationField: true,
+          transform: true,
+          composeOrder: true,
+          state: true,
+          isAutoSuggested: true,
+          decidedByPlatformAdminId: true,
+          decidedAt: true,
+        },
       });
-      assertNoLegallyGatedEdits(
-        incomingFields,
-        new Map(storedStates.map((m) => [m.sourceField, m.state])),
-      );
+      const plan = buildMappingWritePlan(incoming as Array<Record<string, unknown>>, storedRows);
+      assertPlanHasNoLegallyGatedEdits(plan);
 
-      // 2. Apply the operator's decisions.
-      for (const entry of incoming as Array<Record<string, unknown>>) {
+      // 2. Apply the operator's decisions — ONLY the rows that actually change,
+      //    plus the rows whose unchanged decision is being confirmed for the
+      //    first time (the R9 data-loss gate's confirmation path). A row that
+      //    already matched AND was already confirmed is not written at all, so
+      //    a redundant save cannot churn `decidedAt` or invalidate an audit
+      //    trail that nothing actually changed.
+      for (const write of plan.writes) {
         await tx.migrationFieldMapping.updateMany({
-          where: { runId: run.id, sourceField: String(entry.sourceField ?? '') },
+          where: { runId: run.id, sourceField: write.sourceField },
           data: {
-            destinationField: (entry.destinationField as string | null) ?? null,
-            transform: (entry.transform as string | null) ?? null,
-            composeOrder:
-              entry.composeOrder === null || entry.composeOrder === undefined
-                ? null
-                : Number(entry.composeOrder),
-            state: String(entry.state ?? 'MANUAL_REQUIRED'),
+            destinationField: write.next.destinationField,
+            transform: write.next.transform,
+            composeOrder: write.next.composeOrder,
+            state: write.next.state,
             isAutoSuggested: false,
             decidedByPlatformAdminId,
             decidedAt,
@@ -796,7 +823,13 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
       // The gate answers it from the same rows this transaction just wrote.
       const gate = evaluateDataLossGate(state.mappings);
       const savedMetadata = {
-        changed: incoming.length,
+        // The rows this request actually WROTE, not the rows it mentioned. With
+        // a full-collection save the two were the same number and the metric
+        // was meaningless; with delta semantics it is the real edit count an
+        // auditor wants. `submitted` keeps the payload size visible alongside.
+        changed: plan.writes.length,
+        submitted: incoming.length,
+        unchanged: plan.noOpCount,
         mapped: result.mappedCount,
         unresolved: result.unresolvedCount,
         blocked: result.blockedCount,
@@ -806,6 +839,27 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
         unconfirmedExclusions: gate.systemRecommendedButUnconfirmedExclusions,
         valid: result.valid,
       };
+
+      /*
+       * 3b. A SAVE THAT WROTE NOTHING MOVES NOTHING (R12).
+       *
+       * With delta semantics a payload can legitimately resolve to zero writes:
+       * the operator re-saved a row they had already decided, or a stale tab
+       * re-sent the collection it was holding. Falling through to the transition
+       * below would then be actively harmful — from DRY_RUN_COMPLETE or READY
+       * the "mapping changed" hop knocks the run back to MAPPING_REQUIRED and
+       * invalidates a dry run that is still perfectly valid, because the mapping
+       * it was computed against did not change.
+       *
+       * The current run row is re-read rather than reusing the pre-transaction
+       * `run`: that one was loaded before the transaction opened and may already
+       * be stale, and returning a stale status is how a client ends up rendering
+       * a step the server has since left.
+       */
+      if (plan.writes.length === 0) {
+        const unchanged = await tx.migrationRun.findUniqueOrThrow({ where: { id: run.id } });
+        return { updated: unchanged, mappings: state.mappings, validation: result };
+      }
 
       /*
        * 4. Move the run along edges the state machine actually has.
@@ -919,6 +973,153 @@ router.post(
       });
 
       res.json({ run: updated, mappings: toMappingDtos(mappings), validation, accepted });
+    } catch (error) {
+      fail(res, error);
+    }
+  },
+);
+
+/**
+ * Confirm a NAMED SET of recommended exclusions in one action.
+ * F3-DATA-MIG-TODAY-001-R12.
+ *
+ * WHAT PROBLEM THIS SOLVES. The R9 data-loss gate refuses to accept a
+ * system-recommended IGNORE as a decision — nobody chose it, it arrived from
+ * the mapping profile before the workbook was uploaded — so every populated
+ * column the profile recommends dropping needs a named Platform Admin to
+ * confirm it. On the first customer's workbook that is 8 columns, and the only
+ * way to do it was to open each row and re-save it. That is the "dozens of
+ * clicks" the product owner rejected.
+ *
+ * WHY THIS IS STILL AN OPERATOR DECISION, NOT A BULK BYPASS. The route takes an
+ * EXPLICIT LIST of source columns; there is no "confirm everything" mode and no
+ * server-side inference of what the operator meant. The screen shows the
+ * columns and their measured fill counts before sending them, so the click is
+ * made against the same evidence the gate reports. Each row is stamped
+ * individually with the actor and the timestamp, exactly as a per-row save
+ * would be, and the audit event names the columns.
+ *
+ * WHAT IT REFUSES, AND WHY EACH REFUSAL IS NARROW:
+ *   LEGAL_BLOCKED  — lifting or relabelling a KVKK Art. 6 gate is a
+ *                    program-owner decision. Fail closed, whole request.
+ *   any other state — exclusion is only confirmable where the SYSTEM proposed
+ *                    it (IGNORE) or found no destination for it (BLOCKED).
+ *                    Turning a mapped column, a special-category review or an
+ *                    unknown-semantics column into an exclusion is a real
+ *                    semantic choice and stays a deliberate, per-row action.
+ */
+router.post(
+  '/migrations/runs/:id/mappings/confirm-exclusions',
+  async (req: PlatformAdminRequest, res: Response) => {
+    try {
+      const run = await loadRunOrThrow(runIdParam(req));
+      assertStatusIn(
+        run.status as MigrationRunStatus,
+        MAPPING_EDITABLE_STATUSES,
+        'Confirming recommended exclusions',
+      );
+
+      const requested = Array.isArray(req.body?.sourceFields)
+        ? [...new Set((req.body.sourceFields as unknown[]).map((f) => String(f ?? '')))].filter(Boolean)
+        : [];
+      if (requested.length === 0) {
+        throw new MigrationError('MAPPING_INVALID', {
+          message: 'Name the source columns whose exclusion you are confirming.',
+        });
+      }
+
+      const decidedByPlatformAdminId = actorId(req);
+      const decidedAt = new Date();
+
+      const { updated, mappings, validation, confirmed } = await prisma.$transaction(async (tx) => {
+        const current = await tx.migrationRun.findUnique({
+          where: { id: run.id },
+          select: { status: true },
+        });
+        if (!current) {
+          throw new MigrationError('RUN_NOT_FOUND', { message: 'Migration run not found.' });
+        }
+        const fromStatus = current.status as MigrationRunStatus;
+        assertStatusIn(fromStatus, MAPPING_EDITABLE_STATUSES, 'Confirming recommended exclusions');
+
+        const stored = await tx.migrationFieldMapping.findMany({
+          where: { runId: run.id, sourceField: { in: requested } },
+          select: { sourceField: true, state: true },
+        });
+        const byField = new Map(stored.map((m) => [m.sourceField, m.state]));
+
+        const gated = requested.filter((f) => byField.get(f) === LEGALLY_GATED_STATE);
+        if (gated.length > 0) {
+          throw new MigrationError('MAPPING_INVALID', {
+            message:
+              `${gated.length} source column(s) (${gated.map((f) => `"${f}"`).join(', ')}) are blocked ` +
+              `by an unresolved legal decision. Lifting a legal gate is a program-owner decision, not ` +
+              `a mapping choice.`,
+          });
+        }
+
+        const notConfirmable = requested.filter((f) => {
+          const state = byField.get(f);
+          return state !== undefined && state !== 'IGNORE' && state !== 'BLOCKED';
+        });
+        if (notConfirmable.length > 0) {
+          throw new MigrationError('MAPPING_INVALID', {
+            message:
+              `${notConfirmable.length} source column(s) (${notConfirmable.map((f) => `"${f}"`).join(', ')}) ` +
+              `are not recommended exclusions. Excluding them is a decision to take on the column itself.`,
+          });
+        }
+
+        const confirmable = requested.filter((f) => byField.has(f));
+        const promoted = await tx.migrationFieldMapping.updateMany({
+          where: { runId: run.id, sourceField: { in: confirmable } },
+          data: {
+            // BLOCKED becomes IGNORE. BLOCKED names an obstacle ("no
+            // destination exists"), IGNORE names a decision; the gate counts
+            // only the second, and recording the operator's choice as an
+            // obstacle would misstate what happened.
+            state: 'IGNORE',
+            destinationField: null,
+            transform: null,
+            composeOrder: null,
+            isAutoSuggested: false,
+            decidedByPlatformAdminId,
+            decidedAt,
+          },
+        });
+
+        const state = await loadMappingState(tx, run.id);
+        const result = validateMappings(state.mappings, state.headers);
+        const gate = evaluateDataLossGate(state.mappings);
+        const moved = await transitionRunInTx(
+          tx,
+          run.id,
+          fromStatus,
+          result.valid ? 'MAPPING_READY' : 'MAPPING_REQUIRED',
+          {
+            actorPlatformAdminId: decidedByPlatformAdminId,
+            action: 'clinic_data_migration.exclusions_confirmed',
+            // Vendor column headers are schema, not patient data, and naming
+            // them is what makes this audit record answer "which columns did a
+            // human decide to leave behind?".
+            safeMetadata: {
+              confirmed: promoted.count,
+              sourceFields: confirmable,
+              operatorConfirmedExclusions: gate.operatorConfirmedExcluded,
+              unconfirmedExclusions: gate.systemRecommendedButUnconfirmedExclusions,
+              valid: result.valid,
+            },
+          },
+        );
+        return {
+          updated: moved,
+          mappings: state.mappings,
+          validation: result,
+          confirmed: promoted.count,
+        };
+      }, TX_OPTIONS);
+
+      res.json({ run: updated, mappings: toMappingDtos(mappings), validation, confirmed });
     } catch (error) {
       fail(res, error);
     }
@@ -1559,6 +1760,58 @@ router.get(
   async (req: PlatformAdminRequest, res: Response) => {
     try {
       await sendReport(req, res, 'failure');
+    } catch (error) {
+      if (!res.headersSent) fail(res, error);
+    }
+  },
+);
+
+/**
+ * "İçe Aktarılamayan Kayıtları İndir" — F3-DATA-MIG-TODAY-001-R12.
+ *
+ * The rows that cannot be imported, WITH their source values, in a workbook the
+ * operator corrects in Excel and re-uploads. See rejectedRowReport.ts for the
+ * artifact's contract; the two things this route is responsible for:
+ *
+ *  - AUTHORIZATION AND SCOPE. `loadRunOrThrow` resolves the run, and every
+ *    read inside the builder is keyed on that run's id, organization, clinic
+ *    and source system. There is no way to address another tenant's rows
+ *    through this endpoint, and the router's Platform Admin gate means there is
+ *    no anonymous path to it at all. No signed URL is minted: the file is
+ *    streamed on an authenticated request and nowhere else.
+ *  - AN AUDIT RECORD WITH NO CONTENT IN IT. The event records that this admin
+ *    downloaded the rejected rows for this run, in this format, and HOW MANY.
+ *    Not one value from the file appears in it. This is the one download in the
+ *    product that carries source PII, so what it must not do is also log it.
+ */
+router.get(
+  '/migrations/runs/:id/reports/rejected',
+  async (req: PlatformAdminRequest, res: Response) => {
+    try {
+      const run = await loadRunOrThrow(runIdParam(req));
+      const format = String(req.query?.format ?? 'xlsx').toLowerCase() === 'csv' ? 'csv' : 'xlsx';
+      const report = await buildRejectedRowReport(run.id, format);
+
+      await auditMigrationAction({
+        runId: run.id,
+        organizationId: run.organizationId,
+        clinicId: run.clinicId,
+        actorPlatformAdminId: actorId(req),
+        action: 'clinic_data_migration.rejected_rows_downloaded',
+        safeMetadata: {
+          format,
+          rejectedRowCount: report.rejectedRowCount,
+          findingCount: report.findingCount,
+          includesExecutionOutcomes: report.includesExecutionOutcomes,
+        },
+      });
+
+      res.setHeader('Content-Type', report.contentType);
+      // Built from the run UUID we generated, never from the operator's upload
+      // name, so Content-Disposition cannot be injected.
+      res.setHeader('Content-Disposition', `attachment; filename="${report.filename}"`);
+      res.setHeader('X-NoraMedi-Rejected-Rows', String(report.rejectedRowCount));
+      res.send(report.buffer);
     } catch (error) {
       if (!res.headersSent) fail(res, error);
     }
