@@ -172,6 +172,11 @@
       "noRecentActivity": "Son aktivite bulunamadı.",
       "viewAllActivity": "Tüm Geçmiş →",
       "unassigned": "Atanmamış"
+    },
+    "address": {
+      "title": "Adres",
+      "secondaryPhoneBadge": "Ek",
+      "secondaryPhonesLoadFailed": "Ek telefon numaraları yüklenemedi."
     }
   },
   "form": {
@@ -179,6 +184,7 @@
     "lastName": "Soyad",
     "email": "E-posta Adresi",
     "phone": "Telefon Numarası",
+    "phonePrimaryHint": "(birincil)",
     "dob": "Doğum Tarihi",
     "dobFutureError": "Doğum tarihi bugünden ileri bir tarih olamaz",
     "status": "Hasta Durumu",
@@ -200,6 +206,45 @@
     "primaryPractitioner": "Sorumlu Hekim",
     "primaryPractitionerUnassigned": "Atanmadı",
     "primaryPractitionerReadOnlyHint": "(salt okunur — resepsiyon/yönetim tarafından atanır)",
+    "addressSection": "Adres Bilgileri",
+    "address": "Adres",
+    "addressPlaceholder": "Mahalle, cadde, sokak, kapı/daire no",
+    "district": "İlçe",
+    "districtPlaceholder": "örn. Kadıköy",
+    "province": "İl",
+    "provincePlaceholder": "örn. İstanbul",
+    "postalCode": "Posta Kodu",
+    "postalCodePlaceholder": "örn. 34710",
+    "country": "Ülke",
+    "countryPlaceholder": "örn. Türkiye",
+    "secondaryPhones": {
+      "title": "Ek Telefon Numaraları",
+      "description": "Birincil numaraya ek olarak kayıtlı diğer numaralar (ev, iş, yakın kişi).",
+      "addNew": "Numara Ekle",
+      "addTitle": "Yeni telefon numarası",
+      "add": "Ekle",
+      "empty": "Ek telefon numarası kayıtlı değil.",
+      "availableAfterCreate": "Ek telefon numaraları, hasta kaydedildikten sonra hasta kartından eklenebilir.",
+      "contactType": "Numara Türü",
+      "value": "Telefon Numarası",
+      "valuePlaceholder": "+90 216 000 00 00",
+      "label": "Açıklama",
+      "labelPlaceholder": "örn. Eşinin telefonu",
+      "edit": "Düzenle",
+      "delete": "Sil",
+      "deleteConfirm": "Bu numara silinsin mi?",
+      "deleteConfirmYes": "Evet, sil",
+      "valueRequired": "Telefon numarası zorunludur",
+      "saveFailed": "Telefon numarası kaydedilemedi.",
+      "deleteFailed": "Telefon numarası silinemedi.",
+      "loadFailed": "Ek telefon numaraları yüklenemedi.",
+      "types": {
+        "mobile": "Cep",
+        "home": "Ev",
+        "work": "İş",
+        "other": "Diğer"
+      }
+    },
     "identity": {
       "label": "T.C. Kimlik No",
       "sensitiveHint": "(hassas veri, isteğe bağlı)",

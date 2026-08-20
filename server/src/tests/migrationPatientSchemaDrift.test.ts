@@ -1,6 +1,8 @@
 /**
  * migrationPatientSchemaDrift.test.ts — F3-DATA-MIG-TODAY-001 / F3-DATA-MIG-003
- * permanent schema-drift guard for `Patient` and `PatientIdentityDocument`.
+ * / F3-DATA-MIG-TODAY-001-R10 permanent schema-drift guard for `Patient` and
+ * its patient-scoped child models (`PatientIdentityDocument`,
+ * `PatientContactPoint`, `MigrationPreservedSourceValue`).
  *
  * WHY THIS FILE EXISTS
  * --------------------
@@ -31,6 +33,14 @@
  * constants directly (they are exported). Harness shape copied from
  * kvkkHigh007High008SchemaIntegrity.test.ts — standalone tsx script,
  * node:assert/strict, hand-rolled counters. There is no vitest/jest here.
+ *
+ * A SECOND CONTRACT, added by R10: every patient-scoped CHILD model must
+ * declare all three tenant columns, must carry its tenant-scoped indexes, and
+ * must be hard-deleted by anonymization (asserted as a regex over the real
+ * anonymization source — the same technique this file already uses for
+ * patientIdentityDocument.deleteMany). A child model holding patient PII is
+ * exactly as capable of drifting out of the privacy surfaces as a Patient
+ * scalar is; it just does it one table further away from where anyone looks.
  *
  * Run with: tsx src/tests/migrationPatientSchemaDrift.test.ts
  */
@@ -113,6 +123,19 @@ function parseModel(schema: string, modelName: string): ParsedModel {
 
 const patientModel = parseModel(SCHEMA, 'Patient');
 const identityModel = parseModel(SCHEMA, 'PatientIdentityDocument');
+// F3-DATA-MIG-TODAY-001-R10. The two new patient-scoped child models, parsed
+// for the same reason PatientIdentityDocument is: a patient-scoped table no
+// guard knows about can lose its tenant columns, its indexes or its
+// anonymization pass in a refactor while CI stays green.
+const contactPointModel = parseModel(SCHEMA, 'PatientContactPoint');
+const preservedSourceValueModel = parseModel(SCHEMA, 'MigrationPreservedSourceValue');
+
+/** Every patient-scoped child model this guard structurally enforces over. */
+const PATIENT_SCOPED_CHILD_MODELS: ParsedModel[] = [
+  identityModel,
+  contactPointModel,
+  preservedSourceValueModel,
+];
 
 /** Every scalar column declared on Patient — the universe this guard enforces over. */
 const PATIENT_SCALARS = patientModel.fields
@@ -385,7 +408,80 @@ async function main() {
     );
   });
 
-  section('7. This sprint\'s three fields reached the surfaces they were supposed to');
+  section('7. Patient-scoped child models are tenant-complete and tenant-indexed');
+
+  for (const model of PATIENT_SCOPED_CHILD_MODELS) {
+    await test(`${model.name} declares all three tenant columns (patientId, clinicId, organizationId)`, () => {
+      for (const column of ['patientId', 'clinicId', 'organizationId']) {
+        const field = fieldOf(model, column);
+        assert.ok(field, `${model.name}.${column} must exist — a patient-scoped table missing a tenant column cannot be filtered by the scope every query already applies, and every privacy surface (subject access, bulk export, anonymization) reads it`);
+        assert.equal(field!.rawType, 'String', `${model.name}.${column} must be a required String — a nullable tenant key fails OPEN, letting an unscoped row escape every tenant filter`);
+      }
+    });
+  }
+
+  await test('PatientContactPoint declares its tenant-scoped indexes', () => {
+    for (const attr of ['@@index([patientId, contactType])', '@@index([clinicId])', '@@index([organizationId])']) {
+      assert.ok(
+        contactPointModel.blockAttributes.includes(attr),
+        `PatientContactPoint must declare ${attr} — the patient-leading index serves the per-patient read, and the tenant indexes serve clinic/org-scoped sweeps (the bulk export streams this model by clinicId)`,
+      );
+    }
+  });
+
+  await test('PatientContactPoint declares @@unique([patientId, contactType, value])', () => {
+    assert.ok(
+      contactPointModel.blockAttributes.includes('@@unique([patientId, contactType, value])'),
+      'this constraint is what makes an import idempotent: re-running the same migration can never duplicate a contact point. Without it every re-run multiplies the phone numbers held about the patient',
+    );
+  });
+
+  await test('MigrationPreservedSourceValue declares its tenant-scoped indexes', () => {
+    for (const attr of ['@@index([patientId, sourceColumn])', '@@index([clinicId])', '@@index([migrationRunId])']) {
+      assert.ok(
+        preservedSourceValueModel.blockAttributes.includes(attr),
+        `MigrationPreservedSourceValue must declare ${attr}`,
+      );
+    }
+  });
+
+  await test('MigrationPreservedSourceValue PINS both long composite index names with map:', () => {
+    // Prisma generates names for these two that exceed PostgreSQL's
+    // 63-character identifier limit and would be silently TRUNCATED, leaving
+    // schema.prisma and the migration SQL disagreeing about what the index is
+    // called.
+    const expected: Array<{ prefix: string; name: string }> = [
+      {
+        prefix: '@@unique([migrationRunId, patientId, sourceColumn, sourceRowNumber]',
+        name: 'MigrationPreservedSourceValue_run_patient_column_row_key',
+      },
+      {
+        prefix: '@@index([organizationId, sourceSystem, sourceColumn]',
+        name: 'MigrationPreservedSourceValue_org_system_column_idx',
+      },
+    ];
+    for (const { prefix, name } of expected) {
+      const attr = preservedSourceValueModel.blockAttributes.find((a) => a.startsWith(prefix));
+      assert.ok(attr, `MigrationPreservedSourceValue must declare ${prefix}...)`);
+      assert.ok(
+        attr!.includes(`map: "${name}"`),
+        `${prefix}...) must pin its name with map: "${name}" — the Prisma-generated name exceeds PostgreSQL's 63-char identifier limit and would be silently truncated, desynchronizing schema.prisma from the migration SQL. Got: ${attr}`,
+      );
+      assert.ok(name.length <= 63, `the pinned name ${name} must itself fit PostgreSQL's 63-character identifier limit`);
+    }
+  });
+
+  await test('the org-scoped preserved-value index leads with organizationId', () => {
+    const attr = preservedSourceValueModel.blockAttributes.find((a) => a.includes('MigrationPreservedSourceValue_org_system_column_idx'));
+    assert.ok(attr, 'the org/system/column index must exist');
+    assert.match(
+      attr!,
+      /@@index\(\[organizationId,/,
+      'the tenant column leading this index is load-bearing, not incidental: a cross-vendor sweep must be tenant-scoped by construction',
+    );
+  });
+
+  section('8. This sprint\'s three fields reached the surfaces they were supposed to');
 
   await test('gender and chartNumber are anonymized; primaryPractitionerId is deliberately not', () => {
     assert.ok(ANONYMIZATION_PAYLOAD_FIELDS.includes('gender'), 'gender is demographic PII and must be nulled');
@@ -398,6 +494,64 @@ async function main() {
       ANONYMIZATION_SOURCE,
       /patientIdentityDocument\.deleteMany\(\s*\{\s*where:\s*\{\s*patientId\s*\}/,
       'an identity number has no clinical value to preserve, so it is destroyed outright rather than nulled or redacted',
+    );
+  });
+
+  await test('anonymization hard-deletes the patient contact points and preserved source values', () => {
+    // Same technique and same reason as the identity-document assertion
+    // above: both models hold raw patient PII with no clinical value to
+    // retain, so anonymization destroys the rows outright. A future refactor
+    // that quietly drops either pass fails HERE rather than silently leaving
+    // live phone numbers and legacy names behind a row flagged anonymized.
+    assert.match(
+      ANONYMIZATION_SOURCE,
+      /patientContactPoint\.deleteMany\(\s*\{\s*where:\s*\{\s*patientId\s*\}/,
+      'PatientContactPoint rows are the patient OWN secondary phone numbers and carry no clinical fact, so anonymization must destroy them rather than redact them',
+    );
+    assert.match(
+      ANONYMIZATION_SOURCE,
+      /migrationPreservedSourceValue\.deleteMany\(\s*\{\s*where:\s*\{\s*patientId\s*\}/,
+      'MigrationPreservedSourceValue rows hold raw legacy PII kept only as import evidence; leaving them behind would void the anonymization guarantee outright',
+    );
+  });
+
+  await test('both hard deletes are scoped by patientId ALONE, never by clinicId', () => {
+    // Deliberate, and identical to deletePatientIdentityDocuments: the
+    // patient was already resolved under clinicId + organizationId scope by
+    // the caller, so adding clinicId here would fail OPEN — a child row whose
+    // clinicId drifted from the patient (e.g. after a branch transfer) would
+    // silently survive anonymization.
+    for (const model of ['patientIdentityDocument', 'patientContactPoint', 'migrationPreservedSourceValue']) {
+      const re = new RegExp(`${model}\\.deleteMany\\(\\s*\\{\\s*where:\\s*\\{([^}]*)\\}`);
+      const match = re.exec(ANONYMIZATION_SOURCE);
+      assert.ok(match, `anonymization must still call ${model}.deleteMany`);
+      assert.ok(
+        !/clinicId/.test(match![1]!),
+        `${model}.deleteMany must NOT be scoped by clinicId — that scoping fails OPEN for a row whose clinicId drifted from the patient`,
+      );
+    }
+  });
+
+  await test('district reached all three privacy surfaces (not an EXEMPT entry)', () => {
+    assert.ok(PATIENT_SCALARS.includes('district'), 'Patient.district must be in the parsed scalar universe');
+    assert.ok(ANONYMIZATION_PAYLOAD_FIELDS.includes('district'), 'district is address PII and a sharper quasi-identifier than city, so it must be nulled');
+    assert.ok(BULK_EXPORT_SELECT_FIELDS.includes('district'), 'PATIENT_SELECT must export district');
+    assert.ok(SUBJECT_ACCESS_SELECT_FIELDS.includes('district'), 'the KVKK subject-access select must include district');
+    for (const exempt of [ANONYMIZATION_EXEMPT, BULK_EXPORT_EXEMPT, SUBJECT_ACCESS_EXEMPT]) {
+      assert.ok(!('district' in exempt), 'district must be covered by being WIRED, never by an EXEMPT entry');
+    }
+  });
+
+  await test('the two new child models reached the subject-access export', () => {
+    assert.match(
+      PATIENT_PRIVACY_SOURCE,
+      /prisma\.patientContactPoint\.findMany\(/,
+      'secondary phone numbers are personal data held about the subject',
+    );
+    assert.match(
+      PATIENT_PRIVACY_SOURCE,
+      /prisma\.migrationPreservedSourceValue\.findMany\(/,
+      'preserved legacy values are personal data held about the subject and must be disclosed',
     );
   });
 

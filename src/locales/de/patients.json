@@ -172,6 +172,11 @@
       "noRecentActivity": "Keine aktuelle Aktivität gefunden.",
       "viewAllActivity": "Vollständiger Verlauf →",
       "unassigned": "Nicht zugewiesen"
+    },
+    "address": {
+      "title": "Adresse",
+      "secondaryPhoneBadge": "Zusätzlich",
+      "secondaryPhonesLoadFailed": "Weitere Telefonnummern konnten nicht geladen werden."
     }
   },
   "form": {
@@ -179,6 +184,7 @@
     "lastName": "Nachname",
     "email": "E-Mail-Adresse",
     "phone": "Telefonnummer",
+    "phonePrimaryHint": "(primär)",
     "dob": "Geburtsdatum",
     "dobFutureError": "Das Geburtsdatum darf nicht in der Zukunft liegen",
     "status": "Patientenstatus",
@@ -200,6 +206,45 @@
     "primaryPractitioner": "Hauptbehandler",
     "primaryPractitionerUnassigned": "Nicht zugewiesen",
     "primaryPractitionerReadOnlyHint": "(nur Ansicht — wird von Rezeption/Verwaltung zugewiesen)",
+    "addressSection": "Adressdaten",
+    "address": "Adresse",
+    "addressPlaceholder": "Straße, Gebäude, Wohnungs-/Türnummer",
+    "district": "Bezirk",
+    "districtPlaceholder": "z. B. Kadıköy",
+    "province": "Provinz",
+    "provincePlaceholder": "z. B. Istanbul",
+    "postalCode": "Postleitzahl",
+    "postalCodePlaceholder": "z. B. 34710",
+    "country": "Land",
+    "countryPlaceholder": "z. B. Türkei",
+    "secondaryPhones": {
+      "title": "Weitere Telefonnummern",
+      "description": "Weitere hinterlegte Nummern zusätzlich zur Hauptnummer (privat, dienstlich, Angehörige).",
+      "addNew": "Nummer hinzufügen",
+      "addTitle": "Neue Telefonnummer",
+      "add": "Hinzufügen",
+      "empty": "Keine weiteren Telefonnummern hinterlegt.",
+      "availableAfterCreate": "Weitere Telefonnummern können nach dem Speichern des Patienten in der Patientenakte hinzugefügt werden.",
+      "contactType": "Nummerntyp",
+      "value": "Telefonnummer",
+      "valuePlaceholder": "+90 216 000 00 00",
+      "label": "Hinweis",
+      "labelPlaceholder": "z. B. Telefon des Ehepartners",
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "deleteConfirm": "Diese Nummer löschen?",
+      "deleteConfirmYes": "Ja, löschen",
+      "valueRequired": "Telefonnummer ist erforderlich",
+      "saveFailed": "Telefonnummer konnte nicht gespeichert werden.",
+      "deleteFailed": "Telefonnummer konnte nicht gelöscht werden.",
+      "loadFailed": "Weitere Telefonnummern konnten nicht geladen werden.",
+      "types": {
+        "mobile": "Mobil",
+        "home": "Privat",
+        "work": "Dienstlich",
+        "other": "Sonstige"
+      }
+    },
     "identity": {
       "label": "Türkische Identitätsnummer (T.C. Kimlik No)",
       "sensitiveHint": "(sensibel, optional)",

@@ -59,6 +59,13 @@ const patientBaseSchema = z.object({
   dateOfBirth: z.string().optional().nullable().refine(val => !val || new Date(val) <= new Date(), { message: 'Date of birth cannot be in the future' }).transform(val => val ? new Date(val) : null),
   address: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
+  // F3-DATA-MIG-TODAY-001-R10: "İlçe" — the district half of a Turkish
+  // address. `city` is UNCHANGED and still means province/il (see the
+  // Patient.city / Patient.district doc comments in prisma/schema.prisma).
+  // Shaped EXACTLY like its address siblings above/below so it behaves
+  // identically on create (patientSchema) and patch (patientUpdateSchema,
+  // which is patientBaseSchema.partial()).
+  district: z.string().optional().nullable(),
   postalCode: z.string().optional().nullable(),
   country: z.string().optional().nullable(),
   patientStatus: z.enum(['new', 'active', 'inactive', 'archived']).default('new'),

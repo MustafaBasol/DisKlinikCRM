@@ -16,6 +16,14 @@
  *   - OperationalEvent rows (integration failure / webhook error events)
  *   - ContactRequest PII fields (phone, name, note, lastMessage) — resolved/closed only
  *   - WhatsAppInboxEntry.lastMessageText / rawPayload — resolved entries only (row kept)
+ *   - MigrationPreservedSourceValue rows (F3-DATA-MIG-TODAY-001-R10 — raw
+ *     legacy values preserved verbatim from a clinic's PREVIOUS system
+ *     because they had no canonical destination: parents' names, extra phone
+ *     numbers, free text. Import EVIDENCE, never current clinical truth, and
+ *     nothing in the product may branch on them — so unlike Patient/
+ *     Appointment/Payment records there is no operational reason to hold them
+ *     forever, and "forever" is not a retention period KVKK recognises for
+ *     raw PII. Deleted outright once past the window, on `importedAt`.)
  *
  * What is NOT cleaned:
  *   - Patient, Appointment, Treatment, Payment, Insurance, Attachment records
@@ -47,6 +55,32 @@
  *     CommunicationConsentConflictBucket rows (KVKK-HIGH-007 legacy/central
  *     conflict aggregates — already PII-free, but bounded like every other
  *     category so it doesn't grow unbounded either).
+ *   DATA_RETENTION_MIGRATION_PRESERVED_SOURCE_DAYS  integer ≥ 30 (default: 3650)
+ *     MigrationPreservedSourceValue rows (F3-DATA-MIG-TODAY-001-R10).
+ *
+ *     WHY 10 YEARS, AND WHY NOT SHORTER. The purpose of a preserved value is
+ *     to answer, later, "what did the old system actually hold for this
+ *     patient?" — a question that arises exactly when a historical clinical,
+ *     billing or consent record is disputed. In Turkey the general
+ *     prescription period for contractual claims (Türk Borçlar Kanunu m.146)
+ *     is 10 years, so a shorter window would routinely destroy the evidence
+ *     while the claim it answers is still live. 10 years is therefore the
+ *     shortest defensible default, not a generous one.
+ *
+ *     WHY NOT LONGER / INDEFINITE. These rows are raw legacy PII with no
+ *     operational consumer; "keep forever" is the thing this category exists
+ *     to prevent. A clinic with a genuine longer statutory duty raises the
+ *     env var deliberately rather than inheriting an unbounded default.
+ *
+ *     NOT the patient-record retention period. Ministry-of-Health-style
+ *     retention duties attach to the CLINICAL record (Patient, Appointment,
+ *     medical history), which this job never touches — see "What is NOT
+ *     cleaned" above. Migration evidence is not a clinical record.
+ *
+ *     Independent of anonymization: patientAnonymization.ts hard-deletes a
+ *     patient's preserved values immediately on an anonymization request,
+ *     regardless of this window. This category is the backstop for the rows
+ *     nobody ever files a request about.
  */
 
 export type DataRetentionConfig = {
@@ -58,6 +92,8 @@ export type DataRetentionConfig = {
   inboundEventDays: number;
   resolvedContactRequestDays: number;
   communicationConsentConflictBucketsDays: number;
+  /** F3-DATA-MIG-TODAY-001-R10 — MigrationPreservedSourceValue rows. */
+  migrationPreservedSourceDays: number;
   batchSize: number;
 };
 
@@ -77,6 +113,9 @@ const DEFAULTS = {
   inboundEventDays: 90,
   resolvedContactRequestDays: 365,
   communicationConsentConflictBucketsDays: 180,
+  // 10 years — see the DATA_RETENTION_MIGRATION_PRESERVED_SOURCE_DAYS block
+  // in this file's header for the full reasoning.
+  migrationPreservedSourceDays: 3650,
   batchSize: 500,
 } as const;
 
@@ -106,6 +145,7 @@ export function loadDataRetentionConfig(): DataRetentionConfig {
     inboundEventDays: parseSafeDays('DATA_RETENTION_INBOUND_EVENT_DAYS', DEFAULTS.inboundEventDays),
     resolvedContactRequestDays: parseSafeDays('DATA_RETENTION_RESOLVED_CONTACT_REQUEST_DAYS', DEFAULTS.resolvedContactRequestDays),
     communicationConsentConflictBucketsDays: parseSafeDays('DATA_RETENTION_CONSENT_CONFLICT_BUCKETS_DAYS', DEFAULTS.communicationConsentConflictBucketsDays),
+    migrationPreservedSourceDays: parseSafeDays('DATA_RETENTION_MIGRATION_PRESERVED_SOURCE_DAYS', DEFAULTS.migrationPreservedSourceDays),
     batchSize: parseSafeBatchSize(),
   };
 }

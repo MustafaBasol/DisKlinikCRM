@@ -40,8 +40,11 @@ import {
 import { FIRST_CUSTOMER_MATRIX } from '../services/migration/mapping/firstCustomerMatrix.js';
 import {
   FIRST_CUSTOMER_MEASURED_FILL,
+  FIRST_CUSTOMER_NAMED_COLUMNS,
   FIRST_CUSTOMER_TOTAL_ROWS,
+  FIRST_CUSTOMER_WORKBOOK_SHA256,
   fillEvidenceClassOf,
+  informationContentCounts,
   measuredFillCounts,
   measuredFillFor,
 } from '../services/migration/mapping/firstCustomerMeasuredFill.js';
@@ -286,19 +289,46 @@ async function main() {
   section('R9-4. THE ACCOUNTING EQUATION OVER REAL MEASURED FILL');
   // ========================================================================
 
-  await test('#6: the measured-fill evidence covers the matrix exactly, and is 23 / 10 / 58', () => {
+  await test('#6: the measured-fill evidence covers the matrix exactly, and is 49 / 42 / 0', () => {
     assert.equal(FIRST_CUSTOMER_MEASURED_FILL.length, FIRST_CUSTOMER_MATRIX.length);
     for (const e of FIRST_CUSTOMER_MATRIX) {
       assert.ok(measuredFillFor(e.sourceField), `no measured fill recorded for ${e.sourceField}`);
     }
     const counts = measuredFillCounts();
-    // The headline R9 finding, asserted so it cannot drift unnoticed. If a
-    // future re-profiling moves a column out of UNMEASURED, this number changes
-    // and the change is reviewed — which is the point.
-    assert.deepEqual(counts, { MEANINGFUL: 23, ZERO_DATA: 10, UNMEASURED: 58 });
+    // R10 REPLACES THE R9 HEADLINE. R9 asserted 23 / 10 / 58 because 58 columns
+    // had genuinely never been profiled. R10 ran the repository's own analyze
+    // code (parseSourceWorkbook + profileColumns) over the accepted workbook
+    // (sha256 f08c0019…) and measured all 91, so UNMEASURED is now 0 and the
+    // single largest blocker on the first-customer run is retired by EVIDENCE,
+    // not by relaxing the gate. Asserted so it cannot drift unnoticed.
+    assert.deepEqual(counts, { MEANINGFUL: 49, ZERO_DATA: 42, UNMEASURED: 0 });
     assert.equal(counts.MEANINGFUL + counts.ZERO_DATA + counts.UNMEASURED, 91);
+    assert.equal(
+      counts.UNMEASURED,
+      0,
+      'every named source column must stay measured — a regression here re-opens the R9 blocker',
+    );
+
+    // The evidence table and the workbook it was measured from are pinned
+    // together, so a future re-measure against a DIFFERENT file cannot quietly
+    // reuse these counts.
+    assert.equal(FIRST_CUSTOMER_NAMED_COLUMNS, 91);
+    assert.match(FIRST_CUSTOMER_WORKBOOK_SHA256, /^[0-9a-f]{64}$/);
+
+    // Information content is reported ALONGSIDE the evidence class, never
+    // instead of it: 10 columns are filled but carry one distinct value, so
+    // they discriminate no patient from any other. That is decision-support
+    // for the operator, not a decision — every one is still MEANINGFUL above.
+    const info = informationContentCounts();
+    assert.deepEqual(info, { NO_DATA: 42, CONSTANT: 10, VARYING: 39 });
+    assert.equal(info.CONSTANT + info.VARYING, counts.MEANINGFUL);
+    assert.equal(info.NO_DATA, counts.ZERO_DATA);
+
     console.log(
       `    measured fill: MEANINGFUL ${counts.MEANINGFUL} · ZERO_DATA ${counts.ZERO_DATA} · UNMEASURED ${counts.UNMEASURED}  (of ${FIRST_CUSTOMER_MATRIX.length})`,
+    );
+    console.log(
+      `    information content: VARYING ${info.VARYING} · CONSTANT ${info.CONSTANT} · NO_DATA ${info.NO_DATA}`,
     );
   });
 
@@ -362,9 +392,13 @@ async function main() {
     const report = evaluateDataLossGate(rows);
 
     assert.equal(report.totalSourceColumns, 91);
-    assert.equal(report.meaningfulSourceColumns, 23);
-    assert.equal(report.zeroDataColumns, 10);
-    assert.equal(report.unmeasuredFillColumns, 58);
+    assert.equal(report.meaningfulSourceColumns, 49);
+    assert.equal(report.zeroDataColumns, 42);
+    assert.equal(
+      report.unmeasuredFillColumns,
+      0,
+      'R10: every column is measured, so nothing blocks merely for being unprofiled',
+    );
     assert.equal(report.balanced, true, 'every meaningful column lands in exactly one class');
     assert.equal(
       report.satisfied,
@@ -386,22 +420,79 @@ async function main() {
     console.log(`    unconfirmed exclusions: ${report.unconfirmedExclusionFields.join(', ')}`);
     console.log(`    blocked with data:      ${report.blockedMeaningfulFields.join(', ')}`);
 
-    // The three BLOCKED columns that still carry measured data, named so a
-    // reviewer sees exactly which ones the gate is holding the run for.
-    assert.deepEqual(report.blockedMeaningfulFields, [], 'R9 moved every measured-meaningful BLOCKED column to manual review');
+    /*
+     * THE HEADLINE R10 RESULT. Every class of ENGINEERING blocker is gone; what
+     * remains is decisions that belong to people.
+     *
+     * (a) NO MEANINGFUL COLUMN IS BLOCKED FOR WANT OF A DESTINATION. This list
+     *     is empty not because the gate was relaxed but because the fields were
+     *     built. Measuring all 91 columns first EXPOSED ten blocked columns
+     *     carrying real rows (UNVANI 14,890 · SUBEDOSYANO 9,105 · FAX 96 ·
+     *     MEDENIHALI 57 · ANNEADI 25 · BABAADI 18 · ALTDOSYANO 10 · TURIZM 6 ·
+     *     SIGORTATURU 2 · UCRETTARIFESI 1) that R9 could not see; R10 then gave
+     *     every one of them somewhere to go. "NoraMedi has no field for it" is
+     *     no longer a reason any row is held back.
+     */
+    assert.deepEqual(report.blockedMeaningfulFields, []);
+    assert.equal(report.blockedMeaningful, 0);
+
+    /*
+     * (b) Nothing is legally blocked with data, and nothing is unaccounted.
+     *     KVKKONAYKODU and KVKKSMS are both measured at 0 filled rows, so the
+     *     consent-fabrication gate holds at zero cost to the customer. R10 did
+     *     NOT open the historical-evidence exception to achieve this.
+     */
     assert.deepEqual(report.legalBlockedMeaningfulFields, []);
     assert.deepEqual(report.unaccountedMeaningfulFields, []);
-    // ...leaving the unconfirmed exclusions as the remaining data-loss risk.
+
+    /*
+     * (c) Eight system-recommended exclusions still await operator
+     *     confirmation — down from seventeen, because thirteen of them were
+     *     given controlled preservation instead of being proposed for
+     *     discard. Every one of the eight that remains is measured CONSTANT or
+     *     provably redundant, so the operator can confirm it from evidence:
+     *       SUBE_ID        9,083 rows, all "none"
+     *       KAYDEDEN      14,890 rows, all "admin"
+     *       UST_HESAP_KODU 13,985 rows, one ledger code
+     *       CHECKBOX       3,500 rows, all "Yeni"
+     *       DOSYAVAR       3,051 rows, all "false"
+     *       RISK_TUTARI        2 rows, both "0"
+     *       ODEMESONTARIHI     1 row
+     *       AILEGURUBU    14,890 rows, IDENTICAL to HASTA_ID on every row
+     *     Confirmation is still REQUIRED. Measured-safe is not self-approving.
+     */
     assert.deepEqual(report.unconfirmedExclusionFields, [
       'AILEGURUBU',
-      'KAYITTARIHI',
+      'CHECKBOX',
+      'DOSYAVAR',
+      'KAYDEDEN',
+      'ODEMESONTARIHI',
       'RISK_TUTARI',
       'SUBE_ID',
-      'TEDAVIDURUMU',
+      'UST_HESAP_KODU',
     ]);
-    // And the four columns R9 reclassified are now unanswered questions.
-    assert.equal(report.manualReview, 4, 'EVTELEFONU, ISTELEFONU, ILCE, KVKKILKKODU');
+    assert.equal(report.systemRecommendedButUnconfirmedExclusions, 8);
+
+    /*
+     * (d) 21 preservation proposals sit in AUTO_REVIEW, which this gate counts
+     *     as manual review — correctly, because nothing is written until an
+     *     operator accepts them. Accepting loses nothing; the alternative was
+     *     discarding the columns.
+     */
+    assert.equal(report.manualReview, 21, 'the 21 legacy-preservation proposals awaiting accept');
+
+    /*
+     * (e) The three KVKK Art. 6 special-category columns. These are the ONLY
+     *     remaining items that are genuinely not an engineer's to decide.
+     */
     assert.equal(report.sensitiveReview, 3, 'ONEMLINOT, KONTROLNOTU, KANGURUBU');
+
+    /*
+     * (f) 17 columns resolve straight to a real destination — 14 as before,
+     *     plus the three R10 built fields for: ILCE -> patient.district,
+     *     EVTELEFONU -> contactPoint.home, ISTELEFONU -> contactPoint.work.
+     */
+    assert.equal(report.resolved, 17);
   });
 
   await test('#6d: confirming every remaining exclusion is what makes the equation close', () => {

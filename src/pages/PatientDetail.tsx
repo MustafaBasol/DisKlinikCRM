@@ -37,11 +37,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
-import { patientService, taskService, treatmentCaseService, paymentService, paymentPlanService, insuranceProvisionService, attachmentService } from '../services/api';
+import { patientService, taskService, treatmentCaseService, paymentService, paymentPlanService, insuranceProvisionService, attachmentService, patientContactPointService } from '../services/api';
 import api from '../services/api';
 import DentalChart from '../components/DentalChart';
 import PatientPrivacyPanel from '../components/PatientPrivacyPanel';
 import PatientEmergencyContactsPanel from '../components/PatientEmergencyContactsPanel';
+import { contactPointTypeLabelKey, type PatientContactPoint } from '../components/PatientContactPointsSection';
 import CommunicationPreferencesPanel from '../components/CommunicationPreferencesPanel';
 import PatientForm from '../components/PatientForm';
 import TaskForm from '../components/TaskForm';
@@ -159,6 +160,10 @@ const PatientDetail: React.FC = () => {
   // a TCKN is on file).
   const [identity, setIdentity] = useState<{ present: boolean; maskedValue: string | null } | null>(null);
   const canViewIdentity = canManagePatientIdentity(user);
+  // F3-DATA-MIG-TODAY-001-R10: SECONDARY numbers only. `patient.phone` stays
+  // the primary number and is rendered separately, above these.
+  const [contactPoints, setContactPoints] = useState<PatientContactPoint[]>([]);
+  const [contactPointsError, setContactPointsError] = useState(false);
   const paymentCurrency = payments[0]?.currency || treatmentCases[0]?.currency || defaultCurrency;
   const patientFullName = patient
     ? String(
@@ -190,6 +195,18 @@ const PatientDetail: React.FC = () => {
         }
       } else {
         setIdentity(null);
+      }
+
+      // Deliberately NOT surfaced through role="alert": this is supplementary
+      // contact info inside the always-rendered profile card, and an alert
+      // there would fire on every tab of the page.
+      try {
+        const contactPointsRes = await patientContactPointService.getAll(id);
+        setContactPoints(contactPointsRes.data?.contactPoints ?? []);
+        setContactPointsError(false);
+      } catch {
+        setContactPoints([]);
+        setContactPointsError(true);
       }
 
       try {
@@ -406,6 +423,45 @@ const PatientDetail: React.FC = () => {
     ? `${patient.primaryPractitioner.firstName} ${patient.primaryPractitioner.lastName}`
     : t('patients:form.primaryPractitionerUnassigned');
 
+  // F3-DATA-MIG-TODAY-001-R10. Was `${patient.address}, ${patient.city}`,
+  // which rendered a literal "Foo, undefined" for any patient with a street
+  // address but no province. Every component is now joined only when it is
+  // actually present, and postalCode/country — which this page never showed
+  // at all — are included.
+  const addressParts = [patient.address, patient.district, patient.city, patient.postalCode, patient.country]
+    .map((part: unknown) => (part == null ? '' : String(part).trim()))
+    .filter((part: string) => part.length > 0);
+  const addressLabel = addressParts.length > 0 ? addressParts.join(', ') : t('common:noData');
+
+  // Rendered identically in the desktop (size 18) and mobile (size 16)
+  // demographics blocks, which must stay in sync — one renderer, two call
+  // sites, so they cannot drift.
+  const renderSecondaryContactPoints = (iconSize: number) => {
+    if (contactPointsError) {
+      return (
+        <div className="flex items-center gap-3 text-gray-400">
+          <Phone size={iconSize} className="text-gray-300 flex-shrink-0" />
+          <span className="text-xs italic">{t('patients:detail.address.secondaryPhonesLoadFailed')}</span>
+        </div>
+      );
+    }
+    if (contactPoints.length === 0) return null;
+    return (
+      <>
+        {contactPoints.map((cp) => (
+          <div key={cp.id} className="flex items-center gap-3 text-gray-600">
+            <Phone size={iconSize} className="text-gray-400 flex-shrink-0" />
+            <span className="text-sm truncate">
+              <span className="badge badge-gray text-xs mr-2">{t('patients:detail.address.secondaryPhoneBadge')}</span>
+              {t(contactPointTypeLabelKey(cp.contactType))}: {cp.value}
+              {cp.label ? ` (${cp.label})` : ''}
+            </span>
+          </div>
+        ))}
+      </>
+    );
+  };
+
   return (
     <div className="space-y-4 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -488,15 +544,19 @@ const PatientDetail: React.FC = () => {
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <Phone size={18} className="text-gray-400" />
-                <span className="text-sm">{patient.phone || t('common:noData')}</span>
+                <span className="text-sm">
+                  {patient.phone || t('common:noData')}
+                  <span className="ml-2 text-xs text-gray-400">{t('patients:form.phonePrimaryHint')}</span>
+                </span>
               </div>
+              {renderSecondaryContactPoints(18)}
               <div className="flex items-center gap-3 text-gray-600">
                 <Calendar size={18} className="text-gray-400" />
                 <span className="text-sm">{t('patients:form.dob')}: {patient.dateOfBirth ? formatDate(patient.dateOfBirth) : t('common:noData')}</span>
               </div>
-              <div className="flex items-center gap-3 text-gray-600">
-                <MapPin size={18} className="text-gray-400" />
-                <span className="text-sm">{patient.address ? `${patient.address}, ${patient.city}` : t('common:noData')}</span>
+              <div className="flex items-start gap-3 text-gray-600">
+                <MapPin size={18} className="text-gray-400 flex-shrink-0 mt-0.5" />
+                <span className="text-sm">{t('patients:detail.address.title')}: {addressLabel}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <UserIcon size={18} className="text-gray-400" />
@@ -599,15 +659,19 @@ const PatientDetail: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-3 text-gray-600">
                     <Phone size={16} className="text-gray-400 flex-shrink-0" />
-                    <span className="text-sm">{patient.phone || t('common:noData')}</span>
+                    <span className="text-sm">
+                      {patient.phone || t('common:noData')}
+                      <span className="ml-2 text-xs text-gray-400">{t('patients:form.phonePrimaryHint')}</span>
+                    </span>
                   </div>
+                  {renderSecondaryContactPoints(16)}
                   <div className="flex items-center gap-3 text-gray-600">
                     <Calendar size={16} className="text-gray-400 flex-shrink-0" />
                     <span className="text-sm">{t('patients:form.dob')}: {patient.dateOfBirth ? formatDate(patient.dateOfBirth) : t('common:noData')}</span>
                   </div>
-                  <div className="flex items-center gap-3 text-gray-600">
-                    <MapPin size={16} className="text-gray-400 flex-shrink-0" />
-                    <span className="text-sm">{patient.address ? `${patient.address}, ${patient.city}` : t('common:noData')}</span>
+                  <div className="flex items-start gap-3 text-gray-600">
+                    <MapPin size={16} className="text-gray-400 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm">{t('patients:detail.address.title')}: {addressLabel}</span>
                   </div>
                   <div className="flex items-center gap-3 text-gray-600">
                     <UserIcon size={16} className="text-gray-400 flex-shrink-0" />

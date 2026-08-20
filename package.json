@@ -16,6 +16,7 @@
     "test:communication-consent-matrix": "tsx src/components/__tests__/communicationConsentMatrixHelpers.test.ts",
     "test:patient-detail-tabs-helpers": "tsx src/pages/__tests__/patientDetailTabsHelpers.test.ts",
     "test:patient-emergency-contacts-i18n-parity": "tsx src/pages/__tests__/patientEmergencyContactsI18nParity.test.ts",
+    "test:patient-address-i18n-parity": "tsx src/pages/__tests__/patientAddressI18nParity.test.ts",
     "test:patient-detail-nav-i18n-parity": "tsx src/pages/__tests__/patientDetailNavI18nParity.test.ts",
     "test:ux001-wave2-i18n-parity": "tsx src/pages/__tests__/ux001Wave2I18nParity.test.ts",
     "test:platform-migration-helpers": "tsx src/pages/__tests__/platformMigrationHelpers.test.ts",

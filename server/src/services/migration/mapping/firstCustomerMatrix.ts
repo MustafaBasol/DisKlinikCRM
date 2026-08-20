@@ -198,6 +198,29 @@ export type MatrixDisposition =
    * destination. Distinct from BLOCKED_NO_DESTINATION, which is silent.
    */
   | 'SENSITIVE_REVIEW_NO_DESTINATION'
+  /**
+   * F3-DATA-MIG-TODAY-001-R10. CONTROLLED LEGACY SOURCE PRESERVATION.
+   *
+   * The column carries MEASURED, MEANINGFUL data and has no canonical
+   * destination in the product, so the only two options R9 had were "invent a
+   * Patient field" or "drop it". This is the third: keep the value verbatim on
+   * MigrationPreservedSourceValue with full provenance, as EVIDENCE of what the
+   * old system held - never as current clinical truth, and never readable by
+   * any clinical, messaging, billing or patient-matching code path.
+   *
+   * PROPOSED, NOT APPLIED. It resolves to AUTO_REVIEW, so a Platform Admin
+   * still affirmatively accepts each one (individually, or in bulk via
+   * accept-auto). Preservation writes real PII into a new table; that is a
+   * decision with privacy weight, not a default the system may take silently.
+   * What it is NOT is a data-loss risk: accepting it loses nothing, and the
+   * operator remains free to exclude the column instead.
+   *
+   * NEVER for a consent column. Consent columns are BLOCKED_LEGAL_DECISION and
+   * validateMapping Rule 4 forbids them carrying ANY destination, this one
+   * included. Preservation is about columns with no home, not about lawful
+   * basis.
+   */
+  | 'PRESERVE_LEGACY_SOURCE'
   | 'IGNORE_VENDOR_INTERNAL'
   | 'IGNORE_SUMMARY_NOT_TRANSACTION'
   | 'BLOCKED_LEGAL_DECISION'
@@ -241,6 +264,11 @@ function stateFor(d: MatrixDisposition): MappingState {
     case 'IMPORT_AFTER_SENSITIVE_REVIEW':
     case 'SENSITIVE_REVIEW_NO_DESTINATION':
       return 'SENSITIVE_REVIEW_REQUIRED';
+    // A destination IS proposed, so this is not MANUAL_REQUIRED; but it is not
+    // applied without a human, so it is not AUTO_CONFIDENT either. AUTO_REVIEW
+    // is exactly that state, and accept-auto can promote it in bulk.
+    case 'PRESERVE_LEGACY_SOURCE':
+      return 'AUTO_REVIEW';
     case 'BLOCKED_LEGAL_DECISION':
       return 'LEGAL_BLOCKED';
     case 'BLOCKED_NO_DESTINATION':
@@ -270,6 +298,10 @@ function reasonFor(d: MatrixDisposition): MappingReason {
     case 'IMPORT_AFTER_SENSITIVE_REVIEW':
     case 'SENSITIVE_REVIEW_NO_DESTINATION':
       return 'SPECIAL_CATEGORY_REVIEW';
+    // The proposal comes from this reviewed customer profile, exactly like an
+    // import proposal does. What differs is the destination, not the evidence.
+    case 'PRESERVE_LEGACY_SOURCE':
+      return 'FIRST_CUSTOMER_MATRIX';
     case 'BLOCKED_LEGAL_DECISION':
       return 'LEGAL_GATE';
     case 'BLOCKED_NO_DESTINATION':
@@ -306,6 +338,12 @@ function confidenceFor(d: MatrixDisposition): number {
     // operator we have no opinion when in fact we have a documented one.
     case 'IMPORT_AFTER_SENSITIVE_REVIEW':
       return 70;
+    // High confidence in the DESTINATION - preservation is always a valid
+    // place to put a value with no canonical home, and unlike a field guess it
+    // cannot be semantically wrong. The operator gate is the AUTO_REVIEW state,
+    // not a low score, so scoring this low would misreport certainty.
+    case 'PRESERVE_LEGACY_SOURCE':
+      return 90;
     case 'SENSITIVE_REVIEW_NO_DESTINATION':
     case 'BLOCKED_LEGAL_DECISION':
     case 'BLOCKED_NO_DESTINATION':
@@ -376,21 +414,57 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   }),
   entry({
     sourceField: 'UNVANI',
-    meaning: 'Title / honorific',
-    disposition: 'BLOCKED_NO_DESTINATION',
-    note: 'G-E14. No Patient field holds an honorific; fill rate unmeasured.',
+    meaning: 'Display name (derived)',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 14,890 filled rows (100 %) MEASURED by a real Analyze pass ' +
+      'over the accepted workbook (sha256 f08c0019...), not transcribed. R9 recorded UNKNOWN. ' +
+      'Profiling also settled what it IS: 100 % of values CONTAIN the patient\'s own ADI, and ' +
+      'the word-count histogram is 2 words (13,161) or 3 (1,714). It is a derived "Ad Soyad" ' +
+      'display string, NOT a title or honorific - so there was never an honorific field to ' +
+      'build. It duplicates data already imported into firstName/lastName and adds no new fact, ' +
+      'but 14,890 rows may not be dropped on a system recommendation. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it. An operator who judges the ' +
+      'duplication not worth keeping may exclude it instead - that is now an informed choice ' +
+      'rather than a silent one.',
   }),
   entry({
     sourceField: 'BABAADI',
-    meaning: "Father's name",
-    disposition: 'BLOCKED_NO_DESTINATION',
-    note: 'G-E12. Third-party PII with no destination. Never divert into a name or note field.',
+    meaning: 'Father\'s name',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 18 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. Identical treatment and ' +
+      'identical third-party-PII reasoning as ANNEADI. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'ANNEADI',
-    meaning: "Mother's name",
-    disposition: 'BLOCKED_NO_DESTINATION',
-    note: 'G-E12. Third-party PII with no destination.',
+    meaning: 'Mother\'s name',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 25 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. R9 recorded UNKNOWN. G-E12 ' +
+      'stands: this is THIRD-PARTY PII and must never be diverted into a patient name or note ' +
+      'field. Preservation is not that divergence - the value stays labelled as the vendor ' +
+      'column it came from, is covered by patient anonymization (hard delete) and data ' +
+      'retention, and is never presented as a fact about the patient. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'CINSIYET',
@@ -430,8 +504,18 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'MEDENIHALI',
     meaning: 'Marital status',
-    disposition: 'BLOCKED_NO_DESTINATION',
-    note: 'G-E15. No destination and no consumer in the product.',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 57 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. (2 distinct: married / single). ' +
+      'R9 recorded UNKNOWN. G-E15 stands: there is no destination and no consumer, so no field ' +
+      'is being built for 57 rows. Preserved verbatim on MigrationPreservedSourceValue with ' +
+      'full provenance (run, vendor system, source column, source row). EVIDENCE of what the ' +
+      'old system held, never current clinical truth: no clinical, messaging, billing or ' +
+      'patient-matching code path may read it. Proposed, not applied - AUTO_REVIEW, so a ' +
+      'Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'MESLEGI',
@@ -463,9 +547,15 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
     destinationField: 'patient.country',
     transform: 'trim',
     note:
-      '0 % filled FOR THIS CUSTOMER, but the mapping is VALID and must be recorded as a mapping, ' +
-      'NOT as IGNORE. Recording an empty-but-correct column as IGNORE would bake this ' +
-      "customer's data shape into the profile and silently drop the NEXT customer's country data.",
+      'F3-DATA-MIG-TODAY-001-R10. CORRECTS A MATERIALLY WRONG FIGURE. R9 recorded this column ' +
+      'as 0 % filled, transcribed from the decision package. It is in fact 14,890/14,890 ' +
+      '(100.00 %) filled, MEASURED by a real Analyze pass over the accepted workbook (sha256 ' +
+      'f08c0019...). - the single worst transcription error the hand-maintained evidence table ' +
+      'carried, off by every row in the file. 3 distinct vendor country codes, one of them ' +
+      'dominant (14,884 rows). The mapping to patient.country was already correct and is ' +
+      'unchanged; what changes is that it now carries real data for every patient instead of ' +
+      'being believed empty. Values are vendor CODES, not country names, so the operator should ' +
+      'confirm the code-to-country reading before accepting.',
   }),
   entry({
     sourceField: 'TCNO',
@@ -535,24 +625,33 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'EVTELEFONU',
     meaning: 'Home phone',
-    disposition: 'MANUAL_REVIEW',
+    disposition: 'IMPORT_AFTER_SCHEMA_FIELD',
+    destinationField: 'patient.contactPoint.home',
+    transform: 'phone_tr',
     note:
-      'G-E8 (C-5). R9: 45 filled rows MEASURED — a clinic-operational contact route for 45 real ' +
-      'patients, not an empty column. Patient has ONE phone field, already claimed by ' +
-      'CEPTELEFONU, so there is genuinely nowhere for it to go; but "nowhere to go" is a ' +
-      'question, not an answer, and BLOCKED_NO_DESTINATION let it be dropped silently. It is ' +
-      'now an unanswered question a human must close. HARD RULE, unchanged: never divert into ' +
-      'PatientEmergencyContact.phone — that would assert a home number is an emergency contact, ' +
-      'which is a clinical safety claim nobody made.',
+      'F3-DATA-MIG-TODAY-001-R10. 50 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. (R9 recorded 45; the ' +
+      'transcription had drifted.) 15 of those patients have NO mobile number at all, so for ' +
+      'them this is the clinic\'s only contact route. R9 had nowhere to put it because Patient ' +
+      'has a single phone field, already claimed by CEPTELEFONU. R10 created ' +
+      'PatientContactPoint. HARD RULE, unchanged and now structurally enforced by having a ' +
+      'correct destination: never divert into PatientEmergencyContact.phone - that would ' +
+      'fabricate a named third party and, through isLegalDecisionMaker, a clinical ' +
+      'decision-making authority nobody asserted. patient.phone is never touched by this ' +
+      'mapping.',
   }),
   entry({
     sourceField: 'ISTELEFONU',
     meaning: 'Work phone',
-    disposition: 'MANUAL_REVIEW',
+    disposition: 'IMPORT_AFTER_SCHEMA_FIELD',
+    destinationField: 'patient.contactPoint.work',
+    transform: 'phone_tr',
     note:
-      'G-E8 (C-5). R9: 164 filled rows MEASURED. Same single-phone-field constraint as ' +
-      'EVTELEFONU, and the same correction — a measured, populated contact column may not sit ' +
-      'in a silent no-destination state.',
+      'F3-DATA-MIG-TODAY-001-R10. 166 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. (R9 recorded 164.) 10 of those ' +
+      'patients have no mobile number. Same architecture and the same hard rule as EVTELEFONU: ' +
+      'writes a PatientContactPoint of type "work", never patient.phone, never an emergency ' +
+      'contact.',
   }),
   entry({
     sourceField: 'CEPTELEFONU',
@@ -569,8 +668,19 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'FAX',
     meaning: 'Fax number',
-    disposition: 'BLOCKED_NO_DESTINATION',
-    note: 'G-E8. No destination; the accepted recommendation is NOT to build one.',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 96 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. R9 recorded UNKNOWN. The ' +
+      'accepted recommendation not to build a fax field stands - a fax number is not a ' +
+      'messaging channel this product supports - but "we will not build a field" is not a ' +
+      'reason to discard 96 real contact values. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'EMAIL',
@@ -616,13 +726,18 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   }),
   entry({
     sourceField: 'ILCE',
-    meaning: 'District',
-    disposition: 'MANUAL_REVIEW',
+    meaning: 'District (ilce)',
+    disposition: 'IMPORT_AFTER_SCHEMA_FIELD',
+    destinationField: 'patient.district',
+    transform: 'trim',
     note:
-      'G-E7. R9: about 13 filled rows MEASURED — small, but 13 real patients whose district was ' +
-      'recorded. No district field exists, so a human decides whether that matters; the system ' +
-      'may not decide it by omission. Do NOT fold into address: that would make the composition ' +
-      'rule depend on fill rate and break rerun stability.',
+      'F3-DATA-MIG-TODAY-001-R10. 13 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. 9 distinct districts. R9 had to ' +
+      'hold this at MANUAL_REVIEW with the note "No district field exists, so a human decides ' +
+      'whether that matters; the system may not decide it by omission." R10 created the field: ' +
+      'Patient.district (additive, nullable). Distinct from patient.city, which is the PROVINCE ' +
+      '(il) and is claimed by source IL. Still NOT folded into patient.address - composition ' +
+      'order would then depend on fill rate and break rerun stability.',
   }),
   entry({
     sourceField: 'MAHALLE',
@@ -642,21 +757,14 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
     destinationField: 'patient.bloodGroup',
     transform: 'blood_group_tr',
     note:
-      'KVKK Art. 6 special-category health data. 1 filled row out of 14,890. ' +
-      'R7 moved it off the standing legal block and onto operator review, but that review ' +
-      'had nothing to approve: the product had no blood-group column at all, so the column ' +
-      'was sensitive AND structurally blocked. R8 UPDATE: the program owner decided it ' +
-      'should have a real structured destination, and this sprint added Patient.bloodGroup ' +
-      'with the eight canonical ABO/Rh values plus the blood_group_tr normalization. ' +
-      'The structural blocker is resolved; the SENSITIVE gate is NOT. The state is unchanged ' +
-      'at SENSITIVE_REVIEW_REQUIRED (UNDECIDED) with confidence 70, below every auto-accept ' +
-      'path, so a Platform Admin must still approve this column individually before the run ' +
-      'can execute. It is deliberately NOT folded into patient.notes: a structured clinical ' +
-      'attribute written into free text is not the same datum and could not be read back as ' +
-      'a blood group. The single filled source value is NOT pre-judged here. If ' +
-      'blood_group_tr does not recognize it, the transform yields NULL plus a countable ' +
-      'warning and the value stays in the workbook for the operator to resolve. Rh is never ' +
-      'inferred from an ABO-only value. Nothing is discarded on any path.',
+      'F3-DATA-MIG-TODAY-001-R10. 1 filled row, and its value is "Bilinmiyor" - Turkish for ' +
+      '"Unknown". MEASURED by a real Analyze pass over the accepted workbook (sha256 ' +
+      'f08c0019...). So this export contains NO blood-group data at all: the single populated ' +
+      'cell records the absence of a blood group. KVKK Art. 6 special-category review is still ' +
+      'required before accepting the destination, and the R8 decision to create ' +
+      'Patient.bloodGroup rather than fold this into notes still stands for future customers - ' +
+      'but for THIS customer the reviewer should know that approving it imports exactly zero ' +
+      'blood groups. Rh is never inferred.',
   }),
   entry({
     sourceField: 'ONEMLINOT',
@@ -715,19 +823,35 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   }),
   entry({
     sourceField: 'TEDAVIDURUMU',
-    meaning: 'Treatment status',
-    disposition: 'IGNORE_SUMMARY_NOT_TRANSACTION',
+    meaning: 'Treatment status code',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      '0.02 % filled (3/14,890) — which is itself the evidence that this export carries NO ' +
-      'treatment history. A status with no underlying transactions cannot be reconstructed.',
+      'F3-DATA-MIG-TODAY-001-R10. 3 filled rows (3 distinct codes) MEASURED by a real Analyze ' +
+      'pass over the accepted workbook (sha256 f08c0019...), not transcribed. Still evidence ' +
+      'that this export carries NO treatment history, and still not importable as a treatment ' +
+      'fact. 3 rows kept rather than dropped. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'SUBE_ID',
     meaning: 'Vendor branch id',
     disposition: 'IGNORE_VENDOR_INTERNAL',
     note:
-      '61 % filled but only 1 distinct value. Deliberately ignored: the destination clinic cannot ' +
-      'be derived from a vendor branch id and is operator-selected for the run.',
+      'F3-DATA-MIG-TODAY-001-R10. 9,083 filled rows (61.00 %) but exactly ONE distinct value, ' +
+      'the literal string "none". MEASURED by a real Analyze pass over the accepted workbook ' +
+      '(sha256 f08c0019...). This also CLOSES the standing question of whether SUBE_ID branch ' +
+      'semantics needed reconciling against the target clinic: there are no branch semantics in ' +
+      'this export to reconcile. The target clinic remains operator-selected and ' +
+      'server-validated, as it always was. It is filled but CONSTANT: every filled row carries ' +
+      'the SAME value, so importing it would add a constant to thousands of patient records and ' +
+      'distinguish none of them. That is why excluding it loses no information - and the ' +
+      'operator can now confirm that from evidence instead of taking it on trust. Confirmation ' +
+      'is still required; the system does not get to decide this alone.',
   }),
   entry({
     sourceField: 'HASTADOKTOR',
@@ -770,21 +894,32 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   }),
   entry({
     sourceField: 'AILEGURUBU',
-    meaning: 'Family group code (semantics REFUTED)',
+    meaning: 'Family group code (= HASTA_ID)',
     disposition: 'IGNORE_VENDOR_INTERNAL',
     note:
-      'C-16, which CLOSES AND REFUTES G-E20. The family-key hypothesis was MEASURED, not assumed: ' +
-      '100.00 % distinct (14,890/14,890 unique, fixed 24-char all-digit). Inside every one of the ' +
-      '1,557 shared-CEPTELEFONU groups (3,512 rows) the distinct AILEGURUBU count always equals ' +
-      'the group size — no two rows sharing a phone ever share a value. A real household key would ' +
-      'repeat among family members; none do. It is an opaque per-record system identifier. If a ' +
-      'family/household key is ever needed, re-profile YAKINLIKKODU, not this column.',
+      'F3-DATA-MIG-TODAY-001-R10. 14,890 filled rows (100 %), 14,890 distinct - and profiling ' +
+      'settled what that means: the value is IDENTICAL TO HASTA_ID on all 14,890 rows. MEASURED ' +
+      'by a real Analyze pass over the accepted workbook (sha256 f08c0019...). So it is not a ' +
+      'family/household key at all (C-16 refuted G-E20 on distinctness alone; this proves the ' +
+      'stronger statement). Every patient is their own group, and the column carries a copy of ' +
+      'the primary key that is ALREADY imported as provenance.sourceId. Excluding it therefore ' +
+      'discards no information whatsoever - the same values are preserved, under their real ' +
+      'name, by the provenance mapping. Operator confirmation is still required.',
   }),
   entry({
     sourceField: 'UCRETTARIFESI',
-    meaning: 'Fee tariff',
-    disposition: 'BLOCKED_NO_DESTINATION',
-    note: 'G-E21. Model mismatch (D-17): no per-patient standing tariff exists.',
+    meaning: 'Fee tariff code',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 1 filled row MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. G-E21/D-17 model mismatch ' +
+      'stands - there is no tariff entity to point at. One row, kept rather than dropped. ' +
+      'Preserved verbatim on MigrationPreservedSourceValue with full provenance (run, vendor ' +
+      'system, source column, source row). EVIDENCE of what the old system held, never current ' +
+      'clinical truth: no clinical, messaging, billing or patient-matching code path may read ' +
+      'it. Proposed, not applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'KURUMTARIFE',
@@ -795,18 +930,33 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'SIGORTATURU',
     meaning: 'Insurance type',
-    disposition: 'BLOCKED_NO_DESTINATION',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      'G-E23. Creating an InsuranceProvision merely to hold a type would FABRICATE A FINANCIAL ' +
-      'RECORD that never existed.',
+      'F3-DATA-MIG-TODAY-001-R10. 2 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. R9 recorded UNKNOWN. G-E23 ' +
+      'stands: writing this into an insurance model would FABRICATE a financial record with no ' +
+      'transactions behind it. Preservation asserts nothing financial. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'RISK_TUTARI',
     meaning: 'Outstanding balance',
     disposition: 'IGNORE_SUMMARY_NOT_TRANSACTION',
     note:
-      '0.01 % filled (2 rows). A balance is a DERIVED summary of transactions; no financial ' +
-      'history exists in this export, so importing the summary would create an unbacked debt.',
+      'F3-DATA-MIG-TODAY-001-R10. 2 filled rows and exactly ONE distinct value, "0". MEASURED ' +
+      'by a real Analyze pass over the accepted workbook (sha256 f08c0019...). So there is no ' +
+      'outstanding-balance data in this export at all, and the standing concern about importing ' +
+      'a derived debt figure is moot. The summary-not-transaction rule stands regardless. It is ' +
+      'filled but CONSTANT: every filled row carries the SAME value, so importing it would add ' +
+      'a constant to thousands of patient records and distinguish none of them. That is why ' +
+      'excluding it loses no information - and the operator can now confirm that from evidence ' +
+      'instead of taking it on trust. Confirmation is still required; the system does not get ' +
+      'to decide this alone.',
   }),
   entry({
     sourceField: 'INDIRIMORANI',
@@ -828,21 +978,46 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
     sourceField: 'ODEMESONTARIHI',
     meaning: 'Payment due date',
     disposition: 'IGNORE_SUMMARY_NOT_TRANSACTION',
-    note: 'Derived from financial transactions that this export does not contain.',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 1 filled row, 1 distinct value. MEASURED by a real Analyze ' +
+      'pass over the accepted workbook (sha256 f08c0019...). A due date derived from payment ' +
+      'transactions this export does not contain. It is filled but CONSTANT: every filled row ' +
+      'carries the SAME value, so importing it would add a constant to thousands of patient ' +
+      'records and distinguish none of them. That is why excluding it loses no information - ' +
+      'and the operator can now confirm that from evidence instead of taking it on trust. ' +
+      'Confirmation is still required; the system does not get to decide this alone.',
   }),
   entry({
     sourceField: 'SONODEMETARIHI',
     meaning: 'Last payment date',
-    disposition: 'IGNORE_SUMMARY_NOT_TRANSACTION',
-    note: 'Derived from payment records that this export does not contain.',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 202 filled rows (13 distinct dates) MEASURED by a real ' +
+      'Analyze pass over the accepted workbook (sha256 f08c0019...), not transcribed. R9 ' +
+      'recorded UNKNOWN. Preserved as evidence; no Payment row is created, so no unbacked ' +
+      'financial fact is asserted. Preserved verbatim on MigrationPreservedSourceValue with ' +
+      'full provenance (run, vendor system, source column, source row). EVIDENCE of what the ' +
+      'old system held, never current clinical truth: no clinical, messaging, billing or ' +
+      'patient-matching code path may read it. Proposed, not applied - AUTO_REVIEW, so a ' +
+      'Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'ODEMENOTU',
     meaning: 'Payment note',
-    disposition: 'IGNORE_SUMMARY_NOT_TRANSACTION',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      'HARD RULE: do NOT divert into patient.notes. A finance comment rendered as a clinical note ' +
-      'would appear to staff as medical context it is not.',
+      'F3-DATA-MIG-TODAY-001-R10. 3 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. HARD RULE, unchanged: must NOT ' +
+      'be diverted into patient.notes - a payment comment is not a clinical note and would ' +
+      'corrupt a special-category field. Preservation keeps it labelled as the payment column ' +
+      'it is. Preserved verbatim on MigrationPreservedSourceValue with full provenance (run, ' +
+      'vendor system, source column, source row). EVIDENCE of what the old system held, never ' +
+      'current clinical truth: no clinical, messaging, billing or patient-matching code path ' +
+      'may read it. Proposed, not applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'ODEMENOTTARIHI',
@@ -867,10 +1042,18 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'SONISLEMTARIHI',
     meaning: 'Last procedure date',
-    disposition: 'IGNORE_SUMMARY_NOT_TRANSACTION',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      'A synthesised value here would MASS-FABRICATE RECALL CANDIDATES: one staff click on the ' +
-      'recall list would contact thousands of patients on the strength of an invented date.',
+      'F3-DATA-MIG-TODAY-001-R10. 331 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. R9 recorded UNKNOWN. Same ' +
+      'reasoning as SONRANDEVUTARIHI: preserved as evidence, never materialised as a treatment ' +
+      'record, so it can never mass-fabricate recall candidates. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'SONKONTROLTARIHI',
@@ -893,10 +1076,21 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'SONRANDEVUTARIHI',
     meaning: 'Last appointment date',
-    disposition: 'IGNORE_SUMMARY_NOT_TRANSACTION',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      "Derived from appointments not present in this export. The product's availability check " +
-      "evaluates TODAY's roster, so a historical summary has no consumer anyway.",
+      'F3-DATA-MIG-TODAY-001-R10. 13,403 filled rows (90.01 %) MEASURED by a real Analyze pass ' +
+      'over the accepted workbook (sha256 f08c0019...), not transcribed. R9 recorded UNKNOWN. ' +
+      'The IGNORE_SUMMARY_NOT_TRANSACTION reasoning stands as far as it goes: this is a DERIVED ' +
+      'summary with no appointment rows behind it, and materialising it as an appointment would ' +
+      'fabricate history. But preservation materialises nothing - the value is evidence, not an ' +
+      'Appointment - so the recall/availability fabrication risk does not arise. 13,403 rows of ' +
+      'genuine operational history is far too much to discard on that technicality. Preserved ' +
+      'verbatim on MigrationPreservedSourceValue with full provenance (run, vendor system, ' +
+      'source column, source row). EVIDENCE of what the old system held, never current clinical ' +
+      'truth: no clinical, messaging, billing or patient-matching code path may read it. ' +
+      'Proposed, not applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'SONANKETTARIHI',
@@ -922,14 +1116,22 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   }),
   entry({
     sourceField: 'HATIRLAT',
-    meaning: 'Reminder flag',
-    disposition: 'IGNORE_VENDOR_INTERNAL',
+    meaning: 'Vendor reminder flag',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      'G-E25 — HARD RULE: this flag must NEVER map to any consent field. A vendor reminder toggle ' +
-      'is an operational setting, not a KVKK/marketing consent record. §5 recorded it as ' +
-      'BLOCKED_NO_DESTINATION with "recommend NOT building"; a deliberate never-build is an ' +
-      'IGNORE, and recording it as merely blocked would invite a future task to "unblock" it by ' +
-      'adding a consent column — the exact outcome the hard rule forbids.',
+      'F3-DATA-MIG-TODAY-001-R10. 14,890 filled rows (100 %), 27 true, MEASURED by a real ' +
+      'Analyze pass over the accepted workbook (sha256 f08c0019...), not transcribed. R9 ' +
+      'recorded UNKNOWN. HARD RULE, unchanged and absolutely load-bearing: this must NEVER map ' +
+      'to any consent field despite being a messaging-adjacent flag. A vendor UI toggle is not ' +
+      'lawful-basis evidence under KVKK. Preservation is the opposite of that mistake - it ' +
+      'records the vendor flag AS a vendor flag, with the vendor column name attached, and ' +
+      'grants nothing. Preserved verbatim on MigrationPreservedSourceValue with full provenance ' +
+      '(run, vendor system, source column, source row). EVIDENCE of what the old system held, ' +
+      'never current clinical truth: no clinical, messaging, billing or patient-matching code ' +
+      'path may read it. Proposed, not applied - AUTO_REVIEW, so a Platform Admin still accepts ' +
+      'it.',
   }),
   entry({
     sourceField: 'KVKKONAYKODU',
@@ -948,19 +1150,28 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   }),
   entry({
     sourceField: 'KVKKILKKODU',
-    meaning: 'KVKK initial code',
-    disposition: 'MANUAL_REVIEW',
+    meaning: 'KVKK register key (vendor)',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      'K-4. 31.9 % filled (4,750 rows) / 4,633 distinct — a near-unique CODE, not a consent ' +
-      'STATE. Its near-uniqueness is precisely why it cannot be read as a flag. R9 CORRECTION: ' +
-      'HISTORICAL_METADATA_ONLY made this an IGNORE, i.e. 4,750 rows of consent-adjacent ' +
-      'evidence discarded on a system recommendation. Decision-package §3.3 #5 says what it may ' +
-      'actually be: "a record id in ANOTHER register... if it references a consent-form archive, ' +
-      'that archive is requestable and could be genuine evidenceType — the only route to a ' +
-      'granted state." That is a program-owner question, and the answer changes whether the ' +
-      'clinic can lawfully message these patients at all. It must NOT be fabricated into a ' +
-      'consent record, and it must NOT be silently dropped, so it is an open question until ' +
-      'someone answers it.',
+      'F3-DATA-MIG-TODAY-001-R10. K-4 IS NOW ANSWERED BY MEASUREMENT, and the answer is that ' +
+      'this is NOT consent. 4,754 filled rows / 4,633 distinct MEASURED by a real Analyze pass ' +
+      'over the accepted workbook (sha256 f08c0019...), not transcribed. Every value is a ' +
+      '5-digit integer in [10023, 99971]; fill by registration year is 0 % for 2016-2021, 44 % ' +
+      'in 2022 and 100 % for 2023-2026; and it co-occurs with MESAJOK=true on exactly ONE row. ' +
+      'That is the signature of a sequential REGISTER KEY switched on mid-2022, not of a ' +
+      'consent state - a consent flag would not be near-unique, would not correlate with ' +
+      'registration date, and would correlate with the messaging flag. It therefore CANNOT be ' +
+      'read as consent, and R9 was right to refuse to. What it plausibly keys is an external ' +
+      'consent-form archive; if that archive is ever produced, the ARCHIVE is the evidence, ' +
+      'never this integer. Preserved verbatim on MigrationPreservedSourceValue with full ' +
+      'provenance (run, vendor system, source column, source row). EVIDENCE of what the old ' +
+      'system held, never current clinical truth: no clinical, messaging, billing or ' +
+      'patient-matching code path may read it. Proposed, not applied - AUTO_REVIEW, so a ' +
+      'Platform Admin still accepts it. Preserving it grants NO lawful basis and creates no ' +
+      'PatientCommunicationPreference: it records a vendor reference so the question stays ' +
+      'answerable.',
   }),
   entry({
     sourceField: 'KVKKSMS',
@@ -973,11 +1184,23 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   }),
   entry({
     sourceField: 'MESAJOK',
-    meaning: '"Messaging OK" flag',
-    disposition: 'IGNORE_VENDOR_INTERNAL',
+    meaning: 'Vendor "messaging OK" flag',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      'HARD RULE: must NEVER map to any consent field, despite the tempting name. Discarded ' +
-      'deliberately — a vendor UI toggle is not lawful-basis evidence under KVKK.',
+      'F3-DATA-MIG-TODAY-001-R10. 14,153 filled rows (95.05 %) MEASURED by a real Analyze pass ' +
+      'over the accepted workbook (sha256 f08c0019...), not transcribed. - and only FOUR are ' +
+      'true. R9 recorded UNKNOWN, so the gate blocked on it. HARD RULE, unchanged: this must ' +
+      'NEVER map to any consent field, despite the tempting name. A vendor UI toggle is not ' +
+      'lawful-basis evidence, and the measurement makes the point concrete - reading it as ' +
+      'consent would have granted a messaging basis for 4 patients while implying a decision ' +
+      'about 14,149 others. Preservation records the flag as vendor evidence and creates no ' +
+      'PatientCommunicationPreference. Preserved verbatim on MigrationPreservedSourceValue with ' +
+      'full provenance (run, vendor system, source column, source row). EVIDENCE of what the ' +
+      'old system held, never current clinical truth: no clinical, messaging, billing or ' +
+      'patient-matching code path may read it. Proposed, not applied - AUTO_REVIEW, so a ' +
+      'Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'SMSGONDERILDI',
@@ -989,26 +1212,54 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   }),
   entry({
     sourceField: 'KAYITTARIHI',
-    meaning: 'Registration date',
-    disposition: 'HISTORICAL_METADATA_ONLY',
+    meaning: 'Vendor registration date',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      '100 % filled, spanning 2016-2026. Retained as run metadata. HARD RULE: do NOT overwrite ' +
-      'patient.createdAt (@default(now())) — createdAt means "row created in NoraMedi", and ' +
-      'overwriting it would falsify that. Ten years of patient tenure has no faithful home today.',
+      'F3-DATA-MIG-TODAY-001-R10. 14,890 filled rows (100 %), 1,825 distinct dates spanning ' +
+      '2016-2026, MEASURED by a real Analyze pass over the accepted workbook (sha256 ' +
+      'f08c0019...), not transcribed. HARD RULE, unchanged: this must NEVER be written to ' +
+      'patient.createdAt, which means "row created in NoraMedi" and would be falsified by it. ' +
+      'R9 held it as HISTORICAL_METADATA_ONLY, which resolved to IGNORE - i.e. the clinic\'s ' +
+      'entire 10-year registration history was a system recommendation away from being ' +
+      'discarded. Preservation is what "historical metadata only" always meant, now with ' +
+      'somewhere to actually put it. Preserved verbatim on MigrationPreservedSourceValue with ' +
+      'full provenance (run, vendor system, source column, source row). EVIDENCE of what the ' +
+      'old system held, never current clinical truth: no clinical, messaging, billing or ' +
+      'patient-matching code path may read it. Proposed, not applied - AUTO_REVIEW, so a ' +
+      'Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'KAYITSAATI',
-    meaning: 'Registration time',
-    disposition: 'HISTORICAL_METADATA_ONLY',
-    note: 'The time half of KAYITTARIHI. Same createdAt prohibition.',
+    meaning: 'Vendor registration time',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 14,890 filled rows (100 %) MEASURED by a real Analyze pass ' +
+      'over the accepted workbook (sha256 f08c0019...), not transcribed. The time component of ' +
+      'KAYITTARIHI, and preserved for the same reason and under the same createdAt prohibition. ' +
+      'Preserved verbatim on MigrationPreservedSourceValue with full provenance (run, vendor ' +
+      'system, source column, source row). EVIDENCE of what the old system held, never current ' +
+      'clinical truth: no clinical, messaging, billing or patient-matching code path may read ' +
+      'it. Proposed, not applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'KAYDEDEN',
     meaning: 'Recorded-by staff member',
     disposition: 'HISTORICAL_METADATA_ONLY',
     note:
-      'Would need the same explicit reference contract as HASTADOKTOR, and there is no Patient ' +
-      'field for a historical recorder. Retained as run metadata.',
+      'F3-DATA-MIG-TODAY-001-R10. 14,890 filled rows (100 %) but exactly ONE distinct value, ' +
+      '"admin". MEASURED by a real Analyze pass over the accepted workbook (sha256 ' +
+      'f08c0019...). R9 recorded UNKNOWN. There is no per-user attribution in this export to ' +
+      'preserve - every row was recorded by the same account - so the HASTADOKTOR-style ' +
+      'reference contract this column was parked on is not needed for it. It is filled but ' +
+      'CONSTANT: every filled row carries the SAME value, so importing it would add a constant ' +
+      'to thousands of patient records and distinguish none of them. That is why excluding it ' +
+      'loses no information - and the operator can now confirm that from evidence instead of ' +
+      'taking it on trust. Confirmation is still required; the system does not get to decide ' +
+      'this alone.',
   }),
   entry({
     sourceField: 'SILINDI',
@@ -1025,15 +1276,32 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
     sourceField: 'DOSYAVAR',
     meaning: 'Has a physical file',
     disposition: 'IGNORE_VENDOR_INTERNAL',
-    note: 'Vendor bookkeeping. Valuable only as a D-13 physical-inventory signal, not as patient data.',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 3,051 filled rows (20.49 %) but exactly ONE distinct value, ' +
+      '"false" - i.e. the flag is never true anywhere in the export. MEASURED by a real Analyze ' +
+      'pass over the accepted workbook (sha256 f08c0019...). R9 recorded UNKNOWN. D-13 ' +
+      'physical-file inventory signal, and the signal is uniformly negative. It is filled but ' +
+      'CONSTANT: every filled row carries the SAME value, so importing it would add a constant ' +
+      'to thousands of patient records and distinguish none of them. That is why excluding it ' +
+      'loses no information - and the operator can now confirm that from evidence instead of ' +
+      'taking it on trust. Confirmation is still required; the system does not get to decide ' +
+      'this alone.',
   }),
   entry({
     sourceField: 'CHECKBOX',
     meaning: 'Unlabelled checkbox',
     disposition: 'IGNORE_VENDOR_INTERNAL',
     note:
-      'An unlabelled vendor flag. ESCALATION RULE: if profiling ever shows consent-like semantics, ' +
-      'it moves to BLOCKED_LEGAL_DECISION — never to a consent field.',
+      'F3-DATA-MIG-TODAY-001-R10. 3,500 filled rows (23.51 %) but exactly ONE distinct value, ' +
+      '"Yeni" ("New"). MEASURED by a real Analyze pass over the accepted workbook (sha256 ' +
+      'f08c0019...). R9 recorded UNKNOWN and flagged an ESCALATION RULE: if profiling ever ' +
+      'showed consent-like semantics this must become BLOCKED_LEGAL_DECISION. Profiling has now ' +
+      'run, and the value is a single non-consent status word, so the escalation does NOT fire. ' +
+      'That is a measured conclusion, not an assumption. It is filled but CONSTANT: every ' +
+      'filled row carries the SAME value, so importing it would add a constant to thousands of ' +
+      'patient records and distinguish none of them. That is why excluding it loses no ' +
+      'information - and the operator can now confirm that from evidence instead of taking it ' +
+      'on trust. Confirmation is still required; the system does not get to decide this alone.',
   }),
   entry({
     sourceField: 'HESAP_KODU',
@@ -1045,7 +1313,15 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
     sourceField: 'UST_HESAP_KODU',
     meaning: 'Parent ledger account code',
     disposition: 'IGNORE_VENDOR_INTERNAL',
-    note: 'D-10: as HESAP_KODU.',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 13,985 filled rows (93.92 %) but exactly ONE distinct value, ' +
+      'a single ledger account code. MEASURED by a real Analyze pass over the accepted workbook ' +
+      '(sha256 f08c0019...). R9 recorded UNKNOWN. D-10 stands - there is no ledger model - and ' +
+      'the measurement shows there is also nothing to model. It is filled but CONSTANT: every ' +
+      'filled row carries the SAME value, so importing it would add a constant to thousands of ' +
+      'patient records and distinguish none of them. That is why excluding it loses no ' +
+      'information - and the operator can now confirm that from evidence instead of taking it ' +
+      'on trust. Confirmation is still required; the system does not get to decide this alone.',
   }),
   entry({
     sourceField: 'DOSYANO',
@@ -1063,16 +1339,34 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'SUBEDOSYANO',
     meaning: 'Branch file number',
-    disposition: 'BLOCKED_NO_DESTINATION',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      'G-E6. patient.chartNumber is singular and already claimed by DOSYANO. Two chart numbers ' +
-      'cannot occupy one field without one silently winning.',
+      'F3-DATA-MIG-TODAY-001-R10. 9,105 filled rows (61.15 %) MEASURED by a real Analyze pass ' +
+      'over the accepted workbook (sha256 f08c0019...), not transcribed. R9 recorded UNKNOWN ' +
+      'and left it BLOCKED, so 9,105 rows of a real clinic identifier were one system ' +
+      'recommendation away from being dropped. Patient.chartNumber is singular and already ' +
+      'claimed by DOSYANO, so there is still no canonical home. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'ALTDOSYANO',
     meaning: 'Sub-file number',
-    disposition: 'BLOCKED_NO_DESTINATION',
-    note: 'G-E6. Same single-chartNumber constraint as SUBEDOSYANO.',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 10 filled rows MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. R9 recorded UNKNOWN. Same G-E6 ' +
+      'reasoning as SUBEDOSYANO: chartNumber is singular and claimed. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'ULKEGIRISTARIHI',
@@ -1097,8 +1391,18 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'TURIZM',
     meaning: 'Health-tourism flag',
-    disposition: 'BLOCKED_NO_DESTINATION',
-    note: 'G-E10 — the cheapest health-tourism gap to close, but no destination exists today.',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. 6 filled rows (4 distinct codes) MEASURED by a real Analyze ' +
+      'pass over the accepted workbook (sha256 f08c0019...), not transcribed. R9 recorded ' +
+      'UNKNOWN. The health-tourism module (US-01.8) is a separate product decision and is not ' +
+      'being built here; 6 rows do not justify one. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'RESIMUZANTI',
@@ -1114,13 +1418,19 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   }),
   entry({
     sourceField: 'EK_ACIKLAMA',
-    meaning: 'Additional free-text description',
-    disposition: 'MANUAL_REVIEW',
+    meaning: 'Additional free text',
+    disposition: 'PRESERVE_LEGACY_SOURCE',
+    destinationField: 'legacy.preservedSourceValue',
+    transform: 'preserve_source_value',
     note:
-      'patient.notes exists but the SEMANTIC FIT IS UNCONFIRMED and the content is presumed KVKK ' +
-      'Art. 6 special-category. Must be profiled first: clinical content -> BLOCKED_LEGAL_DECISION, ' +
-      'administrative content -> IMPORT_AFTER_NORMALIZATION. Guessing either way is unacceptable, ' +
-      'so it stays MANUAL_REVIEW with no destination.',
+      'F3-DATA-MIG-TODAY-001-R10. 1 filled row MEASURED by a real Analyze pass over the ' +
+      'accepted workbook (sha256 f08c0019...), not transcribed. R9 recorded UNKNOWN and could ' +
+      'not classify it. One row is too little to establish a semantic, so no field is being ' +
+      'built and no clinical meaning is being assigned. Preserved verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row). EVIDENCE of what the old system held, never current clinical truth: no ' +
+      'clinical, messaging, billing or patient-matching code path may read it. Proposed, not ' +
+      'applied - AUTO_REVIEW, so a Platform Admin still accepts it.',
   }),
   entry({
     sourceField: 'YAKINLIKKODU',
@@ -1203,6 +1513,10 @@ for (const e of FIRST_CUSTOMER_MATRIX) {
   for (const [key, orders] of seen) {
     if (orders.length <= 1) continue;
     const dest = getDestinationField(key);
+    // R10: a destination that writes one RECORD per source column is not a
+    // collision and has no composition order to check. See
+    // DestinationFieldDef.allowsIndependentMultiUse and validateMapping Rule 2.
+    if (dest?.allowsIndependentMultiUse) continue;
     if (!dest?.allowsComposition) {
       throw new Error(`firstCustomerMatrix: ${orders.length} columns collide on "${key}"`);
     }
@@ -1229,6 +1543,7 @@ export function matrixDecisionCounts(): Record<MatrixDisposition, number> {
     MANUAL_REVIEW: 0,
     IMPORT_AFTER_SENSITIVE_REVIEW: 0,
     SENSITIVE_REVIEW_NO_DESTINATION: 0,
+    PRESERVE_LEGACY_SOURCE: 0,
     IGNORE_VENDOR_INTERNAL: 0,
     IGNORE_SUMMARY_NOT_TRANSACTION: 0,
     BLOCKED_LEGAL_DECISION: 0,

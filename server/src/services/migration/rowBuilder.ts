@@ -58,7 +58,32 @@ export interface CompiledMapping {
   hasIdentity: boolean;
   /** True when any column is mapped to the practitioner reference. */
   hasPractitioner: boolean;
+  /**
+   * F3-DATA-MIG-TODAY-001-R10. Source columns mapped to a secondary contact
+   * point, paired with the contact type their destination implies.
+   */
+  contactPointSources: readonly { contactType: string; mapping: ResolvedMapping }[];
+  /**
+   * F3-DATA-MIG-TODAY-001-R10. Every source column the operator accepted for
+   * legacy preservation. Unlike every other destination this one is
+   * INDEPENDENTLY MULTI-USED: each column produces its own preserved row, so
+   * this is a list, never a composition.
+   */
+  preservationSources: readonly ResolvedMapping[];
 }
+
+/**
+ * Destination key -> the PatientContactPoint.contactType it writes.
+ * A closed map: an unknown contact-point destination is a programming error,
+ * not something to guess a type for.
+ */
+const CONTACT_POINT_DESTINATIONS: ReadonlyMap<string, string> = new Map([
+  ['patient.contactPoint.home', 'home'],
+  ['patient.contactPoint.work', 'work'],
+]);
+
+/** The one destination that writes MigrationPreservedSourceValue rows. */
+const PRESERVATION_DESTINATION = 'legacy.preservedSourceValue';
 
 const WRITING_STATES = new Set(['AUTO_CONFIDENT', 'RESOLVED']);
 
@@ -97,12 +122,21 @@ export function compileMapping(mappings: ResolvedMapping[]): CompiledMapping {
     });
   }
 
+  const contactPointSources: { contactType: string; mapping: ResolvedMapping }[] = [];
+  for (const [destination, contactType] of CONTACT_POINT_DESTINATIONS) {
+    for (const mapping of byDestination.get(destination) ?? []) {
+      contactPointSources.push({ contactType, mapping });
+    }
+  }
+
   return {
     byDestination,
     provenanceIndex: provenance[0]!.sourceIndex,
     provenanceTransform: (provenance[0]!.transform as TransformName) ?? 'provenance_source_id',
     hasIdentity: byDestination.has('patient.identity.tckn'),
     hasPractitioner: byDestination.has('patient.primaryPractitionerId'),
+    contactPointSources,
+    preservationSources: byDestination.get(PRESERVATION_DESTINATION) ?? [],
   };
 }
 
@@ -115,6 +149,12 @@ export interface PatientDraft {
   dateOfBirth: Date | null;
   address: string | null;
   city: string | null;
+  /**
+   * F3-DATA-MIG-TODAY-001-R10. District / ilçe. Separate from `city`, which is
+   * the province (il) — the two are different administrative levels and
+   * collapsing them would lose the distinction the field was added to keep.
+   */
+  district: string | null;
   country: string | null;
   patientStatus: string;
   gender: string | null;
@@ -159,8 +199,33 @@ export interface BuiltRow {
   identityRawValue: string | null;
   /** Byte-exact source practitioner label, for the reference map lookup. */
   practitionerSourceValue: string | null;
+  /**
+   * F3-DATA-MIG-TODAY-001-R10. Secondary phone numbers for this row. NOT on
+   * the draft: they are child records, and `Patient.phone` must never receive
+   * one of these values.
+   */
+  contactPoints: DraftContactPoint[];
+  /**
+   * F3-DATA-MIG-TODAY-001-R10. Legacy source values to preserve for this row,
+   * one per accepted source column. NOT on the draft: these are evidence
+   * records, never Patient fields.
+   */
+  preservedValues: DraftPreservedValue[];
   warnings: string[];
   failures: RowFailure[];
+}
+
+/** One secondary contact point a row produces. */
+export interface DraftContactPoint {
+  contactType: string;
+  value: string;
+}
+
+/** One legacy value a row preserves, with the provenance that explains it. */
+export interface DraftPreservedValue {
+  /** Byte-exact vendor column name this value came from. */
+  sourceColumn: string;
+  value: string;
 }
 
 const EMPTY_CELL: CanonicalCell = { type: 'empty', text: '' };
@@ -250,6 +315,82 @@ export function buildRow(
     ? asString(read('patient.primaryPractitionerId'))
     : null;
 
+  /*
+   * ---- secondary contact points (R10) -----------------------------------
+   * Read through the SAME transform pipeline as any other destination, so a
+   * secondary number is normalized and warned about exactly like the primary
+   * one. Each destination has one source, so `read()` is correct here.
+   */
+  const contactPoints: DraftContactPoint[] = [];
+  for (const { contactType, mapping } of compiled.contactPointSources) {
+    /*
+     * Read THIS mapping's own cell, not `read(destination)`.
+     *
+     * `read()` hands the destination's whole source bucket to one transform
+     * call — composition semantics. If two columns were ever mapped to the same
+     * contact-point destination, `read()` would transform `cells[0]` and return
+     * that one value for BOTH iterations: the first column's number written
+     * twice and the second silently dropped. `validateMapping` Rule 2 currently
+     * makes that unreachable (a non-composable, non-multi-use destination with
+     * two sources is a MAPPING_DESTINATION_COLLISION), but the executor must
+     * not silently lose a phone number just because a validator ran upstream.
+     */
+    const cell = row.cells[mapping.sourceIndex] ?? EMPTY_CELL;
+    const output = applyTransform((mapping.transform as TransformName) ?? 'phone_tr', {
+      cells: [cell],
+      rowNumber: row.rowNumber,
+    });
+    for (const warning of output.warnings) {
+      warnings.push(`${mapping.destinationField}:${warning}`);
+    }
+    if (output.error) {
+      failures.push({
+        code: output.error.code,
+        message: output.error.message,
+        fieldName: mapping.destinationField ?? undefined,
+      });
+      continue;
+    }
+    const value = asString(output.value);
+    // An absent source cell is not a contact point. Writing an empty row would
+    // assert the clinic holds a number it does not hold.
+    if (value) contactPoints.push({ contactType, value });
+  }
+
+  /*
+   * ---- preserved legacy values (R10) ------------------------------------
+   * The ONE place `read()` is deliberately not used. `read()` hands EVERY
+   * source cell for a destination to a single transform call, which is
+   * composition semantics — right for patient.address, wrong here. Preservation
+   * is independently multi-used: each accepted column keeps its OWN value under
+   * its OWN name, so each is transformed separately and tagged with its
+   * byte-exact sourceField. Merging them would destroy the provenance that is
+   * the entire point of preserving anything.
+   */
+  const preservedValues: DraftPreservedValue[] = [];
+  for (const mapping of compiled.preservationSources) {
+    const cell = row.cells[mapping.sourceIndex] ?? EMPTY_CELL;
+    const output = applyTransform((mapping.transform as TransformName) ?? 'preserve_source_value', {
+      cells: [cell],
+      rowNumber: row.rowNumber,
+    });
+    for (const warning of output.warnings) {
+      warnings.push(`${PRESERVATION_DESTINATION}:${warning}`);
+    }
+    if (output.error) {
+      failures.push({
+        code: output.error.code,
+        message: output.error.message,
+        fieldName: PRESERVATION_DESTINATION,
+      });
+      continue;
+    }
+    const value = asString(output.value);
+    // An empty source cell preserves nothing. No evidence row is written for
+    // absence — an absent value is not evidence that the old system held one.
+    if (value) preservedValues.push({ sourceColumn: mapping.sourceField, value });
+  }
+
   // ---- the rest ----------------------------------------------------------
   const dateOfBirthValue = read('patient.dateOfBirth');
   const dateOfBirth = dateOfBirthValue instanceof Date ? dateOfBirthValue : null;
@@ -266,6 +407,7 @@ export function buildRow(
           dateOfBirth,
           address: asString(read('patient.address')),
           city: asString(read('patient.city')),
+          district: asString(read('patient.district')),
           country: asString(read('patient.country')),
           // Default 'new' rather than null: patientStatus is non-nullable with
           // a product default, and an unmapped source simply means "no
@@ -284,6 +426,8 @@ export function buildRow(
     draft,
     identityRawValue,
     practitionerSourceValue,
+    contactPoints,
+    preservedValues,
     warnings,
     failures,
   };
