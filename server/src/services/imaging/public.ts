@@ -76,6 +76,10 @@
 
 import prisma from '../../db.js';
 import { imagingFileExists } from '../fileStorage.js';
+import {
+  resolveImagingStoragePlacement,
+  type ImagingStoragePlacement,
+} from '../imagingRemoteStorage.js';
 
 // ─── Typed errors (small closed set, never a raw Prisma/provider error) ────
 
@@ -168,6 +172,8 @@ type OwnedImage = {
   clinicId: string;
   originalName: string;
   filePath: string;
+  /** Raw persisted value of ImagingImage.storageBackend (F4-IMAGING-001-R6); NULL on pre-R6 rows. Interpreted only via resolveImagingStoragePlacement(). */
+  storageBackend: string | null;
   study: {
     id: string;
     clinicId: string;
@@ -196,6 +202,7 @@ async function findOwnedImage(clinicId: string, imageId: string): Promise<OwnedI
       clinicId: true,
       originalName: true,
       filePath: true,
+      storageBackend: true,
       study: { select: { id: true, clinicId: true, patientId: true, legalHold: true } },
     },
   });
@@ -398,7 +405,7 @@ export async function getImagesForLifecycleReview(
  * never the clinicId predicate; and every test call restores the real
  * implementation in a `finally` block).
  */
-let storageExistenceChecker: (ref: string) => Promise<boolean> = imagingFileExists;
+let storageExistenceChecker: (ref: string, placement: ImagingStoragePlacement) => Promise<boolean> = imagingFileExists;
 
 /**
  * Test-only hook. NOT part of the accepted ImagingLifecyclePort four-method
@@ -440,7 +447,7 @@ let storageExistenceChecker: (ref: string) => Promise<boolean> = imagingFileExis
  *     per-call parameter or async-local-storage-scoped mechanism instead.
  */
 export function __setImagingStorageExistenceCheckerForTest(
-  override: ((ref: string) => Promise<boolean>) | null,
+  override: ((ref: string, placement: ImagingStoragePlacement) => Promise<boolean>) | null,
 ): void {
   storageExistenceChecker = override ?? imagingFileExists;
 }
@@ -463,7 +470,18 @@ export async function checkImageStorageExists(clinicId: string, imageId: string)
   if (!image) throw new ImagingNotFoundError();
 
   try {
-    return await storageExistenceChecker(image.filePath);
+    // F4-IMAGING-001-R6: the object's OWN recorded placement decides which
+    // backend is asked, never IMAGING_STORAGE_BACKEND. Without this, the
+    // orphan inspection that calls this method would report every
+    // VPS2-resident object as physically missing the moment the flag was
+    // unset, and then stamp storageVerifiedMissingAt on perfectly healthy
+    // rows. A pre-R6 NULL resolves to legacy; an unrecognized persisted
+    // value throws and is converted to the sanitized unavailable error
+    // below — never guessed.
+    return await storageExistenceChecker(
+      image.filePath,
+      resolveImagingStoragePlacement(image.storageBackend),
+    );
   } catch (err) {
     // F4-IMAGING-001 Finding D: bind the provider error and pass it as
     // `cause`. Still the facade's own sanitized error type crossing the

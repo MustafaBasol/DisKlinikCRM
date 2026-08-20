@@ -94,20 +94,66 @@ await test('the ops.ts module header documents the global-scope-is-intentional r
   assert.match(opsSrc, /no clinicId/i);
 });
 
-section('D: narrow DTO — only the accepted four fields cross the boundary');
+section('D: narrow DTO — only the accepted fields cross the boundary');
 
-await test('ImagingBackupRow exposes exactly id, clinicId, storageKeyOrFilePath, fileSize', () => {
-  const dtoMatch = opsSrc.match(/export interface ImagingBackupRow \{([\s\S]*?)\}/);
+// F4-IMAGING-001-R6 widened this allow-list by exactly ONE field, deliberately.
+// `storagePlacement` is the object's own recorded backend, resolved from
+// ImagingImage.storageBackend. The backup sweep needs it to open the right
+// source: before R6 it inherited the reader's global-flag check, so a healthy
+// VPS2-resident object was recorded as `missing_source` — i.e. reported as data
+// loss — the moment IMAGING_STORAGE_BACKEND was unset. It is a two-token
+// logical label ('legacy' | 'vps2'), never PHI, never an endpoint, bucket,
+// region or credential. The list stays CLOSED: study metadata, modality,
+// patientId and originalName may never join it, which the next case still pins.
+const ACCEPTED_DTO_FIELDS = ['clinicId', 'fileSize', 'id', 'storageBackend', 'storageKeyOrFilePath'];
+const ACCEPTED_SELECT_COLUMNS = ['clinicId', 'fileSize', 'filePath', 'id', 'storageBackend'];
+
+await test('ImagingBackupRow exposes exactly id, clinicId, storageKeyOrFilePath, fileSize, storageBackend', () => {
+  const dtoMatch = opsSrc.match(/export interface ImagingBackupRow \{([\s\S]*?)\n\}/);
   assert.ok(dtoMatch, 'ImagingBackupRow interface must exist');
   const fields = Array.from(dtoMatch![1]!.matchAll(/^\s*([a-zA-Z]+):/gm)).map((m) => m[1]);
-  assert.deepEqual([...fields].sort(), ['clinicId', 'fileSize', 'id', 'storageKeyOrFilePath'].sort());
+  assert.deepEqual([...fields].sort(), [...ACCEPTED_DTO_FIELDS].sort());
 });
 
-await test('the underlying Prisma select reads only id/clinicId/filePath/fileSize — no patientId, studyId, originalName, mimeType, or other column', () => {
+await test('the underlying Prisma select reads only id/clinicId/filePath/fileSize/storageBackend — no patientId, studyId, originalName, mimeType, or other column', () => {
   const selectMatch = opsSrc.match(/select:\s*\{([\s\S]*?)\}\s*,?\s*\}\);/);
   assert.ok(selectMatch, 'a select clause must exist on the imagingImage.findMany call');
   const selectedFields = Array.from(selectMatch![1]!.matchAll(/(\w+):\s*true/g)).map((m) => m[1]);
-  assert.deepEqual([...selectedFields].sort(), ['clinicId', 'fileSize', 'filePath', 'id'].sort());
+  assert.deepEqual([...selectedFields].sort(), [...ACCEPTED_SELECT_COLUMNS].sort());
+});
+
+await test('the placement crosses the boundary as the RAW column, interpreted at the point of use, and never carries provider connection data', () => {
+  assert.match(
+    opsSrc,
+    /storageBackend:\s*row\.storageBackend/,
+    'ops.ts must carry the persisted column verbatim',
+  );
+  assert.match(opsSrc, /storageBackend:\s*string \| null;/, 'the DTO field must be the raw nullable column type');
+  // Interpretation is deliberately NOT done during enumeration: the
+  // interpreter fails closed on an unrecognized value, and this generator runs
+  // OUTSIDE fileBackupService's per-row try/catch, so resolving here would turn
+  // one unclassifiable row into an aborted sweep instead of one failed entry.
+  // Comments stripped first: ops.ts's DTO doc comment NAMES the interpreter to
+  // tell consumers to call it, and matching that prose would be a false
+  // positive on exactly the check that must not be weakened.
+  const opsCodeOnly = opsSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ 	]*\/\/.*$/gm, '');
+  assert.ok(
+    !opsCodeOnly.includes('resolveImagingStoragePlacement'),
+    'ops.ts must not interpret placement during enumeration',
+  );
+  assert.match(
+    fileBackupServiceSrc,
+    /openImagingFileStream\(row\.filePath,\s*resolveImagingStoragePlacement\(row\.storageBackend\)\)/,
+    'fileBackupService must interpret the placement at the point of use, inside its per-row catch',
+  );
+  // Comment lines are stripped FIRST: the DTO's own doc comment explains in
+  // prose that placement is "not an endpoint, bucket, region or credential",
+  // and matching that prose would be a false positive on exactly the check
+  // that must not be weakened.
+  const opsCode = opsSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ 	]*\/\/.*$/gm, '');
+  for (const forbidden of ['IMAGING_S3_', 'endpoint', 'bucket', 'accessKey', 'secretAccessKey']) {
+    assert.ok(!opsCode.includes(forbidden), `ops.ts must never expose ${forbidden} across the boundary`);
+  }
 });
 
 await test('listImagesForBackup\'s own implementation (excluding doc comments) never selects patientId, originalName, mimeType, modality, or study metadata', () => {
