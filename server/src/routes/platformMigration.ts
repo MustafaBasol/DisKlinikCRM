@@ -822,6 +822,30 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
       // carrying real data did a human deliberately choose to leave behind?
       // The gate answers it from the same rows this transaction just wrote.
       const gate = evaluateDataLossGate(state.mappings);
+
+      /*
+       * WHICH COLUMNS THIS REQUEST CONFIRMED WITHOUT CHANGING (R12).
+       *
+       * Under the R9 data-loss gate, submitting a system-recommended exclusion
+       * unchanged IS the operator's decision to exclude it — that is the
+       * documented confirmation path and the per-row control depends on it.
+       * The hazard is scale: a client that re-sends the whole collection
+       * asserts a decision about EVERY undecided column at once, so one
+       * intended edit could record ninety implied exclusions. The R12 mapping
+       * screen sends only the row it edited, which is why that no longer
+       * happens in the product.
+       *
+       * Naming those columns here is the second half. A mass confirmation is
+       * still POSSIBLE — an authenticated Platform Admin may legitimately drive
+       * this API directly — but it can no longer be SILENT: the audit record
+       * says exactly which columns a human is now on record as having excluded,
+       * which is the question an auditor asks after a migration. Vendor column
+       * headers are schema, never patient data, so naming them is safe.
+       */
+      const confirmedWithoutChange = plan.entries
+        .filter((e) => e.outcome === 'WRITE' && !e.semanticChange)
+        .map((e) => e.sourceField);
+
       const savedMetadata = {
         // The rows this request actually WROTE, not the rows it mentioned. With
         // a full-collection save the two were the same number and the metric
@@ -830,6 +854,7 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
         changed: plan.writes.length,
         submitted: incoming.length,
         unchanged: plan.noOpCount,
+        confirmedWithoutChange,
         mapped: result.mappedCount,
         unresolved: result.unresolvedCount,
         blocked: result.blockedCount,
@@ -1019,8 +1044,16 @@ router.post(
         'Confirming recommended exclusions',
       );
 
+      // Trimmed before the blank filter: a whitespace-only entry is not a
+      // column name, and letting it through would make the request "succeed"
+      // having confirmed nothing — the shape of a silent no-op the operator
+      // would read as a completed decision.
       const requested = Array.isArray(req.body?.sourceFields)
-        ? [...new Set((req.body.sourceFields as unknown[]).map((f) => String(f ?? '')))].filter(Boolean)
+        ? [
+            ...new Set(
+              (req.body.sourceFields as unknown[]).map((f) => String(f ?? '').trim()),
+            ),
+          ].filter(Boolean)
         : [];
       if (requested.length === 0) {
         throw new MigrationError('MAPPING_INVALID', {

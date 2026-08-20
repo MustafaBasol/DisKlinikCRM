@@ -527,6 +527,16 @@ export interface DryRunSummaryDto {
   identityClassifications: Record<IdentityClassification, number>;
   rowClasses: Record<DryRunRowClass, number>;
   blockers: DryRunBlockerDto[];
+  /**
+   * F3-DATA-MIG-TODAY-001-R12. The subset of `blockers` that actually stops the
+   * run. `blockers` also carries per-ROW findings (one unusable birth date),
+   * which are rejected records rather than reasons to hold back the other
+   * 14,889 patients. ABSENT on a dry run persisted before R12 — treat absent as
+   * "unknown", never as "nothing is blocking".
+   */
+  runLevelBlockers?: DryRunBlockerDto[];
+  /** Rows that will not be imported and that the correction workbook contains. */
+  rejectedRows?: number;
   /** Decided legal-policy exclusions — never counted toward `executable=false`. */
   legalExclusions: DryRunBlockerDto[];
   warnings: DryRunBlockerDto[];

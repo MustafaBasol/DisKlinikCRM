@@ -157,15 +157,21 @@ const MigrationDryRunStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpda
   /**
    * How many source rows the rejected-row export will contain.
    *
-   * The SAME three buckets rowRejection.ts classifies on the server — invalid
-   * builds, duplicate provenance ids, unresolved practitioner references — so
-   * the number the operator reads here and the number of rows in the file they
-   * download are the same number. `warningRows` is deliberately NOT included: a
-   * warning row still imports, and telling the operator to go fix it in Excel
-   * would send them after something that is not broken.
+   * PREFER THE SERVER'S NUMBER. `rejectedRows` is computed in dryRun.ts from the
+   * same three row-rejection classes rowRejection.ts defines and the export
+   * writer uses, so the count on screen and the rows in the downloaded file are
+   * the same number by construction rather than by two implementations
+   * agreeing.
+   *
+   * The sum is the FALLBACK for a dry run persisted before R12, which has no
+   * such field. It reproduces the same three buckets from counters those
+   * summaries do carry. `warningRows` is in neither: a warning row still
+   * imports, and sending the operator to fix it in Excel would send them after
+   * something that is not broken.
    */
   const rejectedRows = dryRun
-    ? dryRun.invalidRows + dryRun.duplicateSourceRows + dryRun.referenceMappingBlockers
+    ? dryRun.rejectedRows ??
+      dryRun.invalidRows + dryRun.duplicateSourceRows + dryRun.referenceMappingBlockers
     : 0;
 
   return (
