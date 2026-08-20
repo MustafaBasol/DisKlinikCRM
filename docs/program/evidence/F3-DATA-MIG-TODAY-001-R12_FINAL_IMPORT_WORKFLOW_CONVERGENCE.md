@@ -407,9 +407,27 @@ Everything below was re-run **after** the merge commit, on `6853930`.
 | Layer 1 tooling | `typecheck:runtime`, `test:runtime:unit`, `test:runtime:storage-gate`, `test:runtime:minio-readiness`, `typecheck:ci-classify`, `test:ci-classify`, `typecheck:guardrail`, `guardrail:test`, `typecheck:log-privacy-guard`, `test:log-privacy-guard` | 74 / 61 / 29 / 28 / 74 / 39 passed, 0 failed |
 | Log privacy guard | `npm run log-privacy-guard:scan -- --strict-baseline` | 306 files, **no new violations** |
 | Layer 2 | `npm --prefix server run server:test:non-disposable` | **3,035 passed, 0 failed** (36 suites) |
-| Layer 3 | `npm run test:runtime:postgres` | see below |
+| Layer 3 | `npm run test:runtime:postgres` | **616 passed, 0 failed** (32 suites, exit 0, cleanup clean) |
 | Layer 5 frontend leaves | 9 scripts | 36 / 21 / 8 / 26 / 24 / 29 / 24 / 75 / 8 passed, 0 failed |
 | Layer 5 vitest | `npm run test:vitest` | **270 passed** (23 files) |
+
+**Layer 3 needed two runs, and the first failure is recorded rather than
+glossed over.** Run 1 died at `test:platform-admin-login-totp-gate` on
+`CHARACTERIZATION: a numeric valid OTP is accepted via String() coercion`
+(`401 !== 200`) — the known ~10% leading-zero TOTP flake, unrelated to R12 and
+unrelated to F4 R6, and it aborts the `&&` chain before the migration suites
+run at all. Run 2 on the same tree passed that assertion and every suite after
+it (616/616, exit 0). The migration suites were additionally run individually
+against a disposable PostgreSQL, so their result does not depend on that
+coin-flip.
+
+One further local-only artifact, recorded for the same reason: `test:platform-backup`
+fails on this workstation with `401 !== 403` because `server/.env` supplies a
+real `PLATFORM_JWT_SECRET`, while the test signs its clinic-type token with the
+hard-coded `getSecret` default. Checked out at `origin/main` the same suite
+fails identically (24 passed, 1 failed), so it is neither an R12 nor an
+integration regression; CI generates no `.env`, so it passes there, and the
+Layer 2 run above was executed with that default exported to match CI.
 
 Migration suites, each re-run individually on the merged tree against a
 disposable PostgreSQL:
