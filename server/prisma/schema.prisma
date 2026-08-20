@@ -3183,6 +3183,39 @@ model ImagingImage {
   /// the orphan-check inspection when the physical file is missing.
   storageVerifiedMissingAt DateTime?
 
+  /// F4-IMAGING-001-R6 — AUTHORITATIVE PER-OBJECT STORAGE PLACEMENT.
+  ///
+  /// Which storage backend actually accepted this object's bytes. Accepted
+  /// values are exactly the two tokens of `ImagingStorageBackend` in
+  /// services/imagingRemoteStorage.ts — `'legacy'` and `'vps2'` — reused
+  /// verbatim rather than re-cased, so there is one vocabulary for "which
+  /// imaging backend", not two that can drift apart. A `String?` and not a
+  /// Prisma enum, matching this schema's convention for closed vocabularies
+  /// (gender / patientStatus / source / pregnancyStatus / bloodGroup); see
+  /// the Patient.bloodGroup comment for the full reasoning.
+  ///
+  /// `NULL` means "written before this column existed" (pre-R6), NOT "unknown
+  /// backend". It is interpreted as `'legacy'`, deterministically and without
+  /// consulting IMAGING_STORAGE_BACKEND — see
+  /// resolveImagingStoragePlacement() in services/imagingRemoteStorage.ts,
+  /// which is the single authoritative interpreter of this column. That is
+  /// correct for every row that exists at migration time: VPS2 imaging
+  /// storage has never been activated in production (F4-IMAGING-001-R5
+  /// evidence §5-§6, STORAGE_MODE = SYNTHETIC_STAGING_ONLY), so no persisted
+  /// row's bytes can be anywhere but legacy storage.
+  ///
+  /// This column exists because global runtime configuration is not a valid
+  /// proxy for historical object placement (R5 Finding B): without it,
+  /// unsetting IMAGING_STORAGE_BACKEND after the first VPS2 write silently
+  /// reclassifies those objects as legacy and makes them unreadable. The
+  /// write path persists the backend that actually accepted the bytes; the
+  /// read/exists/delete/backup paths consult this column, never the flag.
+  ///
+  /// It is a logical placement label only. It never holds an endpoint, a
+  /// bucket name, a region, a URL or any credential — those stay in
+  /// environment configuration (KVKK/secret-hygiene requirement).
+  storageBackend String?
+
   @@index([clinicId, studyId])
 }
 

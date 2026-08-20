@@ -703,8 +703,19 @@ async function main() {
     // deleteFile(storageKey) to deleteImagingFile(storageKey) — same
     // compensation semantics, now routed through the imaging-specific
     // wrapper (which itself calls deleteFile when VPS2 mode is off).
-    const coreDeleteCalls = ingestCoreSrc.match(/deleteImagingFile\(storageKey\)/g) ?? [];
-    assert.ok(coreDeleteCalls.length >= 1, 'expected the shared ingest core to compensate a failed transaction');
+    // F4-IMAGING-001-R6: the compensation now also carries the placement that
+    // the paired saveImagingFile() actually wrote to, rather than re-reading
+    // the global flag. Without it, a flag change between the write and the
+    // failed transaction would delete from the wrong backend and strand the
+    // just-written object as an untracked orphan. The compensation semantics
+    // are otherwise unchanged, and the placement-less form must not come back.
+    const coreDeleteCalls = ingestCoreSrc.match(/deleteImagingFile\(storageKey, storagePlacement\)/g) ?? [];
+    assert.ok(coreDeleteCalls.length >= 1, 'expected the shared ingest core to compensate a failed transaction against the backend that accepted the bytes');
+    assert.equal(
+      /deleteImagingFile\(\s*storageKey\s*\)/.test(ingestCoreSrc),
+      false,
+      'the placement-less compensation form must not remain in the ingest core',
+    );
     assert.equal(bridgePublicSrc.includes('deleteFile('), false,
       'the bridge route must no longer perform its own storage compensation — that is now the core\'s job');
     assert.equal(bridgePublicSrc.includes('deleteImagingFile('), false,

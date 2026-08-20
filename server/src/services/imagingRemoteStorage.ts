@@ -114,6 +114,72 @@ export function isImagingRemoteStorageEnabled(): boolean {
   return getImagingStorageBackend() === 'vps2';
 }
 
+/**
+ * F4-IMAGING-001-R6 — AUTHORITATIVE PER-OBJECT STORAGE PLACEMENT.
+ *
+ * The backend that actually holds one particular object's bytes, as recorded
+ * on `ImagingImage.storageBackend`. Deliberately the SAME two tokens as
+ * `ImagingStorageBackend` above, aliased rather than redeclared, so there is
+ * exactly one vocabulary for "which imaging backend" — but the two concepts
+ * are not interchangeable and must not be used for each other's job:
+ *
+ *   - `getImagingStorageBackend()` answers "where do NEW objects get written?"
+ *     It is global runtime configuration and it can legitimately change.
+ *   - `ImagingStoragePlacement` answers "where does THIS EXISTING object
+ *     live?" It is a historical fact about bytes that were already written,
+ *     and it can never change without physically moving those bytes.
+ *
+ * R5 Finding B was exactly the confusion of the two: the read path inferred
+ * the second from the first, so unsetting `IMAGING_STORAGE_BACKEND` after the
+ * first VPS2 write silently reclassified those objects as legacy and made
+ * them unreadable, which made configuration rollback unsafe.
+ */
+export type ImagingStoragePlacement = ImagingStorageBackend;
+
+/**
+ * Single authoritative interpreter of the persisted
+ * `ImagingImage.storageBackend` column. Every read/exists/delete/backup path
+ * that starts from a database row funnels through this, so no two paths can
+ * disagree about where an object lives.
+ *
+ * Contract:
+ *
+ *   - `null` / `undefined` / empty-or-whitespace-only  =>  `'legacy'`.
+ *     This is the PRE-R6 state: "the row was written before this column
+ *     existed", not "unknown backend". It resolves to legacy
+ *     DETERMINISTICALLY and WITHOUT consulting `IMAGING_STORAGE_BACKEND`, so
+ *     a pre-R6 row reads from the same physical place across a restart, a
+ *     flag flip, and a configuration rollback. That is a fact rather than a
+ *     guess: VPS2 imaging storage has never been activated in production —
+ *     `IMAGING_STORAGE_BACKEND` is unset there and the VPS2 object store is
+ *     `STORAGE_MODE = SYNTHETIC_STAGING_ONLY` with no application network
+ *     path, no client CA trust and no SSE capability (F4-IMAGING-001-R5
+ *     evidence §5-§6, §8) — so no persisted row's bytes can be anywhere but
+ *     legacy storage.
+ *   - `'legacy'` => `'legacy'`; `'vps2'` => `'vps2'` (exact match after trim,
+ *     case-sensitive, matching `getImagingStorageBackend()`).
+ *   - anything else => THROWS.
+ *
+ * The throw is the same fail-closed discipline as `getImagingStorageBackend()`
+ * and it matters more here, not less: an unrecognized persisted value means
+ * this process does not know where the bytes are. Guessing would either serve
+ * or "confirm missing" the wrong physical object. Failing the single row's
+ * request is recoverable; silently reading the wrong backend is not. In the
+ * backup sweep this surfaces as that row's `failed` entry (never
+ * `missing_source`) and never aborts the run.
+ */
+export function resolveImagingStoragePlacement(
+  persisted: string | null | undefined,
+): ImagingStoragePlacement {
+  const trimmed = persisted?.trim() ?? '';
+  if (trimmed === '') return 'legacy';
+  if (trimmed === 'legacy') return 'legacy';
+  if (trimmed === 'vps2') return 'vps2';
+  throw new Error(
+    `Invalid persisted ImagingImage.storageBackend value ${JSON.stringify(persisted)} — must be NULL/empty (pre-R6 row, read as legacy storage), "legacy", or "vps2". Refusing to guess (fail closed): reading an imaging object from the wrong backend would either serve unrelated bytes or report a healthy object as missing.`,
+  );
+}
+
 function isProductionEnv(): boolean {
   return process.env.NODE_ENV === 'production';
 }

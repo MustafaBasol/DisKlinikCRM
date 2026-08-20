@@ -124,7 +124,12 @@ export async function ingestImagingStudyCore(
     clinicId: input.clinicId,
     originalName: input.originalName,
   });
-  await saveImagingFile(storageKey, input.fileBuffer, effectiveMime);
+  // F4-IMAGING-001-R6: capture the backend that ACTUALLY accepted the bytes,
+  // from the same call that wrote them. This value — not a second read of
+  // IMAGING_STORAGE_BACKEND — is what gets persisted below and what the
+  // compensation delete targets, so the row can never claim a placement the
+  // write did not perform, even if the flag changes mid-request.
+  const storagePlacement = await saveImagingFile(storageKey, input.fileBuffer, effectiveMime);
 
   try {
     const study = await prisma.$transaction(async (tx) => {
@@ -156,6 +161,16 @@ export async function ingestImagingStudyCore(
           fileSize: input.fileSize,
           mimeType: effectiveMime,
           filePath: storageKey,
+          // Authoritative per-object placement (F4-IMAGING-001-R6). Ordering
+          // note: the object store is written BEFORE this transaction and the
+          // two are not atomic (pre-existing, unchanged by R6 — see the
+          // best-effort compensation in the catch below). R6 does not widen
+          // that gap: the placement is decided by the completed write, so the
+          // only outcomes remain (a) bytes + row, both agreeing on placement,
+          // or (b) bytes with no row, compensated best-effort exactly as
+          // before. There is no state in which a row records a backend that
+          // did not accept the bytes.
+          storageBackend: storagePlacement,
         },
       });
 
@@ -184,7 +199,7 @@ export async function ingestImagingStudyCore(
     // Best-effort compensation: storage and Postgres are not atomic. No
     // outbox/saga — a failed delete here is swallowed exactly like both
     // routes' pre-existing outer-catch compensation did.
-    await deleteImagingFile(storageKey).catch(() => {});
+    await deleteImagingFile(storageKey, storagePlacement).catch(() => {});
     throw err;
   }
 }

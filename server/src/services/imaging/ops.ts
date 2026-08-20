@@ -51,6 +51,34 @@ export interface ImagingBackupRow {
   clinicId: string;
   storageKeyOrFilePath: string;
   fileSize: number;
+  /**
+   * F4-IMAGING-001-R6 — which backend actually holds this object's bytes.
+   * The backup sweep must know this to open the right source: before R6 it
+   * inherited the reader's global-flag check, so a VPS2-resident object
+   * became unreadable — and was recorded as `missing_source`, i.e. as data
+   * loss — the moment IMAGING_STORAGE_BACKEND was unset.
+   *
+   * Deliberately the RAW persisted column value (`null` on pre-R6 rows),
+   * mirroring how `storageKeyOrFilePath` carries `filePath` verbatim, and
+   * NOT a value pre-interpreted here. Interpretation belongs to
+   * `resolveImagingStoragePlacement()` — the single authoritative
+   * interpreter — called by the consumer at the point of use. That is a
+   * blast-radius decision, not a stylistic one: the interpreter FAILS CLOSED
+   * on an unrecognized value, and this enumeration runs OUTSIDE the backup
+   * sweep's per-row try/catch. Resolving here would turn one unclassifiable
+   * row into an aborted sweep that stops backing up every row after it;
+   * resolving at the point of use turns it into that single row's `failed`
+   * entry while every other file is still backed up. Consumers must not
+   * re-implement the NULL rule — call the interpreter.
+   *
+   * This is a logical placement label and nothing more. It is never an
+   * endpoint, bucket, region or credential — the sweep still opens bytes
+   * through Imaging's own reader (`fileStorage.ts`'s `openImagingFileStream`)
+   * and never constructs a provider client of its own. Widening this DTO any
+   * further would start leaking Imaging internals across the boundary; this
+   * is the minimum the sweep needs to choose correctly, and no PHI is added.
+   */
+  storageBackend: string | null;
 }
 
 export interface ListImagesForBackupResult {
@@ -70,7 +98,7 @@ export async function listImagesForBackup(params: {
     take: params.limit,
     ...(params.cursor ? { skip: 1, cursor: { id: params.cursor } } : {}),
     orderBy: { id: 'asc' },
-    select: { id: true, clinicId: true, filePath: true, fileSize: true },
+    select: { id: true, clinicId: true, filePath: true, fileSize: true, storageBackend: true },
   });
 
   const mapped: ImagingBackupRow[] = rows.map((row) => ({
@@ -78,6 +106,7 @@ export async function listImagesForBackup(params: {
     clinicId: row.clinicId,
     storageKeyOrFilePath: row.filePath,
     fileSize: row.fileSize,
+    storageBackend: row.storageBackend,
   }));
 
   return {

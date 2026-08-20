@@ -197,6 +197,12 @@ const CATEGORY_RULES: CategoryRule[] = [
         'server/src/services/fileBackupService.ts',
         'server/src/services/fileBackupDestination.ts',
         'server/src/services/backupService.ts',
+        // F4-IMAGING-001-R6: imagingRemoteStorage.ts is the VPS2 imaging backend
+        // itself. It sits directly under server/src/services (not under
+        // server/src/services/imaging), so before this line a PR touching only
+        // that file fell through to BACKEND_GENERAL and skipped the Postgres and
+        // storage-integration layers that actually exercise it.
+        'server/src/services/imagingRemoteStorage.ts',
       ];
       if (storageServiceFiles.includes(p)) return true;
       if (underDir(p, 'server/src/tests')) {

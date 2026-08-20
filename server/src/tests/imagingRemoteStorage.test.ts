@@ -38,6 +38,7 @@ import {
 
 import {
   isSafeStorageKey,
+  buildObjectStorageKey,
   saveFile,
   fileExists,
   deleteFile,
@@ -49,6 +50,7 @@ import {
 import {
   isImagingRemoteStorageEnabled,
   getImagingStorageBackend,
+  resolveImagingStoragePlacement,
   validateImagingS3Config,
   __resetImagingS3ClientForTest,
 } from '../services/imagingRemoteStorage.js';
@@ -536,10 +538,37 @@ async function main() {
     // services/imaging/public.ts's checkImageStorageExists). This asserts the
     // structural property that makes that true: the function signatures below
     // take exactly one storage-key argument, nothing shaped like a tenant id.
+    //
+    // F4-IMAGING-001-R6 — THESE NUMBERS DELIBERATELY CHANGED from 3/1/1/1.
+    // Three wrappers gained a second parameter, `placement?:
+    // ImagingStoragePlacement`. TypeScript emits an optional parameter as a
+    // plain one (no initializer), so Function.prototype.length counts it and
+    // these assertions genuinely move — they are not passing by accident.
+    // The property this test was written for is unchanged and still asserted:
+    // the added parameter is a closed two-token placement union, structurally
+    // incapable of carrying a clinicId, an organizationId or a path, which the
+    // test immediately below pins by signature and by behavior.
     assert.equal(saveImagingFile.length, 3); // (key, body, contentType)
-    assert.equal(openImagingFileStream.length, 1); // (ref)
-    assert.equal(imagingFileExists.length, 1); // (ref)
-    assert.equal(deleteImagingFile.length, 1); // (key)
+    assert.equal(openImagingFileStream.length, 2); // (ref, placement?)
+    assert.equal(imagingFileExists.length, 2); // (ref, placement?)
+    assert.equal(deleteImagingFile.length, 2); // (key, placement?)
+  });
+
+  await test('R6: the second parameter of the read/exists/delete wrappers is a storage PLACEMENT, never a tenant identifier', () => {
+    const src = fs.readFileSync(path.resolve(import.meta.dirname, '../services/fileStorage.ts'), 'utf8');
+    for (const sig of [
+      'export async function openImagingFileStream(ref: string, placement?: ImagingStoragePlacement)',
+      'export async function imagingFileExists(ref: string, placement?: ImagingStoragePlacement)',
+      'export async function deleteImagingFile(key: string, placement?: ImagingStoragePlacement)',
+    ]) {
+      assert.ok(src.includes(sig), `fileStorage.ts must declare: ${sig}`);
+    }
+    // ImagingStoragePlacement is the closed two-token union, so the extra
+    // parameter structurally cannot carry a clinicId, an organizationId, a
+    // path, or anything else a caller could use to widen access.
+    assert.equal(resolveImagingStoragePlacement('vps2'), 'vps2');
+    assert.equal(resolveImagingStoragePlacement('legacy'), 'legacy');
+    assert.throws(() => resolveImagingStoragePlacement('clinic-123'), /Invalid persisted ImagingImage.storageBackend/);
   });
 
   await test('a traversal-shaped ref is rejected by the same isSafeStorageKey gate other storage reads use', () => {
@@ -584,6 +613,149 @@ async function main() {
     assert.ok(/NODE_ENV === 'production'/.test(block), 'production is distinguished from dev/test');
     assert.ok(/process\.exit\(1\)/.test(block), 'production startup must abort on an invalid imaging storage config');
     assert.ok(/console\.warn/.test(block), 'non-production only warns, so local/dev work is not blocked');
+  });
+
+  // ── 9. F4-IMAGING-001-R6: per-object storage placement ────────────────────
+  //
+  // R5 Finding B: nothing recorded WHICH backend held a given imaging object,
+  // so the read path inferred placement from the global IMAGING_STORAGE_BACKEND
+  // flag. After the first VPS2-only write, unsetting that flag silently
+  // reclassified those objects as legacy and made them unreadable — which made
+  // configuration rollback unsafe. R6 persists the placement per object on
+  // ImagingImage.storageBackend and reads it back through
+  // resolveImagingStoragePlacement(). This section covers the pure half (no
+  // database, no MinIO); the end-to-end half lives in
+  // dbVerification/imagingStoragePlacement.test.ts (Layer 4).
+  section('9. R6 per-object storage placement — resolver, key contract, default-off');
+
+  await test('resolveImagingStoragePlacement: NULL / undefined / empty / whitespace all mean "pre-R6 row" and resolve to legacy', () => {
+    clearImagingEnv();
+    assert.equal(resolveImagingStoragePlacement(null), 'legacy');
+    assert.equal(resolveImagingStoragePlacement(undefined), 'legacy');
+    assert.equal(resolveImagingStoragePlacement(''), 'legacy');
+    assert.equal(resolveImagingStoragePlacement('   '), 'legacy');
+  });
+
+  await test('resolveImagingStoragePlacement: the two explicit tokens round-trip, trimmed', () => {
+    assert.equal(resolveImagingStoragePlacement('legacy'), 'legacy');
+    assert.equal(resolveImagingStoragePlacement('vps2'), 'vps2');
+    assert.equal(resolveImagingStoragePlacement('  vps2  '), 'vps2');
+    assert.equal(resolveImagingStoragePlacement('  legacy  '), 'legacy');
+  });
+
+  await test('resolveImagingStoragePlacement FAILS CLOSED on any unrecognized persisted value — it never guesses a backend', () => {
+    for (const bad of ['VPS2', 'Vps2', 'vps2-typo', 'local', 's3', 'https://imaging.example:9000', 'clinic-123']) {
+      assert.throws(
+        () => resolveImagingStoragePlacement(bad),
+        /Invalid persisted ImagingImage\.storageBackend/,
+        `expected ${JSON.stringify(bad)} to be refused rather than guessed`,
+      );
+    }
+  });
+
+  await test('resolveImagingStoragePlacement is a pure function of its argument — the global flag cannot change its answer (this is the whole point of R6)', () => {
+    clearImagingEnv();
+    const legacyModeNull = resolveImagingStoragePlacement(null);
+    const legacyModeVps2 = resolveImagingStoragePlacement('vps2');
+    const legacyModeLegacy = resolveImagingStoragePlacement('legacy');
+
+    process.env.IMAGING_STORAGE_BACKEND = 'vps2';
+    assert.equal(resolveImagingStoragePlacement(null), legacyModeNull, 'a pre-R6 row must not become VPS2 because the write flag was turned on');
+    assert.equal(resolveImagingStoragePlacement('vps2'), legacyModeVps2, 'a VPS2 row stays VPS2');
+    assert.equal(resolveImagingStoragePlacement('legacy'), legacyModeLegacy, 'an explicit legacy row stays legacy while the write flag is vps2');
+
+    delete process.env.IMAGING_STORAGE_BACKEND;
+    assert.equal(resolveImagingStoragePlacement('vps2'), 'vps2', 'a VPS2 row STILL resolves to VPS2 after the flag is unset — R5 Finding B, closed');
+    assert.equal(resolveImagingStoragePlacement(null), 'legacy');
+    clearImagingEnv();
+  });
+
+  await test('the two placement tokens are exactly the two ImagingStorageBackend tokens — one vocabulary, not two that can drift', () => {
+    const src = fs.readFileSync(path.resolve(import.meta.dirname, '../services/imagingRemoteStorage.ts'), 'utf8');
+    assert.ok(
+      src.includes("export type ImagingStoragePlacement = ImagingStorageBackend;"),
+      'ImagingStoragePlacement must be an alias of ImagingStorageBackend, never a second independently-declared union',
+    );
+  });
+
+  await test('R6 storage-key contract UNCHANGED: placement never appears in, or alters the shape of, an object key', () => {
+    const clinicId = 'clinic-r6-key-contract';
+    const a = buildObjectStorageKey({ kind: 'imaging-image', clinicId, originalName: 'scan.dcm' });
+    const b = buildObjectStorageKey({ kind: 'imaging-image', clinicId, originalName: 'scan.dcm' });
+    for (const key of [a, b]) {
+      assert.ok(isSafeStorageKey(key), 'key still passes the shared safety gate');
+      assert.ok(key.startsWith(`${clinicId}/`), 'key still starts with the owning clinic segment');
+      assert.ok(key.endsWith('.dcm'), 'key still ends with the normalized extension');
+      assert.equal(key.includes('vps2'), false, 'the storage key must never carry a backend/placement token');
+      assert.equal(key.includes('legacy'), false, 'the storage key must never carry a backend/placement token');
+    }
+    // Two objects that will differ ONLY in placement still produce
+    // structurally identical keys: placement is DB state, never key state.
+    const shape = (k: string) => k.split('/')[0] + '/<opaque>' + path.posix.extname(k);
+    assert.equal(shape(a), shape(b), 'key shape is independent of placement');
+  });
+
+  await test('the persisted placement column holds a logical label only — no endpoint, bucket, region or credential is ever written to the DB', () => {
+    const schemaSrc = fs.readFileSync(path.resolve(import.meta.dirname, '../../prisma/schema.prisma'), 'utf8');
+    // Line-ending tolerant, deliberately. On Windows Git materializes
+    // schema.prisma with CRLF while CI checks it out with LF, and an
+    // `indexOf('\n}\n')` anchor never matches under CRLF: it returns -1,
+    // `slice(start, -1)` hands back almost the whole file, and every
+    // "this model contains X" assertion below would pass vacuously — which is
+    // exactly what happened here before this was fixed. CI runs on Linux, so
+    // CI could never have caught it. The length guard is the backstop.
+    const modelStart = schemaSrc.indexOf('model ImagingImage ');
+    assert.ok(modelStart > -1, 'ImagingImage model present');
+    const afterStart = schemaSrc.slice(modelStart);
+    const blockEnd = afterStart.search(/\r?\n\}\r?\n/);
+    assert.ok(blockEnd > -1, 'ImagingImage model must have a closing brace');
+    const block = afterStart.slice(0, blockEnd);
+    assert.ok(block.length < 3000, `the extracted block must be one model, not the rest of the file (got ${block.length} chars)`);
+    assert.ok(/\n\s*storageBackend\s+String\?/.test(block), 'storageBackend must be a nullable String (no default, no Prisma enum)');
+    assert.equal(/\n\s*storageBackend\s+String\?\s*@default/.test(block), false, 'storageBackend must NOT carry a @default — NULL is the pre-R6 signal');
+    for (const forbidden of ['s3Endpoint', 'accessKey', 'secretAccessKey', 'storageEndpoint', 'storageBucket', 'storageRegion', 'storageCredential']) {
+      assert.equal(block.includes(forbidden), false, `ImagingImage must never persist ${forbidden}`);
+    }
+    // And the ingest write path must persist the value the write returned,
+    // never a fresh read of the global flag.
+    const ingestSrc = fs.readFileSync(path.resolve(import.meta.dirname, '../services/imaging/imagingIngestCore.ts'), 'utf8');
+    assert.ok(
+      /const storagePlacement = await saveImagingFile\(/.test(ingestSrc),
+      'ingest must capture the placement from the call that actually wrote the bytes',
+    );
+    assert.ok(ingestSrc.includes('storageBackend: storagePlacement,'), 'ingest must persist exactly that captured value');
+    assert.equal(
+      /storageBackend:\s*(getImagingStorageBackend|isImagingRemoteStorageEnabled)/.test(ingestSrc),
+      false,
+      'ingest must never re-derive the persisted placement from the global flag',
+    );
+  });
+
+  await test('R6 feature flag remains OFF by default: .env.example ships IMAGING_STORAGE_BACKEND commented out, and an unset flag still means legacy', () => {
+    const envExample = fs.readFileSync(path.resolve(import.meta.dirname, '../../.env.example'), 'utf8');
+    const active = envExample
+      .split(/\r?\n/)
+      .filter((line) => /^\s*IMAGING_STORAGE_BACKEND\s*=/.test(line));
+    assert.deepEqual(active, [], 'no UNCOMMENTED IMAGING_STORAGE_BACKEND assignment may ship in .env.example');
+    assert.ok(envExample.includes('# IMAGING_STORAGE_BACKEND=vps2'), 'the activation line stays present but commented out');
+
+    clearImagingEnv();
+    assert.equal(getImagingStorageBackend(), 'legacy', 'unset flag still means legacy');
+    assert.equal(isImagingRemoteStorageEnabled(), false, 'VPS2 writes stay off by default');
+  });
+
+  await test('.env.example no longer documents the R5 one-way-rollback defect as permanent, and states the R6 rollback condition', () => {
+    const envExample = fs.readFileSync(path.resolve(import.meta.dirname, '../../.env.example'), 'utf8');
+    assert.equal(
+      envExample.includes('ROLLBACK IS ONE-WAY AFTER THE FIRST VPS2 WRITE'),
+      false,
+      'the superseded R3/R5 one-way-rollback paragraph must be removed, not left contradicting the code',
+    );
+    assert.ok(envExample.includes('ImagingImage.storageBackend'), 'the rollback note must point at the column that now carries placement');
+    assert.ok(
+      /must STAY CONFIGURED/.test(envExample),
+      'the rollback note must state the one remaining condition: IMAGING_S3_* stays configured while any row records vps2',
+    );
   });
 
   // ── Cleanup ──────────────────────────────────────────────────────────────

@@ -37,7 +37,7 @@ import crypto from 'crypto';
 import { Transform, Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import prisma from '../db.js';
-import { openFileStream, openImagingFileStream } from './fileStorage.js';
+import { openFileStream, openImagingFileStream, resolveImagingStoragePlacement } from './fileStorage.js';
 import { safeErrorFields } from '../utils/safeError.js';
 import { withJobLock } from '../utils/jobLock.js';
 import { listImagesForBackup } from './imaging/ops.js';
@@ -91,6 +91,15 @@ interface SourceRow {
   clinicId: string;
   filePath: string;
   fileSize: number;
+  /**
+   * F4-IMAGING-001-R6 — ImagingImage rows only: the raw
+   * `ImagingImage.storageBackend` value supplied by imaging/ops.ts's
+   * `listImagesForBackup`, interpreted by `resolveImagingStoragePlacement()`
+   * at the point of use inside the per-row try/catch below. `undefined` for
+   * the two attachment classes, which are not part of imaging storage
+   * routing at all and whose reader ignores this field entirely.
+   */
+  storageBackend?: string | null;
 }
 
 /**
@@ -131,7 +140,13 @@ async function* iterateImagingRowsForBackup(batchSize: number): AsyncGenerator<S
     const { rows, nextCursor } = await listImagesForBackup({ cursor, limit: batchSize });
     if (rows.length === 0) return;
     for (const row of rows) {
-      yield { id: row.id, clinicId: row.clinicId, filePath: row.storageKeyOrFilePath, fileSize: row.fileSize };
+      yield {
+        id: row.id,
+        clinicId: row.clinicId,
+        filePath: row.storageKeyOrFilePath,
+        fileSize: row.fileSize,
+        storageBackend: row.storageBackend,
+      };
     }
     if (!nextCursor) return;
     cursor = nextCursor;
@@ -182,11 +197,18 @@ const SOURCE_MODELS: Array<{
   name: SourceModelName;
   domain: SourceDomain;
   rows: (batchSize: number) => AsyncGenerator<SourceRow>;
-  openSource: (ref: string) => Promise<Readable | null>;
+  openSource: (row: SourceRow) => Promise<Readable | null>;
 }> = [
-  { name: 'PatientAttachment', domain: 'attachments', rows: (batchSize) => iterateGenericSourceRows('patientAttachment', batchSize), openSource: openFileStream },
-  { name: 'LabOrderAttachment', domain: 'lab-attachments', rows: (batchSize) => iterateGenericSourceRows('labOrderAttachment', batchSize), openSource: openFileStream },
-  { name: 'ImagingImage', domain: 'imaging', rows: iterateImagingRowsForBackup, openSource: openImagingFileStream },
+  { name: 'PatientAttachment', domain: 'attachments', rows: (batchSize) => iterateGenericSourceRows('patientAttachment', batchSize), openSource: (row) => openFileStream(row.filePath) },
+  { name: 'LabOrderAttachment', domain: 'lab-attachments', rows: (batchSize) => iterateGenericSourceRows('labOrderAttachment', batchSize), openSource: (row) => openFileStream(row.filePath) },
+  // The placement is interpreted HERE, inside the per-row try/catch, not
+  // during enumeration. `resolveImagingStoragePlacement` fails closed on an
+  // unrecognized persisted value, and enumeration runs outside that catch —
+  // so interpreting during enumeration would turn one unclassifiable row into
+  // an aborted sweep that silently stops backing up every row after it.
+  // Interpreted here, it becomes that single row's `failed` entry (never
+  // `missing_source`) and the run continues.
+  { name: 'ImagingImage', domain: 'imaging', rows: iterateImagingRowsForBackup, openSource: (row) => openImagingFileStream(row.filePath, resolveImagingStoragePlacement(row.storageBackend)) },
 ];
 
 async function hashReadable(stream: Readable): Promise<{ sha256: string; bytes: number }> {
@@ -289,7 +311,7 @@ async function runFileBackupLocked(options: { trigger?: 'scheduled' | 'manual' }
             continue;
           }
 
-          const sourceStream = await cfg.openSource(row.filePath);
+          const sourceStream = await cfg.openSource(row);
           if (!sourceStream) {
             filesMissing++;
             await prisma.fileBackupEntry.create({

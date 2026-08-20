@@ -101,12 +101,53 @@ async function main() {
       assert(clinicsSeen.has(fixtures.crossOrgClinicId), 'clinic B (different org) rows are present — proves global, cross-tenant scope');
     });
 
-    await test('DTO exposes exactly the narrow allow-listed fields — id, clinicId, storageKeyOrFilePath, fileSize — and nothing else (no patientId/study metadata/modality/originalName)', async () => {
+    await test('DTO exposes exactly the narrow allow-listed fields — id, clinicId, storageKeyOrFilePath, fileSize, storageBackend — and nothing else (no patientId/study metadata/modality/originalName)', async () => {
       const result = await listImagesForBackup({ limit: 100 });
       const row = result.rows.find((r) => seededIds.has(r.id));
       assert(row, 'at least one seeded row returned');
       const keys = Object.keys(row!).sort();
-      assertEqual(JSON.stringify(keys), JSON.stringify(['clinicId', 'fileSize', 'id', 'storageKeyOrFilePath']), 'DTO keys are exactly the accepted narrow set');
+      // F4-IMAGING-001-R6 widens this allow-list by exactly ONE field.
+      // `storageBackend` is the object's own recorded backend, which the
+      // backup sweep needs in order to open the right source — before R6 it
+      // inherited the reader's global-flag check and recorded a healthy
+      // VPS2 object as `missing_source` whenever the flag was unset. It is a
+      // logical placement label, not PHI, not an endpoint, not a credential,
+      // and it is carried RAW: interpretation belongs to
+      // resolveImagingStoragePlacement() at the point of use, because that
+      // interpreter fails closed and this enumeration runs outside the backup
+      // sweep's per-row try/catch. The widening is deliberate and the list
+      // stays closed: no study metadata, modality, patientId or originalName
+      // may ever join it.
+      assertEqual(JSON.stringify(keys), JSON.stringify(['clinicId', 'fileSize', 'id', 'storageBackend', 'storageKeyOrFilePath']), 'DTO keys are exactly the accepted narrow set');
+    });
+
+    await test('R6: the placement column is carried verbatim — NULL stays NULL (pre-R6), an explicit value survives unchanged, and no provider endpoint/credential is exposed', async () => {
+      const result = await listImagesForBackup({ limit: 100 });
+      const rows = result.rows.filter((r) => seededIds.has(r.id));
+      assert(rows.length > 0, 'at least one seeded row returned');
+
+      // The rows seeded by this suite carry no storageBackend value, i.e. they
+      // are exactly the pre-R6 shape. The DTO must not paper over that: NULL
+      // must arrive as NULL, so the consumer's own fail-closed interpreter
+      // decides what it means.
+      assertEqual(
+        rows.every((r) => r.storageBackend === null),
+        true,
+        'rows written without a storageBackend value (the pre-R6 shape) arrive as NULL, not silently defaulted',
+      );
+
+      const target = rows[0]!;
+      await prisma.imagingImage.update({ where: { id: target.id }, data: { storageBackend: 'vps2' } });
+      try {
+        const after = await listImagesForBackup({ limit: 100 });
+        const updated = after.rows.find((r) => r.id === target.id);
+        assert(updated, 'updated row still enumerated');
+        assertEqual(updated!.storageBackend, 'vps2', 'an explicit vps2 placement survives the DTO verbatim');
+        // Placement is an opaque label. It must never be a URL, a bucket or a key.
+        assert(!/[:/]/.test(updated!.storageBackend!), 'storageBackend must not look like a URL/endpoint/key');
+      } finally {
+        await prisma.imagingImage.update({ where: { id: target.id }, data: { storageBackend: null } });
+      }
     });
 
     section('=== Pagination: exhaustiveness, no duplicates, stable ordering ===');

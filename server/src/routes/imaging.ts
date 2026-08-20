@@ -25,7 +25,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { isInlinePreviewable } from '../utils/filePreview.js';
-import { openImagingFileStream } from '../services/fileStorage.js';
+import { openImagingFileStream, resolveImagingStoragePlacement } from '../services/fileStorage.js';
 import { getParam, createRateLimiter } from '../utils/helpers.js';
 import { logActivity } from '../utils/activity.js';
 import { writeAuditLog } from '../utils/auditLog.js';
@@ -845,7 +845,18 @@ async function streamStudyImage(req: AuthRequest, res: Response, mode: 'preview'
       return res.status(415).json({ error: 'Bu dosya türü tarayıcıda önizlenemez; indirerek görüntüleyin' });
     }
 
-    const stream = await openImagingFileStream(image.filePath);
+    // F4-IMAGING-001-R6: read from the backend this object was actually
+    // written to, taken from its own row, never from IMAGING_STORAGE_BACKEND.
+    // A VPS2-resident image therefore keeps serving after the flag is unset,
+    // and a legacy image is never routed at a remote store because the flag
+    // happens to be on. `storageBackend` is used ONLY here, server-side, to
+    // pick the source — it is never added to studyImageSelect and never
+    // reaches a response body (KVKK doc 53 section 10: storage location is
+    // not serialized to clients).
+    const stream = await openImagingFileStream(
+      image.filePath,
+      resolveImagingStoragePlacement(image.storageBackend),
+    );
     if (!stream) return res.status(404).json({ error: 'File not found in storage' });
 
     // F4-IMAGING-001 Finding E: the stream is already open at this point. If
