@@ -527,6 +527,16 @@ export interface DryRunSummaryDto {
   identityClassifications: Record<IdentityClassification, number>;
   rowClasses: Record<DryRunRowClass, number>;
   blockers: DryRunBlockerDto[];
+  /**
+   * F3-DATA-MIG-TODAY-001-R12. The subset of `blockers` that actually stops the
+   * run. `blockers` also carries per-ROW findings (one unusable birth date),
+   * which are rejected records rather than reasons to hold back the other
+   * 14,889 patients. ABSENT on a dry run persisted before R12 — treat absent as
+   * "unknown", never as "nothing is blocking".
+   */
+  runLevelBlockers?: DryRunBlockerDto[];
+  /** Rows that will not be imported and that the correction workbook contains. */
+  rejectedRows?: number;
   /** Decided legal-policy exclusions — never counted toward `executable=false`. */
   legalExclusions: DryRunBlockerDto[];
   warnings: DryRunBlockerDto[];
@@ -888,6 +898,22 @@ export function createMigrationApi(api: AxiosInstance) {
       };
     },
 
+    /**
+     * Save mapping decisions. A DELTA, not the whole collection
+     * (F3-DATA-MIG-TODAY-001-R12).
+     *
+     * The shipped screen serialised every row on every keystroke-sized edit, and
+     * the server's legal gate read the mere PRESENCE of a column in the payload
+     * as an attempt to edit it — so changing SUBEDOSYANO was rejected 400
+     * because two untouched consent columns rode along in the same array. The
+     * caller now sends only the rows it actually changed.
+     *
+     * That is a clarity fix, NOT the security fix. The server computes the true
+     * semantic diff against its own stored rows and refuses a genuine attempt to
+     * move a legally gated column however small or large the payload is, so a
+     * hand-made request that sends all 91 rows is treated exactly the same way.
+     * Nothing here is trusted to be minimal.
+     */
     async saveMappings(
       runId: string,
       mappings: MappingWritePayload[],
@@ -911,6 +937,31 @@ export function createMigrationApi(api: AxiosInstance) {
         mappings: normalizeMappings(res.data?.mappings),
         validation: normalizeValidation(res.data?.validation),
         accepted: res.data?.accepted ?? 0,
+      };
+    },
+
+    /**
+     * Confirm, in one action, that a NAMED set of columns the system recommends
+     * excluding really should be excluded (F3-DATA-MIG-TODAY-001-R12).
+     *
+     * The list is always explicit. There is no "confirm everything" call: the
+     * screen sends exactly the columns it showed the operator, with their
+     * measured fill counts, so the audit record and what the operator saw are
+     * the same set. The server independently refuses anything that is not a
+     * recommended exclusion, and refuses legally gated columns outright.
+     */
+    async confirmExclusions(
+      runId: string,
+      sourceFields: string[],
+    ): Promise<{ mappings: MappingDto[]; validation: MappingValidationDto; confirmed: number }> {
+      const res = await api.post<MappingsResponse & { confirmed: number }>(
+        `${BASE}/runs/${runId}/mappings/confirm-exclusions`,
+        { sourceFields },
+      );
+      return {
+        mappings: normalizeMappings(res.data?.mappings),
+        validation: normalizeValidation(res.data?.validation),
+        confirmed: res.data?.confirmed ?? 0,
       };
     },
 
@@ -1003,6 +1054,30 @@ export function createMigrationApi(api: AxiosInstance) {
         responseType: 'blob',
       });
       return res.data as Blob;
+    },
+
+    /**
+     * "İçe Aktarılamayan Kayıtları İndir" — the rows that cannot be imported,
+     * with their source values, in a file the operator corrects and re-uploads.
+     *
+     * Authenticated through the same axios instance as every other call: the
+     * server mints no public URL for this, and it must never be fetched with a
+     * bare `window.open`, which would drop the Platform Admin session cookie
+     * scoping and (more importantly) bypass the CSRF/auth interceptors this
+     * client installs.
+     */
+    async downloadRejectedRows(
+      runId: string,
+      format: 'xlsx' | 'csv' = 'xlsx',
+    ): Promise<{ blob: Blob; filename: string }> {
+      const res = await api.get<Blob>(`${BASE}/runs/${runId}/reports/rejected`, {
+        params: { format },
+        responseType: 'blob',
+      });
+      return {
+        blob: res.data as Blob,
+        filename: `migration-${runId}-rejected.${format}`,
+      };
     },
 
     async getAudit(runId: string, signal?: AbortSignal): Promise<MigrationAuditEventDto[]> {

@@ -1079,6 +1079,34 @@ export interface DryRunSummary {
   rowClasses: Record<DryRunRowClass, number>;
   blockers: DryRunBlocker[];
   /**
+   * F3-DATA-MIG-TODAY-001-R12. The subset of `blockers` that actually
+   * suppresses `executable`.
+   *
+   * `blockers` mixes findings about the RUN (a column with no decision, an
+   * unconfirmed exclusion, a plan cap, a duplicate provenance id) with findings
+   * about ONE ROW (an unusable birth date). Before R12 both suppressed
+   * `executable`, so a single bad value in the first customer's 14,890 rows
+   * made the whole run unexecutable. See dryRun.ts for where the line is drawn
+   * and why the idempotency-threatening cases stay run-level.
+   *
+   * OPTIONAL on the wire: a run whose dry run was persisted before R12 has no
+   * such key. A consumer that finds it absent must fall back to `blockers` and
+   * NOT assume the empty array — assuming empty would claim a pre-R12 run has
+   * nothing stopping it.
+   */
+  runLevelBlockers?: DryRunBlocker[];
+  /**
+   * F3-DATA-MIG-TODAY-001-R12. Source rows that will NOT be imported and that
+   * appear in the downloadable correction workbook: invalid builds, duplicate
+   * provenance ids and unresolved practitioner references. Warning rows are
+   * excluded — they still import.
+   *
+   * Computed on the server so the count the operator reads and the number of
+   * rows in the file they download cannot drift apart. Optional for the same
+   * pre-R12 reason as above.
+   */
+  rejectedRows?: number;
+  /**
    * Legally-gated source columns the operator has already decided to exclude
    * (mapping state LEGAL_BLOCKED). Distinct from `blockers`: these are decided
    * exclusions, not unresolved problems, so they never suppress `executable`

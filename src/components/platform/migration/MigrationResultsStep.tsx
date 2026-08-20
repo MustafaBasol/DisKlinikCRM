@@ -7,6 +7,7 @@ import type { MigrationStepProps } from './types';
 import type { ReconciliationDto } from '../../../services/platformMigrationApi';
 import { getApiErrorMessage, getErrorMessage } from '../../../utils/errors';
 import { isReconciliationBalanced, statusBadgeClass } from '../../../pages/platformMigrationHelpers';
+import MigrationRejectedDownload from './MigrationRejectedDownload';
 
 function triggerBlobDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -155,6 +156,21 @@ const MigrationResultsStep: React.FC<Pick<MigrationStepProps, 'run' | 'api' | 'o
               <span className="text-sm">{downloadError}</span>
             </div>
           )}
+
+          {/*
+            * THE CORRECTION LOOP, AT THE END OF THE RUN TOO
+            * (F3-DATA-MIG-TODAY-001-R12).
+            *
+            * The two reports below are RECONCILIATION artifacts and carry no
+            * source values by design (migrationReports.ts). They answer "what
+            * happened"; they cannot answer "what do I fix". This third download
+            * is the one an operator acts on: the rows that did not arrive, with
+            * their values, ready to correct and re-upload. Offered
+            * unconditionally here — after an execution the operator may want it
+            * even when the run reported no failures, to confirm that for
+            * themselves.
+            */}
+          <MigrationRejectedDownload runId={run.id} api={api} />
 
           {/* Downloads */}
           <div className="flex flex-wrap gap-2">

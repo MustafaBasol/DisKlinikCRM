@@ -579,5 +579,83 @@ export function suggestMappings(
     });
   }
 
-  return out;
+  return out.map((suggestion) =>
+    settleMeasuredEmptyColumn(
+      suggestion,
+      profileByIndex.get(suggestion.sourceIndex) ?? profileByHeader.get(suggestion.sourceField),
+    ),
+  );
+}
+
+/**
+ * States that a MEASURED-EMPTY column has no business being left in.
+ *
+ * Each of these makes the operator answer a question about a column that
+ * provably holds nothing: MANUAL_REQUIRED and SENSITIVE_REVIEW_REQUIRED stop
+ * the mapping step from validating at all, AUTO_REVIEW asks for an approval
+ * that would import zero values, and BLOCKED renders as a red obstacle for a
+ * column there is no obstacle to.
+ *
+ * AUTO_CONFIDENT / RESOLVED are deliberately absent: they are already decided,
+ * they already write nothing when the column is empty, and demoting them would
+ * discard a correct destination the moment a future workbook fills that column.
+ * LEGAL_BLOCKED is absent for a stronger reason — see below.
+ */
+const EMPTY_COLUMN_SETTLED_FROM: ReadonlySet<MappingState> = new Set<MappingState>([
+  'MANUAL_REQUIRED',
+  'AUTO_REVIEW',
+  'SENSITIVE_REVIEW_REQUIRED',
+  'BLOCKED',
+]);
+
+/**
+ * F3-DATA-MIG-TODAY-001-R12. A column MEASURED at zero populated values is a
+ * no-op, and a no-op must not create operator work.
+ *
+ * On the first customer's workbook 42 of 91 columns are measured empty. Two of
+ * them (ADRES_KODU, UZUNNOT) sat in undecided states and BLOCKED the mapping
+ * step outright; twenty-two more rendered as red BLOCKED rows. Not one of them
+ * could lose a single value however it was decided, because there is nothing in
+ * them to lose. Asking a human about them is pure noise, and noise is what made
+ * the real decisions — three special-category columns and one unknown header —
+ * impossible to find.
+ *
+ * MEASURED is doing the work in that sentence. `profile === undefined` means
+ * nobody counted this column, and an uncounted column is NOT an empty one:
+ * treating it as empty is exactly the fail-open the R9 data-loss gate exists to
+ * prevent (dataLossGate.ts: UNMEASURED blocks; only a measured 0 may pass).
+ * So a missing profile falls through unchanged and keeps whatever state the
+ * rules above gave it.
+ *
+ * LEGAL_BLOCKED IS NEVER SETTLED HERE, even when the column is empty. The first
+ * customer's KVKKONAYKODU and KVKKSMS are both measured at 0, and it would be
+ * "harmless" by data-loss arithmetic to fold them into the empty pile. It is
+ * not harmless by record: the legal gate is the recorded reason those columns
+ * are not imported, and a future workbook from the same vendor WILL have them
+ * populated. Relabelling them "empty" would quietly delete the reason and let
+ * the next run treat a consent column as ordinary noise. They already cost the
+ * operator nothing — the gate scores them ZERO_DATA and they do not block — so
+ * there is nothing to gain and a legal record to lose.
+ *
+ * The demotion is visible, not silent: the reason becomes EMPTY_SOURCE_COLUMN,
+ * which the mapping screen renders as "boş sütun", and the row keeps its
+ * measured fill of 0 next to it. The operator can still open the column and map
+ * it by hand if they disagree.
+ */
+function settleMeasuredEmptyColumn(
+  suggestion: MappingSuggestion,
+  profile: SourceColumnProfile | undefined,
+): MappingSuggestion {
+  if (profile === undefined || profile.filledCount !== 0) return suggestion;
+  if (!EMPTY_COLUMN_SETTLED_FROM.has(suggestion.mappingState)) return suggestion;
+  return {
+    ...suggestion,
+    destinationField: null,
+    destinationLabel: null,
+    transform: null,
+    composeOrder: null,
+    confidence: 100,
+    reason: 'EMPTY_SOURCE_COLUMN',
+    mappingState: 'IGNORE',
+  };
 }

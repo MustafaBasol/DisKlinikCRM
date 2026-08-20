@@ -654,7 +654,9 @@
       "sheetCount": "Nombre de feuilles",
       "warnings": "Avertissements d'analyse",
       "continue": "Passer à la correspondance des champs",
-      "errors": { "analyzeFailed": "Le fichier n'a pas pu être analysé" }
+      "errors": {
+        "analyzeFailed": "Le fichier n'a pas pu être analysé"
+      }
     },
     "mapping": {
       "title": "Correspondance des champs",
@@ -758,14 +760,14 @@
         "RESOLVED": "Résolue"
       },
       "filters": {
-        "all": "Toutes",
-        "unresolved": "Non résolues uniquement",
-        "unmappedWithData": "Non mappées avec données",
-        "blocked": "Bloquées uniquement",
-        "legal": "Blocages légaux uniquement",
-        "headerless": "Colonnes sans en-tête",
-        "ignored": "Ignorées",
-        "auto": "Automatiques sûres"
+        "all": "Tous",
+        "needsReview": "À vérifier",
+        "matched": "Associé",
+        "preserved": "Conservé comme donnée héritée",
+        "ignored": "Non importé",
+        "empty": "Colonne vide",
+        "error": "Erreur",
+        "headerless": "Colonnes sans en-tête"
       },
       "columns": {
         "source": "Colonne source",
@@ -795,7 +797,24 @@
         "loadFailed": "La correspondance n'a pas pu être chargée",
         "saveFailed": "La correspondance n'a pas pu être enregistrée",
         "acceptFailed": "Les correspondances automatiques n'ont pas pu être acceptées",
-        "validateFailed": "La correspondance n'a pas pu être validée"
+        "validateFailed": "La correspondance n'a pas pu être validée",
+        "confirmFailed": "Les colonnes n’ont pas pu être confirmées."
+      },
+      "operatorStates": {
+        "MATCHED": "Associé",
+        "PRESERVED": "Conservé comme donnée héritée",
+        "NEEDS_REVIEW": "À vérifier",
+        "EMPTY": "Colonne vide",
+        "IGNORED": "Non importé",
+        "ERROR": "Erreur"
+      },
+      "internalStateHint": "Code d’état interne, pour le support. Aucune action requise.",
+      "remainingWork": "colonnes attendent votre décision",
+      "bulk": {
+        "confirmExclusions": "Confirmer {{n}} colonnes comme non importées",
+        "confirmExclusionsHint": "Confirme en une seule action les colonnes contenant des données que le système propose de ne pas importer. Les colonnes vides sont déjà réglées. Les colonnes bloquées juridiquement ne sont jamais incluses.",
+        "confirmedNotice": "{{n}} colonnes confirmées comme non importées.",
+        "acceptedNotice": "{{n}} suggestions sûres acceptées."
       }
     },
     "reference": {
@@ -820,8 +839,17 @@
         "status": "Statut",
         "actions": "Actions"
       },
-      "actions": { "ignore": "Ignorer", "unignore": "Annuler" },
-      "errors": { "loadFailed": "Les données de référence n'ont pas pu être chargées", "saveFailed": "La correspondance des références n'a pas pu être enregistrée" }
+      "actions": {
+        "ignore": "Ignorer",
+        "unignore": "Annuler"
+      },
+      "errors": {
+        "loadFailed": "Les données de référence n'ont pas pu être chargées",
+        "saveFailed": "La correspondance des références n'a pas pu être enregistrée"
+      },
+      "showUnresolvedOnly": "Afficher uniquement les non résolus",
+      "downloadUnresolved": "Télécharger la liste non résolue (CSV)",
+      "rowsShown": "{{shown}} sur {{total}} affichés"
     },
     "dryRun": {
       "title": "Simulation",
@@ -918,7 +946,17 @@
         "sourceRowsSharing": "Lignes sources partageant un téléphone",
         "note": "Les numéros de téléphone familiaux partagés sont un comportement pris en charge — les patients ne sont jamais fusionnés à cause d'un téléphone partagé."
       },
-      "errors": { "loadFailed": "Les données de simulation n'ont pas pu être chargées", "runFailed": "La simulation a échoué" }
+      "errors": {
+        "loadFailed": "Les données de simulation n'ont pas pu être chargées",
+        "runFailed": "La simulation a échoué"
+      },
+      "plain": {
+        "importable": "enregistrements peuvent être importés",
+        "notImportable": "enregistrements ne peuvent pas être importés",
+        "ofTotal": "(sur {{n}} lignes source)",
+        "rejectedExplain": "Téléchargez ci-dessous les enregistrements refusés et corrigez-les dans Excel. Les enregistrements valides ne sont pas bloqués.",
+        "allClear": "Toutes les lignes source peuvent être importées."
+      }
     },
     "confirm": {
       "title": "Confirmation et exécution",
@@ -932,7 +970,10 @@
       "irreversibleNote": "Cette action est irréversible. Une fois exécutée, des dossiers patients auront été créés et/ou mis à jour.",
       "acknowledgeCheckbox": "Je comprends que cette migration est irréversible et qu'elle agira sur des données patients réelles.",
       "execute": "Exécuter la migration",
-      "errors": { "loadFailed": "Les données de confirmation n'ont pas pu être chargées", "executeFailed": "La migration n'a pas pu être démarrée" }
+      "errors": {
+        "loadFailed": "Les données de confirmation n'ont pas pu être chargées",
+        "executeFailed": "La migration n'a pas pu être démarrée"
+      }
     },
     "progress": {
       "title": "Progression de la migration",
@@ -991,7 +1032,10 @@
         "imbalanced": "Déséquilibré",
         "eligible": "total éligible"
       },
-      "errors": { "loadFailed": "Les résultats n'ont pas pu être chargés", "downloadFailed": "Le rapport n'a pas pu être téléchargé" }
+      "errors": {
+        "loadFailed": "Les résultats n'ont pas pu être chargés",
+        "downloadFailed": "Le rapport n'a pas pu être téléchargé"
+      }
     },
     "history": {
       "title": "Historique des migrations",
@@ -1010,7 +1054,24 @@
         "completed": "Terminée",
         "reports": "Rapports"
       },
-      "errors": { "loadFailed": "L'historique des migrations n'a pas pu être chargé", "downloadFailed": "Le rapport n'a pas pu être téléchargé" }
+      "errors": {
+        "loadFailed": "L'historique des migrations n'a pas pu être chargé",
+        "downloadFailed": "Le rapport n'a pas pu être téléchargé"
+      }
+    },
+    "rejected": {
+      "title": "Enregistrements non importables",
+      "titleWithCount": "{{n}} enregistrements ne peuvent pas être importés",
+      "help": "Ces enregistrements n’ont pas été importés. Téléchargez le fichier, corrigez-le dans Excel puis téléversez le fichier corrigé. Les enregistrements valides ne sont pas affectés et restent importables.",
+      "step1": "Téléchargez le fichier. La feuille 1 contient les lignes à corriger, la feuille 2 explique chaque refus.",
+      "step2": "Corrigez les valeurs de la feuille 1. Ne renommez pas les en-têtes de colonnes.",
+      "step3": "Démarrez un nouveau transfert et téléversez le fichier corrigé. Les lignes ayant le même HASTA_ID mettent à jour le patient existant au lieu de créer un doublon.",
+      "downloadXlsx": "Télécharger Excel (XLSX)",
+      "downloadCsv": "Télécharger CSV",
+      "privacyNote": "Ce fichier contient des données patients. Seul un administrateur de plateforme authentifié peut le télécharger, le lien n’est pas partageable et son contenu n’est jamais écrit dans un journal.",
+      "errors": {
+        "downloadFailed": "Les enregistrements refusés n’ont pas pu être téléchargés."
+      }
     }
   }
 }

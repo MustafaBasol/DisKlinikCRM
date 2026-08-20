@@ -39,6 +39,7 @@ import {
 } from './mapping/dataLossGate.js';
 import { buildPlanLimitReport, planLimitBlockerMessage } from './planLimits.js';
 import { buildRow, compileMapping, consumesPlanQuota, type BuiltRow } from './rowBuilder.js';
+import { classifyRowRejection } from './rowRejection.js';
 import type { CanonicalWorkbook } from './contracts.js';
 import type { ResolvedMapping } from './rowBuilder.js';
 
@@ -95,6 +96,24 @@ function emptyIdentityCounts(): Record<IdentityClassification, number> {
     ABSENT: 0,
   };
 }
+
+/**
+ * Blocker codes that describe ONE ROW, not the run.
+ *
+ * A row carrying one of these is rejected, counted and written into the
+ * downloadable correction workbook; the run proceeds without it. See the long
+ * note at the `executable` computation for where the line is drawn and why
+ * DUPLICATE_SOURCE_RECORD and REFERENCE_UNRESOLVED are deliberately NOT here.
+ *
+ * Deliberately a closed list of two, not "anything starting with ROW_". A new
+ * error code has to be added here on purpose, by someone who has decided that
+ * skipping the row is the right outcome — the default for anything unfamiliar
+ * is to stop the run.
+ */
+const ROW_LEVEL_BLOCKER_CODES: ReadonlySet<string> = new Set([
+  'ROW_VALUE_INVALID',
+  'ROW_REQUIRED_FIELD_MISSING',
+]);
 
 /** Accumulate blockers by code so the report shows one line per cause. */
 class BlockerTally {
@@ -234,8 +253,24 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
       if (identity.classification === 'MANUAL_REVIEW') manualReviewRows++;
     }
 
-    // -- hard failures from the row builder --
-    if (row.failures.length > 0) {
+    /*
+     * -- the three ways a row is REJECTED ---------------------------------
+     *
+     * F3-DATA-MIG-TODAY-001-R12 moved these rules into rowRejection.ts and
+     * calls them from here. They used to live inline, and the rejected-row
+     * export added in R12 would have had to restate them — two copies of "is
+     * this row importable?" that drift the first time either is touched, so
+     * that the summary says one row failed while the downloadable workbook
+     * hands the operator a different one. There is now one implementation and
+     * both callers use it.
+     *
+     * The counters, the row classes and the aggregated blocker messages below
+     * are unchanged, including the exact English blocker text: it is asserted
+     * by existing tests and read by the dry-run screen.
+     */
+    const rejection = classifyRowRejection(row, { sourceIdCounts, unresolvedReferenceValues });
+
+    if (rejection?.kind === 'INVALID') {
       invalidRows++;
       rowClasses.INVALID++;
       for (const failure of row.failures) {
@@ -248,8 +283,7 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
       continue;
     }
 
-    // -- duplicate provenance id within the file --
-    if (row.sourceId && (sourceIdCounts.get(row.sourceId) ?? 0) > 1) {
+    if (rejection?.kind === 'DUPLICATE_SOURCE') {
       duplicateSourceRows++;
       rowClasses.DUPLICATE_SOURCE++;
       blockers.add({
@@ -261,8 +295,7 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
       continue;
     }
 
-    // -- unresolved practitioner reference --
-    if (row.practitionerSourceValue && unresolvedReferenceValues.has(row.practitionerSourceValue)) {
+    if (rejection?.kind === 'REFERENCE_UNRESOLVED') {
       referenceBlockers++;
       rowClasses.MAPPING_REQUIRED++;
       blockers.add({
@@ -434,13 +467,64 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
   }
 
   const blockerList = blockers.list();
+
+  /*
+   * ---- WHAT ACTUALLY STOPS A RUN ---------------------------------------
+   * F3-DATA-MIG-TODAY-001-R12.
+   *
+   * THE DEFECT THIS FIXES. `executable` used to be `blockerList.length === 0`,
+   * and `blockers` mixes two entirely different kinds of finding. One of the
+   * first customer's 14,890 rows carries a birth date in the future. That
+   * produced a single ROW_VALUE_INVALID entry, which made the WHOLE RUN
+   * non-executable — 14,889 importable patients held hostage by one
+   * data-entry error made years ago in someone else's software, with no route
+   * forward except editing the vendor's workbook by hand.
+   *
+   * The executor already does the right thing with such a row: it records a
+   * MigrationRowOutcome and `continue`s (executor.ts). Nothing is silently
+   * lost, and R12 makes the row downloadable so the operator can fix and
+   * re-import it. So the run-level flag was the only thing standing in the way,
+   * and it was measuring the wrong thing.
+   *
+   * WHERE THE LINE IS, AND WHY IT IS HERE:
+   *
+   *   ROW-LEVEL — a single row's value is unusable. The row is rejected,
+   *     counted, and exported; the run proceeds without it. This is the
+   *     product decision: one bad row is one rejected record, not a stopped
+   *     migration.
+   *
+   *   RUN-LEVEL — everything else, and each one for a reason that is about the
+   *     RUN rather than a row:
+   *       MAPPING_*                a column-wide decision is missing. Executing
+   *                                would drop a whole column of clinic data.
+   *       LEGAL_BLOCKED (meaningful) a program-owner decision is owed.
+   *       PLAN_LIMIT_EXCEEDED      a commercial cap; importing anyway would
+   *                                breach it.
+   *       DUPLICATE_SOURCE_RECORD  THE IDEMPOTENCY INVARIANT. Two rows claiming
+   *                                one vendor id mean a rerun cannot tell which
+   *                                patient it already created. This is exactly
+   *                                the "transactional invariant" exception —
+   *                                proceeding risks a wrong merge or a
+   *                                duplicate patient, which no later correction
+   *                                can cleanly undo.
+   *       REFERENCE_UNRESOLVED     every patient of an unmapped practitioner
+   *                                would be skipped. That is a whole caseload,
+   *                                resolved once per unique id in Reference
+   *                                Mapping, not a per-row defect to export.
+   *
+   * `blockers` still carries BOTH on the wire, unchanged, so the operator sees
+   * everything and no existing consumer loses a field. Only what suppresses
+   * `executable` changed.
+   */
+  const runLevelBlockers = blockerList.filter((b) => !ROW_LEVEL_BLOCKER_CODES.has(b.code));
+
   // `dataLossGate.satisfied` is stated explicitly rather than left to follow
-  // from `blockerList.length === 0`. It does follow today — every unsatisfied
-  // class adds a blocker above — but that is an invariant across two separate
-  // pieces of code, and the failure mode if it ever breaks is a run that
-  // executes while dropping clinic data. Naming the condition makes the gate
-  // hold even if the blocker wiring above is later changed.
-  const executable = blockerList.length === 0 && validRows > 0 && dataLossGate.satisfied;
+  // from the blocker list. It does follow today — every unsatisfied class adds
+  // a blocker above — but that is an invariant across two separate pieces of
+  // code, and the failure mode if it ever breaks is a run that executes while
+  // dropping clinic data. Naming the condition makes the gate hold even if the
+  // blocker wiring above is later changed.
+  const executable = runLevelBlockers.length === 0 && validRows > 0 && dataLossGate.satisfied;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -462,6 +546,25 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
     identityClassifications: identityCounts,
     rowClasses,
     blockers: blockerList,
+    /*
+     * The subset of `blockers` that actually suppresses `executable`
+     * (F3-DATA-MIG-TODAY-001-R12). Reported separately so the operator screen
+     * can say "this is what is stopping the run" without re-deriving the
+     * row-level/run-level split client-side — a second implementation of that
+     * rule would eventually disagree with the one that gates Execute.
+     */
+    runLevelBlockers,
+    /**
+     * Source rows that will NOT be imported and that appear in the downloadable
+     * correction workbook. Computed here, from the same three row-rejection
+     * classes rowRejection.ts defines, so the number on screen and the number
+     * of rows in the file are the same number by construction.
+     *
+     * `warningRows` is NOT part of it: a warning row still imports, and sending
+     * the operator to fix it in Excel would send them after something that is
+     * not broken.
+     */
+    rejectedRows: invalidRows + duplicateSourceRows + referenceBlockers,
     legalExclusions: legalExclusions.list(),
     warnings: warnings.list(),
     planLimit,

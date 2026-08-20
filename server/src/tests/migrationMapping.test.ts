@@ -501,15 +501,63 @@ await test('R5 #2: headerless column with SOME data remains MANUAL_REQUIRED (nev
   assert.notEqual(s.reason, 'EMPTY_SOURCE_COLUMN');
 });
 
-await test('R5: a NAMED column with zero fill is never auto-ignored (headerWasBlank must gate this, not fill alone)', () => {
-  // Same zero-fill profile as R5 #1, but this header was NOT synthesized —
-  // it is a real (if unmatched) vendor header, so it must stay MANUAL_REQUIRED.
+/*
+ * R12 REVERSES ONE HALF OF R5, DELIBERATELY.
+ *
+ * R5 allowed only a HEADERLESS zero-fill column to settle itself, and required
+ * a NAMED zero-fill column to stay MANUAL_REQUIRED. On the first customer's
+ * workbook that rule left ADRES_KODU (named, measured 0 populated values)
+ * BLOCKING the entire mapping step, and rendered 22 more measured-empty columns
+ * as red obstacles. An operator cannot answer a question about a column that
+ * provably holds nothing, so the question was pure noise — and the noise was
+ * what made the four real decisions impossible to find.
+ *
+ * The distinction R5 drew has no data-loss basis once the fill is MEASURED at
+ * zero: there is no value to mask, whatever the header says. What DOES have a
+ * data-loss basis is the other half of R5, and it is unchanged and re-asserted
+ * immediately below: a column with ANY data, and a column whose fill was never
+ * measured, both still require a human.
+ */
+await test('R12: a NAMED column MEASURED at zero fill settles itself as an empty no-op', () => {
   const headers = [makeHeader('SOME_TOTALLY_UNRECOGNIZED_EMPTY_COLUMN', 12)];
   const [s] = suggestMappings(headers, [emptyProfile(12, 'SOME_TOTALLY_UNRECOGNIZED_EMPTY_COLUMN')], {
     sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM,
   });
+  assert.equal(s.mappingState, 'IGNORE', 'a measured-empty column must not require an operator decision');
+  assert.equal(s.reason, 'EMPTY_SOURCE_COLUMN', 'and it must SAY why, not look like a silent drop');
+  assert.equal(s.destinationField, null);
+});
+
+await test('R12: a NAMED column with ANY data still requires a human (the half of R5 that matters)', () => {
+  const headers = [makeHeader('SOME_TOTALLY_UNRECOGNIZED_COLUMN', 13)];
+  const [s] = suggestMappings(headers, [nonEmptyProfile(13, 'SOME_TOTALLY_UNRECOGNIZED_COLUMN', 1)], {
+    sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM,
+  });
+  assert.equal(s.mappingState, 'MANUAL_REQUIRED', 'one real value is enough to owe a decision');
+  assert.equal(s.reason, 'UNKNOWN_HEADER');
+  assert.notEqual(s.reason, 'EMPTY_SOURCE_COLUMN');
+});
+
+await test('R12: an UNMEASURED column is never settled as empty (unknowable is not zero)', () => {
+  const headers = [makeHeader('SOME_TOTALLY_UNRECOGNIZED_COLUMN', 14)];
+  const [s] = suggestMappings(headers, [], { sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM });
   assert.equal(s.mappingState, 'MANUAL_REQUIRED');
   assert.equal(s.reason, 'UNKNOWN_HEADER');
+});
+
+await test('R12: a LEGAL_BLOCKED column stays legally gated even when measured empty', () => {
+  // KVKKONAYKODU and KVKKSMS are both 0 % filled in the real workbook. Folding
+  // them into the empty pile would be arithmetically harmless and would delete
+  // the recorded REASON they are not imported — and the next workbook from the
+  // same vendor will have them populated.
+  for (const field of ['KVKKONAYKODU', 'KVKKSMS']) {
+    const headers = [makeHeader(field, 60)];
+    const [s] = suggestMappings(headers, [emptyProfile(60, field)], {
+      sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM,
+    });
+    assert.equal(s.mappingState, 'LEGAL_BLOCKED', `${field} must keep its legal gate`);
+    assert.equal(s.destinationField, null, `${field} must never carry a destination`);
+  }
 });
 
 await test('R5: a headerless column with NO profile supplied stays MANUAL_REQUIRED (unknowable is never treated as empty)', () => {

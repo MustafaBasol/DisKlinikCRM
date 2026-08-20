@@ -654,7 +654,9 @@
       "sheetCount": "Sheet count",
       "warnings": "Analysis warnings",
       "continue": "Continue to Field Mapping",
-      "errors": { "analyzeFailed": "The file could not be analyzed" }
+      "errors": {
+        "analyzeFailed": "The file could not be analyzed"
+      }
     },
     "mapping": {
       "title": "Field Mapping",
@@ -759,13 +761,13 @@
       },
       "filters": {
         "all": "All",
-        "unresolved": "Unresolved only",
-        "unmappedWithData": "Unmapped with data",
-        "blocked": "Blocked only",
-        "legal": "Legal blockers only",
-        "headerless": "Headerless columns",
-        "ignored": "Ignored",
-        "auto": "Auto-confident"
+        "needsReview": "Needs review",
+        "matched": "Matched",
+        "preserved": "Kept as legacy data",
+        "ignored": "Not imported",
+        "empty": "Empty column",
+        "error": "Error",
+        "headerless": "Headerless columns"
       },
       "columns": {
         "source": "Source Column",
@@ -795,7 +797,24 @@
         "loadFailed": "The mapping could not be loaded",
         "saveFailed": "The mapping could not be saved",
         "acceptFailed": "Automatic mappings could not be accepted",
-        "validateFailed": "The mapping could not be validated"
+        "validateFailed": "The mapping could not be validated",
+        "confirmFailed": "The columns could not be confirmed."
+      },
+      "operatorStates": {
+        "MATCHED": "Matched",
+        "PRESERVED": "Kept as legacy data",
+        "NEEDS_REVIEW": "Needs review",
+        "EMPTY": "Empty column",
+        "IGNORED": "Not imported",
+        "ERROR": "Error"
+      },
+      "internalStateHint": "Internal state code, for support. No action needed.",
+      "remainingWork": "columns are waiting for your decision",
+      "bulk": {
+        "confirmExclusions": "Confirm {{n}} columns as not imported",
+        "confirmExclusionsHint": "Confirms, in one action, the columns that hold data and that the system recommends not importing. Empty columns are already settled. Legally gated columns are never included.",
+        "confirmedNotice": "{{n}} columns confirmed as not imported.",
+        "acceptedNotice": "{{n}} safe suggestions accepted."
       }
     },
     "reference": {
@@ -820,8 +839,17 @@
         "status": "Status",
         "actions": "Actions"
       },
-      "actions": { "ignore": "Ignore", "unignore": "Undo" },
-      "errors": { "loadFailed": "Reference data could not be loaded", "saveFailed": "The reference mapping could not be saved" }
+      "actions": {
+        "ignore": "Ignore",
+        "unignore": "Undo"
+      },
+      "errors": {
+        "loadFailed": "Reference data could not be loaded",
+        "saveFailed": "The reference mapping could not be saved"
+      },
+      "showUnresolvedOnly": "Show unresolved only",
+      "downloadUnresolved": "Download unresolved list (CSV)",
+      "rowsShown": "showing {{shown}} of {{total}}"
     },
     "dryRun": {
       "title": "Dry Run",
@@ -918,7 +946,17 @@
         "sourceRowsSharing": "Source Rows Sharing A Phone",
         "note": "Shared family phone numbers are a supported behavior — patients are never merged because of a shared phone."
       },
-      "errors": { "loadFailed": "The dry run data could not be loaded", "runFailed": "The dry run failed" }
+      "errors": {
+        "loadFailed": "The dry run data could not be loaded",
+        "runFailed": "The dry run failed"
+      },
+      "plain": {
+        "importable": "records can be imported",
+        "notImportable": "records cannot be imported",
+        "ofTotal": "(of {{n}} source rows)",
+        "rejectedExplain": "Download the rejected records below and correct them in Excel. The valid records are not held up — the import can go ahead without these.",
+        "allClear": "Every source row can be imported."
+      }
     },
     "confirm": {
       "title": "Confirmation & Execution",
@@ -932,7 +970,10 @@
       "irreversibleNote": "This action cannot be undone. Once it runs, patient records will have been created and/or updated.",
       "acknowledgeCheckbox": "I understand this migration is irreversible and will operate on real patient data.",
       "execute": "Execute Migration",
-      "errors": { "loadFailed": "Confirmation data could not be loaded", "executeFailed": "The migration could not be started" }
+      "errors": {
+        "loadFailed": "Confirmation data could not be loaded",
+        "executeFailed": "The migration could not be started"
+      }
     },
     "progress": {
       "title": "Migration Progress",
@@ -991,7 +1032,10 @@
         "imbalanced": "Imbalanced",
         "eligible": "eligible total"
       },
-      "errors": { "loadFailed": "Results could not be loaded", "downloadFailed": "The report could not be downloaded" }
+      "errors": {
+        "loadFailed": "Results could not be loaded",
+        "downloadFailed": "The report could not be downloaded"
+      }
     },
     "history": {
       "title": "Migration History",
@@ -1010,7 +1054,24 @@
         "completed": "Completed",
         "reports": "Reports"
       },
-      "errors": { "loadFailed": "Migration history could not be loaded", "downloadFailed": "The report could not be downloaded" }
+      "errors": {
+        "loadFailed": "Migration history could not be loaded",
+        "downloadFailed": "The report could not be downloaded"
+      }
+    },
+    "rejected": {
+      "title": "Records that cannot be imported",
+      "titleWithCount": "{{n}} records cannot be imported",
+      "help": "These records were not imported. Download the file, correct it in Excel and upload the corrected file. The valid records are unaffected and remain importable.",
+      "step1": "Download the file. Sheet 1 holds the rows to correct; sheet 2 explains why each one was held back.",
+      "step2": "Fix the values on sheet 1. Do not rename the column headers.",
+      "step3": "Start a new run and upload the corrected file. Rows with the same HASTA_ID update the existing patient instead of creating a duplicate.",
+      "downloadXlsx": "Download Excel (XLSX)",
+      "downloadCsv": "Download CSV",
+      "privacyNote": "This file contains patient data. Only an authenticated Platform Admin can download it, the link cannot be shared, and its contents are never written to any log.",
+      "errors": {
+        "downloadFailed": "The rejected records could not be downloaded."
+      }
     }
   }
 }
