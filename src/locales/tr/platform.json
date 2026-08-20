@@ -693,7 +693,8 @@
         "patient.primaryPractitionerId": "Atanan Hekim",
         "patient.identity.tckn": "T.C. Kimlik No",
         "patient.notes": "Klinik Not / Önemli Not",
-        "patient.bloodGroup": "Kan Grubu"
+        "patient.bloodGroup": "Kan Grubu",
+        "legacy.preservedSourceValue": "Korunan Kaynak Değeri"
       },
       "groups": {
         "provenance": "Köken Bilgisi",
@@ -702,7 +703,8 @@
         "contact": "İletişim",
         "address": "Adres",
         "clinical": "Klinik",
-        "operational": "Operasyonel"
+        "operational": "Operasyonel",
+        "legacy_preservation": "Korunan Kaynak Değerleri"
       },
       "transforms": {
         "trim": "Kırp",
@@ -718,7 +720,8 @@
         "chart_number": "Dosya numarası",
         "identity_tckn": "T.C. Kimlik No doğrulama",
         "provenance_source_id": "Köken kaynak kimliği",
-        "practitioner_reference": "Hekim referansı"
+        "practitioner_reference": "Hekim referansı",
+        "preserve_source_value": "Kaynak değerini birebir koru"
       },
       "cellTypes": {
         "empty": "boş",

@@ -75,6 +75,7 @@ import {
 } from '../services/migration/mapping/validateMapping.js';
 import { evaluateDataLossGate } from '../services/migration/mapping/dataLossGate.js';
 import { normalizeHeader } from '../services/migration/mapping/normalizeHeader.js';
+import { assertNoLegallyGatedEdits } from '../services/migration/mapping/legalGateGuard.js';
 import { buildColumnPreviews } from '../services/migration/mapping/columnPreview.js';
 import { FIRST_CUSTOMER_MATRIX_BY_FIELD } from '../services/migration/mapping/firstCustomerMatrix.js';
 import { UNNAMED_COLUMN_PREFIX } from '../services/migration/parser/canonicalParser.js';
@@ -718,6 +719,47 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
       }
       const fromStatus = current.status as MigrationRunStatus;
       assertStatusIn(fromStatus, MAPPING_EDITABLE_STATUSES, 'Editing the field mapping');
+
+      /*
+       * 1b. THE LEGAL GATE IS SERVER-ENFORCED (F3-DATA-MIG-TODAY-001-R11).
+       *
+       * This route writes the client's `state` verbatim, so until now the only
+       * thing keeping a LEGAL_BLOCKED column blocked was that the mapping
+       * screen declined to render a control for it. validateMappings' Rule 4
+       * could not close the hole either: it forbids a LEGAL_BLOCKED row from
+       * carrying a destination, but it reads the state AS WRITTEN — a payload
+       * that moved the row to RESOLVED in the same request left nothing for
+       * Rule 4 to fire on, and the gate lifted silently.
+       *
+       * R11 widens what an operator can reach in that dropdown, so the one
+       * destination class that must stay unreachable is pinned down here, at
+       * the write, where a hand-made request or a future UI regression meets
+       * the same refusal the screen shows. Lifting a KVKK Art. 6 gate is a
+       * program-owner decision taken in the matrix, never a mapping edit.
+       *
+       * Fail-closed and total: no state change, no destination, not even to
+       * IGNORE. IGNORE is also non-writing, so allowing it would leak no data,
+       * but it would relabel a legal exclusion as an ordinary operator
+       * exclusion and drop the column out of the LEGAL_BLOCKED tally the dry
+       * run reports and an auditor reads.
+       *
+       * This cannot strand a run: dryRun.ts deliberately keeps LEGAL_BLOCKED
+       * out of the blockers that suppress `executable`, so a run reaches
+       * Dry-run and Execute with its legally-gated columns still gated.
+       */
+      const incomingFields = (incoming as Array<Record<string, unknown>>).map((e) =>
+        String(e.sourceField ?? ''),
+      );
+      // The STORED states, read inside this transaction — never the states the
+      // payload asserted, which are exactly what the guard must not trust.
+      const storedStates = await tx.migrationFieldMapping.findMany({
+        where: { runId: run.id, sourceField: { in: incomingFields } },
+        select: { sourceField: true, state: true },
+      });
+      assertNoLegallyGatedEdits(
+        incomingFields,
+        new Map(storedStates.map((m) => [m.sourceField, m.state])),
+      );
 
       // 2. Apply the operator's decisions.
       for (const entry of incoming as Array<Record<string, unknown>>) {

@@ -693,7 +693,8 @@
         "patient.primaryPractitionerId": "Praticien assigné",
         "patient.identity.tckn": "Numéro d'identité national",
         "patient.notes": "Note clinique",
-        "patient.bloodGroup": "Groupe sanguin"
+        "patient.bloodGroup": "Groupe sanguin",
+        "legacy.preservedSourceValue": "Valeur source conservée"
       },
       "groups": {
         "provenance": "Provenance",
@@ -702,7 +703,8 @@
         "contact": "Contact",
         "address": "Adresse",
         "clinical": "Clinique",
-        "operational": "Opérationnel"
+        "operational": "Opérationnel",
+        "legacy_preservation": "Valeurs sources conservées"
       },
       "transforms": {
         "trim": "Rogner",
@@ -718,7 +720,8 @@
         "chart_number": "Numéro de dossier",
         "identity_tckn": "Validation du numéro d'identité national",
         "provenance_source_id": "Identifiant de la source de provenance",
-        "practitioner_reference": "Référence du praticien"
+        "practitioner_reference": "Référence du praticien",
+        "preserve_source_value": "Conserver la valeur source à l'identique"
       },
       "cellTypes": {
         "empty": "vide",
