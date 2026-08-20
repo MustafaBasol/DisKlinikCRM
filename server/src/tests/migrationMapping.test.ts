@@ -76,6 +76,11 @@ import {
   type MatrixDisposition,
 } from '../services/migration/mapping/firstCustomerMatrix.js';
 import {
+  FIRST_CUSTOMER_MEASURED_FILL,
+  measuredFillCounts,
+  measuredFillFor,
+} from '../services/migration/mapping/firstCustomerMeasuredFill.js';
+import {
   suggestMappings,
   hasTypeConflict,
   DESTINATION_ALIASES,
@@ -169,6 +174,16 @@ await test('matrixDecisionCounts() sums to 91 and matches the sprint-adjusted ba
   // KVKKONAYKODU and KVKKSMS REMAIN BLOCKED_LEGAL_DECISION and that is
   // correct: they were never blocked for sensitivity, they are blocked because
   // writing them would fabricate consent that no patient ever gave.
+  //
+  // F3-DATA-MIG-TODAY-001-R9 then moved FOUR columns whose MEASURED fill made a
+  // system-recommended silent drop indefensible (see firstCustomerMeasuredFill.ts):
+  //   EVTELEFONU  (45 rows)     BLOCKED_NO_DESTINATION   -> MANUAL_REVIEW
+  //   ISTELEFONU  (164 rows)    BLOCKED_NO_DESTINATION   -> MANUAL_REVIEW
+  //   ILCE        (~13 rows)    BLOCKED_NO_DESTINATION   -> MANUAL_REVIEW
+  //   KVKKILKKODU (4,750 rows)  HISTORICAL_METADATA_ONLY -> MANUAL_REVIEW
+  // so MANUAL_REVIEW 2 -> 6, BLOCKED_NO_DESTINATION 35 -> 32 and
+  // HISTORICAL_METADATA_ONLY 4 -> 3. No destination was invented for any of
+  // them: an honest open question outranks a plausible wrong answer.
   const expected: Record<MatrixDisposition, number> = {
     IMPORT_DIRECT: 4,
     IMPORT_AFTER_NORMALIZATION: 6,
@@ -179,12 +194,12 @@ await test('matrixDecisionCounts() sums to 91 and matches the sprint-adjusted ba
     // firstCustomerMatrix.ts. A count of 0 is asserted, not tolerated, so
     // that quietly re-populating it is also a reviewable change.
     SENSITIVE_REVIEW_NO_DESTINATION: 0,
-    HISTORICAL_METADATA_ONLY: 4,
-    MANUAL_REVIEW: 2,
+    HISTORICAL_METADATA_ONLY: 3,
+    MANUAL_REVIEW: 6,
     IGNORE_VENDOR_INTERNAL: 13,
     IGNORE_SUMMARY_NOT_TRANSACTION: 16,
     BLOCKED_LEGAL_DECISION: 2,
-    BLOCKED_NO_DESTINATION: 35,
+    BLOCKED_NO_DESTINATION: 32,
   };
   assert.deepEqual(counts, expected);
 });
@@ -955,14 +970,29 @@ section('R7-GATE. source-column accounting invariant (data-loss gate)');
 /**
  * Bucket a mapping state into exactly one accounting class.
  *
- * `explicitlyExcluded` covers IGNORE / BLOCKED / LEGAL_BLOCKED: each is an
- * AFFIRMATIVE recorded decision not to write, carrying its own reason, not an
- * omission. `null` means the state is not accounted for at all - which is the
- * failure this gate exists to catch.
+ * R9 CORRECTION. This function used to fold IGNORE / BLOCKED / LEGAL_BLOCKED
+ * into a single `explicitlyExcluded` class, described as "an AFFIRMATIVE
+ * recorded decision not to write". That claim was FALSE and the program owner
+ * rejected it: those states arrive from firstCustomerMatrix.ts, a mapping
+ * profile computed before any workbook is uploaded. They are SYSTEM
+ * RECOMMENDATIONS. Counting a recommendation as an operator's decision is what
+ * let 68 nominally-meaningful columns be reported as accounted-for while
+ * nobody had decided anything about them.
+ *
+ * `systemRecommendedExclusion` therefore replaces `explicitlyExcluded` here,
+ * and it is NOT a terminal disposition. Whether a specific column's exclusion
+ * was actually confirmed by a Platform Admin depends on per-RUN evidence
+ * (`isAutoSuggested` / `decidedByPlatformAdminId` / `decidedAt`) that a static
+ * matrix cannot carry — so it is decided by dataLossGate.ts and proved in
+ * migrationDataLossGate.test.ts. What THIS function still guards is narrower
+ * and still worth guarding: that no mapping state is unclassified.
+ *
+ * `null` means the state is not accounted for at all - the failure this
+ * function exists to catch.
  */
 function accountingClassOf(
   state: string,
-): 'resolved' | 'manualReview' | 'sensitiveReview' | 'explicitlyExcluded' | null {
+): 'resolved' | 'manualReview' | 'sensitiveReview' | 'systemRecommendedExclusion' | null {
   switch (state) {
     case 'AUTO_CONFIDENT':
     case 'RESOLVED':
@@ -975,7 +1005,7 @@ function accountingClassOf(
     case 'IGNORE':
     case 'BLOCKED':
     case 'LEGAL_BLOCKED':
-      return 'explicitlyExcluded';
+      return 'systemRecommendedExclusion';
     default:
       return null;
   }
@@ -993,29 +1023,44 @@ await test('GATE #1: every MAPPING_STATE is accounted for by exactly one class',
   }
 });
 
-await test('GATE #2: meaningful columns = resolved + manualReview + sensitiveReview + explicitlyExcluded, no remainder', () => {
-  // Synthetic stand-in for an analyzed workbook: every one of the 91 matrix
-  // columns, each given a fill count. Zero-data columns are accounted
-  // SEPARATELY, exactly as the gate requires.
-  //
-  // Fill counts here are DELIBERATELY chosen so that the columns whose
-  // disposition this task changed are treated as data-bearing, including the
-  // near-vestigial ones: a column with one meaningful value on row 14,889 is
-  // still a DATA-BEARING column.
-  const ZERO_DATA = new Set(['UZUNNOT', 'KVKKONAYKODU', 'KVKKSMS', 'ADRES_KODU']);
-
-  const tally = { resolved: 0, manualReview: 0, sensitiveReview: 0, explicitlyExcluded: 0 };
-  let meaningful = 0;
-  let zeroData = 0;
+await test('GATE #2: every matrix column has a measured-fill record, and the classes partition it', () => {
+  /*
+   * R9 REPLACED THE BODY OF THIS TEST, and the reason matters more than the
+   * assertions.
+   *
+   * What used to be here: `const filledCount = ZERO_DATA.has(f) ? 0 : 1`, with
+   * ZERO_DATA a hand-written set of four names. Every other column was declared
+   * data-bearing by fiat. That single line manufactured the headline figure the
+   * program owner rejected — "meaningful 87 = ... + explicitlyExcluded 68" —
+   * out of nothing. It was not a measurement, it was an assumption shaped like
+   * one, and it was wrong in BOTH directions: 58 of the 91 columns have never
+   * been profiled at all (so calling them meaningful was a guess), and 10 are
+   * measured empty rather than four (so the zero-data set was wrong too).
+   *
+   * A gate that decides whether a clinic's data may be dropped may not be
+   * proved against invented fill counts. The real ones now live in
+   * firstCustomerMeasuredFill.ts, transcribed from the accepted decision
+   * package's §5 FILL column with the R3 re-profiling evidence, and the
+   * balancing equation over them is proved in migrationDataLossGate.test.ts
+   * against the actual gate rather than against a copy of its logic.
+   *
+   * What survives here is the structural half: the matrix and the measured-fill
+   * evidence describe the SAME 91 columns, and every state maps to a class.
+   */
+  const missingFill: string[] = [];
   const unaccounted: string[] = [];
+  const tally = {
+    resolved: 0,
+    manualReview: 0,
+    sensitiveReview: 0,
+    systemRecommendedExclusion: 0,
+  };
 
   for (const e of FIRST_CUSTOMER_MATRIX) {
-    const filledCount = ZERO_DATA.has(e.sourceField) ? 0 : 1;
-    if (filledCount === 0) {
-      zeroData++;
+    if (!measuredFillFor(e.sourceField)) {
+      missingFill.push(e.sourceField);
       continue;
     }
-    meaningful++;
     const cls = accountingClassOf(e.mappingState);
     if (cls === null) {
       unaccounted.push(`${e.sourceField} (${e.mappingState})`);
@@ -1024,19 +1069,30 @@ await test('GATE #2: meaningful columns = resolved + manualReview + sensitiveRev
     tally[cls]++;
   }
 
-  assert.deepEqual(unaccounted, [], 'no meaningful source column may end in an unaccounted state');
-  assert.equal(
-    meaningful,
-    tally.resolved + tally.manualReview + tally.sensitiveReview + tally.explicitlyExcluded,
-    'the accounting must balance with NO unexplained remainder',
+  assert.deepEqual(
+    missingFill,
+    [],
+    'every matrix column needs a measured-fill record, or the gate cannot say whether dropping it loses data',
   );
-  assert.equal(meaningful + zeroData, FIRST_CUSTOMER_MATRIX.length, 'every column is in exactly one bucket');
-  assert.equal(zeroData, ZERO_DATA.size, 'zero-data columns are accounted separately, not folded in');
+  assert.deepEqual(unaccounted, [], 'no source column may end in an unaccounted state');
+  assert.equal(
+    tally.resolved + tally.manualReview + tally.sensitiveReview + tally.systemRecommendedExclusion,
+    FIRST_CUSTOMER_MATRIX.length,
+    'the classes must partition the matrix with NO unexplained remainder',
+  );
+  assert.equal(
+    FIRST_CUSTOMER_MEASURED_FILL.length,
+    FIRST_CUSTOMER_MATRIX.length,
+    'the fill evidence and the matrix must describe the same column set',
+  );
 
+  const fill = measuredFillCounts();
   console.log(
-    `    meaningful ${meaningful} = resolved ${tally.resolved} + manualReview ${tally.manualReview}` +
-      ` + sensitiveReview ${tally.sensitiveReview} + explicitlyExcluded ${tally.explicitlyExcluded}` +
-      `   (zero-data, accounted separately: ${zeroData})`,
+    `    matrix ${FIRST_CUSTOMER_MATRIX.length} = resolved ${tally.resolved} + manualReview ${tally.manualReview}` +
+      ` + sensitiveReview ${tally.sensitiveReview} + systemRecommendedExclusion ${tally.systemRecommendedExclusion}`,
+  );
+  console.log(
+    `    MEASURED FILL: meaningful ${fill.MEANINGFUL} · zero-data ${fill.ZERO_DATA} · UNMEASURED ${fill.UNMEASURED}`,
   );
 });
 

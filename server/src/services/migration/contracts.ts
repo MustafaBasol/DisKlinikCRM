@@ -22,6 +22,14 @@
  * carry NUMBERS; classifications carry ENUM-LIKE STRINGS. Never a cell value.
  */
 
+/*
+ * TYPE-ONLY, and deliberately so. dataLossGate.ts imports getDestinationField
+ * from THIS file, so a value import here would close a runtime cycle. `import
+ * type` is erased at compile time, leaving DryRunSummary able to name the
+ * gate's report shape with no module-loading consequence at all.
+ */
+import type { DataLossGateReport } from './mapping/dataLossGate.js';
+
 // ---------------------------------------------------------------------------
 // Run lifecycle
 // ---------------------------------------------------------------------------
@@ -94,6 +102,22 @@ export const MIGRATION_ERROR_CODES = [
   'MAPPING_TYPE_INCOMPATIBLE',
   'MAPPING_DESTINATION_COLLISION',
   'MAPPING_COMPOSITION_UNSUPPORTED',
+  /*
+   * F3-DATA-MIG-TODAY-001-R9 — the first-customer data-loss gate.
+   *
+   * All four are prefixed MAPPING_ deliberately: classifyBlocker()
+   * (reports/migrationReports.ts) routes every MAPPING_* code to the MAPPING
+   * owner, and the mapping screen is exactly where an operator resolves all
+   * four. The prefix is the classification, not decoration.
+   */
+  /** A meaningful column the SYSTEM proposed excluding, with no operator confirmation. */
+  'MAPPING_EXCLUSION_NOT_CONFIRMED',
+  /** A meaningful column left BLOCKED / LEGAL_BLOCKED with no accepted disposition. */
+  'MAPPING_MEANINGFUL_COLUMN_BLOCKED',
+  /** A column whose fill was never measured, so dropping it cannot be shown to be safe. */
+  'MAPPING_FILL_UNMEASURED',
+  /** A meaningful column in a state the data-loss accounting does not recognise. */
+  'MAPPING_DATA_LOSS_UNACCOUNTED',
   'REFERENCE_UNRESOLVED',
   'LEGAL_BLOCKED',
   // ---- row data ----
@@ -307,7 +331,29 @@ export interface DestinationFieldDef {
   /** i18n-independent English label for the mapping UI. */
   label: string;
   /** Grouping for the mapping UI. */
-  group: 'identity' | 'name' | 'contact' | 'address' | 'clinical' | 'operational' | 'provenance';
+  group:
+    | 'identity'
+    | 'name'
+    | 'contact'
+    | 'address'
+    | 'clinical'
+    | 'operational'
+    | 'provenance'
+    /**
+     * F3-DATA-MIG-TODAY-001-R9. A destination that PRESERVES a legally-gated
+     * source column's content as historical evidence rather than importing it
+     * as operational data — the single narrow way a meaningful LEGAL_BLOCKED
+     * column could ever pass the data-loss gate (dataLossGate.ts).
+     *
+     * DECLARED, WITH NO MEMBERS, ON PURPOSE. The gate's exception has to name
+     * something checkable or it degrades into prose, and an empty group keeps
+     * the exception structurally unreachable until a program owner accepts an
+     * actual destination for preserved evidence. Adding a member here is a
+     * legal decision, and validateMapping.ts Rule 4 (a LEGAL_BLOCKED column may
+     * carry no destination at all) would have to be revisited in the same
+     * change — two deliberate edits, never one accident.
+     */
+    | 'historical_evidence';
   type: DestinationValueType;
   required: boolean;
   /** Allowed transforms for this destination. */
@@ -933,6 +979,18 @@ export interface DryRunSummary {
   warnings: DryRunBlocker[];
   planLimit: PlanLimitReport;
   sharedPhoneImpact: SharedPhoneImpact;
+  /**
+   * F3-DATA-MIG-TODAY-001-R9. The first-customer data-loss accounting, computed
+   * from the REAL per-column fill counts this run measured — see dataLossGate.ts.
+   *
+   * OPTIONAL on the wire, required in spirit. A run whose dry run completed
+   * before this field existed has a persisted summary without it, and that
+   * summary is still read back by GET /runs/:id and by assertExecutable. It is
+   * therefore `?`-typed so the old shape still parses, and every consumer must
+   * treat ABSENT as NOT PROVEN rather than as satisfied — the same fail-closed
+   * rule the gate itself applies to an unmeasured column.
+   */
+  dataLossGate?: DataLossGateReport;
   /** True when execution may proceed. */
   executable: boolean;
   durationMs: number;

@@ -64,8 +64,23 @@ export interface MappingRecordLike {
 const WRITING_STATES = new Set(['AUTO_CONFIDENT', 'RESOLVED']);
 
 /**
- * Explicit decisions NOT to write. These are decisions, not omissions — the
- * operator (or the accepted first-customer matrix) affirmatively chose them.
+ * States that do not write, and that this MAPPING-STAGE validator accepts as
+ * settled enough to leave the mapping screen.
+ *
+ * READ THE NAME NARROWLY. F3-DATA-MIG-TODAY-001-R9 corrected a claim that used
+ * to sit here: that these were states "the operator (or the accepted
+ * first-customer matrix) affirmatively chose". The parenthesis was the defect.
+ * A state that arrived from firstCustomerMatrix.ts is a SYSTEM RECOMMENDATION
+ * computed before the workbook was uploaded — nobody chose it, and treating it
+ * as an operator decision is how a populated column gets dropped with the
+ * paperwork looking complete.
+ *
+ * This validator is still right to let them through, because it gates
+ * CONTINUE, not EXECUTE: at this point the operator has not yet been shown the
+ * measured per-column fill and cannot fairly be asked to confirm exclusions.
+ * The confirmation is owed one step later, at the dry run, where the real
+ * counts exist — see dataLossGate.ts, which is what actually gates Execute and
+ * which does NOT accept a recommendation in place of a decision.
  */
 const NON_WRITING_DECIDED_STATES = new Set(['IGNORE', 'BLOCKED', 'LEGAL_BLOCKED']);
 

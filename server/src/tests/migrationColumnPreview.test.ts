@@ -99,8 +99,12 @@ await test('TCNO / TCKN / T.C. Kimlik No header text classifies tckn with no des
 });
 
 await test('secondary phone headers with NO destination (e.g. EVTELEFONU, ISTELEFONU) still classify phone', () => {
-  // These are BLOCKED_NO_DESTINATION in the first-customer matrix (Patient has
-  // only one phone field) but remain patient contact data and must stay masked.
+  // R9 moved both to MANUAL_REVIEW once their measured fill (45 and 164 rows)
+  // made a silent no-destination drop indefensible. The masking below is
+  // deliberately INDEPENDENT of that: it keys off the header shape, so a phone
+  // column is masked whatever its disposition. Neither has a destination
+  // (Patient has only one phone field), but both are patient contact data and
+  // must stay masked.
   assert.equal(classifyColumnSensitivity('EVTELEFONU', undefined, 5), 'phone');
   assert.equal(classifyColumnSensitivity('ISTELEFONU', undefined, 5), 'phone');
   assert.equal(classifyColumnSensitivity('CEP_TELEFONU', undefined, 5), 'phone');

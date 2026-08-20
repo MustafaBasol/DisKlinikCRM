@@ -73,6 +73,7 @@ import {
   validateMappings,
   isUndecidedMappingState,
 } from '../services/migration/mapping/validateMapping.js';
+import { evaluateDataLossGate } from '../services/migration/mapping/dataLossGate.js';
 import { normalizeHeader } from '../services/migration/mapping/normalizeHeader.js';
 import { buildColumnPreviews } from '../services/migration/mapping/columnPreview.js';
 import { FIRST_CUSTOMER_MATRIX_BY_FIELD } from '../services/migration/mapping/firstCustomerMatrix.js';
@@ -744,6 +745,14 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
 
       // Counts only. Never the destinations chosen for named source columns —
       // those are safe, but the count is what an auditor needs.
+      //
+      // F3-DATA-MIG-TODAY-001-R9 adds the two data-loss figures. `ignored` has
+      // always been recorded, but it conflates the profile's RECOMMENDATION
+      // with the operator's DECISION, so on its own it could never answer the
+      // question an auditor actually asks after a migration: how many columns
+      // carrying real data did a human deliberately choose to leave behind?
+      // The gate answers it from the same rows this transaction just wrote.
+      const gate = evaluateDataLossGate(state.mappings);
       const savedMetadata = {
         changed: incoming.length,
         mapped: result.mappedCount,
@@ -751,6 +760,8 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
         blocked: result.blockedCount,
         legalBlocked: result.legalBlockedCount,
         ignored: result.ignoredCount,
+        operatorConfirmedExclusions: gate.operatorConfirmedExcluded,
+        unconfirmedExclusions: gate.systemRecommendedButUnconfirmedExclusions,
         valid: result.valid,
       };
 
@@ -1145,6 +1156,13 @@ router.post('/migrations/runs/:id/dry-run', async (req: PlatformAdminRequest, re
         .filter((m) => m.state === 'LEGAL_BLOCKED')
         .map((m) => m.sourceField),
       unresolvedMappingCount: validation.unresolvedCount,
+      /*
+       * F3-DATA-MIG-TODAY-001-R9. The PERSISTED rows, not the narrowed
+       * `ResolvedMapping` projection: the data-loss gate needs the measured
+       * `sourceProfile` and the operator-decision evidence, and neither
+       * survives that projection.
+       */
+      gateRecords: mappings,
     });
 
     const updated = await transitionRun(
@@ -1162,6 +1180,16 @@ router.post('/migrations/runs/:id/dry-run', async (req: PlatformAdminRequest, re
           expectedCreateCount: summary.expectedCreateCount,
           expectedReuseCount: summary.expectedReuseCount,
           planLimitAllowed: summary.planLimit.allowed,
+          // F3-DATA-MIG-TODAY-001-R9. Counts only — the audit record must be
+          // able to answer "how many columns carrying data were still
+          // unaccounted for at this dry run?" without re-reading the summary
+          // Json, and without naming a single source column in the audit log.
+          dataLossGateSatisfied: summary.dataLossGate?.satisfied ?? false,
+          meaningfulSourceColumns: summary.dataLossGate?.meaningfulSourceColumns ?? 0,
+          operatorConfirmedExclusions: summary.dataLossGate?.operatorConfirmedExcluded ?? 0,
+          unconfirmedExclusions:
+            summary.dataLossGate?.systemRecommendedButUnconfirmedExclusions ?? 0,
+          unmeasuredFillColumns: summary.dataLossGate?.unmeasuredFillColumns ?? 0,
           executable: summary.executable,
           durationMs: summary.durationMs,
         },

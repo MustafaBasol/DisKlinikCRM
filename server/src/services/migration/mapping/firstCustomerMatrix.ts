@@ -32,12 +32,12 @@
  *   IMPORT_AFTER_SCHEMA_FIELD              1              4          +3
  *   IMPORT_AFTER_SENSITIVE_REVIEW          0              4          +4   (R7/R8)
  *   SENSITIVE_REVIEW_NO_DESTINATION        0              0           0   (R8)
- *   HISTORICAL_METADATA_ONLY               4              4           0
- *   MANUAL_REVIEW                          2              2           0
+ *   HISTORICAL_METADATA_ONLY               4              3          -1   (R9)
+ *   MANUAL_REVIEW                          2              6          +4   (R9)
  *   IGNORE_VENDOR_INTERNAL                12             13          +1
  *   IGNORE_SUMMARY_NOT_TRANSACTION        16             16           0
  *   BLOCKED_LEGAL_DECISION                 5              2          -3
- *   BLOCKED_NO_DESTINATION                40             35          -5
+ *   BLOCKED_NO_DESTINATION                40             32          -8   (R9)
  *   TOTAL                                 91             91           0
  *
  * ---------------------------------------------------------------------------
@@ -113,8 +113,50 @@
  *     A composed write is by definition not a trim-only direct import, so both
  *     halves of the composition carry IMPORT_AFTER_NORMALIZATION.
  *
- * Rolled-up buckets encoded here: IMPORT 15 · HISTORICAL 4 · IGNORE 29 ·
- * BLOCKED 37 · MANUAL_REVIEW 2 · SENSITIVE_REVIEW 4  =  91.
+ * ---------------------------------------------------------------------------
+ * R9 CORRECTION (F3-DATA-MIG-TODAY-001-R9-DATA-LOSS-GATE)
+ * ---------------------------------------------------------------------------
+ * THIS FILE IS A RECOMMENDATION, NOT A DECISION. Everything encoded here was
+ * derived from the accepted decision package BEFORE any customer workbook was
+ * uploaded. R7/R8's data-loss accounting treated a disposition of IGNORE /
+ * BLOCKED / BLOCKED_LEGAL_DECISION reached from this table as an "explicit
+ * exclusion" and therefore as fully accounted for. It is not: nobody chose it.
+ * Only a Platform Admin, on a specific run, against measured fill counts, can
+ * decide that a populated column will not be migrated. See dataLossGate.ts.
+ *
+ * Four columns are RECLASSIFIED here because a system-recommended silent drop
+ * was the wrong disposition once their MEASURED fill was taken seriously
+ * (docs §5 FILL column, R3 re-profiling; transcribed in
+ * firstCustomerMeasuredFill.ts):
+ *
+ *   EVTELEFONU   BLOCKED_NO_DESTINATION   -> MANUAL_REVIEW    45 rows filled
+ *   ISTELEFONU   BLOCKED_NO_DESTINATION   -> MANUAL_REVIEW   164 rows filled
+ *   ILCE         BLOCKED_NO_DESTINATION   -> MANUAL_REVIEW    ~13 rows filled
+ *   KVKKILKKODU  HISTORICAL_METADATA_ONLY -> MANUAL_REVIEW  4,750 rows filled
+ *
+ * The first three are clinic-operational PII with no destination in the
+ * product. "No destination exists" is a fact about NoraMedi, never a finding
+ * that the customer's data is worthless — so they become unanswered questions
+ * (MANUAL_REVIEW, which blocks the run) instead of silent drops. No destination
+ * was invented for them: guessing beats dropping only until the guess is wrong.
+ *
+ * KVKKILKKODU is the serious one. It was an IGNORE carrying 4,750 rows of
+ * consent-ADJACENT evidence, and §3.3 #5 of the decision package says it may be
+ * a key into a consent-form archive — potentially the only lawful route to a
+ * `granted` state for these patients. It must not be fabricated into consent
+ * and must not be discarded; it is a program-owner question.
+ *
+ * The OTHER measured-meaningful IGNORE columns (SUBE_ID, AILEGURUBU,
+ * TEDAVIDURUMU, RISK_TUTARI, KAYITTARIHI) are DELIBERATELY left as IGNORE.
+ * Each has a real evidential basis for exclusion — 1 distinct branch value; the
+ * C-16 refutation of the family-key hypothesis; 3 and 2 rows of summary data
+ * with no transaction history behind them; a registration date with no faithful
+ * destination. That basis makes exclusion the right RECOMMENDATION, and the
+ * gate still requires an operator to confirm each one before Execute, so
+ * nothing is dropped without a named human deciding it.
+ *
+ * Rolled-up buckets encoded here: IMPORT 15 · HISTORICAL 3 · IGNORE 28 ·
+ * BLOCKED 34 · MANUAL_REVIEW 6 · SENSITIVE_REVIEW 4  =  91.
  */
 
 import {
@@ -493,17 +535,24 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'EVTELEFONU',
     meaning: 'Home phone',
-    disposition: 'BLOCKED_NO_DESTINATION',
+    disposition: 'MANUAL_REVIEW',
     note:
-      'G-E8 (C-5). 0.3 % filled. Patient has ONE phone field, already claimed by CEPTELEFONU. ' +
-      'HARD RULE: never divert into PatientEmergencyContact.phone — that would assert a home ' +
-      'number is an emergency contact, which is a clinical safety claim nobody made.',
+      'G-E8 (C-5). R9: 45 filled rows MEASURED — a clinic-operational contact route for 45 real ' +
+      'patients, not an empty column. Patient has ONE phone field, already claimed by ' +
+      'CEPTELEFONU, so there is genuinely nowhere for it to go; but "nowhere to go" is a ' +
+      'question, not an answer, and BLOCKED_NO_DESTINATION let it be dropped silently. It is ' +
+      'now an unanswered question a human must close. HARD RULE, unchanged: never divert into ' +
+      'PatientEmergencyContact.phone — that would assert a home number is an emergency contact, ' +
+      'which is a clinical safety claim nobody made.',
   }),
   entry({
     sourceField: 'ISTELEFONU',
     meaning: 'Work phone',
-    disposition: 'BLOCKED_NO_DESTINATION',
-    note: 'G-E8 (C-5). 1.1 % filled. Same single-phone-field constraint as EVTELEFONU.',
+    disposition: 'MANUAL_REVIEW',
+    note:
+      'G-E8 (C-5). R9: 164 filled rows MEASURED. Same single-phone-field constraint as ' +
+      'EVTELEFONU, and the same correction — a measured, populated contact column may not sit ' +
+      'in a silent no-destination state.',
   }),
   entry({
     sourceField: 'CEPTELEFONU',
@@ -568,10 +617,12 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'ILCE',
     meaning: 'District',
-    disposition: 'BLOCKED_NO_DESTINATION',
+    disposition: 'MANUAL_REVIEW',
     note:
-      'G-E7. About 13 filled rows. No district field. Do NOT fold into address: that would make ' +
-      'the composition rule depend on fill rate and break rerun stability.',
+      'G-E7. R9: about 13 filled rows MEASURED — small, but 13 real patients whose district was ' +
+      'recorded. No district field exists, so a human decides whether that matters; the system ' +
+      'may not decide it by omission. Do NOT fold into address: that would make the composition ' +
+      'rule depend on fill rate and break rerun stability.',
   }),
   entry({
     sourceField: 'MAHALLE',
@@ -898,10 +949,18 @@ export const FIRST_CUSTOMER_MATRIX: readonly MatrixEntry[] = [
   entry({
     sourceField: 'KVKKILKKODU',
     meaning: 'KVKK initial code',
-    disposition: 'HISTORICAL_METADATA_ONLY',
+    disposition: 'MANUAL_REVIEW',
     note:
-      'K-4. 31.9 % filled / 4,633 distinct — a near-unique CODE, not a consent STATE. Retained as ' +
-      'run metadata only. Its near-uniqueness is precisely why it cannot be read as a flag.',
+      'K-4. 31.9 % filled (4,750 rows) / 4,633 distinct — a near-unique CODE, not a consent ' +
+      'STATE. Its near-uniqueness is precisely why it cannot be read as a flag. R9 CORRECTION: ' +
+      'HISTORICAL_METADATA_ONLY made this an IGNORE, i.e. 4,750 rows of consent-adjacent ' +
+      'evidence discarded on a system recommendation. Decision-package §3.3 #5 says what it may ' +
+      'actually be: "a record id in ANOTHER register... if it references a consent-form archive, ' +
+      'that archive is requestable and could be genuine evidenceType — the only route to a ' +
+      'granted state." That is a program-owner question, and the answer changes whether the ' +
+      'clinic can lawfully message these patients at all. It must NOT be fabricated into a ' +
+      'consent record, and it must NOT be silently dropped, so it is an open question until ' +
+      'someone answers it.',
   }),
   entry({
     sourceField: 'KVKKSMS',
