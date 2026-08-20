@@ -253,6 +253,37 @@ async function main() {
     assert.ok(routeSrc.includes('openImagingFileStream('), 'files must be streamed from storage behind auth (F4-IMAGING-001: routed through the imaging-specific wrapper, which itself always delegates to openFileStream when VPS2 mode is off)');
   });
 
+  // ── F4-IMAGING-001 Finding E: the opened source stream must not leak if the
+  // audit write rejects. streamStudyImage() opens the stream BEFORE awaiting
+  // auditImaging(); if that await rejected, the handler's outer catch turned it
+  // into a 500 and nothing ever consumed or closed the stream. Under legacy
+  // storage that leaked a file handle; under VPS2 mode it leaks a live S3
+  // response socket, which progressively exhausts the SDK's connection pool.
+  //
+  // Structural assertion, consistent with the other route-source checks in this
+  // suite: exercising the reject path for real needs an HTTP request against a
+  // live DB with a failing audit backend, which this DB-free suite cannot do.
+  await test('F4-IMAGING-001 Finding E: a failing audit write destroys the already-opened stream instead of leaking it', () => {
+    const streamFn = routeSrc.slice(routeSrc.indexOf('async function streamStudyImage'));
+    // The handler ends where the first route registration after it begins.
+    const body = streamFn.slice(0, streamFn.indexOf('router.get('));
+
+    const openIdx = body.indexOf('await openImagingFileStream(');
+    const auditIdx = body.indexOf('auditImaging(');
+    assert.ok(openIdx !== -1 && auditIdx !== -1, 'expected both the stream open and the audit write in streamStudyImage');
+    assert.ok(openIdx < auditIdx, 'precondition for this finding: the stream is opened before the audit write');
+
+    const betweenOpenAndPipe = body.slice(openIdx, body.indexOf('stream.pipe('));
+    assert.ok(
+      /catch\s*\(\s*auditErr\s*\)\s*\{[^}]*stream\.destroy\(\)/s.test(betweenOpenAndPipe),
+      'the auditImaging() await must be wrapped so a rejection destroys the opened stream before propagating',
+    );
+    assert.ok(
+      /throw\s+auditErr/.test(betweenOpenAndPipe),
+      'the audit failure must still propagate — imaging bytes are never served unaudited, the stream is only cleaned up',
+    );
+  });
+
   await test('originals are immutable — no binary replace/delete endpoints', () => {
     assert.equal(/router\.(put|patch|post)\([^)]*images\/:imageId/.test(routeSrc), false, 'image binaries must have no mutation endpoint');
     assert.equal(routeSrc.includes('imagingImage.update'), false);

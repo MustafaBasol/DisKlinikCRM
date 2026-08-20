@@ -97,8 +97,17 @@ export class ImagingLegalHoldViolationError extends Error {
 
 export class ImagingStorageUnavailableError extends Error {
   readonly code = 'IMAGING_STORAGE_UNAVAILABLE' as const;
-  constructor() {
-    super('Imaging storage provider is unavailable.');
+  /**
+   * `cause` carries the underlying provider failure (F4-IMAGING-001 Finding D).
+   * The message/name/code this class exposes are unchanged and still sanitized
+   * — the raw provider error is reachable ONLY via the standard `cause` link,
+   * which is what error trackers and operators need to tell "VPS2 imaging
+   * storage is down" apart from any other unavailability. Before this, the
+   * throw site used a bare `catch {}` and the provider error was destroyed at
+   * the boundary, leaving an imaging outage with no signal anywhere.
+   */
+  constructor(options?: { cause?: unknown }) {
+    super('Imaging storage provider is unavailable.', options);
     this.name = 'ImagingStorageUnavailableError';
   }
 }
@@ -455,8 +464,12 @@ export async function checkImageStorageExists(clinicId: string, imageId: string)
 
   try {
     return await storageExistenceChecker(image.filePath);
-  } catch {
-    throw new ImagingStorageUnavailableError();
+  } catch (err) {
+    // F4-IMAGING-001 Finding D: bind the provider error and pass it as
+    // `cause`. Still the facade's own sanitized error type crossing the
+    // boundary — but a VPS2 outage is no longer silently indistinguishable
+    // from every other storage failure.
+    throw new ImagingStorageUnavailableError({ cause: err });
   }
 }
 

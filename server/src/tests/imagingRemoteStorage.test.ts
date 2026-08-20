@@ -548,6 +548,44 @@ async function main() {
     }
   });
 
+  // ── 8. Finding C: config is validated at BOOT, not lazily on first use ──
+  //
+  // validateImagingS3Config() used to be reachable only from getImagingS3(),
+  // i.e. on the first imaging request that actually constructed a client. An
+  // operator who activated IMAGING_STORAGE_BACKEND=vps2 with a missing bucket
+  // or endpoint therefore got a process that started up looking perfectly
+  // healthy and only failed much later, at request time, with imaging silently
+  // unavailable in between. It is now also called during startup validation in
+  // index.ts, following that file's existing ENCRYPTION_KEY precedent.
+  section('8. Boot-time configuration validation (F4-IMAGING-001 Finding C)');
+
+  const indexSrc = fs.readFileSync(path.resolve(process.cwd(), 'src', 'index.ts'), 'utf8');
+
+  await test('index.ts imports and calls validateImagingS3Config() during startup validation', () => {
+    assert.ok(
+      /import \{[^}]*validateImagingS3Config[^}]*\} from '\.\/services\/imagingRemoteStorage\.js';/.test(indexSrc),
+      'index.ts must import validateImagingS3Config from the imaging storage module',
+    );
+    assert.ok(indexSrc.includes('validateImagingS3Config();'), 'index.ts must actually call it, not just import it');
+  });
+
+  await test('the boot-time call runs before the server starts listening (a bad config must stop startup, not surface on the first request)', () => {
+    const callIdx = indexSrc.indexOf('validateImagingS3Config();');
+    const listenIdx = indexSrc.search(/(app|server|httpServer)\.listen\(/);
+    assert.ok(callIdx !== -1, 'boot-time call present');
+    assert.ok(listenIdx !== -1, 'expected a listen() call in index.ts');
+    assert.ok(callIdx < listenIdx, 'validation must run before the process begins accepting traffic');
+  });
+
+  await test('it fails closed in production (exit) and only warns outside production, matching the ENCRYPTION_KEY precedent in the same file', () => {
+    const callIdx = indexSrc.indexOf('validateImagingS3Config();');
+    const block = indexSrc.slice(callIdx, callIdx + 700);
+    assert.ok(/catch\s*\(/.test(block), 'the throw is caught so the failure can be reported deliberately');
+    assert.ok(/NODE_ENV === 'production'/.test(block), 'production is distinguished from dev/test');
+    assert.ok(/process\.exit\(1\)/.test(block), 'production startup must abort on an invalid imaging storage config');
+    assert.ok(/console\.warn/.test(block), 'non-production only warns, so local/dev work is not blocked');
+  });
+
   // ── Cleanup ──────────────────────────────────────────────────────────────
   restoreEnv(baseSnapshot);
   try {

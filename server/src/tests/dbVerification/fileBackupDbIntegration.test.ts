@@ -608,6 +608,252 @@ async function main() {
     assertEqual(after.id, before.id, 'no new entry was created — the tampered object is never re-verified going forward');
   });
 
+
+  // ═══════════ VPS2 IMAGING SOURCE BACKEND (F4-IMAGING-001 Finding A) ══════
+  //
+  // Regression cover for the accepted merge blocker on PR #459: the sweep
+  // enumerated ImagingImage rows but opened every source through the generic
+  // openFileStream(). With IMAGING_STORAGE_BACKEND=vps2 active, newly
+  // ingested imaging objects live ONLY in VPS2 object storage, so that
+  // generic read resolved null and a perfectly healthy remote object was
+  // recorded as `missing_source` and never backed up.
+  //
+  // The source reader is now per-content-class: ImagingImage reads go through
+  // fileStorage.ts's openImagingFileStream() (the same VPS2-aware contract
+  // routes/imaging.ts serves bytes from), while PatientAttachment and
+  // LabOrderAttachment keep calling openFileStream() unchanged.
+  //
+  // The VPS2 side is simulated by the SAME disposable MinIO this suite
+  // already runs against, in a SEPARATE bucket — an imaging-primary store is
+  // a different concern from the backup destination and must not share a
+  // bucket or credentials with it. All content is synthetic random bytes.
+  section('=== VPS2 imaging source backend (F4-IMAGING-001 Finding A) ===');
+
+  const imagingBucketName = `imaging-vps2-review-${Date.now()}`;
+  const remoteImaging = await import('../../services/imagingRemoteStorage.js');
+
+  // The backup DESTINATION for this section is a fresh local directory: the
+  // subject under test here is where backup READS imaging bytes FROM, and a
+  // local destination keeps that isolated from the S3-destination bucket
+  // above (whose objects were deliberately tampered with).
+  const vps2DestDir = await fs.mkdtemp(path.join(os.tmpdir(), 'file-backup-vps2-dest-'));
+  const savedS3Bucket = process.env.FILE_BACKUP_S3_BUCKET;
+  process.env.FILE_BACKUP_LOCAL_DIR = vps2DestDir;
+  delete process.env.FILE_BACKUP_S3_BUCKET;
+
+  /** Enables VPS2 imaging mode. The accessKeyId override lets a test force a genuine remote ERROR (auth), which is NOT a 404 and must never be read as absence. */
+  function enableVps2ImagingMode(overrides: { accessKeyId?: string } = {}): void {
+    process.env.IMAGING_STORAGE_BACKEND = 'vps2';
+    process.env.IMAGING_S3_BUCKET = imagingBucketName;
+    process.env.IMAGING_S3_ENDPOINT = minioEndpoint;
+    process.env.IMAGING_S3_ACCESS_KEY_ID = overrides.accessKeyId ?? minioAccessKey;
+    process.env.IMAGING_S3_SECRET_ACCESS_KEY = minioSecretKey;
+    process.env.IMAGING_S3_FORCE_PATH_STYLE = 'true';
+    process.env.IMAGING_S3_REGION = 'auto';
+    remoteImaging.__resetImagingS3ClientForTest();
+  }
+
+  function disableVps2ImagingMode(): void {
+    delete process.env.IMAGING_STORAGE_BACKEND;
+    delete process.env.IMAGING_S3_BUCKET;
+    delete process.env.IMAGING_S3_ENDPOINT;
+    delete process.env.IMAGING_S3_ACCESS_KEY_ID;
+    delete process.env.IMAGING_S3_SECRET_ACCESS_KEY;
+    delete process.env.IMAGING_S3_FORCE_PATH_STYLE;
+    delete process.env.IMAGING_S3_REGION;
+    remoteImaging.__resetImagingS3ClientForTest();
+  }
+
+  /**
+   * Storage-key contract is UNCHANGED by this task: `<clinicId>/<opaqueId><ext>`,
+   * exactly what buildObjectStorageKey({kind:'imaging-image'}) produces and
+   * what writePrimaryFile() above already emits. No new key template.
+   */
+  function syntheticImagingKey(clinicId: string): string {
+    return `${clinicId}/${randomUUID()}.bin`;
+  }
+
+  async function createImagingRow(clinicId: string, studyId: string, key: string, size: number) {
+    return prisma.imagingImage.create({
+      data: {
+        clinicId,
+        studyId,
+        fileName: 'vps2.bin',
+        originalName: 'vps2.bin',
+        fileSize: size,
+        mimeType: 'application/octet-stream',
+        filePath: key,
+      },
+    });
+  }
+
+  const sha256Hex = (b: Buffer) => crypto.createHash('sha256').update(b).digest('hex');
+
+  await test('MinIO imaging bucket can be created (disposable VPS2-side imaging store reachable, separate bucket from the backup destination)', async () => {
+    await adminS3.send(new CreateBucketCommand({ Bucket: imagingBucketName }));
+  }, 'vps2-imaging-bucket-created');
+
+  // ── 1. LEGACY MODE UNCHANGED ────────────────────────────────────────────
+  disableVps2ImagingMode();
+  const legacyContent = crypto.randomBytes(2048);
+  const legacyKey = await writePrimaryFile(fixtures.defaultClinicId, legacyContent);
+  const legacyImagingRow = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, legacyKey, legacyContent.length);
+
+  await test('1. LEGACY MODE: an ImagingImage backed by a legacy local object still backs up and verifies (IMAGING_STORAGE_BACKEND unset — byte-identical to pre-change behavior)', async () => {
+    await runFileBackup({ trigger: 'manual' });
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: legacyImagingRow.id } });
+    assertEqual(entry.status, 'verified', 'legacy-mode imaging entry status');
+    assertEqual(entry.sourceChecksumSha256, sha256Hex(legacyContent), 'legacy-mode source checksum matches the synthetic bytes');
+  }, 'vps2-finding-a-1-legacy-mode-unchanged');
+
+  // ── 2/3/4/10/11. VPS2-ONLY OBJECT (the actual regression) ───────────────
+  enableVps2ImagingMode();
+
+  const vps2ContentA = crypto.randomBytes(4096);
+  const vps2KeyA = syntheticImagingKey(fixtures.defaultClinicId);
+  await adminS3.send(new PutObjectCommand({ Bucket: imagingBucketName, Key: vps2KeyA, Body: vps2ContentA }));
+  // Deliberately NO writePrimaryFile() — these bytes exist ONLY in VPS2
+  // object storage, exactly like an imaging object ingested after activation.
+  const vps2ImagingRowA = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, vps2KeyA, vps2ContentA.length);
+
+  const vps2ContentB = crypto.randomBytes(3072);
+  const vps2KeyB = syntheticImagingKey(fixtures.crossOrgClinicId);
+  await adminS3.send(new PutObjectCommand({ Bucket: imagingBucketName, Key: vps2KeyB, Body: vps2ContentB }));
+  const vps2ImagingRowB = await createImagingRow(fixtures.crossOrgClinicId, imagingStudyB.id, vps2KeyB, vps2ContentB.length);
+
+  // ── 5. REMOTE CONFIRMED ABSENT + LEGACY PRESENT -> controlled fallback ──
+  const fallbackContent = crypto.randomBytes(1536);
+  const fallbackKey = await writePrimaryFile(fixtures.defaultClinicId, fallbackContent);
+  // Deliberately NOT put into the imaging bucket: a VPS2 GET resolves a real
+  // 404, which is "confirmed absent", the one case allowed to fall back.
+  const fallbackImagingRow = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, fallbackKey, fallbackContent.length);
+
+  await test('2. VPS2-ONLY OBJECT: an ImagingImage whose bytes exist only in VPS2 object storage is backed up successfully (this is the Finding A regression)', async () => {
+    const vps2Run = await runFileBackup({ trigger: 'manual' });
+    assert(vps2Run.filesVerified >= 1, 'the VPS2-mode run verified at least one file');
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: vps2ImagingRowA.id } });
+    assertEqual(entry.status, 'verified', 'VPS2-only imaging object must be copied and verified');
+  }, 'vps2-finding-a-2-remote-only-object-backed-up');
+
+  await test('3. DESTINATION CHECKSUM: the VPS2-sourced copy is verified by re-reading the destination, and both checksums equal the synthetic source bytes', async () => {
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: vps2ImagingRowA.id } });
+    assertEqual(entry.sourceChecksumSha256, sha256Hex(vps2ContentA), 'source checksum equals the bytes written to VPS2');
+    assertEqual(entry.destinationChecksumSha256, sha256Hex(vps2ContentA), 'destination re-read checksum equals the same bytes');
+    assertEqual(entry.sourceSizeBytes, vps2ContentA.length, 'recorded size matches the remote object');
+  }, 'vps2-finding-a-3-destination-checksum-verifies');
+
+  await test('4. NOT missing_source: the VPS2-only object is never classified as a missing source (the exact pre-fix defect)', async () => {
+    const missing = await prisma.fileBackupEntry.findMany({
+      where: { sourceRecordId: { in: [vps2ImagingRowA.id, vps2ImagingRowB.id] }, status: 'missing_source' },
+      select: { id: true, sourceRecordId: true },
+    });
+    assertEqual(missing.length, 0, `no VPS2-backed ImagingImage may be recorded as missing_source (found ${JSON.stringify(missing)})`);
+  }, 'vps2-finding-a-4-not-missing-source');
+
+  await test('5. CONFIRMED-ABSENT FALLBACK: a VPS2 404 with a legacy object present falls back to legacy and backs up the legacy bytes', async () => {
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: fallbackImagingRow.id } });
+    assertEqual(entry.status, 'verified', 'confirmed-absent-remote + legacy-present must back up via the controlled legacy fallback');
+    assertEqual(entry.sourceChecksumSha256, sha256Hex(fallbackContent), 'the bytes backed up are the legacy object bytes');
+  }, 'vps2-finding-a-5-confirmed-absent-legacy-fallback');
+
+  await test('10. DESTINATION KEY SHAPE UNCHANGED: VPS2-sourced imaging still writes file-backups/imaging/<clinicId>/<recordId>.bin', async () => {
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: vps2ImagingRowA.id } });
+    assertEqual(entry.destinationKey, `file-backups/imaging/${fixtures.defaultClinicId}/${vps2ImagingRowA.id}.bin`, 'destination key shape is unchanged by the source-read change');
+  }, 'vps2-finding-a-10-destination-key-unchanged');
+
+  await test('11. TENANT/CLINIC SCOPE UNCHANGED: a VPS2-only imaging object in a DIFFERENT org/clinic is also backed up, under its own clinic scope', async () => {
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: vps2ImagingRowB.id } });
+    assertEqual(entry.status, 'verified', 'cross-org VPS2-only imaging object is backed up too (global sweep scope unchanged)');
+    assertEqual(entry.clinicId, fixtures.crossOrgClinicId, 'entry is scoped to the row own clinic');
+    assertEqual(entry.destinationKey, `file-backups/imaging/${fixtures.crossOrgClinicId}/${vps2ImagingRowB.id}.bin`, 'cross-org destination key is scoped to that clinic');
+    assertEqual(entry.sourceChecksumSha256, sha256Hex(vps2ContentB), 'cross-org bytes are that tenant own bytes, not clinic A bytes');
+  }, 'vps2-finding-a-11-tenant-scope-unchanged');
+
+  await test('9. ALREADY-BACKED SKIP UNCHANGED: a second run in VPS2 mode creates no new entry for an already-verified imaging record', async () => {
+    const before = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: vps2ImagingRowA.id } });
+    const secondRun = await runFileBackup({ trigger: 'manual' });
+    const after = await prisma.fileBackupEntry.findMany({ where: { sourceRecordId: vps2ImagingRowA.id } });
+    assertEqual(after.length, 1, 'no duplicate entry for an already-verified imaging record');
+    assertEqual(after[0]!.id, before.id, 'the original entry is reused, not replaced');
+    assert(secondRun.filesSkipped >= 1, 'the skip path was actually exercised');
+  }, 'vps2-finding-a-9-already-backed-skip-unchanged');
+
+  // ── 6/7/8. REMOTE ERROR IS A FAILURE, NEVER missing_source ──────────────
+  //
+  // An invalid access key against the LIVE MinIO produces a genuine remote
+  // error (403 InvalidAccessKeyId) rather than a 404. That is the "cannot
+  // tell" case: the sweep must record `failed`, must NOT record
+  // `missing_source` (which reads as "this file does not exist" and would be
+  // acted on as data loss), and must NOT silently substitute legacy bytes.
+  //
+  // The same broken-remote window is used to prove PatientAttachment and
+  // LabOrderAttachment are untouched: if either had been routed through the
+  // imaging reader, they would fail here too.
+  const outageContent = crypto.randomBytes(1024);
+  const outageKey = await writePrimaryFile(fixtures.defaultClinicId, outageContent);
+  // A legacy object DOES exist at this key — so a `verified` result here
+  // would prove a silent legacy fallback on an unavailable remote, which the
+  // contract forbids.
+  const outageImagingRow = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, outageKey, outageContent.length);
+
+  const attachmentContent = crypto.randomBytes(512);
+  const attachmentKey = await writePrimaryFile(fixtures.defaultClinicId, attachmentContent);
+  const attachmentDuringOutage = await prisma.patientAttachment.create({
+    data: {
+      clinicId: fixtures.defaultClinicId,
+      patientId: patientA.id,
+      fileName: 'vps2-unaffected.bin',
+      originalName: 'vps2-unaffected.bin',
+      fileSize: attachmentContent.length,
+      mimeType: 'application/octet-stream',
+      filePath: attachmentKey,
+      uploadedById: staffA.id,
+    },
+  });
+
+  const labAttachmentContent = crypto.randomBytes(768);
+  const labAttachmentKey = await writePrimaryFile(fixtures.defaultClinicId, labAttachmentContent);
+  const labAttachmentDuringOutage = await prisma.labOrderAttachment.create({
+    data: {
+      clinicId: fixtures.defaultClinicId,
+      labWorkOrderId: labWorkOrder.id,
+      fileName: 'vps2-unaffected-lab.bin',
+      originalName: 'vps2-unaffected-lab.bin',
+      fileSize: labAttachmentContent.length,
+      mimeType: 'application/octet-stream',
+      filePath: labAttachmentKey,
+      uploadedById: staffA.id,
+    },
+  });
+
+  enableVps2ImagingMode({ accessKeyId: 'definitely-not-a-valid-access-key' });
+
+  await test('6. REMOTE ERROR: an unavailable/unauthorized VPS2 backend makes the imaging row FAIL — never missing_source, and never a silent legacy fallback even though a legacy object exists at that key', async () => {
+    await runFileBackup({ trigger: 'manual' });
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: outageImagingRow.id } });
+    assert(entry.status !== 'missing_source', `a VPS2 outage must never be recorded as missing_source (got "${entry.status}")`);
+    assert(entry.status !== 'verified', `a VPS2 outage must not be silently satisfied from legacy storage (got "${entry.status}")`);
+    assertEqual(entry.status, 'failed', 'a VPS2 outage surfaces as a failed backup entry');
+  }, 'vps2-finding-a-6-remote-error-is-failure-not-missing-source');
+
+  await test('7. PatientAttachment UNAFFECTED: it still reads through the generic file storage path and succeeds while the imaging backend is broken', async () => {
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: attachmentDuringOutage.id } });
+    assertEqual(entry.status, 'verified', 'PatientAttachment is not routed through the imaging reader');
+    assertEqual(entry.sourceChecksumSha256, sha256Hex(attachmentContent), 'PatientAttachment bytes unchanged');
+    assertEqual(entry.destinationKey, `file-backups/attachments/${fixtures.defaultClinicId}/${attachmentDuringOutage.id}.bin`, 'PatientAttachment destination key unchanged');
+  }, 'vps2-finding-a-7-patient-attachment-unaffected');
+
+  await test('8. LabOrderAttachment UNAFFECTED: it still reads through the generic file storage path and succeeds while the imaging backend is broken', async () => {
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: labAttachmentDuringOutage.id } });
+    assertEqual(entry.status, 'verified', 'LabOrderAttachment is not routed through the imaging reader');
+    assertEqual(entry.sourceChecksumSha256, sha256Hex(labAttachmentContent), 'LabOrderAttachment bytes unchanged');
+    assertEqual(entry.destinationKey, `file-backups/lab-attachments/${fixtures.defaultClinicId}/${labAttachmentDuringOutage.id}.bin`, 'LabOrderAttachment destination key unchanged');
+  }, 'vps2-finding-a-8-lab-attachment-unaffected');
+
+  disableVps2ImagingMode();
+  await fs.rm(vps2DestDir, { recursive: true, force: true }).catch(() => {});
+  if (savedS3Bucket !== undefined) process.env.FILE_BACKUP_S3_BUCKET = savedS3Bucket;
+
   console.log('\nCleaning up MinIO bucket and Postgres fixtures...');
   await prisma.fileBackupEntry.deleteMany({ where: { clinicId: { in: [fixtures.defaultClinicId, fixtures.crossOrgClinicId] } } }).catch(() => {});
   await prisma.fileBackupRun.deleteMany({}).catch(() => {});
