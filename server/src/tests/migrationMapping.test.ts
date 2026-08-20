@@ -1038,11 +1038,15 @@ await test('GATE #2: every matrix column has a measured-fill record, and the cla
    * measured empty rather than four (so the zero-data set was wrong too).
    *
    * A gate that decides whether a clinic's data may be dropped may not be
-   * proved against invented fill counts. The real ones now live in
-   * firstCustomerMeasuredFill.ts, transcribed from the accepted decision
-   * package's §5 FILL column with the R3 re-profiling evidence, and the
-   * balancing equation over them is proved in migrationDataLossGate.test.ts
-   * against the actual gate rather than against a copy of its logic.
+   * proved against invented fill counts. The real ones live in
+   * firstCustomerMeasuredFill.ts. R9 transcribed them by hand from the
+   * decision package's §5 FILL column, which left 58 columns UNMEASURED and
+   * carried several wrong figures; R10 replaced that table wholesale with the
+   * output of the repository's OWN analyze code (parseSourceWorkbook +
+   * profileColumns) run over the accepted workbook, so all 91 are measured and
+   * nothing is transcribed. The balancing equation over them is proved in
+   * migrationDataLossGate.test.ts against the actual gate rather than against a
+   * copy of its logic.
    *
    * What survives here is the structural half: the matrix and the measured-fill
    * evidence describe the SAME 91 columns, and every state maps to a class.
