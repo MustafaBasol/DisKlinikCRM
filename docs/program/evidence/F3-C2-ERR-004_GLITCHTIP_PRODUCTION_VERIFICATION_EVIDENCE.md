@@ -18,6 +18,22 @@
 > artifacts from the hosting provider and to make a naming/TLS decision. This document
 > narrows the remaining work; it does not claim any part of it done.
 
+> ## [2026-08-20 AMENDMENT — `F3-C2-ERR-004-R1-IHS-KVKK-GATE-RECONCILIATION`]
+>
+> Later operator work closed **BLOCKER 2** (ingress) and **BLOCKER 3** (admin/synthetic
+> artifacts) in full, and the program owner supplied and accepted the Türkiye
+> data-location/provider evidence that **BLOCKER 1** was waiting on. **This amendment
+> narrows further; it still does not activate telemetry.** `SENTRY_DSN` remains unset,
+> no NoraMedi organization/project/DSN exists in GlitchTip, and no NoraMedi production
+> synthetic or real event has been sent. See **§15** for the full reconciliation, the
+> E1–E5/I1–I5 gate matrix, and the exact hard-gate decision:
+> **`IHS_KVKK_DSN_HARD_GATE = BLOCKED`** — the register update this document requires
+> is written (`docs/compliance/62-kvkk-subprocessor-register.md` §1a) but **not yet
+> merged**, and counsel confirmation of the undefined `I1–I5` items and the hosting
+> provider's subprocessor characterization (`F3-C2-ERR-002` §7.3) remains outstanding.
+> All findings and gate assessments below this line are preserved **unedited** as
+> history; do not read them as current without cross-checking §15.
+
 ---
 
 ## 1. What this task actually delivered
@@ -614,3 +630,153 @@ All run at `origin/main` @ `16887e60` plus this branch's changes, in an isolated
 `test:error-tracking-verification` is registered in the `server:test:non-disposable` aggregate,
 which the CI classifier's coverage assertion requires — `test:ci-classify` re-run after the
 change confirms no suite is orphaned.
+
+---
+
+## 15. R1 Reconciliation (2026-08-20) — `F3-C2-ERR-004-R1-IHS-KVKK-GATE-RECONCILIATION`
+
+**Task type:** documentation/evidence/compliance-register reconciliation. **No repository
+runtime code, route, schema, or migration was touched by R1.** No production mutation, no DSN
+creation, no production event. Same PR (#467), same branch.
+
+### 15.1 What changed on the ground since the original evidence above
+
+Program-owner-supplied and accepted facts, as of 2026-08-20:
+
+**GlitchTip ingress (closes BLOCKER 2 in full):**
+
+| Item | State |
+|---|---|
+| Observability FQDN | `errors.noramedi.com` |
+| DNS | Production-verified |
+| TLS | Let's Encrypt issued; expiry `2026-11-18`; automatic renewal configured |
+| Reverse proxy | nginx, active |
+| GlitchTip application binding | Unchanged — still `127.0.0.1:8000` only |
+| Firewall | `ufw` default incoming deny; publicly allowed ports only `22/80/443` |
+| Public HTTPS | `HTTP/2 200` verified |
+| HTTP → HTTPS | `301` verified |
+| Unknown Host header | catch-all `444` / empty reply, verified |
+| `GLITCHTIP_DOMAIN` | now `https://errors.noramedi.com` (was the literal placeholder `<observability-fqdn>`) |
+
+**GlitchTip administration (closes BLOCKER 3 in full):** a legitimate GlitchTip superuser has
+been created; the `SYNTHETIC-Attacker-Org` / `SYNTHETIC-Probe-Project` / user `id=1` / project-key
+artifacts recorded as the §4.3 finding have been **fully removed**, and their absence has been
+**verified directly against the production GlitchTip database** (not inferred).
+
+**IHS provider evidence (narrows BLOCKER 1 — does not fully close it):**
+
+| Fact | Value |
+|---|---|
+| Physical host / disk infrastructure | Türkiye / NGN Data Center |
+| Provider backup location | Türkiye |
+| Overseas replication/failover/migration | Provider states: none |
+| Guest-level encryption | LUKS/dm-crypt technically permitted |
+| Resource expansion | Possible while preserving existing data |
+| Provider staff post-credential-change access | Not retained routinely; support access requires customer-provided access |
+| Provider-side encryption at rest | **None** |
+| Custom DPA | **None offered** under the standard online-service model |
+| Fixed IOPS/throughput guarantee | **Absent** |
+| Sanitization / subprocessor-of-subprocessor / support-audit evidence | **Incomplete** |
+
+These residual items are recorded exactly as evidenced in
+`docs/compliance/62-kvkk-subprocessor-register.md` §1a — **not** upgraded into a claim that a
+custom DPA exists, and not silently dropped.
+
+**Still not done (unchanged by R1):** real NoraMedi GlitchTip organization/project; real DSN;
+`SENTRY_DSN` activation; NoraMedi production synthetic event; receipt/redaction/release/request
+correlation verification against a live event; PR #467 merge; deployment of any runtime change
+this PR contains (there are none — see §14, `git diff --check` clean, no schema/route change).
+
+### 15.2 E1–E5 / I1–I5 gate matrix
+
+Definitions are `F3-C2-ERR-002` §6 (E1–E5) verbatim. **`I1–I5` has no discrete definition
+anywhere in this repository** — it is used only as a bundled shorthand for "provider/DPA items"
+across `F3-C2-ERR-002` §7.1/§9, this document's §7.1 (above), the master tracker, and
+`F4-IMAGING-001-R5`. Not guessed here; classified as `UNDEFINED_IN_REPOSITORY`.
+
+| ID | Requirement | Classification | Basis |
+|---|---|---|---|
+| E1 | Contractual statement of datacenter country | `SATISFIED_BY_ACCEPTED_PROVIDER_EVIDENCE` (documentary form — invoice/screenshot/PDF — not captured) | Program-owner-accepted: Türkiye / NGN Data Center, 2026-08-20 |
+| E2 | Datacenter facility identification | `PARTIALLY_SATISFIED` | Facility named (NGN Data Center); no city-level location recorded |
+| E3 | Independent network-level corroboration | `PARTIALLY_SATISFIED` (unchanged) | RIPE RDAP `country: TR`, `netname: IHS-VPS-NET5` — geolocation-adjacent inference only, per §6's own "geolocation alone is not sufficient" |
+| E4 | Written no-migration/replication/failover-outside-Türkiye confirmation | `SATISFIED_BY_ACCEPTED_PROVIDER_EVIDENCE` (documentary form — contract clause vs. support statement — not distinguished) | Program-owner-accepted provider statement, 2026-08-20 |
+| E5 | Backup/snapshot storage region | `SATISFIED_BY_ACCEPTED_PROVIDER_EVIDENCE` | Program-owner-accepted: Türkiye, 2026-08-20 |
+| I1–I5 | Provider/DPA items (undefined) | `UNDEFINED_IN_REPOSITORY — COUNSEL_REVIEW_REQUIRED` | No document in this repository enumerates I1 through I5 individually; only the bundled label exists. The substantive DPA facts that are known (no custom DPA, no provider-side encryption at rest, no fixed IOPS guarantee, incomplete sanitization/support-audit evidence) are recorded in the register §1a regardless of the missing enumeration |
+
+**Not classified as `NOT_REQUIRED_FOR_THIS_SELF_HOSTED_GLITCHTIP_ACTIVATION` for any item** —
+E1–E5 and the I-items all bear on the **hosting** relationship (IHS), which is engaged
+regardless of GlitchTip being self-hosted software; only the *software* itself (GlitchTip) is
+outside subprocessor scope, per `F3-C2-ERR-002` §7.1's four-role distinction (§7.3 of that
+document), which this task does not revisit.
+
+### 15.3 Hard-gate decision
+
+```
+IHS_KVKK_DSN_HARD_GATE = BLOCKED
+```
+
+**The external wait this gate was named for (`BLOCKED_WAITING_IHS`) is resolved** — the
+program owner has supplied and accepted the E1/E2/E4/E5-substance evidence, and BLOCKER 2/3 are
+closed in full. **The gate itself stays `BLOCKED`, for two reasons neither of which this task
+may close unilaterally:**
+
+1. **`F3-C2-ERR-002` §9 Stage 4 step 1 requires the subprocessor-register update to be
+   MERGED**, not merely written and committed. The register update exists
+   (`docs/compliance/62-kvkk-subprocessor-register.md` §1a and the row-`1a`/`7c` reconciliation
+   in §7 and §9) but lives only on this task's branch, in draft PR #467. Merging PR #467 is a
+   separate, program-owner-authorized action this task does not take (see the task's own
+   instruction not to mark the PR ready for merge).
+2. **Counsel confirmation is outstanding** on two related, unresolved items: `F3-C2-ERR-002`
+   §7.3's `COUNSEL REVIEW PENDING` marker on the IHS hosting relationship's precise
+   subprocessor characterization, and the `I1–I5` items, which have no discrete definition to
+   confirm against (§15.2). Neither is resolved by supplying the E1/E2/E4/E5-substance facts
+   above — those facts are necessary evidence, not a substitute for counsel sign-off, and the
+   register itself (§0 classification legend) explicitly disclaims making legal determinations.
+
+**Exact missing artifacts/actions to close the gate:**
+
+- Merge `docs/compliance/62-kvkk-subprocessor-register.md`'s §1a update (this PR or a
+  follow-up) to `main`.
+- Obtain counsel confirmation of the IHS hosting relationship's subprocessor characterization
+  and DPA sufficiency (`F3-C2-ERR-002` §7.3), and either a discrete `I1–I5` definition or an
+  explicit counsel statement that the §1a evidence is sufficient without one.
+- Only after both of the above: proceed to `F3-C2-ERR-002` §9 Stage 3 (deploy `main` with DSN
+  still unset) and Stage 4 (set the real DSN) — neither is authorized by this task.
+
+### 15.4 Lifecycle (R1, additive — does not rewrite §13 above)
+
+```
+AGENT_COMPLETED       = YES   (repository/documentation scope only)
+TESTS_PASSED          = N/A — no source/runtime/test file changed by R1 (see §14 above,
+                         unchanged; git diff --check clean)
+PR_OPENED             = YES  (#467, unchanged, still DRAFT)
+MERGED                = NO
+DEPLOYED              = NO
+PRODUCTION_VERIFIED   = NO (repository/register facts only; no NoraMedi telemetry event exists)
+TELEMETRY_ACTIVE      = NO
+DSN_ACTIVE             = NO
+SYNTHETIC_EVENT_VERIFIED = NO
+```
+
+`F3-SEC-EXIT-001` §5 item 10 = **`NOT_SATISFIED`** · `F3_EXIT_CRITERION_2` = **`NOT_SATISFIED`**
+· `F3_EXIT_GATE` = **`NOT SATISFIED`** · `F3_COMPLETE` = **`NO`** · `F4_TRANSITION_AUTHORIZED` =
+**`NO`** · `F3-C2-ERR-004 = BLOCKED_WAITING_COUNSEL_AND_MERGE`** (narrowed from
+`BLOCKED_WAITING_IHS` — the IHS external wait is resolved; what remains is the repository-side
+merge gate and counsel sign-off, both internal to the program, not external to a third party).
+
+### 15.5 Exact next task
+
+1. **Program owner:** decide whether to merge PR #467 as-is (documentation/evidence/register
+   reconciliation only — no runtime, schema, or route change; CI 13/13 at head) or hold it
+   pending further review.
+2. **Program owner / counsel:** resolve `F3-C2-ERR-002` §7.3's `COUNSEL REVIEW PENDING` marker
+   and the `I1–I5` definition gap (§15.2).
+3. **Only after 1 and 2:** `F3-C2-ERR-002` §9 Stage 3 (deploy `main` with `SENTRY_DSN` still
+   unset) and Stage 4 (set the real DSN, from a real `noramedi` GlitchTip organization/project —
+   which also does not yet exist and is explicitly **not** created by this task), then Stage 5/6
+   synthetic verification via the already-committed
+   `server/src/scripts/verifyErrorTrackingDelivery.ts`.
+
+This task does **not** create the real NoraMedi GlitchTip organization/project or DSN, even
+though the hard-gate analysis above narrows toward eventual closure — that remains a
+subsequent, separately authorized task, exactly as scoped.
