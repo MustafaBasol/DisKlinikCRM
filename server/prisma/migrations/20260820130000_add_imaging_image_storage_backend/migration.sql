@@ -1,0 +1,114 @@
+-- F4-IMAGING-001-R6 — authoritative per-object storage placement for ImagingImage.
+--
+-- WHY (R5 Finding B, the accepted production-activation blocker): nothing in
+-- the database recorded WHICH backend holds a given imaging object.
+-- "ImagingImage"."filePath" stores a storage key, and that key is deliberately
+-- backend-independent (the same string is used for local disk, legacy S3 and
+-- VPS2). Placement was therefore inferred at read time from the global
+-- IMAGING_STORAGE_BACKEND environment variable — global runtime configuration
+-- used as a proxy for historical, per-object physical placement. After the
+-- first VPS2-only write, unsetting that variable silently reclassified those
+-- objects as legacy and made them unreadable. This column removes that
+-- ambiguity: configuration decides where NEW objects are written; this column
+-- decides where an EXISTING object is read from.
+--
+-- EXPAND-ONLY, and deliberately the smallest possible change:
+--   * ADD COLUMN only. No DROP, no ALTER TYPE, no RENAME, no data statement,
+--     no index, no constraint.
+--   * NULLABLE, with NO DEFAULT. On PostgreSQL 11+ a nullable ADD COLUMN with
+--     no default performs NO TABLE REWRITE: it updates the catalog only, so
+--     the EXECUTION WORK ONCE THE LOCK IS HELD is independent of row count.
+--     "ImagingImage" row count is therefore not a risk factor here.
+--
+--     THAT IS NOT THE SAME AS "safe at any time". The statement still needs a
+--     brief ACCESS EXCLUSIVE lock on "ImagingImage", and ACQUIRING that lock
+--     can WAIT — behind any concurrent transaction already holding a
+--     conflicting lock on the table (including a long-running read: ACCESS
+--     EXCLUSIVE conflicts with ACCESS SHARE), and, once it is queued, behind
+--     everything that then queues behind it. The catalog-only property bounds
+--     how long the lock is HELD, not how long it takes to GET. Deploy
+--     accordingly: run it inside the operator-approved migration window, and
+--     ABORT/STOP THE DEPLOY if the migration cannot acquire its lock within
+--     that window's approved timeout rather than letting it sit at the head of
+--     a growing lock queue and stall imaging traffic. This migration
+--     deliberately sets no session lock_timeout/statement_timeout of its own:
+--     this repository has no such convention in any existing migration (none
+--     issues a SET), and adding one here would make this file the only place
+--     that silently decides a production timeout policy. The bound belongs to
+--     the deploy procedure that runs `prisma migrate deploy`, where the
+--     operator can see and approve it.
+--   * ZERO BACKFILL. NULL is the meaningful, correct value for every existing
+--     row and carries real information — "written before this column existed"
+--     (pre-R6) — which readers interpret deterministically as legacy storage.
+--     See below for why that interpretation is a fact, not a guess.
+--
+-- TEXT, not a native enum type, matching this schema's convention for closed
+-- vocabularies (gender / patientStatus / source / pregnancyStatus /
+-- bloodGroup — see 20260819130000_add_patient_blood_group lines 13-18). The
+-- accepted values are enforced in one place,
+-- `resolveImagingStoragePlacement` in src/services/imagingRemoteStorage.ts,
+-- and asserted by tests. The two tokens ('legacy', 'vps2') are reused verbatim
+-- from the pre-existing `ImagingStorageBackend` type in that same module, so
+-- there is exactly one vocabulary for "which imaging backend", not two that
+-- can drift.
+--
+-- WHY NOT `NOT NULL DEFAULT 'legacy'`: on PG 11+ a constant default is also
+-- catalog-only, so this is not a lock argument. It is rejected because (a) it
+-- would collapse "recorded as legacy" and "never recorded" into one
+-- indistinguishable value, fabricating a placement claim for historical rows
+-- exactly as 20260819130000 rejected a placeholder blood group; and (b) it
+-- would be FAIL-OPEN during the expand window — the currently deployed release
+-- does not write this column, so every row it inserts would be stamped
+-- 'legacy' by the database default even if the operator had activated VPS2.
+-- NULL makes that same window produce an honest "unrecorded" value.
+--
+-- WHY NULL IS SAFELY READ AS LEGACY (evidence, not assumption): VPS2 imaging
+-- storage has never been activated in production. IMAGING_STORAGE_BACKEND is
+-- unset in production (it is commented out in server/.env.example line 250 and
+-- documented there as off by default), and the VPS2 object store is classified
+-- STORAGE_MODE = SYNTHETIC_STAGING_ONLY with no application network path,
+-- no client CA trust and no SSE capability
+-- (docs/program/evidence/F4-IMAGING-001-R5_BACKUP_SOURCE_READ_AND_VPS2_STAGING_EVIDENCE.md
+-- §5-§6, §8). No persisted production row's bytes can therefore be anywhere
+-- but legacy storage.
+--
+-- NO SECRETS / NO ENDPOINTS: this column holds a logical placement label only.
+-- Bucket, endpoint, region and credentials remain environment configuration
+-- and are never persisted to the database (KVKK secret-hygiene requirement).
+--
+-- ROLLBACK: none required, and a destructive DROP COLUMN is NOT the rollback
+-- path. The previously deployed release never references this column, and
+-- because it is nullable with no default every INSERT that release performs
+-- remains valid. Once any row has been written with 'vps2', this column is the
+-- ONLY record of that placement — dropping it destroys the evidence and makes
+-- those objects unreadable, which is the very failure R6 exists to prevent.
+-- Roll back application activation (leave IMAGING_STORAGE_BACKEND unset)
+-- instead. If the column is ever genuinely to be retired, the contract step is
+-- a separate, later migration, and only after proving no row holds 'vps2':
+--   ALTER TABLE "ImagingImage" DROP COLUMN "storageBackend";
+--
+-- TIMESTAMP: 20260820130000, not the round 12:00:00 slot this repo usually
+-- picks. A pre-PR re-check of the migration chain found that the concurrently
+-- running Migration R10 lane had, in the interval, committed
+-- 20260820120000_add_patient_district_contact_points_and_preserved_source_values
+-- on feature/f3-data-mig-r10-final-coverage. The two migrations are entirely
+-- disjoint (that one adds Patient.district plus two new tables and never
+-- mentions "ImagingImage"), so there is no semantic conflict — but two
+-- directories claiming the same instant is a chain-hygiene problem, and this
+-- one moved rather than the other. R10's migration was NOT read for content
+-- beyond confirming disjointness, and was NOT edited, renamed, reordered or
+-- combined with.
+--
+-- Hand-authored per this repo's convention (see
+-- 20260819130000_add_patient_blood_group and
+-- 20260814120000_add_recovery_drill_run). Deliberately hand-authored rather
+-- than pasted from `prisma migrate diff`, whose output for this schema also
+-- carries unrelated pre-existing drift; only this task's own object is
+-- declared here. Equivalence to the schema is proven the stronger way instead:
+-- CI Layers 3 and 4 apply the whole chain to a fresh disposable PostgreSQL
+-- (`prisma migrate deploy`, both reporting step "ok") and then exercise
+-- `ImagingImage.storageBackend` through the generated Prisma client for real
+-- reads and writes. A column that did not match the schema would fail there.
+
+-- AlterTable
+ALTER TABLE "ImagingImage" ADD COLUMN "storageBackend" TEXT;

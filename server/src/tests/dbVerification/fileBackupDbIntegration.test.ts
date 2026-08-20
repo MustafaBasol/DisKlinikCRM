@@ -673,7 +673,23 @@ async function main() {
     return `${clinicId}/${randomUUID()}.bin`;
   }
 
-  async function createImagingRow(clinicId: string, studyId: string, key: string, size: number) {
+  /**
+   * F4-IMAGING-001-R6: `storageBackend` is now an EXPLICIT argument rather
+   * than something the reader infers from the global flag. Passing it here is
+   * not a test convenience — it is what the production write path does:
+   * `saveImagingFile()` returns the backend that actually accepted the bytes
+   * and `imagingIngestCore.ts` persists exactly that value on the row.
+   *
+   * `null` is the pre-R6 row shape ("written before this column existed"),
+   * which readers interpret as legacy storage.
+   */
+  async function createImagingRow(
+    clinicId: string,
+    studyId: string,
+    key: string,
+    size: number,
+    storageBackend: 'legacy' | 'vps2' | null = null,
+  ) {
     return prisma.imagingImage.create({
       data: {
         clinicId,
@@ -683,6 +699,7 @@ async function main() {
         fileSize: size,
         mimeType: 'application/octet-stream',
         filePath: key,
+        storageBackend,
       },
     });
   }
@@ -714,19 +731,27 @@ async function main() {
   await adminS3.send(new PutObjectCommand({ Bucket: imagingBucketName, Key: vps2KeyA, Body: vps2ContentA }));
   // Deliberately NO writePrimaryFile() — these bytes exist ONLY in VPS2
   // object storage, exactly like an imaging object ingested after activation.
-  const vps2ImagingRowA = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, vps2KeyA, vps2ContentA.length);
+  const vps2ImagingRowA = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, vps2KeyA, vps2ContentA.length, 'vps2');
 
   const vps2ContentB = crypto.randomBytes(3072);
   const vps2KeyB = syntheticImagingKey(fixtures.crossOrgClinicId);
   await adminS3.send(new PutObjectCommand({ Bucket: imagingBucketName, Key: vps2KeyB, Body: vps2ContentB }));
-  const vps2ImagingRowB = await createImagingRow(fixtures.crossOrgClinicId, imagingStudyB.id, vps2KeyB, vps2ContentB.length);
+  const vps2ImagingRowB = await createImagingRow(fixtures.crossOrgClinicId, imagingStudyB.id, vps2KeyB, vps2ContentB.length, 'vps2');
 
-  // ── 5. REMOTE CONFIRMED ABSENT + LEGACY PRESENT -> controlled fallback ──
+  // ── 5. PRE-R6 ROW (NULL placement) WHILE THE WRITE FLAG IS vps2 ─────────
+  //
+  // Under R5 this was "remote confirmed absent -> controlled legacy fallback":
+  // the reader probed VPS2 first because the flag was on, got a 404, and fell
+  // back. Under R6 the row's own placement decides, and a NULL placement means
+  // "written before the column existed", i.e. legacy — so the legacy object is
+  // read directly and VPS2 is never probed at all. The observable outcome and
+  // every assertion below are deliberately unchanged; what changed is that the
+  // outcome no longer depends on a 404 round-trip, and therefore no longer
+  // depends on the flag's current value (see case 5b).
   const fallbackContent = crypto.randomBytes(1536);
   const fallbackKey = await writePrimaryFile(fixtures.defaultClinicId, fallbackContent);
-  // Deliberately NOT put into the imaging bucket: a VPS2 GET resolves a real
-  // 404, which is "confirmed absent", the one case allowed to fall back.
-  const fallbackImagingRow = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, fallbackKey, fallbackContent.length);
+  // Deliberately NOT put into the imaging bucket.
+  const fallbackImagingRow = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, fallbackKey, fallbackContent.length, null);
 
   await test('2. VPS2-ONLY OBJECT: an ImagingImage whose bytes exist only in VPS2 object storage is backed up successfully (this is the Finding A regression)', async () => {
     const vps2Run = await runFileBackup({ trigger: 'manual' });
@@ -750,9 +775,9 @@ async function main() {
     assertEqual(missing.length, 0, `no VPS2-backed ImagingImage may be recorded as missing_source (found ${JSON.stringify(missing)})`);
   }, 'vps2-finding-a-4-not-missing-source');
 
-  await test('5. CONFIRMED-ABSENT FALLBACK: a VPS2 404 with a legacy object present falls back to legacy and backs up the legacy bytes', async () => {
+  await test('5. PRE-R6 ROW: a NULL-placement ImagingImage backs up from legacy storage even while the global write backend is vps2', async () => {
     const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: fallbackImagingRow.id } });
-    assertEqual(entry.status, 'verified', 'confirmed-absent-remote + legacy-present must back up via the controlled legacy fallback');
+    assertEqual(entry.status, 'verified', 'a pre-R6 row must still back up while the write flag is vps2');
     assertEqual(entry.sourceChecksumSha256, sha256Hex(fallbackContent), 'the bytes backed up are the legacy object bytes');
   }, 'vps2-finding-a-5-confirmed-absent-legacy-fallback');
 
@@ -794,7 +819,7 @@ async function main() {
   // A legacy object DOES exist at this key — so a `verified` result here
   // would prove a silent legacy fallback on an unavailable remote, which the
   // contract forbids.
-  const outageImagingRow = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, outageKey, outageContent.length);
+  const outageImagingRow = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, outageKey, outageContent.length, 'vps2');
 
   const attachmentContent = crypto.randomBytes(512);
   const attachmentKey = await writePrimaryFile(fixtures.defaultClinicId, attachmentContent);
@@ -849,6 +874,125 @@ async function main() {
     assertEqual(entry.sourceChecksumSha256, sha256Hex(labAttachmentContent), 'LabOrderAttachment bytes unchanged');
     assertEqual(entry.destinationKey, `file-backups/lab-attachments/${fixtures.defaultClinicId}/${labAttachmentDuringOutage.id}.bin`, 'LabOrderAttachment destination key unchanged');
   }, 'vps2-finding-a-8-lab-attachment-unaffected');
+
+  // ═══════ F4-IMAGING-001-R6: PLACEMENT SURVIVES A CONFIGURATION ROLLBACK ══
+  //
+  // Everything above runs with IMAGING_STORAGE_BACKEND=vps2 set. R5's Finding B
+  // was that the read path could not tell where an object lived once that flag
+  // went away, so an operator who rolled the flag back lost access to every
+  // VPS2-resident object — and the backup sweep recorded them as
+  // `missing_source`, i.e. as data loss. These cases are the rollback arm: the
+  // WRITE flag is unset, the IMAGING_S3_* connection settings stay configured
+  // (which is the documented rollback contract in .env.example), and the rows'
+  // own recorded placement must still drive the source read.
+  section('=== R6: per-object placement after a global-flag rollback ===');
+
+  /** VPS2 connection settings WITHOUT activating VPS2 as the write backend — the post-rollback production shape. */
+  function rollbackVps2WriteFlagOnly(overrides: { accessKeyId?: string } = {}): void {
+    enableVps2ImagingMode(overrides);
+    delete process.env.IMAGING_STORAGE_BACKEND;
+    remoteImaging.__resetImagingS3ClientForTest();
+  }
+
+  const r6RemoteContent = crypto.randomBytes(5120);
+  const r6RemoteKey = syntheticImagingKey(fixtures.defaultClinicId);
+  await adminS3.send(new PutObjectCommand({ Bucket: imagingBucketName, Key: r6RemoteKey, Body: r6RemoteContent }));
+  // Bytes exist ONLY in VPS2 — no writePrimaryFile.
+  const r6RemoteRow = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, r6RemoteKey, r6RemoteContent.length, 'vps2');
+
+  // A legacy-placed row created during the same window, to prove the reverse
+  // direction: an explicit 'legacy' row is never routed at VPS2.
+  const r6LegacyContent = crypto.randomBytes(2560);
+  const r6LegacyKey = await writePrimaryFile(fixtures.defaultClinicId, r6LegacyContent);
+  const r6LegacyRow = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, r6LegacyKey, r6LegacyContent.length, 'legacy');
+
+  const r6AttachmentContent = crypto.randomBytes(640);
+  const r6AttachmentKey = await writePrimaryFile(fixtures.defaultClinicId, r6AttachmentContent);
+  const r6Attachment = await prisma.patientAttachment.create({
+    data: {
+      clinicId: fixtures.defaultClinicId,
+      patientId: patientA.id,
+      fileName: 'r6-unaffected.bin',
+      originalName: 'r6-unaffected.bin',
+      fileSize: r6AttachmentContent.length,
+      mimeType: 'application/octet-stream',
+      filePath: r6AttachmentKey,
+      uploadedById: staffA.id,
+    },
+  });
+
+  const r6LabContent = crypto.randomBytes(896);
+  const r6LabKey = await writePrimaryFile(fixtures.defaultClinicId, r6LabContent);
+  const r6LabAttachment = await prisma.labOrderAttachment.create({
+    data: {
+      clinicId: fixtures.defaultClinicId,
+      labWorkOrderId: labWorkOrder.id,
+      fileName: 'r6-unaffected-lab.bin',
+      originalName: 'r6-unaffected-lab.bin',
+      fileSize: r6LabContent.length,
+      mimeType: 'application/octet-stream',
+      filePath: r6LabKey,
+      uploadedById: staffA.id,
+    },
+  });
+
+  rollbackVps2WriteFlagOnly();
+
+  await test('R6-10. ROLLBACK: an explicit vps2 ImagingImage is still backed up from VPS2 after IMAGING_STORAGE_BACKEND is unset (R5 Finding B, closed)', async () => {
+    assertEqual(process.env.IMAGING_STORAGE_BACKEND, undefined, 'precondition: the global write backend really is unset');
+    await runFileBackup({ trigger: 'manual' });
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: r6RemoteRow.id } });
+    assert(entry.status !== 'missing_source', `a VPS2-placed object must not become missing_source after a flag rollback (got "${entry.status}")`);
+    assertEqual(entry.status, 'verified', 'the VPS2-placed object is read from VPS2 and verified');
+    assertEqual(entry.sourceChecksumSha256, sha256Hex(r6RemoteContent), 'the bytes backed up are the VPS2 bytes');
+    assertEqual(entry.destinationChecksumSha256, sha256Hex(r6RemoteContent), 'destination re-read checksum matches');
+  }, 'r6-10-vps2-placement-survives-flag-rollback');
+
+  await test('R6-2b. An explicit legacy ImagingImage created in the same window is read from legacy, never routed at VPS2', async () => {
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: r6LegacyRow.id } });
+    assertEqual(entry.status, 'verified', 'an explicit legacy row backs up from legacy storage');
+    assertEqual(entry.sourceChecksumSha256, sha256Hex(r6LegacyContent), 'the bytes backed up are the legacy bytes');
+  }, 'r6-2b-explicit-legacy-row-reads-legacy');
+
+  await test('R6-12. PatientAttachment is unaffected by the placement change', async () => {
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: r6Attachment.id } });
+    assertEqual(entry.status, 'verified', 'PatientAttachment still verifies');
+    assertEqual(entry.sourceChecksumSha256, sha256Hex(r6AttachmentContent), 'PatientAttachment bytes unchanged');
+    assertEqual(entry.destinationKey, `file-backups/attachments/${fixtures.defaultClinicId}/${r6Attachment.id}.bin`, 'PatientAttachment destination key unchanged');
+  }, 'r6-12-patient-attachment-unaffected');
+
+  await test('R6-13. LabOrderAttachment is unaffected by the placement change', async () => {
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: r6LabAttachment.id } });
+    assertEqual(entry.status, 'verified', 'LabOrderAttachment still verifies');
+    assertEqual(entry.sourceChecksumSha256, sha256Hex(r6LabContent), 'LabOrderAttachment bytes unchanged');
+    assertEqual(entry.destinationKey, `file-backups/lab-attachments/${fixtures.defaultClinicId}/${r6LabAttachment.id}.bin`, 'LabOrderAttachment destination key unchanged');
+  }, 'r6-13-lab-attachment-unaffected');
+
+  // ── R6-11: provider error with the write flag ALREADY rolled back ────────
+  //
+  // This is the negative control that R5 could not express at all. The row is
+  // recorded 'vps2', the provider is broken (403, not 404), a legacy object
+  // DOES exist at the same key, and the global write flag is UNSET. Under R5
+  // the reader would never have contacted VPS2 and would have happily backed
+  // up the unrelated legacy object as a success. It must be `failed`.
+  const r6OutageContent = crypto.randomBytes(1280);
+  const r6OutageKey = await writePrimaryFile(fixtures.defaultClinicId, r6OutageContent);
+  const r6OutageRow = await createImagingRow(fixtures.defaultClinicId, imagingStudy.id, r6OutageKey, r6OutageContent.length, 'vps2');
+
+  rollbackVps2WriteFlagOnly({ accessKeyId: 'definitely-not-a-valid-access-key' });
+
+  await test('R6-11. PROVIDER ERROR AFTER ROLLBACK: a broken VPS2 backend makes a vps2-placed row FAIL — not missing_source, and never silently satisfied from the same-key legacy object', async () => {
+    assertEqual(process.env.IMAGING_STORAGE_BACKEND, undefined, 'precondition: the global write backend really is unset');
+    await runFileBackup({ trigger: 'manual' });
+    const entry = await prisma.fileBackupEntry.findFirstOrThrow({ where: { sourceRecordId: r6OutageRow.id } });
+    assert(entry.status !== 'missing_source', `a provider outage must never be recorded as missing_source (got "${entry.status}")`);
+    assert(entry.status !== 'verified', `a provider outage must not be silently satisfied from the legacy object at the same key (got "${entry.status}")`);
+    assertEqual(entry.status, 'failed', 'a provider outage surfaces as a failed backup entry even with the write flag off');
+    assert(
+      entry.sourceChecksumSha256 !== sha256Hex(r6OutageContent),
+      'the legacy bytes at that key must not have been read at all',
+    );
+  }, 'r6-11-provider-error-after-rollback-is-failure');
 
   disableVps2ImagingMode();
   await fs.rm(vps2DestDir, { recursive: true, force: true }).catch(() => {});
