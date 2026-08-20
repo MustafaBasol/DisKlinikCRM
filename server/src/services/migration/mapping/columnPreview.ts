@@ -40,8 +40,30 @@ const HIDDEN_ADDRESS_LABEL = '[Adres içeriği — önizleme gizlendi]';
  * column is under a KVKK Art. 6 legal hold and is never written".
  */
 const HIDDEN_LEGAL_BLOCKED_LABEL = '[KVKK Madde 6 — hukuki gerekçeyle gizlendi]';
+/**
+ * A THIRD distinct hidden label, for mapping state SENSITIVE_REVIEW_REQUIRED
+ * (F3-DATA-MIG-TODAY-001-FINAL-R7). Kept apart from both siblings because the
+ * three say genuinely different things to a reviewer:
+ *   HIDDEN_FREETEXT_LABEL      — heuristic: "this LOOKS sensitive"
+ *   HIDDEN_LEGAL_BLOCKED_LABEL — decided: "this is never written"
+ *   this one                   — decided: "this IS special-category, it CAN be
+ *                                migrated, and you must decide where"
+ * The VALUE is masked exactly as strongly as it was under LEGAL_BLOCKED — the
+ * R7 policy change moves a column's DISPOSITION, and must never be a way to
+ * leak special-category cell content to a browser that could not see it
+ * before.
+ */
+const HIDDEN_SENSITIVE_REVIEW_LABEL = '[Özel nitelikli veri — inceleme için gizlendi]';
 
-export type ColumnSensitivity = 'tckn' | 'phone' | 'email' | 'address' | 'freetext' | 'low' | 'legalBlocked';
+export type ColumnSensitivity =
+  | 'tckn'
+  | 'phone'
+  | 'email'
+  | 'address'
+  | 'freetext'
+  | 'low'
+  | 'legalBlocked'
+  | 'sensitiveReview';
 
 export interface ColumnPreviewSample {
   /** 1-based data-row number (CanonicalRow.rowNumber), so an operator can
@@ -77,6 +99,11 @@ export function classifyColumnSensitivity(
   mappingState?: MappingState,
 ): ColumnSensitivity {
   if (mappingState === 'LEGAL_BLOCKED') return 'legalBlocked';
+  // Same fail-closed rule, same reason: a decided policy classification must
+  // short-circuit every heuristic. KANGURUBU is the standing example — no
+  // destination, an unrecognized header and short values like "A Rh+" that a
+  // length/keyword heuristic reads as low-risk.
+  if (mappingState === 'SENSITIVE_REVIEW_REQUIRED') return 'sensitiveReview';
   if (destinationType === 'identity') return 'tckn';
   if (destinationType === 'phone') return 'phone';
   if (destinationType === 'email') return 'email';
@@ -143,6 +170,8 @@ function formatSample(text: string, sensitivity: ColumnSensitivity): string {
       return HIDDEN_FREETEXT_LABEL;
     case 'legalBlocked':
       return HIDDEN_LEGAL_BLOCKED_LABEL;
+    case 'sensitiveReview':
+      return HIDDEN_SENSITIVE_REVIEW_LABEL;
     case 'low':
     default:
       return trimmed.length > LOW_RISK_MAX_CHARS ? `${trimmed.slice(0, LOW_RISK_MAX_CHARS)}…` : trimmed;

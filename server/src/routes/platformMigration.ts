@@ -69,10 +69,15 @@ import {
   profileColumns,
 } from '../services/migration/parser/canonicalParser.js';
 import { suggestMappings } from '../services/migration/mapping/mappingEngine.js';
-import { validateMappings } from '../services/migration/mapping/validateMapping.js';
+import {
+  validateMappings,
+  isUndecidedMappingState,
+} from '../services/migration/mapping/validateMapping.js';
+import { evaluateDataLossGate } from '../services/migration/mapping/dataLossGate.js';
 import { normalizeHeader } from '../services/migration/mapping/normalizeHeader.js';
 import { buildColumnPreviews } from '../services/migration/mapping/columnPreview.js';
 import { FIRST_CUSTOMER_MATRIX_BY_FIELD } from '../services/migration/mapping/firstCustomerMatrix.js';
+import { UNNAMED_COLUMN_PREFIX } from '../services/migration/parser/canonicalParser.js';
 import { runDryRun, assertExecutable } from '../services/migration/dryRun.js';
 import {
   executeMigrationRun,
@@ -415,9 +420,10 @@ router.post('/migrations/runs/:id/analyze', async (req: PlatformAdminRequest, re
       mappingStateByIndex,
     );
 
-    const unresolved = suggestions.filter(
-      (s) => s.mappingState === 'MANUAL_REQUIRED' || s.mappingState === 'AUTO_REVIEW',
-    ).length;
+    // ONE definition of "still needs a human", shared with validateMappings.
+    // Hard-coding the list here is how a run ends up advertising MAPPING_READY
+    // while the validator reports the same mapping as invalid.
+    const unresolved = suggestions.filter((s) => isUndecidedMappingState(s.mappingState)).length;
 
     const fromStatus = run.status as MigrationRunStatus;
     const mappingStatus: MigrationRunStatus = unresolved > 0 ? 'MAPPING_REQUIRED' : 'MAPPING_READY';
@@ -462,6 +468,10 @@ router.post('/migrations/runs/:id/analyze', async (req: PlatformAdminRequest, re
           sourceField: s.sourceField,
           sourceIndex: s.sourceIndex,
           sourceNormalized: s.sourceNormalized || normalizeHeader(s.sourceField),
+          // The parser's authoritative headerless flag, persisted so the
+          // mapping API can answer "does this column have an original
+          // header?" long after the workbook has been put away.
+          sourceHeaderWasBlank: s.sourceHeader === null,
           destinationField: s.destinationField,
           transform: s.transform,
           composeOrder: s.composeOrder,
@@ -538,29 +548,92 @@ async function loadMappingState(db: Prisma.TransactionClient, runId: string) {
     original: m.sourceField,
     normalized: m.sourceNormalized,
     index: m.sourceIndex,
+    // Carried back so validation and the wire DTO see the same authoritative
+    // fact the parser produced. `null` (a row written before the column
+    // existed) deliberately becomes `undefined`, i.e. "unknown", NOT `false`:
+    // claiming a column definitely had a header when the evidence was never
+    // recorded is precisely the kind of confident guess this flag replaced.
+    headerWasBlank: m.sourceHeaderWasBlank ?? undefined,
   }));
   return { mappings, headers, headerColumnCount: run?.headerColumnCount ?? headers.length };
 }
 
 /**
- * Attach a wire-only, deterministic explanation to every LEGAL_BLOCKED row so
- * the mapping screen can tell an operator WHY, not just THAT, a column is
- * locked (F3-DATA-MIG-TODAY-001-UI-006-R6). Sourced from the first-customer
- * matrix's own `note` field (firstCustomerMatrix.ts) — the same deterministic
- * policy record that decided LEGAL_BLOCKED in the first place — never a new
- * legal conclusion invented at this layer. Computed at response time only:
- * NOT a database column, so no schema migration is needed and nothing new is
- * persisted. A source system the matrix doesn't cover (or a byte-exact header
- * the matrix doesn't have an entry for) simply gets `policyNote: null`; the
- * UI falls back to the existing `reason` label in that case.
+ * Shape a persisted mapping row into the wire DTO the mapping screen expects.
+ *
+ * Everything added here is COMPUTED AT RESPONSE TIME from columns the row
+ * already has. Nothing new is persisted by this function.
+ *
+ * `policyNote` (F3-DATA-MIG-TODAY-001-UI-006-R6) tells an operator WHY, not
+ * just THAT, a column is withheld. It is read from the first-customer matrix's
+ * own `note` — the same deterministic policy record that produced the state in
+ * the first place — and is never a fresh legal conclusion invented at this
+ * layer. It now covers SENSITIVE_REVIEW_REQUIRED as well as LEGAL_BLOCKED,
+ * because a column the operator is being ASKED to decide about needs the
+ * recorded reasoning at least as much as one that is simply withheld. A source
+ * system the matrix does not cover gets `null` and the UI falls back to the
+ * `reason` label.
+ *
+ * `sourceHeader` / `sourceLabel` FIX A PRODUCTION DEFECT
+ * (F3-DATA-MIG-TODAY-001-FINAL-R7). These endpoints returned the raw Prisma
+ * rows, and `MigrationFieldMapping` has no `sourceLabel` column — so the
+ * client's `MappingDto.sourceLabel` was `undefined` in the browser on every
+ * response. Two visible consequences:
+ *   1. The mapping row's PRIMARY identity line rendered empty, leaving the
+ *      physical coordinate ("Excel sütunu: 43 / AQ") as the only thing an
+ *      operator could see. That is the production screenshot this task exists
+ *      to fix, and it was a missing wire field, not a styling choice.
+ *   2. `mappingMatchesQuery` dereferenced `sourceLabel.toLowerCase()`. Because
+ *      `||` short-circuits it survived any query that matched `sourceField`
+ *      first, and threw a TypeError inside a render-phase `useMemo` on any
+ *      query that did not — i.e. searching for something absent crashed the
+ *      screen instead of showing "no results".
+ *
+ * `sourceHeader` is the ORIGINAL workbook header, or `null` when the header
+ * CELL was blank and `sourceField` therefore holds the synthesized
+ * `COLUMN_<index>` name. It is taken from the persisted
+ * `sourceHeaderWasBlank`, never inferred from the shape of `sourceField` —
+ * see CanonicalHeader's contract in contracts.ts. Rows written before that
+ * column existed carry NULL, and only those fall back to a legacy inference,
+ * which is anchored on `sourceIndex` (`COLUMN_<n>` AT physical column n) and
+ * so is strictly narrower than a bare name match.
  */
-function withPolicyNote<T extends { sourceField: string; state: string }>(
-  mappings: readonly T[],
-): (T & { policyNote: string | null })[] {
-  return mappings.map((m) => ({
-    ...m,
-    policyNote: m.state === 'LEGAL_BLOCKED' ? FIRST_CUSTOMER_MATRIX_BY_FIELD.get(m.sourceField)?.note ?? null : null,
-  }));
+function isLegacyHeaderlessName(sourceField: string, sourceIndex: number): boolean {
+  return sourceField === `${UNNAMED_COLUMN_PREFIX}${sourceIndex}`;
+}
+
+const POLICY_NOTE_STATES = new Set(['LEGAL_BLOCKED', 'SENSITIVE_REVIEW_REQUIRED']);
+
+function toMappingDtos<
+  T extends {
+    sourceField: string;
+    sourceIndex: number;
+    sourceHeaderWasBlank?: boolean | null;
+    state: string;
+  },
+>(mappings: readonly T[]): (T & {
+  policyNote: string | null;
+  sourceHeader: string | null;
+  sourceLabel: string;
+})[] {
+  return mappings.map((m) => {
+    const headerWasBlank =
+      m.sourceHeaderWasBlank ?? isLegacyHeaderlessName(m.sourceField, m.sourceIndex);
+    const sourceHeader = headerWasBlank ? null : m.sourceField;
+    return {
+      ...m,
+      policyNote: POLICY_NOTE_STATES.has(m.state)
+        ? FIRST_CUSTOMER_MATRIX_BY_FIELD.get(m.sourceField)?.note ?? null
+        : null,
+      sourceHeader,
+      // Never undefined. A headerless column falls back to the synthesized
+      // technical name so this field always has SOMETHING; the UI is expected
+      // to prefer `sourceHeader` and render its own localized "no header"
+      // label, because choosing that wording is a presentation decision and
+      // does not belong on the wire.
+      sourceLabel: sourceHeader ?? m.sourceField,
+    };
+  });
 }
 
 router.get('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, res: Response) => {
@@ -568,7 +641,7 @@ router.get('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
     await loadRunOrThrow(runIdParam(req));
     const { mappings, headers } = await loadMappingState(prisma, runIdParam(req));
     res.json({
-      mappings: withPolicyNote(mappings),
+      mappings: toMappingDtos(mappings),
       destinations: DESTINATION_FIELDS,
       validation: validateMappings(mappings, headers),
     });
@@ -672,6 +745,14 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
 
       // Counts only. Never the destinations chosen for named source columns —
       // those are safe, but the count is what an auditor needs.
+      //
+      // F3-DATA-MIG-TODAY-001-R9 adds the two data-loss figures. `ignored` has
+      // always been recorded, but it conflates the profile's RECOMMENDATION
+      // with the operator's DECISION, so on its own it could never answer the
+      // question an auditor actually asks after a migration: how many columns
+      // carrying real data did a human deliberately choose to leave behind?
+      // The gate answers it from the same rows this transaction just wrote.
+      const gate = evaluateDataLossGate(state.mappings);
       const savedMetadata = {
         changed: incoming.length,
         mapped: result.mappedCount,
@@ -679,6 +760,8 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
         blocked: result.blockedCount,
         legalBlocked: result.legalBlockedCount,
         ignored: result.ignoredCount,
+        operatorConfirmedExclusions: gate.operatorConfirmedExcluded,
+        unconfirmedExclusions: gate.systemRecommendedButUnconfirmedExclusions,
         valid: result.valid,
       };
 
@@ -724,7 +807,7 @@ router.put('/migrations/runs/:id/mappings', async (req: PlatformAdminRequest, re
       return { updated: moved, mappings: state.mappings, validation: result };
     }, TX_OPTIONS);
 
-    res.json({ run: updated, mappings: withPolicyNote(mappings), validation });
+    res.json({ run: updated, mappings: toMappingDtos(mappings), validation });
   } catch (error) {
     fail(res, error);
   }
@@ -793,7 +876,7 @@ router.post(
         };
       });
 
-      res.json({ run: updated, mappings: withPolicyNote(mappings), validation, accepted });
+      res.json({ run: updated, mappings: toMappingDtos(mappings), validation, accepted });
     } catch (error) {
       fail(res, error);
     }
@@ -1073,6 +1156,13 @@ router.post('/migrations/runs/:id/dry-run', async (req: PlatformAdminRequest, re
         .filter((m) => m.state === 'LEGAL_BLOCKED')
         .map((m) => m.sourceField),
       unresolvedMappingCount: validation.unresolvedCount,
+      /*
+       * F3-DATA-MIG-TODAY-001-R9. The PERSISTED rows, not the narrowed
+       * `ResolvedMapping` projection: the data-loss gate needs the measured
+       * `sourceProfile` and the operator-decision evidence, and neither
+       * survives that projection.
+       */
+      gateRecords: mappings,
     });
 
     const updated = await transitionRun(
@@ -1090,6 +1180,16 @@ router.post('/migrations/runs/:id/dry-run', async (req: PlatformAdminRequest, re
           expectedCreateCount: summary.expectedCreateCount,
           expectedReuseCount: summary.expectedReuseCount,
           planLimitAllowed: summary.planLimit.allowed,
+          // F3-DATA-MIG-TODAY-001-R9. Counts only — the audit record must be
+          // able to answer "how many columns carrying data were still
+          // unaccounted for at this dry run?" without re-reading the summary
+          // Json, and without naming a single source column in the audit log.
+          dataLossGateSatisfied: summary.dataLossGate?.satisfied ?? false,
+          meaningfulSourceColumns: summary.dataLossGate?.meaningfulSourceColumns ?? 0,
+          operatorConfirmedExclusions: summary.dataLossGate?.operatorConfirmedExcluded ?? 0,
+          unconfirmedExclusions:
+            summary.dataLossGate?.systemRecommendedButUnconfirmedExclusions ?? 0,
+          unmeasuredFillColumns: summary.dataLossGate?.unmeasuredFillColumns ?? 0,
           executable: summary.executable,
           durationMs: summary.durationMs,
         },

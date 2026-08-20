@@ -667,7 +667,8 @@
       "cannotContinue": "La correspondance n'est pas valide — résolvez les problèmes ci-dessus pour continuer.",
       "continue": "Passer à la correspondance des références",
       "headerless": "Sans en-tête",
-      "excelColumn": "Colonne Excel : {{n}} / {{letter}}",
+      "excelColumn": "Colonne Excel : {{letter}} ({{n}})",
+      "jumpToRow": "Aller à cette colonne",
       "sampleRow": "Ligne {{row}} : {{value}}",
       "previewUnavailable": "Cette colonne contient des données mais aucune n'a été trouvée dans la fenêtre d'aperçu — vérifiez attentivement.",
       "legalReason": "Ne peut pas être transféré automatiquement pour des raisons légales. Motif : {{reason}}",
@@ -690,7 +691,9 @@
         "patient.patientStatus": "Statut du patient",
         "patient.chartNumber": "Ancien numéro de dossier",
         "patient.primaryPractitionerId": "Praticien assigné",
-        "patient.identity.tckn": "Numéro d'identité national"
+        "patient.identity.tckn": "Numéro d'identité national",
+        "patient.notes": "Note clinique",
+        "patient.bloodGroup": "Groupe sanguin"
       },
       "groups": {
         "provenance": "Provenance",
@@ -710,6 +713,8 @@
         "gender_tr": "Correspondance de genre TR",
         "deleted_to_status": "Indicateur supprimé → statut",
         "compose_address": "Composition de l'adresse",
+        "compose_notes": "Composition des notes",
+        "blood_group_tr": "Normalisation du groupe sanguin",
         "chart_number": "Numéro de dossier",
         "identity_tckn": "Validation du numéro d'identité national",
         "provenance_source_id": "Identifiant de la source de provenance",
@@ -736,7 +741,8 @@
         "SUMMARY_NOT_TRANSACTION": "Colonne récapitulative, non transactionnelle",
         "SEMANTICS_UNRESOLVED": "Sémantique non résolue",
         "UNKNOWN_HEADER": "En-tête non reconnu",
-        "EMPTY_SOURCE_COLUMN": "Colonne source vide (ignorée automatiquement)"
+        "EMPTY_SOURCE_COLUMN": "Colonne source vide (ignorée automatiquement)",
+        "SPECIAL_CATEGORY_REVIEW": "Donnée de catégorie particulière — vérification requise"
       },
       "states": {
         "AUTO_CONFIDENT": "Automatique (haute confiance)",
@@ -745,11 +751,13 @@
         "BLOCKED": "Bloquée",
         "IGNORE": "Ignorée",
         "LEGAL_BLOCKED": "Blocage légal",
+        "SENSITIVE_REVIEW_REQUIRED": "Données sensibles — vérification requise",
         "RESOLVED": "Résolue"
       },
       "filters": {
         "all": "Toutes",
         "unresolved": "Non résolues uniquement",
+        "unmappedWithData": "Non mappées avec données",
         "blocked": "Bloquées uniquement",
         "legal": "Blocages légaux uniquement",
         "headerless": "Colonnes sans en-tête",
@@ -777,6 +785,7 @@
         "unresolved": "Non résolues",
         "blocked": "Bloquées",
         "legalBlocked": "Blocage légal",
+        "sensitiveReview": "Vérif. sensible",
         "ignored": "Ignorées"
       },
       "errors": {

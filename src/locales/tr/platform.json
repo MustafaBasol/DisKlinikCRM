@@ -667,7 +667,8 @@
       "cannotContinue": "Eşleme geçersiz olduğu için devam edilemiyor — yukarıdaki sorunları çözün.",
       "continue": "Referans Eşlemeye Geç",
       "headerless": "Başlık yok",
-      "excelColumn": "Excel sütunu: {{n}} / {{letter}}",
+      "excelColumn": "Excel sütunu: {{letter}} ({{n}})",
+      "jumpToRow": "Bu sütuna git",
       "sampleRow": "Satır {{row}}: {{value}}",
       "previewUnavailable": "Bu sütunda veri var ama önizleme penceresinde bulunamadı — dikkatli inceleyin.",
       "legalReason": "Yasal nedenle otomatik aktarılamaz. Neden: {{reason}}",
@@ -690,7 +691,9 @@
         "patient.patientStatus": "Hasta Durumu",
         "patient.chartNumber": "Eski dosya / protokol numarası",
         "patient.primaryPractitionerId": "Atanan Hekim",
-        "patient.identity.tckn": "T.C. Kimlik No"
+        "patient.identity.tckn": "T.C. Kimlik No",
+        "patient.notes": "Klinik Not / Önemli Not",
+        "patient.bloodGroup": "Kan Grubu"
       },
       "groups": {
         "provenance": "Köken Bilgisi",
@@ -710,6 +713,8 @@
         "gender_tr": "TR cinsiyet eşleme",
         "deleted_to_status": "Silindi → durum",
         "compose_address": "Adres bileşimi",
+        "compose_notes": "Not bileşimi",
+        "blood_group_tr": "Kan grubu normalizasyonu",
         "chart_number": "Dosya numarası",
         "identity_tckn": "T.C. Kimlik No doğrulama",
         "provenance_source_id": "Köken kaynak kimliği",
@@ -736,7 +741,8 @@
         "SUMMARY_NOT_TRANSACTION": "Özet sütun, işlem değil",
         "SEMANTICS_UNRESOLVED": "Anlamı çözülemedi",
         "UNKNOWN_HEADER": "Tanınmayan başlık",
-        "EMPTY_SOURCE_COLUMN": "Boş kaynak sütunu (otomatik yok sayıldı)"
+        "EMPTY_SOURCE_COLUMN": "Boş kaynak sütunu (otomatik yok sayıldı)",
+        "SPECIAL_CATEGORY_REVIEW": "Özel nitelikli veri — operatör incelemesi gerekli"
       },
       "states": {
         "AUTO_CONFIDENT": "Otomatik (Yüksek Güven)",
@@ -745,11 +751,13 @@
         "BLOCKED": "Engellendi",
         "IGNORE": "Yok Sayıldı",
         "LEGAL_BLOCKED": "Yasal Engel",
+        "SENSITIVE_REVIEW_REQUIRED": "Hassas Veri — İnceleme Gerekli",
         "RESOLVED": "Çözüldü"
       },
       "filters": {
         "all": "Tümü",
         "unresolved": "Sadece çözülmemiş",
+        "unmappedWithData": "Verisi olan eşleşmemişler",
         "blocked": "Sadece engellenmiş",
         "legal": "Sadece yasal engelliler",
         "headerless": "Başlıksız sütunlar",
@@ -777,6 +785,7 @@
         "unresolved": "Çözülmemiş",
         "blocked": "Engellenen",
         "legalBlocked": "Yasal Engelli",
+        "sensitiveReview": "Hassas İnceleme",
         "ignored": "Yok Sayılan"
       },
       "errors": {

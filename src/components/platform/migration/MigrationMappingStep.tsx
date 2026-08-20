@@ -31,8 +31,8 @@ import {
   type MappingFilterId,
   mappingRowVisible,
   formatPercent,
-  parseUnnamedColumnIndex,
-  excelColumnLetter,
+  isHeaderlessMapping,
+  excelColumnCoordinate,
 } from '../../../pages/platformMigrationHelpers';
 import type { ColumnPreviewSampleDto } from '../../../services/platformMigrationApi';
 
@@ -46,6 +46,10 @@ const STATE_BADGE: Record<MappingState, string> = {
   IGNORE: 'badge-gray',
   BLOCKED: 'badge-red',
   LEGAL_BLOCKED: 'badge-red',
+  // Amber, deliberately NOT red: special-category content needs a human
+  // decision, it is not forbidden the way LEGAL_BLOCKED is. The ring keeps it
+  // readable next to MANUAL_REQUIRED's plain yellow.
+  SENSITIVE_REVIEW_REQUIRED: 'badge bg-amber-100 text-amber-800 ring-1 ring-amber-300',
 };
 
 // ── Row ───────────────────────────────────────────────────────────────────────
@@ -58,6 +62,14 @@ interface RowProps {
   destinationGroups: readonly string[];
   saving: boolean;
   canReset: boolean;
+  /**
+   * True while this row is the target an operator jumped to from a validation
+   * issue. MUST be a declared prop: MappingRow is React.memo'd, so a highlight
+   * driven by anything the memo comparison cannot see would never repaint.
+   */
+  isFocusTarget: boolean;
+  /** Registers/unregisters this row's <tr> so the step can scroll it into view. */
+  registerRowRef: (sourceField: string, el: HTMLTableRowElement | null) => void;
   onDestinationChange: (sourceField: string, destinationKey: string) => void;
   onTransformChange: (sourceField: string, transform: TransformName) => void;
   onComposeOrderChange: (sourceField: string, order: number) => void;
@@ -67,13 +79,15 @@ interface RowProps {
 }
 
 const MappingRow: React.FC<RowProps> = React.memo(({
-  mapping, profile, samples, destinations, destinationGroups, saving, canReset,
+  mapping, profile, samples, destinations, destinationGroups, saving, canReset, isFocusTarget, registerRowRef,
   onDestinationChange, onTransformChange, onComposeOrderChange, onMarkIgnore, onMarkBlocked, onResetAuto,
 }) => {
   const { t } = useTranslation(['platform']);
   const isLegalBlocked = mapping.state === 'LEGAL_BLOCKED';
   const isBlocked = mapping.state === 'BLOCKED';
   const isIgnored = mapping.state === 'IGNORE';
+  // SENSITIVE_REVIEW_REQUIRED is deliberately NOT part of this lock: the whole
+  // point of that state is that the operator picks/approves a destination.
   const destSelectionLocked = isLegalBlocked || isBlocked;
   const selectedDest = mapping.destinationField ? destinations.find((d) => d.key === mapping.destinationField) : undefined;
   const nonZeroTypes = profile
@@ -84,24 +98,37 @@ const MappingRow: React.FC<RowProps> = React.memo(({
   // Physical workbook coordinate (F3-DATA-MIG-TODAY-001-UI-006-R6, requirement
   // A) — deterministic from sourceIndex alone, NEVER from the (possibly
   // synthesized) header text, so a garbled or blank header can never be
-  // mistaken for the column's real identity.
-  const excelLetter = excelColumnLetter(mapping.sourceIndex);
-  const isHeaderless = parseUnnamedColumnIndex(mapping.sourceField) !== null;
-  const displayHeader = isHeaderless ? t('platform:migration.mapping.headerless') : mapping.sourceLabel;
+  // mistaken for the column's real identity. Rendered in the single
+  // convention `AQ (43)`: letter first, 1-based physical number in brackets.
+  const coordinate = excelColumnCoordinate(mapping.sourceIndex);
+  // Authoritative headerless test — the server's persisted `sourceHeader`,
+  // not the shape of the synthesized `sourceField` (see isHeaderlessMapping).
+  const isHeaderless = isHeaderlessMapping(mapping);
+  // PRIMARY identity line: the operator's own workbook header, verbatim.
+  // A synthesized `COLUMN_<n>` must NEVER surface here as if it were a real
+  // header — it stays in the `title=` tooltip for support/debugging only.
+  const displayHeader = isHeaderless
+    ? t('platform:migration.mapping.headerless')
+    : (mapping.sourceHeader ?? mapping.sourceLabel ?? mapping.sourceField);
   const previewMissingDespiteData = !!profile && profile.filledCount > 0 && (!samples || samples.length === 0);
 
   return (
-    <tr className={`border-b border-gray-50 dark:border-gray-800 align-top ${isLegalBlocked ? 'bg-amber-50/60 dark:bg-amber-900/10' : isBlocked ? 'bg-red-50/60 dark:bg-red-900/10' : isIgnored ? 'opacity-60' : ''}`}>
+    <tr
+      ref={(el) => registerRowRef(mapping.sourceField, el)}
+      tabIndex={-1}
+      aria-current={isFocusTarget ? 'true' : undefined}
+      className={`border-b border-gray-50 dark:border-gray-800 align-top outline-none ${isFocusTarget ? 'ring-2 ring-inset ring-primary-500 bg-primary-50/40 dark:bg-primary-900/20' : ''} ${isLegalBlocked ? 'bg-amber-50/60 dark:bg-amber-900/10' : isBlocked ? 'bg-red-50/60 dark:bg-red-900/10' : isIgnored ? 'opacity-60' : ''}`}
+    >
       {/* Source */}
       <td className="px-3 py-3 min-w-[180px]">
         <p
-          className={`text-xs font-semibold break-all ${isHeaderless ? 'italic text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}
+          className={`text-sm font-semibold break-all ${isHeaderless ? 'italic text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}
           title={mapping.sourceField}
         >
           {displayHeader}
         </p>
         <p className="text-[11px] text-gray-400 mt-0.5">
-          {t('platform:migration.mapping.excelColumn', { n: mapping.sourceIndex + 1, letter: excelLetter })}
+          {t('platform:migration.mapping.excelColumn', { n: coordinate.number, letter: coordinate.letter })}
         </p>
         {samples && samples.length > 0 && (
           <ul className="mt-1.5 space-y-0.5 border-l-2 border-gray-100 dark:border-gray-800 pl-1.5">
@@ -301,8 +328,15 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
   const [filter, setFilter] = useState<MappingFilterId>('all');
   const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
+  /**
+   * Which row a validation issue sent the operator to. `nonce` exists so that
+   * clicking the SAME issue twice re-runs the scroll/focus effect instead of
+   * being swallowed as an identical state value.
+   */
+  const [focusTarget, setFocusTarget] = useState<{ sourceField: string; nonce: number } | null>(null);
 
   const initialMappingsRef = useRef<Map<string, MappingDto>>(new Map());
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
   // Debounce the free-text filter so the list doesn't re-derive per keystroke.
   useEffect(() => {
@@ -441,10 +475,50 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
     }
   };
 
+  const registerRowRef = useCallback((sourceField: string, el: HTMLTableRowElement | null) => {
+    if (el) rowRefs.current.set(sourceField, el);
+    else rowRefs.current.delete(sourceField);
+  }, []);
+
+  /**
+   * Navigate from a validation issue to the column it is about. STRICTLY a
+   * navigation: it never touches a mapping's state, destination, transform or
+   * compose order, and never triggers a save.
+   *
+   * Both `query` AND `queryInput` are cleared: clearing only the debounced
+   * `query` would let the 250ms debounce effect immediately re-apply the stale
+   * input text and hide the row again a quarter-second after we scrolled to it.
+   */
+  const handleJumpToRow = useCallback((sourceField: string | undefined) => {
+    if (!sourceField) return;
+    const target = (mappings ?? []).find((m) => m.sourceField === sourceField);
+    if (!target) return; // Unknown column — do nothing at all, never throw.
+    setFilter('all');
+    setQueryInput('');
+    setQuery('');
+    setFocusTarget((prev) => ({ sourceField, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, [mappings]);
+
+  /**
+   * Scroll/focus runs in an effect, NOT in the click handler: the row may be
+   * filtered out at click time, so the DOM node only exists after the filter
+   * reset above has re-rendered the table. An effect is committed after that
+   * render, which is exactly the moment the node is available.
+   */
+  useEffect(() => {
+    if (!focusTarget) return;
+    const el = rowRefs.current.get(focusTarget.sourceField);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.focus({ preventScroll: true });
+    const handle = setTimeout(() => setFocusTarget(null), 2000);
+    return () => clearTimeout(handle);
+  }, [focusTarget]);
+
   const visibleMappings = useMemo(() => {
     if (!mappings) return [];
-    return mappings.filter((m) => mappingRowVisible(m, filter, query));
-  }, [mappings, filter, query]);
+    return mappings.filter((m) => mappingRowVisible(m, filter, query, profiles[m.sourceIndex]));
+  }, [mappings, filter, query, profiles]);
 
   const canContinue = !!validation?.valid && !loading && !bulkBusy;
 
@@ -544,6 +618,8 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
                     destinationGroups={DESTINATION_GROUPS}
                     saving={savingField === m.sourceField}
                     canReset={initialMappingsRef.current.has(m.sourceField)}
+                    isFocusTarget={focusTarget?.sourceField === m.sourceField}
+                    registerRowRef={registerRowRef}
                     onDestinationChange={handleDestinationChange}
                     onTransformChange={handleTransformChange}
                     onComposeOrderChange={handleComposeOrderChange}
@@ -568,20 +644,46 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
               <SummaryStat label={t('platform:migration.mapping.summary.unresolved')} value={validation.unresolvedCount} warn={validation.unresolvedCount > 0} />
               <SummaryStat label={t('platform:migration.mapping.summary.blocked')} value={validation.blockedCount} warn={validation.blockedCount > 0} />
               <SummaryStat label={t('platform:migration.mapping.summary.legalBlocked')} value={validation.legalBlockedCount} warn={validation.legalBlockedCount > 0} />
+              <SummaryStat
+                label={t('platform:migration.mapping.summary.sensitiveReview')}
+                value={validation.sensitiveReviewCount ?? 0}
+                attention={(validation.sensitiveReviewCount ?? 0) > 0}
+              />
               <SummaryStat label={t('platform:migration.mapping.summary.ignored')} value={validation.ignoredCount} />
             </div>
             {validation.issues.length > 0 && (
               <ul className="space-y-1.5 mt-2">
-                {validation.issues.map((issue, idx) => (
-                  <li key={`${issue.code}-${idx}`} className="flex items-start gap-2 text-xs text-red-700 dark:text-red-300">
-                    <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-                    <span>
+                {validation.issues.map((issue, idx) => {
+                  const text = (
+                    <>
                       <span className="font-mono font-semibold">{issue.code}</span>
                       {issue.sourceField ? ` — ${issue.sourceField}` : ''}
                       {': '}{issue.message}
-                    </span>
-                  </li>
-                ))}
+                    </>
+                  );
+                  return (
+                    <li key={`${issue.code}-${idx}`} className="flex items-start gap-2 text-xs text-red-700 dark:text-red-300">
+                      <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                      {/* An issue that names a column is a navigation affordance:
+                          a real, keyboard-reachable button that reveals and
+                          focuses that row. An issue with no sourceField has
+                          nowhere to go and stays plain text. */}
+                      {issue.sourceField ? (
+                        <button
+                          type="button"
+                          onClick={() => handleJumpToRow(issue.sourceField)}
+                          title={t('platform:migration.mapping.jumpToRow')}
+                          className="text-left underline decoration-dotted underline-offset-2 hover:decoration-solid rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        >
+                          {text}
+                          <span className="sr-only"> — {t('platform:migration.mapping.jumpToRow')}</span>
+                        </button>
+                      ) : (
+                        <span>{text}</span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
             {!validation.valid && (
@@ -606,9 +708,14 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
   );
 };
 
-const SummaryStat: React.FC<{ label: string; value: number; warn?: boolean }> = ({ label, value, warn }) => (
+/**
+ * `warn` = red (something is wrong). `attention` = amber (a human still has to
+ * look at this, but nothing is broken) — used by the sensitive-review count,
+ * which must not read as an error the way legal blocks do.
+ */
+const SummaryStat: React.FC<{ label: string; value: number; warn?: boolean; attention?: boolean }> = ({ label, value, warn, attention }) => (
   <div className="flex items-center gap-1.5">
-    <span className={`text-lg font-bold ${warn ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>{value}</span>
+    <span className={`text-lg font-bold ${warn ? 'text-red-600 dark:text-red-400' : attention ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-white'}`}>{value}</span>
     <span className="text-xs text-gray-500 dark:text-gray-400 inline-flex items-center gap-0.5">
       <ChevronRight size={11} className="opacity-40" />
       {label}

@@ -264,6 +264,50 @@ model Patient {
   /// Re-identification vector against the physical archive — nulled by
   /// anonymization.
   chartNumber           String?
+  /// F3-DATA-MIG-TODAY-001-R8. Structured ABO/Rh blood group (source
+  /// KANGURUBU). Additive, nullable, no default, zero backfill.
+  ///
+  /// Closed vocabulary, and the ONLY accepted values:
+  ///   A_POSITIVE  A_NEGATIVE  B_POSITIVE  B_NEGATIVE
+  ///   AB_POSITIVE AB_NEGATIVE O_POSITIVE  O_NEGATIVE
+  /// Declared in ONE place, `patientBloodGroupValues` (src/schemas/index.ts),
+  /// which the write schema, the migration destination catalog and the UI all
+  /// validate against.
+  ///
+  /// THERE IS DELIBERATELY NO `UNKNOWN` MEMBER. NULL means "no blood group is
+  /// recorded", and an UNKNOWN token would be indistinguishable from a
+  /// recorded fact that the patient's group is unknown — a clinically
+  /// different claim. A malformed or unrecognized legacy value therefore maps
+  /// to NULL plus a row warning, never to a placeholder and never to a guess:
+  /// Rh is NEVER inferred when the source omits it (see `blood_group_tr` in
+  /// services/migration/mapping/transforms.ts).
+  ///
+  /// Canonical storage is the letter O, never the digit 0. Turkish clinical
+  /// usage writes the O group as "0 Rh+", so "0" is accepted on INPUT and
+  /// rendered as "0 Rh+" in the Turkish UI, but what is stored is O_POSITIVE.
+  ///
+  /// KVKK Art. 6 SPECIAL-CATEGORY health data. It is a `String?` and not a
+  /// Prisma enum on purpose: this repository stores every closed vocabulary
+  /// (gender, patientStatus, source, pregnancyStatus) as a documented String,
+  /// and — decisively — the permanent drift guard in
+  /// tests/migrationPatientSchemaDrift.test.ts enumerates Patient columns by
+  /// filtering PRISMA_SCALAR_TYPES. A native enum column would be invisible to
+  /// that guard forever, i.e. fail-OPEN on anonymization / subject access /
+  /// bulk export for the one field that most needs them.
+  /// NOT on PatientMedicalHistory, which is where the field-gap decision
+  /// package's G-E11 proposed a `bloodType` (and left DEFERRED, unbuilt).
+  /// Two reasons. (1) That model is a VERSIONED clinical record: every row
+  /// requires `recordedById` - a real User who took the history - and a
+  /// per-patient version allocated under an advisory lock. A migration has
+  /// no recording clinician, and naming one would attribute a clinical act
+  /// to a staff member who never performed it; the same reasoning already
+  /// stops a migration creating a User for primaryPractitionerId.
+  /// (2) A blood group is a STABLE patient attribute, not a point-in-time
+  /// history entry that is re-taken and superseded, so versioning it would
+  /// model it as something it is not. Allergies and current medications DO
+  /// belong there, and stay there.
+  /// Nulled by anonymization (services/privacy/patientAnonymization.ts).
+  bloodGroup            String?
   /// F3-DATA-MIG-TODAY-001 (G-E3). The patient's assigned practitioner
   /// (source HASTADOKTOR, resolved to a real User.id through
   /// MigrationReferenceMap). Additive, nullable, zero backfill.
@@ -3936,6 +3980,21 @@ model MigrationFieldMapping {
   sourceIndex      Int
   /// Normalized form used for matching only - never the stored key.
   sourceNormalized String
+  /// TRUE when the worksheet's header CELL for this column was blank, so
+  /// `sourceField` holds the synthesized `COLUMN_<sourceIndex>` name
+  /// (canonicalParser.ts, UNNAMED_COLUMN_PREFIX) rather than a real vendor
+  /// header. Mirrors CanonicalHeader.headerWasBlank, whose contract states
+  /// that a headerless column must be identified by THIS flag and never by
+  /// string-matching the synthesized name - a real vendor header could
+  /// legitimately be "COLUMN_7". Persisting it is what lets the mapping API
+  /// answer "does this column have an original header?" authoritatively after
+  /// the workbook has been put away; without it the flag died at analyze time
+  /// and every consumer was forced back onto the forbidden string match.
+  /// ADDITIVE + NULLABLE: NULL means "recorded before this column existed",
+  /// which readers treat as "unknown, fall back to the legacy inference", so
+  /// no backfill is required and the previous application release runs
+  /// unchanged against this schema.
+  sourceHeaderWasBlank Boolean?
 
   destinationField String?
   /// Named transform contract applied between source and destination, e.g.

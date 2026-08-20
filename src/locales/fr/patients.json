@@ -193,6 +193,8 @@
     "phoneDuplicateBody": "C'est normal pour des enfants ou des membres de la famille. Vous pouvez tout de même enregistrer.",
     "gender": "Genre",
     "genderUnspecified": "Non précisé",
+    "bloodGroup": "Groupe sanguin",
+    "bloodGroupUnspecified": "Non renseigné",
     "chartNumber": "Numéro de dossier",
     "chartNumberPlaceholder": "ex. 10423",
     "primaryPractitioner": "Praticien principal",
@@ -212,6 +214,16 @@
     "male": "Homme",
     "female": "Femme",
     "other": "Autre"
+  },
+  "bloodGroup": {
+    "A_POSITIVE": "A Rh+",
+    "A_NEGATIVE": "A Rh-",
+    "B_POSITIVE": "B Rh+",
+    "B_NEGATIVE": "B Rh-",
+    "AB_POSITIVE": "AB Rh+",
+    "AB_NEGATIVE": "AB Rh-",
+    "O_POSITIVE": "O Rh+",
+    "O_NEGATIVE": "O Rh-"
   },
   "dentalChart": {
     "title": "Schéma dentaire",

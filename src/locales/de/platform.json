@@ -667,7 +667,8 @@
       "cannotContinue": "Die Zuordnung ist ungültig — beheben Sie die obigen Probleme, um fortzufahren.",
       "continue": "Weiter zur Referenzzuordnung",
       "headerless": "Kein Header",
-      "excelColumn": "Excel-Spalte: {{n}} / {{letter}}",
+      "excelColumn": "Excel-Spalte: {{letter}} ({{n}})",
+      "jumpToRow": "Zu dieser Spalte",
       "sampleRow": "Zeile {{row}}: {{value}}",
       "previewUnavailable": "Diese Spalte enthält Daten, aber im Vorschaufenster wurde keine gefunden — bitte sorgfältig prüfen.",
       "legalReason": "Kann aus rechtlichen Gründen nicht automatisch übertragen werden. Grund: {{reason}}",
@@ -690,7 +691,9 @@
         "patient.patientStatus": "Patientenstatus",
         "patient.chartNumber": "Alte Karten-/Aktennummer",
         "patient.primaryPractitionerId": "Zugewiesener Behandler",
-        "patient.identity.tckn": "Nationale Identitätsnummer"
+        "patient.identity.tckn": "Nationale Identitätsnummer",
+        "patient.notes": "Klinische Notiz",
+        "patient.bloodGroup": "Blutgruppe"
       },
       "groups": {
         "provenance": "Herkunft",
@@ -710,6 +713,8 @@
         "gender_tr": "TR-Geschlechtszuordnung",
         "deleted_to_status": "Gelöscht-Kennzeichen → Status",
         "compose_address": "Adresszusammensetzung",
+        "compose_notes": "Notizen-Komposition",
+        "blood_group_tr": "Blutgruppen-Normalisierung",
         "chart_number": "Kartennummer",
         "identity_tckn": "Validierung der Personenkennziffer",
         "provenance_source_id": "Herkunfts-Quellkennung",
@@ -736,7 +741,8 @@
         "SUMMARY_NOT_TRANSACTION": "Zusammenfassungsspalte, keine Transaktion",
         "SEMANTICS_UNRESOLVED": "Bedeutung ungeklärt",
         "UNKNOWN_HEADER": "Unbekannte Kopfzeile",
-        "EMPTY_SOURCE_COLUMN": "Leere Quellspalte (automatisch ignoriert)"
+        "EMPTY_SOURCE_COLUMN": "Leere Quellspalte (automatisch ignoriert)",
+        "SPECIAL_CATEGORY_REVIEW": "Besondere Datenkategorie — Prüfung erforderlich"
       },
       "states": {
         "AUTO_CONFIDENT": "Automatisch (hohe Sicherheit)",
@@ -745,11 +751,13 @@
         "BLOCKED": "Blockiert",
         "IGNORE": "Ignoriert",
         "LEGAL_BLOCKED": "Rechtlich gesperrt",
+        "SENSITIVE_REVIEW_REQUIRED": "Sensible Daten — Prüfung erforderlich",
         "RESOLVED": "Gelöst"
       },
       "filters": {
         "all": "Alle",
         "unresolved": "Nur ungelöste",
+        "unmappedWithData": "Nicht zugeordnet mit Daten",
         "blocked": "Nur blockierte",
         "legal": "Nur rechtlich gesperrte",
         "headerless": "Spalten ohne Kopfzeile",
@@ -777,6 +785,7 @@
         "unresolved": "Ungelöst",
         "blocked": "Blockiert",
         "legalBlocked": "Rechtlich gesperrt",
+        "sensitiveReview": "Sensible Prüfung",
         "ignored": "Ignoriert"
       },
       "errors": {

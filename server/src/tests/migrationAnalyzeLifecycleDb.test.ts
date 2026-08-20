@@ -514,6 +514,45 @@ async function uploadWorkbook(runId: string, file: Buffer, filename = 'synthetic
   return res;
 }
 
+/**
+ * R7 (F3-DATA-MIG-TODAY-001-FINAL-R7): record an explicit operator decision
+ * for every column the analyzer left in SENSITIVE_REVIEW_REQUIRED.
+ *
+ * KANGURUBU used to arrive as LEGAL_BLOCKED, which validateMapping.ts counts
+ * as a DECIDED exclusion, so a freshly analyzed run was immediately valid.
+ * R7 moved it to SENSITIVE_REVIEW_REQUIRED, which is UNDECIDED on purpose:
+ * special-category data is no longer discarded for being sensitive, but it is
+ * also never carried into a run without a human approving it. So a run is now
+ * only 'ready' once someone has actually decided, and these fixtures have to
+ * make that decision the way an operator would.
+ *
+ * IGNORE is used here because this suite's fixture column has no destination
+ * to approve; the point being exercised is that an AFFIRMATIVE decision was
+ * recorded, not which one.
+ */
+async function decideSensitiveColumns(runId: string): Promise<void> {
+  const pending = await prisma.migrationFieldMapping.findMany({
+    where: { runId, state: 'SENSITIVE_REVIEW_REQUIRED' },
+  });
+  if (pending.length === 0) return;
+  await runChain(
+    mappingsPutChain,
+    adminReq(
+      { id: runId },
+      {
+        mappings: pending.map((m) => ({
+          sourceField: m.sourceField,
+          destinationField: null,
+          transform: null,
+          composeOrder: null,
+          state: 'IGNORE',
+        })),
+      },
+    ),
+    mockRes(),
+  );
+}
+
 const analyze = (runId: string, body: Record<string, unknown> = {}) =>
   runChain(analyzeChain, adminReq({ id: runId }, body), mockRes());
 
@@ -568,9 +607,14 @@ async function main() {
     assert.notEqual(res.body?.code, 'MIGRATION_STATE_INVALID');
   });
 
-  await test('the run lands in MAPPING_READY with analyzedAt populated and no error recorded', async () => {
+  await test('the run lands in MAPPING_REQUIRED with analyzedAt populated and no error recorded', async () => {
     const run = await prisma.migrationRun.findUniqueOrThrow({ where: { id: runId } });
-    assert.equal(run.status, 'MAPPING_READY');
+    // R7: MAPPING_REQUIRED, not MAPPING_READY. The fixture's KANGURUBU column
+    // is now SENSITIVE_REVIEW_REQUIRED (undecided) rather than LEGAL_BLOCKED
+    // (decided), so the run correctly reports that it still needs a human.
+    // The 409 regression this suite exists for is about the ANALYZE hop being
+    // traversed at all, which is asserted below and is unaffected.
+    assert.equal(run.status, 'MAPPING_REQUIRED');
     assert.notEqual(run.analyzedAt, null);
     assert.equal(run.lastErrorCode, null);
     assert.equal(run.lastErrorMessage, null);
@@ -578,23 +622,44 @@ async function main() {
     assert.equal(run.headerColumnCount, HEADERS.length);
   });
 
-  await test('the proposed mapping matches the production shape: 5 AUTO_CONFIDENT + 1 LEGAL_BLOCKED', async () => {
+  await test('the proposed mapping matches the production shape: 5 AUTO_CONFIDENT + 1 SENSITIVE_REVIEW_REQUIRED', async () => {
     const mappings = await prisma.migrationFieldMapping.findMany({ where: { runId } });
     assert.equal(mappings.length, HEADERS.length);
     assert.equal(mappings.filter((m) => m.state === 'AUTO_CONFIDENT').length, 5);
-    assert.equal(mappings.filter((m) => m.state === 'LEGAL_BLOCKED').length, 1);
+    // R7: KANGURUBU is special-category health data and is no longer withheld
+    // permanently for that reason alone - it is surfaced for operator review.
+    assert.equal(mappings.filter((m) => m.state === 'SENSITIVE_REVIEW_REQUIRED').length, 1);
+    assert.equal(mappings.filter((m) => m.state === 'LEGAL_BLOCKED').length, 0);
     assert.equal(
       mappings.some((m) => m.destinationField === 'provenance.sourceId'),
       true,
       'provenance.sourceId must be proposed or a rerun cannot be idempotent',
     );
-    // The legal gate is preserved: a LEGAL_BLOCKED column carries no destination.
-    for (const blocked of mappings.filter((m) => m.state === 'LEGAL_BLOCKED')) {
-      assert.equal(blocked.destinationField, null);
+    // R8: the fixture's KANGURUBU column now PROPOSES the structured
+    // destination Patient.bloodGroup, which R8 created for it. What must not
+    // change is the gate: a proposal is not a decision. The column is still
+    // persisted UNDECIDED, so nothing is written until an operator resolves
+    // it, and it is still not routed anywhere merely plausible (patient.notes
+    // in particular, which would turn a coded clinical attribute into free
+    // text that can never be read back).
+    for (const pending of mappings.filter((m) => m.state === 'SENSITIVE_REVIEW_REQUIRED')) {
+      assert.equal(
+        pending.destinationField,
+        'patient.bloodGroup',
+        'the structured destination is proposed, and only the structured one',
+      );
+      assert.equal(pending.transform, 'blood_group_tr');
+      assert.equal(pending.decidedAt, null, 'a proposal must never arrive pre-decided');
+      assert.equal(pending.decidedByPlatformAdminId, null);
+    }
+    // R7 header model: the persisted flag says these columns all had a real
+    // header, so nothing downstream has to guess from the name's shape.
+    for (const m of mappings) {
+      assert.equal(m.sourceHeaderWasBlank, false, `${m.sourceField} had a real header`);
     }
   });
 
-  await test('the accepted lifecycle was TRAVERSED, not bypassed: UPLOADED->ANALYZED->MAPPING_READY', async () => {
+  await test('the accepted lifecycle was TRAVERSED, not bypassed: UPLOADED->ANALYZED->MAPPING_*', async () => {
     const events = await prisma.platformAdminAuditEvent.findMany({
       where: { resourceKey: runId, actorPlatformAdminId: ACTOR_ID },
       orderBy: { createdAt: 'asc' },
@@ -604,7 +669,7 @@ async function main() {
       .map((e) => `${e.previousValue}->${e.newValue}`);
     assert.equal(hops.includes('CREATED->UPLOADED'), true, JSON.stringify(hops));
     assert.equal(hops.includes('UPLOADED->ANALYZED'), true, JSON.stringify(hops));
-    assert.equal(hops.includes('ANALYZED->MAPPING_READY'), true, JSON.stringify(hops));
+    assert.equal(hops.includes('ANALYZED->MAPPING_REQUIRED'), true, JSON.stringify(hops));
     assert.equal(
       hops.includes('UPLOADED->MAPPING_READY'),
       false,
@@ -635,11 +700,14 @@ async function main() {
   section('Retry safety and convergence');
   // -------------------------------------------------------------------------
 
-  await test('re-analyzing a MAPPING_READY run is safe and creates no duplicate mappings', async () => {
+  await test('re-analyzing an analyzed run is safe and creates no duplicate mappings', async () => {
     const res = await analyze(runId);
     assert.equal(res.statusCode, 200, JSON.stringify(res.body));
     const run = await prisma.migrationRun.findUniqueOrThrow({ where: { id: runId } });
-    assert.equal(run.status, 'MAPPING_READY');
+    // R7: re-analysis re-proposes, so the special-category column returns to
+    // SENSITIVE_REVIEW_REQUIRED and the run correctly re-reports that a human
+    // is still needed. Convergence - no duplicate rows - is what this guards.
+    assert.equal(run.status, 'MAPPING_REQUIRED');
     const mappings = await prisma.migrationFieldMapping.findMany({ where: { runId } });
     assert.equal(mappings.length, HEADERS.length);
     assert.equal(new Set(mappings.map((m) => m.sourceField)).size, HEADERS.length);
@@ -676,7 +744,10 @@ async function main() {
       assert.equal(res.statusCode, 200, JSON.stringify(res.body));
 
       const recovered = await prisma.migrationRun.findUniqueOrThrow({ where: { id: strandedId } });
-      assert.equal(recovered.status, 'MAPPING_READY');
+      // R7: MAPPING_REQUIRED - the freshly proposed mapping puts KANGURUBU in
+      // SENSITIVE_REVIEW_REQUIRED. Convergence (stale rows replaced, run moved
+      // off UPLOADED, analyzedAt set) is what this test guards, and it holds.
+      assert.equal(recovered.status, 'MAPPING_REQUIRED');
       assert.notEqual(recovered.analyzedAt, null);
 
       const mappings = await prisma.migrationFieldMapping.findMany({
@@ -718,6 +789,10 @@ async function main() {
       const editRunId = await createRun(target);
       await uploadWorkbook(editRunId, fixture);
       await analyze(editRunId);
+      // R7: an operator must decide the special-category column before the
+      // mapping can be valid at all. That decision is the migration's new
+      // precondition, not what this test is about.
+      await decideSensitiveColumns(editRunId);
       await prisma.migrationRun.update({
         where: { id: editRunId },
         data: { status: 'DRY_RUN_COMPLETE' },
@@ -781,6 +856,11 @@ async function main() {
     const id = await createRun(tenant);
     await uploadWorkbook(id, fixture);
     await analyze(id);
+    // R7: analyze now leaves the special-category column undecided, so a run
+    // is not valid until an operator resolves it. Every caller of this helper
+    // wants a run whose mapping is genuinely VALID, so make that decision here
+    // rather than parking the run at a status its mapping does not support.
+    await decideSensitiveColumns(id);
     if (status !== 'MAPPING_READY') {
       await prisma.migrationRun.update({ where: { id }, data: { status } });
     }
@@ -923,8 +1003,15 @@ async function main() {
 
       const after = await mappingRows(racedRunId);
       assert.deepEqual(after, before, 'every mapping field must be byte-equivalent to before');
+      // Scoped to the column this edit actually touched. R7 fixtures record a
+      // real operator decision on the special-category column BEFORE the race,
+      // so a blanket 'no row carries provenance' assertion would now be
+      // asserting that the fixture never happened, not that the edit rolled
+      // back. The deepEqual above already proves nothing else moved.
       assert.equal(
-        after.some((r) => r.decidedByPlatformAdminId !== null),
+        after
+          .filter((r) => r.destinationField === 'provenance.sourceId')
+          .some((r) => r.decidedByPlatformAdminId !== null),
         false,
         'the rolled-back edit must leave no decision provenance behind',
       );

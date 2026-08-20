@@ -21,7 +21,7 @@
  */
 
 import type { CanonicalCell, MigrationErrorCode, TransformName } from '../contracts.js';
-import { normalizeHeader } from './normalizeHeader.js';
+import { normalizeHeader, turkishUpper } from './normalizeHeader.js';
 
 export interface TransformInput {
   /**
@@ -324,6 +324,122 @@ const genderTr: TransformFn = (input) => {
 };
 
 /**
+ * Legacy blood-group token -> 'A_POSITIVE' | ... | 'O_NEGATIVE' | null.
+ *
+ * ###########################################################################
+ * # RH IS **NEVER** INFERRED, AND AN UNRECOGNIZED VALUE BECOMES **NULL PLUS #
+ * # A WARNING** - NEVER A GUESS AND NEVER A PLACEHOLDER.                    #
+ * #                                                                         #
+ * # 'A' is not A_POSITIVE. A source that recorded the ABO group but not the #
+ * # Rh factor recorded HALF a blood group, and completing it from the       #
+ * # population majority would fabricate a transfusion-relevant clinical     #
+ * # fact. That case gets its OWN warning code so the operator can count it  #
+ * # and go back to the source, instead of it disappearing into a generic    #
+ * # 'unrecognized' bucket.                                                  #
+ * ###########################################################################
+ *
+ * ACCEPTED SHAPES (whole value only, after the compaction below):
+ *   ABO      AB | A | B | O | 0        ('0' is Turkish presentation of O)
+ *   RH       optional literal 'RH'
+ *   SIGN     + | POZITIF | POZ | POSITIVE | POSITIF | POS
+ *            - | NEGATIF | NEG | NEGATIVE
+ * so 'A+', 'a rh+', 'A Rh POZITIF', 'AB RH NEGATIF', '0 Rh (+)' all resolve,
+ * and each resolves to exactly one canonical value. 'A B +' does NOT: a
+ * space inside the ABO token is ambiguity, not noise.
+ *
+ * WHY A WHOLE-STRING MATCH, and why that is the safety property that matters:
+ * the ABO part alone is a single letter or digit, so any looser rule would
+ * read unrelated codes as blood groups. Requiring BOTH an ABO part and an Rh
+ * sign, with nothing else left over, is what makes '0' safe to accept: a bare
+ * '0', a bare 'A', a row number, a status code such as '0/1' or a vendor
+ * reference like 'AB-123' all fail the match and are reported, never mapped.
+ * This is the mechanism behind "'0' and 'O' normalize to the same ABO group
+ * ONLY in clearly blood-group-shaped values".
+ *
+ * The Turkish dotted/dotless I pair IS folded, because 'POZITIF' spelled with
+ * a dotted capital I is the same word. O-umlaut is deliberately NOT folded to
+ * O, unlike normalizeHeader: folding it would let a Turkish word beginning
+ * with that letter be read as blood group O. normalizeHeader is unusable here
+ * for a second reason too - it collapses '+' and '-' to '_', which is
+ * precisely the information this transform depends on.
+ */
+const BLOOD_GROUP_ABO: ReadonlyMap<string, string> = new Map([
+  ['A', 'A'],
+  ['B', 'B'],
+  ['AB', 'AB'],
+  ['O', 'O'],
+  // Turkish clinical usage writes the O group with the digit zero ('0 Rh+').
+  // Canonical STORAGE is always the letter O; the digit is an input spelling
+  // and a Turkish-UI presentation choice, never a stored value.
+  ['0', 'O'],
+]);
+
+const BLOOD_GROUP_RH_POSITIVE: ReadonlySet<string> = new Set([
+  '+', 'POZITIF', 'POZ', 'POSITIVE', 'POSITIF', 'POS',
+]);
+
+const BLOOD_GROUP_RH_NEGATIVE: ReadonlySet<string> = new Set([
+  '-', 'NEGATIF', 'NEG', 'NEGATIVE',
+]);
+
+/**
+ * The ABO part, at the START of the value, and only where it is followed by a
+ * genuine boundary: end of value, whitespace, a sign, or the literal 'RH'.
+ *
+ * The lookahead is what makes 'AB' read as the AB group rather than as group A
+ * followed by a stray 'B', and what makes 'A B +' fail outright instead of
+ * being "helpfully" read as AB+. A space INSIDE the ABO token is not harmless
+ * whitespace - it changes which of two real blood groups is meant - so it is
+ * treated as ambiguity and reported, never resolved by guesswork.
+ */
+const BLOOD_GROUP_ABO_HEAD = /^(AB|A|B|O|0)(?=$|[\s+-]|RH)/;
+
+/** What may follow the ABO part: an optional literal RH, then the Rh sign. */
+const BLOOD_GROUP_TAIL = /^(?:RH)?\s*(\+|-|[A-Z]+)$/;
+
+const bloodGroupTr: TransformFn = (input) => {
+  const raw = first(input).text.trim();
+  // A blank cell means 'no blood group recorded', which is exactly what NULL
+  // means. That is not a defect and must not be warned about, or the operator
+  // would face one warning per empty row.
+  if (raw === '') return ok(null);
+
+  // Fold the Turkish dotted/dotless I only (see the doc comment), then reduce
+  // every run of characters that carry no meaning here - parentheses, slashes,
+  // dots, repeated spaces - to a SINGLE SPACE. A separator is preserved rather
+  // than deleted precisely so that 'A B +' stays two tokens and cannot be
+  // silently welded into 'AB+'.
+  const compact = turkishUpper(raw)
+    .replace(/\u0130/g, 'I')
+    .replace(/[^A-Z0-9+-]+/g, ' ')
+    .trim();
+
+  const head = BLOOD_GROUP_ABO_HEAD.exec(compact);
+  if (head === null) return ok(null, 'BLOOD_GROUP_VALUE_UNRECOGNIZED');
+
+  const abo = BLOOD_GROUP_ABO.get(head[1]!);
+  if (abo === undefined) return ok(null, 'BLOOD_GROUP_VALUE_UNRECOGNIZED');
+
+  const tail = compact.slice(head[1]!.length).trim();
+  // The ABO group was recorded and the Rh factor was not. Rh is NEVER
+  // inferred, so this is NULL - but with its own code, so the operator can
+  // count these and go back to the source instead of losing them in a generic
+  // 'unrecognized' bucket.
+  if (tail === '' || tail === 'RH') return ok(null, 'BLOOD_GROUP_RH_MISSING');
+
+  const matched = BLOOD_GROUP_TAIL.exec(tail);
+  if (matched === null) return ok(null, 'BLOOD_GROUP_VALUE_UNRECOGNIZED');
+
+  const sign = matched[1]!;
+  if (BLOOD_GROUP_RH_POSITIVE.has(sign)) return ok(abo + '_POSITIVE');
+  if (BLOOD_GROUP_RH_NEGATIVE.has(sign)) return ok(abo + '_NEGATIVE');
+  // A word we do not recognize sat where the Rh sign belongs. It is NOT an
+  // Rh-missing case (something WAS written there) and it is certainly not a
+  // reason to assume positive.
+  return ok(null, 'BLOOD_GROUP_VALUE_UNRECOGNIZED');
+};
+
+/**
  * Tokens the legacy vendor uses for a SET boolean flag.
  * 'E' is Turkish "evet" (yes). 'H' ("hayır", no) is deliberately absent and is
  * matched by the explicit falsy list below, so a Turkish no is never read as
@@ -396,6 +512,40 @@ const composeAddress: TransformFn = (input) => {
   }
   if (parts.length === 0) return ok(null);
   return ok(parts.join(', '));
+};
+
+// ---------------------------------------------------------------------------
+// clinical notes composition
+// ---------------------------------------------------------------------------
+
+/**
+ * Compose several clinical free-text source columns into `patient.notes`.
+ *
+ * Same contract as `composeAddress` and for the same reason: a PURE function
+ * of the ordered inputs, stable across reruns forever. It does not skip a part
+ * on a length threshold, does not de-duplicate, does not reorder and does not
+ * consult any other column, so a rerun of the SAME workbook produces a
+ * byte-identical string and idempotent re-import is preserved.
+ *
+ * Parts are joined with a NEWLINE rather than ', ' (the address join): these
+ * are independent clinical statements written at different times by different
+ * people, and running them together on one line would read as a single
+ * sentence and change their clinical meaning. Each part is trimmed, and empty
+ * parts are omitted — an omission that is itself stable because it depends
+ * only on the cell being empty.
+ *
+ * NO VALUE IS EVER LOGGED OR RETURNED IN A WARNING by this transform. The
+ * content is KVKK Art. 6 special-category by assumption, so it stays inside
+ * the value channel and never reaches a message, a code or a report.
+ */
+const composeNotes: TransformFn = (input) => {
+  const parts: string[] = [];
+  for (const cell of input.cells) {
+    const t = cell.text.trim();
+    if (t !== '') parts.push(t);
+  }
+  if (parts.length === 0) return ok(null);
+  return ok(parts.join('\n'));
 };
 
 // ---------------------------------------------------------------------------
@@ -550,6 +700,8 @@ export const TRANSFORMS: Record<TransformName, TransformFn> = {
   gender_tr: genderTr,
   deleted_to_status: deletedToStatus,
   compose_address: composeAddress,
+  compose_notes: composeNotes,
+  blood_group_tr: bloodGroupTr,
   chart_number: chartNumber,
   identity_tckn: identityTckn,
   provenance_source_id: provenanceSourceId,
