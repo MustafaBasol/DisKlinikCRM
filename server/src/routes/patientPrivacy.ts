@@ -135,6 +135,12 @@ async function collectStructuredExportData(
             // subject, so KVKK Art. 11 / GDPR Art. 15 cover them.
             gender: true,
             chartNumber: true,
+            // F3-DATA-MIG-TODAY-001-R8: KVKK Art. 6 special-category health
+            // data held about the subject. Art. 11 / GDPR Art. 15 cover it
+            // exactly as they cover every other field here — special-category
+            // status raises the bar for PROCESSING it, and does not narrow the
+            // subject's right to see what is held.
+            bloodGroup: true,
             communicationConsent: true,
             marketingConsent: true,
             isAnonymized: true,

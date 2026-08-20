@@ -193,6 +193,8 @@
     "phoneDuplicateBody": "Das ist normal bei Kindern oder Familienmitgliedern. Sie können trotzdem speichern.",
     "gender": "Geschlecht",
     "genderUnspecified": "Nicht angegeben",
+    "bloodGroup": "Blutgruppe",
+    "bloodGroupUnspecified": "Keine Angabe",
     "chartNumber": "Akten-/Patientennummer",
     "chartNumberPlaceholder": "z. B. 10423",
     "primaryPractitioner": "Hauptbehandler",
@@ -212,6 +214,16 @@
     "male": "Männlich",
     "female": "Weiblich",
     "other": "Divers"
+  },
+  "bloodGroup": {
+    "A_POSITIVE": "A Rh+",
+    "A_NEGATIVE": "A Rh-",
+    "B_POSITIVE": "B Rh+",
+    "B_NEGATIVE": "B Rh-",
+    "AB_POSITIVE": "AB Rh+",
+    "AB_NEGATIVE": "AB Rh-",
+    "O_POSITIVE": "0 Rh+",
+    "O_NEGATIVE": "0 Rh-"
   },
   "dentalChart": {
     "title": "Zahnstatus",

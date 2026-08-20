@@ -141,6 +141,10 @@ const BASE_PATIENT = {
   fullName: 'Test Patient',
   email: 'patient@example.com',
   phone: '5551234567',
+  // F3-DATA-MIG-TODAY-001-R8. Synthetic. Present so the profile block's
+  // blood-group row has something to render; every other test in this file
+  // is unaffected by it.
+  bloodGroup: 'O_NEGATIVE',
   appointments: [],
   activityLogs: [],
   whatsappConversationMessages: [],
@@ -438,5 +442,32 @@ describe('PatientDetail — patient identity (F3-DATA-MIG-TODAY-001-UI-001-R1/R3
     const identityRows = screen.getAllByText(/patients:form\.identity\.label/);
     expect(identityRows.length).toBeGreaterThan(0);
     identityRows.forEach((row) => expect(row).toHaveTextContent('*******1234'));
+  });
+});
+
+describe('PatientDetail - structured blood group (F3-DATA-MIG-TODAY-001-R8)', () => {
+  it('renders the stored blood group as a localized label in the profile block', async () => {
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    // t() is mocked to return `defaultValue` when one is given, and the page
+    // passes the raw stored token as the defaultValue on purpose: a value this
+    // build has no translation for must still be SHOWN to the clinician rather
+    // than collapsing to "no data". So the token is what renders here, and
+    // that fallback is exactly what this asserts.
+    const rows = screen.getAllByText(/patients:form\.bloodGroup/);
+    expect(rows.length).toBeGreaterThan(0);
+    rows.forEach((row) => expect(row).toHaveTextContent('O_NEGATIVE'));
+  });
+
+  it('shows "no data" rather than an empty row when no blood group is recorded', async () => {
+    patientSvc.getById.mockResolvedValue({ data: { ...BASE_PATIENT, bloodGroup: null } });
+
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    const rows = screen.getAllByText(/patients:form\.bloodGroup/);
+    expect(rows.length).toBeGreaterThan(0);
+    rows.forEach((row) => expect(row).toHaveTextContent('common:noData'));
   });
 });

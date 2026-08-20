@@ -99,8 +99,12 @@ await test('TCNO / TCKN / T.C. Kimlik No header text classifies tckn with no des
 });
 
 await test('secondary phone headers with NO destination (e.g. EVTELEFONU, ISTELEFONU) still classify phone', () => {
-  // These are BLOCKED_NO_DESTINATION in the first-customer matrix (Patient has
-  // only one phone field) but remain patient contact data and must stay masked.
+  // R9 moved both to MANUAL_REVIEW once their measured fill (45 and 164 rows)
+  // made a silent no-destination drop indefensible. The masking below is
+  // deliberately INDEPENDENT of that: it keys off the header shape, so a phone
+  // column is masked whatever its disposition. Neither has a destination
+  // (Patient has only one phone field), but both are patient contact data and
+  // must stay masked.
   assert.equal(classifyColumnSensitivity('EVTELEFONU', undefined, 5), 'phone');
   assert.equal(classifyColumnSensitivity('ISTELEFONU', undefined, 5), 'phone');
   assert.equal(classifyColumnSensitivity('CEP_TELEFONU', undefined, 5), 'phone');
@@ -240,32 +244,79 @@ await test('two independent calls with different data never mix samples — buil
 // D. Fail-closed masking for LEGAL_BLOCKED mappings (F3-DATA-MIG-TODAY-001-UI-002-R2)
 // ══════════════════════════════════════════════════════════════════════════
 //
-// KANGURUBU (blood group) is BLOCKED_LEGAL_DECISION in firstCustomerMatrix.ts
-// because blood group is KVKK Art. 6 special-category health data — but it
-// has no destination and no header keyword the classifier recognizes, and
-// its values ("A Rh+") are short. Before this fix, that combination fell
-// through every heuristic to 'low' and was returned RAW. mappingState must
-// be checked first and override every other signal.
+// KANGURUBU (blood group) is KVKK Art. 6 special-category health data, but it
+// has no destination and no header keyword the classifier recognizes, and its
+// values ("A Rh+") are short. Before this fix, that combination fell through
+// every heuristic to 'low' and was returned RAW. mappingState must be checked
+// first and override every other signal.
+//
+// F3-DATA-MIG-TODAY-001-FINAL-R7 moved KANGURUBU from LEGAL_BLOCKED to
+// SENSITIVE_REVIEW_REQUIRED — the column is no longer permanently unimportable
+// merely for being special-category. THE MASKING IS UNCHANGED IN STRENGTH:
+// the policy change moves a column's DISPOSITION and must never become a way
+// to leak special-category cell content to a browser that could not see it
+// before. This section therefore guards BOTH withheld states.
 
-section('D. Fail-closed masking for LEGAL_BLOCKED mappings');
+section('D. Fail-closed masking for policy-withheld mappings');
+
+/** Both decided-by-policy states whose samples must never be returned raw. */
+const WITHHELD_ENTRIES = FIRST_CUSTOMER_MATRIX.filter(
+  (e) =>
+    e.mappingState === 'LEGAL_BLOCKED' || e.mappingState === 'SENSITIVE_REVIEW_REQUIRED',
+);
 
 const LEGAL_BLOCKED_ENTRIES = FIRST_CUSTOMER_MATRIX.filter(
   (e) => e.disposition === 'BLOCKED_LEGAL_DECISION',
 );
 
-await test('firstCustomerMatrix.ts actually contains BLOCKED_LEGAL_DECISION entries (sanity check the test below is not vacuous)', () => {
+/** The fixed literal each withheld state renders. Never a value. */
+const WITHHELD_LABEL: Record<string, string> = {
+  LEGAL_BLOCKED: '[KVKK Madde 6 — hukuki gerekçeyle gizlendi]',
+  SENSITIVE_REVIEW_REQUIRED: '[Özel nitelikli veri — inceleme için gizlendi]',
+};
+
+await test('firstCustomerMatrix.ts actually contains policy-withheld entries (sanity check the tests below are not vacuous)', () => {
   assert.ok(LEGAL_BLOCKED_ENTRIES.length > 0, 'expected at least one BLOCKED_LEGAL_DECISION entry to exist');
   assert.ok(
-    LEGAL_BLOCKED_ENTRIES.some((e) => e.sourceField === 'KANGURUBU'),
-    'KANGURUBU must be one of the legal-blocked entries this suite is guarding',
+    WITHHELD_ENTRIES.some((e) => e.sourceField === 'KANGURUBU'),
+    'KANGURUBU must be one of the withheld entries this suite is guarding',
   );
+  // R7: and it is specifically withheld-for-review now, not permanently blocked.
+  const kan = FIRST_CUSTOMER_MATRIX.find((e) => e.sourceField === 'KANGURUBU')!;
+  assert.equal(kan.mappingState, 'SENSITIVE_REVIEW_REQUIRED');
 });
 
 await test('KANGURUBU (blood group) with a real-shaped sample "A Rh+" is fully hidden, never returned raw', () => {
-  const entry = LEGAL_BLOCKED_ENTRIES.find((e) => e.sourceField === 'KANGURUBU')!;
+  const entry = FIRST_CUSTOMER_MATRIX.find((e) => e.sourceField === 'KANGURUBU')!;
   const preview = previewForSingleColumn('KANGURUBU', ['A Rh+'], undefined, 5, entry.mappingState);
-  assert.equal(preview.samples[0]!.value, '[KVKK Madde 6 — hukuki gerekçeyle gizlendi]');
+  assert.equal(preview.samples[0]!.value, WITHHELD_LABEL[entry.mappingState]);
   assert.ok(!values(preview.samples).some((s) => s.includes('A Rh+')), 'raw blood-group value must never appear');
+});
+
+await test('R7: every SENSITIVE_REVIEW_REQUIRED field is masked exactly as strongly as it was when LEGAL_BLOCKED', () => {
+  const sensitive = FIRST_CUSTOMER_MATRIX.filter((e) => e.mappingState === 'SENSITIVE_REVIEW_REQUIRED');
+  assert.ok(sensitive.length > 0, 'R7 must have produced at least one sensitive-review column');
+  for (const entry of sensitive) {
+    const rawValue = `RAW-${entry.sourceField}-VALUE`;
+    const preview = previewForSingleColumn(entry.sourceField, [rawValue], undefined, 5, entry.mappingState);
+    assert.equal(
+      preview.samples[0]!.value,
+      WITHHELD_LABEL.SENSITIVE_REVIEW_REQUIRED,
+      `${entry.sourceField} must render the fixed sensitive-review literal`,
+    );
+    assert.ok(
+      !values(preview.samples).some((s) => s.includes(rawValue)),
+      `${entry.sourceField} must never leak its raw value into a preview`,
+    );
+  }
+});
+
+await test('R7: the sensitive-review literal is DISTINCT from the legal-hold literal', () => {
+  // The two say different things to a reviewer: "never written" versus "you
+  // must decide where this goes". Collapsing them would hide the difference.
+  assert.notEqual(WITHHELD_LABEL.LEGAL_BLOCKED, WITHHELD_LABEL.SENSITIVE_REVIEW_REQUIRED);
+  assert.equal(classifyColumnSensitivity('KANGURUBU', undefined, 5, 'SENSITIVE_REVIEW_REQUIRED'), 'sensitiveReview');
+  assert.equal(classifyColumnSensitivity('KANGURUBU', undefined, 5, 'LEGAL_BLOCKED'), 'legalBlocked');
 });
 
 await test('every BLOCKED_LEGAL_DECISION field in firstCustomerMatrix.ts is fully hidden, never returned raw', () => {

@@ -1,0 +1,32 @@
+-- F3-DATA-MIG-TODAY-001-FINAL-R7
+--
+-- Persist the parser's authoritative "the worksheet header cell for this
+-- column was blank" fact alongside the mapping decision it belongs to.
+--
+-- WHY THIS COLUMN EXISTS. CanonicalHeader.headerWasBlank (contracts.ts) is the
+-- only correct way to tell a genuinely nameless source column apart from a
+-- real vendor column that happens to be named "COLUMN_7"; its own contract
+-- forbids inferring it by string-matching the synthesized COLUMN_<index> name.
+-- The flag was computed at analyze time and then dropped on the floor: nothing
+-- persisted it, so every later consumer -- the mappings API, and through it
+-- the operator's mapping screen -- was forced back onto exactly the string
+-- match the contract forbids. This column ends that.
+--
+-- EXPAND-ONLY, ADDITIVE, ZERO BACKFILL.
+--   * Nullable with no DEFAULT, so this is a metadata-only change: PostgreSQL
+--     does not rewrite the table and does not need a long ACCESS EXCLUSIVE
+--     lock proportional to table size.
+--   * NULL is a meaningful third value -- "written before this column
+--     existed" -- and readers fall back to the legacy inference for it. No
+--     UPDATE is run over existing rows.
+--   * No column is dropped, renamed, retyped or constrained. Nothing that the
+--     currently-deployed application release reads or writes is touched.
+--
+-- ROLLBACK. The previous application release (be8e07c4908bfc3484194c530d97ba33b79d0bca)
+-- never references this column, and because it is nullable every INSERT that
+-- release performs remains valid. Rolling the application back therefore needs
+-- NO schema rollback. If the column itself must also be removed, the contract
+-- step is a plain `ALTER TABLE "MigrationFieldMapping" DROP COLUMN
+-- "sourceHeaderWasBlank";` -- it carries no data that any other table or
+-- constraint depends on.
+ALTER TABLE "MigrationFieldMapping" ADD COLUMN "sourceHeaderWasBlank" BOOLEAN;

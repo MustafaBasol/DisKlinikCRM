@@ -27,6 +27,30 @@ export const optionalUuid = z.preprocess(
 // the API validate against the same three values.
 export const patientGenderValues = ['male', 'female', 'other'] as const;
 
+// F3-DATA-MIG-TODAY-001-R8: the ONLY accepted Patient.bloodGroup values, and
+// the single place they are declared. The write schema below, the migration
+// destination catalog (services/migration/contracts.ts), the blood-group
+// normalization transform and the patient form all validate against this list.
+//
+// Canonical ABO storage is the LETTER O, never the digit 0 — Turkish clinical
+// usage writes "0 Rh+", which is a PRESENTATION convention handled in the UI
+// and accepted on input by the transform. There is no UNKNOWN member: NULL
+// means "not recorded", and a token meaning "recorded as unknown" would be a
+// different clinical claim that nothing in this product makes. See the
+// Patient.bloodGroup doc comment in prisma/schema.prisma.
+export const patientBloodGroupValues = [
+  'A_POSITIVE',
+  'A_NEGATIVE',
+  'B_POSITIVE',
+  'B_NEGATIVE',
+  'AB_POSITIVE',
+  'AB_NEGATIVE',
+  'O_POSITIVE',
+  'O_NEGATIVE',
+] as const;
+
+export type PatientBloodGroup = (typeof patientBloodGroupValues)[number];
+
 const patientBaseSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
@@ -43,6 +67,10 @@ const patientBaseSchema = z.object({
   // NULL = "not recorded / never asked", a distinct state from 'other' — see
   // Patient.gender doc comment in prisma/schema.prisma.
   gender: z.preprocess(value => value === '' ? null : value, z.enum(patientGenderValues).optional().nullable()),
+  // KVKK Art. 6 special-category health data. Closed vocabulary: an
+  // unrecognized token is REJECTED (400) rather than coerced or stored raw —
+  // '' is the form's "not specified" and becomes NULL.
+  bloodGroup: z.preprocess(value => value === '' ? null : value, z.enum(patientBloodGroupValues).optional().nullable()),
   // Legacy clinic-facing chart/file number. Deliberately not unique — see
   // Patient.chartNumber doc comment.
   chartNumber: z.preprocess(value => (typeof value === 'string' ? (value.trim() === '' ? null : value.trim()) : value), z.string().max(64).optional().nullable()),

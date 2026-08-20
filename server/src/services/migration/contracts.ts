@@ -22,6 +22,14 @@
  * carry NUMBERS; classifications carry ENUM-LIKE STRINGS. Never a cell value.
  */
 
+/*
+ * TYPE-ONLY, and deliberately so. dataLossGate.ts imports getDestinationField
+ * from THIS file, so a value import here would close a runtime cycle. `import
+ * type` is erased at compile time, leaving DryRunSummary able to name the
+ * gate's report shape with no module-loading consequence at all.
+ */
+import type { DataLossGateReport } from './mapping/dataLossGate.js';
+
 // ---------------------------------------------------------------------------
 // Run lifecycle
 // ---------------------------------------------------------------------------
@@ -94,6 +102,22 @@ export const MIGRATION_ERROR_CODES = [
   'MAPPING_TYPE_INCOMPATIBLE',
   'MAPPING_DESTINATION_COLLISION',
   'MAPPING_COMPOSITION_UNSUPPORTED',
+  /*
+   * F3-DATA-MIG-TODAY-001-R9 — the first-customer data-loss gate.
+   *
+   * All four are prefixed MAPPING_ deliberately: classifyBlocker()
+   * (reports/migrationReports.ts) routes every MAPPING_* code to the MAPPING
+   * owner, and the mapping screen is exactly where an operator resolves all
+   * four. The prefix is the classification, not decoration.
+   */
+  /** A meaningful column the SYSTEM proposed excluding, with no operator confirmation. */
+  'MAPPING_EXCLUSION_NOT_CONFIRMED',
+  /** A meaningful column left BLOCKED / LEGAL_BLOCKED with no accepted disposition. */
+  'MAPPING_MEANINGFUL_COLUMN_BLOCKED',
+  /** A column whose fill was never measured, so dropping it cannot be shown to be safe. */
+  'MAPPING_FILL_UNMEASURED',
+  /** A meaningful column in a state the data-loss accounting does not recognise. */
+  'MAPPING_DATA_LOSS_UNACCOUNTED',
   'REFERENCE_UNRESOLVED',
   'LEGAL_BLOCKED',
   // ---- row data ----
@@ -307,7 +331,29 @@ export interface DestinationFieldDef {
   /** i18n-independent English label for the mapping UI. */
   label: string;
   /** Grouping for the mapping UI. */
-  group: 'identity' | 'name' | 'contact' | 'address' | 'clinical' | 'operational' | 'provenance';
+  group:
+    | 'identity'
+    | 'name'
+    | 'contact'
+    | 'address'
+    | 'clinical'
+    | 'operational'
+    | 'provenance'
+    /**
+     * F3-DATA-MIG-TODAY-001-R9. A destination that PRESERVES a legally-gated
+     * source column's content as historical evidence rather than importing it
+     * as operational data — the single narrow way a meaningful LEGAL_BLOCKED
+     * column could ever pass the data-loss gate (dataLossGate.ts).
+     *
+     * DECLARED, WITH NO MEMBERS, ON PURPOSE. The gate's exception has to name
+     * something checkable or it degrades into prose, and an empty group keeps
+     * the exception structurally unreachable until a program owner accepts an
+     * actual destination for preserved evidence. Adding a member here is a
+     * legal decision, and validateMapping.ts Rule 4 (a LEGAL_BLOCKED column may
+     * carry no destination at all) would have to be revisited in the same
+     * change — two deliberate edits, never one accident.
+     */
+    | 'historical_evidence';
   type: DestinationValueType;
   required: boolean;
   /** Allowed transforms for this destination. */
@@ -316,6 +362,30 @@ export interface DestinationFieldDef {
   allowsComposition: boolean;
   /** Allowed values when type === 'enum'. */
   enumValues?: readonly string[];
+  /**
+   * KVKK Art. 6 special-category data (F3-DATA-MIG-TODAY-001-R8).
+   *
+   * A destination marked here may NEVER be proposed by a HEURISTIC. The
+   * mapping engine derives two heuristics automatically from this catalog -
+   * an exact match on the destination key or its last path segment, and the
+   * vendor-neutral alias table - and both land in AUTO_REVIEW. AUTO_REVIEW
+   * is not itself executable, but POST .../mappings/accept-auto promotes
+   * every AUTO_REVIEW row that has a destination straight to RESOLVED,
+   * which IS a writing state. So without this flag, adding a
+   * special-category destination to the catalog would silently make an
+   * arbitrary customer's column named e.g. 'NOTES' or 'BLOODGROUP'
+   * importable by one 'accept all safe suggestions' click, with nobody
+   * having reviewed that column individually.
+   *
+   * These destinations are reachable in exactly two ways, both of which are
+   * a decision by a person or a reviewed document:
+   *   1. a REVIEWED customer profile (firstCustomerMatrix.ts), which
+   *      proposes them only in SENSITIVE_REVIEW_REQUIRED - an undecided,
+   *      non-executable state a Platform Admin must resolve column by
+   *      column;
+   *   2. a Platform Admin choosing the destination by hand.
+   */
+  specialCategory?: boolean;
   /** Short reviewer-facing note rendered in the mapping UI. */
   note?: string;
 }
@@ -333,6 +403,8 @@ export const TRANSFORM_NAMES = [
   'gender_tr',
   'deleted_to_status',
   'compose_address',
+  'compose_notes',
+  'blood_group_tr',
   'chart_number',
   'identity_tckn',
   'provenance_source_id',
@@ -347,12 +419,8 @@ export type TransformName = (typeof TRANSFORM_NAMES)[number];
  * Deliberately NOT present, and why (each is an accepted program decision, not
  * an oversight — see docs/program/PATIENT_FIELD_GAP_AND_IDENTITY_DECISION_PACKAGE.md):
  *
- *  - patient.notes                — KVKK Art. 6 special-category gate is
- *    unresolved for ONEMLINOT (45.70 % filled) / KONTROLNOTU / UZUNNOT /
- *    KANGURUBU. The destination exists in the schema; the blocker is purely
- *    LEGAL, which makes it more dangerous, not less. Also write-only from the
- *    UI — imported clinical text could not be rectified or erased by staff
- *    through any interface, making a KVKK request unserviceable.
+ *  - (patient.notes WAS listed here and is now PRESENT — see below. The
+ *    exclusion is retired by F3-DATA-MIG-TODAY-001-FINAL-R7.)
  *  - patient.postalCode           — ADRES_KODU semantics (5-digit posta kodu
  *    vs 10-digit UAVT address code) remain UNRESOLVED. 0.00 % filled in this
  *    workbook, so absence of data must never be encoded as a direct mapping.
@@ -459,6 +527,50 @@ export const DESTINATION_FIELDS: readonly DestinationFieldDef[] = [
       'plus a row warning — never to "other" and never to a guess.',
   },
   {
+    key: 'patient.bloodGroup',
+    label: 'Blood group',
+    group: 'clinical',
+    type: 'enum',
+    required: false,
+    allowedTransforms: ['blood_group_tr'],
+    allowsComposition: false,
+    specialCategory: true,
+    enumValues: [
+      'A_POSITIVE',
+      'A_NEGATIVE',
+      'B_POSITIVE',
+      'B_NEGATIVE',
+      'AB_POSITIVE',
+      'AB_NEGATIVE',
+      'O_POSITIVE',
+      'O_NEGATIVE',
+    ],
+    note:
+      'KVKK Art. 6 SPECIAL-CATEGORY health data. Added by ' +
+      'F3-DATA-MIG-TODAY-001-R8 so that a structured clinical attribute has a ' +
+      'STRUCTURED destination: blood group is deliberately NOT routed through ' +
+      'patient.notes, because a coded value buried in free text is a different ' +
+      'datum that nothing can read back as a blood group. ' +
+      'Sensitivity restricts HOW this migrates, never WHETHER it may: no source ' +
+      'column reaches this destination automatically. It is absent from the ' +
+      "mapping engine's generic header dictionary on purpose, so an arbitrary " +
+      'workbook can never produce an AUTO_CONFIDENT blood-group mapping; the ' +
+      'only proposer is a reviewed customer profile, which emits ' +
+      'SENSITIVE_REVIEW_REQUIRED — an UNDECIDED state a Platform Admin must ' +
+      'resolve column by column before the run can execute, with the preview ' +
+      'server-masked throughout (columnPreview.ts). ' +
+      'NULL (no blood group recorded) is the only representation of absence: ' +
+      'there is no UNKNOWN member, an unrecognized source token maps to NULL ' +
+      'plus a row warning, and Rh is NEVER inferred when the source omits it. ' +
+      'The KVKK data-subject rights were verified against the code before this ' +
+      'destination was added, not assumed: ACCESS — routes/patientPrivacy.ts ' +
+      'selects bloodGroup for the Art. 11 subject-access export; RECTIFICATION ' +
+      '— schemas/index.ts admits it on patientUpdateSchema, routes/patients.ts ' +
+      'persists it on PUT /patients/:id and the patient form offers a ' +
+      'controlled select; ERASURE — services/privacy/patientAnonymization.ts ' +
+      'nulls it, in both the first-anonymization and the repair pass.',
+  },
+  {
     key: 'patient.address',
     label: 'Street address',
     group: 'address',
@@ -470,6 +582,45 @@ export const DESTINATION_FIELDS: readonly DestinationFieldDef[] = [
       'Supports documented multi-source composition (e.g. neighbourhood + ' +
       'street). The composition rule is STABLE across reruns — an unstable rule ' +
       'would break idempotency.',
+  },
+  {
+    key: 'patient.notes',
+    label: 'Clinical note',
+    group: 'clinical',
+    type: 'string',
+    required: false,
+    allowedTransforms: ['compose_notes', 'trim_collapse', 'trim'],
+    allowsComposition: true,
+    // R8: closes a hole R7 left open - a customer column literally named
+    // 'NOTES' matched the auto-derived key heuristic below and would have
+    // been swept in by accept-auto. See specialCategory above.
+    specialCategory: true,
+    note:
+      'KVKK Art. 6 SPECIAL-CATEGORY. Added by F3-DATA-MIG-TODAY-001-FINAL-R7. ' +
+      'Sensitivity restricts HOW this is migrated, never WHETHER incumbent-clinic ' +
+      'operational data may be migrated at all: no source column reaches this ' +
+      'destination automatically. Every column proposing it is emitted as ' +
+      'SENSITIVE_REVIEW_REQUIRED, which is an UNDECIDED state — a Platform Admin ' +
+      'must explicitly resolve each one before the run can execute, and the ' +
+      'preview stays server-masked throughout (columnPreview.ts). ' +
+      'The KVKK data-subject rights this destination has to be able to service ' +
+      'were VERIFIED against the code before it was added, not assumed: ACCESS — ' +
+      'routes/patientPrivacy.ts selects notes for the Art. 11 subject-access ' +
+      'export; RECTIFICATION — schemas/index.ts admits notes on patientUpdateSchema ' +
+      'and routes/patients.ts persists it on PUT /patients/:id; ERASURE — ' +
+      'services/privacy/patientAnonymization.ts already clears notes alongside ' +
+      'every other patient scalar. The earlier "write-only from the UI, so a KVKK ' +
+      'request would be unserviceable" justification for excluding this ' +
+      'destination did not survive that check: notes is READ and displayed as the ' +
+      'patient-detail Clinical Alerts card, and the only real gap is a missing ' +
+      'edit control in the clinic UI, which is a UI gap and not an ' +
+      'architectural bar to servicing a request. ' +
+      'Composition is allowed because the first-customer export splits clinical ' +
+      'free text across several columns (ONEMLINOT / KONTROLNOTU / UZUNNOT); ' +
+      'without it, preserving the second and third columns would require either ' +
+      'discarding them or inventing a new schema column. The compose order is ' +
+      'fixed and the join rule is stable across reruns, so composition cannot ' +
+      'break idempotency.',
   },
   {
     key: 'patient.city',
@@ -567,6 +718,33 @@ export const MAPPING_STATES = [
   'AUTO_CONFIDENT',
   'AUTO_REVIEW',
   'MANUAL_REQUIRED',
+  /**
+   * KVKK Art. 6 special-category source data that a Platform Admin must review
+   * and resolve column by column. Added by F3-DATA-MIG-TODAY-001-FINAL-R7.
+   *
+   * WHY THIS IS NOT `LEGAL_BLOCKED`. `LEGAL_BLOCKED` is a DECIDED, permanent
+   * exclusion: validateMapping.ts Rule 4 forbids it from carrying a destination
+   * at all, so nothing in it can ever be migrated by an operator decision.
+   * Applying that to an incumbent clinic's own operational clinical data —
+   * data the clinic is migrating precisely so it can keep treating those
+   * patients — would discard it for being sensitive, which is the outcome this
+   * task rejects. Special-category status must drive HOW data moves
+   * (masking, explicit review, restricted destination, tenant scope, audit),
+   * never WHETHER it may move at all.
+   *
+   * WHY THIS IS NOT `MANUAL_REQUIRED` EITHER. Both are undecided and both
+   * block execution, but they are undecided for different reasons and the
+   * operator needs to see which: MANUAL_REQUIRED means "we could not work out
+   * what this column means"; SENSITIVE_REVIEW_REQUIRED means "we know what it
+   * means, and it is special-category, so a human must approve the
+   * destination". Collapsing them would hide the sensitivity from the very
+   * screen where the decision is taken.
+   *
+   * It is deliberately absent from EXECUTABLE_MAPPING_STATES: a run cannot
+   * execute while any column is still merely proposed. The operator resolves
+   * each one to RESOLVED (with a destination), IGNORE or BLOCKED.
+   */
+  'SENSITIVE_REVIEW_REQUIRED',
   'BLOCKED',
   'IGNORE',
   'LEGAL_BLOCKED',
@@ -594,6 +772,8 @@ export const MAPPING_REASONS = [
   'VENDOR_INTERNAL',
   'SUMMARY_NOT_TRANSACTION',
   'SEMANTICS_UNRESOLVED',
+  /** Special-category (KVKK Art. 6) content: destination proposed, human approval required. */
+  'SPECIAL_CATEGORY_REVIEW',
   'UNKNOWN_HEADER',
   'EMPTY_SOURCE_COLUMN',
 ] as const;
@@ -603,6 +783,17 @@ export type MappingReason = (typeof MAPPING_REASONS)[number];
 export interface MappingSuggestion {
   sourceField: string;
   sourceLabel: string;
+  /**
+   * The workbook header EXACTLY as exported, or `null` when the header CELL
+   * itself was blank and `sourceField`/`sourceLabel` therefore hold the
+   * synthesized `COLUMN_<index>` name (canonicalParser.ts).
+   *
+   * This is the authoritative headerless signal on the wire. It exists so that
+   * nothing downstream has to re-derive the fact by string-matching the
+   * synthesized name — the exact inference CanonicalHeader.headerWasBlank's
+   * contract forbids, because a real vendor header could collide with it.
+   */
+  sourceHeader: string | null;
   sourceIndex: number;
   sourceNormalized: string;
   destinationField: string | null;
@@ -626,6 +817,12 @@ export interface MappingValidationResult {
   valid: boolean;
   issues: MappingValidationIssue[];
   unresolvedCount: number;
+  /**
+   * Subset of `unresolvedCount`: columns awaiting a special-category review
+   * decision. Reported separately so the operator can see how much of the
+   * remaining work is sensitive-data review rather than unknown semantics.
+   */
+  sensitiveReviewCount: number;
   blockedCount: number;
   legalBlockedCount: number;
   ignoredCount: number;
@@ -782,6 +979,18 @@ export interface DryRunSummary {
   warnings: DryRunBlocker[];
   planLimit: PlanLimitReport;
   sharedPhoneImpact: SharedPhoneImpact;
+  /**
+   * F3-DATA-MIG-TODAY-001-R9. The first-customer data-loss accounting, computed
+   * from the REAL per-column fill counts this run measured — see dataLossGate.ts.
+   *
+   * OPTIONAL on the wire, required in spirit. A run whose dry run completed
+   * before this field existed has a persisted summary without it, and that
+   * summary is still read back by GET /runs/:id and by assertExecutable. It is
+   * therefore `?`-typed so the old shape still parses, and every consumer must
+   * treat ABSENT as NOT PROVEN rather than as satisfied — the same fail-closed
+   * rule the gate itself applies to an unmeasured column.
+   */
+  dataLossGate?: DataLossGateReport;
   /** True when execution may proceed. */
   executable: boolean;
   durationMs: number;

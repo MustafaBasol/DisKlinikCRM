@@ -32,6 +32,11 @@ import {
   type SharedPhoneImpact,
 } from './contracts.js';
 import { classifyIdentities, type IdentityDecision } from './identity/identityClassifier.js';
+import {
+  evaluateDataLossGate,
+  type DataLossGateRecord,
+  type DataLossGateReport,
+} from './mapping/dataLossGate.js';
 import { buildPlanLimitReport, planLimitBlockerMessage } from './planLimits.js';
 import { buildRow, compileMapping, consumesPlanQuota, type BuiltRow } from './rowBuilder.js';
 import type { CanonicalWorkbook } from './contracts.js';
@@ -50,6 +55,19 @@ export interface DryRunInput {
   legalBlockedFields: readonly string[];
   /** Columns still awaiting a decision. */
   unresolvedMappingCount: number;
+  /**
+   * F3-DATA-MIG-TODAY-001-R9. The persisted mapping rows, carrying the measured
+   * `sourceProfile` and the operator-decision evidence
+   * (`isAutoSuggested` / `decidedByPlatformAdminId` / `decidedAt`) that
+   * `mappings` (a `ResolvedMapping[]`, deliberately narrowed for the row loop)
+   * does not.
+   *
+   * REQUIRED, not optional. An optional field is an opt-out, and "the caller
+   * forgot" would then read as "no data-loss risk" — the precise fail-open this
+   * gate exists to close. Making it required moves that mistake from a silent
+   * runtime pass to a compile error at every call site.
+   */
+  gateRecords: readonly DataLossGateRecord[];
 }
 
 function emptyRowClasses(): Record<DryRunRowClass, number> {
@@ -112,6 +130,7 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
     unresolvedReferenceValues,
     legalBlockedFields,
     unresolvedMappingCount,
+    gateRecords,
   } = input;
 
   const compiled = compileMapping(mappings);
@@ -311,6 +330,91 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
   const legalBlockerCount = legalBlockedFields.length;
   blockedRows = rowClasses.BLOCKED;
 
+  // ---- F3-DATA-MIG-TODAY-001-R9: the first-customer data-loss gate --------
+  //
+  // The rule the program owner set: EVERY source column carrying MEANINGFUL
+  // data must end in a mapped destination, manual review, sensitive review, or
+  // an OPERATOR-CONFIRMED exclusion. A profile that recommends IGNORE, an
+  // engine that reports BLOCKED and a legal gate are RECOMMENDATIONS; none of
+  // them is a human deciding to discard a clinic's own operational record.
+  //
+  // Note what this does NOT change: the MAPPING-stage Continue gate
+  // (validateMappings) still passes a run whose columns are ignored/blocked,
+  // because at that point the operator has not yet been shown the measured
+  // fill and cannot reasonably be asked to confirm exclusions. The confirmation
+  // is owed HERE, at the dry run — the first moment the real per-column counts
+  // exist — and it gates EXECUTE, which is the only step that can lose data.
+  const dataLossGate = evaluateDataLossGate(gateRecords);
+
+  for (const field of dataLossGate.unconfirmedExclusionFields) {
+    blockers.add({
+      code: 'MAPPING_EXCLUSION_NOT_CONFIRMED',
+      message:
+        'This source column carries data, and the system RECOMMENDS excluding it — but no operator has confirmed that decision for this run. Open it in the mapping screen and save it to record the exclusion, or give it a destination.',
+      fieldName: field,
+    });
+  }
+
+  for (const field of dataLossGate.blockedMeaningfulFields) {
+    blockers.add({
+      code: 'MAPPING_MEANINGFUL_COLUMN_BLOCKED',
+      message:
+        'This source column carries data but is BLOCKED — an unresolved obstacle, not a decision. Map it to a destination, send it to review, or mark it ignored and save, which records the exclusion as yours.',
+      fieldName: field,
+    });
+  }
+
+  // A legally-gated column with MEANINGFUL content is the one case where the
+  // legal gate must gate EXECUTION and not merely be displayed: the
+  // legalExclusions list above deliberately never suppresses `executable`, and
+  // R7/R8 relied on that for every legal-blocked column regardless of how much
+  // real content it held. Zero-data and unmeasured legal-blocked columns are
+  // unaffected and stay purely informational.
+  for (const field of dataLossGate.legalBlockedMeaningfulFields) {
+    blockers.add({
+      code: 'MAPPING_MEANINGFUL_COLUMN_BLOCKED',
+      message:
+        'This source column holds real content under an unresolved KVKK Art. 6 legal gate. It may not simply be dropped: it needs a program-owner decision — an accepted historical-evidence destination, or an explicit review outcome — before this run may execute.',
+      fieldName: field,
+    });
+  }
+
+  for (const field of dataLossGate.unmeasuredFillFields) {
+    blockers.add({
+      code: 'MAPPING_FILL_UNMEASURED',
+      message:
+        'This column was never profiled, so whether excluding it loses data is unknown. Unmeasured is not empty. Re-run Analyze so the column is measured before this run executes.',
+      fieldName: field,
+    });
+  }
+
+  for (const field of dataLossGate.unaccountedMeaningfulFields) {
+    blockers.add({
+      code: 'MAPPING_DATA_LOSS_UNACCOUNTED',
+      message:
+        'This source column carries data but sits in a state the data-loss accounting does not recognise, so nothing can vouch for where its content goes. Give it an explicit decision in the mapping screen.',
+      fieldName: field,
+    });
+  }
+
+  // Belt and braces, and the only place the gate reports on ITSELF.
+  //
+  // Every case enumerated above contributes its own per-field blocker, and the
+  // two remaining unsatisfied cases (a meaningful column still in manual or
+  // sensitive review) are blocked by the MAPPING_REQUIRED entry derived from
+  // `unresolvedMappingCount`. So this fires only when the accounting failed to
+  // balance, or when a caller passed an `unresolvedMappingCount` that disagrees
+  // with the rows it passed. Both are defects in the surrounding code rather
+  // than in the operator's mapping — and both are exactly the conditions under
+  // which "nothing is missing" stops being provable, so they are reported
+  // rather than swallowed.
+  if (!dataLossGate.satisfied && blockers.size === 0) {
+    blockers.add({
+      code: 'MAPPING_DATA_LOSS_UNACCOUNTED',
+      message: `The source-column data-loss accounting did not resolve cleanly: ${dataLossGate.meaningfulSourceColumns} meaningful column(s) against ${dataLossGate.resolved} mapped, ${dataLossGate.manualReview} in manual review, ${dataLossGate.sensitiveReview} in sensitive review and ${dataLossGate.operatorConfirmedExcluded} operator-confirmed exclusion(s).`,
+    });
+  }
+
   // ---- plan limits --------------------------------------------------------
   const planLimit = await buildPlanLimitReport({
     organizationId,
@@ -330,7 +434,13 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
   }
 
   const blockerList = blockers.list();
-  const executable = blockerList.length === 0 && validRows > 0;
+  // `dataLossGate.satisfied` is stated explicitly rather than left to follow
+  // from `blockerList.length === 0`. It does follow today — every unsatisfied
+  // class adds a blocker above — but that is an invariant across two separate
+  // pieces of code, and the failure mode if it ever breaks is a run that
+  // executes while dropping clinic data. Naming the condition makes the gate
+  // hold even if the blocker wiring above is later changed.
+  const executable = blockerList.length === 0 && validRows > 0 && dataLossGate.satisfied;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -356,6 +466,7 @@ export async function runDryRun(input: DryRunInput): Promise<DryRunSummary> {
     warnings: warnings.list(),
     planLimit,
     sharedPhoneImpact,
+    dataLossGate,
     executable,
     durationMs: Date.now() - startedAt,
   };
@@ -370,6 +481,10 @@ function describeWarning(code: string): string {
   switch (bare) {
     case 'GENDER_VALUE_UNRECOGNIZED':
       return 'The source gender value was not recognised and is left unset rather than guessed. "Unknown" and "other" are deliberately different states.';
+    case 'BLOOD_GROUP_VALUE_UNRECOGNIZED':
+      return 'The source blood-group value was not recognised and is left unset rather than guessed. The value is preserved in the source column and nothing is discarded - review it there.';
+    case 'BLOOD_GROUP_RH_MISSING':
+      return 'The source recorded an ABO group with no Rh factor. Rh is never inferred, so the blood group is left unset - half a blood group is not a blood group.';
     case 'PHONE_LEADING_ZERO_RESTORED':
       return 'A leading zero destroyed by the spreadsheet was restored under a Turkish-number assumption. A 10-digit number starting with 5 is genuinely ambiguous, so it is flagged rather than silently assumed.';
     case 'PHONE_UNPARSEABLE':
@@ -468,6 +583,29 @@ export function assertExecutable(summary: DryRunSummary | null): asserts summary
   if (!summary.executable) {
     throw new MigrationError('MIGRATION_STATE_INVALID', {
       message: `This migration cannot be executed while ${summary.blockers.length} blocker(s) remain. Resolve them and run the dry run again.`,
+    });
+  }
+  /*
+   * F3-DATA-MIG-TODAY-001-R9. The persisted summary must PROVE the data-loss
+   * gate ran, not merely fail to contradict it.
+   *
+   * `dryRunSummary` is a Json column read back from a previous request, so a
+   * run whose dry run completed before this release carries `executable: true`
+   * computed WITHOUT the gate. Trusting that flag alone would let exactly the
+   * runs this task exists to stop walk straight through on the strength of a
+   * stale verdict. An absent or unsatisfied gate is therefore not executable,
+   * and the fix is the cheap, safe one: run the dry run again.
+   */
+  const gate = summary.dataLossGate;
+  if (!gate) {
+    throw new MigrationError('MIGRATION_STATE_INVALID', {
+      message:
+        'This dry run was produced before the source-column data-loss gate existed, so it cannot show that every column carrying data has been accounted for. Run the dry run again.',
+    });
+  }
+  if (!gate.satisfied) {
+    throw new MigrationError('MIGRATION_STATE_INVALID', {
+      message: `This migration cannot be executed while source columns carrying data are unaccounted for: ${gate.systemRecommendedButUnconfirmedExclusions} unconfirmed exclusion(s), ${gate.blockedMeaningful + gate.legalBlockedMeaningful} blocked, ${gate.unmeasuredFillColumns} unmeasured, ${gate.unaccountedMeaningful} unaccounted.`,
     });
   }
 }

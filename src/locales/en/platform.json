@@ -667,7 +667,8 @@
       "cannotContinue": "The mapping is invalid — resolve the issues above before continuing.",
       "continue": "Continue to Reference Mapping",
       "headerless": "No header",
-      "excelColumn": "Excel column: {{n}} / {{letter}}",
+      "excelColumn": "Excel column: {{letter}} ({{n}})",
+      "jumpToRow": "Go to this column",
       "sampleRow": "Row {{row}}: {{value}}",
       "previewUnavailable": "This column has data but none was found within the preview window — review carefully.",
       "legalReason": "Cannot be transferred automatically for legal reasons. Reason: {{reason}}",
@@ -690,7 +691,9 @@
         "patient.patientStatus": "Patient status",
         "patient.chartNumber": "Legacy chart / file number",
         "patient.primaryPractitionerId": "Assigned practitioner",
-        "patient.identity.tckn": "National identity number"
+        "patient.identity.tckn": "National identity number",
+        "patient.notes": "Clinical note",
+        "patient.bloodGroup": "Blood group"
       },
       "groups": {
         "provenance": "Provenance",
@@ -710,6 +713,8 @@
         "gender_tr": "TR gender mapping",
         "deleted_to_status": "Deleted flag → status",
         "compose_address": "Address composition",
+        "compose_notes": "Notes composition",
+        "blood_group_tr": "Blood group normalization",
         "chart_number": "Chart number",
         "identity_tckn": "National ID validation",
         "provenance_source_id": "Provenance source id",
@@ -736,7 +741,8 @@
         "SUMMARY_NOT_TRANSACTION": "Summary column, not transactional",
         "SEMANTICS_UNRESOLVED": "Semantics unresolved",
         "UNKNOWN_HEADER": "Unrecognized header",
-        "EMPTY_SOURCE_COLUMN": "Empty source column (automatically ignored)"
+        "EMPTY_SOURCE_COLUMN": "Empty source column (automatically ignored)",
+        "SPECIAL_CATEGORY_REVIEW": "Special-category data — operator review required"
       },
       "states": {
         "AUTO_CONFIDENT": "Automatic (High Confidence)",
@@ -745,11 +751,13 @@
         "BLOCKED": "Blocked",
         "IGNORE": "Ignored",
         "LEGAL_BLOCKED": "Legal Block",
+        "SENSITIVE_REVIEW_REQUIRED": "Sensitive data — review required",
         "RESOLVED": "Resolved"
       },
       "filters": {
         "all": "All",
         "unresolved": "Unresolved only",
+        "unmappedWithData": "Unmapped with data",
         "blocked": "Blocked only",
         "legal": "Legal blockers only",
         "headerless": "Headerless columns",
@@ -777,6 +785,7 @@
         "unresolved": "Unresolved",
         "blocked": "Blocked",
         "legalBlocked": "Legal Blocked",
+        "sensitiveReview": "Sensitive review",
         "ignored": "Ignored"
       },
       "errors": {

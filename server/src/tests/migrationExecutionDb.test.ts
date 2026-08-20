@@ -34,7 +34,7 @@ import prisma from '../db.js';
 import { buildBiff8Fixture, type FixtureSheet } from './helpers/biff8Fixture.js';
 import { parseSourceWorkbook, profileColumns } from '../services/migration/parser/canonicalParser.js';
 import { suggestMappings } from '../services/migration/mapping/mappingEngine.js';
-import { runDryRun } from '../services/migration/dryRun.js';
+import { runDryRun, assertExecutable } from '../services/migration/dryRun.js';
 import {
   executeMigrationRun,
   markFailedBatchesForRetry,
@@ -50,7 +50,7 @@ import {
 import { computeIdentityLookupHash } from '../utils/patientIdentityCrypto.js';
 import { deleteSourceFile, storeSourceFile } from '../services/migration/sourceFileStore.js';
 import { buildExecuteInput } from '../routes/platformMigration.js';
-import { SOURCE_SYSTEM_DEFAULT, MigrationError } from '../services/migration/contracts.js';
+import { SOURCE_SYSTEM_DEFAULT, MigrationError, type DryRunSummary } from '../services/migration/contracts.js';
 import type { ResolvedMapping } from '../services/migration/rowBuilder.js';
 
 let passed = 0;
@@ -229,6 +229,13 @@ async function cleanupTenants() {
 // Run construction
 // ---------------------------------------------------------------------------
 
+/**
+ * Stand-in Platform Admin id for fixtures that model "an operator already
+ * settled this mapping". A plain constant, never a real admin: the
+ * data-loss gate only asks WHETHER a decider was recorded, never who.
+ */
+const FIXTURE_OPERATOR_ID = 'fixture-platform-admin';
+
 async function prepareRun(
   tenant: { organizationId: string; clinicId: string },
   rows: SyntheticRow[],
@@ -264,22 +271,51 @@ async function prepareRun(
     state: s.destinationField ? 'AUTO_CONFIDENT' : 'IGNORE',
   }));
 
+  /*
+   * F3-DATA-MIG-TODAY-001-R9. Two things this fixture now has to be honest
+   * about, because the data-loss gate reads both.
+   *
+   * `sourceProfile` carries the MEASURED fill count. Without it every column
+   * reads as UNMEASURED, which the gate treats as fail-closed — correctly, but
+   * it would make every fixture here non-executable for the wrong reason.
+   *
+   * The IGNORE rows are stamped as OPERATOR-CONFIRMED, which is what these
+   * fixtures have always meant ("the mapping UI is not under test here" =
+   * assume a competent operator already settled it). Before R9 that assumption
+   * was invisible; now it has to be written down, because an unconfirmed
+   * exclusion of a populated column is exactly what stops a run. The gate's
+   * own suite proves the negative case.
+   */
+  const profileByIndex = new Map(profiles.map((p) => [p.index, p]));
+  const decidedAt = new Date();
+
   await prisma.migrationFieldMapping.createMany({
-    data: mappings.map((m) => ({
-      runId: run.id,
-      sourceField: m.sourceField,
-      sourceIndex: m.sourceIndex,
-      sourceNormalized: m.sourceField,
-      destinationField: m.destinationField,
-      transform: m.transform,
-      composeOrder: m.composeOrder,
-      state: m.state,
-      confidence: 100,
-      isAutoSuggested: true,
-    })),
+    data: mappings.map((m) => {
+      const operatorDecided = m.state === 'IGNORE';
+      return {
+        runId: run.id,
+        sourceField: m.sourceField,
+        sourceIndex: m.sourceIndex,
+        sourceNormalized: m.sourceField,
+        destinationField: m.destinationField,
+        transform: m.transform,
+        composeOrder: m.composeOrder,
+        state: m.state,
+        confidence: 100,
+        sourceProfile: (profileByIndex.get(m.sourceIndex) ?? null) as never,
+        isAutoSuggested: !operatorDecided,
+        decidedByPlatformAdminId: operatorDecided ? FIXTURE_OPERATOR_ID : null,
+        decidedAt: operatorDecided ? decidedAt : null,
+      };
+    }),
   });
 
-  return { run, workbook, mappings };
+  const gateRecords = await prisma.migrationFieldMapping.findMany({
+    where: { runId: run.id },
+    orderBy: { sourceIndex: 'asc' },
+  });
+
+  return { run, workbook, mappings, gateRecords };
 }
 
 function executeInput(
@@ -318,7 +354,7 @@ async function main() {
     await test('patient and identity counts are unchanged by a dry run', async () => {
       const tenant = await makeTenant('dry');
       const rows = syntheticRows(25);
-      const { run, workbook, mappings } = await prepareRun(tenant, rows);
+      const { run, workbook, mappings, gateRecords } = await prepareRun(tenant, rows);
 
       const before = {
         patients: await prisma.patient.count({ where: { organizationId: tenant.organizationId } }),
@@ -337,6 +373,7 @@ async function main() {
         unresolvedReferenceValues: new Set(),
         legalBlockedFields: [],
         unresolvedMappingCount: 0,
+        gateRecords,
       });
 
       const after = {
@@ -366,7 +403,7 @@ async function main() {
     await test('legalBlockedFields > 0 does not suppress executable when there are no other blockers', async () => {
       const tenant = await makeTenant('legal');
       const rows = syntheticRows(5, 3);
-      const { run, workbook, mappings } = await prepareRun(tenant, rows);
+      const { run, workbook, mappings, gateRecords } = await prepareRun(tenant, rows);
 
       const summary = await runDryRun({
         runId: run.id,
@@ -378,6 +415,7 @@ async function main() {
         unresolvedReferenceValues: new Set(),
         legalBlockedFields: ['ONEMLINOT', 'KONTROLNOTU'],
         unresolvedMappingCount: 0,
+        gateRecords,
       });
 
       assert.equal(summary.legalBlockers, 2, 'the count stays visible');
@@ -396,7 +434,7 @@ async function main() {
     await test('a real blocker (unresolved mapping) still suppresses executable even alongside a legal exclusion', async () => {
       const tenant = await makeTenant('legal2');
       const rows = syntheticRows(5, 4);
-      const { run, workbook, mappings } = await prepareRun(tenant, rows);
+      const { run, workbook, mappings, gateRecords } = await prepareRun(tenant, rows);
 
       const summary = await runDryRun({
         runId: run.id,
@@ -408,11 +446,137 @@ async function main() {
         unresolvedReferenceValues: new Set(),
         legalBlockedFields: ['ONEMLINOT'],
         unresolvedMappingCount: 1,
+        gateRecords,
       });
 
       assert.equal(summary.legalBlockers, 1);
       assert.equal(summary.executable, false, 'a genuine unresolved-mapping blocker must still gate execution');
       assert.ok(summary.blockers.some((b) => b.code === 'MAPPING_REQUIRED'));
+    });
+
+    // ---------------------------------------------------------------------
+    // F3-DATA-MIG-TODAY-001-R9 — the first-customer data-loss gate, proved
+    // against real persisted rows rather than in-memory fixtures. The unit
+    // proofs live in migrationDataLossGate.test.ts; what needs a database is
+    // that the ROUND TRIP carries the evidence: the analyze-shaped row really
+    // does read as "system proposed", the save-shaped row really does read as
+    // "operator confirmed", and `executable` really does follow.
+    section('1c. A system-recommended exclusion of a populated column blocks Execute');
+
+    await test('an unconfirmed IGNORE on a column carrying data makes the run non-executable', async () => {
+      const tenant = await makeTenant('gate');
+      const rows = syntheticRows(6, 5);
+      const { run, workbook, mappings } = await prepareRun(tenant, rows);
+
+      // Model exactly what the ANALYZE route writes: a matrix-driven exclusion,
+      // proposed by the system, decided by nobody. DOSYANO is used because it
+      // is populated in the fixture and is not a required destination.
+      await prisma.migrationFieldMapping.updateMany({
+        where: { runId: run.id, sourceField: 'DOSYANO' },
+        data: {
+          state: 'IGNORE',
+          destinationField: null,
+          transform: null,
+          isAutoSuggested: true,
+          decidedByPlatformAdminId: null,
+          decidedAt: null,
+        },
+      });
+      const proposed = await prisma.migrationFieldMapping.findMany({
+        where: { runId: run.id },
+        orderBy: { sourceIndex: 'asc' },
+      });
+      const withoutDosyano = mappings.filter((m) => m.sourceField !== 'DOSYANO');
+
+      const blockedSummary = await runDryRun({
+        runId: run.id,
+        organizationId: tenant.organizationId,
+        clinicId: tenant.clinicId,
+        sourceSystem: SOURCE_SYSTEM_DEFAULT,
+        workbook,
+        mappings: withoutDosyano,
+        unresolvedReferenceValues: new Set(),
+        legalBlockedFields: [],
+        unresolvedMappingCount: 0,
+        gateRecords: proposed,
+      });
+
+      assert.equal(blockedSummary.executable, false, 'a populated column nobody decided to drop must stop the run');
+      assert.equal(blockedSummary.dataLossGate?.satisfied, false);
+      assert.deepEqual(blockedSummary.dataLossGate?.unconfirmedExclusionFields, ['DOSYANO']);
+      assert.ok(
+        blockedSummary.blockers.some(
+          (b) => b.code === 'MAPPING_EXCLUSION_NOT_CONFIRMED' && b.fieldName === 'DOSYANO',
+        ),
+        'the operator must be told WHICH column, not just that something is wrong',
+      );
+      // Execute refuses. It refuses on the BLOCKER count, which is reached
+      // first — the gate having suppressed `executable` is what produced that
+      // count, so this is the gate doing its job through the normal path.
+      assert.throws(
+        () => assertExecutable(blockedSummary),
+        /blocker\(s\) remain/,
+        'Execute itself must refuse',
+      );
+
+      // ...and the gate is ALSO an independent check, not just an input to
+      // `executable`. A summary claiming to be clean while the gate says
+      // otherwise is still refused, so a future change to the blocker wiring
+      // cannot quietly reopen the hole.
+      assert.throws(
+        () => assertExecutable({ ...blockedSummary, blockers: [], executable: true }),
+        /unaccounted for/,
+        'an unsatisfied gate must refuse on its own, independently of `executable`',
+      );
+
+      // Now the operator opens the mapping screen and saves that column as
+      // ignored — the stamp the PUT /mappings route applies.
+      await prisma.migrationFieldMapping.updateMany({
+        where: { runId: run.id, sourceField: 'DOSYANO' },
+        data: {
+          isAutoSuggested: false,
+          decidedByPlatformAdminId: FIXTURE_OPERATOR_ID,
+          decidedAt: new Date(),
+        },
+      });
+      const confirmed = await prisma.migrationFieldMapping.findMany({
+        where: { runId: run.id },
+        orderBy: { sourceIndex: 'asc' },
+      });
+
+      const clearedSummary = await runDryRun({
+        runId: run.id,
+        organizationId: tenant.organizationId,
+        clinicId: tenant.clinicId,
+        sourceSystem: SOURCE_SYSTEM_DEFAULT,
+        workbook,
+        mappings: withoutDosyano,
+        unresolvedReferenceValues: new Set(),
+        legalBlockedFields: [],
+        unresolvedMappingCount: 0,
+        gateRecords: confirmed,
+      });
+
+      assert.equal(clearedSummary.dataLossGate?.satisfied, true);
+      assert.equal(clearedSummary.dataLossGate?.operatorConfirmedExcluded, 1);
+      assert.deepEqual(clearedSummary.dataLossGate?.unconfirmedExclusionFields, []);
+      assert.equal(clearedSummary.executable, true, 'a confirmed exclusion clears the gate');
+      assert.doesNotThrow(() => assertExecutable(clearedSummary));
+    });
+
+    await test('a dry-run summary persisted before the gate existed is NOT executable', () => {
+      /*
+       * `dryRunSummary` is a Json column read back from an earlier request. A
+       * run that reached DRY_RUN_COMPLETE before this release carries
+       * `executable: true` computed WITHOUT the data-loss gate. Trusting that
+       * stale verdict would let precisely the runs this task exists to stop
+       * walk through on the strength of an old answer to a different question.
+       */
+      const legacy = {
+        blockers: [],
+        executable: true,
+      } as unknown as DryRunSummary;
+      assert.throws(() => assertExecutable(legacy), /Run the dry run again/);
     });
 
     // ---------------------------------------------------------------------
