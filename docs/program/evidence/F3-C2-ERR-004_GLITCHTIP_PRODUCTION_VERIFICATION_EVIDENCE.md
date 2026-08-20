@@ -575,7 +575,7 @@ present ⇒ stop and revert per §9.2.
 ```
 AGENT_COMPLETED       = YES   (repository scope only)
 TESTS_PASSED          = pending external confirmation (counts in §14)
-PR_OPENED             = see tracker entry
+PR_OPENED             = YES  (#467, DRAFT)
 MERGED                = NO
 DEPLOYED              = NO
 PRODUCTION_VERIFIED   = NO
