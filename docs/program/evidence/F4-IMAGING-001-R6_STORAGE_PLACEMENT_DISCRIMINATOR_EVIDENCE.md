@@ -191,7 +191,10 @@ deleteImagingFile(key, placement?): Promise<void>
 | omitted | The exact pre-R6 flag-driven behavior, retained for callers with genuinely no row context. **There are none in production code** — proven structurally, see §5. |
 
 `isSafeStorageKey(ref)` still gates the remote path, so a pre-key-era absolute `filePath` is
-never sent to an object store as a key, whatever the row records.
+never sent to an object store as a key, whatever the row records. **Failing that gate under an
+explicit `'vps2'` placement is a REFUSAL, not a fall-through to legacy** — see §14, the
+architecture-review fix. At the head this document originally described (`a5885819`) it was a
+fall-through, and that was a real defect.
 
 **No legacy fallback for an explicit VPS2 object, deliberately, including on a confirmed 404.**
 R6 neither mirrors nor moves bytes, so an object recorded as VPS2 has no legitimate legacy
@@ -438,9 +441,20 @@ merely noise — it can hide whether a new suite ran. The real fix is to pass th
   sorts last in the chain, and that `ImagingImage`'s index set is still exactly
   `@@index([clinicId, studyId])`.
 - **Lock / table-rewrite assessment:** on PostgreSQL 11+ a nullable `ADD COLUMN` with **no**
-  default is catalog-only — a brief `ACCESS EXCLUSIVE` lock, no table rewrite, and a duration
-  independent of row count. Production-size risk is therefore not a function of how many
-  imaging rows exist. No index is created, which matters because Prisma runs each migration
+  default performs **no table rewrite** — it is a catalog update, so the execution work *once
+  the lock is held* is independent of row count. Production-size risk is therefore not a
+  function of how many imaging rows exist. **That is not the same as "safe at any time"**
+  (corrected in the architecture review, §14): the statement still needs a brief
+  `ACCESS EXCLUSIVE` lock on `ImagingImage`, and **acquiring** that lock can wait behind a
+  concurrent long-running transaction (`ACCESS EXCLUSIVE` conflicts with `ACCESS SHARE`, so
+  even a long read blocks it), with everything else then queueing behind the waiter. The
+  catalog-only property bounds how long the lock is **held**, not how long it takes to **get**.
+  The production deploy must therefore run inside the operator-approved migration window and
+  **abort/stop if the migration cannot acquire its lock within that window's approved
+  timeout**. The migration sets no session `lock_timeout`/`statement_timeout` of its own: no
+  existing migration in this repository issues a `SET`, so there is no accepted convention to
+  follow, and the timeout bound belongs to the deploy procedure where an operator can see and
+  approve it. No index is created, which matters because Prisma runs each migration
   inside a transaction and `CREATE INDEX CONCURRENTLY` is consequently unavailable; a
   table-scanning `CREATE INDEX` here would have held a real lock. If a future classification
   sweep needs an index, it belongs in its own migration.
@@ -644,8 +658,12 @@ blocker's account.
 - **Pre-R6 rows** keep `NULL` and are read as legacy, deterministically and without consulting
   the flag. That is a fact rather than a guess for every row that exists at migration time: VPS2
   imaging storage has never been activated in production.
-- **Old local objects** with an absolute `filePath` are unaffected — `isSafeStorageKey` still
-  routes them to local disk before placement is ever consulted.
+- **Old local objects** with an absolute `filePath` are unaffected: they resolve to
+  `'legacy'` (`NULL` → legacy) and read from local disk exactly as before. Precisely stated
+  after the architecture review (§14): the `isSafeStorageKey` gate applies **only** to an
+  explicit `'vps2'` placement, where it now refuses rather than falling back — under
+  `'legacy'` and under the omitted-placement seam an absolute path is read normally, which is
+  what keeps every pre-R6 row readable.
 - **The previously deployed release** never references the column, and because it is nullable
   with no default every INSERT that release performs stays valid.
 - **Storage-key contract:** unchanged, `<clinicId>/<opaqueId><ext>`, still built by
@@ -721,3 +739,279 @@ Once any row records `'vps2'`, **that column is the only record of where those b
 
 The provider/DPA gate is unchanged: E1/E2/E4/E5 and I1–I5 remain unmet. No real health data may
 reach VPS2 before they land, and none did.
+
+---
+
+## 14. Architecture-review fix (R6-R1) — explicit VPS2 placement now fails closed
+
+Added after the architecture review of PR #464 at head `a5885819`. Everything in §1–§13 above
+describes that head; this section records what changed and why, and corrects the three places
+where §3.3, §5.5 and §11 had overstated something.
+
+### 14.1 The finding
+
+The review accepted R6's design (`'vps2'` ⇒ VPS2 only, `'legacy'` ⇒ legacy only, `NULL` ⇒
+legacy, unknown ⇒ fail closed) and found that the implementation did not hold it in one corner.
+`fileStorage.ts` at `a5885819` read:
+
+```ts
+// openImagingFileStream
+if (placement === 'vps2' && isSafeStorageKey(ref)) return getImagingObjectStream(ref);
+return openFileStream(ref);                       // <- legacy, for EVERY other case
+
+// imagingFileExists
+if (placement === 'vps2' && isSafeStorageKey(ref)) return imagingObjectExists(ref);
+return fileExists(ref);                           // <- legacy, for EVERY other case
+
+// deleteImagingFile
+const backend = placement ?? (isImagingRemoteStorageEnabled() ? 'vps2' : 'legacy');
+if (backend === 'vps2') { await deleteImagingObject(key); return; }   // <- no key gate at all
+```
+
+So for **one and the same object** — a row whose `storageBackend` explicitly says `'vps2'` but
+whose `filePath` cannot be an object-storage key (an absolute legacy path, a UNC/drive path, a
+traversal segment, a control character):
+
+| Operation | Backend actually used at `a5885819` |
+|---|---|
+| `openImagingFileStream(ref, 'vps2')` | **legacy** — returned a `ReadStream` over the local file |
+| `imagingFileExists(ref, 'vps2')` | **legacy** — returned `false` from `fileExists`'s key gate |
+| `deleteImagingFile(ref, 'vps2')` | **VPS2** — issued a `DeleteObject` against the object store |
+
+Read said legacy, exists said legacy, delete said VPS2. That is exactly the invariant R6 exists
+to establish, violated. For regulated imaging data the read arm is the worst of the three: it
+serves whatever unrelated bytes happen to sit at that local path *as if they were the VPS2
+object*. The exists arm is not benign either — a legacy-derived "confirmed absent" for a row
+that says the bytes are on VPS2 is precisely what makes the orphan sweep stamp
+`storageVerifiedMissingAt` on a healthy VPS2 row.
+
+**Root cause.** `isSafeStorageKey(ref)` was used as a *routing condition* (`&&` inside the
+branch predicate) when it is a *validity condition* on the row. Falsifying a routing condition
+selects the other backend; falsifying a validity condition means the row is internally
+inconsistent and no backend can be selected honestly. The two were conflated — the same class
+of confusion as R5 Finding B itself, one level down.
+
+**Reachability, stated honestly.** This combination cannot be produced by today's production
+code: `saveImagingFile()` only ever receives a `buildObjectStorageKey()` result, and `'vps2'`
+is written only by the write that actually stored the bytes. It is reachable through a
+hand-edited row, a partial restore, a future backfill, or an import — and the whole point of a
+placement discriminator is to be trustworthy under exactly those conditions. It is fixed as a
+correctness/consistency defect, not as a live incident.
+
+### 14.2 Exact fail-closed semantics after the fix
+
+`assertVps2PlacementRefUsable(ref)` runs **first** on every explicit-`'vps2'` path and throws
+`ImagingPlacementRefMismatchError` when `isSafeStorageKey(ref)` is false:
+
+| Field | Value |
+|---|---|
+| `name` | `ImagingPlacementRefMismatchError` |
+| `code` | `IMAGING_PLACEMENT_REF_MISMATCH` |
+| `message` | fixed literal: `Imaging object placement and storage reference are inconsistent.` |
+| shape | a **throw** — never `null`, never `false`; "I cannot tell where these bytes are" must not read as "this object is genuinely gone" |
+| leakage | none: no ref/key, no bucket, endpoint, region, credential or patient data, in the message or in the throw-site log line (which prints the code only) |
+
+Behavior per placement, after the fix:
+
+| Placement | Usable object key | Unusable ref (absolute / UNC / traversal / control char) |
+|---|---|---|
+| `'vps2'` | VPS2 only — 404 ⇒ `null`/`false`, provider error propagates | **refuses**: read, exists and delete all throw `ImagingPlacementRefMismatchError`; no legacy primitive is called and no object-store request is issued |
+| `'legacy'` | legacy only | legacy only — **unchanged**: `openFileStream` reads the absolute path; `imagingFileExists` returns `false` via the pre-existing `fileExists` key gate (a return, never a throw) |
+| omitted (compat seam) | unchanged pre-R6 flag-driven behavior | unchanged |
+
+`NULL`/pre-R6 rows are unaffected: `resolveImagingStoragePlacement(NULL) === 'legacy'`, so they
+take the `'legacy'` row above and old absolute paths stay readable.
+
+**Delete is gated too, deliberately.** Fixing only read/exists would have left the mirror image
+of the same disagreement (read refuses, delete still talks to VPS2). The gate is applied only
+to an *explicit* `'vps2'`, never to the omitted-placement seam, so the seam keeps its exact
+pre-R6 shape.
+
+**How the throw surfaces at each caller** (no caller changed):
+
+| Caller | Behavior |
+|---|---|
+| `routes/imaging.ts` preview/download | existing outer `catch` ⇒ `500 {"error":"Failed to preview/download imaging image"}`; nothing leaks |
+| `services/imaging/public.ts` `checkImageStorageExists` | wrapped in the facade's own sanitized `ImagingStorageUnavailableError` (underlying error attached as `cause`). `inspectOrphans()` does not catch per row, so it propagates and **fails the inspection** — the row is never classified `dbRowPhysicalMissing`, `markConfirmedMissing()` is never handed it, and `storageVerifiedMissingAt` is **never** stamped. A failed inspection instead of a false "confirmed missing". |
+| `services/fileBackupService.ts` imaging sweep | that row becomes a `failed` ledger entry with `errorMessage = 'IMAGING_PLACEMENT_REF_MISMATCH'` (via `safeErrorFields`) — never `missing_source`, never aborting the run |
+
+### 14.3 Migration comment correction (comment only — no new migration)
+
+`20260820130000_add_imaging_image_storage_backend/migration.sql` claimed the operation was
+"catalog-only … a brief `ACCESS EXCLUSIVE` lock, no table rewrite, and a duration independent
+of row count. Safe on the production `ImagingImage` table at any size."
+
+The no-rewrite assessment is correct for a nullable `ADD COLUMN` with no default on supported
+PostgreSQL, and it is unchanged. The wording overstated the operational conclusion: it bounded
+how long the lock is *held* and then read that as a bound on the whole statement. **Lock
+acquisition can wait** behind concurrent/long-running transactions, and a queued
+`ACCESS EXCLUSIVE` request blocks everything behind it. The header now states, precisely:
+
+- no table rewrite;
+- row-count-independent execution work **after lock acquisition**;
+- a brief `ACCESS EXCLUSIVE` lock is required;
+- acquiring it can wait behind concurrent/long-running transactions;
+- the production deploy must **abort/stop if the migration cannot acquire its lock within the
+  operator-approved migration window/timeout**.
+
+No session `lock_timeout`/`statement_timeout` was added: no existing migration in this
+repository issues a `SET`, so there is no accepted convention, and putting a production timeout
+policy in this one file would hide it from the operator running `prisma migrate deploy`.
+
+**The migration's structure, timestamp, directory name and SQL statement are byte-identical to
+`a5885819`.** Only `--` comment lines changed; the pinning test in
+`imagingStoragePlacementCallSites.test.ts` §4 strips comments before asserting, and still
+asserts exactly `['ALTER TABLE "ImagingImage" ADD COLUMN "storageBackend" TEXT;']`. No new
+migration was created; no R10 artifact was read for content, renamed, reordered or edited.
+
+### 14.4 Regression tests
+
+`server/src/tests/imagingPlacementFailClosed.test.ts` (**new**, 13 cases, pure unit — no DB, no
+MinIO, no network; every fail-closed assertion short-circuits before an S3 client is
+constructed). Wired into `server:test:non-disposable` as
+`npm run test:imaging-placement-fail-closed`; the filename contains `imaging`, so
+`scripts/ci-classify` puts it in `STORAGE_IMAGING`.
+
+The suite installs a spy over `fs.existsSync` / `fs.createReadStream` / `fs.promises.unlink`
+(`fileStorage.ts` calls these as property lookups on the shared builtin, so the swap is
+observed), which upgrades "the call rejected" to "it never touched legacy storage at all". The
+legacy cases in section 1 are the spy's positive control — a spy that never fires would make a
+zero count meaningless.
+
+| Review case | Test | Assertion |
+|---|---|---|
+| A | `openImagingFileStream(absPath, 'vps2')` with **real legacy bytes present** | throws the exact error; returns nothing; `fs.createReadStream` and `fs.existsSync` counters are **0** |
+| B | `imagingFileExists(absPath, 'vps2')` | throws; returns neither `true` nor `false`; `fs.existsSync` counter is **0** |
+| C | `openImagingFileStream(absPath, 'legacy')` | still returns the exact bytes (byte-equality, not "a stream"); exists keeps its pre-existing `false` return |
+| D | `resolveImagingStoragePlacement(NULL/undefined/''/'   ') === 'legacy'`, then read | still reads the absolute path successfully |
+| E | read/exists/delete matrix for one object | all three throw the **same** code, so no pair can name different backends; the legacy file is still on disk and byte-identical afterwards (`fs.promises.unlink` counter **0**) |
+| — | not-over-broad control | explicit `'vps2'` + a **valid** key still reaches the VPS2 provider (fails on `IMAGING_S3_ENDPOINT`, i.e. a provider/config error, never the placement error) |
+| — | leak control | the thrown error and the captured throw-site `console.error` contain no ref, basename, tmpdir, bucket, endpoint or credential token |
+| — | shape control | five unusable ref shapes (absolute POSIX, Windows drive, UNC, traversal, NUL byte) all fail closed identically on read and exists |
+| — | seam control | the omitted-placement overload still reads the absolute path from legacy |
+
+Plus one structural case added to `imagingStoragePlacementCallSites.test.ts` §2 (now 14 cases):
+the defective `placement === 'vps2' && isSafeStorageKey` conjunction must not exist anywhere in
+`fileStorage.ts`; each explicit-`'vps2'` branch must match its whole expected body (so a legacy
+call inserted between the gate and the provider call breaks the match); and the gate helper
+itself must contain no `openFileStream`/`fileExists`/`deleteFile`/`resolveLocalPath` and must
+throw the sanitized error.
+
+### 14.5 Negative control — the new tests detect the `a5885819` behavior
+
+The `a5885819` read/exists/delete branches were restored in a disposable working state (a local
+file copy, reverted immediately afterwards; **not committed**) and the new suite was re-run
+against them:
+
+```
+2. Explicit vps2 placement + a ref that cannot be an object key FAILS CLOSED
+  x A: openImagingFileStream(absolutePath, "vps2") throws and NEVER returns the legacy bytes
+      it must not return a stream at all — not the legacy bytes, not null
+      + actual: ReadStream { … path: '…\r6-placement-…\legacy-image.dcm' … }
+      - expected: undefined
+  x B: imagingFileExists(absolutePath, "vps2") throws — never a legacy-derived true OR false
+      + actual: false
+      - expected: undefined
+  x every unusable ref shape fails closed the same way, on both read and exists
+      Missing expected rejection: read must fail closed for "…\legacy-image.dcm"
+3. Read, exists and delete agree — all three refuse for the same object
+  x E: delete does NOT route an explicitly-vps2 unusable ref to VPS2 while read/exists refuse
+      expected ImagingPlacementRefMismatchError, got Error: IMAGING_STORAGE_BACKEND=vps2
+      requires IMAGING_S3_ENDPOINT to be set …
+  x E: the full read/exists/delete matrix …  read must refuse, not resolve
+      + actual: 'returned'   - expected: 'threw'
+  x neither the thrown error nor anything logged at the throw site carries the ref
+7 passed, 6 failed
+```
+
+Two things this proves beyond "the tests fail":
+
+1. **A returned a real `ReadStream` pointing at the local legacy file.** The defect was not
+   theoretical — the old code hands back the legacy bytes for an explicitly-VPS2 object.
+2. **The E delete case failed with an `IMAGING_S3_ENDPOINT` error**, i.e. the old delete
+   genuinely reached the VPS2 provider for the same ref the old read served from legacy. That
+   is the read/exists/delete disagreement captured directly, not inferred.
+
+The five legacy/compat cases in section 1 **passed under both** the old and the fixed code,
+which is the evidence that the fix changes nothing for `'legacy'`, for `NULL`/pre-R6 rows, or
+for the omitted-placement seam.
+
+### 14.6 Test results for this fix
+
+Every command below was executed locally on this tree in this session against real disposable
+PostgreSQL and real disposable MinIO. Nothing is inferred from CI configuration.
+
+| Command | Passed | Failed | Skipped | Exit |
+|---|---|---|---|---|
+| `server/ npm run typecheck` (`prisma generate && tsc --noEmit`) | — | 0 | — | 0 |
+| `server/ npm run test:imaging-placement-fail-closed` (**new**) | 13 | 0 | 0 | 0 |
+| `server/ npm run test:imaging-storage-placement-call-sites` | 14 | 0 | 0 | 0 |
+| `server/ npm run test:imaging-remote-storage` (MinIO absent) | 39 | 0 | 6 MinIO sections self-skip | 0 |
+| `server/ npm run test:imaging` | 104 | 0 | 0 | 0 |
+| `server/ npm run test:storage-key-contract` | 70 | 0 | 0 | 0 |
+| `server/ npm run test:storage-deletion-evidence` | 34 | 0 | 0 | 0 |
+| `server/ npm run test:file-backup-imaging-ops-migration` | 12 | 0 | 0 | 0 |
+| `server/ npm run server:test:non-disposable` (CI **Layer 2**, whole aggregate) | **3204** | **0** | 0 | 0 |
+| `npm run test:runtime:storage` (CI **Layer 4**, disposable PostgreSQL + MinIO) | **100** | **0** | 0 | 0 |
+| ↳ `fileBackupDbIntegration` | 42 | 0 | 0 | — |
+| ↳ `imagingRemoteStorage` (MinIO live) | 45 | 0 | 0 | — |
+| ↳ `imagingStoragePlacement` | 13 | 0 | 0 | — |
+| `npm run test:runtime:postgres` (CI **Layer 3**, disposable PostgreSQL) — **first run** | 693 | **18** | 0 | **1** |
+| `npm run test:runtime:postgres` — **re-run with the two identity-crypto env vars set** | **694** | **0** | 0 | **0** |
+| `npm run test:ci-classify` | 28 | 0 | 0 | 0 |
+| `npm run test:log-privacy-guard` | 39 | 0 | 0 | 0 |
+| `npm run log-privacy-guard:scan -- --strict-baseline` (blocking gate) | — | **0 new violations** | 103 grandfathered, no stale exception | 0 |
+| `npm run guardrail:test` | 74 | 0 | 0 | 0 |
+| `npm run typecheck:guardrail` | — | 0 | — | 0 |
+| `npm run typecheck:runtime` | — | 0 | — | 0 |
+| `npm run typecheck:ci-classify` | — | 0 | — | 0 |
+| `npm run typecheck:log-privacy-guard` | — | 0 | — | 0 |
+
+Both disposable profiles reported `migration.step = ok`, i.e. the whole chain — including the
+comment-edited `20260820130000` — still applies cleanly from an empty database. Layer 4's MinIO
+again ran in `loopback-fallback` address mode (Docker Desktop on Windows), so
+`verify:storage-run --require-offhost-destination` was deliberately not passed, exactly as in
+§5.1; that flag fails closed on loopback mode by design and is a CI-runner concern.
+
+The Layer 2 marker count carries the same caveat as §5.1 — member suites print several
+different summary formats, so 3204 is a count of individual pass markers in the run log (which
+includes 8 per-suite "`✓ N ✗ 0`" total lines), not a single reported total. Against §5.1's 3181
+the delta is the 13 new fail-closed cases plus the 1 new structural case.
+
+**The first Layer 3 run failed, and it was diagnosed rather than asserted to be unrelated.**
+`migrationExecutionDb.test.ts` reported 5 passed / 18 failed, with **every** failure carrying
+`errorCode: "IDENTITY_CRYPTO_NOT_CONFIGURED"`. Cause: `PATIENT_IDENTITY_ENCRYPTION_KEY` and
+`PATIENT_IDENTITY_LOOKUP_SECRET` were unset in this session's shell, and
+`assertPatientIdentityCryptoConfigured()` fails closed on **every call** by design, with no
+development fallback key — so every migration execution run aborts before writing anything.
+The disposable-runtime orchestrator does not set these two variables. Proof it is environmental
+and not a regression, in three independent forms:
+
+1. **It was fixed by setting the variables, not by changing code.** Re-running the identical
+   tree with both set: `migrationExecutionDb` **23 passed / 0 failed**, whole layer exit 0.
+2. **The suite cannot reach this change.** `migrationExecutionDb.test.ts` imports nothing from
+   `fileStorage.ts` or the imaging domain — it is entirely the data-migration lane.
+3. **This fix does not touch that chain.** The only `package.json` edits are the new
+   `test:imaging-placement-fail-closed` script and its append to `server:test:non-disposable`;
+   `server:test:disposable-db`, which is what Layer 3 runs, does not appear in the diff at all.
+
+**A second, more useful consequence of that first red, worth recording.** `server:test:disposable-db`
+is an `&&` chain and `test:migration-execution-db` sits ahead of `test:migration-r10-write-path-db`,
+`test:migration-analyze-lifecycle-db` and `test:patient-identity-db` — so in the first run those
+three **never executed at all**, and a reader of that log could not tell "failed" from "never
+ran". This is exactly the hazard already recorded at the end of §5.6 as deserving its own task;
+it is now observed a second time, from a different trigger. In the green re-run all three did
+run: `migrationR10WritePathDb` 21/0, `migrationAnalyzeLifecycleDb` 28/0, `patientIdentityDb`
+25/0. The known-flaky `platformAdminLoginTotpGate` (§5.6) did **not** fire in either run —
+27 ok / 0 FAIL both times.
+
+The two identity-crypto values used for the re-run were freshly generated, used only in the
+disposable test process, and are **not** written to any repository file, to this document, to
+the tracker or to the PR.
+
+### 14.7 Status delta
+
+Nothing in §13 improves because of this fix. `PRODUCTION_ACTIVATION_SAFE` stays **`NO`**: every
+§10 infrastructure/provider blocker (E1/E2/E4/E5, I1–I5, `STORAGE_MODE =
+SYNTHETIC_STAGING_ONLY`) is untouched by it. The fix removes a correctness defect that would
+have mattered *after* activation; it does not move any activation gate.

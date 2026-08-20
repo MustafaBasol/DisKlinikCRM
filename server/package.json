@@ -68,6 +68,7 @@
     "test:storage-deletion-evidence": "tsx src/tests/storageDeletionEvidence.test.ts",
     "test:imaging-remote-storage": "tsx src/tests/imagingRemoteStorage.test.ts",
     "test:imaging-storage-placement-call-sites": "tsx src/tests/imagingStoragePlacementCallSites.test.ts",
+    "test:imaging-placement-fail-closed": "tsx src/tests/imagingPlacementFailClosed.test.ts",
     "test:imaging-storage-placement": "tsx src/tests/dbVerification/imagingStoragePlacement.test.ts",
     "test:lab-attachment-legal-hold": "tsx src/tests/labOrderAttachmentLegalHold.test.ts",
     "test:finance": "tsx src/tests/financeDashboard.test.ts",

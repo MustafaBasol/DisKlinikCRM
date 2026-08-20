@@ -16,9 +16,27 @@
 --   * ADD COLUMN only. No DROP, no ALTER TYPE, no RENAME, no data statement,
 --     no index, no constraint.
 --   * NULLABLE, with NO DEFAULT. On PostgreSQL 11+ a nullable ADD COLUMN with
---     no default is a catalog-only operation: a brief ACCESS EXCLUSIVE lock,
---     no table rewrite, and a duration independent of row count. Safe on the
---     production "ImagingImage" table at any size.
+--     no default performs NO TABLE REWRITE: it updates the catalog only, so
+--     the EXECUTION WORK ONCE THE LOCK IS HELD is independent of row count.
+--     "ImagingImage" row count is therefore not a risk factor here.
+--
+--     THAT IS NOT THE SAME AS "safe at any time". The statement still needs a
+--     brief ACCESS EXCLUSIVE lock on "ImagingImage", and ACQUIRING that lock
+--     can WAIT — behind any concurrent transaction already holding a
+--     conflicting lock on the table (including a long-running read: ACCESS
+--     EXCLUSIVE conflicts with ACCESS SHARE), and, once it is queued, behind
+--     everything that then queues behind it. The catalog-only property bounds
+--     how long the lock is HELD, not how long it takes to GET. Deploy
+--     accordingly: run it inside the operator-approved migration window, and
+--     ABORT/STOP THE DEPLOY if the migration cannot acquire its lock within
+--     that window's approved timeout rather than letting it sit at the head of
+--     a growing lock queue and stall imaging traffic. This migration
+--     deliberately sets no session lock_timeout/statement_timeout of its own:
+--     this repository has no such convention in any existing migration (none
+--     issues a SET), and adding one here would make this file the only place
+--     that silently decides a production timeout policy. The bound belongs to
+--     the deploy procedure that runs `prisma migrate deploy`, where the
+--     operator can see and approve it.
 --   * ZERO BACKFILL. NULL is the meaningful, correct value for every existing
 --     row and carries real information — "written before this column existed"
 --     (pre-R6) — which readers interpret deterministically as legacy storage.

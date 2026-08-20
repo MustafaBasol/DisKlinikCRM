@@ -236,6 +236,57 @@ async function main() {
     }
   });
 
+  await test('R6 REVIEW FIX: an explicit vps2 placement can never reach a legacy primitive — the three wrappers gate on the same helper and fall through to nothing', () => {
+    // Behavioral proof lives in imagingPlacementFailClosed.test.ts. This is the
+    // structural half: a future edit that re-introduces the a5885819 shape
+    // `if (placement === 'vps2' && isSafeStorageKey(ref))` would restore a
+    // silent legacy fall-through for an explicitly-VPS2 object, and no test
+    // that only exercises safe keys would notice.
+    const src = stripComments(read('services/fileStorage.ts'));
+
+    // The defective conjunction must not come back anywhere in this module.
+    assert.equal(
+      /placement\s*===\s*'vps2'\s*&&\s*isSafeStorageKey/.test(src),
+      false,
+      'the explicit-vps2 branch must not be conditioned on isSafeStorageKey — an unusable ref must fail closed, not fall through to legacy',
+    );
+
+    // Each explicit-vps2 branch asserts the ref FIRST, then calls only the
+    // VPS2 primitive. Matching the whole branch body keeps this honest: a
+    // legacy call inserted between the two lines would break the match.
+    // Line-ending tolerant for the same Windows/CI reason as
+    // extractPrismaModelBlock above.
+    const normalized = src.replace(/\r\n/g, '\n');
+    const expectedBranches = [
+      "if (placement === 'vps2') {\n    assertVps2PlacementRefUsable(ref);\n    return getImagingObjectStream(ref);\n  }",
+      "if (placement === 'vps2') {\n    assertVps2PlacementRefUsable(ref);\n    return imagingObjectExists(ref);\n  }",
+      "if (placement === 'vps2') assertVps2PlacementRefUsable(key);",
+    ];
+    for (const branch of expectedBranches) {
+      assert.ok(
+        normalized.includes(branch),
+        `fileStorage.ts must contain the fail-closed branch: ${JSON.stringify(branch)}`,
+      );
+    }
+
+    // And the gate itself must refuse rather than degrade: no legacy primitive
+    // may appear inside the helper.
+    const helperStart = normalized.indexOf('function assertVps2PlacementRefUsable');
+    assert.ok(helperStart > -1, 'the fail-closed gate helper must exist');
+    const helperBody = normalized.slice(helperStart, normalized.indexOf('\n}', helperStart) + 2);
+    for (const legacyPrimitive of ['openFileStream', 'fileExists', 'deleteFile', 'resolveLocalPath']) {
+      assert.equal(
+        helperBody.includes(legacyPrimitive),
+        false,
+        `assertVps2PlacementRefUsable must not call ${legacyPrimitive} — it refuses, it does not substitute legacy storage`,
+      );
+    }
+    assert.ok(
+      helperBody.includes('throw new ImagingPlacementRefMismatchError()'),
+      'the gate must throw the sanitized placement error',
+    );
+  });
+
   section('3. Placement is server-derived and never reaches a client');
 
   await test('no imaging API response selector exposes storageBackend (KVKK doc 53 §10 — storage location is not serialized to callers)', () => {

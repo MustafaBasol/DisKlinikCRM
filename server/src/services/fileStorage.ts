@@ -771,6 +771,64 @@ export async function cleanupStaleLocalExportPartialFiles(
 // (see routes/attachments.ts, routes/labOrders.ts, patientPrivacyExportPackage.ts).
 
 /**
+ * F4-IMAGING-001-R6 (architecture review, PR #464) — FAIL-CLOSED ERROR FOR AN
+ * EXPLICITLY-VPS2 OBJECT WHOSE REFERENCE CANNOT BE AN OBJECT-STORAGE KEY.
+ *
+ * A row that records `storageBackend = 'vps2'` asserts a historical fact:
+ * those bytes were written to the VPS2 object store, with `filePath` used
+ * verbatim as the object key. A `filePath` that `isSafeStorageKey()` rejects
+ * (an absolute path, a UNC/drive-prefixed path, a traversal segment, a
+ * control character) can never have been such a key — `saveImagingFile()`
+ * only ever receives a `buildObjectStorageKey()` result — so the row is
+ * internally inconsistent and this process cannot tell where the bytes are.
+ *
+ * Before this error existed, that combination fell through to the legacy
+ * branch on the read and exists paths while `deleteImagingFile()` still
+ * routed to VPS2, so one and the same object could answer "legacy" to a read,
+ * "legacy" to an existence probe, and "VPS2" to a delete. For regulated
+ * imaging data that is worse than an outage. The read hands back whatever
+ * unrelated bytes happen to sit at that local path as if they were the VPS2
+ * object. The exists probe answers from legacy too — a definitive `false`
+ * out of `fileExists()`'s own key gate, i.e. a legacy-derived "confirmed
+ * gone" about a row that says the bytes are on VPS2, which is exactly what
+ * makes the orphan sweep stamp `storageVerifiedMissingAt` on a healthy row.
+ * All three paths now refuse instead — read, exists and delete cannot
+ * disagree, because none of them proceeds.
+ *
+ * Sanitized by construction, exactly like `ExportTempStorageUnsafeError`
+ * above: the message is a fixed literal and callers/logs key off `code`
+ * (`'IMAGING_PLACEMENT_REF_MISMATCH'`) — never the ref, never a bucket,
+ * endpoint, region, credential or any patient-identifying value.
+ * `safeErrorFields()` surfaces exactly that code, which is what the backup
+ * sweep persists as the row's `failed` entry.
+ */
+export class ImagingPlacementRefMismatchError extends Error {
+  readonly code = 'IMAGING_PLACEMENT_REF_MISMATCH' as const;
+  constructor() {
+    super('Imaging object placement and storage reference are inconsistent.');
+    this.name = 'ImagingPlacementRefMismatchError';
+  }
+}
+
+/**
+ * Gate for every explicitly-`'vps2'` path (read / exists / delete). Throws
+ * `ImagingPlacementRefMismatchError` rather than degrading to legacy or
+ * sending an unusable key to the object store.
+ *
+ * Deliberately NOT applied to `'legacy'` placement, nor to the omitted-
+ * placement compatibility seam: legacy storage is exactly where pre-key-era
+ * ABSOLUTE `filePath` values legitimately live, and refusing them would break
+ * every pre-R6 row (`resolveImagingStoragePlacement(NULL) === 'legacy'`).
+ * The gate exists only where an absolute path is impossible by construction.
+ */
+function assertVps2PlacementRefUsable(ref: string): void {
+  if (isSafeStorageKey(ref)) return;
+  // No ref in the log line — the code is the whole signal (see safeError.ts).
+  console.error('[fileStorage] IMAGING_PLACEMENT_REF_MISMATCH (vps2 placement with a non-object-storage reference)');
+  throw new ImagingPlacementRefMismatchError();
+}
+
+/**
  * Write path. When VPS2 mode is active, writes go ONLY to VPS2 — never
  * silently mirrored or falling back to local/legacy S3 on failure (an
  * activated operator expects a deterministic write target; a silent
@@ -817,10 +875,21 @@ export async function saveImagingFile(key: string, body: Buffer, contentType: st
  * Omitting `placement` keeps the pre-R6, flag-driven behavior for callers
  * with genuinely no per-object placement information. There are none in
  * production code; see imagingStoragePlacementCallSites.test.ts.
+ *
+ * ARCHITECTURE REVIEW (PR #464): an EXPLICIT `'vps2'` placement whose `key`
+ * cannot be an object-storage key fails closed here too — see
+ * `assertVps2PlacementRefUsable`. Without it, read/exists refusing while
+ * delete still issued a VPS2 DeleteObject would be the same read/exists/delete
+ * disagreement in mirror image. Today's only caller (the ingest rollback
+ * compensation) always passes a `buildObjectStorageKey()` result, so the gate
+ * is unreachable from production and changes no live behavior; it exists so
+ * the three paths cannot drift apart. The omitted-placement seam is
+ * deliberately NOT gated — it keeps its exact pre-R6 shape.
  */
 export async function deleteImagingFile(key: string, placement?: ImagingStoragePlacement): Promise<void> {
   const backend = placement ?? (isImagingRemoteStorageEnabled() ? 'vps2' : 'legacy');
   if (backend === 'vps2') {
+    if (placement === 'vps2') assertVps2PlacementRefUsable(key);
     await deleteImagingObject(key);
     return;
   }
@@ -861,9 +930,23 @@ export async function deleteImagingFile(key: string, placement?: ImagingStorageP
  * kept so that this module-level primitive stays usable and byte-compatible
  * for the storage-level tests that exercise it without a database row.
  *
- * `isSafeStorageKey(ref)` still gates the remote path: a pre-key-era ABSOLUTE
- * `filePath` is always a local-disk object and is never sent to an object
- * store as a key, whatever the row records.
+ * `isSafeStorageKey(ref)` still gates the remote path, but ARCHITECTURE
+ * REVIEW (PR #464) changed WHAT FAILING THAT GATE MEANS under an EXPLICIT
+ * `'vps2'` placement. It used to fall through to `openFileStream(ref)`, i.e.
+ * an object the database explicitly records as VPS2-resident was silently
+ * served from legacy storage — while `deleteImagingFile(ref, 'vps2')` still
+ * routed the delete to VPS2. Read said legacy, exists said legacy, delete said
+ * VPS2, for one and the same object: precisely the disagreement R6 exists to
+ * make impossible, and a path that can serve unverified local bytes for
+ * regulated imaging data. Explicit `'vps2'` + an unusable ref now throws
+ * `ImagingPlacementRefMismatchError` and never touches `openFileStream` /
+ * `fileExists` / any legacy fallback.
+ *
+ * The gate still applies ONLY to explicit `'vps2'`. Under `'legacy'` — which
+ * is what `resolveImagingStoragePlacement(NULL)` returns for every pre-R6 row
+ * — a pre-key-era ABSOLUTE `filePath` is a perfectly valid local-disk object
+ * and is read exactly as it always was. The omitted-placement compatibility
+ * seam above is likewise unchanged.
  */
 export async function openImagingFileStream(ref: string, placement?: ImagingStoragePlacement): Promise<Readable | null> {
   if (placement === undefined) {
@@ -874,7 +957,8 @@ export async function openImagingFileStream(ref: string, placement?: ImagingStor
     }
     return openFileStream(ref);
   }
-  if (placement === 'vps2' && isSafeStorageKey(ref)) {
+  if (placement === 'vps2') {
+    assertVps2PlacementRefUsable(ref);
     return getImagingObjectStream(ref);
   }
   return openFileStream(ref);
@@ -886,6 +970,20 @@ export async function openImagingFileStream(ref: string, placement?: ImagingStor
  * confirmed 404 is a real `false`, a provider error propagates), a `'legacy'`
  * object against legacy only. Omitting `placement` retains the pre-R6
  * flag-driven probe — see openImagingFileStream.
+ *
+ * ARCHITECTURE REVIEW (PR #464): an EXPLICIT `'vps2'` placement whose `ref`
+ * cannot be an object-storage key throws `ImagingPlacementRefMismatchError`
+ * instead of probing legacy. Any legacy-derived answer is one this process is
+ * not entitled to give for a VPS2-placed row — including the `false` that
+ * `fileExists()`'s key gate used to return here, which the orphan-inspection
+ * sweep reads as "confirmed missing" and acts on by stamping
+ * `storageVerifiedMissingAt`. `checkImageStorageExists` converts the throw to
+ * its own sanitized `ImagingStorageUnavailableError`, which propagates out of
+ * `inspectOrphans()` (it does not catch per row). The row is therefore never
+ * classified `dbRowPhysicalMissing`, so `markConfirmedMissing()` is never
+ * handed it and `storageVerifiedMissingAt` is never stamped — a failed
+ * inspection instead of a false "confirmed missing", which is the fail-closed
+ * outcome.
  */
 export async function imagingFileExists(ref: string, placement?: ImagingStoragePlacement): Promise<boolean> {
   if (placement === undefined) {
@@ -895,7 +993,8 @@ export async function imagingFileExists(ref: string, placement?: ImagingStorageP
     }
     return fileExists(ref);
   }
-  if (placement === 'vps2' && isSafeStorageKey(ref)) {
+  if (placement === 'vps2') {
+    assertVps2PlacementRefUsable(ref);
     return imagingObjectExists(ref);
   }
   return fileExists(ref);
