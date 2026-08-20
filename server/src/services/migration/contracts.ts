@@ -352,14 +352,55 @@ export interface DestinationFieldDef {
      * legal decision, and validateMapping.ts Rule 4 (a LEGAL_BLOCKED column may
      * carry no destination at all) would have to be revisited in the same
      * change — two deliberate edits, never one accident.
+     *
+     * R10 DID NOT ADD A MEMBER HERE, deliberately. R10's legacy preservation
+     * lives in the SEPARATE `legacy_preservation` group below precisely so
+     * that adding it could not, as a side effect, unlock the consent
+     * exception. This group is still empty and the exception is still
+     * structurally unreachable.
      */
-    | 'historical_evidence';
+    | 'historical_evidence'
+    /**
+     * F3-DATA-MIG-TODAY-001-R10. CONTROLLED LEGACY SOURCE PRESERVATION —
+     * a source column whose content is kept verbatim, with provenance, because
+     * it has NO canonical destination in the product and dropping it would be
+     * silent data loss.
+     *
+     * WHY THIS IS NOT `historical_evidence`. The two look similar and are not.
+     * `historical_evidence` exists to let a LEGAL_BLOCKED column (consent)
+     * through the data-loss gate under a narrow exception. This group has
+     * nothing to do with consent or with that exception: it is an ordinary
+     * destination that an operator selects for a BLOCKED or MANUAL_REQUIRED
+     * column, moving it to RESOLVED through the normal decision path. Keeping
+     * them separate is what stops "we needed somewhere to put SUBEDOSYANO"
+     * from quietly becoming "a migration may now write consent evidence".
+     *
+     * A destination in this group writes to MigrationPreservedSourceValue —
+     * evidence, never current clinical truth. Nothing in the product may
+     * branch on it. See the model doc in schema.prisma.
+     */
+    | 'legacy_preservation';
   type: DestinationValueType;
   required: boolean;
   /** Allowed transforms for this destination. */
   allowedTransforms: readonly TransformName[];
   /** True when several source columns may compose into it (documented rule). */
   allowsComposition: boolean;
+  /**
+   * F3-DATA-MIG-TODAY-001-R10. True when several source columns may each map
+   * to this destination INDEPENDENTLY — not composed into one value, but
+   * written as separate records that stay distinguishable by source column.
+   *
+   * This is the opposite of `allowsComposition`, not a synonym for it.
+   * `allowsComposition` merges N columns into ONE field (MAHALLE + ADRESI ->
+   * patient.address) and therefore needs a total ordering. This flag means N
+   * columns produce N rows and ordering is meaningless.
+   *
+   * Set on exactly one destination: `legacy.preservedSourceValue`, where every
+   * preserved value carries its own `sourceColumn`, so two columns sharing the
+   * destination can never be confused for each other.
+   */
+  allowsIndependentMultiUse?: boolean;
   /** Allowed values when type === 'enum'. */
   enumValues?: readonly string[];
   /**
@@ -409,6 +450,15 @@ export const TRANSFORM_NAMES = [
   'identity_tckn',
   'provenance_source_id',
   'practitioner_reference',
+  /**
+   * F3-DATA-MIG-TODAY-001-R10. Preserve the source value VERBATIM. Trims
+   * nothing beyond the parser's own projection, folds no case, strips no
+   * diacritic, normalizes no format — the whole point of preservation is that
+   * the stored value is what the old system held. Same discipline as
+   * `practitioner_reference`, for the same reason: a "helpful" normalization
+   * silently destroys the evidence it was asked to keep.
+   */
+  'preserve_source_value',
 ] as const;
 
 export type TransformName = (typeof TRANSFORM_NAMES)[number];
@@ -633,6 +683,21 @@ export const DESTINATION_FIELDS: readonly DestinationFieldDef[] = [
     note: 'Free text — no province lookup table exists in the product, so values are not canonicalized.',
   },
   {
+    key: 'patient.district',
+    label: 'District (ilçe)',
+    group: 'address',
+    type: 'string',
+    required: false,
+    allowedTransforms: ['trim'],
+    allowsComposition: false,
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. The district half of a Turkish address, added because ' +
+      'the product had no destination for it and source ILCE therefore had to sit at ' +
+      'MANUAL_REVIEW. Distinct from patient.city, which is the PROVINCE (il) and is claimed ' +
+      'by source IL. Deliberately NOT composed into patient.address: composition order would ' +
+      'then depend on fill rate and break rerun stability.',
+  },
+  {
     key: 'patient.country',
     label: 'Country of residence',
     group: 'address',
@@ -641,6 +706,52 @@ export const DESTINATION_FIELDS: readonly DestinationFieldDef[] = [
     allowedTransforms: ['trim'],
     allowsComposition: false,
     note: 'Address country, NOT citizenship. A valid mapping even at 0 % fill for this customer.',
+  },
+  {
+    key: 'patient.contactPoint.home',
+    label: 'Home phone (secondary)',
+    group: 'contact',
+    type: 'phone',
+    required: false,
+    allowedTransforms: ['phone_tr', 'trim'],
+    allowsComposition: false,
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. Writes a PatientContactPoint of type "home". NEVER touches ' +
+      'patient.phone, which stays the single primary number every existing flow reads, and ' +
+      'NEVER creates a PatientEmergencyContact — routing a patient\'s own second number into ' +
+      'an emergency contact would fabricate a named third party and a legal decision-maker.',
+  },
+  {
+    key: 'patient.contactPoint.work',
+    label: 'Work phone (secondary)',
+    group: 'contact',
+    type: 'phone',
+    required: false,
+    allowedTransforms: ['phone_tr', 'trim'],
+    allowsComposition: false,
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. Writes a PatientContactPoint of type "work". Same rules as ' +
+      'the home destination: primary phone untouched, no emergency contact fabricated.',
+  },
+  {
+    key: 'legacy.preservedSourceValue',
+    label: 'Preserve as legacy source value',
+    group: 'legacy_preservation',
+    type: 'string',
+    required: false,
+    allowedTransforms: ['preserve_source_value'],
+    allowsComposition: false,
+    allowsIndependentMultiUse: true,
+    note:
+      'F3-DATA-MIG-TODAY-001-R10. THE SAFETY VALVE. Keeps a source column\'s value verbatim on ' +
+      'MigrationPreservedSourceValue with full provenance (run, vendor system, source column, ' +
+      'source row) when the column carries real data but has no canonical destination — the ' +
+      'alternative to inventing a Patient field for it or dropping it silently. MANY columns may ' +
+      'select this destination independently; each preserved row records its own sourceColumn, ' +
+      'so they never merge. This is EVIDENCE, not current clinical truth: no clinical, ' +
+      'messaging, billing or patient-matching code path may read it. It is NOT a route for ' +
+      'consent — consent columns are LEGAL_BLOCKED and validateMapping Rule 4 forbids them ' +
+      'carrying any destination at all, including this one.',
   },
   {
     key: 'patient.patientStatus',

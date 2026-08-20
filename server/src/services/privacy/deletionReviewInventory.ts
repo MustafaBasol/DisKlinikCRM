@@ -48,6 +48,22 @@ export interface DeletionReviewInventory {
     payments: number;
     paymentPlans: number;
     toothRecords: number;
+    /**
+     * F3-DATA-MIG-TODAY-001-R10. Secondary patient phone numbers. Counted
+     * because this inventory's job is to tell a reviewer everything a
+     * deletion would touch, and a patient-scoped row that no surface counts
+     * is a row nobody reviews.
+     */
+    contactPoints: number;
+    /**
+     * F3-DATA-MIG-TODAY-001-R10. Legacy source values preserved from a
+     * migration. Counted for the same reason, and it matters more here than
+     * the others: these rows hold raw legacy PII, so a review that did not
+     * mention them would understate what is actually held about the patient.
+     * The count is unfiltered by `sensitivity` — a reviewer needs the true
+     * total, not the bulk-export-visible subset.
+     */
+    preservedSourceValues: number;
   };
   attachments: {
     total: number;
@@ -106,6 +122,8 @@ export async function buildDeletionReviewInventory(params: {
     payments,
     paymentPlans,
     toothRecords,
+    contactPoints,
+    preservedSourceValues,
     attachmentRows,
     imagingImageRows,
   ] = await Promise.all([
@@ -116,6 +134,9 @@ export async function buildDeletionReviewInventory(params: {
     prisma.payment.count({ where: { patientId, clinicId } }),
     prisma.paymentPlan.count({ where: { patientId, clinicId } }),
     prisma.toothRecord.count({ where: { patientId, clinicId } }),
+    // F3-DATA-MIG-TODAY-001-R10 — patient-scoped rows added by R10.
+    prisma.patientContactPoint.count({ where: { patientId, clinicId } }),
+    prisma.migrationPreservedSourceValue.count({ where: { patientId, clinicId } }),
     prisma.patientAttachment.findMany({
       where: { clinicId, patientId },
       select: { legalHold: true, fileSize: true },
@@ -158,6 +179,8 @@ export async function buildDeletionReviewInventory(params: {
       payments,
       paymentPlans,
       toothRecords,
+      contactPoints,
+      preservedSourceValues,
     },
     attachments: {
       total: attachmentRows.length,

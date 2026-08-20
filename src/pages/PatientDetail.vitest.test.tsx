@@ -38,6 +38,7 @@ import {
   insuranceProvisionService,
   attachmentService,
   patientEmergencyContactService,
+  patientContactPointService,
 } from '../services/api';
 
 const { getMockTab, setMockTab } = vi.hoisted(() => {
@@ -73,6 +74,10 @@ vi.mock('../services/api', () => ({
   insuranceProvisionService: { getAll: vi.fn() },
   attachmentService: { getAll: vi.fn() },
   patientEmergencyContactService: { getAll: vi.fn(), remove: vi.fn() },
+  // F3-DATA-MIG-TODAY-001-R10: the profile card now also loads the secondary
+  // phone (contact-point) sub-resource; without this the explicit factory
+  // mock would throw "No export is defined" on the real module.
+  patientContactPointService: { getAll: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
   default: { get: vi.fn(() => Promise.reject(new Error('not mocked'))) },
 }));
 
@@ -133,6 +138,7 @@ const planSvc = paymentPlanService as unknown as Record<string, ReturnType<typeo
 const insuranceSvc = insuranceProvisionService as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const attachmentSvc = attachmentService as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const emergencyContactSvc = patientEmergencyContactService as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const contactPointSvc = patientContactPointService as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 const BASE_PATIENT = {
   id: 'patient-1',
@@ -176,6 +182,7 @@ beforeEach(() => {
   insuranceSvc.getAll.mockResolvedValue({ data: [] });
   attachmentSvc.getAll.mockResolvedValue({ data: [] });
   emergencyContactSvc.getAll.mockResolvedValue({ data: [] });
+  contactPointSvc.getAll.mockResolvedValue({ data: { contactPoints: [] } });
 });
 
 function renderPatientDetail() {

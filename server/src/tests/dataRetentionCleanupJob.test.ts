@@ -151,6 +151,12 @@ await test('default resolvedContactRequestDays is 365', () => {
   assert.equal(cfg.resolvedContactRequestDays, 365);
 });
 
+await test('default migrationPreservedSourceDays is 3650 (10 years)', () => {
+  const cfg = withEnv({ DATA_RETENTION_MIGRATION_PRESERVED_SOURCE_DAYS: undefined }, () =>
+    loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(cfg.migrationPreservedSourceDays, 3650);
+});
+
 await test('default batchSize is 500', () => {
   const cfg = withEnv({ DATA_RETENTION_BATCH_SIZE: undefined }, () =>
     loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
@@ -183,6 +189,18 @@ await test('env override: conversationMessagesDays', () => {
   const cfg = withEnv({ DATA_RETENTION_CONVERSATION_MESSAGES_DAYS: '730' }, () =>
     loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
   assert.equal(cfg.conversationMessagesDays, 730);
+});
+
+await test('env override: migrationPreservedSourceDays', () => {
+  const cfg = withEnv({ DATA_RETENTION_MIGRATION_PRESERVED_SOURCE_DAYS: '1825' }, () =>
+    loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(cfg.migrationPreservedSourceDays, 1825);
+});
+
+await test('below-minimum migrationPreservedSourceDays falls back to the 3650-day default', () => {
+  const cfg = withEnv({ DATA_RETENTION_MIGRATION_PRESERVED_SOURCE_DAYS: '10' }, () =>
+    loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(cfg.migrationPreservedSourceDays, 3650);
 });
 
 await test('env override: batchSize', () => {
@@ -424,6 +442,47 @@ await test('external calendar inbound events use the same inboundEventDays thres
     `threshold should be ~90 days ago, got ${call.threshold.toISOString()}`);
 });
 
+// ── Section H3: MigrationPreservedSourceValue ────────────────────────────────
+
+section('H3. MigrationPreservedSourceValue (F3-DATA-MIG-TODAY-001-R10 legacy import evidence)');
+
+await test('live run: preserved legacy source values past the window are deleted', async () => {
+  const preservedDeps = makeCategoryDeps(6);
+  const summary = await runDataRetentionCleanup(
+    { dryRun: false, config: DEFAULT_TEST_CONFIG },
+    { conversationMessages: zeroDeps(), conversationStates: zeroDeps(),
+      operationalEvents: zeroDeps(), inboundEvents: zeroDeps(),
+      externalCalendarInboundEvents: zeroDeps(),
+      contactRequests: zeroDeps(), inboxEntries: zeroDeps(),
+      communicationConsentConflictBuckets: zeroDeps(),
+      migrationPreservedSourceValues: preservedDeps },
+  );
+  assert.equal(summary.deletedMigrationPreservedSourceValues, 6);
+  assert.equal(preservedDeps.executeCalls.length, 1);
+});
+
+await test('preserved source values age on their own migrationPreservedSourceDays threshold', async () => {
+  const preservedDeps = makeCategoryDeps(1);
+  const config = { ...DEFAULT_TEST_CONFIG, migrationPreservedSourceDays: 3650 };
+
+  await runDataRetentionCleanup(
+    { dryRun: false, config },
+    { conversationMessages: zeroDeps(), conversationStates: zeroDeps(),
+      operationalEvents: zeroDeps(), inboundEvents: zeroDeps(),
+      externalCalendarInboundEvents: zeroDeps(),
+      contactRequests: zeroDeps(), inboxEntries: zeroDeps(),
+      communicationConsentConflictBuckets: zeroDeps(),
+      migrationPreservedSourceValues: preservedDeps },
+  );
+
+  const call = preservedDeps.executeCalls[0];
+  assert.ok(call, 'executeCleanupBatch should have been called');
+  const expectedThreshold = new Date();
+  expectedThreshold.setDate(expectedThreshold.getDate() - 3650);
+  assert.ok(Math.abs(call.threshold.getTime() - expectedThreshold.getTime()) < 2000,
+    `threshold should be ~3650 days ago, got ${call.threshold.toISOString()}`);
+});
+
 // ── Section I: OperationalEvent ───────────────────────────────────────────────
 
 section('I. OperationalEvent');
@@ -539,6 +598,7 @@ await test('all categories fail: summary has errors but does not throw', async (
     contactRequests: failingDeps('e'),
     inboxEntries: failingDeps('f'),
     communicationConsentConflictBuckets: failingDeps('g'),
+    migrationPreservedSourceValues: failingDeps('i'),
   };
 
   let threw = false;
@@ -550,7 +610,7 @@ await test('all categories fail: summary has errors but does not throw', async (
   }
   assert.equal(threw, false, 'runDataRetentionCleanup must not throw even if all categories fail');
   assert.ok(summary, 'summary should be returned');
-  assert.ok((summary?.errors?.length ?? 0) >= 8, 'should have collected all 8 errors');
+  assert.ok((summary?.errors?.length ?? 0) >= 9, 'should have collected all 9 errors');
 });
 
 // ── Section L: Log safety ─────────────────────────────────────────────────────
@@ -705,6 +765,7 @@ await test('summary contains all required fields', async () => {
   assert.ok('deletedExternalCalendarInboundEvents' in summary);
   assert.ok('anonymizedContactRequests' in summary);
   assert.ok('redactedInboxEntries' in summary);
+  assert.ok('deletedMigrationPreservedSourceValues' in summary);
   assert.ok('skippedCategories' in summary);
   assert.ok('errors' in summary);
   assert.ok('dryRun' in summary);

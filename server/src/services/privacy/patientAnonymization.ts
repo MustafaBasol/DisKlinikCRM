@@ -6,8 +6,13 @@
  *
  * Design rules:
  * - Never hard-deletes patient row or medical/financial records.
- * - PatientIdentityDocument is the ONE hard-deleted child (pure identifier,
- *   zero clinical value) — see deletePatientIdentityDocuments below.
+ * - Three children are hard-deleted, and only three, each because the row
+ *   carries NO clinical, financial or audit value once the patient is
+ *   anonymized: PatientIdentityDocument (pure identifier), PatientContactPoint
+ *   (the patient's own secondary phone numbers) and
+ *   MigrationPreservedSourceValue (raw legacy PII kept only as import
+ *   evidence). See deletePatientIdentityDocuments / deletePatientContactPoints
+ *   / deletePatientPreservedSourceValues below.
  * - Linked communication records (ContactRequest, WhatsApp, Instagram) have
  *   their contact-identifying fields cleared.
  * - Audit log is written without full patient PII.
@@ -54,6 +59,18 @@ export type AnonymizePatientResult = {
    * idempotent re-run (the first run already destroyed them).
    */
   identityDocumentsDeleted: number;
+  /**
+   * F3-DATA-MIG-TODAY-001-R10. Number of PatientContactPoint rows HARD
+   * DELETED for this patient. 0 on a patient that never had one, and 0 on an
+   * idempotent re-run.
+   */
+  contactPointsDeleted: number;
+  /**
+   * F3-DATA-MIG-TODAY-001-R10. Number of MigrationPreservedSourceValue rows
+   * HARD DELETED for this patient. 0 on a patient that was never migrated,
+   * and 0 on an idempotent re-run.
+   */
+  preservedSourceValuesDeleted: number;
   /**
    * True if any attachment or imaging redaction failed. Callers (the privacy
    * route) MUST surface this — never report unconditional success when this
@@ -230,6 +247,62 @@ async function deletePatientIdentityDocuments(patientId: string): Promise<number
   return count;
 }
 
+/**
+ * F3-DATA-MIG-TODAY-001-R10 (PatientContactPoint): HARD DELETE, not redaction.
+ *
+ * These rows ARE the patient's own alternative phone numbers (home/work/other)
+ * and nothing else. Unlike PatientEmergencyContact — whose row is preserved
+ * because `isPrimary`/`isLegalDecisionMaker` encode a clinically meaningful
+ * fact about who may decide for the patient — a contact point carries no
+ * clinical, financial or audit fact at all: strip `value`/`normalizedValue`/
+ * `label` and what remains is an empty shell asserting only "this patient once
+ * had a second number", which is itself a (weak) quasi-identifier and of no
+ * use to anyone. Preserving it would keep the row count and destroy the
+ * content — the worst of both. So the row goes.
+ *
+ * Ordering follows the identity-document precedent exactly: this runs BEFORE
+ * the patient row is flipped to `isAnonymized = true`, so a failure at any
+ * later step leaves `isAnonymized = false` and the whole sequence is retried,
+ * rather than leaving a row that CLAIMS to be anonymized while still holding
+ * live phone numbers.
+ *
+ * Scoped by patientId ALONE, deliberately, for the same reason as
+ * deletePatientIdentityDocuments: the patient was already resolved under
+ * clinicId + organizationId scope by the caller, and adding clinicId here
+ * would fail OPEN — a contact point whose clinicId drifted from the patient's
+ * (e.g. after a branch transfer) would silently survive anonymization.
+ * Idempotent by construction: a second run deletes 0 rows.
+ */
+async function deletePatientContactPoints(patientId: string): Promise<number> {
+  const { count } = await prisma.patientContactPoint.deleteMany({ where: { patientId } });
+  return count;
+}
+
+/**
+ * F3-DATA-MIG-TODAY-001-R10 (MigrationPreservedSourceValue): HARD DELETE.
+ *
+ * Preserved source values are the raw cells of the clinic's PREVIOUS system,
+ * kept verbatim with provenance because they had no canonical destination —
+ * parents' names, extra phone numbers, free text. They are import EVIDENCE,
+ * explicitly never current clinical truth (nothing in the product may branch
+ * on them), so anonymization's "preserve the operational record" rule does not
+ * apply: there is no operational record here to preserve, only unstructured
+ * legacy PII. Leaving these rows behind would void the anonymization guarantee
+ * outright — the patient's name, parents and phone numbers would still be
+ * readable from a table nobody thinks to look at.
+ *
+ * Redaction is not an option either: the value column is the whole row, and a
+ * preserved value with its value cleared is provenance pointing at nothing.
+ *
+ * Same ordering discipline and same `patientId`-only scoping as
+ * deletePatientIdentityDocuments/deletePatientContactPoints above — see those
+ * for the full rationale. Idempotent: a second run deletes 0 rows.
+ */
+async function deletePatientPreservedSourceValues(patientId: string): Promise<number> {
+  const { count } = await prisma.migrationPreservedSourceValue.deleteMany({ where: { patientId } });
+  return count;
+}
+
 const ANON_FIRST = 'Anonim';
 const ANON_LAST  = 'Hasta';
 const ANON_TEXT  = '[ANONYMIZED]';
@@ -295,12 +368,12 @@ export async function anonymizePatientData(
     });
     // Same reason the passes below are re-run: an anonymization performed
     // before gender/chartNumber (F3-DATA-MIG-TODAY-001, G-E5/G-E6) or
-    // bloodGroup (R8) were added to this payload never nulled them, and the isAnonymized guard above means the
+    // bloodGroup (R8) or district (R10) were added to this payload never nulled them, and the isAnonymized guard above means the
     // main patient.update() block never runs again to backfill them. Blind and
     // idempotent — nulling an already-null column is a no-op.
     await prisma.patient.updateMany({
       where: { id: patientId, clinicId },
-      data: { gender: null, chartNumber: null, bloodGroup: null },
+      data: { gender: null, chartNumber: null, bloodGroup: null, district: null },
     });
     // Still run the attachment/imaging/emergency-contact redaction passes —
     // re-running must be a safe no-op (already-redacted rows are skipped, see
@@ -318,6 +391,13 @@ export async function anonymizePatientData(
     // before identity documents shipped never destroyed them. Deletes 0 rows
     // on a patient the current code path already handled.
     const identityDocumentsDeleted = await deletePatientIdentityDocuments(patientId);
+    // F3-DATA-MIG-TODAY-001-R10, same reason again: a patient anonymized
+    // before secondary contact points and preserved legacy source values
+    // existed still holds both, and the isAnonymized guard means the main
+    // block never runs to destroy them. Both deletes are idempotent and
+    // delete 0 rows on a patient the current code path already handled.
+    const contactPointsDeleted = await deletePatientContactPoints(patientId);
+    const preservedSourceValuesDeleted = await deletePatientPreservedSourceValues(patientId);
     return {
       alreadyAnonymized: true,
       patientId,
@@ -325,6 +405,8 @@ export async function anonymizePatientData(
       attachmentResults,
       imagingResults,
       identityDocumentsDeleted,
+      contactPointsDeleted,
+      preservedSourceValuesDeleted,
       partialFailure: attachmentResults.failed > 0 || imagingResults.failed > 0,
     };
   }
@@ -352,6 +434,23 @@ export async function anonymizePatientData(
   // repairs rows anonymized before this field existed.
   const identityDocumentsDeleted = await deletePatientIdentityDocuments(patientId);
 
+  // ── 0b. PatientContactPoint: HARD DELETE, BEFORE the patient is marked ────
+  // F3-DATA-MIG-TODAY-001-R10. Same ordering rationale as step 0 above, and
+  // for the same reason: these rows hold live phone numbers, so a failure
+  // between this delete and the patient update must leave `isAnonymized =
+  // false` and force a full retry — never a row that claims to be anonymized
+  // while its secondary numbers are still readable. See
+  // deletePatientContactPoints for why the row is destroyed rather than
+  // redacted, and why it is scoped by patientId alone.
+  const contactPointsDeleted = await deletePatientContactPoints(patientId);
+
+  // ── 0c. MigrationPreservedSourceValue: HARD DELETE, BEFORE the mark ───────
+  // F3-DATA-MIG-TODAY-001-R10. Raw legacy PII kept only as import evidence.
+  // Identical ordering discipline to steps 0 and 0b — see
+  // deletePatientPreservedSourceValues for why leaving these rows behind
+  // would void the anonymization guarantee outright.
+  const preservedSourceValuesDeleted = await deletePatientPreservedSourceValues(patientId);
+
   // ── 1. Anonymize patient identity fields ──────────────────────────────────
   await prisma.patient.update({
     where: { id: patientId },
@@ -363,6 +462,13 @@ export async function anonymizePatientData(
       dateOfBirth: null,
       address: null,
       city: null,
+      // F3-DATA-MIG-TODAY-001-R10: district (ilçe) is address PII and a
+      // sharper quasi-identifier than `city` above it — a province holds
+      // millions of people, a district thousands, so retaining it while
+      // nulling everything else would materially narrow a re-identification
+      // search against the surviving operational record. Nulled on exactly
+      // the same basis as city/postalCode/address.
+      district: null,
       postalCode: null,
       country: null,
       notes: null,
@@ -402,8 +508,9 @@ export async function anonymizePatientData(
     },
   });
 
-  // (Identity documents were hard-deleted in step 0, before the patient was
-  // marked anonymized — see the ordering rationale there.)
+  // (Identity documents, secondary contact points and preserved legacy source
+  // values were hard-deleted in steps 0/0b/0c, before the patient was marked
+  // anonymized — see the ordering rationale there.)
 
   // ── 2. ContactRequests: clear contact PII ─────────────────────────────────
   await prisma.contactRequest.updateMany({
@@ -576,6 +683,10 @@ export async function anonymizePatientData(
       imagingResults,
       // Count only — never the identifier, never its docType/value.
       identityDocumentsDeleted,
+      // Counts only — never the phone number, never the preserved value, and
+      // never the vendor column name it came from.
+      contactPointsDeleted,
+      preservedSourceValuesDeleted,
       partialFailure,
     },
   });
@@ -598,6 +709,8 @@ export async function anonymizePatientData(
     attachmentResults,
     imagingResults,
     identityDocumentsDeleted,
+    contactPointsDeleted,
+    preservedSourceValuesDeleted,
     partialFailure,
   };
 }

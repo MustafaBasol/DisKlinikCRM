@@ -55,6 +55,11 @@ export const PATIENT_SELECT = {
   dateOfBirth: true,
   address: true,
   city: true,
+  // F3-DATA-MIG-TODAY-001-R10. District (ilçe) — the other half of the
+  // address the clinic already sees and edits in the patient UI, alongside
+  // `city` (province/il) above. Omitting it would hand the clinic back an
+  // address that silently lost a line.
+  district: true,
   postalCode: true,
   country: true,
   patientStatus: true,
@@ -82,6 +87,66 @@ export const PATIENT_SELECT = {
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.PatientSelect;
+
+/**
+ * F3-DATA-MIG-TODAY-001-R10 — PatientContactPoint (secondary patient phone
+ * numbers: home/work/other).
+ *
+ * Clinic-owned patient contact data the exporting clinic already sees on the
+ * patient record, so it belongs in the clinic's own copy exactly as
+ * `Patient.phone` does. `patientId` IS exported (unlike on PATIENT_SELECT,
+ * where the tenant keys are the constant-per-row ones) because it is the join
+ * key that makes patient-contact-points.ndjson usable at all.
+ *
+ * `clinicId`/`organizationId` are deliberately absent: the export is already
+ * per-clinic, so both would be a constant in every row — the same reasoning
+ * recorded in BULK_EXPORT_EXEMPT for Patient.
+ */
+export const PATIENT_CONTACT_POINT_SELECT = {
+  id: true,
+  patientId: true,
+  contactType: true,
+  value: true,
+  normalizedValue: true,
+  label: true,
+  source: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.PatientContactPointSelect;
+
+/**
+ * F3-DATA-MIG-TODAY-001-R10 — MigrationPreservedSourceValue (legacy source
+ * values preserved verbatim with provenance during a migration).
+ *
+ * Exported because it is the clinic's OWN historical record, carried over
+ * from the system it migrated off; a bulk export that dropped it would hand
+ * back a copy missing everything the previous vendor held. The provenance
+ * columns (sourceSystem/sourceColumn/sourceRowNumber/importedAt) travel with
+ * the value on purpose — a preserved value without its provenance is an
+ * unattributed string, which is exactly what this model exists to avoid.
+ *
+ * `migrationRunId` is deliberately NOT exported: it is an internal
+ * platform-side run identifier with no meaning outside this deployment, and
+ * no consumer of the export package resolves it.
+ *
+ * `sensitivity` is exported, but note it is ALSO a filter: the export stream
+ * in clinicBulkExportPackage.ts selects rows with sensitivity 'NORMAL' only.
+ * RESTRICTED rows never enter this file. The column is carried so a consumer
+ * can see the classification of what it did receive, not so it can do the
+ * filtering itself.
+ */
+export const MIGRATION_PRESERVED_SOURCE_VALUE_SELECT = {
+  id: true,
+  patientId: true,
+  sourceSystem: true,
+  sourceColumn: true,
+  sourceRowNumber: true,
+  value: true,
+  valueType: true,
+  semanticClass: true,
+  sensitivity: true,
+  importedAt: true,
+} satisfies Prisma.MigrationPreservedSourceValueSelect;
 
 export const APPOINTMENT_SELECT = {
   id: true,

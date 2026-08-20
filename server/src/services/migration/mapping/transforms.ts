@@ -682,6 +682,26 @@ const practitionerReference: TransformFn = (input) => {
   return ok(text === '' ? null : text);
 };
 
+/**
+ * Legacy source-value preservation (F3-DATA-MIG-TODAY-001-R10).
+ *
+ * Returns the value AS-IS, exactly like `practitionerReference` and for the
+ * same reason inverted: preservation exists so a reviewer can see WHAT THE OLD
+ * SYSTEM HELD. A transform that trimmed, folded case, collapsed whitespace or
+ * reformatted a number would destroy the very thing it was asked to keep, and
+ * would do it invisibly — the preserved row would still look plausible.
+ *
+ * Emits NO warning, ever. A warning here could only be about the shape of a
+ * value nobody has classified, and warning codes are operator-facing; there is
+ * nothing useful to say about a value whose semantics are by definition
+ * unresolved. Empty stays empty: an absent source cell preserves nothing, so
+ * no evidence row is written for it (see rowBuilder).
+ */
+const preserveSourceValue: TransformFn = (input) => {
+  const text = first(input).text;
+  return ok(text === '' ? null : text);
+};
+
 // ---------------------------------------------------------------------------
 // registry
 // ---------------------------------------------------------------------------
@@ -706,6 +726,7 @@ export const TRANSFORMS: Record<TransformName, TransformFn> = {
   identity_tckn: identityTckn,
   provenance_source_id: provenanceSourceId,
   practitioner_reference: practitionerReference,
+  preserve_source_value: preserveSourceValue,
 };
 
 export function applyTransform(name: TransformName, input: TransformInput): TransformOutput {

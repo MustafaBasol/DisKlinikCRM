@@ -434,6 +434,9 @@ async function main() {
     ACTIVITY_LOG_SELECT: allowlists.ACTIVITY_LOG_SELECT,
     INSURANCE_PROVISION_SELECT: allowlists.INSURANCE_PROVISION_SELECT,
     INVENTORY_ITEM_SELECT: allowlists.INVENTORY_ITEM_SELECT,
+    // F3-DATA-MIG-TODAY-001-R10 entity streams.
+    PATIENT_CONTACT_POINT_SELECT: allowlists.PATIENT_CONTACT_POINT_SELECT,
+    MIGRATION_PRESERVED_SOURCE_VALUE_SELECT: allowlists.MIGRATION_PRESERVED_SOURCE_VALUE_SELECT,
   };
 
   await test('every entity SELECT constant excludes every denylisted secret field name', () => {
@@ -455,6 +458,27 @@ async function main() {
     assert.ok(source.includes('select: USER_SELECT'));
     assert.ok(source.includes('select: PATIENT_SELECT'));
     assert.ok(source.includes('select: INVENTORY_ITEM_SELECT'));
+    assert.ok(source.includes('select: PATIENT_CONTACT_POINT_SELECT'));
+    assert.ok(source.includes('select: MIGRATION_PRESERVED_SOURCE_VALUE_SELECT'));
+  });
+
+  await test('preserved source values are streamed with a sensitivity NORMAL filter in the QUERY', async () => {
+    // F3-DATA-MIG-TODAY-001-R10. RESTRICTED preserved values are excluded
+    // from clinic bulk export by policy. The filter must live in the Prisma
+    // where clause, not in a post-read map: a RESTRICTED row must never be
+    // loaded into the export process at all, and the exclusion must not be
+    // lose-able by an edit to the streaming/serialization code downstream.
+    const source = await readSource('services/privacy/clinicBulkExportPackage.ts');
+    assert.match(
+      source,
+      /migration-preserved-source-values\.ndjson/,
+      'the preserved-source-value entity stream must exist',
+    );
+    assert.match(
+      source,
+      /where:\s*\{\s*clinicId,\s*sensitivity:\s*'NORMAL'\s*\}/,
+      'the preserved-source-value stream must filter sensitivity to NORMAL inside the query',
+    );
   });
 
   section('8. Audit fail-closed boundary');

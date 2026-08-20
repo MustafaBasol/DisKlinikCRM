@@ -65,6 +65,8 @@ import {
   ACTIVITY_LOG_SELECT,
   INSURANCE_PROVISION_SELECT,
   INVENTORY_ITEM_SELECT,
+  PATIENT_CONTACT_POINT_SELECT,
+  MIGRATION_PRESERVED_SOURCE_VALUE_SELECT,
 } from './clinicBulkExportFieldAllowlists.js';
 
 // ── Constants ────────────────────────────────────────────────────────────
@@ -1151,6 +1153,48 @@ function buildEntityDefinitions(clinicId: string): EntityDefinition[] {
           take,
         };
         return prisma.patient.findMany(withCursor(base, cursor));
+      },
+    },
+    {
+      // F3-DATA-MIG-TODAY-001-R10: secondary patient phone numbers. Scoped by
+      // clinicId like every other stream here; no soft-delete column exists
+      // on this model, so there is no deletedAt filter to apply.
+      fileName: 'patient-contact-points.ndjson',
+      fetchBatch: (cursor, take) => {
+        const base: Prisma.PatientContactPointFindManyArgs = {
+          where: { clinicId },
+          select: PATIENT_CONTACT_POINT_SELECT,
+          orderBy: { id: 'asc' },
+          take,
+        };
+        return prisma.patientContactPoint.findMany(withCursor(base, cursor));
+      },
+    },
+    {
+      // F3-DATA-MIG-TODAY-001-R10: preserved legacy source values.
+      //
+      // sensitivity: 'NORMAL' is a HARD FILTER, not a display hint. A
+      // RESTRICTED preserved value is one the migration operator classified
+      // at write time as too sensitive to redistribute in bulk, and this
+      // export produces a downloadable ZIP that leaves the platform's
+      // control. The filter lives HERE (in the query) rather than in a
+      // post-read map so that a RESTRICTED row is never even loaded into the
+      // export process's memory, and so the exclusion cannot be lost by an
+      // edit to the streaming/serialization code downstream.
+      //
+      // The subject-access export (routes/patientPrivacy.ts) deliberately
+      // applies NO such filter — see the note there. Bulk export to the
+      // clinic and disclosure to the data subject are different rights with
+      // different scopes.
+      fileName: 'migration-preserved-source-values.ndjson',
+      fetchBatch: (cursor, take) => {
+        const base: Prisma.MigrationPreservedSourceValueFindManyArgs = {
+          where: { clinicId, sensitivity: 'NORMAL' },
+          select: MIGRATION_PRESERVED_SOURCE_VALUE_SELECT,
+          orderBy: { id: 'asc' },
+          take,
+        };
+        return prisma.migrationPreservedSourceValue.findMany(withCursor(base, cursor));
       },
     },
     {

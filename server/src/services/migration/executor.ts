@@ -58,6 +58,7 @@ import {
 } from '../../utils/patientIdentityCrypto.js';
 import { classifyIdentities, type IdentityDecision } from './identity/identityClassifier.js';
 import { buildRow, compileMapping, type BuiltRow, type CompiledMapping } from './rowBuilder.js';
+import { classifyColumnSensitivity } from './mapping/columnPreview.js';
 import type { ResolvedMapping } from './rowBuilder.js';
 import type { CanonicalWorkbook } from './contracts.js';
 import {
@@ -400,6 +401,29 @@ interface BatchResult {
  * what keeps "one malformed row" from costing 499 good ones, while still
  * making a database outage leave no half-written batch.
  */
+
+/**
+ * Sensitivity of a PRESERVED legacy value (F3-DATA-MIG-TODAY-001-R10).
+ *
+ * FAILS CLOSED. A preserved column is, by definition, one nobody has been able
+ * to classify into a product field — so the honest default is RESTRICTED, which
+ * excludes it from clinic bulk export while leaving it fully available through
+ * the patient's own subject-access export and fully covered by anonymization.
+ * Only a column the shared classifier positively recognises as low-risk is
+ * released to bulk export.
+ *
+ * Reuses columnPreview's classifier rather than a private keyword list so the
+ * two cannot drift, and so this degrades sensibly for a vendor this program has
+ * never seen. `destinationType` is deliberately not passed: every preserved
+ * value shares one generic string destination, so it carries no signal, and
+ * passing it would only dilute the header/length evidence that does.
+ */
+function preservedSensitivityFor(sourceColumn: string, value: string): 'NORMAL' | 'RESTRICTED' {
+  return classifyColumnSensitivity(sourceColumn, undefined, value.length) === 'low'
+    ? 'NORMAL'
+    : 'RESTRICTED';
+}
+
 async function executeOneBatch(input: BatchInput): Promise<BatchResult> {
   const startedAt = Date.now();
   const {
@@ -584,6 +608,10 @@ async function executeOneBatch(input: BatchInput): Promise<BatchResult> {
               // logged.
               bloodGroup: row.draft.bloodGroup,
               primaryPractitionerId,
+              // F3-DATA-MIG-TODAY-001-R10. District / ilce. An ordinary
+              // address scalar with no special gate: `patient.district` is a
+              // plain AUTO_CONFIDENT destination, exactly like city/country.
+              district: row.draft.district,
               // Deliberately NOT set, each for a recorded reason:
               //   postalCode       — ADRES_KODU semantics unresolved
               //   source           — enum-constrained; free-text referrer would
@@ -630,6 +658,66 @@ async function executeOneBatch(input: BatchInput): Promise<BatchResult> {
               },
             });
             identityWritten = true;
+          }
+
+          /*
+           * -- secondary contact points (F3-DATA-MIG-TODAY-001-R10) --
+           * In the SAME transaction as the patient, so a failure here rolls the
+           * patient back with it rather than leaving a patient whose alternative
+           * numbers silently vanished.
+           *
+           * `Patient.phone` is NOT touched by any of this. These are child rows
+           * of type home/work; the primary number was already written above from
+           * `patient.phone`, and nothing here can reach it.
+           *
+           * skipDuplicates honours @@unique([patientId, contactType, value]), so
+           * a rerun over the same source row adds nothing — the same idempotency
+           * property MigrationRecord gives the patient itself.
+           */
+          if (row.contactPoints.length > 0) {
+            await tx.patientContactPoint.createMany({
+              data: row.contactPoints.map((cp) => ({
+                patientId: patient.id,
+                clinicId,
+                organizationId,
+                contactType: cp.contactType,
+                value: cp.value,
+                normalizedValue: cp.value.replace(/\D/g, '') || null,
+                // Provenance: these did NOT come from staff entry. A later
+                // staff edit deliberately does not rewrite this.
+                source: 'legacy_migration',
+              })),
+              skipDuplicates: true,
+            });
+          }
+
+          /*
+           * -- preserved legacy source values (F3-DATA-MIG-TODAY-001-R10) --
+           * Same transaction, same reasoning. Each row carries its own
+           * byte-exact `sourceColumn` plus the run id, so every preserved value
+           * is traceable to an operator-approved mapping decision on a specific
+           * file. Idempotent on
+           * @@unique([migrationRunId, patientId, sourceColumn, sourceRowNumber]).
+           *
+           * EVIDENCE, NOT CLINICAL TRUTH: nothing in the product reads these.
+           */
+          if (row.preservedValues.length > 0) {
+            await tx.migrationPreservedSourceValue.createMany({
+              data: row.preservedValues.map((pv) => ({
+                organizationId,
+                clinicId,
+                patientId: patient.id,
+                migrationRunId: runId,
+                sourceSystem,
+                sourceColumn: pv.sourceColumn,
+                sourceRowNumber: row.rowNumber,
+                value: pv.value,
+                valueType: 'string',
+                semanticClass: 'LEGACY_NO_CANONICAL_DESTINATION',
+                sensitivity: preservedSensitivityFor(pv.sourceColumn, pv.value),
+              })),
+              skipDuplicates: true,
+            });
           }
 
           counters.createdRows++;

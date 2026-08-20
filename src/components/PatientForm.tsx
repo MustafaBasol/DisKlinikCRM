@@ -6,6 +6,7 @@ import { useClinic } from '../context/ClinicContext';
 import { useAuth } from '../context/AuthContext';
 import { normalizeRole, canManagePatientIdentity } from '../utils/permissions';
 import { PATIENT_BLOOD_GROUP_VALUES, bloodGroupLabelKey } from '../constants/patientBloodGroup';
+import PatientContactPointsSection from './PatientContactPointsSection';
 
 interface PatientFormProps {
   patient?: any;
@@ -32,6 +33,10 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
     phone: '',
     dateOfBirth: '',
     address: '',
+    // F3-DATA-MIG-TODAY-001-R10: `district` is the Turkish "ilçe" and `city`
+    // is the province ("il"). `city` keeps its historical field name in code
+    // and in the API payload — only its UI LABEL says province/İl.
+    district: '',
     city: '',
     postalCode: '',
     country: '',
@@ -108,6 +113,14 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
         bloodGroup: patient.bloodGroup || '',
         chartNumber: patient.chartNumber || '',
         primaryPractitionerId: patient.primaryPractitionerId || '',
+        // F3-DATA-MIG-TODAY-001-R10: the address columns are nullable
+        // server-side; coerce to '' so their (new) inputs stay controlled
+        // instead of flipping to uncontrolled on a null.
+        address: patient.address || '',
+        district: patient.district || '',
+        city: patient.city || '',
+        postalCode: patient.postalCode || '',
+        country: patient.country || '',
       });
     }
   }, [patient]);
@@ -270,7 +283,14 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
               {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email._errors[0]}</p>}
             </div>
             <div>
-              <label className="label">{t('patients:form.phone')}</label>
+              {/* F3-DATA-MIG-TODAY-001-R10: this is the single PRIMARY number
+                  (Patient.phone) and is unchanged — same name, same debounced
+                  duplicate check. Additional numbers live in the separate
+                  contact-points sub-resource rendered below. */}
+              <label className="label">
+                {t('patients:form.phone')}
+                <span className="ml-2 text-xs font-normal text-gray-400">{t('patients:form.phonePrimaryHint')}</span>
+              </label>
               <input
                 name="phone"
                 value={formData.phone || ''}
@@ -298,6 +318,16 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
               {t('patients:form.noContactInfoWarning')}
             </div>
           )}
+
+          {/* Secondary phone numbers (PatientContactPoint sub-resource).
+              Rendered here, directly under the primary phone, so the
+              primary/additional distinction is unambiguous. On CREATE there
+              is no patient id yet, so the section shows an explanatory
+              placeholder — see the `patientId` prop doc for why buffering was
+              rejected. Deletion uses an INLINE two-step confirm, not
+              window.confirm: a native modal dialog cannot be driven by
+              @testing-library and would sit on top of this modal. */}
+          <PatientContactPointsSection patientId={patient?.id ?? null} />
 
           {/* Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -472,6 +502,86 @@ const PatientForm: React.FC<PatientFormProps> = ({ patient, onClose, onSuccess }
               <option value="doctolib">Doctolib</option>
               <option value="other">{t('patients:source.other')}</option>
             </select>
+          </div>
+
+          {/* Address — F3-DATA-MIG-TODAY-001-R10.
+              `address`, `city`, `postalCode` and `country` have been in
+              formData (and therefore in the create/update payload) since this
+              form existed, but had NO inputs: on edit the `{...patient}`
+              rehydration re-submitted them unchanged, on create they were
+              always ''. They are now editable, together with the new
+              `district` (ilçe). NOTE: `city` is the province ("il") — the
+              LABEL says province, the field name stays `city` because that is
+              what the API column is called. */}
+          <div className="pt-6 border-t border-gray-50 space-y-6">
+            <h3 className="text-sm font-semibold text-gray-900">{t('patients:form.addressSection')}</h3>
+
+            <div>
+              <label className="label" htmlFor="patient-address">{t('patients:form.address')}</label>
+              <input
+                id="patient-address"
+                name="address"
+                value={formData.address || ''}
+                onChange={handleChange}
+                className={`input-field ${errors.address ? 'border-red-500' : ''}`}
+                placeholder={t('patients:form.addressPlaceholder')}
+              />
+              {errors.address && <p className="text-xs text-red-500 mt-1">{errors.address._errors[0]}</p>}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="label" htmlFor="patient-district">{t('patients:form.district')}</label>
+                <input
+                  id="patient-district"
+                  name="district"
+                  value={formData.district || ''}
+                  onChange={handleChange}
+                  className={`input-field ${errors.district ? 'border-red-500' : ''}`}
+                  placeholder={t('patients:form.districtPlaceholder')}
+                />
+                {errors.district && <p className="text-xs text-red-500 mt-1">{errors.district._errors[0]}</p>}
+              </div>
+              <div>
+                <label className="label" htmlFor="patient-city">{t('patients:form.province')}</label>
+                <input
+                  id="patient-city"
+                  name="city"
+                  value={formData.city || ''}
+                  onChange={handleChange}
+                  className={`input-field ${errors.city ? 'border-red-500' : ''}`}
+                  placeholder={t('patients:form.provincePlaceholder')}
+                />
+                {errors.city && <p className="text-xs text-red-500 mt-1">{errors.city._errors[0]}</p>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="label" htmlFor="patient-postal-code">{t('patients:form.postalCode')}</label>
+                <input
+                  id="patient-postal-code"
+                  name="postalCode"
+                  value={formData.postalCode || ''}
+                  onChange={handleChange}
+                  className={`input-field ${errors.postalCode ? 'border-red-500' : ''}`}
+                  placeholder={t('patients:form.postalCodePlaceholder')}
+                />
+                {errors.postalCode && <p className="text-xs text-red-500 mt-1">{errors.postalCode._errors[0]}</p>}
+              </div>
+              <div>
+                <label className="label" htmlFor="patient-country">{t('patients:form.country')}</label>
+                <input
+                  id="patient-country"
+                  name="country"
+                  value={formData.country || ''}
+                  onChange={handleChange}
+                  className={`input-field ${errors.country ? 'border-red-500' : ''}`}
+                  placeholder={t('patients:form.countryPlaceholder')}
+                />
+                {errors.country && <p className="text-xs text-red-500 mt-1">{errors.country._errors[0]}</p>}
+              </div>
+            </div>
           </div>
 
           {/* Consents */}

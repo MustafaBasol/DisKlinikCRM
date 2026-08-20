@@ -114,6 +114,8 @@ async function collectStructuredExportData(
         privacyRequests,
         emergencyContacts,
         medicalHistory,
+        contactPoints,
+        preservedSourceValues,
       ] = await Promise.all([
         prisma.patient.findFirst({
           where: { id: patientId, clinicId, organizationId },
@@ -126,6 +128,10 @@ async function collectStructuredExportData(
             dateOfBirth: true,
             address: true,
             city: true,
+            // F3-DATA-MIG-TODAY-001-R10: district (ilçe) is address PII held
+            // about the subject, exactly like `city` (province/il) above it.
+            // Disclosed on the same basis and by the same rule.
+            district: true,
             postalCode: true,
             country: true,
             patientStatus: true,
@@ -394,6 +400,51 @@ async function collectStructuredExportData(
           },
           orderBy: { version: 'desc' },
         }),
+        // F3-DATA-MIG-TODAY-001-R10: secondary contact points are the
+        // subject's OWN alternative phone numbers, so KVKK Art. 11 / GDPR
+        // Art. 15 cover them exactly as they cover `Patient.phone`. Selected
+        // explicitly (never a bare findMany) for the same reason as every
+        // other read here.
+        prisma.patientContactPoint.findMany({
+          where: { patientId, clinicId },
+          select: {
+            id: true,
+            contactType: true,
+            value: true,
+            normalizedValue: true,
+            label: true,
+            source: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: [{ contactType: 'asc' }, { createdAt: 'asc' }],
+        }),
+        // F3-DATA-MIG-TODAY-001-R10: preserved legacy source values are raw
+        // personal data held ABOUT the subject (parents' names, phone
+        // numbers, free text), carried over from the clinic's previous
+        // system. The subject is entitled to receive them.
+        //
+        // `sensitivity` is DELIBERATELY NOT a filter here. It gates the
+        // CLINIC BULK export (a copy handed to the clinic), not the subject's
+        // own access right — withholding a RESTRICTED row from the person the
+        // row is about would invert what the flag is for. Every preserved row
+        // for this patient is disclosed, and `sensitivity` itself is included
+        // so the subject can see how the value is classified.
+        prisma.migrationPreservedSourceValue.findMany({
+          where: { patientId, clinicId },
+          select: {
+            id: true,
+            sourceSystem: true,
+            sourceColumn: true,
+            sourceRowNumber: true,
+            value: true,
+            valueType: true,
+            semanticClass: true,
+            sensitivity: true,
+            importedAt: true,
+          },
+          orderBy: [{ importedAt: 'asc' }, { sourceColumn: 'asc' }],
+        }),
       ]);
 
       // F3-DATA-MIG-003 / G-E4. Decryption is per-document and fail-SOFT: a
@@ -451,6 +502,10 @@ async function collectStructuredExportData(
         privacyRequests,
         emergencyContacts,
         medicalHistory,
+        // F3-DATA-MIG-TODAY-001-R10 — see the two reads above for why each is
+        // in scope for a subject-access request.
+        contactPoints,
+        preservedSourceValues,
       };
 }
 

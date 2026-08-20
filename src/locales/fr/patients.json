@@ -172,6 +172,11 @@
       "noRecentActivity": "Aucune activité récente trouvée.",
       "viewAllActivity": "Historique complet →",
       "unassigned": "Non assigné"
+    },
+    "address": {
+      "title": "Adresse",
+      "secondaryPhoneBadge": "Suppl.",
+      "secondaryPhonesLoadFailed": "Impossible de charger les numéros de téléphone supplémentaires."
     }
   },
   "form": {
@@ -179,6 +184,7 @@
     "lastName": "Nom",
     "email": "Adresse e-mail",
     "phone": "Numéro de téléphone",
+    "phonePrimaryHint": "(principal)",
     "dob": "Date de naissance",
     "dobFutureError": "La date de naissance ne peut pas être dans le futur",
     "status": "Statut du patient",
@@ -200,6 +206,45 @@
     "primaryPractitioner": "Praticien principal",
     "primaryPractitionerUnassigned": "Non assigné",
     "primaryPractitionerReadOnlyHint": "(lecture seule — assigné par la réception/la direction)",
+    "addressSection": "Coordonnées postales",
+    "address": "Adresse",
+    "addressPlaceholder": "Rue, bâtiment, numéro d'appartement",
+    "district": "District",
+    "districtPlaceholder": "ex. Kadıköy",
+    "province": "Province",
+    "provincePlaceholder": "ex. Istanbul",
+    "postalCode": "Code postal",
+    "postalCodePlaceholder": "ex. 34710",
+    "country": "Pays",
+    "countryPlaceholder": "ex. Turquie",
+    "secondaryPhones": {
+      "title": "Numéros de téléphone supplémentaires",
+      "description": "Autres numéros enregistrés en plus du numéro principal (domicile, travail, proche).",
+      "addNew": "Ajouter un numéro",
+      "addTitle": "Nouveau numéro de téléphone",
+      "add": "Ajouter",
+      "empty": "Aucun numéro de téléphone supplémentaire enregistré.",
+      "availableAfterCreate": "Les numéros supplémentaires pourront être ajoutés depuis la fiche du patient une fois celui-ci enregistré.",
+      "contactType": "Type de numéro",
+      "value": "Numéro de téléphone",
+      "valuePlaceholder": "+90 216 000 00 00",
+      "label": "Remarque",
+      "labelPlaceholder": "ex. téléphone du conjoint",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "deleteConfirm": "Supprimer ce numéro ?",
+      "deleteConfirmYes": "Oui, supprimer",
+      "valueRequired": "Le numéro de téléphone est obligatoire",
+      "saveFailed": "Impossible d'enregistrer le numéro de téléphone.",
+      "deleteFailed": "Impossible de supprimer le numéro de téléphone.",
+      "loadFailed": "Impossible de charger les numéros de téléphone supplémentaires.",
+      "types": {
+        "mobile": "Mobile",
+        "home": "Domicile",
+        "work": "Professionnel",
+        "other": "Autre"
+      }
+    },
     "identity": {
       "label": "Numéro d'identité turc (T.C. Kimlik No)",
       "sensitiveHint": "(sensible, facultatif)",

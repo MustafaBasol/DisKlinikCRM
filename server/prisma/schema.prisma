@@ -112,6 +112,9 @@ model Clinic {
   migrationRecords              MigrationRecord[]                  @relation("MigrationRecordClinic")
   migrationReferenceMaps        MigrationReferenceMap[]            @relation("MigrationReferenceMapClinic")
   patientIdentityDocuments      PatientIdentityDocument[]          @relation("PatientIdentityDocumentClinic")
+  // F3-DATA-MIG-TODAY-001-R10 back-relations.
+  patientContactPoints          PatientContactPoint[]              @relation("PatientContactPointClinic")
+  migrationPreservedValues      MigrationPreservedSourceValue[]    @relation("MigrationPreservedSourceValueClinic")
 
   @@unique([organizationId, slug])
 }
@@ -236,9 +239,33 @@ model Patient {
   phone                 String?
   dateOfBirth           DateTime?
   address               String?
+  /// Province / il. NOT renamed by R10, deliberately. This column has carried
+  /// province semantics since before the migration program existed — the
+  /// destination catalog labels it "City / province" (contracts.ts) and the
+  /// first-customer matrix maps source `IL` (province) onto it. Renaming it to
+  /// `province` would need a data migration, an API compatibility shim and a
+  /// catalog change, for no behaviour gain; the patient UI simply LABELS it
+  /// "Province / İl". See `district` below for the half that was missing.
   city                  String?
   postalCode            String?
   country               String?
+  /// F3-DATA-MIG-TODAY-001-R10. District / ilçe — the one structurally missing
+  /// piece of a Turkish address. Additive, nullable, no default, no backfill.
+  ///
+  /// Before R10 a Turkish address could not be recorded properly at all: the
+  /// product had address/city/postalCode/country but no district, and the
+  /// first-customer matrix had to hold source `ILCE` at MANUAL_REVIEW with the
+  /// note "No district field exists, so a human decides whether that matters;
+  /// the system may not decide it by omission." This column closes that.
+  ///
+  /// Deliberately NOT folded into `address`: composition order would then
+  /// depend on fill rate, which breaks rerun stability (the same reason
+  /// MAHALLE/ADRESI compose in a FIXED order).
+  ///
+  /// String?, not a Prisma enum, and no @default — a native enum column would
+  /// be invisible to migrationPatientSchemaDrift.ts's PRISMA_SCALAR_TYPES
+  /// filter forever. Same reasoning as `gender` and `bloodGroup`.
+  district              String?
   patientStatus         String       @default("new") // new, active, inactive, archived
   source                String? // google, referral, social_media, etc.
   notes                 String?
@@ -375,6 +402,14 @@ model Patient {
   /// at routes/patients.ts:167-191/:273. That is the whole point of the child
   /// model. See PatientIdentityDocument.
   identityDocuments             PatientIdentityDocument[]
+  /// F3-DATA-MIG-TODAY-001-R10. Secondary phone numbers (home/work/other).
+  /// `Patient.phone` remains THE primary number and the only one any existing
+  /// flow reads. See PatientContactPoint.
+  contactPoints                 PatientContactPoint[]
+  /// F3-DATA-MIG-TODAY-001-R10. Legacy source values preserved verbatim with
+  /// provenance because they had no canonical destination. Evidence, never
+  /// current clinical truth. See MigrationPreservedSourceValue.
+  preservedSourceValues         MigrationPreservedSourceValue[]
 
   @@index([clinicId, phone])
   @@index([clinicId, email])
@@ -428,6 +463,69 @@ model PatientEmergencyContact {
   updatedAt            DateTime     @updatedAt
 
   @@index([patientId, isPrimary])
+  @@index([clinicId])
+  @@index([organizationId])
+}
+
+/// F3-DATA-MIG-TODAY-001-R10 — SECONDARY PATIENT CONTACT POINTS.
+///
+/// WHY THIS IS NOT PatientEmergencyContact. The legacy export carries
+/// `EVTELEFONU` (home phone, 50 measured rows) and `ISTELEFONU` (work phone,
+/// 166 measured rows). Both are the PATIENT'S OWN alternative numbers. Routing
+/// them into PatientEmergencyContact would fabricate a named third party, a
+/// relationship type and — through `isLegalDecisionMaker` — a clinical
+/// decision-making authority that nobody in the source data ever asserted.
+/// The first-customer matrix records that as a HARD RULE. This model exists so
+/// the rule can be obeyed without discarding the numbers.
+///
+/// WHY IT IS NOT A SECOND COLUMN ON Patient. Phone count is open-ended, and
+/// `Patient` is returned by a whole-record spread at routes/patients.ts, so
+/// every new scalar auto-leaks to every authorized clinic client. A child
+/// model keeps the shape honest and the exposure explicit.
+///
+/// PRIMARY PHONE IS UNCHANGED AND STAYS ON Patient. `Patient.phone` remains
+/// THE primary number: WhatsApp inbound matching, the shared-family-phone
+/// behaviour, SMS routing, duplicate detection and `@@index([clinicId, phone])`
+/// all continue to read it and ONLY it. Nothing in this model participates in
+/// patient matching, and no migration may write a secondary number into
+/// `Patient.phone`. Shared-family-phone semantics are therefore untouched:
+/// 1,883 numbers are shared across 4,390 rows in the first customer's export,
+/// and that behaviour is deliberate product behaviour, not a defect.
+///
+/// `normalizedValue` is digits-only, stored for display grouping and duplicate
+/// hinting WITHIN a patient. It is deliberately NOT unique and deliberately
+/// NOT indexed across patients — an inbound-message matcher that started
+/// reading it would silently change which patient a message resolves to.
+model PatientContactPoint {
+  id             String       @id @default(uuid())
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id])
+  clinicId       String
+  clinic         Clinic       @relation("PatientContactPointClinic", fields: [clinicId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  /// mobile | home | work | other. Plain String with the vocabulary in this
+  /// comment, per the schema-wide convention — a native enum would be
+  /// invisible to the schema-drift guards.
+  contactType     String
+  /// The number as entered/imported. Never normalized destructively.
+  value           String
+  /// Digits-only projection of `value`. Display and within-patient duplicate
+  /// hinting ONLY. Never a matching key. See the model note above.
+  normalizedValue String?
+  /// Optional free-text label ("iş", "yazlık"). Never clinical.
+  label           String?
+  /// patient_portal | staff | import | api | legacy_migration
+  source          String  @default("staff")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One row per (patient, type, number): re-running an import can never
+  /// duplicate a contact point, which is what makes migration idempotent here.
+  @@unique([patientId, contactType, value])
+  @@index([patientId, contactType])
   @@index([clinicId])
   @@index([organizationId])
 }
@@ -1712,6 +1810,9 @@ model Organization {
   migrationReferenceMaps        MigrationReferenceMap[]
   migrationRecords              MigrationRecord[]
   patientIdentityDocuments      PatientIdentityDocument[]
+  // F3-DATA-MIG-TODAY-001-R10 back-relations.
+  patientContactPoints          PatientContactPoint[]
+  migrationPreservedValues      MigrationPreservedSourceValue[]
 }
 
 model UserClinic {
@@ -3911,10 +4012,12 @@ model MigrationRun {
   completedAt DateTime?
   cancelledAt DateTime?
 
-  batches       MigrationRunBatch[]
-  fieldMappings MigrationFieldMapping[]
-  rowOutcomes   MigrationRowOutcome[]
-  records       MigrationRecord[]       @relation("MigrationRecordCreatedByRun")
+  batches         MigrationRunBatch[]
+  fieldMappings   MigrationFieldMapping[]
+  rowOutcomes     MigrationRowOutcome[]
+  records         MigrationRecord[]               @relation("MigrationRecordCreatedByRun")
+  /// F3-DATA-MIG-TODAY-001-R10. Legacy source values this run preserved.
+  preservedValues MigrationPreservedSourceValue[]
 
   @@index([organizationId, createdAt])
   @@index([clinicId, createdAt])
@@ -4195,6 +4298,95 @@ model MigrationRowOutcome {
   @@unique([runId, sourceRowNumber])
   @@index([runId, status])
   @@index([runId, batchNumber])
+}
+
+/// F3-DATA-MIG-TODAY-001-R10 - CONTROLLED LEGACY SOURCE PRESERVATION.
+///
+/// THE PROBLEM THIS SOLVES. Measuring all 91 first-customer columns showed 10
+/// that carry real rows and have no canonical destination anywhere in the
+/// product - UNVANI (14,890), SUBEDOSYANO (9,105), FAX (96), MEDENIHALI (57),
+/// ANNEADI (25), BABAADI (18), ALTDOSYANO (10), TURIZM (6), SIGORTATURU (2),
+/// UCRETTARIFESI (1) - plus KVKKILKKODU (4,754), a vendor register key that
+/// must never become consent. Before this model the only two options were
+/// "invent a Patient column for each" or "drop it". Both are wrong. This is
+/// the third option: keep the value, with provenance, marked as evidence.
+///
+/// THIS IS NOT A JSON DUMP, and the constraints are what make that true:
+///   - one ROW per preserved value, not one blob per patient;
+///   - `sourceColumn` names the vendor column it came from, byte-exact;
+///   - `migrationRunId` names the run that wrote it, so every value is
+///     traceable to an operator-approved mapping decision on a specific file;
+///   - `sourceSystem` names the vendor;
+///   - there is NO clinic-facing write API. The ONLY writer is the migration
+///     executor, which is Platform-Admin-gated. Clinic staff can read it where
+///     business-appropriate; nobody can author one by hand.
+///
+/// EVIDENCE, NOT CURRENT CLINICAL TRUTH. A preserved value is what the old
+/// system held. It is deliberately not readable by any clinical, messaging,
+/// billing or matching code path, and nothing in the product may branch on it.
+/// It exists so a question about a patient's legacy record can be answered.
+///
+/// PRIVACY. These rows carry raw legacy PII (names of parents, phone numbers,
+/// free text), so this model is wired into every patient privacy surface:
+/// subject-access export, anonymization (hard delete - a preserved legacy
+/// value has no clinical value to retain), clinic bulk export and data
+/// retention. `sensitivity` drives that handling and is set at write time from
+/// the mapping decision, never inferred later.
+///
+/// WHY NOT ENCRYPTED AT REST. PatientIdentityDocument encrypts because it holds
+/// government identity numbers with an exhaustively-invertible key space. No
+/// government identifier reaches this model: every such first-customer column
+/// (TCNO aside, which has its own encrypted home) measured 0 filled rows -
+/// PASAPORTNO, SOSYAL_GUVENCE_NO, ENABIZTAKIPNO, YUPASS_NO, HTS_KODU, VERGINO
+/// are all empty. Adding a second crypto boundary for data that does not exist
+/// would be speculative complexity; if a future source carries one, it belongs
+/// in PatientIdentityDocument, not here. `sensitivity = 'RESTRICTED'` is the
+/// hook that would gate such a value out of bulk export.
+model MigrationPreservedSourceValue {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  clinicId       String
+  clinic         Clinic       @relation("MigrationPreservedSourceValueClinic", fields: [clinicId], references: [id])
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id])
+
+  /// The run that wrote this value. Cascade: deleting a run's evidence with the
+  /// run is correct - the provenance is the point, and a preserved value whose
+  /// run is gone can no longer be explained.
+  migrationRunId String
+  migrationRun   MigrationRun @relation(fields: [migrationRunId], references: [id], onDelete: Cascade)
+
+  /// Vendor system identifier, e.g. "legacy-dental-tr-v1".
+  sourceSystem    String
+  /// Byte-exact vendor column name, e.g. "SUBEDOSYANO".
+  sourceColumn    String
+  /// 1-based row number in the source workbook, for provenance only.
+  sourceRowNumber Int?
+  /// The preserved value, verbatim as the parser projected it.
+  value           String
+  /// string | number | date | boolean - what the source cell actually was.
+  valueType       String @default("string")
+  /// Short operator-facing reason this column had no canonical destination,
+  /// copied from the mapping decision. Explains the row without a lookup.
+  semanticClass   String
+  /// NORMAL | RESTRICTED. RESTRICTED is excluded from clinic bulk export.
+  sensitivity     String @default("NORMAL")
+
+  importedAt DateTime @default(now())
+
+  /// Idempotency: re-running the same run over the same row and column can
+  /// never duplicate evidence.
+  ///
+  /// Both composite names are PINNED with `map:`. Prisma's generated names here
+  /// exceed PostgreSQL's 63-character identifier limit and would be silently
+  /// truncated, leaving schema.prisma and the migration SQL disagreeing about
+  /// what the index is called. Same reason MigrationReferenceMap pins its own.
+  @@unique([migrationRunId, patientId, sourceColumn, sourceRowNumber], map: "MigrationPreservedSourceValue_run_patient_column_row_key")
+  @@index([patientId, sourceColumn])
+  @@index([organizationId, sourceSystem, sourceColumn], map: "MigrationPreservedSourceValue_org_system_column_idx")
+  @@index([clinicId])
+  @@index([migrationRunId])
 }
 
 /// F3-DATA-MIG-003 / G-E4 - Encrypted national/travel identity documents.

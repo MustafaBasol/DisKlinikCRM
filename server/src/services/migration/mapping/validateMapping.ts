@@ -334,6 +334,27 @@ export function validateMappings(
     }
 
     const destination = getDestinationField(destinationKey);
+
+    /*
+     * F3-DATA-MIG-TODAY-001-R10. INDEPENDENT MULTI-USE is not a collision.
+     *
+     * The collision rule below exists because two columns writing the same
+     * scalar field means one silently overwrites the other. That reasoning
+     * does not apply to a destination that produces one RECORD per source
+     * column: `legacy.preservedSourceValue` writes a MigrationPreservedSourceValue
+     * row stamped with its own `sourceColumn`, so N columns produce N
+     * distinguishable rows and nothing is overwritten.
+     *
+     * It is also NOT composition, so the total-ordering requirement below must
+     * not be applied either — there is no single composed value whose ordering
+     * could vary between reruns. A `composeOrder` here would be meaningless,
+     * and the destination declares `allowsComposition: false` so the engine
+     * never proposes one.
+     */
+    if (destination?.allowsIndependentMultiUse) {
+      continue;
+    }
+
     if (!destination?.allowsComposition) {
       issues.push(
         issue(

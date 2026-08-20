@@ -137,6 +137,29 @@ const MESSAGE_CONTENT_PROP_NAMES = new Set(['text', 'body']);
 // one of these names is unambiguously an identity value in this codebase —
 // there is no benign object property called `tckn` — so they carry the same
 // low false-positive profile as `email`/`phone`.
+//
+// F3-DATA-MIG-TODAY-001-R10 adds `district` and `normalizedValue`.
+//   - `district` (Patient.district, the Turkish ilçe) is address PII and a
+//     sharper quasi-identifier than the province already in `city`: a district
+//     narrows a population to thousands. There is no benign `district` in this
+//     codebase — the only declaration is the patient address column.
+//   - `normalizedValue` is the digits-only projection of a PatientContactPoint
+//     phone number, i.e. a phone number with the formatting removed. It is
+//     already covered in spirit by `phone`, but not by name, so a
+//     `console.error('...', normalizedValue)` would have passed this gate
+//     while logging the exact digits `redactPhone` exists to hide. The name is
+//     unambiguous here: its only declarations are the contact-point column and
+//     the identity-crypto lookup input (patientIdentityCrypto.ts), and BOTH
+//     are values that must never be logged.
+//
+// `value` (PatientContactPoint.value, MigrationPreservedSourceValue.value) is
+// DELIBERATELY NOT added despite being the rawest PII of the three. It is a
+// pervasive generic identifier/property name across this codebase — settings
+// values, enum values, parsed values, form values — so name-only matching on
+// it would produce mass false positives the gate could not act on, and a gate
+// that must be baseline-suppressed everywhere protects nothing. This is the
+// same judgment already recorded above for firstName/lastName/patientName.
+// The narrow-name entries here are the part that can actually be enforced.
 const DIRECT_PII_IDENTIFIER_NAMES = new Set([
   'email',
   'phone',
@@ -147,6 +170,8 @@ const DIRECT_PII_IDENTIFIER_NAMES = new Set([
   'identityNumber',
   'passportNumber',
   'chartNumber',
+  'district',
+  'normalizedValue',
 ]);
 
 const CONSOLE_SINK_METHODS = new Set(['log', 'info', 'warn', 'error', 'debug']);

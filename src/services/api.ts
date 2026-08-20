@@ -137,6 +137,25 @@ export const patientPrivacyService = {
     api.get(`/patients/${patientId}/privacy/orphan-check`),
 };
 
+// F3-DATA-MIG-TODAY-001-R10: SECONDARY patient phone numbers
+// (server `PatientContactPoint`). `Patient.phone` stays the single PRIMARY
+// number and is NEVER part of this sub-resource — it is still written through
+// patientService.update()/create(). Response envelopes differ per verb:
+// GET -> { contactPoints: ContactPoint[] }, POST/PUT -> { contactPoint },
+// DELETE -> 204 with no body.
+export const patientContactPointService = {
+  getAll: (patientId: string) => api.get(`/patients/${patientId}/contact-points`),
+  create: (patientId: string, data: { contactType: string; value: string; label?: string | null }) =>
+    api.post(`/patients/${patientId}/contact-points`, data),
+  update: (
+    patientId: string,
+    contactPointId: string,
+    data: { contactType?: string; value?: string; label?: string | null },
+  ) => api.put(`/patients/${patientId}/contact-points/${contactPointId}`, data),
+  remove: (patientId: string, contactPointId: string) =>
+    api.delete(`/patients/${patientId}/contact-points/${contactPointId}`),
+};
+
 export const patientEmergencyContactService = {
   getAll: (patientId: string) => api.get(`/patients/${patientId}/emergency-contacts`),
   create: (patientId: string, data: any) => api.post(`/patients/${patientId}/emergency-contacts`, data),

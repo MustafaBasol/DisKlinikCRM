@@ -421,66 +421,78 @@ async function main() {
     console.log(`    blocked with data:      ${report.blockedMeaningfulFields.join(', ')}`);
 
     /*
-     * R10: measuring all 91 columns did not make the picture rosier — it made
-     * it HONEST, and bigger. Retiring 58 UNMEASURED columns moved 26 of them
-     * into MEANINGFUL, which is why the blocking lists below GREW. Every entry
-     * here is a real column with real rows behind it that currently has
-     * nowhere to go, and each list is asserted by name so no future change can
-     * shrink one silently.
+     * THE HEADLINE R10 RESULT. Every class of ENGINEERING blocker is gone; what
+     * remains is decisions that belong to people.
+     *
+     * (a) NO MEANINGFUL COLUMN IS BLOCKED FOR WANT OF A DESTINATION. This list
+     *     is empty not because the gate was relaxed but because the fields were
+     *     built. Measuring all 91 columns first EXPOSED ten blocked columns
+     *     carrying real rows (UNVANI 14,890 · SUBEDOSYANO 9,105 · FAX 96 ·
+     *     MEDENIHALI 57 · ANNEADI 25 · BABAADI 18 · ALTDOSYANO 10 · TURIZM 6 ·
+     *     SIGORTATURU 2 · UCRETTARIFESI 1) that R9 could not see; R10 then gave
+     *     every one of them somewhere to go. "NoraMedi has no field for it" is
+     *     no longer a reason any row is held back.
      */
+    assert.deepEqual(report.blockedMeaningfulFields, []);
+    assert.equal(report.blockedMeaningful, 0);
 
-    // (a) BLOCKED with measured data: the genuine "NoraMedi has no field"
-    //     engineering gaps. R9 believed this list was empty; it was empty only
-    //     because 10 of these columns had never been profiled.
-    assert.deepEqual(report.blockedMeaningfulFields, [
-      'ALTDOSYANO',
-      'ANNEADI',
-      'BABAADI',
-      'FAX',
-      'MEDENIHALI',
-      'SIGORTATURU',
-      'SUBEDOSYANO',
-      'TURIZM',
-      'UCRETTARIFESI',
-      'UNVANI',
-    ]);
-    assert.equal(report.blockedMeaningful, 10);
-
-    // (b) Nothing is legally blocked with data, and nothing is unaccounted.
-    //     KVKKONAYKODU and KVKKSMS are both measured at 0 filled rows, so the
-    //     consent-fabrication gate holds without costing the customer a row.
+    /*
+     * (b) Nothing is legally blocked with data, and nothing is unaccounted.
+     *     KVKKONAYKODU and KVKKSMS are both measured at 0 filled rows, so the
+     *     consent-fabrication gate holds at zero cost to the customer. R10 did
+     *     NOT open the historical-evidence exception to achieve this.
+     */
     assert.deepEqual(report.legalBlockedMeaningfulFields, []);
     assert.deepEqual(report.unaccountedMeaningfulFields, []);
 
-    // (c) System-recommended exclusions nobody has confirmed. 17, not 5.
+    /*
+     * (c) Eight system-recommended exclusions still await operator
+     *     confirmation — down from seventeen, because thirteen of them were
+     *     given controlled preservation instead of being proposed for
+     *     discard. Every one of the eight that remains is measured CONSTANT or
+     *     provably redundant, so the operator can confirm it from evidence:
+     *       SUBE_ID        9,083 rows, all "none"
+     *       KAYDEDEN      14,890 rows, all "admin"
+     *       UST_HESAP_KODU 13,985 rows, one ledger code
+     *       CHECKBOX       3,500 rows, all "Yeni"
+     *       DOSYAVAR       3,051 rows, all "false"
+     *       RISK_TUTARI        2 rows, both "0"
+     *       ODEMESONTARIHI     1 row
+     *       AILEGURUBU    14,890 rows, IDENTICAL to HASTA_ID on every row
+     *     Confirmation is still REQUIRED. Measured-safe is not self-approving.
+     */
     assert.deepEqual(report.unconfirmedExclusionFields, [
       'AILEGURUBU',
       'CHECKBOX',
       'DOSYAVAR',
-      'HATIRLAT',
       'KAYDEDEN',
-      'KAYITSAATI',
-      'KAYITTARIHI',
-      'MESAJOK',
-      'ODEMENOTU',
       'ODEMESONTARIHI',
       'RISK_TUTARI',
-      'SONISLEMTARIHI',
-      'SONODEMETARIHI',
-      'SONRANDEVUTARIHI',
       'SUBE_ID',
-      'TEDAVIDURUMU',
       'UST_HESAP_KODU',
     ]);
-    assert.equal(report.systemRecommendedButUnconfirmedExclusions, 17);
+    assert.equal(report.systemRecommendedButUnconfirmedExclusions, 8);
 
-    // (d) Open human questions. EK_ACIKLAMA joins the four R9 named, now that
-    //     it is measured at 1 filled row rather than UNKNOWN.
-    assert.equal(report.manualReview, 5, 'EVTELEFONU, ISTELEFONU, ILCE, KVKKILKKODU, EK_ACIKLAMA');
+    /*
+     * (d) 21 preservation proposals sit in AUTO_REVIEW, which this gate counts
+     *     as manual review — correctly, because nothing is written until an
+     *     operator accepts them. Accepting loses nothing; the alternative was
+     *     discarding the columns.
+     */
+    assert.equal(report.manualReview, 21, 'the 21 legacy-preservation proposals awaiting accept');
+
+    /*
+     * (e) The three KVKK Art. 6 special-category columns. These are the ONLY
+     *     remaining items that are genuinely not an engineer's to decide.
+     */
     assert.equal(report.sensitiveReview, 3, 'ONEMLINOT, KONTROLNOTU, KANGURUBU');
 
-    // (e) And 14 columns already resolve to a real destination.
-    assert.equal(report.resolved, 14);
+    /*
+     * (f) 17 columns resolve straight to a real destination — 14 as before,
+     *     plus the three R10 built fields for: ILCE -> patient.district,
+     *     EVTELEFONU -> contactPoint.home, ISTELEFONU -> contactPoint.work.
+     */
+    assert.equal(report.resolved, 17);
   });
 
   await test('#6d: confirming every remaining exclusion is what makes the equation close', () => {

@@ -172,6 +172,11 @@
       "noRecentActivity": "No recent activity found.",
       "viewAllActivity": "Full History →",
       "unassigned": "Unassigned"
+    },
+    "address": {
+      "title": "Address",
+      "secondaryPhoneBadge": "Additional",
+      "secondaryPhonesLoadFailed": "Could not load the additional phone numbers."
     }
   },
   "form": {
@@ -179,6 +184,7 @@
     "lastName": "Last Name",
     "email": "Email Address",
     "phone": "Phone Number",
+    "phonePrimaryHint": "(primary)",
     "dob": "Date of Birth",
     "dobFutureError": "Date of birth cannot be in the future",
     "status": "Patient Status",
@@ -200,6 +206,45 @@
     "primaryPractitioner": "Primary Practitioner",
     "primaryPractitionerUnassigned": "Unassigned",
     "primaryPractitionerReadOnlyHint": "(view only — assigned by reception/management)",
+    "addressSection": "Address Details",
+    "address": "Address",
+    "addressPlaceholder": "Street, building, apartment/door number",
+    "district": "District",
+    "districtPlaceholder": "e.g. Kadıköy",
+    "province": "Province",
+    "provincePlaceholder": "e.g. İstanbul",
+    "postalCode": "Postal Code",
+    "postalCodePlaceholder": "e.g. 34710",
+    "country": "Country",
+    "countryPlaceholder": "e.g. Türkiye",
+    "secondaryPhones": {
+      "title": "Additional Phone Numbers",
+      "description": "Other numbers on file besides the primary one (home, work, relative).",
+      "addNew": "Add number",
+      "addTitle": "New phone number",
+      "add": "Add",
+      "empty": "No additional phone numbers on file.",
+      "availableAfterCreate": "Additional phone numbers can be added from the patient record once the patient has been saved.",
+      "contactType": "Number Type",
+      "value": "Phone Number",
+      "valuePlaceholder": "+90 216 000 00 00",
+      "label": "Note",
+      "labelPlaceholder": "e.g. spouse's phone",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this number?",
+      "deleteConfirmYes": "Yes, delete",
+      "valueRequired": "Phone number is required",
+      "saveFailed": "Could not save the phone number.",
+      "deleteFailed": "Could not delete the phone number.",
+      "loadFailed": "Could not load the additional phone numbers.",
+      "types": {
+        "mobile": "Mobile",
+        "home": "Home",
+        "work": "Work",
+        "other": "Other"
+      }
+    },
     "identity": {
       "label": "National ID Number (T.C. Kimlik No)",
       "sensitiveHint": "(sensitive, optional)",

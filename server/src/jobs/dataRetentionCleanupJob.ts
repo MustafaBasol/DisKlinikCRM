@@ -40,6 +40,7 @@ export type DataRetentionSummary = {
   anonymizedContactRequests: number;
   redactedInboxEntries: number;
   deletedCommunicationConsentConflictBuckets: number;
+  deletedMigrationPreservedSourceValues: number;
   skippedCategories: string[];
   errors: string[];
   dryRun: boolean;
@@ -64,6 +65,7 @@ export type DataRetentionDeps = {
   contactRequests: DataRetentionCategoryDeps;
   inboxEntries: DataRetentionCategoryDeps;
   communicationConsentConflictBuckets: DataRetentionCategoryDeps;
+  migrationPreservedSourceValues: DataRetentionCategoryDeps;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -245,6 +247,42 @@ function makeCommunicationConsentConflictBucketsDeps(): DataRetentionCategoryDep
   };
 }
 
+/** MigrationPreservedSourceValue — F3-DATA-MIG-TODAY-001-R10.
+ *
+ *  Raw legacy values preserved verbatim from a clinic's previous system
+ *  because they had no canonical destination (parents' names, extra phone
+ *  numbers, free text). Import EVIDENCE, never current clinical truth: no
+ *  clinical, messaging, billing or matching code path reads them, so there is
+ *  nothing operational to keep and the rows are DELETED, not redacted —
+ *  redaction would leave provenance pointing at nothing.
+ *
+ *  Aged on `importedAt` (the row is immutable after the migration run wrote
+ *  it, so there is no meaningful `updatedAt`). Window is
+ *  DATA_RETENTION_MIGRATION_PRESERVED_SOURCE_DAYS, default 10 years — see the
+ *  reasoning block in dataRetentionPolicy.ts.
+ *
+ *  Deliberately NOT filtered by `sensitivity`: RESTRICTED rows are the ones
+ *  it matters most to age out, and a filter here would keep exactly the wrong
+ *  half forever. */
+function makeMigrationPreservedSourceValuesDeps(): DataRetentionCategoryDeps {
+  return {
+    countEligible: (threshold) =>
+      prisma.migrationPreservedSourceValue.count({ where: { importedAt: { lt: threshold } } }),
+    executeCleanupBatch: async (threshold, batchSize) => {
+      const rows = await prisma.migrationPreservedSourceValue.findMany({
+        where: { importedAt: { lt: threshold } },
+        select: { id: true },
+        take: batchSize,
+      });
+      if (rows.length === 0) return 0;
+      const { count } = await prisma.migrationPreservedSourceValue.deleteMany({
+        where: { id: { in: rows.map(r => r.id) } },
+      });
+      return count;
+    },
+  };
+}
+
 function makeInboxEntriesDeps(): DataRetentionCategoryDeps {
   return {
     countEligible: (threshold) =>
@@ -288,6 +326,7 @@ function defaultDeps(): DataRetentionDeps {
     contactRequests: makeContactRequestsDeps(),
     inboxEntries: makeInboxEntriesDeps(),
     communicationConsentConflictBuckets: makeCommunicationConsentConflictBucketsDeps(),
+    migrationPreservedSourceValues: makeMigrationPreservedSourceValuesDeps(),
   };
 }
 
@@ -332,6 +371,7 @@ export async function runDataRetentionCleanup(
     anonymizedContactRequests: 0,
     redactedInboxEntries: 0,
     deletedCommunicationConsentConflictBuckets: 0,
+    deletedMigrationPreservedSourceValues: 0,
     skippedCategories: [],
     errors: [],
     dryRun,
@@ -411,6 +451,15 @@ export async function runDataRetentionCleanup(
     summary,
   );
 
+  summary.deletedMigrationPreservedSourceValues = await runCategory(
+    'migrationPreservedSourceValues',
+    daysAgo(config.migrationPreservedSourceDays),
+    config,
+    resolved.migrationPreservedSourceValues,
+    dryRun,
+    summary,
+  );
+
   console.log(
     `[data-retention] Complete dryRun=${dryRun}` +
     ` messages=${summary.deletedConversationMessages}` +
@@ -421,6 +470,7 @@ export async function runDataRetentionCleanup(
     ` contactRequests=${summary.anonymizedContactRequests}` +
     ` inboxEntries=${summary.redactedInboxEntries}` +
     ` consentConflictBuckets=${summary.deletedCommunicationConsentConflictBuckets}` +
+    ` migrationPreservedSourceValues=${summary.deletedMigrationPreservedSourceValues}` +
     (summary.errors.length ? ` errors=${summary.errors.length}` : ''),
   );
 

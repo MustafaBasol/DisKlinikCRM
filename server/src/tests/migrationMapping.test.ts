@@ -184,24 +184,62 @@ await test('matrixDecisionCounts() sums to 91 and matches the sprint-adjusted ba
   // so MANUAL_REVIEW 2 -> 6, BLOCKED_NO_DESTINATION 35 -> 32 and
   // HISTORICAL_METADATA_ONLY 4 -> 3. No destination was invented for any of
   // them: an honest open question outranks a plausible wrong answer.
+  /*
+   * F3-DATA-MIG-TODAY-001-R10 then measured all 91 columns with the repository's
+   * own analyze code and moved everything the measurement made indefensible.
+   *
+   * THREE COLUMNS GAINED A REAL TYPED DESTINATION, because R10 built the fields
+   * that were missing (IMPORT_AFTER_SCHEMA_FIELD 4 -> 7):
+   *   ILCE        (13 rows)     MANUAL_REVIEW -> patient.district
+   *   EVTELEFONU  (50 rows)     MANUAL_REVIEW -> patient.contactPoint.home
+   *   ISTELEFONU  (166 rows)    MANUAL_REVIEW -> patient.contactPoint.work
+   *
+   * TWENTY-ONE COLUMNS GAINED CONTROLLED PRESERVATION. Each carries measured
+   * data and has no canonical destination, so the only prior options were
+   * "invent a Patient field" or "drop it". They are proposed for
+   * legacy.preservedSourceValue in AUTO_REVIEW — nothing is written without an
+   * operator accepting it, and nothing is lost if they do.
+   *
+   * The remaining MANUAL_REVIEW column is ADRES_KODU, whose UAVT-vs-postal-code
+   * semantics are still unresolved — and which is measured at 0 filled rows, so
+   * it blocks nothing. BLOCKED_NO_DESTINATION 32 -> 22: every one of the 10
+   * blocked columns that actually carried data now has a destination, and the
+   * 22 that remain are all measured at 0 rows for this customer while staying
+   * honestly recorded as having no destination for a future one.
+   */
   const expected: Record<MatrixDisposition, number> = {
     IMPORT_DIRECT: 4,
     IMPORT_AFTER_NORMALIZATION: 6,
     IMPORT_AFTER_REFERENCE_MAPPING: 1,
-    IMPORT_AFTER_SCHEMA_FIELD: 4,
+    IMPORT_AFTER_SCHEMA_FIELD: 7,
     IMPORT_AFTER_SENSITIVE_REVIEW: 4,
     // R8: no members today. The disposition is retained deliberately - see
     // firstCustomerMatrix.ts. A count of 0 is asserted, not tolerated, so
     // that quietly re-populating it is also a reviewable change.
     SENSITIVE_REVIEW_NO_DESTINATION: 0,
-    HISTORICAL_METADATA_ONLY: 3,
-    MANUAL_REVIEW: 6,
-    IGNORE_VENDOR_INTERNAL: 13,
-    IGNORE_SUMMARY_NOT_TRANSACTION: 16,
+    HISTORICAL_METADATA_ONLY: 1,
+    MANUAL_REVIEW: 1,
+    PRESERVE_LEGACY_SOURCE: 21,
+    IGNORE_VENDOR_INTERNAL: 11,
+    IGNORE_SUMMARY_NOT_TRANSACTION: 11,
     BLOCKED_LEGAL_DECISION: 2,
-    BLOCKED_NO_DESTINATION: 32,
+    BLOCKED_NO_DESTINATION: 22,
   };
   assert.deepEqual(counts, expected);
+
+  // The consent gate is UNCHANGED by R10 and must stay that way: the two
+  // LEGAL_BLOCKED columns are KVKKONAYKODU and KVKKSMS, both measured at 0
+  // filled rows, and neither may ever acquire a destination — including the
+  // new preservation destination. Preservation is for columns with no home,
+  // never a side door onto lawful basis.
+  for (const e of FIRST_CUSTOMER_MATRIX) {
+    if (e.disposition !== 'BLOCKED_LEGAL_DECISION') continue;
+    assert.equal(
+      e.destinationField,
+      null,
+      `${e.sourceField} is LEGAL_BLOCKED and must carry no destination at all`,
+    );
+  }
 });
 
 await test('every non-null destinationField names a real DESTINATION_FIELDS key', () => {
@@ -237,15 +275,69 @@ await test('no BLOCKED_LEGAL_DECISION entry carries a destination', () => {
 
 await test('the four consent-adjacent columns map to NO consent destination', () => {
   const consentAdjacent = ['MESAJOK', 'SMSGONDERILDI', 'HATIRLAT', 'SMSBORCTARIH'];
+
   // The destination catalog itself must not define a consent-shaped field —
-  // consent is never invented by this migration (contracts.ts).
+  // consent is never invented by this migration (contracts.ts). This is the
+  // load-bearing half of the guarantee and it is UNCHANGED by R10.
   const consentLikeDest = DESTINATION_FIELDS.find((d) => /consent|optout|opt_out/i.test(d.key));
   assert.equal(consentLikeDest, undefined, 'no consent-shaped destination should exist in the catalog');
 
+  /*
+   * R10 SHARPENS THIS TEST rather than relaxing it.
+   *
+   * R9 asserted these columns carry NO destination at all, which was a proxy
+   * for the real rule while the only alternative to "no destination" was a
+   * patient field. R10 added a third possibility — controlled preservation —
+   * and MESAJOK (14,153 rows) and HATIRLAT (14,890 rows) now use it, because
+   * dropping 29,043 rows of vendor evidence on a system recommendation is
+   * exactly the silent data loss this whole task exists to end.
+   *
+   * So the proxy is replaced by the rule it stood for. A consent-adjacent
+   * column may reach ONLY the legacy_preservation group, may never reach a
+   * patient field, and may never be applied without a human.
+   */
   for (const field of consentAdjacent) {
     const entry = FIRST_CUSTOMER_MATRIX.find((e) => e.sourceField === field);
     assert.ok(entry, `expected matrix entry for "${field}"`);
-    assert.equal(entry!.destinationField, null, `"${field}" must not carry any destination`);
+
+    if (entry!.destinationField === null) continue;
+
+    assert.equal(
+      entry!.destinationField,
+      'legacy.preservedSourceValue',
+      `"${field}" may only ever reach controlled preservation, never any other destination`,
+    );
+
+    const dest = DESTINATION_FIELDS.find((d) => d.key === entry!.destinationField)!;
+    assert.equal(
+      dest.group,
+      'legacy_preservation',
+      `"${field}" must land in legacy_preservation — NOT historical_evidence, which is the ` +
+        'consent exception and must stay empty and unreachable',
+    );
+    assert.ok(
+      !entry!.destinationField!.startsWith('patient.'),
+      `"${field}" must never write a patient field of any kind`,
+    );
+    // Never auto-applied: preservation resolves to AUTO_REVIEW, so a Platform
+    // Admin accepts it. A consent-adjacent column must never be AUTO_CONFIDENT.
+    assert.equal(
+      entry!.mappingState,
+      'AUTO_REVIEW',
+      `"${field}" must require an operator decision before anything is written`,
+    );
+  }
+
+  // And the two columns that ARE the consent gate stay absolutely closed:
+  // no destination, no preservation, no exception.
+  for (const field of ['KVKKONAYKODU', 'KVKKSMS'] as const) {
+    const entry = FIRST_CUSTOMER_MATRIX.find((e) => e.sourceField === field)!;
+    assert.equal(entry.mappingState, 'LEGAL_BLOCKED');
+    assert.equal(
+      entry.destinationField,
+      null,
+      `"${field}" is the consent gate itself and may never carry a destination, preservation included`,
+    );
   }
 });
 
@@ -754,6 +846,17 @@ await test('R5 #9/#10: ADRES_KODU and EK_ACIKLAMA reproduce, then no longer repr
   // with no destination (see firstCustomerMatrix.ts). Drive them through the
   // ACTUAL production pipeline (suggestMappings -> validateMappings), not a
   // hand-built fixture, so this test would have caught the real defect.
+  /*
+   * R10: ADRES_KODU is still the MANUAL_REVIEW example (its UAVT-vs-postal-code
+   * semantics remain genuinely unresolved, and it is measured at 0 filled rows
+   * so nothing is lost by leaving the question open). EK_ACIKLAMA moved to
+   * controlled preservation — measured at 1 filled row, still semantically
+   * unresolved, but now kept as evidence instead of held hostage to a question
+   * nobody can answer from one cell.
+   *
+   * The invariant this test guards is unchanged and is asserted for BOTH:
+   * neither column may ever acquire an INVENTED SEMANTIC, i.e. a patient field.
+   */
   const fields = ['ADRES_KODU', 'EK_ACIKLAMA'];
   const headers = fields.map((f, i) => makeHeader(f, i));
   const suggestions = suggestMappings(headers, [], { sourceSystem: FIRST_CUSTOMER_SOURCE_SYSTEM });
@@ -761,9 +864,27 @@ await test('R5 #9/#10: ADRES_KODU and EK_ACIKLAMA reproduce, then no longer repr
   for (const field of fields) {
     const s = suggestions.find((x) => x.sourceField === field)!;
     assert.ok(s, `expected a suggestion for "${field}"`);
-    assert.equal(s.mappingState, 'MANUAL_REQUIRED', `"${field}" is an accepted MANUAL_REVIEW matrix decision`);
-    assert.equal(s.destinationField, null, `"${field}" must not carry an invented destination`);
+    assert.ok(
+      s.destinationField === null || s.destinationField === 'legacy.preservedSourceValue',
+      `"${field}" must not carry an invented destination — only null or controlled preservation`,
+    );
+    assert.ok(
+      !(s.destinationField ?? '').startsWith('patient.'),
+      `"${field}" has unresolved semantics and must never be written to a patient field`,
+    );
+    // Either way it is undecided until a human acts: MANUAL_REQUIRED proposes
+    // nothing, AUTO_REVIEW proposes preservation but applies nothing.
+    assert.ok(
+      s.mappingState === 'MANUAL_REQUIRED' || s.mappingState === 'AUTO_REVIEW',
+      `"${field}" must remain an operator decision, not an automatic import`,
+    );
   }
+
+  assert.equal(
+    suggestions.find((x) => x.sourceField === 'ADRES_KODU')!.mappingState,
+    'MANUAL_REQUIRED',
+    'ADRES_KODU stays the open-question example: 0 rows, semantics unresolved',
+  );
 
   const records: MappingRecordLike[] = suggestions.map((s) => ({
     sourceField: s.sourceField,
@@ -938,11 +1059,49 @@ await test('R7 #7: a truly unresolved semantic target requires review rather tha
   // ADRES_KODU / EK_ACIKLAMA remain its live examples: a column whose target
   // is genuinely unknown stays an unanswered question rather than becoming a
   // guess or an omission.
+  /*
+   * R10 UPDATE. The rule being guarded is "never a GUESS, and never a silent
+   * OMISSION". R9 could only satisfy it one way — leave the column unmapped —
+   * because the only destinations that existed asserted a semantic. R10 adds a
+   * destination that asserts NO semantic, so the rule now has two valid
+   * answers, and this test checks the rule rather than one of its answers.
+   *
+   * ADRES_KODU: still unmapped. 0 filled rows, so the open question costs
+   * nothing and inventing a postal-code mapping would encode absence as fact.
+   * EK_ACIKLAMA: 1 filled row, preserved. Not a guess (preservation claims
+   * nothing about what the value means) and not an omission (the value
+   * survives, tagged with the vendor column it came from).
+   */
   for (const field of ['ADRES_KODU', 'EK_ACIKLAMA'] as const) {
     const m = FIRST_CUSTOMER_MATRIX.find((x) => x.sourceField === field)!;
-    assert.equal(m.mappingState, 'MANUAL_REQUIRED', `${field} must stay an unanswered question, not a guess`);
-    assert.equal(m.destinationField, null);
+
+    // NEVER A GUESS: an unresolved column may not be written to any patient field.
+    assert.ok(
+      m.destinationField === null || m.destinationField === 'legacy.preservedSourceValue',
+      `${field} must never be guessed into a semantic destination`,
+    );
+    // NEVER SILENTLY APPLIED: both states require a human before anything is written.
+    assert.ok(
+      m.mappingState === 'MANUAL_REQUIRED' || m.mappingState === 'AUTO_REVIEW',
+      `${field} must stay an operator decision`,
+    );
+    // NEVER A SILENT OMISSION: a column measured to carry data may not end in a
+    // state that discards it without an operator confirming that discard.
+    const fill = measuredFillFor(field);
+    if (fill && (fill.filledCount ?? 0) > 0) {
+      assert.notEqual(
+        m.mappingState,
+        'IGNORE',
+        `${field} carries ${fill.filledCount} measured rows and must not be system-dropped`,
+      );
+    }
   }
+
+  assert.equal(
+    FIRST_CUSTOMER_MATRIX.find((x) => x.sourceField === 'ADRES_KODU')!.destinationField,
+    null,
+    'ADRES_KODU: 0 measured rows, semantics unresolved — the honest answer is still no mapping',
+  );
 });
 
 await test('R7 #8: patient.notes composition is stable across reruns (idempotency)', () => {
