@@ -2,6 +2,7 @@
 
 **Phase:** F3 — Production Hardening / Clinic Data Migration
 **Base:** `origin/main` @ `5de3cee` (the release the defect was reported against)
+**Integrated:** `origin/main` @ `16887e6` merged in as `6853930` after F4-IMAGING-001-R6 landed — see §10
 **Branch:** `hotfix/f3-data-mig-r12-final-import-workflow-convergence`
 **Execute against real customer data:** **NO.** Not performed, and out of scope for this task.
 
@@ -342,3 +343,104 @@ Both are re-asserted in the suites, and neither is a silent drift.
   written anywhere.
 - **Execute:** not performed against customer data, and still gated behind the
   program owner's explicit authorization.
+
+---
+
+## 10. Integration with `origin/main` (F4-IMAGING-001-R6)
+
+R12 was cut from `5de3cee`. While it was in review `main` advanced by four
+commits — the F4-IMAGING-001-R6 storage-placement discriminator (PR #464) —
+and GitHub reported PR #466 as `CONFLICTING`. `origin/main` @ `16887e6` was
+merged **into** this branch (the repository's convention for this situation;
+the branch is already pushed and public, so it is not rebased) as
+`6853930`. No R12 commit was rewritten and no F4 R6 commit was altered.
+
+**Conflicts: exactly one file, `server/package.json`.** Both sides edited the
+same run of test-aggregate lines. Resolved as a **union**, key by key:
+
+| Key | Taken from | Why |
+| --- | --- | --- |
+| `server:test:non-disposable` | main | F4 R6 appended `test:imaging-storage-placement-call-sites` and `test:imaging-placement-fail-closed`; R12 never touched this key |
+| `server:test:disposable-db` | R12 | R12 registered `test:migration-import-workflow-convergence-db`; main never touched this key |
+| `server:test:storage-integration` | main | F4 R6 appended `test:imaging-storage-placement`; R12 never touched this key |
+| `server:test:legacy-db-required` | either | Textually identical; R12's copy differs only by the trailing comma the new key requires |
+| `test:migration-import-workflow-convergence-db` | R12 | New key, R12 only |
+
+Verified mechanically rather than by eye: comparing the resolved `scripts`
+object against `origin/main`'s, **exactly two keys differ** — R12's new script
+and R12's `disposable-db` line — and **nothing main added is missing**. The
+`test:ci-classify` suite, which fails if any test script is absent from every
+aggregate, passes (28/28).
+
+`docs/program/NORAMEDI_MASTER_TRACKER.md` auto-merged cleanly. The two lanes
+append in different places (F3 migration newest-first at the top, F4 imaging
+appended at the end), so there was no textual overlap and both entries are
+intact.
+
+**F4 R6 preserved, checked and not assumed.** `git diff origin/main` over
+`server/prisma/` and every imaging/storage source file is **empty** — the
+migration `20260820130000_add_imaging_image_storage_backend`, the
+`schema.prisma` change, `fileStorage.ts`, `imagingRemoteStorage.ts`,
+`imaging/ops.ts`, `imaging/public.ts`, `imagingIngestCore.ts`,
+`routes/imaging.ts` and `fileBackupService.ts` are byte-identical to main. F4
+R6's own suites pass on this branch: `imaging-storage-placement-call-sites`
+14/14, `imaging-placement-fail-closed` 13/13, `imaging-remote-storage` 39/39,
+`imaging` 104/104, `file-backup` 15/15,
+`file-backup-imaging-ops-migration` 12/12.
+
+**R12 still adds no migration.** `prisma migrate status` against a disposable
+PostgreSQL reported the F4 R6 migration as the *only* pending one; after
+`prisma migrate deploy` (never `migrate dev`) all **80** migrations are applied
+and the schema is up to date. `git diff 5de3cee -- server/prisma/` shows the
+F4 R6 migration and its schema block and nothing else.
+
+### Post-integration re-verification
+
+Everything below was re-run **after** the merge commit, on `6853930`.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Working tree | `git status --short` | clean |
+| Whitespace / conflict markers | `git diff --check` | clean |
+| Server typecheck | `npm --prefix server run typecheck` | pass |
+| Frontend typecheck + prod build | `npm run build` | pass (`tsc -b` + `vite build`, 26.2s) |
+| Layer 1 tooling | `typecheck:runtime`, `test:runtime:unit`, `test:runtime:storage-gate`, `test:runtime:minio-readiness`, `typecheck:ci-classify`, `test:ci-classify`, `typecheck:guardrail`, `guardrail:test`, `typecheck:log-privacy-guard`, `test:log-privacy-guard` | 74 / 61 / 29 / 28 / 74 / 39 passed, 0 failed |
+| Log privacy guard | `npm run log-privacy-guard:scan -- --strict-baseline` | 306 files, **no new violations** |
+| Layer 2 | `npm --prefix server run server:test:non-disposable` | **3,035 passed, 0 failed** (36 suites) |
+| Layer 3 | `npm run test:runtime:postgres` | see below |
+| Layer 5 frontend leaves | 9 scripts | 36 / 21 / 8 / 26 / 24 / 29 / 24 / 75 / 8 passed, 0 failed |
+| Layer 5 vitest | `npm run test:vitest` | **270 passed** (23 files) |
+
+Migration suites, each re-run individually on the merged tree against a
+disposable PostgreSQL:
+
+`migration-import-workflow-convergence-db` **48/48** · `migration-r10-write-path-db` 21/21 ·
+`migration-analyze-lifecycle-db` 28/28 · `migration-execution-db` 23/23 ·
+`patient-identity-db` 25/25 · `migration-parser` 45/45 · `migration-mapping` 74/74 ·
+`migration-preserved-source-mapping` 21/21 · `migration-data-loss-gate` 19/19 ·
+`migration-column-preview` 36/36 · `migration-reports` 15/15 ·
+`migration-platform-auth-scope` 24/24 · `migration-patient-schema-drift` 31/31 ·
+`patient-blood-group` 16/16 · frontend `platform-migration-helpers` 75/75 ·
+`migration-destination-group-parity` 8/8.
+
+### Acceptance scenarios re-run after integration
+
+| # | Scenario | Result |
+| --- | --- | --- |
+| A | Change one ordinary mapping while unchanged protected rows exist | HTTP **200** (was 400) |
+| B | Actually mutate a protected consent/legal row | **400**, fail-closed, refusal names the column |
+| C | Measured-empty source column | settled, no operator action, no blocker |
+| D | Real workbook, 91 columns × 14,890 rows | converges in **5 clicks**; 3 genuine human decisions remain |
+| E | Dry run | **14,889 valid / 1 rejected** (`INVALID_FUTURE_BIRTH_DATE`, source row 14,488), `executable: true`, 0 run-level blockers |
+| F | Rejected-row download | XLSX **and** CSV 200; original vendor headers, TR message + fix + run id; gated column excluded; Platform-Admin/run-scoped; **0 of 39 fixture cell values appear in the server log** |
+| G | Correction / re-import loop | proven by §10 of the convergence DB suite (idempotent by provenance, no duplicate patients) |
+| H | Real-customer Execute | **NOT PERFORMED.** The run stops at `DRY_RUN_COMPLETE` |
+
+Harness totals: real-workbook acceptance **27/27**, HTTP acceptance over the
+live route stack **41/41**, rendered-component acceptance against the live
+server **5/5**. Server request log for the whole HTTP pass: 18×200, 1×201,
+**2×400 — both the deliberate fail-closed refusals of scenario B**, zero 5xx,
+zero unintended 4xx.
+
+**Rollback after integration** is unchanged: reverting the R12 commits leaves
+the merge's F4 R6 content intact, and R12 still owns no schema object.
