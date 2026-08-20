@@ -778,9 +778,11 @@
         "actions": "Aktionen"
       },
       "actions": {
+        "approve": "Zuordnung bestätigen",
         "ignore": "Ignorieren",
         "block": "Blockieren",
         "reset": "Auf Automatik zurücksetzen",
+        "approveHint": "Das vorgeschlagene Ziel, die Transformation und die Reihenfolge unverändert bestätigen",
         "ignoreHint": "Diese Spalte ignorieren — es wird nichts in ein Ziel geschrieben",
         "blockHint": "Diese Spalte blockieren — zur Überprüfung markieren",
         "resetHint": "Auf den automatischen Vorschlag zurücksetzen"

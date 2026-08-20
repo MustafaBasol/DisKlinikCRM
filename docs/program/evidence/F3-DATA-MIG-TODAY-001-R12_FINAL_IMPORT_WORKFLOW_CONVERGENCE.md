@@ -462,3 +462,180 @@ zero unintended 4xx.
 
 **Rollback after integration** is unchanged: reverting the R12 commits leaves
 the merge's F4 R6 content intact, and R12 still owns no schema object.
+
+---
+
+## 11. R12-UX-CLOSURE — the two UX defects real operator acceptance found (2026-08-20)
+
+**Task:** F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE. **Same R12 lifecycle — no R13,
+no second unrelated task.** **Base:** `origin/main` @ `073b145f` (the release
+this section's defects were reported against — the merge commit that landed
+everything §1–§10 above). **Branch:** `hotfix/f3-data-mig-r12-ux-closure`.
+**Not merged, not deployed, real-customer Execute not performed.**
+
+Everything through §10 above was operator-verified through Reference Mapping.
+Continuing acceptance on the SAME first-customer workbook exposed two further
+UX defects on the mapping screen — neither a regression of §1–§10, both new
+observations from continuing the same acceptance pass one step further.
+
+### 11.1 Defect A — no explicit "approve the already-correct suggestion" action
+
+**Symptom.** For a row in `SENSITIVE_REVIEW_REQUIRED` ("Kontrol et") whose
+proposed destination the operator agreed with — `ONEMLINOT`/`KONTROLNOTU` →
+`patient.notes` via `compose_notes`, `composeOrder` 1/2, and `KANGURUBU` →
+`patient.bloodGroup` via `blood_group_tr` — there was no way to accept the
+suggestion as-is. Because `MigrationMappingStep`'s per-field handlers only
+persisted on an actual destination/transform/composeOrder change, the operator
+had to pick a different destination (Korunan Kaynak Değeri), save, then pick
+the correct one again, purely to trigger a write that moved the row out of
+`SENSITIVE_REVIEW_REQUIRED`. Unnecessary risk (a wrong value briefly on
+record) for zero benefit.
+
+**Root cause.** `handleDestinationChange` / `handleTransformChange` /
+`handleComposeOrderChange` each persisted a real edit; nothing persisted "same
+tuple, decision made." The server side already supported exactly this shape —
+`mappingWriteDiff.ts` (§ above, R12) treats a `state`-only change as a
+semantic change and writes it, stamping the audit fields — but the client
+never sent it.
+
+**Fix — no new server route.** `MigrationMappingStep.handleApproveMapping`
+sends the row's SAME `destinationField`/`transform`/`composeOrder` with only
+`state: 'RESOLVED'`, through the SAME `PUT /migrations/runs/:id/mappings` +
+`mappingWriteDiff.ts` path every other edit already uses. A new pure predicate,
+`platformMigrationHelpers.canApproveMapping`, gates the button: only a
+`SENSITIVE_REVIEW_REQUIRED` row whose current destination exists in the
+catalog and whose transform/composeOrder already satisfy
+`validateMapping.ts`'s per-row rules gets the button — never `LEGAL_BLOCKED`,
+never a row with no destination. The security boundary is the SAME one §2/§5
+already established: `legalGateGuard.ts` refuses any edit to a stored
+`LEGAL_BLOCKED` row regardless of what the client sends, so a hand-crafted
+"approve" against one still fails closed.
+
+### 11.2 Defect B — "Yok say" left destination residue
+
+**Symptom.** Clicking "Yok say" on `KANGURUBU` set `state = IGNORE` but left
+`destinationField = patient.bloodGroup` in place, producing
+`MAPPING_INVALID — KANGURUBU is marked ignored but still carries destination
+"patient.bloodGroup"` (`validateMapping.ts`'s existing IGNORE rule).
+
+**Root cause.** `handleMarkIgnore` updated only `state`; `persistMapping`
+always sends the full four-field tuple, so the untouched `destinationField`
+rode along in the same write the state change went out in — the identical
+shape of defect §2's production 400, one level down (a stale field surviving
+inside a single row's payload instead of across the whole collection).
+
+**Fix.** The same updater now also sets `destinationField`, `transform` and
+`composeOrder` to `null`, so `persistMapping` clears all four fields in ONE
+PUT row, applied in ONE `updateMany` inside the existing transaction —
+atomic by construction, not a two-step decision.
+
+### 11.3 What did NOT change
+
+No Prisma migration, no new destination, no new mapping state, no relaxed
+guard. `mappingWriteDiff.ts`, `legalGateGuard.ts`, `dataLossGate.ts` and
+`validateMapping.ts` are byte-identical to `073b145f`. Changed files:
+`src/components/platform/migration/MigrationMappingStep.tsx`,
+`src/pages/platformMigrationHelpers.ts` (new `canApproveMapping`),
+`src/locales/{tr,en,fr,de}/platform.json` (`actions.approve` /
+`actions.approveHint`), plus the three test files below and
+`server/package.json` (one new `test:migration-mapping-approval-db` script,
+registered into `server:test:disposable-db`).
+
+### 11.4 Verification
+
+| Suite | Result |
+| --- | --- |
+| `test:platform-migration-helpers` (new `canApproveMapping` cases) | **85/85** |
+| `MigrationMappingStep.vitest.test.tsx` (5 pre-existing + 5 new) | **10/10** |
+| `server/src/tests/migrationMappingApprovalDb.test.ts` (new, DB-backed, real route stack + real Postgres) | **19/19** |
+| `migrationImportWorkflowConvergenceDb.test.ts` — R12 400 regression, re-run unmodified | **48/48** |
+| `migrationMapping.test.ts` | **74/74** |
+| `migrationDataLossGate.test.ts` | **19/19** |
+| Frontend `tsc --noEmit` | clean |
+| Server `tsc --noEmit` | clean |
+
+The new DB suite proves, against a real disposable PostgreSQL and the real
+Express route stack (no mocks): approving `ONEMLINOT` returns 2xx and leaves
+`destinationField`/`transform`/`composeOrder` byte-identical, with
+`composeOrder: 1` intact; approving `KONTROLNOTU` preserves `composeOrder: 2`;
+both stamp `decidedByPlatformAdminId`/`decidedAt` and survive a reload through
+the real `GET`; the untouched stored `LEGAL_BLOCKED` row (`KVKKONAYKODU`,
+populated) is neither written nor stamped by either approval; a hand-crafted
+approve-shaped `PUT` directly against that `LEGAL_BLOCKED` row is refused
+(`MAPPING_INVALID`, names the column); a `SENSITIVE_REVIEW_REQUIRED` row with
+no destination can never be made to validate even by an "approve"-shaped
+request; ignoring `KANGURUBU` clears all three fields atomically and leaves no
+`MAPPING_INVALID` issue; and approving two of three `SENSITIVE_REVIEW_REQUIRED`
+rows while ignoring the third drives `sensitiveReviewCount` and
+`unresolvedCount` to 0 and advances the run to `MAPPING_READY`.
+
+**Real-customer Execute: not performed.** No dry-run or execute step was
+touched by this task.
+
+### 11.5 R12-UX-CLOSURE amendment — exact-head CI fix and Block-action closure (2026-08-20)
+
+Architecture review of head `1efc4bb5a147c96cdfdf262acfdfe5e68f03c666` found
+two blockers before this PR could be called merge-safe, both addressed in the
+same PR, on the same branch, with no new task opened.
+
+**CI #422 (Layer 1: frontend typecheck + build) — root cause.** The new
+`makeApprovalApi()` test-fixture factory in
+`MigrationMappingStep.vitest.test.tsx` cast its return value to
+`MigrationApiClient & { saveMappings: ReturnType<typeof vi.fn> }`, omitting
+`acceptAutoMappings` from the intersection. `renderStep()`'s parameter type is
+`ReturnType<typeof makeApi>`, whose intersection type declares BOTH
+`saveMappings` and `acceptAutoMappings` as `ReturnType<typeof vi.fn>`. Because
+`acceptAutoMappings` fell back to `MigrationApiClient`'s real method signature
+`(runId: string) => Promise<...>` under the incomplete cast, every
+`renderStep(api)` call built from `makeApprovalApi()` failed TS2345 — the
+constructed object's `acceptAutoMappings` type didn't satisfy the mock type
+`renderStep` requires. Fix: added `acceptAutoMappings:
+ReturnType<typeof vi.fn>;` to `makeApprovalApi`'s cast, matching `makeApi`'s
+existing intersection exactly. No production type was touched, no `any` was
+introduced.
+
+**Block-action residue — root cause.** `handleMarkBlocked` in
+`MigrationMappingStep.tsx` wrote only `state: 'BLOCKED'`, the exact defect
+shape `handleMarkIgnore` had before the original R12-UX-CLOSURE fix: a row
+already carrying a destination (e.g. a `RESOLVED` row an operator decides to
+block instead) kept that destination, and
+`validateMapping.ts`'s `state === 'BLOCKED'` branch already reports that
+combination as `MAPPING_INVALID` ("marked blocked but still carries
+destination"). Fix, identical in shape to the ignore fix: `handleMarkBlocked`
+now clears `destinationField`, `destinationLabel`, `transform` and
+`composeOrder` to `null` in the SAME updater passed to `persistMapping`, so
+the same PUT row and the same server `updateMany` write all four fields
+atomically. No server-side code changed — `validateMapping.ts`'s existing
+Rule for `state === 'BLOCKED'` and the legal gate's stored-state check already
+cover this shape with zero new logic.
+
+Changed files for this amendment (all within the original R12-UX-CLOSURE
+scope): `src/components/platform/migration/MigrationMappingStep.tsx`
+(`handleMarkBlocked` fix only),
+`src/components/platform/migration/__tests__/MigrationMappingStep.vitest.test.tsx`
+(`acceptAutoMappings` cast fix, plus two new tests: `6b` Block clears the
+tuple atomically, `6c` a `LEGAL_BLOCKED` row never renders "Engelle"),
+`server/src/tests/migrationMappingApprovalDb.test.ts` (two new sections: `9`
+Block clears the tuple atomically end-to-end against a real Postgres and
+survives a reload, `10` a hand-crafted Block-shaped `PUT` against a stored
+`LEGAL_BLOCKED` row is refused). No Prisma migration. No production server
+file touched.
+
+| Suite (re-run at the amended head) | Result |
+| --- | --- |
+| `test:platform-migration-helpers` | **85/85** |
+| `MigrationMappingStep.vitest.test.tsx` (10 pre-existing + 2 new) | **12/12** |
+| `server/src/tests/migrationMappingApprovalDb.test.ts` (19 pre-existing + 4 new) | **23/23** |
+| `migrationImportWorkflowConvergenceDb.test.ts` — R12 400 regression | **48/48** |
+| `migrationMapping.test.ts` | **74/74** |
+| `migrationDataLossGate.test.ts` | **19/19** |
+| Frontend `tsc -b` | clean |
+| Frontend production `npm run build` | clean |
+| Server `tsc --noEmit` | clean |
+| `git diff --check` | clean |
+
+`LEGAL_BLOCKED` behaviour is unchanged and unaffected: the client never
+renders "Engelle" for a `LEGAL_BLOCKED` row (unchanged, pre-existing
+condition in `MigrationMappingStep.tsx`), and the existing
+`legalGateGuard.ts` refuses any edit — including a Block-shaped one — against
+a stored `LEGAL_BLOCKED` row, verified directly in the new DB test section 10.

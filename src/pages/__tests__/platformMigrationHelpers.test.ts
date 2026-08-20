@@ -30,9 +30,15 @@ import {
   OPERATOR_MAPPING_STATUSES,
   operatorMappingStatus,
   operatorNeedsAction,
+  canApproveMapping,
   PRESERVATION_DESTINATION_KEY,
 } from '../platformMigrationHelpers';
-import { MIGRATION_RUN_STATUSES, type MigrationRunStatus, type MappingDto } from '../../services/platformMigrationApi';
+import {
+  MIGRATION_RUN_STATUSES,
+  type MigrationRunStatus,
+  type MappingDto,
+  type DestinationFieldDto,
+} from '../../services/platformMigrationApi';
 
 let passed = 0;
 let failed = 0;
@@ -591,6 +597,136 @@ async function main() {
       const expectedTerminal = status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED';
       assert.equal(isTerminalRunStatus(status), expectedTerminal, status);
     }
+  });
+
+  section('── canApproveMapping: F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE ────────');
+
+  const NOTES_DEST: DestinationFieldDto = {
+    key: 'patient.notes',
+    label: 'Clinical note',
+    group: 'clinical',
+    type: 'string',
+    required: false,
+    allowedTransforms: ['compose_notes', 'trim'],
+    allowsComposition: true,
+  };
+  const BLOOD_GROUP_DEST: DestinationFieldDto = {
+    key: 'patient.bloodGroup',
+    label: 'Blood group',
+    group: 'clinical',
+    type: 'enum',
+    required: false,
+    allowedTransforms: ['blood_group_tr'],
+    allowsComposition: false,
+  };
+  const DESTS = [NOTES_DEST, BLOOD_GROUP_DEST];
+
+  await test('ONEMLINOT-shaped row (composed note, order 1) is approvable', () => {
+    const m = makeMapping({
+      sourceField: 'ONEMLINOT',
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.notes',
+      transform: 'compose_notes',
+      composeOrder: 1,
+      reason: 'SPECIAL_CATEGORY_REVIEW',
+    });
+    assert.equal(canApproveMapping(m, DESTS), true);
+  });
+
+  await test('KONTROLNOTU-shaped row (composed note, order 2) is approvable', () => {
+    const m = makeMapping({
+      sourceField: 'KONTROLNOTU',
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.notes',
+      transform: 'compose_notes',
+      composeOrder: 2,
+      reason: 'SPECIAL_CATEGORY_REVIEW',
+    });
+    assert.equal(canApproveMapping(m, DESTS), true);
+  });
+
+  await test('KANGURUBU-shaped row (non-composable blood group) is approvable', () => {
+    const m = makeMapping({
+      sourceField: 'KANGURUBU',
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.bloodGroup',
+      transform: 'blood_group_tr',
+      composeOrder: null,
+      reason: 'SPECIAL_CATEGORY_REVIEW',
+    });
+    assert.equal(canApproveMapping(m, DESTS), true);
+  });
+
+  await test('a row not in SENSITIVE_REVIEW_REQUIRED is never approvable, even with a valid destination', () => {
+    for (const state of ['AUTO_CONFIDENT', 'AUTO_REVIEW', 'MANUAL_REQUIRED', 'BLOCKED', 'IGNORE', 'RESOLVED'] as const) {
+      const m = makeMapping({
+        state,
+        destinationField: 'patient.notes',
+        transform: 'compose_notes',
+        composeOrder: 1,
+      });
+      assert.equal(canApproveMapping(m, DESTS), false, state);
+    }
+  });
+
+  await test('LEGAL_BLOCKED is never approvable, belt-and-braces alongside the server-side legal gate', () => {
+    const m = makeMapping({
+      state: 'LEGAL_BLOCKED',
+      destinationField: null,
+      transform: null,
+      composeOrder: null,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
+  });
+
+  await test('a SENSITIVE_REVIEW_REQUIRED row with no destination is never approvable', () => {
+    const m = makeMapping({
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: null,
+      transform: null,
+      composeOrder: null,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
+  });
+
+  await test('a destination the catalog no longer carries is never approvable', () => {
+    const m = makeMapping({
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.retiredField',
+      transform: null,
+      composeOrder: null,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
+  });
+
+  await test('a transform outside the destination allow-list is never approvable', () => {
+    const m = makeMapping({
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.bloodGroup',
+      transform: 'compose_notes' as never,
+      composeOrder: null,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
+  });
+
+  await test('a composeOrder on a non-composable destination is never approvable', () => {
+    const m = makeMapping({
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.bloodGroup',
+      transform: 'blood_group_tr',
+      composeOrder: 1,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
+  });
+
+  await test('a missing composeOrder on a composable destination is never approvable', () => {
+    const m = makeMapping({
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.notes',
+      transform: 'compose_notes',
+      composeOrder: null,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
   });
 
   // ─── Summary ──────────────────────────────────────────────────────────────

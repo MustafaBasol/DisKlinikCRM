@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ArrowRight,
   ChevronRight,
+  CheckCircle2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { MigrationStepProps } from './types';
@@ -36,6 +37,7 @@ import {
   formatPercent,
   isHeaderlessMapping,
   excelColumnCoordinate,
+  canApproveMapping,
 } from '../../../pages/platformMigrationHelpers';
 import type { ColumnPreviewSampleDto } from '../../../services/platformMigrationApi';
 
@@ -96,6 +98,7 @@ interface RowProps {
   onDestinationChange: (sourceField: string, destinationKey: string) => void;
   onTransformChange: (sourceField: string, transform: TransformName) => void;
   onComposeOrderChange: (sourceField: string, order: number) => void;
+  onApproveMapping: (sourceField: string) => void;
   onMarkIgnore: (sourceField: string) => void;
   onMarkBlocked: (sourceField: string) => void;
   onResetAuto: (sourceField: string) => void;
@@ -103,12 +106,21 @@ interface RowProps {
 
 const MappingRow: React.FC<RowProps> = React.memo(({
   mapping, profile, samples, destinations, destinationGroups, saving, canReset, isFocusTarget, registerRowRef,
-  onDestinationChange, onTransformChange, onComposeOrderChange, onMarkIgnore, onMarkBlocked, onResetAuto,
+  onDestinationChange, onTransformChange, onComposeOrderChange, onApproveMapping, onMarkIgnore, onMarkBlocked, onResetAuto,
 }) => {
   const { t } = useTranslation(['platform']);
   const isLegalBlocked = mapping.state === 'LEGAL_BLOCKED';
   const isBlocked = mapping.state === 'BLOCKED';
   const isIgnored = mapping.state === 'IGNORE';
+  /*
+   * "Eşlemeyi Onayla" — F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE. Offered only when
+   * the row is SENSITIVE_REVIEW_REQUIRED and its already-proposed destination
+   * would actually validate; see canApproveMapping's own doc for why each
+   * check is there. LEGAL_BLOCKED rows never reach this branch — the server
+   * independently refuses any edit to a stored LEGAL_BLOCKED row regardless of
+   * what this UI-side check decides.
+   */
+  const canApprove = canApproveMapping(mapping, destinations);
   /*
    * ONLY the legal gate locks destination selection.
    *
@@ -322,6 +334,27 @@ const MappingRow: React.FC<RowProps> = React.memo(({
       <td className="px-3 py-3 min-w-[190px]">
         <div className="flex flex-col items-start gap-1">
           {/*
+            * Offered ONLY for a SENSITIVE_REVIEW_REQUIRED row whose proposed
+            * destination already validates (canApproveMapping above). Before
+            * this button existed, approving a correct suggestion meant
+            * temporarily choosing a different destination and then choosing
+            * the right one again just to trigger a save — this sends the SAME
+            * destination/transform/composeOrder with only `state` changed.
+            */}
+          {canApprove && (
+            <button
+              type="button"
+              aria-label={t('platform:migration.mapping.actions.approve')}
+              title={t('platform:migration.mapping.actions.approveHint')}
+              disabled={saving}
+              onClick={() => onApproveMapping(mapping.sourceField)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-green-200 dark:border-green-800 text-[11px] font-medium text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-40"
+            >
+              <CheckCircle2 size={12} />
+              {t('platform:migration.mapping.actions.approve')}
+            </button>
+          )}
+          {/*
             * `!isLegalBlocked` added by F3-DATA-MIG-TODAY-001-R11. Ignoring a
             * legally-gated column would relabel a KVKK Art. 6 exclusion as an
             * ordinary operator exclusion and drop it from the LEGAL_BLOCKED
@@ -514,12 +547,72 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
     persistMapping(sourceField, (m) => ({ ...m, composeOrder: order }));
   }, [persistMapping]);
 
+  /**
+   * "Yok say" (ignore). F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE.
+   *
+   * THE PRODUCTION DEFECT THIS FIXES. This updater used to change only `state`,
+   * leaving destinationField/transform/composeOrder exactly as they were. For a
+   * column the engine had already proposed a destination for (KANGURUBU ->
+   * patient.bloodGroup), that sent IGNORE alongside the untouched destination in
+   * the SAME PUT payload — and because `persistMapping` always sends the full
+   * four-field tuple, the server wrote destinationField verbatim, producing a
+   * row that was simultaneously "ignored" and still mapped
+   * (MAPPING_INVALID — "marked ignored but still carries destination"). The
+   * operator had no way to reach a clean ignored row without opening the
+   * dropdown and clearing it by hand first.
+   *
+   * The four fields are cleared in the SAME updater, so `persistMapping` sends
+   * them in the SAME PUT row and the server writes them in the SAME
+   * `updateMany` — atomically, not as two decisions that could observe a
+   * half-written row in between.
+   */
   const handleMarkIgnore = useCallback((sourceField: string) => {
-    persistMapping(sourceField, (m) => ({ ...m, state: 'IGNORE' }));
+    persistMapping(sourceField, (m) => ({
+      ...m,
+      state: 'IGNORE',
+      destinationField: null,
+      destinationLabel: null,
+      transform: null,
+      composeOrder: null,
+    }));
   }, [persistMapping]);
 
+  /**
+   * "Eşlemeyi Onayla" — approve a SENSITIVE_REVIEW_REQUIRED row's ALREADY
+   * proposed destination without altering it. F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE.
+   *
+   * Only offered when `canApproveMapping` says the row's current
+   * destination/transform/composeOrder would already validate (see the
+   * MappingRow render above), so this never needs to touch any of the three.
+   * Reuses `persistMapping`, i.e. the SAME PUT /mappings + semantic-diff
+   * machinery every other edit goes through: the server treats the
+   * SENSITIVE_REVIEW_REQUIRED -> RESOLVED state change alone as a semantic
+   * change (mappingWriteDiff.ts), writes exactly this one row, and stamps
+   * decidedByPlatformAdminId/decidedAt — the same audit record a manual
+   * re-selection of the same destination already produces today. No new
+   * endpoint, no new server-side trust: a LEGAL_BLOCKED row is never offered
+   * this action, and even a hand-crafted request against it is still refused
+   * by the existing legal gate (assertPlanHasNoLegallyGatedEdits).
+   */
+  const handleApproveMapping = useCallback((sourceField: string) => {
+    persistMapping(sourceField, (m) => ({ ...m, state: 'RESOLVED' }));
+  }, [persistMapping]);
+
+  /**
+   * "Engelle" — same atomic-clear requirement as "Yok say" above: a BLOCKED
+   * row must not carry a leftover destination/transform/composeOrder from
+   * whatever state it was in before, or it fails MAPPING_INVALID the same
+   * way an unclear IGNORE row did. F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE.
+   */
   const handleMarkBlocked = useCallback((sourceField: string) => {
-    persistMapping(sourceField, (m) => ({ ...m, state: 'BLOCKED' }));
+    persistMapping(sourceField, (m) => ({
+      ...m,
+      state: 'BLOCKED',
+      destinationField: null,
+      destinationLabel: null,
+      transform: null,
+      composeOrder: null,
+    }));
   }, [persistMapping]);
 
   const handleResetAuto = useCallback((sourceField: string) => {
@@ -836,6 +929,7 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
                     onDestinationChange={handleDestinationChange}
                     onTransformChange={handleTransformChange}
                     onComposeOrderChange={handleComposeOrderChange}
+                    onApproveMapping={handleApproveMapping}
                     onMarkIgnore={handleMarkIgnore}
                     onMarkBlocked={handleMarkBlocked}
                     onResetAuto={handleResetAuto}
