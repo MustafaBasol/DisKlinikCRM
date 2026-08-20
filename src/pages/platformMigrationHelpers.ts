@@ -9,6 +9,7 @@
  */
 
 import type {
+  DestinationFieldDto,
   MappingDto,
   MigrationRunStatus,
   SourceColumnProfileDto,
@@ -165,6 +166,44 @@ export function operatorMappingStatus(
 /** Does this row still cost the operator something? Drives the "kalan iş" count. */
 export function operatorNeedsAction(status: OperatorMappingStatus): boolean {
   return status === 'NEEDS_REVIEW' || status === 'ERROR';
+}
+
+/**
+ * Can "Eşlemeyi Onayla" resolve this row WITHOUT touching destination,
+ * transform or composeOrder? F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE.
+ *
+ * ONLY SENSITIVE_REVIEW_REQUIRED is eligible. Every other undecided state
+ * (MANUAL_REQUIRED, AUTO_REVIEW) has no engine-proposed destination the
+ * operator has already agreed with — approving in place would just be
+ * confirming a blank. LEGAL_BLOCKED is excluded on purpose: lifting that gate
+ * is a program-owner decision, and the server refuses any edit to a stored
+ * LEGAL_BLOCKED row regardless of what this predicate says, so this is
+ * belt-and-braces, not the enforcement point.
+ *
+ * The destination/transform/composeOrder checks mirror the PER-ROW rules
+ * validateMapping.ts applies to a WRITING state (Rule 3 transform allow-list,
+ * the composeOrder⇄allowsComposition pairing) — a row that fails them here
+ * would fail them again the instant it were written as RESOLVED, so the
+ * button must not offer to create that result. Cross-row rules (destination
+ * collisions, duplicate composeOrders) are NOT re-checked here: the server
+ * re-validates after every save and would report those regardless, exactly
+ * as a manual dropdown edit already does today.
+ */
+export function canApproveMapping(
+  mapping: Pick<MappingDto, 'state' | 'destinationField' | 'transform' | 'composeOrder'>,
+  destinations: readonly Pick<DestinationFieldDto, 'key' | 'allowedTransforms' | 'allowsComposition'>[],
+): boolean {
+  if (mapping.state !== 'SENSITIVE_REVIEW_REQUIRED') return false;
+  if (!mapping.destinationField) return false;
+  const destination = destinations.find((d) => d.key === mapping.destinationField);
+  if (!destination) return false;
+  if (mapping.transform !== null && !destination.allowedTransforms.includes(mapping.transform)) return false;
+  if (destination.allowsComposition) {
+    if (mapping.composeOrder === null || mapping.composeOrder === undefined) return false;
+  } else if (mapping.composeOrder !== null && mapping.composeOrder !== undefined) {
+    return false;
+  }
+  return true;
 }
 
 /**

@@ -27,7 +27,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import MigrationMappingStep from '../MigrationMappingStep';
@@ -324,5 +324,265 @@ describe('MigrationMappingStep — source column identity (R7)', () => {
     // An issue with no sourceField has nowhere to go and stays plain text.
     expect(screen.queryByRole('button', { name: /Genel bir sorun/ })).not.toBeInTheDocument();
     expect(screen.getByText(/Genel bir sorun/)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE
+// ---------------------------------------------------------------------------
+
+describe('MigrationMappingStep — "Eşlemeyi Onayla" and "Yok say" (R12-UX-CLOSURE)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const NOTES_DESTINATIONS: DestinationFieldDto[] = [
+    {
+      key: 'patient.notes',
+      label: 'Clinical note',
+      group: 'clinical',
+      type: 'string',
+      required: false,
+      allowedTransforms: ['compose_notes', 'trim'],
+      allowsComposition: true,
+    },
+    {
+      key: 'patient.bloodGroup',
+      label: 'Blood group',
+      group: 'clinical',
+      type: 'enum',
+      required: false,
+      allowedTransforms: ['blood_group_tr'],
+      allowsComposition: false,
+    },
+  ];
+
+  /** ONEMLINOT: SENSITIVE_REVIEW_REQUIRED, already carries a valid destination/transform/order. */
+  const ONEMLINOT: MappingDto = {
+    sourceField: 'ONEMLINOT',
+    sourceHeader: 'ONEMLINOT',
+    sourceLabel: 'ONEMLINOT',
+    sourceIndex: 10,
+    sourceNormalized: 'ONEMLINOT',
+    destinationField: 'patient.notes',
+    destinationLabel: 'Clinical note',
+    transform: 'compose_notes',
+    composeOrder: 1,
+    confidence: 70,
+    reason: 'SPECIAL_CATEGORY_REVIEW',
+    state: 'SENSITIVE_REVIEW_REQUIRED',
+  };
+
+  /** KONTROLNOTU: same shape, second in the composition order. */
+  const KONTROLNOTU: MappingDto = {
+    ...ONEMLINOT,
+    sourceField: 'KONTROLNOTU',
+    sourceHeader: 'KONTROLNOTU',
+    sourceLabel: 'KONTROLNOTU',
+    sourceIndex: 11,
+    sourceNormalized: 'KONTROLNOTU',
+    composeOrder: 2,
+  };
+
+  /** KANGURUBU: SENSITIVE_REVIEW_REQUIRED with a destination already carrying data. */
+  const KANGURUBU: MappingDto = {
+    sourceField: 'KANGURUBU',
+    sourceHeader: 'KANGURUBU',
+    sourceLabel: 'KANGURUBU',
+    sourceIndex: 12,
+    sourceNormalized: 'KANGURUBU',
+    destinationField: 'patient.bloodGroup',
+    destinationLabel: 'Blood group',
+    transform: 'blood_group_tr',
+    composeOrder: null,
+    confidence: 70,
+    reason: 'SPECIAL_CATEGORY_REVIEW',
+    state: 'SENSITIVE_REVIEW_REQUIRED',
+  };
+
+  /** A legally gated row — must never offer the approve action. */
+  const LEGAL_ROW: MappingDto = {
+    sourceField: 'KVKKONAYKODU',
+    sourceHeader: 'KVKKONAYKODU',
+    sourceLabel: 'KVKKONAYKODU',
+    sourceIndex: 13,
+    sourceNormalized: 'KVKKONAYKODU',
+    destinationField: null,
+    destinationLabel: null,
+    transform: null,
+    composeOrder: null,
+    confidence: 0,
+    reason: 'LEGAL_GATE',
+    state: 'LEGAL_BLOCKED',
+    policyNote: 'Synthetic policy note.',
+  };
+
+  /** A SENSITIVE_REVIEW_REQUIRED row with no destination proposed — cannot approve. */
+  const NO_DEST_REVIEW: MappingDto = {
+    sourceField: 'UZUNNOT',
+    sourceHeader: 'UZUNNOT',
+    sourceLabel: 'UZUNNOT',
+    sourceIndex: 14,
+    sourceNormalized: 'UZUNNOT',
+    destinationField: null,
+    destinationLabel: null,
+    transform: null,
+    composeOrder: null,
+    confidence: 0,
+    reason: 'SPECIAL_CATEGORY_REVIEW',
+    state: 'SENSITIVE_REVIEW_REQUIRED',
+  };
+
+  const VALID_VALIDATION: MappingValidationDto = {
+    valid: true,
+    issues: [],
+    unresolvedCount: 0,
+    blockedCount: 0,
+    legalBlockedCount: 0,
+    ignoredCount: 0,
+    mappedCount: 1,
+    sensitiveReviewCount: 0,
+  };
+
+  function makeApprovalApi(mappings: MappingDto[]) {
+    const mappingsResponse: MappingsResponse = {
+      mappings,
+      destinations: NOTES_DESTINATIONS,
+      validation: VALID_VALIDATION,
+    };
+    return {
+      getMappings: vi.fn().mockResolvedValue(mappingsResponse),
+      analyze: vi.fn().mockResolvedValue({ run: RUN, analysis: ANALYSIS }),
+      saveMappings: vi.fn().mockResolvedValue({ mappings, validation: VALID_VALIDATION }),
+      acceptAutoMappings: vi.fn().mockResolvedValue({ mappings, validation: VALID_VALIDATION, accepted: 0 }),
+      validateMappings: vi.fn().mockResolvedValue(VALID_VALIDATION),
+      getRun: vi.fn().mockResolvedValue({ run: RUN, reconciliation: null, dryRun: null }),
+    } as unknown as import('../../../../services/platformMigrationApi').MigrationApiClient & {
+      saveMappings: ReturnType<typeof vi.fn>;
+    };
+  }
+
+  it('1/2/3. ONEMLINOT and KONTROLNOTU: "Eşlemeyi Onayla" sends the SAME destination/transform/composeOrder, only state changes', async () => {
+    const user = userEvent.setup();
+    const api = makeApprovalApi([ONEMLINOT, KONTROLNOTU]);
+    renderStep(api);
+
+    await screen.findByText('ONEMLINOT');
+    const approveButtons = await screen.findAllByRole('button', { name: 'Eşlemeyi Onayla' });
+    expect(approveButtons).toHaveLength(2);
+
+    const onemlinotRow = screen.getByText('ONEMLINOT').closest('tr')!;
+    const approveOnemlinot = within(onemlinotRow).getByRole('button', { name: 'Eşlemeyi Onayla' });
+    await user.click(approveOnemlinot);
+
+    await waitFor(() => expect(api.saveMappings).toHaveBeenCalledTimes(1));
+    expect(api.saveMappings).toHaveBeenCalledWith('run-r7-1', [
+      {
+        sourceField: 'ONEMLINOT',
+        destinationField: 'patient.notes',
+        transform: 'compose_notes',
+        composeOrder: 1,
+        state: 'RESOLVED',
+      },
+    ]);
+
+    const kontrolnotuRow = screen.getByText('KONTROLNOTU').closest('tr')!;
+    const approveKontrolnotu = within(kontrolnotuRow).getByRole('button', { name: 'Eşlemeyi Onayla' });
+    await user.click(approveKontrolnotu);
+
+    await waitFor(() => expect(api.saveMappings).toHaveBeenCalledTimes(2));
+    expect(api.saveMappings).toHaveBeenLastCalledWith('run-r7-1', [
+      {
+        sourceField: 'KONTROLNOTU',
+        destinationField: 'patient.notes',
+        transform: 'compose_notes',
+        composeOrder: 2,
+        state: 'RESOLVED',
+      },
+    ]);
+  });
+
+  it('4. a LEGAL_BLOCKED row never renders "Eşlemeyi Onayla"', async () => {
+    const api = makeApprovalApi([LEGAL_ROW]);
+    renderStep(api);
+
+    await screen.findByText('KVKKONAYKODU');
+    expect(screen.queryByRole('button', { name: 'Eşlemeyi Onayla' })).not.toBeInTheDocument();
+  });
+
+  it('5. a SENSITIVE_REVIEW_REQUIRED row with no proposed destination never renders "Eşlemeyi Onayla"', async () => {
+    const api = makeApprovalApi([NO_DEST_REVIEW]);
+    renderStep(api);
+
+    await screen.findByText('UZUNNOT');
+    expect(screen.queryByRole('button', { name: 'Eşlemeyi Onayla' })).not.toBeInTheDocument();
+  });
+
+  it('6. KANGURUBU "Yok say" clears destination/transform/composeOrder atomically in the same PUT row', async () => {
+    const user = userEvent.setup();
+    const api = makeApprovalApi([KANGURUBU]);
+    renderStep(api);
+
+    await screen.findByText('KANGURUBU');
+    const row = screen.getByText('KANGURUBU').closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Yok say' }));
+
+    await waitFor(() => expect(api.saveMappings).toHaveBeenCalledTimes(1));
+    expect(api.saveMappings).toHaveBeenCalledWith('run-r7-1', [
+      {
+        sourceField: 'KANGURUBU',
+        destinationField: null,
+        transform: null,
+        composeOrder: null,
+        state: 'IGNORE',
+      },
+    ]);
+  });
+
+  it('7. approving two rows and ignoring one drives "sizden karar bekliyor" to 0', async () => {
+    const user = userEvent.setup();
+    const resolvedOnemlinot: MappingDto = { ...ONEMLINOT, state: 'RESOLVED', reason: 'MANUAL' };
+    const resolvedKontrolnotu: MappingDto = { ...KONTROLNOTU, state: 'RESOLVED', reason: 'MANUAL' };
+    const ignoredKangurubu: MappingDto = {
+      ...KANGURUBU,
+      state: 'IGNORE',
+      destinationField: null,
+      destinationLabel: null,
+      transform: null,
+      composeOrder: null,
+    };
+    const api = makeApprovalApi([ONEMLINOT, KONTROLNOTU, KANGURUBU]);
+    api.saveMappings
+      .mockResolvedValueOnce({ mappings: [resolvedOnemlinot, KONTROLNOTU, KANGURUBU], validation: VALID_VALIDATION })
+      .mockResolvedValueOnce({
+        mappings: [resolvedOnemlinot, resolvedKontrolnotu, KANGURUBU],
+        validation: VALID_VALIDATION,
+      })
+      .mockResolvedValueOnce({
+        mappings: [resolvedOnemlinot, resolvedKontrolnotu, ignoredKangurubu],
+        validation: VALID_VALIDATION,
+      });
+    renderStep(api);
+
+    await screen.findByText('ONEMLINOT');
+    // remainingWork is the amber/green headline figure, not any of the count
+    // chips beside it (several of which legitimately read "0" too).
+    const remainingWork = () => screen.getByText('sütun sizden karar bekliyor').previousElementSibling;
+    expect(remainingWork()).toHaveTextContent('3');
+
+    await user.click(within(screen.getByText('ONEMLINOT').closest('tr')!).getByRole('button', { name: 'Eşlemeyi Onayla' }));
+    await waitFor(() => expect(api.saveMappings).toHaveBeenCalledTimes(1));
+
+    await user.click(within(screen.getByText('KONTROLNOTU').closest('tr')!).getByRole('button', { name: 'Eşlemeyi Onayla' }));
+    await waitFor(() => expect(api.saveMappings).toHaveBeenCalledTimes(2));
+
+    await user.click(within(screen.getByText('KANGURUBU').closest('tr')!).getByRole('button', { name: 'Yok say' }));
+    await waitFor(() => expect(api.saveMappings).toHaveBeenCalledTimes(3));
+
+    await waitFor(() => expect(remainingWork()).toHaveTextContent('0'));
   });
 });

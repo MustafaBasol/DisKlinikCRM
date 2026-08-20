@@ -462,3 +462,112 @@ zero unintended 4xx.
 
 **Rollback after integration** is unchanged: reverting the R12 commits leaves
 the merge's F4 R6 content intact, and R12 still owns no schema object.
+
+---
+
+## 11. R12-UX-CLOSURE — the two UX defects real operator acceptance found (2026-08-20)
+
+**Task:** F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE. **Same R12 lifecycle — no R13,
+no second unrelated task.** **Base:** `origin/main` @ `073b145f` (the release
+this section's defects were reported against — the merge commit that landed
+everything §1–§10 above). **Branch:** `hotfix/f3-data-mig-r12-ux-closure`.
+**Not merged, not deployed, real-customer Execute not performed.**
+
+Everything through §10 above was operator-verified through Reference Mapping.
+Continuing acceptance on the SAME first-customer workbook exposed two further
+UX defects on the mapping screen — neither a regression of §1–§10, both new
+observations from continuing the same acceptance pass one step further.
+
+### 11.1 Defect A — no explicit "approve the already-correct suggestion" action
+
+**Symptom.** For a row in `SENSITIVE_REVIEW_REQUIRED` ("Kontrol et") whose
+proposed destination the operator agreed with — `ONEMLINOT`/`KONTROLNOTU` →
+`patient.notes` via `compose_notes`, `composeOrder` 1/2, and `KANGURUBU` →
+`patient.bloodGroup` via `blood_group_tr` — there was no way to accept the
+suggestion as-is. Because `MigrationMappingStep`'s per-field handlers only
+persisted on an actual destination/transform/composeOrder change, the operator
+had to pick a different destination (Korunan Kaynak Değeri), save, then pick
+the correct one again, purely to trigger a write that moved the row out of
+`SENSITIVE_REVIEW_REQUIRED`. Unnecessary risk (a wrong value briefly on
+record) for zero benefit.
+
+**Root cause.** `handleDestinationChange` / `handleTransformChange` /
+`handleComposeOrderChange` each persisted a real edit; nothing persisted "same
+tuple, decision made." The server side already supported exactly this shape —
+`mappingWriteDiff.ts` (§ above, R12) treats a `state`-only change as a
+semantic change and writes it, stamping the audit fields — but the client
+never sent it.
+
+**Fix — no new server route.** `MigrationMappingStep.handleApproveMapping`
+sends the row's SAME `destinationField`/`transform`/`composeOrder` with only
+`state: 'RESOLVED'`, through the SAME `PUT /migrations/runs/:id/mappings` +
+`mappingWriteDiff.ts` path every other edit already uses. A new pure predicate,
+`platformMigrationHelpers.canApproveMapping`, gates the button: only a
+`SENSITIVE_REVIEW_REQUIRED` row whose current destination exists in the
+catalog and whose transform/composeOrder already satisfy
+`validateMapping.ts`'s per-row rules gets the button — never `LEGAL_BLOCKED`,
+never a row with no destination. The security boundary is the SAME one §2/§5
+already established: `legalGateGuard.ts` refuses any edit to a stored
+`LEGAL_BLOCKED` row regardless of what the client sends, so a hand-crafted
+"approve" against one still fails closed.
+
+### 11.2 Defect B — "Yok say" left destination residue
+
+**Symptom.** Clicking "Yok say" on `KANGURUBU` set `state = IGNORE` but left
+`destinationField = patient.bloodGroup` in place, producing
+`MAPPING_INVALID — KANGURUBU is marked ignored but still carries destination
+"patient.bloodGroup"` (`validateMapping.ts`'s existing IGNORE rule).
+
+**Root cause.** `handleMarkIgnore` updated only `state`; `persistMapping`
+always sends the full four-field tuple, so the untouched `destinationField`
+rode along in the same write the state change went out in — the identical
+shape of defect §2's production 400, one level down (a stale field surviving
+inside a single row's payload instead of across the whole collection).
+
+**Fix.** The same updater now also sets `destinationField`, `transform` and
+`composeOrder` to `null`, so `persistMapping` clears all four fields in ONE
+PUT row, applied in ONE `updateMany` inside the existing transaction —
+atomic by construction, not a two-step decision.
+
+### 11.3 What did NOT change
+
+No Prisma migration, no new destination, no new mapping state, no relaxed
+guard. `mappingWriteDiff.ts`, `legalGateGuard.ts`, `dataLossGate.ts` and
+`validateMapping.ts` are byte-identical to `073b145f`. Changed files:
+`src/components/platform/migration/MigrationMappingStep.tsx`,
+`src/pages/platformMigrationHelpers.ts` (new `canApproveMapping`),
+`src/locales/{tr,en,fr,de}/platform.json` (`actions.approve` /
+`actions.approveHint`), plus the three test files below and
+`server/package.json` (one new `test:migration-mapping-approval-db` script,
+registered into `server:test:disposable-db`).
+
+### 11.4 Verification
+
+| Suite | Result |
+| --- | --- |
+| `test:platform-migration-helpers` (new `canApproveMapping` cases) | **85/85** |
+| `MigrationMappingStep.vitest.test.tsx` (5 pre-existing + 5 new) | **10/10** |
+| `server/src/tests/migrationMappingApprovalDb.test.ts` (new, DB-backed, real route stack + real Postgres) | **19/19** |
+| `migrationImportWorkflowConvergenceDb.test.ts` — R12 400 regression, re-run unmodified | **48/48** |
+| `migrationMapping.test.ts` | **74/74** |
+| `migrationDataLossGate.test.ts` | **19/19** |
+| Frontend `tsc --noEmit` | clean |
+| Server `tsc --noEmit` | clean |
+
+The new DB suite proves, against a real disposable PostgreSQL and the real
+Express route stack (no mocks): approving `ONEMLINOT` returns 2xx and leaves
+`destinationField`/`transform`/`composeOrder` byte-identical, with
+`composeOrder: 1` intact; approving `KONTROLNOTU` preserves `composeOrder: 2`;
+both stamp `decidedByPlatformAdminId`/`decidedAt` and survive a reload through
+the real `GET`; the untouched stored `LEGAL_BLOCKED` row (`KVKKONAYKODU`,
+populated) is neither written nor stamped by either approval; a hand-crafted
+approve-shaped `PUT` directly against that `LEGAL_BLOCKED` row is refused
+(`MAPPING_INVALID`, names the column); a `SENSITIVE_REVIEW_REQUIRED` row with
+no destination can never be made to validate even by an "approve"-shaped
+request; ignoring `KANGURUBU` clears all three fields atomically and leaves no
+`MAPPING_INVALID` issue; and approving two of three `SENSITIVE_REVIEW_REQUIRED`
+rows while ignoring the third drives `sensitiveReviewCount` and
+`unresolvedCount` to 0 and advances the run to `MAPPING_READY`.
+
+**Real-customer Execute: not performed.** No dry-run or execute step was
+touched by this task.

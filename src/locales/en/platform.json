@@ -778,9 +778,11 @@
         "actions": "Actions"
       },
       "actions": {
+        "approve": "Approve mapping",
         "ignore": "Ignore",
         "block": "Block",
         "reset": "Reset to auto",
+        "approveHint": "Approve the proposed destination, transform and order unchanged",
         "ignoreHint": "Ignore this column — nothing will be written to any destination",
         "blockHint": "Block this column — flag it for review",
         "resetHint": "Reset to the automatic suggestion"

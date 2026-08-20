@@ -778,9 +778,11 @@
         "actions": "İşlemler"
       },
       "actions": {
+        "approve": "Eşlemeyi Onayla",
         "ignore": "Yok say",
         "block": "Engelle",
         "reset": "Otomatiğe sıfırla",
+        "approveHint": "Önerilen hedefi, dönüşümü ve sırayı değiştirmeden onayla",
         "ignoreHint": "Bu sütunu yok say — hiçbir hedefe yazılmaz",
         "blockHint": "Bu sütunu engelle — inceleme için işaretle",
         "resetHint": "Otomatik öneriye sıfırla"

@@ -778,9 +778,11 @@
         "actions": "Actions"
       },
       "actions": {
+        "approve": "Approuver l'association",
         "ignore": "Ignorer",
         "block": "Bloquer",
         "reset": "Réinitialiser à l'automatique",
+        "approveHint": "Approuver la destination, la transformation et l'ordre proposés sans les modifier",
         "ignoreHint": "Ignorer cette colonne — rien ne sera écrit vers une destination",
         "blockHint": "Bloquer cette colonne — la marquer pour révision",
         "resetHint": "Réinitialiser à la suggestion automatique"
