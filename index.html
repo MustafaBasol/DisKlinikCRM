@@ -20,19 +20,42 @@
     <meta name="twitter:title" content="NoraMedi Dental CRM | Diş Klinikleri İçin Klinik Yönetim Sistemi" />
     <meta name="twitter:description" content="NoraMedi Dental CRM, diş klinikleri için hasta takibi, randevu yönetimi, WhatsApp ve Instagram görüşmeleri, ödeme takibi ve çoklu klinik yönetimini tek panelde sunan modern klinik CRM sistemidir." />
     <meta name="twitter:image" content="/assets/brand/noramedi/twitter-card.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <!--
+      F3-DATA-MIG-TODAY-001-R12 — the Google Fonts stylesheet and its two
+      preconnects were REMOVED, not replaced.
+
+      The production Content-Security-Policy blocks fonts.googleapis.com, so
+      that stylesheet has never actually loaded in production: the app has been
+      rendering in the system-ui fallback all along, and the only thing the tag
+      still produced was a CSP violation in the Platform Admin console on every
+      screen — including the migration workflow. Removing it changes nothing
+      about how production looks and removes the error.
+
+      The policy was NOT widened to let it through. Allowing an external style
+      origin in order to silence a console line would trade a real restriction
+      for cosmetics.
+
+      'Inter' is deliberately left FIRST in the font stack (tailwind.config.js,
+      src/index.css). Self-hosting it — an @fontsource package, or woff2 files
+      under /public — is a typography decision with its own review, and when it
+      lands nothing in the CSS has to change: the face simply starts resolving.
+      Until then the stack falls through to system-ui, which is what production
+      already shows.
+    -->
     <title>NoraMedi Dental CRM | Diş Klinikleri İçin Klinik Yönetim Sistemi</title>
-    <!-- Dark mode: apply before React renders to prevent flash -->
-    <script>
-      (function () {
-        var stored = localStorage.getItem('theme');
-        if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-          document.documentElement.classList.add('dark');
-        }
-      })();
-    </script>
+    <!--
+      Dark mode, applied before React renders so the app never flashes light.
+
+      An EXTERNAL, same-origin, CLASSIC script (F3-DATA-MIG-TODAY-001-R12). It
+      was inline, which the production CSP blocks — the second of the two
+      violations the Platform Admin console showed. Served from /public, so
+      `script-src 'self'` already permits it and no policy change was needed.
+
+      No `defer` and no `type="module"`: both would run it after the document
+      is parsed, i.e. after the first paint, which is exactly the flash it
+      exists to prevent.
+    -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

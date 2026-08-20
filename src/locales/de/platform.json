@@ -654,7 +654,9 @@
       "sheetCount": "Blattanzahl",
       "warnings": "Analysewarnungen",
       "continue": "Weiter zur Feldzuordnung",
-      "errors": { "analyzeFailed": "Die Datei konnte nicht analysiert werden" }
+      "errors": {
+        "analyzeFailed": "Die Datei konnte nicht analysiert werden"
+      }
     },
     "mapping": {
       "title": "Feldzuordnung",
@@ -759,13 +761,13 @@
       },
       "filters": {
         "all": "Alle",
-        "unresolved": "Nur ungelöste",
-        "unmappedWithData": "Nicht zugeordnet mit Daten",
-        "blocked": "Nur blockierte",
-        "legal": "Nur rechtlich gesperrte",
-        "headerless": "Spalten ohne Kopfzeile",
-        "ignored": "Ignorierte",
-        "auto": "Automatisch sicher"
+        "needsReview": "Prüfen",
+        "matched": "Zugeordnet",
+        "preserved": "Als Altdaten aufbewahrt",
+        "ignored": "Nicht importiert",
+        "empty": "Leere Spalte",
+        "error": "Fehler",
+        "headerless": "Spalten ohne Überschrift"
       },
       "columns": {
         "source": "Quellspalte",
@@ -776,9 +778,11 @@
         "actions": "Aktionen"
       },
       "actions": {
+        "approve": "Zuordnung bestätigen",
         "ignore": "Ignorieren",
         "block": "Blockieren",
         "reset": "Auf Automatik zurücksetzen",
+        "approveHint": "Das vorgeschlagene Ziel, die Transformation und die Reihenfolge unverändert bestätigen",
         "ignoreHint": "Diese Spalte ignorieren — es wird nichts in ein Ziel geschrieben",
         "blockHint": "Diese Spalte blockieren — zur Überprüfung markieren",
         "resetHint": "Auf den automatischen Vorschlag zurücksetzen"
@@ -795,7 +799,24 @@
         "loadFailed": "Die Zuordnung konnte nicht geladen werden",
         "saveFailed": "Die Zuordnung konnte nicht gespeichert werden",
         "acceptFailed": "Automatische Zuordnungen konnten nicht übernommen werden",
-        "validateFailed": "Die Zuordnung konnte nicht validiert werden"
+        "validateFailed": "Die Zuordnung konnte nicht validiert werden",
+        "confirmFailed": "Die Spalten konnten nicht bestätigt werden."
+      },
+      "operatorStates": {
+        "MATCHED": "Zugeordnet",
+        "PRESERVED": "Als Altdaten aufbewahrt",
+        "NEEDS_REVIEW": "Prüfen",
+        "EMPTY": "Leere Spalte",
+        "IGNORED": "Nicht importiert",
+        "ERROR": "Fehler"
+      },
+      "internalStateHint": "Interner Statuscode für den Support. Keine Aktion erforderlich.",
+      "remainingWork": "Spalten warten auf Ihre Entscheidung",
+      "bulk": {
+        "confirmExclusions": "{{n}} Spalten als „nicht importiert“ bestätigen",
+        "confirmExclusionsHint": "Bestätigt in einem Schritt die Spalten mit Daten, die das System nicht importieren möchte. Leere Spalten sind bereits erledigt. Rechtlich gesperrte Spalten sind nie enthalten.",
+        "confirmedNotice": "{{n}} Spalten als „nicht importiert“ bestätigt.",
+        "acceptedNotice": "{{n}} sichere Vorschläge übernommen."
       }
     },
     "reference": {
@@ -820,8 +841,17 @@
         "status": "Status",
         "actions": "Aktionen"
       },
-      "actions": { "ignore": "Ignorieren", "unignore": "Rückgängig" },
-      "errors": { "loadFailed": "Referenzdaten konnten nicht geladen werden", "saveFailed": "Die Referenzzuordnung konnte nicht gespeichert werden" }
+      "actions": {
+        "ignore": "Ignorieren",
+        "unignore": "Rückgängig"
+      },
+      "errors": {
+        "loadFailed": "Referenzdaten konnten nicht geladen werden",
+        "saveFailed": "Die Referenzzuordnung konnte nicht gespeichert werden"
+      },
+      "showUnresolvedOnly": "Nur ungelöste anzeigen",
+      "downloadUnresolved": "Ungelöste Liste herunterladen (CSV)",
+      "rowsShown": "{{shown}} von {{total}} angezeigt"
     },
     "dryRun": {
       "title": "Testlauf",
@@ -918,7 +948,17 @@
         "sourceRowsSharing": "Quellzeilen mit geteilter Telefonnummer",
         "note": "Geteilte Familientelefonnummern sind ein unterstütztes Verhalten — Patienten werden deswegen nie zusammengeführt."
       },
-      "errors": { "loadFailed": "Die Testlaufdaten konnten nicht geladen werden", "runFailed": "Der Testlauf ist fehlgeschlagen" }
+      "errors": {
+        "loadFailed": "Die Testlaufdaten konnten nicht geladen werden",
+        "runFailed": "Der Testlauf ist fehlgeschlagen"
+      },
+      "plain": {
+        "importable": "Datensätze können importiert werden",
+        "notImportable": "Datensätze können nicht importiert werden",
+        "ofTotal": "(von {{n}} Quellzeilen)",
+        "rejectedExplain": "Laden Sie die abgelehnten Datensätze unten herunter und korrigieren Sie sie in Excel. Die gültigen Datensätze werden nicht aufgehalten.",
+        "allClear": "Alle Quellzeilen können importiert werden."
+      }
     },
     "confirm": {
       "title": "Bestätigung & Ausführung",
@@ -932,7 +972,10 @@
       "irreversibleNote": "Diese Aktion kann nicht rückgängig gemacht werden. Nach der Ausführung wurden Patientendatensätze erstellt und/oder aktualisiert.",
       "acknowledgeCheckbox": "Ich verstehe, dass diese Migration unumkehrbar ist und mit echten Patientendaten arbeitet.",
       "execute": "Migration ausführen",
-      "errors": { "loadFailed": "Bestätigungsdaten konnten nicht geladen werden", "executeFailed": "Die Migration konnte nicht gestartet werden" }
+      "errors": {
+        "loadFailed": "Bestätigungsdaten konnten nicht geladen werden",
+        "executeFailed": "Die Migration konnte nicht gestartet werden"
+      }
     },
     "progress": {
       "title": "Migrationsfortschritt",
@@ -991,7 +1034,10 @@
         "imbalanced": "Nicht ausgeglichen",
         "eligible": "berechtigte Gesamtsumme"
       },
-      "errors": { "loadFailed": "Die Ergebnisse konnten nicht geladen werden", "downloadFailed": "Der Bericht konnte nicht heruntergeladen werden" }
+      "errors": {
+        "loadFailed": "Die Ergebnisse konnten nicht geladen werden",
+        "downloadFailed": "Der Bericht konnte nicht heruntergeladen werden"
+      }
     },
     "history": {
       "title": "Migrationsverlauf",
@@ -1010,7 +1056,24 @@
         "completed": "Abgeschlossen",
         "reports": "Berichte"
       },
-      "errors": { "loadFailed": "Der Migrationsverlauf konnte nicht geladen werden", "downloadFailed": "Der Bericht konnte nicht heruntergeladen werden" }
+      "errors": {
+        "loadFailed": "Der Migrationsverlauf konnte nicht geladen werden",
+        "downloadFailed": "Der Bericht konnte nicht heruntergeladen werden"
+      }
+    },
+    "rejected": {
+      "title": "Nicht importierbare Datensätze",
+      "titleWithCount": "{{n}} Datensätze können nicht importiert werden",
+      "help": "Diese Datensätze wurden nicht importiert. Laden Sie die Datei herunter, korrigieren Sie sie in Excel und laden Sie die korrigierte Datei hoch. Die gültigen Datensätze sind nicht betroffen und bleiben importierbar.",
+      "step1": "Datei herunterladen. Blatt 1 enthält die zu korrigierenden Zeilen, Blatt 2 erklärt jede Zurückweisung.",
+      "step2": "Korrigieren Sie die Werte auf Blatt 1. Benennen Sie die Spaltenüberschriften nicht um.",
+      "step3": "Starten Sie einen neuen Lauf und laden Sie die korrigierte Datei hoch. Zeilen mit derselben HASTA_ID aktualisieren den vorhandenen Patienten, statt ein Duplikat anzulegen.",
+      "downloadXlsx": "Excel (XLSX) herunterladen",
+      "downloadCsv": "CSV herunterladen",
+      "privacyNote": "Diese Datei enthält Patientendaten. Nur ein angemeldeter Plattform-Administrator kann sie herunterladen, der Link ist nicht teilbar, und der Inhalt wird in kein Log geschrieben.",
+      "errors": {
+        "downloadFailed": "Die nicht importierbaren Datensätze konnten nicht heruntergeladen werden."
+      }
     }
   }
 }

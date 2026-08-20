@@ -1,11 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, AlertCircle, ShieldAlert, CheckCircle2, XCircle, HelpCircle, ArrowRight, EyeOff } from 'lucide-react';
+import { Loader2, AlertCircle, ShieldAlert, CheckCircle2, XCircle, HelpCircle, ArrowRight, EyeOff, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { MigrationStepProps } from './types';
 import type { ReferenceCandidateDto, ReferenceValueDto, ReferenceWriteEntry, ReferenceMapStatus } from '../../../services/platformMigrationApi';
 import { getErrorMessage } from '../../../utils/errors';
 
 const DATALIST_ID = 'migration-reference-candidates';
+
+/**
+ * A UTF-8 byte-order mark, and CRLF line endings, for the unresolved-list CSV.
+ *
+ * Neither is decoration. Excel on a Turkish Windows install opens a BOM-less
+ * UTF-8 CSV in the system codepage, turning every ç/ğ/ı/ö/ş/ü into mojibake —
+ * in a file whose whole purpose is to be read by a Turkish-speaking operator.
+ * CRLF is what RFC 4180 specifies and what Excel writes back.
+ */
+const BOM = '\uFEFF';
+const CRLF = '\r\n';
 
 function candidateText(c: ReferenceCandidateDto): string {
   return `${c.name} (${c.role})`;
@@ -106,6 +117,7 @@ const MigrationReferenceStep: React.FC<MigrationStepProps> = ({ run, api, onRunU
   const [savingValue, setSavingValue] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
   const [advancing, setAdvancing] = useState(false);
+  const [unresolvedOnly, setUnresolvedOnly] = useState(false);
 
   const fetchReferences = useCallback(() => {
     setLoading(true);
@@ -122,15 +134,35 @@ const MigrationReferenceStep: React.FC<MigrationStepProps> = ({ run, api, onRunU
 
   useEffect(() => { fetchReferences(); }, [fetchReferences]);
 
+  /**
+   * Save ONE reference decision. F3-DATA-MIG-TODAY-001-R12.
+   *
+   * This used to re-send the whole `values` array on every change, exactly like
+   * the mapping screen did — so resolving one of 25 practitioner ids issued 25
+   * upserts, each one re-stamping `approvedByPlatformAdminId` and `approvedAt`
+   * on decisions the operator had taken minutes earlier. The audit trail then
+   * said 25 approvals happened at the same instant, which is not what happened,
+   * and two quick edits could reorder into the second overwriting the first
+   * with the stale copy it was holding.
+   *
+   * Sending only the changed entry makes the stored approval evidence describe
+   * the decision that was actually taken. The server upserts per entry, so a
+   * one-element array is a first-class request, not a special case.
+   */
   const persist = useCallback((sourceValue: string, next: ReferenceValueDto[]) => {
     setSavingValue(sourceValue);
     setSaveError('');
-    const entries: ReferenceWriteEntry[] = next.map((v) => ({
+    const edited = next.find((v) => v.sourceValue === sourceValue);
+    if (!edited) {
+      setSavingValue(null);
+      return;
+    }
+    const entries: ReferenceWriteEntry[] = [{
       entityType: 'practitioner',
-      sourceValue: v.sourceValue,
-      destinationId: v.destinationId,
-      status: v.status,
-    }));
+      sourceValue: edited.sourceValue,
+      destinationId: edited.destinationId,
+      status: edited.status,
+    }];
     api.saveReferences(run.id, entries)
       .then((saved) => setValues(saved))
       .catch((err) => setSaveError(getErrorMessage(err, t('platform:migration.reference.errors.saveFailed'))))
@@ -170,7 +202,47 @@ const MigrationReferenceStep: React.FC<MigrationStepProps> = ({ run, api, onRunU
     });
   }, [persist]);
 
-  const unresolvedCount = values?.filter((v) => v.status === 'UNMAPPED' || v.status === 'CONFLICTED').length ?? 0;
+  const unresolvedValues = useMemo(
+    () => (values ?? []).filter((v) => v.status === 'UNMAPPED' || v.status === 'CONFLICTED'),
+    [values],
+  );
+  const unresolvedCount = unresolvedValues.length;
+  const visibleValues = unresolvedOnly ? unresolvedValues : (values ?? []);
+
+  /**
+   * Download the still-unresolved vendor practitioner ids, with how many rows
+   * each one affects (F3-DATA-MIG-TODAY-001-R12).
+   *
+   * Built ENTIRELY from data already on this screen — there is no new endpoint
+   * and no second server path to these values, so there is nothing new to
+   * authorize or audit. The clinic uses it to look the codes up in their own
+   * legacy system and come back with the answer, which is the only place that
+   * answer exists.
+   *
+   * A UTF-8 BOM, because this file is opened in Excel on a Turkish Windows
+   * install and without it every ç/ğ/ı/ö/ş/ü in a practitioner label is
+   * mojibake.
+   */
+  const handleDownloadUnresolved = useCallback(() => {
+    const cell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const lines = [
+      [
+        t('platform:migration.reference.columns.sourceLabel'),
+        t('platform:migration.reference.columns.rowCount'),
+        t('platform:migration.reference.columns.status'),
+      ].map(cell).join(','),
+      ...unresolvedValues.map((v) => [v.sourceValue, v.rowCount, v.status].map(cell).join(',')),
+    ];
+    const blob = new Blob([BOM + lines.join(CRLF) + CRLF], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `migration-${run.id}-unresolved-references.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }, [unresolvedValues, run.id, t]);
 
   const handleContinue = async () => {
     setAdvancing(true);
@@ -227,6 +299,34 @@ const MigrationReferenceStep: React.FC<MigrationStepProps> = ({ run, api, onRunU
             {t('platform:migration.reference.unresolvedCount', { n: unresolvedCount })}
           </div>
 
+          {/*
+            * TRIAGE CONTROLS (F3-DATA-MIG-TODAY-001-R12). Twenty-five vendor
+            * ids is a short list, but only the unresolved ones are work — and
+            * the operator usually has to leave this screen, ask the clinic who
+            * these codes are, and come back. Both of those needs are one click
+            * each now instead of scrolling and re-reading.
+            */}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={unresolvedOnly}
+                onChange={(e) => setUnresolvedOnly(e.target.checked)}
+                className="rounded border-gray-300 dark:border-gray-600"
+              />
+              {t('platform:migration.reference.showUnresolvedOnly')}
+            </label>
+            {unresolvedCount > 0 && (
+              <button type="button" className="btn-secondary text-xs" onClick={handleDownloadUnresolved}>
+                <Download size={13} />
+                {t('platform:migration.reference.downloadUnresolved')}
+              </button>
+            )}
+            <span className="text-xs text-gray-400 ml-auto">
+              {t('platform:migration.reference.rowsShown', { shown: visibleValues.length, total: values.length })}
+            </span>
+          </div>
+
           {saveError && (
             <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg p-2.5 mb-3 text-sm">
               <AlertCircle size={14} />
@@ -246,7 +346,7 @@ const MigrationReferenceStep: React.FC<MigrationStepProps> = ({ run, api, onRunU
                 </tr>
               </thead>
               <tbody>
-                {values.map((v) => (
+                {visibleValues.map((v) => (
                   <ReferenceRow
                     key={v.sourceValue}
                     value={v}

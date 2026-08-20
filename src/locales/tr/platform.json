@@ -654,7 +654,9 @@
       "sheetCount": "Sayfa sayısı",
       "warnings": "Analiz uyarıları",
       "continue": "Alan Eşlemeye Geç",
-      "errors": { "analyzeFailed": "Dosya analiz edilemedi" }
+      "errors": {
+        "analyzeFailed": "Dosya analiz edilemedi"
+      }
     },
     "mapping": {
       "title": "Alan Eşleme",
@@ -759,13 +761,13 @@
       },
       "filters": {
         "all": "Tümü",
-        "unresolved": "Sadece çözülmemiş",
-        "unmappedWithData": "Verisi olan eşleşmemişler",
-        "blocked": "Sadece engellenmiş",
-        "legal": "Sadece yasal engelliler",
-        "headerless": "Başlıksız sütunlar",
-        "ignored": "Yok sayılanlar",
-        "auto": "Otomatik güvenli"
+        "needsReview": "Kontrol et",
+        "matched": "Eşleşti",
+        "preserved": "Saklanacak eski veri",
+        "ignored": "Aktarılmayacak",
+        "empty": "Boş sütun",
+        "error": "Hatalı",
+        "headerless": "Başlıksız sütunlar"
       },
       "columns": {
         "source": "Kaynak Sütun",
@@ -776,9 +778,11 @@
         "actions": "İşlemler"
       },
       "actions": {
+        "approve": "Eşlemeyi Onayla",
         "ignore": "Yok say",
         "block": "Engelle",
         "reset": "Otomatiğe sıfırla",
+        "approveHint": "Önerilen hedefi, dönüşümü ve sırayı değiştirmeden onayla",
         "ignoreHint": "Bu sütunu yok say — hiçbir hedefe yazılmaz",
         "blockHint": "Bu sütunu engelle — inceleme için işaretle",
         "resetHint": "Otomatik öneriye sıfırla"
@@ -795,7 +799,24 @@
         "loadFailed": "Eşleme verisi yüklenemedi",
         "saveFailed": "Eşleme kaydedilemedi",
         "acceptFailed": "Otomatik eşlemeler kabul edilemedi",
-        "validateFailed": "Eşleme doğrulanamadı"
+        "validateFailed": "Eşleme doğrulanamadı",
+        "confirmFailed": "Sütunlar onaylanamadı."
+      },
+      "operatorStates": {
+        "MATCHED": "Eşleşti",
+        "PRESERVED": "Saklanacak eski veri",
+        "NEEDS_REVIEW": "Kontrol et",
+        "EMPTY": "Boş sütun",
+        "IGNORED": "Aktarılmayacak",
+        "ERROR": "Hatalı"
+      },
+      "internalStateHint": "Teknik durum kodu — destek ekibi için. İşlem yapmanız gerekmez.",
+      "remainingWork": "sütun sizden karar bekliyor",
+      "bulk": {
+        "confirmExclusions": "Aktarılmayacak {{n}} sütunu onayla",
+        "confirmExclusionsHint": "Sistemin aktarılmamasını önerdiği, içinde veri bulunan sütunları tek seferde onaylarsınız. Boş sütunlar zaten otomatik olarak işaretlidir. Yasal engelli sütunlar bu işleme dahil edilmez.",
+        "confirmedNotice": "{{n}} sütun \"aktarılmayacak\" olarak onaylandı.",
+        "acceptedNotice": "{{n}} güvenli öneri kabul edildi."
       }
     },
     "reference": {
@@ -820,8 +841,17 @@
         "status": "Durum",
         "actions": "İşlemler"
       },
-      "actions": { "ignore": "Yok say", "unignore": "Geri al" },
-      "errors": { "loadFailed": "Referans verisi yüklenemedi", "saveFailed": "Referans eşlemesi kaydedilemedi" }
+      "actions": {
+        "ignore": "Yok say",
+        "unignore": "Geri al"
+      },
+      "errors": {
+        "loadFailed": "Referans verisi yüklenemedi",
+        "saveFailed": "Referans eşlemesi kaydedilemedi"
+      },
+      "showUnresolvedOnly": "Sadece çözülmemişleri göster",
+      "downloadUnresolved": "Çözülmemiş listesini indir (CSV)",
+      "rowsShown": "{{shown}} / {{total}} gösteriliyor"
     },
     "dryRun": {
       "title": "Deneme Çalıştırma",
@@ -918,7 +948,17 @@
         "sourceRowsSharing": "Telefon Paylaşan Kaynak Satır",
         "note": "Paylaşılan aile telefonları desteklenen bir davranıştır — hastalar birleştirilmez."
       },
-      "errors": { "loadFailed": "Deneme çalıştırma verisi yüklenemedi", "runFailed": "Deneme çalıştırma başarısız" }
+      "errors": {
+        "loadFailed": "Deneme çalıştırma verisi yüklenemedi",
+        "runFailed": "Deneme çalıştırma başarısız"
+      },
+      "plain": {
+        "importable": "kayıt aktarılabilir",
+        "notImportable": "kayıt aktarılamıyor",
+        "ofTotal": "(toplam {{n}} kaynak satır)",
+        "rejectedExplain": "Aktarılamayan kayıtları aşağıdan indirip Excel’de düzeltebilirsiniz. Geçerli kayıtlar bekletilmez; aktarım bu kayıtlar olmadan da yapılabilir.",
+        "allClear": "Tüm kaynak satırları aktarılabilir durumda."
+      }
     },
     "confirm": {
       "title": "Onay ve Çalıştırma",
@@ -932,7 +972,10 @@
       "irreversibleNote": "Bu işlem geri alınamaz. Çalıştırıldıktan sonra hasta kayıtları oluşturulmuş/güncellenmiş olacaktır.",
       "acknowledgeCheckbox": "Bu aktarımın geri alınamaz olduğunu ve gerçek hasta verisi üzerinde çalışacağını anladım.",
       "execute": "Aktarımı Çalıştır",
-      "errors": { "loadFailed": "Onay verisi yüklenemedi", "executeFailed": "Aktarım başlatılamadı" }
+      "errors": {
+        "loadFailed": "Onay verisi yüklenemedi",
+        "executeFailed": "Aktarım başlatılamadı"
+      }
     },
     "progress": {
       "title": "Aktarım İlerlemesi",
@@ -991,7 +1034,10 @@
         "imbalanced": "Dengesiz",
         "eligible": "uygun toplam"
       },
-      "errors": { "loadFailed": "Sonuç verisi yüklenemedi", "downloadFailed": "Rapor indirilemedi" }
+      "errors": {
+        "loadFailed": "Sonuç verisi yüklenemedi",
+        "downloadFailed": "Rapor indirilemedi"
+      }
     },
     "history": {
       "title": "Aktarım Geçmişi",
@@ -1010,7 +1056,24 @@
         "completed": "Tamamlandı",
         "reports": "Raporlar"
       },
-      "errors": { "loadFailed": "Aktarım geçmişi yüklenemedi", "downloadFailed": "Rapor indirilemedi" }
+      "errors": {
+        "loadFailed": "Aktarım geçmişi yüklenemedi",
+        "downloadFailed": "Rapor indirilemedi"
+      }
+    },
+    "rejected": {
+      "title": "İçe aktarılamayan kayıtlar",
+      "titleWithCount": "İçe aktarılamayan {{n}} kayıt",
+      "help": "Bu kayıtlar aktarılmadı. Dosyayı indirin, Excel’de düzeltin ve düzeltilmiş dosyayı yeniden yükleyin. Geçerli kayıtlar bundan etkilenmez, onlar aktarılabilir durumda kalır.",
+      "step1": "Dosyayı indirin. İlk sayfa düzeltilecek kayıtları, ikinci sayfa her satırın neden aktarılamadığını gösterir.",
+      "step2": "İlk sayfadaki değerleri düzeltin. Sütun başlıklarını değiştirmeyin.",
+      "step3": "Yeni bir aktarım başlatıp düzeltilmiş dosyayı yükleyin. Aynı HASTA_ID’ye sahip kayıtlar mükerrer oluşturulmaz, mevcut hasta güncellenir.",
+      "downloadXlsx": "Excel (XLSX) indir",
+      "downloadCsv": "CSV indir",
+      "privacyNote": "Bu dosya hasta verisi içerir. Yalnızca yetkili Platform Yöneticisi indirebilir; bağlantı paylaşılamaz ve dosya içeriği hiçbir kayda/log’a yazılmaz.",
+      "errors": {
+        "downloadFailed": "İçe aktarılamayan kayıtlar indirilemedi."
+      }
     }
   }
 }

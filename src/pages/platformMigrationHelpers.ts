@@ -9,6 +9,7 @@
  */
 
 import type {
+  DestinationFieldDto,
   MappingDto,
   MigrationRunStatus,
   SourceColumnProfileDto,
@@ -80,15 +81,149 @@ export function stepForStatus(status: MigrationRunStatus): MigrationStepNumber {
 // Mapping screen: filter chips
 // ---------------------------------------------------------------------------
 
+/**
+ * The destination key that means "keep this legacy value verbatim as evidence".
+ * Mirrored from the server catalog by literal — this module stays free of
+ * server imports — and pinned by a parity test.
+ */
+export const PRESERVATION_DESTINATION_KEY = 'legacy.preservedSourceValue';
+
+/**
+ * WHAT THE OPERATOR SEES. F3-DATA-MIG-TODAY-001-R12.
+ *
+ * The mapping screen used to render the ENGINE's state machine directly:
+ * AUTO_CONFIDENT, AUTO_REVIEW, SENSITIVE_REVIEW_REQUIRED, LEGAL_BLOCKED,
+ * BLOCKED, IGNORE, RESOLVED — eight internal states, several of which are only
+ * distinguishable if you know why the state machine has them. A Platform Admin
+ * running a clinic's first migration is not, and should not have to be, an
+ * expert on the KVKK Art. 6 gate or on the difference between "the system
+ * proposes excluding this" and "a human excluded this".
+ *
+ * So there are now two vocabularies. The INTERNAL one is unchanged: nothing in
+ * the state machine, the data-loss gate or the legal gate is relaxed, and the
+ * server still decides everything on the internal state. The OPERATOR one is a
+ * projection of it, computed here, in one place, so the whole screen agrees.
+ *
+ *   MATCHED       Eşleşti                — goes to a NoraMedi field
+ *   PRESERVED     Saklanacak eski veri   — kept verbatim as legacy evidence
+ *   NEEDS_REVIEW  Kontrol et             — a human still owes an answer
+ *   EMPTY         Boş sütun              — measured at 0 values; nothing to do
+ *   IGNORED       Aktarılmayacak         — decided not to carry it
+ *   ERROR         Hatalı                 — carries data and cannot proceed
+ */
+export const OPERATOR_MAPPING_STATUSES = [
+  'MATCHED',
+  'PRESERVED',
+  'NEEDS_REVIEW',
+  'EMPTY',
+  'IGNORED',
+  'ERROR',
+] as const;
+export type OperatorMappingStatus = (typeof OPERATOR_MAPPING_STATUSES)[number];
+
+/**
+ * Project one mapping row onto the operator vocabulary.
+ *
+ * `profile` carries the MEASURED fill. It is optional because the profiles are
+ * fetched separately from the mappings, and when it is missing the column's
+ * fill is UNKNOWN — which is never reported as EMPTY. Claiming a column is
+ * empty because nobody measured it is the exact fail-open the server-side
+ * data-loss gate refuses (dataLossGate.ts: UNMEASURED blocks, only a measured
+ * zero passes), and the screen must not contradict the gate.
+ *
+ * A LEGAL_BLOCKED column measured at zero reports EMPTY rather than inventing
+ * an operator-facing legal concept: it is true, it is the only thing about that
+ * column an operator can act on (nothing), and the recorded legal reason is
+ * still rendered in the destination cell for anyone who looks. The INTERNAL
+ * state stays LEGAL_BLOCKED — this projection never writes anything.
+ */
+export function operatorMappingStatus(
+  mapping: Pick<MappingDto, 'state' | 'destinationField'>,
+  profile?: Pick<SourceColumnProfileDto, 'filledCount'> | undefined,
+): OperatorMappingStatus {
+  const measuredEmpty = !!profile && profile.filledCount === 0;
+
+  if (mapping.state === 'AUTO_CONFIDENT' || mapping.state === 'RESOLVED') {
+    return mapping.destinationField === PRESERVATION_DESTINATION_KEY ? 'PRESERVED' : 'MATCHED';
+  }
+  if (
+    mapping.state === 'MANUAL_REQUIRED' ||
+    mapping.state === 'AUTO_REVIEW' ||
+    mapping.state === 'SENSITIVE_REVIEW_REQUIRED'
+  ) {
+    return 'NEEDS_REVIEW';
+  }
+  if (mapping.state === 'IGNORE') return measuredEmpty ? 'EMPTY' : 'IGNORED';
+  if (mapping.state === 'BLOCKED' || mapping.state === 'LEGAL_BLOCKED') {
+    // With data and no destination this is a genuine obstacle, not a decision:
+    // the run cannot execute while it stands, so it reads as an error rather
+    // than quietly as "ignored".
+    return measuredEmpty ? 'EMPTY' : 'ERROR';
+  }
+  return 'ERROR';
+}
+
+/** Does this row still cost the operator something? Drives the "kalan iş" count. */
+export function operatorNeedsAction(status: OperatorMappingStatus): boolean {
+  return status === 'NEEDS_REVIEW' || status === 'ERROR';
+}
+
+/**
+ * Can "Eşlemeyi Onayla" resolve this row WITHOUT touching destination,
+ * transform or composeOrder? F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE.
+ *
+ * ONLY SENSITIVE_REVIEW_REQUIRED is eligible. Every other undecided state
+ * (MANUAL_REQUIRED, AUTO_REVIEW) has no engine-proposed destination the
+ * operator has already agreed with — approving in place would just be
+ * confirming a blank. LEGAL_BLOCKED is excluded on purpose: lifting that gate
+ * is a program-owner decision, and the server refuses any edit to a stored
+ * LEGAL_BLOCKED row regardless of what this predicate says, so this is
+ * belt-and-braces, not the enforcement point.
+ *
+ * The destination/transform/composeOrder checks mirror the PER-ROW rules
+ * validateMapping.ts applies to a WRITING state (Rule 3 transform allow-list,
+ * the composeOrder⇄allowsComposition pairing) — a row that fails them here
+ * would fail them again the instant it were written as RESOLVED, so the
+ * button must not offer to create that result. Cross-row rules (destination
+ * collisions, duplicate composeOrders) are NOT re-checked here: the server
+ * re-validates after every save and would report those regardless, exactly
+ * as a manual dropdown edit already does today.
+ */
+export function canApproveMapping(
+  mapping: Pick<MappingDto, 'state' | 'destinationField' | 'transform' | 'composeOrder'>,
+  destinations: readonly Pick<DestinationFieldDto, 'key' | 'allowedTransforms' | 'allowsComposition'>[],
+): boolean {
+  if (mapping.state !== 'SENSITIVE_REVIEW_REQUIRED') return false;
+  if (!mapping.destinationField) return false;
+  const destination = destinations.find((d) => d.key === mapping.destinationField);
+  if (!destination) return false;
+  if (mapping.transform !== null && !destination.allowedTransforms.includes(mapping.transform)) return false;
+  if (destination.allowsComposition) {
+    if (mapping.composeOrder === null || mapping.composeOrder === undefined) return false;
+  } else if (mapping.composeOrder !== null && mapping.composeOrder !== undefined) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * The chips, in the operator's vocabulary.
+ *
+ * R12 replaced the previous engine-state chips (`unresolved`, `blocked`,
+ * `legal`, `auto`, `unmappedWithData`) with these. The old set asked the
+ * operator to filter by concepts they had to learn first, and two of them —
+ * `blocked` and `legal` — were mostly measured-empty columns, i.e. a chip whose
+ * whole result set was noise.
+ */
 export const MAPPING_FILTER_IDS = [
   'all',
-  'unresolved',
-  'unmappedWithData',
-  'blocked',
-  'legal',
-  'headerless',
+  'needsReview',
+  'matched',
+  'preserved',
   'ignored',
-  'auto',
+  'empty',
+  'error',
+  'headerless',
 ] as const;
 export type MappingFilterId = (typeof MAPPING_FILTER_IDS)[number];
 
@@ -131,49 +266,45 @@ export function isHeaderlessMapping(mapping: MappingIdentity): boolean {
 }
 
 /**
- * Chip predicate. `unresolved` covers both MANUAL_REQUIRED (no destination
- * chosen yet) and AUTO_REVIEW (a suggestion exists but confidence was too low
- * to auto-accept) — both need an operator decision before Continue unblocks.
- * `headerless` covers every column whose workbook header cell was blank
- * (state-independent — a headerless column can land in any mapping state),
- * so an operator can review every synthesized-name column as a group
- * regardless of what the engine decided about each one individually.
+ * Chip predicate, in the operator vocabulary.
  *
- * `unmappedWithData` is the triage chip: columns that still need a human
- * decision AND actually carry values. It needs the column's profile, which is
- * fetched separately from the mappings, so `profile` is an OPTIONAL third
- * parameter — every existing call site keeps compiling. When it is missing the
- * column's fill is UNKNOWN, and an unknown column is never claimed to have
- * data (returns false) rather than padding the chip with maybes.
+ * Every chip except `all` and `headerless` is exactly one
+ * `operatorMappingStatus` bucket, so a chip can never disagree with the badge
+ * rendered on the row it hides or shows — the previous chips were an
+ * independent second classification of the same rows and had already drifted
+ * from what the badges said.
+ *
+ * `headerless` stays state-independent: a column whose workbook header cell was
+ * blank can land in any state, and an operator reviewing "the columns with no
+ * name" wants all of them together.
+ *
+ * `profile` is optional because the profiles are fetched separately from the
+ * mappings. When it is missing the fill is UNKNOWN, and the projection above
+ * never reports UNKNOWN as EMPTY — so an unmeasured column shows up under the
+ * chip for whatever its state says, never under `empty`.
  */
 export function mappingMatchesFilter(
-  mapping: Pick<MappingDto, 'state'> & MappingIdentity,
+  mapping: Pick<MappingDto, 'state' | 'destinationField'> & MappingIdentity,
   filter: MappingFilterId,
   profile?: Pick<SourceColumnProfileDto, 'filledCount'> | undefined,
 ): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'headerless') return isHeaderlessMapping(mapping);
+
+  const status = operatorMappingStatus(mapping, profile);
   switch (filter) {
-    case 'all':
-      return true;
-    case 'unresolved':
-      return mapping.state === 'MANUAL_REQUIRED' || mapping.state === 'AUTO_REVIEW';
-    case 'unmappedWithData': {
-      const needsDecision =
-        mapping.state === 'MANUAL_REQUIRED' ||
-        mapping.state === 'AUTO_REVIEW' ||
-        mapping.state === 'SENSITIVE_REVIEW_REQUIRED';
-      if (!needsDecision) return false;
-      return !!profile && profile.filledCount > 0;
-    }
-    case 'blocked':
-      return mapping.state === 'BLOCKED';
-    case 'legal':
-      return mapping.state === 'LEGAL_BLOCKED';
-    case 'headerless':
-      return isHeaderlessMapping(mapping);
+    case 'needsReview':
+      return status === 'NEEDS_REVIEW';
+    case 'matched':
+      return status === 'MATCHED';
+    case 'preserved':
+      return status === 'PRESERVED';
     case 'ignored':
-      return mapping.state === 'IGNORE';
-    case 'auto':
-      return mapping.state === 'AUTO_CONFIDENT';
+      return status === 'IGNORED';
+    case 'empty':
+      return status === 'EMPTY';
+    case 'error':
+      return status === 'ERROR';
     default:
       return true;
   }
@@ -278,11 +409,11 @@ export function mappingMatchesQuery(mapping: MappingSearchable, query: string): 
 
 /**
  * Combined predicate the mapping table's toolbar applies to each row. The
- * column profile is optional and only consumed by the `unmappedWithData` chip
- * (see `mappingMatchesFilter`).
+ * column profile is optional and feeds the operator-status projection every
+ * chip is derived from (see `mappingMatchesFilter`).
  */
 export function mappingRowVisible(
-  mapping: Pick<MappingDto, 'state'> & MappingSearchable,
+  mapping: Pick<MappingDto, 'state' | 'destinationField'> & MappingSearchable,
   filter: MappingFilterId,
   query: string,
   profile?: Pick<SourceColumnProfileDto, 'filledCount'> | undefined,

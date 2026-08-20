@@ -27,8 +27,18 @@ import {
   isRunInFlight,
   isTerminalRunStatus,
   MAPPING_FILTER_IDS,
+  OPERATOR_MAPPING_STATUSES,
+  operatorMappingStatus,
+  operatorNeedsAction,
+  canApproveMapping,
+  PRESERVATION_DESTINATION_KEY,
 } from '../platformMigrationHelpers';
-import { MIGRATION_RUN_STATUSES, type MigrationRunStatus, type MappingDto } from '../../services/platformMigrationApi';
+import {
+  MIGRATION_RUN_STATUSES,
+  type MigrationRunStatus,
+  type MappingDto,
+  type DestinationFieldDto,
+} from '../../services/platformMigrationApi';
 
 let passed = 0;
 let failed = 0;
@@ -118,15 +128,24 @@ async function main() {
 
   section('── mapping filter chips ─────────────────────────────────────────');
 
+  /*
+   * F3-DATA-MIG-TODAY-001-R12 replaced the engine-state chips with the operator
+   * vocabulary. The old set (`unresolved`, `unmappedWithData`, `blocked`,
+   * `legal`, `auto`) asked the operator to filter by concepts they had to learn
+   * first, and on the first customer's workbook two of those chips returned
+   * almost nothing BUT measured-empty columns — a filter whose entire result
+   * set was noise. Every chip below is exactly one `operatorMappingStatus`
+   * bucket, so a chip can never disagree with the badge on the row it shows.
+   */
   assert.deepEqual(MAPPING_FILTER_IDS, [
     'all',
-    'unresolved',
-    'unmappedWithData',
-    'blocked',
-    'legal',
-    'headerless',
+    'needsReview',
+    'matched',
+    'preserved',
     'ignored',
-    'auto',
+    'empty',
+    'error',
+    'headerless',
   ]);
 
   const rowManualRequired = makeMapping({ state: 'MANUAL_REQUIRED' });
@@ -142,34 +161,71 @@ async function main() {
     for (const row of allRows) assert.equal(mappingMatchesFilter(row, 'all'), true, row.state);
   });
 
-  await test('"unresolved" matches MANUAL_REQUIRED and AUTO_REVIEW only', () => {
-    assert.equal(mappingMatchesFilter(rowManualRequired, 'unresolved'), true);
-    assert.equal(mappingMatchesFilter(rowAutoReview, 'unresolved'), true);
+  const withData = { filledCount: 3 };
+  const noData = { filledCount: 0 };
+
+  await test('"needsReview" matches exactly the three undecided states', () => {
+    const rowSensitive = makeMapping({ state: 'SENSITIVE_REVIEW_REQUIRED' });
+    for (const row of [rowManualRequired, rowAutoReview, rowSensitive]) {
+      assert.equal(mappingMatchesFilter(row, 'needsReview', withData), true, row.state);
+    }
     for (const row of [rowBlocked, rowLegalBlocked, rowIgnore, rowAutoConfident, rowResolved]) {
-      assert.equal(mappingMatchesFilter(row, 'unresolved'), false, row.state);
+      assert.equal(mappingMatchesFilter(row, 'needsReview', withData), false, row.state);
     }
   });
 
-  await test('"blocked" matches BLOCKED only (never LEGAL_BLOCKED)', () => {
-    assert.equal(mappingMatchesFilter(rowBlocked, 'blocked'), true);
-    assert.equal(mappingMatchesFilter(rowLegalBlocked, 'blocked'), false, 'LEGAL_BLOCKED must not appear under the technical Blocked filter');
+  await test('"matched" is a decided row with a CANONICAL destination', () => {
+    const matched = makeMapping({ state: 'RESOLVED', destinationField: 'patient.district' });
+    assert.equal(mappingMatchesFilter(matched, 'matched', withData), true);
+    assert.equal(mappingMatchesFilter(matched, 'preserved', withData), false);
   });
 
-  await test('"legal" matches LEGAL_BLOCKED only (never plain BLOCKED)', () => {
-    assert.equal(mappingMatchesFilter(rowLegalBlocked, 'legal'), true);
-    assert.equal(mappingMatchesFilter(rowBlocked, 'legal'), false);
+  await test('"preserved" is a decided row targeting legacy preservation, and is NOT "matched"', () => {
+    const preserved = makeMapping({ state: 'RESOLVED', destinationField: 'legacy.preservedSourceValue' });
+    assert.equal(mappingMatchesFilter(preserved, 'preserved', withData), true);
+    assert.equal(
+      mappingMatchesFilter(preserved, 'matched', withData),
+      false,
+      'keeping a legacy value is not the same claim as mapping it to a NoraMedi field',
+    );
   });
 
-  await test('"ignored" matches IGNORE only', () => {
-    assert.equal(mappingMatchesFilter(rowIgnore, 'ignored'), true);
-    for (const row of [rowManualRequired, rowAutoReview, rowBlocked, rowLegalBlocked, rowAutoConfident, rowResolved]) {
-      assert.equal(mappingMatchesFilter(row, 'ignored'), false, row.state);
+  await test('"empty" is MEASURED zero fill, and an unmeasured column is never claimed empty', () => {
+    for (const row of [rowIgnore, rowBlocked, rowLegalBlocked]) {
+      assert.equal(mappingMatchesFilter(row, 'empty', noData), true, row.state);
+    }
+    assert.equal(
+      mappingMatchesFilter(rowBlocked, 'empty', undefined),
+      false,
+      'no profile means UNKNOWN fill; unknown is never reported as empty',
+    );
+    assert.equal(mappingMatchesFilter(rowBlocked, 'error', undefined), true, 'unmeasured BLOCKED reads as an error, not as empty');
+  });
+
+  await test('"ignored" is a non-writing decision that still HAS data', () => {
+    assert.equal(mappingMatchesFilter(rowIgnore, 'ignored', withData), true);
+    assert.equal(mappingMatchesFilter(rowIgnore, 'ignored', noData), false, 'an empty ignored column belongs under "empty"');
+    for (const row of [rowManualRequired, rowAutoReview, rowAutoConfident, rowResolved]) {
+      assert.equal(mappingMatchesFilter(row, 'ignored', withData), false, row.state);
     }
   });
 
-  await test('"auto" matches AUTO_CONFIDENT only (not AUTO_REVIEW)', () => {
-    assert.equal(mappingMatchesFilter(rowAutoConfident, 'auto'), true);
-    assert.equal(mappingMatchesFilter(rowAutoReview, 'auto'), false);
+  await test('"error" is a data-bearing obstacle — BLOCKED or LEGAL_BLOCKED with values', () => {
+    assert.equal(mappingMatchesFilter(rowBlocked, 'error', withData), true);
+    assert.equal(mappingMatchesFilter(rowLegalBlocked, 'error', withData), true);
+    assert.equal(mappingMatchesFilter(rowBlocked, 'error', noData), false, 'nothing is wrong with an empty column');
+  });
+
+  await test('every state lands in EXACTLY ONE operator bucket', () => {
+    const states = ['MANUAL_REQUIRED', 'AUTO_REVIEW', 'SENSITIVE_REVIEW_REQUIRED', 'BLOCKED', 'LEGAL_BLOCKED', 'IGNORE', 'AUTO_CONFIDENT', 'RESOLVED'] as const;
+    const buckets = ['needsReview', 'matched', 'preserved', 'ignored', 'empty', 'error'] as const;
+    for (const state of states) {
+      for (const profile of [withData, noData, undefined]) {
+        const row = makeMapping({ state });
+        const hits = buckets.filter((b) => mappingMatchesFilter(row, b, profile));
+        assert.equal(hits.length, 1, `${state} (fill=${profile?.filledCount ?? 'unmeasured'}) matched ${hits.join(',') || 'nothing'}`);
+      }
+    }
   });
 
   await test('"headerless" matches a blank-header column regardless of state, and nothing else', () => {
@@ -193,9 +249,9 @@ async function main() {
 
   await test('mappingRowVisible combines the chip filter AND the text query', () => {
     const row = makeMapping({ state: 'BLOCKED', sourceField: 'ADRES_KODU', sourceLabel: 'Adres Kodu', sourceNormalized: 'ADRESKODU' });
-    assert.equal(mappingRowVisible(row, 'blocked', 'adres'), true);
-    assert.equal(mappingRowVisible(row, 'blocked', 'zzz'), false, 'wrong query excludes despite matching filter');
-    assert.equal(mappingRowVisible(row, 'legal', 'adres'), false, 'wrong filter excludes despite matching query');
+    assert.equal(mappingRowVisible(row, 'error', 'adres', withData), true);
+    assert.equal(mappingRowVisible(row, 'error', 'zzz', withData), false, 'wrong query excludes despite matching filter');
+    assert.equal(mappingRowVisible(row, 'ignored', 'adres', withData), false, 'wrong filter excludes despite matching query');
   });
 
   section('── PART 13 A/B: isHeaderlessMapping (authoritative sourceHeader) ─');
@@ -310,53 +366,82 @@ async function main() {
     assert.doesNotThrow(() => mappingRowVisible(legacy, 'all', 'zzz'));
   });
 
-  section('── unmappedWithData filter (needs a decision AND has values) ──────');
+  section('── operatorMappingStatus (the vocabulary the screen renders) ─────');
+
+  await test('the operator vocabulary is exactly six buckets, and the projection is total', () => {
+    assert.deepEqual(OPERATOR_MAPPING_STATUSES, [
+      'MATCHED', 'PRESERVED', 'NEEDS_REVIEW', 'EMPTY', 'IGNORED', 'ERROR',
+    ]);
+  });
+
+  await test('the preservation destination key matches the server catalog', () => {
+    // Mirrored by literal (this module stays free of server imports), so it is
+    // pinned here: a rename on the server that missed this constant would
+    // silently reclassify every preserved column as "matched".
+    assert.equal(PRESERVATION_DESTINATION_KEY, 'legacy.preservedSourceValue');
+  });
 
   const profileWithData = { filledCount: 1 };
   const profileEmpty = { filledCount: 0 };
 
-  await test('MANUAL_REQUIRED with at least one filled cell is included', () => {
-    const row = makeMapping({ state: 'MANUAL_REQUIRED' });
-    assert.equal(mappingMatchesFilter(row, 'unmappedWithData', profileWithData), true);
+  await test('a decided row with a canonical destination is MATCHED', () => {
+    for (const state of ['AUTO_CONFIDENT', 'RESOLVED'] as const) {
+      const row = makeMapping({ state, destinationField: 'patient.firstName' });
+      assert.equal(operatorMappingStatus(row, profileWithData), 'MATCHED', state);
+      assert.equal(operatorNeedsAction(operatorMappingStatus(row, profileWithData)), false);
+    }
   });
 
-  await test('SENSITIVE_REVIEW_REQUIRED with data is included (it still needs a human)', () => {
-    const row = makeMapping({ state: 'SENSITIVE_REVIEW_REQUIRED', reason: 'SPECIAL_CATEGORY_REVIEW' });
-    assert.equal(mappingMatchesFilter(row, 'unmappedWithData', { filledCount: 7 }), true);
+  await test('a decided row targeting legacy preservation is PRESERVED, not MATCHED', () => {
+    const row = makeMapping({ state: 'RESOLVED', destinationField: 'legacy.preservedSourceValue' });
+    assert.equal(operatorMappingStatus(row, profileWithData), 'PRESERVED');
   });
 
-  await test('AUTO_REVIEW with data is included', () => {
-    const row = makeMapping({ state: 'AUTO_REVIEW' });
-    assert.equal(mappingMatchesFilter(row, 'unmappedWithData', profileWithData), true);
-  });
-
-  await test('a column needing a decision but holding ZERO values is EXCLUDED', () => {
+  await test('all three undecided states are NEEDS_REVIEW and all three cost the operator work', () => {
     for (const state of ['MANUAL_REQUIRED', 'AUTO_REVIEW', 'SENSITIVE_REVIEW_REQUIRED'] as const) {
       const row = makeMapping({ state });
-      assert.equal(mappingMatchesFilter(row, 'unmappedWithData', profileEmpty), false, state);
+      assert.equal(operatorMappingStatus(row, profileWithData), 'NEEDS_REVIEW', state);
+      assert.equal(operatorNeedsAction('NEEDS_REVIEW'), true);
     }
   });
 
-  await test('a resolved / auto-confident column is EXCLUDED even when it has data', () => {
-    for (const state of ['RESOLVED', 'AUTO_CONFIDENT', 'IGNORE', 'BLOCKED', 'LEGAL_BLOCKED'] as const) {
+  await test('MEASURED zero fill settles a non-writing column as EMPTY and costs nothing', () => {
+    for (const state of ['IGNORE', 'BLOCKED', 'LEGAL_BLOCKED'] as const) {
       const row = makeMapping({ state });
-      assert.equal(mappingMatchesFilter(row, 'unmappedWithData', profileWithData), false, state);
+      assert.equal(operatorMappingStatus(row, profileEmpty), 'EMPTY', state);
+      assert.equal(operatorNeedsAction('EMPTY'), false);
     }
   });
 
-  await test('an UNKNOWN fill (no profile loaded) is EXCLUDED — never claimed to have data', () => {
-    const row = makeMapping({ state: 'MANUAL_REQUIRED' });
-    assert.equal(mappingMatchesFilter(row, 'unmappedWithData', undefined), false);
-    assert.equal(mappingMatchesFilter(row, 'unmappedWithData'), false, 'the profile parameter is optional');
+  await test('a data-bearing BLOCKED / LEGAL_BLOCKED column is an ERROR and DOES cost work', () => {
+    for (const state of ['BLOCKED', 'LEGAL_BLOCKED'] as const) {
+      const row = makeMapping({ state });
+      assert.equal(operatorMappingStatus(row, profileWithData), 'ERROR', state);
+    }
+    assert.equal(operatorNeedsAction('ERROR'), true);
+  });
+
+  await test('UNMEASURED fill is never reported as EMPTY (unknown is not zero)', () => {
+    // The server-side data-loss gate blocks on an unmeasured column rather than
+    // assuming it is safe to drop. The screen must not tell the operator the
+    // opposite of what the gate will do.
+    const blocked = makeMapping({ state: 'BLOCKED' });
+    assert.equal(operatorMappingStatus(blocked, undefined), 'ERROR');
+    const ignored = makeMapping({ state: 'IGNORE' });
+    assert.equal(operatorMappingStatus(ignored, undefined), 'IGNORED');
+  });
+
+  await test('an unrecognised state degrades to ERROR, never to a silent pass', () => {
+    const row = { ...makeMapping({ state: 'IGNORE' }), state: 'SOMETHING_NEW' } as unknown as MappingDto;
+    assert.equal(operatorMappingStatus(row, profileWithData), 'ERROR');
   });
 
   await test('mappingRowVisible threads the optional profile through to the chip', () => {
     const row = makeMapping({ state: 'MANUAL_REQUIRED', sourceField: 'EK_ACIKLAMA', sourceHeader: 'EK_ACIKLAMA', sourceLabel: 'EK_ACIKLAMA', sourceNormalized: 'EKACIKLAMA', sourceIndex: 42 });
-    assert.equal(mappingRowVisible(row, 'unmappedWithData', '', profileWithData), true);
-    assert.equal(mappingRowVisible(row, 'unmappedWithData', '', profileEmpty), false);
-    assert.equal(mappingRowVisible(row, 'unmappedWithData', ''), false, 'no profile → not claimed to have data');
-    assert.equal(mappingRowVisible(row, 'unmappedWithData', 'zzz', profileWithData), false, 'the text query still applies');
-    assert.equal(mappingRowVisible(row, 'unmappedWithData', 'AQ', profileWithData), true, 'coordinate search still applies');
+    assert.equal(mappingRowVisible(row, 'needsReview', '', profileWithData), true);
+    assert.equal(mappingRowVisible(row, 'needsReview', '', profileEmpty), true, 'state decides needsReview; fill only decides EMPTY vs IGNORED/ERROR');
+    assert.equal(mappingRowVisible(row, 'needsReview', 'zzz', profileWithData), false, 'the text query still applies');
+    assert.equal(mappingRowVisible(row, 'needsReview', 'AQ', profileWithData), true, 'coordinate search still applies');
   });
 
   section('── parseUnnamedColumnIndex (F3-DATA-MIG-TODAY-001-UI-002) ────────');
@@ -512,6 +597,136 @@ async function main() {
       const expectedTerminal = status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED';
       assert.equal(isTerminalRunStatus(status), expectedTerminal, status);
     }
+  });
+
+  section('── canApproveMapping: F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE ────────');
+
+  const NOTES_DEST: DestinationFieldDto = {
+    key: 'patient.notes',
+    label: 'Clinical note',
+    group: 'clinical',
+    type: 'string',
+    required: false,
+    allowedTransforms: ['compose_notes', 'trim'],
+    allowsComposition: true,
+  };
+  const BLOOD_GROUP_DEST: DestinationFieldDto = {
+    key: 'patient.bloodGroup',
+    label: 'Blood group',
+    group: 'clinical',
+    type: 'enum',
+    required: false,
+    allowedTransforms: ['blood_group_tr'],
+    allowsComposition: false,
+  };
+  const DESTS = [NOTES_DEST, BLOOD_GROUP_DEST];
+
+  await test('ONEMLINOT-shaped row (composed note, order 1) is approvable', () => {
+    const m = makeMapping({
+      sourceField: 'ONEMLINOT',
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.notes',
+      transform: 'compose_notes',
+      composeOrder: 1,
+      reason: 'SPECIAL_CATEGORY_REVIEW',
+    });
+    assert.equal(canApproveMapping(m, DESTS), true);
+  });
+
+  await test('KONTROLNOTU-shaped row (composed note, order 2) is approvable', () => {
+    const m = makeMapping({
+      sourceField: 'KONTROLNOTU',
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.notes',
+      transform: 'compose_notes',
+      composeOrder: 2,
+      reason: 'SPECIAL_CATEGORY_REVIEW',
+    });
+    assert.equal(canApproveMapping(m, DESTS), true);
+  });
+
+  await test('KANGURUBU-shaped row (non-composable blood group) is approvable', () => {
+    const m = makeMapping({
+      sourceField: 'KANGURUBU',
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.bloodGroup',
+      transform: 'blood_group_tr',
+      composeOrder: null,
+      reason: 'SPECIAL_CATEGORY_REVIEW',
+    });
+    assert.equal(canApproveMapping(m, DESTS), true);
+  });
+
+  await test('a row not in SENSITIVE_REVIEW_REQUIRED is never approvable, even with a valid destination', () => {
+    for (const state of ['AUTO_CONFIDENT', 'AUTO_REVIEW', 'MANUAL_REQUIRED', 'BLOCKED', 'IGNORE', 'RESOLVED'] as const) {
+      const m = makeMapping({
+        state,
+        destinationField: 'patient.notes',
+        transform: 'compose_notes',
+        composeOrder: 1,
+      });
+      assert.equal(canApproveMapping(m, DESTS), false, state);
+    }
+  });
+
+  await test('LEGAL_BLOCKED is never approvable, belt-and-braces alongside the server-side legal gate', () => {
+    const m = makeMapping({
+      state: 'LEGAL_BLOCKED',
+      destinationField: null,
+      transform: null,
+      composeOrder: null,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
+  });
+
+  await test('a SENSITIVE_REVIEW_REQUIRED row with no destination is never approvable', () => {
+    const m = makeMapping({
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: null,
+      transform: null,
+      composeOrder: null,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
+  });
+
+  await test('a destination the catalog no longer carries is never approvable', () => {
+    const m = makeMapping({
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.retiredField',
+      transform: null,
+      composeOrder: null,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
+  });
+
+  await test('a transform outside the destination allow-list is never approvable', () => {
+    const m = makeMapping({
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.bloodGroup',
+      transform: 'compose_notes' as never,
+      composeOrder: null,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
+  });
+
+  await test('a composeOrder on a non-composable destination is never approvable', () => {
+    const m = makeMapping({
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.bloodGroup',
+      transform: 'blood_group_tr',
+      composeOrder: 1,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
+  });
+
+  await test('a missing composeOrder on a composable destination is never approvable', () => {
+    const m = makeMapping({
+      state: 'SENSITIVE_REVIEW_REQUIRED',
+      destinationField: 'patient.notes',
+      transform: 'compose_notes',
+      composeOrder: null,
+    });
+    assert.equal(canApproveMapping(m, DESTS), false);
   });
 
   // ─── Summary ──────────────────────────────────────────────────────────────

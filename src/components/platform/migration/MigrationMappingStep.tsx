@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ArrowRight,
   ChevronRight,
+  CheckCircle2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { MigrationStepProps } from './types';
@@ -29,27 +30,51 @@ import { getErrorMessage } from '../../../utils/errors';
 import {
   MAPPING_FILTER_IDS,
   type MappingFilterId,
+  type OperatorMappingStatus,
+  operatorMappingStatus,
+  operatorNeedsAction,
   mappingRowVisible,
   formatPercent,
   isHeaderlessMapping,
   excelColumnCoordinate,
+  canApproveMapping,
 } from '../../../pages/platformMigrationHelpers';
 import type { ColumnPreviewSampleDto } from '../../../services/platformMigrationApi';
 
-// ── State badge ──────────────────────────────────────────────────────────────
+// ── Operator status badge ────────────────────────────────────────────────────
 
-const STATE_BADGE: Record<MappingState, string> = {
-  AUTO_CONFIDENT: 'badge-green',
-  RESOLVED: 'badge-green',
-  AUTO_REVIEW: 'badge-blue',
-  MANUAL_REQUIRED: 'badge-yellow',
-  IGNORE: 'badge-gray',
-  BLOCKED: 'badge-red',
-  LEGAL_BLOCKED: 'badge-red',
-  // Amber, deliberately NOT red: special-category content needs a human
-  // decision, it is not forbidden the way LEGAL_BLOCKED is. The ring keeps it
-  // readable next to MANUAL_REQUIRED's plain yellow.
-  SENSITIVE_REVIEW_REQUIRED: 'badge bg-amber-100 text-amber-800 ring-1 ring-amber-300',
+/**
+ * The badge renders the OPERATOR vocabulary (F3-DATA-MIG-TODAY-001-R12), not
+ * the engine's eight-state machine. See `operatorMappingStatus` for why, and
+ * for the exact projection. The internal state is still available — it is shown
+ * underneath in small type for support, and it is what every server-side rule
+ * continues to decide on.
+ */
+/**
+ * The order the summary line reads in: what arrives first, what is kept, what
+ * is still owed, then the two "nothing happens here" buckets, then errors.
+ * NEEDS_REVIEW is deliberately not in this list — it has the headline number of
+ * its own immediately to the left, and printing it twice would suggest two
+ * different figures.
+ */
+const OPERATOR_SUMMARY_ORDER: readonly OperatorMappingStatus[] = [
+  'MATCHED',
+  'PRESERVED',
+  'IGNORED',
+  'EMPTY',
+  'ERROR',
+];
+
+const OPERATOR_BADGE: Record<OperatorMappingStatus, string> = {
+  MATCHED: 'badge-green',
+  PRESERVED: 'badge-blue',
+  // Amber, deliberately NOT red: a column awaiting a decision is unfinished
+  // work, not a fault. Red is reserved for a column that carries data and
+  // cannot proceed at all.
+  NEEDS_REVIEW: 'badge bg-amber-100 text-amber-800 ring-1 ring-amber-300 dark:bg-amber-900/30 dark:text-amber-200',
+  EMPTY: 'badge-gray',
+  IGNORED: 'badge-gray',
+  ERROR: 'badge-red',
 };
 
 // ── Row ───────────────────────────────────────────────────────────────────────
@@ -73,6 +98,7 @@ interface RowProps {
   onDestinationChange: (sourceField: string, destinationKey: string) => void;
   onTransformChange: (sourceField: string, transform: TransformName) => void;
   onComposeOrderChange: (sourceField: string, order: number) => void;
+  onApproveMapping: (sourceField: string) => void;
   onMarkIgnore: (sourceField: string) => void;
   onMarkBlocked: (sourceField: string) => void;
   onResetAuto: (sourceField: string) => void;
@@ -80,12 +106,21 @@ interface RowProps {
 
 const MappingRow: React.FC<RowProps> = React.memo(({
   mapping, profile, samples, destinations, destinationGroups, saving, canReset, isFocusTarget, registerRowRef,
-  onDestinationChange, onTransformChange, onComposeOrderChange, onMarkIgnore, onMarkBlocked, onResetAuto,
+  onDestinationChange, onTransformChange, onComposeOrderChange, onApproveMapping, onMarkIgnore, onMarkBlocked, onResetAuto,
 }) => {
   const { t } = useTranslation(['platform']);
   const isLegalBlocked = mapping.state === 'LEGAL_BLOCKED';
   const isBlocked = mapping.state === 'BLOCKED';
   const isIgnored = mapping.state === 'IGNORE';
+  /*
+   * "Eşlemeyi Onayla" — F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE. Offered only when
+   * the row is SENSITIVE_REVIEW_REQUIRED and its already-proposed destination
+   * would actually validate; see canApproveMapping's own doc for why each
+   * check is there. LEGAL_BLOCKED rows never reach this branch — the server
+   * independently refuses any edit to a stored LEGAL_BLOCKED row regardless of
+   * what this UI-side check decides.
+   */
+  const canApprove = canApproveMapping(mapping, destinations);
   /*
    * ONLY the legal gate locks destination selection.
    *
@@ -125,6 +160,7 @@ const MappingRow: React.FC<RowProps> = React.memo(({
   // Authoritative headerless test — the server's persisted `sourceHeader`,
   // not the shape of the synthesized `sourceField` (see isHeaderlessMapping).
   const isHeaderless = isHeaderlessMapping(mapping);
+  const operatorStatus = operatorMappingStatus(mapping, profile);
   // PRIMARY identity line: the operator's own workbook header, verbatim.
   // A synthesized `COLUMN_<n>` must NEVER surface here as if it were a real
   // header — it stays in the `title=` tooltip for support/debugging only.
@@ -138,7 +174,15 @@ const MappingRow: React.FC<RowProps> = React.memo(({
       ref={(el) => registerRowRef(mapping.sourceField, el)}
       tabIndex={-1}
       aria-current={isFocusTarget ? 'true' : undefined}
-      className={`border-b border-gray-50 dark:border-gray-800 align-top outline-none ${isFocusTarget ? 'ring-2 ring-inset ring-primary-500 bg-primary-50/40 dark:bg-primary-900/20' : ''} ${isLegalBlocked ? 'bg-amber-50/60 dark:bg-amber-900/10' : isBlocked ? 'bg-red-50/60 dark:bg-red-900/10' : isIgnored ? 'opacity-60' : ''}`}
+      /*
+       * Row tint follows the OPERATOR status, not the engine state (R12). The
+       * old rule painted every BLOCKED row red and every LEGAL_BLOCKED row
+       * amber; on the first customer's workbook that was 24 alarming rows, 24
+       * of which held zero values. A column with nothing in it now reads as
+       * what it is — settled and unremarkable — and red is spent only where
+       * something really is wrong.
+       */
+      className={`border-b border-gray-50 dark:border-gray-800 align-top outline-none ${isFocusTarget ? 'ring-2 ring-inset ring-primary-500 bg-primary-50/40 dark:bg-primary-900/20' : ''} ${operatorStatus === 'ERROR' ? 'bg-red-50/60 dark:bg-red-900/10' : operatorStatus === 'NEEDS_REVIEW' ? 'bg-amber-50/50 dark:bg-amber-900/10' : operatorStatus === 'EMPTY' || operatorStatus === 'IGNORED' ? 'opacity-60' : ''}`}
     >
       {/* Source */}
       <td className="px-3 py-3 min-w-[180px]">
@@ -273,16 +317,43 @@ const MappingRow: React.FC<RowProps> = React.memo(({
         </span>
       </td>
 
-      {/* State */}
-      <td className="px-3 py-3 min-w-[110px]">
-        <span className={STATE_BADGE[mapping.state]}>
-          {t(`platform:migration.mapping.states.${mapping.state}`)}
+      {/* State — operator vocabulary, with the engine state kept for support */}
+      <td className="px-3 py-3 min-w-[130px]">
+        <span className={OPERATOR_BADGE[operatorStatus]}>
+          {t(`platform:migration.mapping.operatorStates.${operatorStatus}`)}
         </span>
+        <p
+          className="text-[10px] text-gray-400 mt-1 font-mono"
+          title={t('platform:migration.mapping.internalStateHint')}
+        >
+          {mapping.state}
+        </p>
       </td>
 
       {/* Actions */}
       <td className="px-3 py-3 min-w-[190px]">
         <div className="flex flex-col items-start gap-1">
+          {/*
+            * Offered ONLY for a SENSITIVE_REVIEW_REQUIRED row whose proposed
+            * destination already validates (canApproveMapping above). Before
+            * this button existed, approving a correct suggestion meant
+            * temporarily choosing a different destination and then choosing
+            * the right one again just to trigger a save — this sends the SAME
+            * destination/transform/composeOrder with only `state` changed.
+            */}
+          {canApprove && (
+            <button
+              type="button"
+              aria-label={t('platform:migration.mapping.actions.approve')}
+              title={t('platform:migration.mapping.actions.approveHint')}
+              disabled={saving}
+              onClick={() => onApproveMapping(mapping.sourceField)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-green-200 dark:border-green-800 text-[11px] font-medium text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-40"
+            >
+              <CheckCircle2 size={12} />
+              {t('platform:migration.mapping.actions.approve')}
+            </button>
+          )}
           {/*
             * `!isLegalBlocked` added by F3-DATA-MIG-TODAY-001-R11. Ignoring a
             * legally-gated column would relabel a KVKK Art. 6 exclusion as an
@@ -351,7 +422,8 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
   const [error, setError] = useState('');
   const [savingField, setSavingField] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
-  const [bulkBusy, setBulkBusy] = useState<'accept' | 'validate' | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<'accept' | 'exclusions' | 'validate' | null>(null);
+  const [bulkNotice, setBulkNotice] = useState('');
   const [advancing, setAdvancing] = useState(false);
 
   const [filter, setFilter] = useState<MappingFilterId>('all');
@@ -403,19 +475,45 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
 
   useEffect(() => { fetchAll(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * Save ONE row's decision. F3-DATA-MIG-TODAY-001-R12.
+   *
+   * THE PRODUCTION DEFECT THIS REPLACES. This function used to update the row
+   * locally and then serialise EVERY mapping — `next.map(...)` — into the PUT
+   * body. The server's legal gate treated the presence of a column in that body
+   * as an attempt to edit it, so the first customer's two untouched
+   * LEGAL_BLOCKED consent columns were in every save and every save was
+   * rejected with HTTP 400. Changing SUBEDOSYANO, or anything else, was
+   * impossible; repeated clicks produced repeated 400s.
+   *
+   * Sending only the edited row is the honest description of what the operator
+   * did, and it also removes an ordering hazard the full-collection save had:
+   * two quick edits each sent a full snapshot, so the second overwrote the
+   * first's row with the stale copy it had been holding.
+   *
+   * The server is still the authority. It diffs the submitted row against its
+   * own stored row and refuses a genuine legal-gate edit regardless of payload
+   * size, so this is not the thing keeping the gate closed — see
+   * mappingWriteDiff.ts.
+   */
   const persistMapping = useCallback((sourceField: string, updater: (row: MappingDto) => MappingDto) => {
     setSavingField(sourceField);
     setSaveError('');
     setMappings((prev) => {
       if (!prev) return prev;
-      const next = prev.map((m) => (m.sourceField === sourceField ? updater(m) : m));
-      const payload: MappingWritePayload[] = next.map((m) => ({
-        sourceField: m.sourceField,
-        destinationField: m.destinationField,
-        transform: m.transform,
-        composeOrder: m.composeOrder,
-        state: m.state,
-      }));
+      const current = prev.find((m) => m.sourceField === sourceField);
+      if (!current) {
+        setSavingField(null);
+        return prev;
+      }
+      const edited = updater(current);
+      const payload: MappingWritePayload[] = [{
+        sourceField: edited.sourceField,
+        destinationField: edited.destinationField,
+        transform: edited.transform,
+        composeOrder: edited.composeOrder,
+        state: edited.state,
+      }];
       api.saveMappings(run.id, payload)
         .then((res) => {
           setMappings(res.mappings);
@@ -423,7 +521,7 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
         })
         .catch((err) => setSaveError(getErrorMessage(err, t('platform:migration.mapping.errors.saveFailed'))))
         .finally(() => setSavingField(null));
-      return next;
+      return prev.map((m) => (m.sourceField === sourceField ? edited : m));
     });
   }, [api, run.id, t]);
 
@@ -449,12 +547,72 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
     persistMapping(sourceField, (m) => ({ ...m, composeOrder: order }));
   }, [persistMapping]);
 
+  /**
+   * "Yok say" (ignore). F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE.
+   *
+   * THE PRODUCTION DEFECT THIS FIXES. This updater used to change only `state`,
+   * leaving destinationField/transform/composeOrder exactly as they were. For a
+   * column the engine had already proposed a destination for (KANGURUBU ->
+   * patient.bloodGroup), that sent IGNORE alongside the untouched destination in
+   * the SAME PUT payload — and because `persistMapping` always sends the full
+   * four-field tuple, the server wrote destinationField verbatim, producing a
+   * row that was simultaneously "ignored" and still mapped
+   * (MAPPING_INVALID — "marked ignored but still carries destination"). The
+   * operator had no way to reach a clean ignored row without opening the
+   * dropdown and clearing it by hand first.
+   *
+   * The four fields are cleared in the SAME updater, so `persistMapping` sends
+   * them in the SAME PUT row and the server writes them in the SAME
+   * `updateMany` — atomically, not as two decisions that could observe a
+   * half-written row in between.
+   */
   const handleMarkIgnore = useCallback((sourceField: string) => {
-    persistMapping(sourceField, (m) => ({ ...m, state: 'IGNORE' }));
+    persistMapping(sourceField, (m) => ({
+      ...m,
+      state: 'IGNORE',
+      destinationField: null,
+      destinationLabel: null,
+      transform: null,
+      composeOrder: null,
+    }));
   }, [persistMapping]);
 
+  /**
+   * "Eşlemeyi Onayla" — approve a SENSITIVE_REVIEW_REQUIRED row's ALREADY
+   * proposed destination without altering it. F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE.
+   *
+   * Only offered when `canApproveMapping` says the row's current
+   * destination/transform/composeOrder would already validate (see the
+   * MappingRow render above), so this never needs to touch any of the three.
+   * Reuses `persistMapping`, i.e. the SAME PUT /mappings + semantic-diff
+   * machinery every other edit goes through: the server treats the
+   * SENSITIVE_REVIEW_REQUIRED -> RESOLVED state change alone as a semantic
+   * change (mappingWriteDiff.ts), writes exactly this one row, and stamps
+   * decidedByPlatformAdminId/decidedAt — the same audit record a manual
+   * re-selection of the same destination already produces today. No new
+   * endpoint, no new server-side trust: a LEGAL_BLOCKED row is never offered
+   * this action, and even a hand-crafted request against it is still refused
+   * by the existing legal gate (assertPlanHasNoLegallyGatedEdits).
+   */
+  const handleApproveMapping = useCallback((sourceField: string) => {
+    persistMapping(sourceField, (m) => ({ ...m, state: 'RESOLVED' }));
+  }, [persistMapping]);
+
+  /**
+   * "Engelle" — same atomic-clear requirement as "Yok say" above: a BLOCKED
+   * row must not carry a leftover destination/transform/composeOrder from
+   * whatever state it was in before, or it fails MAPPING_INVALID the same
+   * way an unclear IGNORE row did. F3-DATA-MIG-TODAY-001-R12-UX-CLOSURE.
+   */
   const handleMarkBlocked = useCallback((sourceField: string) => {
-    persistMapping(sourceField, (m) => ({ ...m, state: 'BLOCKED' }));
+    persistMapping(sourceField, (m) => ({
+      ...m,
+      state: 'BLOCKED',
+      destinationField: null,
+      destinationLabel: null,
+      transform: null,
+      composeOrder: null,
+    }));
   }, [persistMapping]);
 
   const handleResetAuto = useCallback((sourceField: string) => {
@@ -466,12 +624,47 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
   const handleAcceptAllSafe = async () => {
     setBulkBusy('accept');
     setSaveError('');
+    setBulkNotice('');
     try {
       const res = await api.acceptAutoMappings(run.id);
       setMappings(res.mappings);
       setValidation(res.validation);
+      setBulkNotice(t('platform:migration.mapping.bulk.acceptedNotice', { n: res.accepted }));
     } catch (err) {
       setSaveError(getErrorMessage(err, t('platform:migration.mapping.errors.acceptFailed')));
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
+  /**
+   * Confirm every column the SYSTEM recommends excluding that still carries
+   * data (F3-DATA-MIG-TODAY-001-R12).
+   *
+   * WHY THIS EXISTS. The data-loss gate refuses to accept a system-recommended
+   * IGNORE as a decision — nobody chose it — so each such column needed a human
+   * to open it and re-save it. Eight columns on the first customer's workbook,
+   * and no way to see them as a set.
+   *
+   * WHY IT IS STILL A DECISION AND NOT A BYPASS. The list is computed from what
+   * is ON SCREEN, sent explicitly, and shown to the operator first (the button
+   * names the count, and the `empty` chip proves the rest are empty). Columns
+   * with NO data are deliberately left out: the gate already treats a measured
+   * zero as nothing to lose, so confirming them would be a click that records
+   * a decision about nothing.
+   */
+  const handleConfirmExclusions = async () => {
+    if (confirmableExclusions.length === 0) return;
+    setBulkBusy('exclusions');
+    setSaveError('');
+    setBulkNotice('');
+    try {
+      const res = await api.confirmExclusions(run.id, confirmableExclusions.map((m) => m.sourceField));
+      setMappings(res.mappings);
+      setValidation(res.validation);
+      setBulkNotice(t('platform:migration.mapping.bulk.confirmedNotice', { n: res.confirmed }));
+    } catch (err) {
+      setSaveError(getErrorMessage(err, t('platform:migration.mapping.errors.confirmFailed')));
     } finally {
       setBulkBusy(null);
     }
@@ -549,6 +742,43 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
     return mappings.filter((m) => mappingRowVisible(m, filter, query, profiles[m.sourceIndex]));
   }, [mappings, filter, query, profiles]);
 
+  /**
+   * The whole sheet, counted in the operator's vocabulary. One pass, so the
+   * summary bar, the "remaining work" figure and the bulk-action button all
+   * read from the same classification the badges use.
+   */
+  const operatorTally = useMemo(() => {
+    const counts: Record<OperatorMappingStatus, number> = {
+      MATCHED: 0, PRESERVED: 0, NEEDS_REVIEW: 0, EMPTY: 0, IGNORED: 0, ERROR: 0,
+    };
+    let remaining = 0;
+    for (const m of mappings ?? []) {
+      const status = operatorMappingStatus(m, profiles[m.sourceIndex]);
+      counts[status]++;
+      if (operatorNeedsAction(status)) remaining++;
+    }
+    return { counts, remaining };
+  }, [mappings, profiles]);
+
+  /**
+   * Columns eligible for the bulk exclusion confirmation: recommended for
+   * exclusion (IGNORE / BLOCKED) AND carrying MEASURED data.
+   *
+   * The fill test is `> 0` on a profile that EXISTS. A column nobody measured
+   * is not swept in — the server-side gate treats unmeasured as unproven and
+   * blocks on it, so bulk-confirming one here would record a decision the gate
+   * would (correctly) still refuse to honour.
+   */
+  const confirmableExclusions = useMemo(
+    () =>
+      (mappings ?? []).filter((m) => {
+        if (m.state !== 'IGNORE' && m.state !== 'BLOCKED') return false;
+        const profile = profiles[m.sourceIndex];
+        return !!profile && profile.filledCount > 0;
+      }),
+    [mappings, profiles],
+  );
+
   const canContinue = !!validation?.valid && !loading && !bulkBusy;
 
   return (
@@ -559,11 +789,26 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
           <p className="text-sm text-gray-500 dark:text-gray-400">{t('platform:migration.mapping.subtitle')}</p>
         </div>
         {mappings && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button type="button" className="btn-secondary text-xs" disabled={bulkBusy !== null} onClick={handleAcceptAllSafe}>
               {bulkBusy === 'accept' ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
               {t('platform:migration.mapping.acceptAllSafe')}
             </button>
+            {/* Only offered when there is something to confirm; a button that
+                does nothing is worse than no button. The count is in the label
+                so the operator knows the size of what they are agreeing to. */}
+            {confirmableExclusions.length > 0 && (
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                disabled={bulkBusy !== null}
+                title={t('platform:migration.mapping.bulk.confirmExclusionsHint')}
+                onClick={handleConfirmExclusions}
+              >
+                {bulkBusy === 'exclusions' ? <Loader2 size={13} className="animate-spin" /> : <EyeOff size={13} />}
+                {t('platform:migration.mapping.bulk.confirmExclusions', { n: confirmableExclusions.length })}
+              </button>
+            )}
             <button type="button" className="btn-secondary text-xs" disabled={bulkBusy !== null} onClick={handleValidate}>
               {bulkBusy === 'validate' ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
               {t('platform:migration.mapping.validateMapping')}
@@ -616,6 +861,38 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
             </span>
           </div>
 
+          {/*
+            * THE HEADLINE THE OPERATOR ACTUALLY NEEDS. Not "26 unresolved
+            * mappings" in engine vocabulary but "how many columns are still
+            * waiting for you", with everything else already accounted for. On
+            * the first customer's workbook this reads 4 after the two bulk
+            * actions: three special-category columns and one unknown header.
+            */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/30 px-4 py-3 mb-3">
+            <div className="flex items-baseline gap-2">
+              <span className={`text-2xl font-bold ${operatorTally.remaining > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
+                {operatorTally.remaining}
+              </span>
+              <span className="text-sm text-gray-600 dark:text-gray-300">
+                {t('platform:migration.mapping.remainingWork')}
+              </span>
+            </div>
+            <span className="text-xs text-gray-400">·</span>
+            {OPERATOR_SUMMARY_ORDER.map((status) => (
+              <span key={status} className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="font-semibold text-gray-800 dark:text-gray-100">{operatorTally.counts[status]}</span>{' '}
+                {t(`platform:migration.mapping.operatorStates.${status}`)}
+              </span>
+            ))}
+          </div>
+
+          {bulkNotice && (
+            <div className="flex items-center gap-2 text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 rounded-lg p-2.5 mb-3 text-sm">
+              <ShieldCheck size={14} />
+              {bulkNotice}
+            </div>
+          )}
+
           {saveError && (
             <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg p-2.5 mb-3 text-sm">
               <AlertCircle size={14} />
@@ -652,6 +929,7 @@ const MigrationMappingStep: React.FC<MigrationStepProps> = ({ run, api, onRunUpd
                     onDestinationChange={handleDestinationChange}
                     onTransformChange={handleTransformChange}
                     onComposeOrderChange={handleComposeOrderChange}
+                    onApproveMapping={handleApproveMapping}
                     onMarkIgnore={handleMarkIgnore}
                     onMarkBlocked={handleMarkBlocked}
                     onResetAuto={handleResetAuto}
