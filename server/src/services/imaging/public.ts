@@ -75,7 +75,7 @@
  */
 
 import prisma from '../../db.js';
-import { fileExists } from '../fileStorage.js';
+import { imagingFileExists } from '../fileStorage.js';
 
 // ─── Typed errors (small closed set, never a raw Prisma/provider error) ────
 
@@ -97,8 +97,17 @@ export class ImagingLegalHoldViolationError extends Error {
 
 export class ImagingStorageUnavailableError extends Error {
   readonly code = 'IMAGING_STORAGE_UNAVAILABLE' as const;
-  constructor() {
-    super('Imaging storage provider is unavailable.');
+  /**
+   * `cause` carries the underlying provider failure (F4-IMAGING-001 Finding D).
+   * The message/name/code this class exposes are unchanged and still sanitized
+   * — the raw provider error is reachable ONLY via the standard `cause` link,
+   * which is what error trackers and operators need to tell "VPS2 imaging
+   * storage is down" apart from any other unavailability. Before this, the
+   * throw site used a bare `catch {}` and the provider error was destroyed at
+   * the boundary, leaving an imaging outage with no signal anywhere.
+   */
+  constructor(options?: { cause?: unknown }) {
+    super('Imaging storage provider is unavailable.', options);
     this.name = 'ImagingStorageUnavailableError';
   }
 }
@@ -389,7 +398,7 @@ export async function getImagesForLifecycleReview(
  * never the clinicId predicate; and every test call restores the real
  * implementation in a `finally` block).
  */
-let storageExistenceChecker: (ref: string) => Promise<boolean> = fileExists;
+let storageExistenceChecker: (ref: string) => Promise<boolean> = imagingFileExists;
 
 /**
  * Test-only hook. NOT part of the accepted ImagingLifecyclePort four-method
@@ -433,16 +442,17 @@ let storageExistenceChecker: (ref: string) => Promise<boolean> = fileExists;
 export function __setImagingStorageExistenceCheckerForTest(
   override: ((ref: string) => Promise<boolean>) | null,
 ): void {
-  storageExistenceChecker = override ?? fileExists;
+  storageExistenceChecker = override ?? imagingFileExists;
 }
 
 /**
  * Verifies ownership (scoped by the caller-supplied `clinicId`) before
  * touching storage, then delegates entirely to the existing fileStorage.ts
- * abstraction (no S3/local branching here). A provider failure (fileExists
- * throwing on an unexpected, non-404-shaped error) is converted to the
- * facade's own sanitized error — never a raw provider exception, never the
- * storage key, crossing this boundary.
+ * abstraction — this facade itself does no S3/local/VPS2 branching; that
+ * lives in fileStorage.ts's `imagingFileExists` (F4-IMAGING-001). A provider
+ * failure (the existence check throwing on an unexpected, non-404-shaped
+ * error) is converted to the facade's own sanitized error — never a raw
+ * provider exception, never the storage key, crossing this boundary.
  *
  * `clinicId` must already be authorization-validated by the caller (F2-PREP-009
  * §3) — this facade applies it as a trusted predicate, it does not re-run
@@ -454,8 +464,12 @@ export async function checkImageStorageExists(clinicId: string, imageId: string)
 
   try {
     return await storageExistenceChecker(image.filePath);
-  } catch {
-    throw new ImagingStorageUnavailableError();
+  } catch (err) {
+    // F4-IMAGING-001 Finding D: bind the provider error and pass it as
+    // `cause`. Still the facade's own sanitized error type crossing the
+    // boundary — but a VPS2 outage is no longer silently indistinguishable
+    // from every other storage failure.
+    throw new ImagingStorageUnavailableError({ cause: err });
   }
 }
 

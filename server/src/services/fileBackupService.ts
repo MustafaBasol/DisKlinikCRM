@@ -37,7 +37,7 @@ import crypto from 'crypto';
 import { Transform, Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import prisma from '../db.js';
-import { openFileStream } from './fileStorage.js';
+import { openFileStream, openImagingFileStream } from './fileStorage.js';
 import { safeErrorFields } from '../utils/safeError.js';
 import { withJobLock } from '../utils/jobLock.js';
 import { listImagesForBackup } from './imaging/ops.js';
@@ -138,10 +138,55 @@ async function* iterateImagingRowsForBackup(batchSize: number): AsyncGenerator<S
   }
 }
 
-const SOURCE_MODELS: Array<{ name: SourceModelName; domain: SourceDomain; rows: (batchSize: number) => AsyncGenerator<SourceRow> }> = [
-  { name: 'PatientAttachment', domain: 'attachments', rows: (batchSize) => iterateGenericSourceRows('patientAttachment', batchSize) },
-  { name: 'LabOrderAttachment', domain: 'lab-attachments', rows: (batchSize) => iterateGenericSourceRows('labOrderAttachment', batchSize) },
-  { name: 'ImagingImage', domain: 'imaging', rows: iterateImagingRowsForBackup },
+/**
+ * Per-content-class source reader (F4-IMAGING-001 backup-source correction).
+ *
+ * Before this, every row in the sweep was read through the generic
+ * `openFileStream()`. That is correct for PatientAttachment and
+ * LabOrderAttachment — those content classes are not part of the imaging
+ * storage routing at all and keep calling the generic primitive exactly as
+ * before. It is NOT correct for ImagingImage: once an operator sets
+ * `IMAGING_STORAGE_BACKEND=vps2`, newly ingested imaging objects are written
+ * only to VPS2 object storage (fileStorage.ts's `saveImagingFile`), so a
+ * generic `openFileStream()` on their key resolves null and this sweep would
+ * record a perfectly healthy remote object as `missing_source` and never back
+ * it up — a silent backup-coverage hole in exactly the content class with the
+ * largest objects.
+ *
+ * The fix is deliberately a re-use, not a re-implementation: ImagingImage
+ * reads go through fileStorage.ts's `openImagingFileStream()`, the same
+ * VPS2-aware imaging read contract that routes/imaging.ts already serves
+ * bytes from. No remote-client logic is duplicated here, no Imaging domain
+ * boundary is bypassed (enumeration still goes through imaging/ops.ts's
+ * `listImagesForBackup`), and no direct Prisma access is added. Inheriting
+ * that one contract also gives this sweep its three required behaviors for
+ * free, with no branch of its own:
+ *
+ *   - remote object EXISTS            -> backup reads the remote bytes.
+ *   - remote CONFIRMED ABSENT (404)   -> controlled fallback to the legacy
+ *                                        object, so imaging written before
+ *                                        VPS2 was activated still backs up.
+ *   - remote ERROR (outage/auth/net)  -> the call THROWS, so the sweep's
+ *                                        existing per-row catch records a
+ *                                        `failed` entry. A VPS2 outage must
+ *                                        never be laundered into
+ *                                        `missing_source`, which reads as
+ *                                        "this file does not exist" and would
+ *                                        be acted on as data loss.
+ *
+ * With `IMAGING_STORAGE_BACKEND` unset (the production default today),
+ * `openImagingFileStream()` delegates straight to `openFileStream()`, so this
+ * sweep's behavior is byte-identical to before this change.
+ */
+const SOURCE_MODELS: Array<{
+  name: SourceModelName;
+  domain: SourceDomain;
+  rows: (batchSize: number) => AsyncGenerator<SourceRow>;
+  openSource: (ref: string) => Promise<Readable | null>;
+}> = [
+  { name: 'PatientAttachment', domain: 'attachments', rows: (batchSize) => iterateGenericSourceRows('patientAttachment', batchSize), openSource: openFileStream },
+  { name: 'LabOrderAttachment', domain: 'lab-attachments', rows: (batchSize) => iterateGenericSourceRows('labOrderAttachment', batchSize), openSource: openFileStream },
+  { name: 'ImagingImage', domain: 'imaging', rows: iterateImagingRowsForBackup, openSource: openImagingFileStream },
 ];
 
 async function hashReadable(stream: Readable): Promise<{ sha256: string; bytes: number }> {
@@ -244,7 +289,7 @@ async function runFileBackupLocked(options: { trigger?: 'scheduled' | 'manual' }
             continue;
           }
 
-          const sourceStream = await openFileStream(row.filePath);
+          const sourceStream = await cfg.openSource(row.filePath);
           if (!sourceStream) {
             filesMissing++;
             await prisma.fileBackupEntry.create({

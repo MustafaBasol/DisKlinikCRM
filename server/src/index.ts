@@ -84,6 +84,7 @@ import { buildHealthRouter } from './routes/health.js';
 import { getRedis } from './utils/redis.js';
 import { installFatalErrorHandlers } from './utils/fatalErrorHandlers.js';
 import { captureFatalError } from './utils/errorTracking.js';
+import { validateImagingS3Config } from './services/imagingRemoteStorage.js';
 
 dotenv.config();
 
@@ -113,6 +114,27 @@ if (!isEncryptionKeyConfigured()) {
     'Secret writes (WhatsApp tokens, SMS provider configs, webhook secrets) will fail. ' +
     'Set ENCRYPTION_KEY=<openssl rand -hex 32>.',
   );
+}
+
+// F4-IMAGING-001 Finding C: validate the imaging storage backend selection and
+// its IMAGING_S3_* configuration HERE, at boot, not lazily on first use.
+// validateImagingS3Config() returns immediately unless an operator has
+// explicitly set IMAGING_STORAGE_BACKEND=vps2, so with the flag unset (current
+// production default) this is a no-op and startup is unchanged. When the flag
+// IS set, a typo'd backend name or a missing bucket/endpoint must stop the
+// process here rather than surfacing as a 500 on the first imaging request
+// hours later, with imaging silently unavailable in between. Same fail-closed
+// shape as the ENCRYPTION_KEY check above: fatal in production, warn otherwise
+// so local/dev work is not blocked.
+try {
+  validateImagingS3Config();
+} catch (err) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (process.env.NODE_ENV === 'production') {
+    console.error(`[FATAL] Imaging storage configuration is invalid: ${message}`);
+    process.exit(1);
+  }
+  console.warn(`[WARN] Imaging storage configuration is invalid: ${message}`);
 }
 
 for (const warning of getSessionCookieDeploymentWarnings()) {

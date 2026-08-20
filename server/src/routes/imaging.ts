@@ -25,7 +25,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { authorize, AuthRequest } from '../middleware/auth.js';
 import { isInlinePreviewable } from '../utils/filePreview.js';
-import { openFileStream } from '../services/fileStorage.js';
+import { openImagingFileStream } from '../services/fileStorage.js';
 import { getParam, createRateLimiter } from '../utils/helpers.js';
 import { logActivity } from '../utils/activity.js';
 import { writeAuditLog } from '../utils/auditLog.js';
@@ -845,13 +845,25 @@ async function streamStudyImage(req: AuthRequest, res: Response, mode: 'preview'
       return res.status(415).json({ error: 'Bu dosya türü tarayıcıda önizlenemez; indirerek görüntüleyin' });
     }
 
-    const stream = await openFileStream(image.filePath);
+    const stream = await openImagingFileStream(image.filePath);
     if (!stream) return res.status(404).json({ error: 'File not found in storage' });
 
-    await auditImaging(req, image.clinicId, 'imaging_study_viewed', 'imaging_study', studyId, {
-      imageId,
-      mode,
-    });
+    // F4-IMAGING-001 Finding E: the stream is already open at this point. If
+    // the audit write rejects, the outer catch below turns it into a 500 and
+    // nothing would ever consume or close this stream — a leaked file handle
+    // under legacy storage, and a leaked S3 response socket under VPS2 mode
+    // (which would progressively exhaust the SDK's connection pool). Destroy it
+    // before letting the rejection propagate. The audit failure itself is NOT
+    // swallowed: imaging reads stay audited-or-refused, never served unaudited.
+    try {
+      await auditImaging(req, image.clinicId, 'imaging_study_viewed', 'imaging_study', studyId, {
+        imageId,
+        mode,
+      });
+    } catch (auditErr) {
+      stream.destroy();
+      throw auditErr;
+    }
 
     const disposition = mode === 'preview' ? 'inline' : 'attachment';
     res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(image.originalName)}"`);

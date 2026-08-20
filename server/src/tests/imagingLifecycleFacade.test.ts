@@ -592,6 +592,42 @@ async function main() {
       }
     });
 
+    // F4-IMAGING-001 Finding D. The sanitization above is correct and must
+    // stay, but it used to be implemented with a bare `catch {}` that never
+    // bound the provider error at all — so a VPS2 imaging outage was destroyed
+    // at this boundary and reached no log, no error tracker, and no operator.
+    // The provider error is now preserved as `cause`: reachable for diagnosis,
+    // still absent from everything the facade actually exposes.
+    await test('F4-IMAGING-001 Finding D: the provider failure is preserved as `cause` (outage signal survives), while message/name/code stay sanitized', async () => {
+      const study = await createStudy({ clinicId: fixtures.defaultClinicId, patientId: patientA.id });
+      const image = await createImage({ clinicId: fixtures.defaultClinicId, studyId: study.id });
+
+      const providerError = new Error('simulated VPS2 outage with a raw internal detail that must never leak');
+      providerError.name = 'TimeoutError';
+      const failingFileExists = async (_ref: string): Promise<boolean> => {
+        throw providerError;
+      };
+
+      __setImagingStorageExistenceCheckerForTest(failingFileExists);
+      try {
+        await checkImageStorageExists(fixtures.defaultClinicId, image.id);
+        assert.fail('expected ImagingStorageUnavailableError');
+      } catch (err) {
+        assert.ok(err instanceof ImagingStorageUnavailableError, 'still the sanitized facade error type');
+        assert.equal(
+          (err as Error).cause,
+          providerError,
+          'the underlying provider error must be preserved as `cause` — a bare catch here is what made an imaging outage invisible',
+        );
+        assert.equal((err as any).code, 'IMAGING_STORAGE_UNAVAILABLE', 'exposed code unchanged');
+        assert.equal((err as Error).name, 'ImagingStorageUnavailableError', 'exposed name unchanged (not the provider TimeoutError)');
+        assert.ok(!/simulated VPS2 outage/.test((err as Error).message), 'raw provider detail still never in the message');
+        assert.ok(!(err as Error).message.includes(image.filePath), 'storage key still never in the message');
+      } finally {
+        __setImagingStorageExistenceCheckerForTest(null);
+      }
+    });
+
     await test('verifies ownership before touching storage — throws not-found before ever calling the storage check (missing AND cross-tenant)', async () => {
       let storageCheckCalled = false;
       const spyFileExists = async (_ref: string): Promise<boolean> => {

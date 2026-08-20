@@ -39,7 +39,7 @@
  */
 
 import prisma from '../../db.js';
-import { buildObjectStorageKey, deleteFile, fileNameFromKey, saveFile } from '../fileStorage.js';
+import { buildObjectStorageKey, deleteImagingFile, fileNameFromKey, saveImagingFile } from '../fileStorage.js';
 import { isAllowedFileSignature } from '../../utils/fileSignature.js';
 import { IMAGING_EXTENSIONS_BY_MIME, normalizeDeclaredMime } from './imagingUploadValidation.js';
 
@@ -124,7 +124,7 @@ export async function ingestImagingStudyCore(
     clinicId: input.clinicId,
     originalName: input.originalName,
   });
-  await saveFile(storageKey, input.fileBuffer, effectiveMime);
+  await saveImagingFile(storageKey, input.fileBuffer, effectiveMime);
 
   try {
     const study = await prisma.$transaction(async (tx) => {
@@ -184,7 +184,7 @@ export async function ingestImagingStudyCore(
     // Best-effort compensation: storage and Postgres are not atomic. No
     // outbox/saga — a failed delete here is swallowed exactly like both
     // routes' pre-existing outer-catch compensation did.
-    await deleteFile(storageKey).catch(() => {});
+    await deleteImagingFile(storageKey).catch(() => {});
     throw err;
   }
 }
