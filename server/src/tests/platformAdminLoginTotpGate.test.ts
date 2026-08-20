@@ -333,20 +333,65 @@ for (const [label, totpCode] of [
   });
 }
 
-await test('CHARACTERIZATION: a numeric valid OTP is accepted via String() coercion', async () => {
-  const { email, secret } = await fixtureAdmin({ enrolled: true });
-  const res = await login({
-    email,
-    password: FIXTURE_PASSWORD,
-    totpCode: Number(generateTotp(secret!)),
+// The route's contract is `String(req.body.totpCode ?? '').trim()` fed into
+// `verifyTotp`'s `/^\d{6}$/` check (totp.ts:84-85). A JSON number therefore
+// authenticates ONLY when its decimal string round-trips through Number()
+// with all 6 digits intact — which fails for any code with a leading zero
+// (`Number('012345')` is `12345`, i.e. 5 digits). This is deterministic and
+// independent of live TOTP generation, so it is proven directly here rather
+// than only inferred from the live-code test below.
+for (const [label, digits, expectSurvives] of [
+  ['no leading zero', '512345', true],
+  ['single leading zero', '012345', false],
+  ['code that is all zeros but for the low digit', '000001', false],
+] as Array<[string, string, boolean]>) {
+  await test(`CHARACTERIZATION (unit, no DB): Number()-round-trip of a ${label} OTP ${expectSurvives ? 'survives' : 'loses digits'}`, () => {
+    const coerced = String(Number(digits)).trim();
+    assert.equal(
+      /^\d{6}$/.test(coerced),
+      expectSurvives,
+      `Number('${digits}') -> '${coerced}' must ${expectSurvives ? '' : 'NOT '}match the route's 6-digit contract`,
+    );
   });
+}
 
-  // Pins existing behaviour: the route does String(req.body.totpCode ?? '').
-  // A JSON client sending a number still authenticates. Note a leading-zero
-  // code would be destroyed by Number() on the client side, which is the
-  // client's problem, not this route's — recorded, not changed.
-  assert.equal(res.statusCode, 200);
-});
+await test(
+  'CHARACTERIZATION: a numeric valid OTP is accepted via String() coercion, UNLESS the original code had a leading zero',
+  async () => {
+    const { email, secret } = await fixtureAdmin({ enrolled: true });
+    const originalCode = generateTotp(secret!);
+    const res = await login({
+      email,
+      password: FIXTURE_PASSWORD,
+      totpCode: Number(originalCode),
+    });
+
+    // Pins existing behaviour: the route does String(req.body.totpCode ?? '').
+    // A JSON client sending a number authenticates only if the round-trip
+    // through Number() preserved all 6 digits. When the freshly generated
+    // TOTP happens to start with '0', Number() silently drops it, the route
+    // sees a 5-digit string, and verifyTotp's /^\d{6}$/ check rejects it
+    // before ever touching the secret — see totp.ts:84-85 and the unit-level
+    // proof of this exact mechanism immediately above. This branch is
+    // therefore NOT a flake: whichever the real TOTP generator happened to
+    // produce this run, the assertion below is the one truthful outcome for it.
+    if (originalCode.startsWith('0')) {
+      assert.equal(
+        res.statusCode,
+        401,
+        `originalCode='${originalCode}' starts with 0, so Number()-coercion must have dropped it and login must fail closed`,
+      );
+      assert.equal(res.body.code, 'MFA_INVALID');
+      assertNoSessionIssued(res);
+    } else {
+      assert.equal(
+        res.statusCode,
+        200,
+        `originalCode='${originalCode}' has no leading zero, so Number()-coercion must be lossless and login must succeed`,
+      );
+    }
+  },
+);
 
 await test('CHARACTERIZATION: internal whitespace is stripped by verifyTotp', async () => {
   const { email, secret } = await fixtureAdmin({ enrolled: true });
