@@ -323,7 +323,35 @@ export function buildRow(
    */
   const contactPoints: DraftContactPoint[] = [];
   for (const { contactType, mapping } of compiled.contactPointSources) {
-    const value = asString(read(mapping.destinationField!));
+    /*
+     * Read THIS mapping's own cell, not `read(destination)`.
+     *
+     * `read()` hands the destination's whole source bucket to one transform
+     * call — composition semantics. If two columns were ever mapped to the same
+     * contact-point destination, `read()` would transform `cells[0]` and return
+     * that one value for BOTH iterations: the first column's number written
+     * twice and the second silently dropped. `validateMapping` Rule 2 currently
+     * makes that unreachable (a non-composable, non-multi-use destination with
+     * two sources is a MAPPING_DESTINATION_COLLISION), but the executor must
+     * not silently lose a phone number just because a validator ran upstream.
+     */
+    const cell = row.cells[mapping.sourceIndex] ?? EMPTY_CELL;
+    const output = applyTransform((mapping.transform as TransformName) ?? 'phone_tr', {
+      cells: [cell],
+      rowNumber: row.rowNumber,
+    });
+    for (const warning of output.warnings) {
+      warnings.push(`${mapping.destinationField}:${warning}`);
+    }
+    if (output.error) {
+      failures.push({
+        code: output.error.code,
+        message: output.error.message,
+        fieldName: mapping.destinationField ?? undefined,
+      });
+      continue;
+    }
+    const value = asString(output.value);
     // An absent source cell is not a contact point. Writing an empty row would
     // assert the clinic holds a number it does not hold.
     if (value) contactPoints.push({ contactType, value });

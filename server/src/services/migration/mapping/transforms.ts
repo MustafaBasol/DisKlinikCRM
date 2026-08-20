@@ -687,9 +687,18 @@ const practitionerReference: TransformFn = (input) => {
  *
  * Returns the value AS-IS, exactly like `practitionerReference` and for the
  * same reason inverted: preservation exists so a reviewer can see WHAT THE OLD
- * SYSTEM HELD. A transform that trimmed, folded case, collapsed whitespace or
+ * SYSTEM HELD. A transform that folded case, collapsed internal whitespace or
  * reformatted a number would destroy the very thing it was asked to keep, and
  * would do it invisibly — the preserved row would still look plausible.
+ *
+ * PRECISE SCOPE — "verbatim" means verbatim relative to the PARSER PROJECTION,
+ * not to the source bytes. `projectCell()` in canonicalParser.ts already
+ * `.trim()`s every string cell before any transform runs, so LEADING AND
+ * TRAILING WHITESPACE IS ALREADY GONE by the time this function is reached.
+ * Case, internal whitespace, punctuation and digit formatting all survive
+ * untouched; surrounding blanks do not. That distinction matters if this
+ * evidence is ever produced to a regulator, so it is written down here rather
+ * than left to a reader to discover.
  *
  * Emits NO warning, ever. A warning here could only be about the shape of a
  * value nobody has classified, and warning codes are operator-facing; there is
