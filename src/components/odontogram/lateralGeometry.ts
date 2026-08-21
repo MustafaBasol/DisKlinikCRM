@@ -48,44 +48,46 @@ export const LATERAL_ART: AnatomyRegistry<LateralToothArt> = {
   // contour sits low, close to the cervical line, per the task brief.
   'permanent:upper:central_incisor': {
     crown:
-      'M45 10 C42 9 26 9 22 11.5 C18.5 13.5 16.5 16.5 16.5 20 ' +
-      'C16.5 24.5 17 27.5 18.5 31 C20 34.5 21 38 24 40.3 L39 40.3 ' +
-      'C42.5 38.5 44.3 33 44.8 27 C45.3 21 45.5 15 45 10 Z',
+      'M43 7 C40 5.3 36 5 33 6.3 C30 7.6 26 7.4 23 8.8 ' +
+      'C20.3 10 18 12.5 17 16.5 C16.2 20 16.6 24 18 27.5 ' +
+      'C19.2 30.5 20.3 32.5 22 34 L38 34.3 C40.3 32 41.8 28.5 42.6 24 ' +
+      'C43.4 19.5 43.5 14.5 43.5 10.5 C43.5 9.2 43.3 8 43 7 Z',
     roots: [
-      'M23 40 C22 50 23.5 62 27 72 C28.5 77 30 80.5 32.5 81.5 ' +
-        'C35 80.5 36 77 37 72 C39.5 62 40.5 50 40 40 Z',
+      'M26.5 34 C27.8 46 29.3 58.5 31 69.5 C31.3 70.4 31.7 70.4 32 69.5 ' +
+        'C33.7 58.5 35.2 46 37.5 34 C35.5 32.3 28.5 32.3 26.5 34 Z',
     ],
-    surface:
-      'M19 15 C19 15 24 12.5 32 12.3 C40 12.1 44 14 44 14 ' +
-      'M26 9.5 V15 M32.5 9 V15.3 M38.5 9.3 V15',
-    cervical: 'M20 39 C25 41.5 38 41.5 43 38.5',
+    surface: 'M23 9.5 V16 M32 6.5 V14 M40 8 V15',
+    cervical: 'M20 33.5 C25 35.8 36 35.8 41 32.5',
     widthRatio: 1.0,
     sideStrategy: 'mirror',
     simplification:
-      'Mamelon ridges simplified to three straight grooves; the real ' +
-      'developmental lobes are more subtly curved.',
+      'Mamelon ridges simplified to three short straight grooves rather ' +
+      'than the real, subtly curved developmental lobes; the root apex is ' +
+      'drawn with a small rounded cap rather than a mathematically sharp ' +
+      'point.',
   },
 
   // Same distal/mesial contour logic as the central, but smaller and more
   // rounded overall, as a lateral incisor genuinely is.
   'permanent:upper:lateral_incisor': {
     crown:
-      'M42 14 C40 11 34 9.5 30 9.7 C25.5 10 21.5 12 19.5 15.5 ' +
-      'C18 18.3 17.7 21.5 18.3 25 C19 29 20.3 33.5 23 37.5 ' +
-      'C24.8 40 26.8 41.3 29.5 41.5 L35 41.3 C38 40.7 39.8 37.5 40.8 33 ' +
-      'C41.8 28 42.3 22.5 42.3 18 C42.3 16.5 42.2 15 42 14 Z',
+      'M40 8 C37.5 6.5 33.5 6.3 31 7.5 C28.5 8.6 25.5 8.4 23 10 ' +
+      'C20.8 11.4 19.3 13.8 19 17 C18.7 20 19.3 23.3 20.6 26.5 ' +
+      'C21.6 28.8 22.5 30.5 24 32 L35.5 32.3 C37.4 30.2 38.6 27.2 39.3 23.3 ' +
+      'C40 19.5 40.2 15 40.2 11.3 C40.2 10.1 40.1 9 40 8 Z',
     roots: [
-      'M23 41 C22.3 49 23.5 59 26.5 68 C28 72.5 29.7 75.7 31.5 76.7 ' +
-        'C33 75.7 34 72.5 35 68 C37.5 59 38.3 49 37.6 41 Z',
+      'M25 32 C26.2 42 28 53 30 63 C30.3 63.8 30.7 63.8 31 63 ' +
+        'C33 53 34.8 42 35 32 C33 30.6 27 30.6 25 32 Z',
     ],
-    surface: 'M23 16 L23.5 21 M31 12.5 L31 19 M37 15 L37 20',
-    cervical: 'M20 37.5 C25 40 34 40 39 36.5',
+    surface: 'M24 11 L24 17 M31 7.5 V14.5 M37 10 L37 16',
+    cervical: 'M22.5 31.5 C27 33.6 33.5 33.6 37.5 30.8',
     widthRatio: 0.78,
     sideStrategy: 'mirror',
     simplification:
-      'Root apex drawn as a straight taper; real lateral incisor roots are ' +
-      'the tooth most prone to a distal curvature this silhouette does not ' +
-      'attempt.',
+      'Root tapers smoothly toward the apex but on an essentially straight ' +
+      'axis; the slight distal curvature real lateral incisor roots often ' +
+      'show near the apex is not modelled, and the apex itself is capped ' +
+      'slightly rounded rather than a sharp point.',
   },
 
   // Cusp tip displaced mesially (x=36, off the x=32 crown midline). Mesial
@@ -94,19 +96,21 @@ export const LATERAL_ART: AnatomyRegistry<LateralToothArt> = {
   // the longest root in the arch.
   'permanent:upper:canine': {
     crown:
-      'M36 6.5 C38.5 8 42 12.5 44 17 C45.7 20.7 46 25 45.5 29 ' +
-      'C45 33.5 44 37 42.5 39.3 L23 39.3 C21 36.5 19.3 32 18.7 27 ' +
-      'C18.1 22 18.6 16.5 21 12.5 C23.5 9 30 6.8 36 6.5 Z',
+      'M36 5 C38.3 6.3 41 10.5 42.3 15.5 C43.3 19.5 43.3 24.5 42.7 29 ' +
+      'C42.2 32.3 41.2 34.3 40 35.2 L23 35.2 C21 33.3 19.5 30 18.8 26 ' +
+      'C18 21.5 18.3 16.5 20.3 12.3 C22.5 7.8 29 5.3 36 5 Z',
     roots: [
-      'M22 39.5 C20.5 47.5 21 57.5 22.3 66.5 C23.2 72.3 24.6 77.3 26.7 80.8 ' +
-        'C28.4 83.6 29.9 84.7 31 83.9 C33.3 82.2 35.2 77.2 36.1 70.7 ' +
-        'C37.3 62 37.5 50.5 36.5 39.5 Z',
+      'M24 35 C25.5 50 27 65 28.5 78.3 C28.8 79.2 29.2 79.2 29.5 78.3 ' +
+        'C31.5 65 33.5 50 36 35 C33.5 33 26.5 33 24 35 Z',
     ],
-    surface: 'M36 6.5 V16 M27 12 L36 6.5 L40 14',
-    cervical: 'M20 39 C26 41.5 38 41.5 43 37.5',
+    surface: 'M36 5 V15 M27 11 L36 5 L40 14',
+    cervical: 'M21 34.3 C26.5 36.8 38.5 36.8 41 32.8',
     widthRatio: 0.89,
     sideStrategy: 'mirror',
-    simplification: '',
+    simplification:
+      'Root apex is drawn with a small rounded cap rather than tapering to ' +
+      'an anatomically fine point, so it reads as rounded rather than ' +
+      'spiky at chart size.',
   },
 
   // The task calls this one out explicitly: bifurcated (buccal + palatal)
@@ -263,43 +267,47 @@ export const LATERAL_ART: AnatomyRegistry<LateralToothArt> = {
   // (small) asymmetry is still drawn so mirroring stays meaningful.
   'permanent:lower:central_incisor': {
     crown:
-      'M39 13 C38.7 10.7 37 9.3 34.5 9 L28 9 C25 9.3 23 11 22.3 13.8 ' +
-      'C21.7 16.5 21.8 19.5 22.5 22.8 C23.3 26.5 24.3 30.5 25.8 34.5 ' +
-      'C27 37.7 28.3 39.7 30 40.2 L32.5 40.2 C34.3 39.8 35.7 37.7 36.8 34.3 ' +
-      'C38.1 30.3 38.9 26.2 39.3 22 C39.6 19 39.5 15.8 39 13 Z',
+      'M38 9 C36 7.8 32.5 7.6 30.5 8.5 C28.5 9.3 26.3 9.2 25 10.5 ' +
+      'C23.8 11.6 23 13.5 23 16 C23 18.7 23.7 21.3 25 24 ' +
+      'C25.9 26 26.7 28 27.8 29.5 L36.5 30 C37.5 28.3 38.2 25.8 38.6 22.5 ' +
+      'C39 19 39.1 15.3 38.9 12.3 C38.8 11 38.5 9.9 38 9 Z',
     roots: [
-      'M24.5 40 C24 47 24.8 56 27 65 C28 69 29.3 72 30.8 72.7 ' +
-        'C32.3 72 33.4 69 34.2 65 C35.8 56 36.2 47 35.5 40 Z',
+      'M27 30 C27.9 38 29 47 30.2 55.6 C30.5 56.3 30.9 56.3 31.2 55.6 ' +
+        'C32.9 47 34 38 34.5 30 C32.7 28.8 28.8 28.8 27 30 Z',
     ],
-    surface: 'M25 12 L37 11.5 M28.5 9.3 V15 M32.5 9 V15.3',
-    cervical: 'M23 39 C27 41 33 41 37 38',
+    surface: 'M26.5 10.5 L37 10 M30.5 8.5 V13.5 M34.5 9.3 V13.7',
+    cervical: 'M24.5 29.3 C28.5 31.3 34 31.3 37.5 28.5',
     widthRatio: 0.63,
     sideStrategy: 'mirror',
     simplification:
       'Drawn with only mild mesiodistal asymmetry, matching this tooth ' +
       'genuinely being the most nearly symmetric in the arch; a fully ' +
       'symmetric silhouette was deliberately avoided so left/right ' +
-      'mirroring stays meaningful at chart scale.',
+      'mirroring stays meaningful at chart scale. Narrowest root in the ' +
+      'arch, drawn with a straight-axis taper and a small rounded apex cap ' +
+      'rather than a true fine point.',
   },
 
   'permanent:lower:lateral_incisor': {
     crown:
-      'M41 14 C40.6 11.3 38.7 9.5 36 9.1 L28.5 9.3 C25.3 9.8 23.1 11.7 22.3 14.7 ' +
-      'C21.6 17.5 21.7 20.7 22.5 24.2 C23.4 28.2 24.6 32.3 26.3 36 ' +
-      'C27.7 39 29.2 40.7 31 41 L33.5 40.8 C35.5 40.2 37.1 37.9 38.3 34.3 ' +
-      'C39.7 30.1 40.6 25.7 41 21.3 C41.3 18.7 41.2 16.2 41 14 Z',
+      'M39.5 9 C37.3 7.7 33.5 7.5 31.3 8.5 C29 9.4 26.5 9.4 25 11 ' +
+      'C23.6 12.4 22.8 14.5 22.9 17.3 C23 20.3 23.9 23.3 25.5 26.3 ' +
+      'C26.6 28.3 27.5 30 28.5 31 L37 31.3 C38.2 29.4 39 26.7 39.5 23.3 ' +
+      'C40 19.8 40.1 15.8 39.9 12.5 C39.8 11.1 39.6 9.9 39.5 9 Z',
     roots: [
-      'M25 40.5 C24.3 48 25.3 57.5 27.8 67 C29 71.3 30.4 74.3 32 75 ' +
-        'C33.6 74.3 35 71.3 36.2 67 C38.5 57.5 39 48 37.8 40.5 Z',
+      'M26.5 31 C27.7 40 29 50 30.2 59.6 C30.5 60.3 30.9 60.3 31.2 59.6 ' +
+        'C32.9 50 34.3 40 35.5 31 C33.5 29.6 28.5 29.6 26.5 31 Z',
     ],
-    surface: 'M25.5 13 L38 12 M29 9.6 V16 M33.5 9.3 V16.3',
-    cervical: 'M23.5 39.5 C28 41.8 34 41.8 38.5 38.5',
+    surface: 'M26 11.5 L38.5 11 M31 8.5 V13.7 M35.5 9.3 V14',
+    cervical: 'M24.5 30.3 C29 32.5 34.5 32.5 38.5 29',
     widthRatio: 0.69,
     sideStrategy: 'mirror',
     simplification:
       "Real lower lateral incisors often show a slight distal twist of the " +
       "incisal edge relative to the root axis; that rotation is not " +
-      'modelled, only mesiodistal contour and proportion.',
+      'modelled, only mesiodistal contour and proportion. Root taper is ' +
+      'drawn on a straight axis with a small rounded apex cap rather than ' +
+      'a true fine point.',
   },
 
   // Cusp displaced mesially (x=34), short mesial slope / long distal slope,
@@ -307,19 +315,21 @@ export const LATERAL_ART: AnatomyRegistry<LateralToothArt> = {
   // canine's asymmetry.
   'permanent:lower:canine': {
     crown:
-      'M34 7 C36 8.3 39 12.5 40.5 16.5 C42 20.5 42.3 25 41.8 29.5 ' +
-      'C41.3 34 40 37.7 38 39.8 L23 39.8 C20.8 37 19.2 32.5 18.5 27.5 ' +
-      'C17.8 22.5 18.3 17.3 20.5 13.3 C22.8 9.3 28.5 7.2 34 7 Z',
+      'M34.5 6 C36.7 7.3 39.3 11.3 40.3 15.8 C41.1 19.5 41 24 40.2 28 ' +
+      'C39.7 30.7 38.8 32.4 37.7 33.2 L23 33.2 C21.1 31.4 19.7 28.3 19 24.5 ' +
+      'C18.2 20.3 18.5 15.7 20.5 11.8 C22.6 7.7 28.7 6.2 34.5 6 Z',
     roots: [
-      'M22 39.5 C20.5 47.5 20 56 21 64.5 C21.7 70.5 23 75.5 25.3 79 ' +
-        'C27.3 82 29 83 30.3 82.2 C32.5 80.7 34.3 76 35.2 69.5 ' +
-        'C36.3 61 36.7 50.5 35.5 39.5 Z',
+      'M23 33 C24.3 47 26 60 27.8 72.3 C28.1 73.2 28.9 73.2 29.2 72.3 ' +
+        'C31 60 32.7 47 35 33 C32.5 31.3 25.5 31.3 23 33 Z',
     ],
-    surface: 'M34 7 V17 M25 12.5 L34 7 L39 15.5',
-    cervical: 'M20 39 C26 41.5 36 41.5 40 37.5',
+    surface: 'M34.5 6 V15 M26.5 10.5 L34.5 6 L38 13.5',
+    cervical: 'M20.5 32.3 C26 34.6 35.5 34.6 38.5 30.8',
     widthRatio: 0.85,
     sideStrategy: 'mirror',
-    simplification: '',
+    simplification:
+      'Root apex is capped slightly rounded rather than tapering to a ' +
+      'true fine point, and its axis is drawn straight rather than with ' +
+      'the mid-root mesial curvature some mandibular canine roots show.',
   },
 
   // Single root. Dominant buccal cusp (x=33) with only a hinted, much
@@ -458,60 +468,64 @@ export const LATERAL_ART: AnatomyRegistry<LateralToothArt> = {
 
   'primary:upper:central_incisor': {
     crown:
-      'M44 18 C43.8 13 40.8 9.5 36.5 9 L27 9.2 C22.8 9.7 19.8 13.2 19.5 18 ' +
-      'C19.3 21.8 20.3 25.5 22.3 28.5 C23.3 30 23.9 31.6 24.8 32.8 ' +
-      'C25.8 34.3 27 35.3 28.5 35.6 L35 35.4 C36.6 35 37.9 33.9 38.8 32.3 ' +
-      'C39.6 31 40.1 29.4 41.1 27.9 C43.1 24.8 44.2 21.5 44 18 Z',
+      'M41 8.5 C40.8 7 38.5 6.3 35.5 6.5 L29 6.8 C25.8 7.2 23.5 8.5 22.7 11 ' +
+      'C21.9 13.5 22.3 16.3 23.5 19 C24.2 20.6 24.5 22.2 25.5 23.5 ' +
+      'C26.6 25 27.9 26.2 29.5 26.7 L37.5 26.5 C39 25.8 40.1 24.3 40.9 22.3 ' +
+      'C41.7 20.2 42.1 17.7 42.1 15 C42.1 12.5 41.7 10.2 41 8.5 Z',
     roots: [
-      'M24 35.5 C23 42 24 50 26.5 58 C27.8 62 29.3 65 31 65.7 ' +
-        'C32.7 65 34.1 62 35.3 58 C37.5 50 38.2 42 37 35.5 Z',
+      'M25.5 27 C26.8 35 28.3 43 30 50.6 C30.3 51.3 30.7 51.3 31 50.6 ' +
+        'C32.7 43 34.5 35 36.5 27 C34 25.6 28 25.6 25.5 27 Z',
     ],
-    surface: 'M25 12 L38.5 12 M28.5 9.5 V15 M35 9.3 V15.3',
-    cervical: 'M21 34.5 C26.5 37 34.5 37 40.5 33',
+    surface: 'M25 12 L38 11.5 M29 7.5 V13 M35.5 7.3 V13.3',
+    cervical: 'M23 26.3 C27.5 28.5 34.5 28.5 40 25',
     widthRatio: 0.79,
     sideStrategy: 'mirror',
     simplification:
       'Cervical constriction is exaggerated beyond real proportions so it ' +
       'reads clearly at chart size; mamelon ridges are simplified to two ' +
-      'straight grooves.',
+      'straight grooves; the root apex is capped slightly rounded rather ' +
+      'than a true point.',
   },
 
   'primary:upper:lateral_incisor': {
     crown:
-      'M39 18 C38.8 13.3 36 10 32 9.5 L26 9.7 C22.2 10.2 19.5 13.5 19.2 18 ' +
-      'C19 21.5 19.8 25 21.6 27.8 C22.5 29.3 23 30.8 23.8 32 ' +
-      'C24.7 33.4 25.8 34.3 27.2 34.6 L32.8 34.4 C34.2 34 35.3 33 36.1 31.5 ' +
-      'C36.8 30.3 37.2 28.8 38.1 27.4 C39.8 24.6 39.2 21 39 18 Z',
+      'M37.5 8.5 C37.3 7 35.3 6.3 32.7 6.5 L27.5 6.8 C24.8 7.2 22.8 8.5 22.1 10.8 ' +
+      'C21.4 13 21.8 15.5 22.8 18 C23.4 19.5 23.7 21 24.6 22.2 ' +
+      'C25.6 23.6 26.7 24.6 28.1 25.1 L34.9 24.9 C36.2 24.3 37.1 23 37.8 21.2 ' +
+      'C38.5 19.3 38.8 17 38.8 14.6 C38.8 12.4 38.4 10.3 37.5 8.5 Z',
     roots: [
-      'M22.5 34.3 C21.7 40 22.5 47 24.7 54 C25.9 57.7 27.3 60.3 28.8 61 ' +
-        'C30.3 60.3 31.6 57.7 32.5 54 C34.3 47 34.7 40 33.7 34.3 Z',
+      'M25.5 26 C26.6 32.7 28 39.7 29.3 46.6 C29.6 47.2 30 47.2 30.3 46.6 ' +
+        'C31.7 39.7 33.2 32.7 34.5 26 C32.3 24.7 27.7 24.7 25.5 26 Z',
     ],
-    surface: 'M23.5 12.5 L34.5 12.3 M27 9.8 V15 M32 9.7 V15.2',
-    cervical: 'M20.5 33.7 C25.5 36 31.5 36 36.5 32.3',
+    surface: 'M25 11.5 L34.5 11 M27.7 7.3 V12 M32.7 7.1 V12.3',
+    cervical: 'M23 25.3 C27 27.3 32 27.3 36.3 24',
     widthRatio: 0.66,
     sideStrategy: 'mirror',
     simplification:
-      'Root apex drawn as a straight taper rather than the slight ' +
-      'curvature real primary lateral incisor roots often show.',
+      'Root apex drawn with a small rounded cap rather than the slight ' +
+      'curvature real primary lateral incisor roots often show near a ' +
+      'genuinely fine tip.',
   },
 
   'primary:upper:canine': {
     crown:
-      'M36 10.5 C38 11.8 40.5 15 41.7 18.3 C42.6 20.7 42.7 23 42 25 ' +
-      'C41.3 23.7 40 23 38.7 23.7 C37.3 24.5 37.3 27 38.3 29.5 ' +
-      'C39 31.3 38.9 32.8 38 33.8 C36.8 34.9 35.2 35.4 33.5 35.5 L23.5 35.3 ' +
-      'C21.8 34.8 20.6 33.4 20 31.3 C19.4 29.2 19.8 27 21 25.5 ' +
-      'C19.7 24.7 18.7 23 19.2 20.5 C19.9 17.1 22.3 13.5 25.5 11.5 ' +
-      'C28.7 9.6 33 9.3 36 10.5 Z',
+      'M34.5 6.5 C36.5 7.7 38.7 10.5 39.7 13.5 C40.5 15.9 40.6 18.2 40 20.3 ' +
+      'C39.4 19.2 38.3 18.7 37.2 19.4 C36 20.2 36 22.2 36.9 24.3 ' +
+      'C37.5 25.7 37.4 26.9 36.6 27.7 C35.6 28.6 34.2 29 32.7 29.1 L24.5 28.9 ' +
+      'C23 28.5 22 27.4 21.5 25.7 C21 24 21.3 22.3 22.3 21.1 ' +
+      'C21.2 20.4 20.5 19 20.9 17 C21.5 14.3 23.3 11.5 25.7 9.7 ' +
+      'C28.1 7.9 31.7 6.7 34.5 6.5 Z',
     roots: [
-      'M23.5 35 C22.3 41.3 23 48.5 25.3 55.5 C26.6 59.3 28.3 62 30.3 62.7 ' +
-        'C32.3 62 34 59.3 35.2 55.5 C37.3 48.5 37.8 41.3 36.5 35 Z',
+      'M22.5 28 C23.7 39 25.2 50 27 59.4 C27.3 60.1 27.7 60.1 28 59.4 ' +
+        'C29.8 50 31.3 39 34.5 28 C31.5 26.4 25.5 26.4 22.5 28 Z',
     ],
-    surface: 'M36 10.5 V19 M27.5 15 L36 10.5 L39.5 17.5',
-    cervical: 'M21 34.3 C26.5 36.8 34.5 36.8 39 32.8',
+    surface: 'M34.5 6.5 V15 M27 10.5 L34.5 6.5 L37.5 13.5',
+    cervical: 'M21 27.3 C26 29.5 33 29.5 39 25.8',
     widthRatio: 0.85,
     sideStrategy: 'mirror',
-    simplification: '',
+    simplification:
+      'Root apex is capped slightly rounded rather than tapering to a ' +
+      'true fine point.',
   },
 
   // Three roots, palatal first, splayed markedly wide.
@@ -580,60 +594,63 @@ export const LATERAL_ART: AnatomyRegistry<LateralToothArt> = {
 
   'primary:lower:central_incisor': {
     crown:
-      'M35.5 15 C35.3 11.5 33 9.3 30 9 L25.5 9.2 C22.7 9.6 20.6 11.9 20.3 15 ' +
-      'C20.1 17.8 20.8 20.7 22.2 23.2 C22.9 24.5 23.2 25.8 23.9 26.7 ' +
-      'C24.7 27.7 25.7 28.4 26.9 28.6 L29.3 28.5 C30.4 28.2 31.2 27.4 31.8 26.2 ' +
-      'C32.4 25.1 32.6 23.8 33.3 22.6 C34.6 20.3 35.7 17.7 35.5 15 Z',
+      'M35.5 9.5 C35.3 8.2 33.5 7.5 31 7.6 L28 7.8 C25.6 8.1 23.8 9.2 23.2 11.1 ' +
+      'C22.6 13 23 15.1 23.9 17.1 C24.4 18.3 24.7 19.5 25.5 20.4 ' +
+      'C26.4 21.5 27.5 22.2 28.7 22.5 L33.5 22.3 C34.5 21.8 35.2 20.8 35.7 19.4 ' +
+      'C36.2 17.9 36.4 16 36.4 14 C36.4 12.3 36.1 10.7 35.5 9.5 Z',
     roots: [
-      'M23.5 28.3 C22.9 33 23.6 38.5 25.4 44 C26.4 46.9 27.6 48.9 28.8 49.4 ' +
-        'C30 48.9 31.1 46.9 32 44 C33.6 38.5 34.1 33 33.5 28.3 Z',
+      'M27 23 C27.7 29 28.7 35 29.6 40.6 C29.9 41.1 30.1 41.1 30.4 40.6 ' +
+        'C31.3 35 32.3 29 33 23 C31.3 22 28.7 22 27 23 Z',
     ],
-    surface: 'M23 12 L33 12 M26 9.5 V14.5 M29.5 9.3 V14.7',
-    cervical: 'M21.5 27.5 C25.5 29.5 30.5 29.5 34 26',
+    surface: 'M26.5 10.5 L34 10 M29 8 V12 M32.5 7.8 V12.2',
+    cervical: 'M24.5 22.3 C27.5 23.9 31.5 23.9 34.5 21.3',
     widthRatio: 0.53,
     sideStrategy: 'mirror',
     simplification:
       'Smallest tooth in the arch; surface detail simplified to a single ' +
       'incisal ridge line, mamelons omitted as they are not visible at ' +
-      'this scale.',
+      'this scale; root apex capped slightly rounded rather than a true ' +
+      'point.',
   },
 
   'primary:lower:lateral_incisor': {
     crown:
-      'M38 16 C37.8 12 35.3 9.4 32 9.1 L26.5 9.3 C23.4 9.8 21 12.3 20.6 16 ' +
-      'C20.3 19.1 21.1 22.3 22.7 25 C23.5 26.4 23.9 27.8 24.7 28.8 ' +
-      'C25.5 29.9 26.7 30.6 28 30.8 L30.7 30.6 C31.9 30.3 32.9 29.4 33.5 28.1 ' +
-      'C34.1 26.8 34.3 25.4 35.1 24.1 C36.6 21.6 38.2 18.9 38 16 Z',
+      'M37 9.5 C36.8 8.2 34.7 7.5 31.9 7.6 L28.5 7.8 C25.9 8.1 23.9 9.2 23.2 11.2 ' +
+      'C22.5 13.1 22.9 15.3 23.9 17.4 C24.5 18.6 24.8 19.9 25.7 20.9 ' +
+      'C26.6 22 27.9 22.7 29.2 23 L34.6 22.8 C35.7 22.3 36.6 21.2 37.1 19.7 ' +
+      'C37.7 18.1 37.9 16.1 37.9 14 C37.9 12.2 37.6 10.6 37 9.5 Z',
     roots: [
-      'M25 30.3 C24.3 35.5 25.1 41.5 27.2 47.5 C28.4 50.8 29.8 53 31.2 53.6 ' +
-        'C32.6 53 33.9 50.8 34.8 47.5 C36.5 41.5 37 35.5 36.3 30.3 Z',
+      'M27 24 C27.9 31 29.1 37 30.5 43.6 C30.8 44.1 31.2 44.1 31.5 43.6 ' +
+        'C32.9 37 34.1 31 35 24 C33 22.7 29 22.7 27 24 Z',
     ],
-    surface: 'M24 13 L34.5 12.7 M27.5 9.6 V15 M31.5 9.4 V15.3',
-    cervical: 'M22 29.5 C27 32 32 32 36.5 28',
+    surface: 'M26.5 11 L36 10.5 M29.5 8 V12.3 M34 7.8 V12.5',
+    cervical: 'M24.5 23.3 C29 25.3 33.5 25.3 37.5 22.3',
     widthRatio: 0.63,
     sideStrategy: 'mirror',
     simplification:
-      'Root apex drawn as a straight taper; only mesiodistal proportion ' +
-      'and cervical constriction are modelled.',
+      'Root apex drawn with a small rounded cap; only mesiodistal ' +
+      'proportion and cervical constriction are otherwise modelled.',
   },
 
   'primary:lower:canine': {
     crown:
-      'M35 11 C36.7 12.3 38.8 15.2 39.8 18.2 C40.5 20.3 40.6 22.3 40 24 ' +
-      'C39.3 22.9 38.2 22.4 37.1 23.1 C35.9 23.9 35.9 26 36.8 28.2 ' +
-      'C37.4 29.7 37.3 31 36.5 31.9 C35.5 32.9 34.1 33.3 32.6 33.4 L24 33.2 ' +
-      'C22.5 32.8 21.5 31.6 21 29.8 C20.5 28 20.8 26.2 21.9 24.9 ' +
-      'C20.8 24.2 20 22.8 20.4 20.7 C21 17.8 23 14.7 25.7 13 ' +
-      'C28.4 11.3 32.2 10 35 11 Z',
+      'M33.5 6.5 C35.3 7.6 37.2 10.1 38.1 12.8 C38.8 15 38.9 17.1 38.3 19 ' +
+      'C37.8 18 36.8 17.6 35.8 18.2 C34.7 18.9 34.7 20.7 35.5 22.6 ' +
+      'C36 23.9 35.9 25 35.2 25.7 C34.3 26.5 33 26.9 31.7 27 L24.7 26.8 ' +
+      'C23.4 26.4 22.5 25.4 22.1 23.9 C21.6 22.4 21.9 20.8 22.8 19.7 ' +
+      'C21.8 19.1 21.2 17.8 21.5 16 C22 13.6 23.6 11.1 25.8 9.4 ' +
+      'C28 7.7 31.1 6.6 33.5 6.5 Z',
     roots: [
-      'M24 32.7 C23 38 23.7 44 25.8 50 C27 53.2 28.4 55.5 30 56.1 ' +
-        'C31.6 55.5 33 53.2 34 50 C35.8 44 36.3 38 35.2 32.7 Z',
+      'M23 25 C24 34 25.5 43 27.4 51.4 C27.7 52 28.1 52 28.4 51.4 ' +
+        'C30 43 31.5 34 33.5 25 C30.5 23.4 25.5 23.4 23 25 Z',
     ],
-    surface: 'M35 11 V18.5 M27.5 15.2 L35 11 L38 17',
-    cervical: 'M22 32 C27 34.4 33.5 34.4 38 30.5',
+    surface: 'M33.5 6.5 V14.5 M26.5 10.5 L33.5 6.5 L36.5 13',
+    cervical: 'M21.5 24.3 C26.5 26.5 32.5 26.5 38 22.8',
     widthRatio: 0.72,
     sideStrategy: 'mirror',
-    simplification: '',
+    simplification:
+      'Root apex is capped slightly rounded rather than tapering to a ' +
+      'true fine point.',
   },
 
   // Two roots, widely divergent — the mesiobuccal cusp bulge that makes this
