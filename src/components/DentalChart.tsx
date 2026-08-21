@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   ExternalLink,
   Eye,
@@ -12,7 +14,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import DentalChartFullscreenModal from './DentalChartFullscreenModal';
 import ToothDetailPanel from './ToothDetailPanel';
-import { Odontogram } from './odontogram';
+import { getChartOrder, Odontogram } from './odontogram';
 import {
   Dentition,
   getToothDentition,
@@ -273,6 +275,45 @@ const DentalChart: React.FC<DentalChartProps> = ({
     setSelectedTooth(null);
     setEditStatus('planned');
     setEditNote('');
+    setJumpValue('');
+    setJumpInvalid(false);
+  };
+
+  /**
+   * Prev/next-tooth + jump-to-FDI (US: DENTAL-CHART-UX-001-R2 item 10). Pure
+   * local-selection navigation — reuses handleSelectTooth so it never issues
+   * a new API call and never mutates a record; jumping to an FDI that is not
+   * part of the arch currently on screen surfaces jumpInvalid instead of
+   * silently switching dentition or crashing.
+   */
+  const chartOrder = useMemo(() => getChartOrder(activeDentition), [activeDentition]);
+  const [jumpValue, setJumpValue] = useState('');
+  const [jumpInvalid, setJumpInvalid] = useState(false);
+
+  const handlePreviousTooth = () => {
+    if (chartOrder.length === 0) return;
+    const currentIndex = selectedTooth !== null ? chartOrder.indexOf(selectedTooth) : -1;
+    const previousIndex = currentIndex <= 0 ? chartOrder.length - 1 : currentIndex - 1;
+    handleSelectTooth(chartOrder[previousIndex]);
+  };
+
+  const handleNextTooth = () => {
+    if (chartOrder.length === 0) return;
+    const currentIndex = selectedTooth !== null ? chartOrder.indexOf(selectedTooth) : -1;
+    const nextIndex = currentIndex === -1 || currentIndex === chartOrder.length - 1 ? 0 : currentIndex + 1;
+    handleSelectTooth(chartOrder[nextIndex]);
+  };
+
+  const handleJumpToFdi = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const fdi = Number(jumpValue.trim());
+    if (!Number.isInteger(fdi) || !chartOrder.includes(fdi)) {
+      setJumpInvalid(true);
+      return;
+    }
+    setJumpInvalid(false);
+    setJumpValue('');
+    handleSelectTooth(fdi);
   };
 
   const renderDentitionSwitch = () => {
@@ -325,6 +366,65 @@ const DentalChart: React.FC<DentalChartProps> = ({
             </button>
           );
         })}
+      </div>
+    );
+  };
+
+  const renderToothNav = () => {
+    if (patientMode) return null;
+    const jumpErrorId = 'dental-chart-jump-error';
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1 dark:bg-gray-900">
+          <button
+            type="button"
+            onClick={handlePreviousTooth}
+            aria-label={t('patients:dentalChart.navigation.previousTooth', { defaultValue: 'Previous tooth' })}
+            title={t('patients:dentalChart.navigation.previousTooth', { defaultValue: 'Previous tooth' })}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white hover:text-slate-800 dark:hover:bg-gray-700 dark:hover:text-white"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={handleNextTooth}
+            aria-label={t('patients:dentalChart.navigation.nextTooth', { defaultValue: 'Next tooth' })}
+            title={t('patients:dentalChart.navigation.nextTooth', { defaultValue: 'Next tooth' })}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white hover:text-slate-800 dark:hover:bg-gray-700 dark:hover:text-white"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        <form onSubmit={handleJumpToFdi} className="flex items-center gap-1.5">
+          <label htmlFor="dental-chart-jump-fdi" className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            {t('patients:dentalChart.navigation.jumpLabel', { defaultValue: 'Go to FDI' })}
+          </label>
+          <input
+            id="dental-chart-jump-fdi"
+            type="text"
+            inputMode="numeric"
+            value={jumpValue}
+            onChange={(event) => {
+              setJumpValue(event.target.value);
+              if (jumpInvalid) setJumpInvalid(false);
+            }}
+            placeholder={t('patients:dentalChart.navigation.jumpPlaceholder', { defaultValue: 'e.g. 36' })}
+            aria-invalid={jumpInvalid}
+            aria-describedby={jumpInvalid ? jumpErrorId : undefined}
+            className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 dark:border-gray-600 dark:bg-gray-800 dark:text-slate-200"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-200 dark:bg-gray-800 dark:text-slate-300 dark:hover:bg-gray-700"
+          >
+            {t('patients:dentalChart.navigation.jumpLabel', { defaultValue: 'Go to FDI' })}
+          </button>
+        </form>
+        {jumpInvalid && (
+          <span id={jumpErrorId} role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
+            {t('patients:dentalChart.navigation.jumpInvalid', { defaultValue: 'That tooth is not in this dentition.' })}
+          </span>
+        )}
       </div>
     );
   };
@@ -484,6 +584,7 @@ const DentalChart: React.FC<DentalChartProps> = ({
             <>
               <div className="flex flex-wrap items-center gap-3">
                 {renderDentitionSwitch()}
+                {renderToothNav()}
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   {isPrimaryView
                     ? t('patients:dentalChart.dentition.primaryHint', {
@@ -613,7 +714,12 @@ const DentalChart: React.FC<DentalChartProps> = ({
         showDetailPanel={!patientMode || selectedTooth !== null}
         onPatientModeChange={setPatientMode}
         onClose={() => setFullscreenOpen(false)}
-        toolbar={renderDentitionSwitch()}
+        toolbar={
+          <>
+            {renderDentitionSwitch()}
+            {renderToothNav()}
+          </>
+        }
         legend={renderLegend(true, patientMode)}
         chart={renderChartStage('presentation')}
         detailPanel={renderDetailPanel('fullscreen')}

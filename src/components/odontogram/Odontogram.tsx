@@ -27,26 +27,24 @@
  * array index, since each row is built as [...rightQuadrant, ...leftQuadrant]
  * in screen left-to-right order already). Arrow Up/Down jump to the same
  * column index in the other arch. Home/End go to the row ends.
+ *
+ * SIZING (refinement pass) — column widths are now resolved PX values, not
+ * `fr` proportions: each arch position gets `BASE_WIDTH[size] *
+ * max(upperRatio, lowerRatio)`, the same number handed to ToothGlyph so the
+ * button actually fills its column instead of floating inside a wider,
+ * flex-centred cell. At `regular` size across a 16-tooth adult arch this
+ * puts molars around 62-71px wide with a few px of gap between teeth —
+ * dense, not sparse. Columns are shared between the upper and lower arch
+ * (whichever of the two is wider at that position wins) so both arches and
+ * the R/L markers stay in register.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Dentition,
-  LOWER_LEFT,
-  LOWER_LEFT_PRIMARY,
-  LOWER_RIGHT,
-  LOWER_RIGHT_PRIMARY,
-  PROCEDURE_STATUS_META,
-  ToothRecord,
-  TreatmentProcedure,
-  UPPER_LEFT,
-  UPPER_LEFT_PRIMARY,
-  UPPER_RIGHT,
-  UPPER_RIGHT_PRIMARY,
-} from '../dentalChart.types';
+import { PROCEDURE_STATUS_META, ToothRecord, TreatmentProcedure, Dentition } from '../dentalChart.types';
 import ToothGlyph, { ChartSize } from './ToothGlyph';
 import { getToothIdentity } from './toothIdentity';
 import { getLateralArt } from './lateralGeometry';
+import { getUpperRow, getLowerRow } from './chartOrder';
 
 export interface OdontogramProps {
   dentition: Dentition;
@@ -58,41 +56,40 @@ export interface OdontogramProps {
   patientMode: boolean;
 }
 
-const ARCH_BY_DENTITION: Record<
-  Dentition,
-  { upperRight: number[]; upperLeft: number[]; lowerRight: number[]; lowerLeft: number[] }
-> = {
-  permanent: {
-    upperRight: UPPER_RIGHT,
-    upperLeft: UPPER_LEFT,
-    lowerRight: LOWER_RIGHT,
-    lowerLeft: LOWER_LEFT,
-  },
-  primary: {
-    upperRight: UPPER_RIGHT_PRIMARY,
-    upperLeft: UPPER_LEFT_PRIMARY,
-    lowerRight: LOWER_RIGHT_PRIMARY,
-    lowerLeft: LOWER_LEFT_PRIMARY,
-  },
+/** Px width for a widthRatio of 1.0 (a permanent upper central incisor). */
+const BASE_WIDTH: Record<ChartSize, number> = {
+  regular: 54,
+  large: 74,
+  presentation: 100,
 };
+
+const MIN_WIDTH = 28;
+const COLUMN_GAP: Record<ChartSize, number> = { regular: 3, large: 4, presentation: 5 };
 
 const MARKER_WIDTH: Record<ChartSize, number> = {
-  regular: 20,
-  large: 26,
-  presentation: 34,
+  regular: 36,
+  large: 46,
+  presentation: 60,
 };
 
+// Prominent, high-contrast — the primary orientation cue, not a decoration.
 const MARKER_TEXT_CLASS: Record<ChartSize, string> = {
-  regular: 'text-sm',
-  large: 'text-base',
-  presentation: 'text-xl',
+  regular: 'text-2xl',
+  large: 'text-3xl',
+  presentation: 'text-5xl',
 };
+const MARKER_COLOR_CLASS = 'text-slate-800 dark:text-slate-100';
 
 const NUMBER_TEXT_CLASS: Record<ChartSize, string> = {
-  regular: 'text-[10px]',
-  large: 'text-[11px]',
-  presentation: 'text-[13px]',
+  regular: 'text-[11px]',
+  large: 'text-xs',
+  presentation: 'text-sm',
 };
+
+// Fixed height reserved for the procedure-dot strip under every FDI number,
+// whether or not that tooth has procedures — this is what keeps every
+// number in the row on one baseline (see task item 7).
+const DOT_ROW_HEIGHT: Record<ChartSize, number> = { regular: 6, large: 7, presentation: 9 };
 
 const CHIP_TEXT_CLASS: Record<ChartSize, string> = {
   regular: 'text-[10px]',
@@ -120,9 +117,8 @@ function Marker({ label, size, ariaLabel }: { label: string; size: ChartSize; ar
   return (
     <span
       aria-label={ariaLabel}
-      className={['flex items-center justify-center font-black text-slate-300 dark:text-slate-600', MARKER_TEXT_CLASS[size]].join(
-        ' ',
-      )}
+      style={{ alignSelf: 'center' }}
+      className={['flex items-center justify-center font-black', MARKER_TEXT_CLASS[size], MARKER_COLOR_CLASS].join(' ')}
     >
       {label}
     </span>
@@ -139,30 +135,46 @@ const Odontogram: React.FC<OdontogramProps> = ({
   patientMode,
 }) => {
   const { t } = useTranslation(['patients']);
-  const arch = ARCH_BY_DENTITION[dentition];
 
-  const upperRow = useMemo(() => [...arch.upperRight, ...arch.upperLeft], [arch]);
-  const lowerRow = useMemo(() => [...arch.lowerRight, ...arch.lowerLeft], [arch]);
+  const upperRow = useMemo(() => getUpperRow(dentition), [dentition]);
+  const lowerRow = useMemo(() => getLowerRow(dentition), [dentition]);
 
-  // One shared column width per quadrant position, so the upper and lower
-  // arches (and the R/L markers, and the FDI number rows) all line up — the
-  // wider of the two arches' teeth at that position wins.
+  // One shared column width (px) per quadrant position, so the upper and
+  // lower arches (and the R/L markers, and the FDI number rows) all line up
+  // — the wider of the two arches' teeth at that position wins.
   const columnWidths = useMemo(
     () =>
       upperRow.map((upperFdi, index) => {
         const lowerFdi = lowerRow[index];
         const upperRatio = getLateralArt(getToothIdentity(upperFdi)).widthRatio;
         const lowerRatio = lowerFdi != null ? getLateralArt(getToothIdentity(lowerFdi)).widthRatio : upperRatio;
-        return Math.max(upperRatio, lowerRatio);
+        const ratio = Math.max(upperRatio, lowerRatio);
+        return Math.max(MIN_WIDTH, Math.round(BASE_WIDTH[size] * ratio));
       }),
-    [upperRow, lowerRow],
+    [upperRow, lowerRow, size],
   );
 
   const gridTemplateColumns = useMemo(
-    () => `${MARKER_WIDTH[size]}px ${columnWidths.map((w) => `${w}fr`).join(' ')} ${MARKER_WIDTH[size]}px`,
+    () => `${MARKER_WIDTH[size]}px ${columnWidths.map((w) => `${w}px`).join(' ')} ${MARKER_WIDTH[size]}px`,
     [columnWidths, size],
   );
-  const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns, alignItems: 'center' };
+  const baseGridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns,
+    columnGap: COLUMN_GAP[size],
+    justifyContent: 'center',
+  };
+
+  // Within a tooth's glyph, the crown "seam" (where the lateral and
+  // occlusal views meet) sits at a FIXED distance from whichever end of the
+  // button holds the lateral view (constant height) — the occlusal view's
+  // height varies per family. So: the upper row (lateral-then-occlusal)
+  // must be TOP-aligned to keep that seam level across the row, and the
+  // lower row (occlusal-then-lateral) must be BOTTOM-aligned — otherwise
+  // the crowns visibly jitter again, just from the occlusal side this time.
+  const upperGridStyle: React.CSSProperties = { ...baseGridStyle, alignItems: 'start' };
+  const lowerGridStyle: React.CSSProperties = { ...baseGridStyle, alignItems: 'end' };
+  const numberGridStyle: React.CSSProperties = { ...baseGridStyle, alignItems: 'start' };
 
   // ── Roving tabindex + arrow-key navigation ────────────────────────────────
   const buttonRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
@@ -256,20 +268,20 @@ const Odontogram: React.FC<OdontogramProps> = ({
 
   const renderToothRow = (row: number[], isUpper: boolean) => (
     <div
-      style={gridStyle}
+      style={isUpper ? upperGridStyle : lowerGridStyle}
       role="group"
       aria-label={isUpper ? upperJaw : lowerJaw}
       className="px-0.5"
     >
       <Marker label={rightShort} size={size} ariaLabel={rightLabel} />
-      {row.map((fdi) => (
+      {row.map((fdi, index) => (
         <ToothGlyph
           key={fdi}
           ref={registerRef(fdi)}
           fdi={fdi}
           record={records.get(fdi)}
-          procedures={procedureMap.get(fdi)}
           isSelected={selectedTooth === fdi}
+          width={columnWidths[index]}
           size={size}
           patientMode={patientMode}
           tabIndex={fdi === focusedFdi ? 0 : -1}
@@ -283,25 +295,28 @@ const Odontogram: React.FC<OdontogramProps> = ({
   );
 
   const renderNumberRow = (row: number[]) => (
-    <div style={gridStyle} className="px-0.5" aria-hidden="true">
+    <div style={numberGridStyle} className="px-0.5" aria-hidden="true">
       <span />
-      {row.map((fdi) => {
+      {row.map((fdi, index) => {
         const procedures = patientMode ? [] : procedureMap.get(fdi) ?? [];
         return (
-          <div key={fdi} className="flex flex-col items-center gap-0.5">
+          <div key={fdi} className="flex flex-col items-center" style={{ width: columnWidths[index] }}>
             <span className={`font-semibold tabular-nums text-slate-500 dark:text-slate-400 ${NUMBER_TEXT_CLASS[size]}`}>
               {fdi}
             </span>
-            {procedures.length > 0 && (
-              <div className="flex max-w-full flex-wrap items-center justify-center gap-0.5">
-                {procedures.slice(0, 4).map((procedure) => (
-                  <span
-                    key={procedure.id}
-                    className={`h-1 w-1 rounded-full ${PROCEDURE_STATUS_META[procedure.status]?.dot ?? 'bg-gray-400'}`}
-                  />
-                ))}
-              </div>
-            )}
+            {/* Fixed-height slot reserved whether or not this tooth has
+                procedures, so every number in the row sits on one baseline. */}
+            <div
+              className="flex max-w-full flex-wrap items-center justify-center gap-0.5"
+              style={{ height: DOT_ROW_HEIGHT[size] }}
+            >
+              {procedures.slice(0, 4).map((procedure) => (
+                <span
+                  key={procedure.id}
+                  className={`h-1 w-1 rounded-full ${PROCEDURE_STATUS_META[procedure.status]?.dot ?? 'bg-gray-400'}`}
+                />
+              ))}
+            </div>
           </div>
         );
       })}

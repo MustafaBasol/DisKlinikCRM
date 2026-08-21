@@ -7,3 +7,5 @@ export { default as ToothGlyph } from './ToothGlyph';
 export type { ToothGlyphProps, ChartSize } from './ToothGlyph';
 export { getToothIdentity } from './toothIdentity';
 export type { ToothArch, ToothSide, ToothQuadrant, ToothFamily, ToothIdentity } from './toothIdentity';
+export { getArchTeeth, getUpperRow, getLowerRow, getChartOrder } from './chartOrder';
+export type { ArchTeeth } from './chartOrder';

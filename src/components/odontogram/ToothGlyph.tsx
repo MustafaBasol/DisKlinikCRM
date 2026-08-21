@@ -20,49 +20,51 @@
  * The two reflections operate on independent axes, so composition order does
  * not change the result; the order below simply matches the order the
  * contract lists them in.
+ *
+ * REFINEMENT PASS (post Lane B/C integration) — three sizing/scale defects
+ * fixed here, all via module-scope-memoised bounding-box math (never parsed
+ * per render — see lateralBounds.ts / occlusalBounds.ts):
+ *   - `width` is now supplied by the caller (Odontogram resolves one shared
+ *     px width per arch column) instead of computed independently per tooth,
+ *     so the rendered glyph actually fills its column — no more whitespace.
+ *   - the lateral SVG's `viewBox` is cropped per tooth so every crown's
+ *     outer edge sits the same distance from its own box edge — a shared
+ *     baseline instead of per-family jitter — and rendered at a FIXED pixel
+ *     height (independent of `width`) with `preserveAspectRatio="none"", so
+ *     vertical scale never varies by tooth.
+ *   - the occlusal SVG's `viewBox` is cropped to that tooth's own outline
+ *     bounding box, so a small anterior tooth fills its box instead of
+ *     rendering as a speck; its rendered box keeps the padded bbox's own
+ *     aspect ratio, sized off the shared `width` (which is itself driven by
+ *     widthRatio), so molars still read larger than incisors.
  */
 import React, { useMemo } from 'react';
-import { Activity, AlertTriangle, Check, CircleDot, Crown, X } from 'lucide-react';
+import { Activity, AlertTriangle, Check, Crown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import {
-  PROCEDURE_STATUS_META,
-  TOOTH_STATUS_META,
-  ToothRecord,
-  ToothStatus,
-  TreatmentProcedure,
-} from '../dentalChart.types';
+import { TOOTH_STATUS_META, ToothRecord, ToothStatus } from '../dentalChart.types';
 import { getToothIdentity } from './toothIdentity';
 import { getLateralArt } from './lateralGeometry';
 import { getOcclusalArt } from './occlusalGeometry';
-import {
-  LATERAL_VIEWBOX,
-  OCCLUSAL_VIEWBOX,
-  OCCLUSAL_SURFACE_NAMES,
-  type OcclusalSurfaceName,
-  type SideStrategy,
-} from './anatomy.types';
+import { OCCLUSAL_SURFACE_NAMES, type OcclusalSurfaceName, type SideStrategy } from './anatomy.types';
 import type { ToothIdentity } from './toothIdentity';
-import {
-  CROWN_MARGIN_PATH,
-  IMPLANT_FIXTURE_PATH,
-  IMPLANT_THREAD_PATH,
-} from '../toothGeometry';
+import { CROWN_MARGIN_PATH, IMPLANT_FIXTURE_PATH, IMPLANT_THREAD_PATH } from '../toothGeometry';
+import { getLateralCrownBBox, getLateralViewBox } from './lateralBounds';
+import { getOcclusalCrop } from './occlusalBounds';
 
 export type ChartSize = 'regular' | 'large' | 'presentation';
 
-/** 1.0 widthRatio maps to this many px; narrower/wider teeth scale off it. */
-const BASE_WIDTH: Record<ChartSize, number> = {
-  regular: 32,
-  large: 42,
-  presentation: 58,
+/** Fixed rendered pixel height for the lateral view — constant per size so
+ *  every tooth shares one vertical scale (see lateralBounds.ts). */
+const LATERAL_HEIGHT: Record<ChartSize, number> = {
+  regular: 86,
+  large: 118,
+  presentation: 160,
 };
 
-const MIN_WIDTH = 20;
-
 const NUMBER_BADGE_SIZE: Record<ChartSize, number> = {
-  regular: 14,
-  large: 16,
-  presentation: 20,
+  regular: 15,
+  large: 18,
+  presentation: 22,
 };
 
 function statusFallback(status: ToothStatus): string {
@@ -85,6 +87,17 @@ const SURFACE_FALLBACK: Record<string, string> = {
   incisal: 'Incisal',
 };
 
+// Base (no-status) contrast — bumped in the refinement pass; the old
+// slate-400/slate-500 pairing nearly disappeared against a plain workspace.
+const DEFAULT_STROKE_CLASS = 'stroke-slate-500 dark:stroke-slate-300';
+const DEFAULT_FILL_CLASS = 'fill-white dark:fill-gray-700/70';
+
+// Missing status: previously just faded everything to opacity-35, which read
+// as "very light" rather than "absent". Now: normal-contrast dashed ghost
+// outline (no fade) plus a bold X drawn from the crown/outline bbox.
+const MISSING_STROKE_CLASS = 'stroke-slate-500 dark:stroke-slate-300';
+const MISSING_MARK_CLASS = 'stroke-slate-600 dark:stroke-slate-200';
+
 function lateralTransform(identity: ToothIdentity, sideStrategy: SideStrategy): string | undefined {
   const parts: string[] = [];
   if (identity.arch === 'upper') parts.push('translate(0 88) scale(1 -1)');
@@ -99,12 +112,12 @@ function occlusalTransform(identity: ToothIdentity, sideStrategy: SideStrategy):
   return parts.length ? parts.join(' ') : undefined;
 }
 
-function ToothStatusMark({ status, isUpper, size }: { status?: ToothStatus; isUpper: boolean; size: ChartSize }) {
-  if (!status) return null;
+function ToothStatusMark({ status, size }: { status?: ToothStatus; size: ChartSize }) {
+  if (!status || status === 'missing') return null;
 
   const px = NUMBER_BADGE_SIZE[size];
-  const positionClass = isUpper ? '-top-1 -right-1' : '-bottom-1 -right-1';
-  const baseClass = `absolute ${positionClass} flex items-center justify-center rounded-full border bg-white shadow-sm dark:bg-gray-800`;
+  const baseClass =
+    'flex items-center justify-center rounded-full border bg-white shadow-sm dark:bg-gray-800';
   const style = { height: px, width: px };
   const iconSize = Math.round(px * 0.62);
 
@@ -132,13 +145,6 @@ function ToothStatusMark({ status, isUpper, size }: { status?: ToothStatus; isUp
       </span>
     );
   }
-  if (status === 'missing') {
-    return (
-      <span className={`${baseClass} border-gray-200 text-gray-500`} style={style}>
-        <X size={iconSize} strokeWidth={2.5} />
-      </span>
-    );
-  }
   if (status === 'crown') {
     return (
       <span className={`${baseClass} border-indigo-200 text-indigo-600`} style={style}>
@@ -146,9 +152,10 @@ function ToothStatusMark({ status, isUpper, size }: { status?: ToothStatus; isUp
       </span>
     );
   }
+  // implant
   return (
-    <span className={`${baseClass} border-purple-200 text-purple-600`} style={style}>
-      <CircleDot size={iconSize} strokeWidth={2.5} />
+    <span className={`${baseClass} border-purple-200 bg-purple-500 text-white`} style={style}>
+      <span className="block h-1.5 w-1.5 rounded-full bg-white" />
     </span>
   );
 }
@@ -158,87 +165,118 @@ interface LateralViewProps {
   identity: ToothIdentity;
   status?: ToothStatus;
   width: number;
+  height: number;
   viewLabel: string;
 }
 
-const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width, viewLabel }) => {
+const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width, height, viewLabel }) => {
   const art = useMemo(() => getLateralArt(identity), [identity]);
   const meta = status ? TOOTH_STATUS_META[status] : null;
-  const strokeClass = meta?.stroke ?? 'stroke-slate-400 dark:stroke-slate-500';
-  const fillClass = meta?.fill ?? 'fill-white dark:fill-gray-700/60';
+  const strokeClass = meta?.stroke ?? DEFAULT_STROKE_CLASS;
+  const fillClass = meta?.fill ?? DEFAULT_FILL_CLASS;
   // Full-coverage crown restoration fills the WHOLE clinical crown.
   const crownFillClass = status === 'crown' ? 'fill-indigo-200 dark:fill-indigo-500/40' : fillClass;
   const isMissing = status === 'missing';
   const isImplant = status === 'implant';
   const transform = lateralTransform(identity, art.sideStrategy);
-  const height = Math.round(width * (88 / 64));
+  const viewBox = useMemo(() => getLateralViewBox(identity, art), [identity, art]);
+  const crownBBox = useMemo(() => getLateralCrownBBox(identity, art), [identity, art]);
 
   return (
     <svg
-      viewBox={LATERAL_VIEWBOX}
+      viewBox={viewBox}
       width={width}
       height={height}
+      preserveAspectRatio="none"
       role="img"
       aria-hidden="true"
       data-view="lateral"
-      className={isMissing ? 'opacity-35' : 'opacity-100'}
+      data-tooth-fdi={fdi}
     >
       <title>{viewLabel}</title>
       <g transform={transform}>
-        {isImplant ? (
+        {isMissing ? (
           <>
             <path
-              d={IMPLANT_FIXTURE_PATH}
-              className="fill-purple-200 stroke-purple-600 dark:fill-purple-500/40 dark:stroke-purple-300"
-              strokeWidth={1.6}
+              d={art.crown}
+              className={`fill-none ${MISSING_STROKE_CLASS}`}
+              strokeWidth={2}
+              strokeDasharray="4 3"
+              strokeLinecap="round"
               strokeLinejoin="round"
             />
+            {art.roots.map((rootPath, index) => (
+              <path
+                key={index}
+                d={rootPath}
+                className={`fill-none ${MISSING_STROKE_CLASS}`}
+                strokeWidth={1.6}
+                strokeDasharray="4 3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ))}
+            {/* Bold, unmistakable absence mark, sized from this tooth's own
+                crown bbox so it always precisely overlays the crown. */}
             <path
-              d={IMPLANT_THREAD_PATH}
-              className="stroke-purple-600 opacity-70 dark:stroke-purple-200"
-              strokeWidth={1.1}
+              d={`M${crownBBox.minX} ${crownBBox.minY} L${crownBBox.maxX} ${crownBBox.maxY} M${crownBBox.maxX} ${crownBBox.minY} L${crownBBox.minX} ${crownBBox.maxY}`}
+              className={MISSING_MARK_CLASS}
+              strokeWidth={2.6}
               strokeLinecap="round"
-              fill="none"
             />
           </>
         ) : (
-          art.roots.map((rootPath, index) => (
+          <>
+            {isImplant ? (
+              <>
+                <path
+                  d={IMPLANT_FIXTURE_PATH}
+                  className="fill-purple-200 stroke-purple-600 dark:fill-purple-500/40 dark:stroke-purple-300"
+                  strokeWidth={1.6}
+                  strokeLinejoin="round"
+                />
+                <path
+                  d={IMPLANT_THREAD_PATH}
+                  className="stroke-purple-600 opacity-70 dark:stroke-purple-200"
+                  strokeWidth={1.1}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </>
+            ) : (
+              art.roots.map((rootPath, index) => (
+                <path
+                  key={index}
+                  d={rootPath}
+                  className={`${fillClass} ${strokeClass} opacity-85`}
+                  strokeWidth={1.9}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ))
+            )}
+
             <path
-              key={index}
-              d={rootPath}
-              className={`${fillClass} ${strokeClass} opacity-75`}
-              strokeWidth={isMissing ? 1.4 : 1.7}
-              strokeDasharray={isMissing ? '4 3' : undefined}
+              d={art.crown}
+              className={`${crownFillClass} ${strokeClass}`}
+              strokeWidth={2.2}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
-          ))
-        )}
 
-        <path
-          d={art.crown}
-          className={`${crownFillClass} ${strokeClass}`}
-          strokeWidth={isMissing ? 1.7 : 2}
-          strokeDasharray={isMissing ? '5 4' : undefined}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+            <path d={art.surface} className={`${strokeClass} opacity-50`} strokeWidth={1.1} fill="none" strokeLinecap="round" />
+            <path d={art.cervical} className={`${strokeClass} opacity-40`} strokeWidth={1.1} fill="none" strokeLinecap="round" />
 
-        {!isMissing && (
-          <>
-            <path d={art.surface} className={`${strokeClass} opacity-40`} strokeWidth={1} fill="none" strokeLinecap="round" />
-            <path d={art.cervical} className={`${strokeClass} opacity-30`} strokeWidth={1} fill="none" strokeLinecap="round" />
+            {status === 'crown' && (
+              <path
+                d={CROWN_MARGIN_PATH}
+                className="stroke-indigo-600 dark:stroke-indigo-200"
+                strokeWidth={1.6}
+                strokeLinecap="round"
+                fill="none"
+              />
+            )}
           </>
-        )}
-
-        {status === 'crown' && (
-          <path
-            d={CROWN_MARGIN_PATH}
-            className="stroke-indigo-600 dark:stroke-indigo-200"
-            strokeWidth={1.6}
-            strokeLinecap="round"
-            fill="none"
-          />
         )}
       </g>
 
@@ -256,9 +294,6 @@ const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width,
           fill="none"
         />
       )}
-      {isMissing && (
-        <path d="M20 44 H44" className="stroke-gray-400 dark:stroke-gray-300" strokeWidth={2.6} strokeLinecap="round" />
-      )}
     </svg>
   );
 };
@@ -275,8 +310,8 @@ interface OcclusalViewProps {
 const OcclusalView: React.FC<OcclusalViewProps> = ({ fdi, identity, status, width, viewLabel, t }) => {
   const art = useMemo(() => getOcclusalArt(identity), [identity]);
   const meta = status ? TOOTH_STATUS_META[status] : null;
-  const strokeClass = meta?.stroke ?? 'stroke-slate-400 dark:stroke-slate-500';
-  const fillClass = meta?.fill ?? 'fill-white dark:fill-gray-700/60';
+  const strokeClass = meta?.stroke ?? DEFAULT_STROKE_CLASS;
+  const fillClass = meta?.fill ?? DEFAULT_FILL_CLASS;
   const isMissing = status === 'missing';
   const isImplant = status === 'implant';
   const outlineFillClass =
@@ -286,51 +321,60 @@ const OcclusalView: React.FC<OcclusalViewProps> = ({ fdi, identity, status, widt
         ? 'fill-purple-100 dark:fill-purple-500/30'
         : fillClass;
   const transform = occlusalTransform(identity, art.sideStrategy);
-  const height = width;
+  const crop = useMemo(() => getOcclusalCrop(identity), [identity]);
+  const height = Math.round(width * crop.aspect);
 
   return (
     <svg
-      viewBox={OCCLUSAL_VIEWBOX}
+      viewBox={crop.viewBox}
       width={width}
       height={height}
       role="img"
       aria-hidden="true"
       data-view="occlusal"
       data-tooth-fdi={fdi}
-      className={isMissing ? 'opacity-35' : 'opacity-100'}
     >
       <title>{viewLabel}</title>
       <g transform={transform}>
-        <path
-          d={art.outline}
-          className={`${outlineFillClass} ${strokeClass}`}
-          strokeWidth={isMissing ? 1.4 : 1.8}
-          strokeDasharray={isMissing ? '4 3' : undefined}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        {isMissing ? (
+          <path
+            d={art.outline}
+            className={`fill-none ${MISSING_STROKE_CLASS}`}
+            strokeWidth={1.8}
+            strokeDasharray="4 3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : (
+          <>
+            <path
+              d={art.outline}
+              className={`${outlineFillClass} ${strokeClass}`}
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
 
-        {!isMissing &&
-          OCCLUSAL_SURFACE_NAMES.map((name) => {
-            const key = surfaceLabelKey(name, identity);
-            return (
-              <path
-                key={name}
-                d={art.surfaces[name]}
-                data-surface={name}
-                data-tooth-fdi={fdi}
-                style={{ pointerEvents: 'none' }}
-                className={status ? `${fillClass} opacity-60` : 'fill-slate-400/10 dark:fill-slate-300/15'}
-              >
-                <title>
-                  {t(`patients:dentalChart.surface.${key}`, { defaultValue: SURFACE_FALLBACK[key] ?? key })}
-                </title>
-              </path>
-            );
-          })}
+            {OCCLUSAL_SURFACE_NAMES.map((name) => {
+              const key = surfaceLabelKey(name, identity);
+              return (
+                <path
+                  key={name}
+                  d={art.surfaces[name]}
+                  data-surface={name}
+                  data-tooth-fdi={fdi}
+                  style={{ pointerEvents: 'none' }}
+                  className={status ? `${fillClass} opacity-70` : 'fill-slate-400/15 dark:fill-slate-300/20'}
+                >
+                  <title>
+                    {t(`patients:dentalChart.surface.${key}`, { defaultValue: SURFACE_FALLBACK[key] ?? key })}
+                  </title>
+                </path>
+              );
+            })}
 
-        {!isMissing && (
-          <path d={art.detail} className={`${strokeClass} opacity-35`} strokeWidth={0.9} fill="none" strokeLinecap="round" />
+            <path d={art.detail} className={`${strokeClass} opacity-45`} strokeWidth={1} fill="none" strokeLinecap="round" />
+          </>
         )}
       </g>
     </svg>
@@ -340,8 +384,10 @@ const OcclusalView: React.FC<OcclusalViewProps> = ({ fdi, identity, status, widt
 export interface ToothGlyphProps {
   fdi: number;
   record?: ToothRecord;
-  procedures?: TreatmentProcedure[];
   isSelected: boolean;
+  /** Resolved shared column width (px) — same value for every tooth at this
+   *  arch position, so the button fills its grid column exactly. */
+  width: number;
   size?: ChartSize;
   patientMode?: boolean;
   /** When false, only the lateral view renders (kept for future density modes). */
@@ -358,8 +404,8 @@ const ToothGlyphInner = React.forwardRef<HTMLButtonElement, ToothGlyphProps>(
     {
       fdi,
       record,
-      procedures = [],
       isSelected,
+      width,
       size = 'regular',
       patientMode = false,
       showOcclusal = true,
@@ -385,15 +431,30 @@ const ToothGlyphInner = React.forwardRef<HTMLButtonElement, ToothGlyphProps>(
     const lateralLabel = t('patients:dentalChart.view.lateral', { defaultValue: 'Lateral view' });
     const occlusalLabel = t('patients:dentalChart.view.occlusal', { defaultValue: 'Occlusal view' });
 
-    const width = Math.max(MIN_WIDTH, Math.round(BASE_WIDTH[size] * getLateralArt(identity).widthRatio));
-    const procedureDotSize = size === 'presentation' ? 'h-1.5 w-1.5' : 'h-1 w-1';
+    const lateralHeight = LATERAL_HEIGHT[size];
 
     const lateralNode = (
-      <LateralView key="lateral" fdi={fdi} identity={identity} status={status} width={width} viewLabel={lateralLabel} />
+      <LateralView
+        key="lateral"
+        fdi={fdi}
+        identity={identity}
+        status={status}
+        width={width}
+        height={lateralHeight}
+        viewLabel={lateralLabel}
+      />
     );
     const occlusalNode = showOcclusal ? (
       <OcclusalView key="occlusal" fdi={fdi} identity={identity} status={status} width={width} viewLabel={occlusalLabel} t={t} />
     ) : null;
+
+    // The status badge anchors to the CROWN seam — the edge where the
+    // lateral and occlusal views meet in the stack (bottom of the lateral
+    // block for the upper arch, top of it for the lower arch; see
+    // lateralBounds.ts for why the crown always lands on that edge). It is
+    // positioned with a small POSITIVE inset (never a negative one) so it
+    // never bleeds into a neighbouring tooth's column.
+    const badge = status && status !== 'missing' ? <ToothStatusMark status={status} size={size} /> : null;
 
     return (
       <button
@@ -408,22 +469,28 @@ const ToothGlyphInner = React.forwardRef<HTMLButtonElement, ToothGlyphProps>(
         onClick={() => onSelect(fdi)}
         onKeyDown={onKeyDownNav}
         onFocus={onFocusTooth}
-        style={{ minHeight: 44 }}
+        style={{ minHeight: 44, width }}
         className={[
-          'group relative flex w-full flex-col items-center gap-0.5 rounded-md border-0 bg-transparent p-0.5 outline-none',
+          'group relative flex flex-col items-center rounded-md border-0 bg-transparent p-0 outline-none',
           'transition-transform duration-150 hover:-translate-y-0.5',
           'focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-gray-900',
         ].join(' ')}
       >
         {isUpper ? (
           <>
-            {lateralNode}
+            <div className="relative">
+              {lateralNode}
+              {badge && <div className="pointer-events-none absolute bottom-0.5 right-0.5">{badge}</div>}
+            </div>
             {occlusalNode}
           </>
         ) : (
           <>
             {occlusalNode}
-            {lateralNode}
+            <div className="relative">
+              {lateralNode}
+              {badge && <div className="pointer-events-none absolute top-0.5 right-0.5">{badge}</div>}
+            </div>
           </>
         )}
 
@@ -435,22 +502,6 @@ const ToothGlyphInner = React.forwardRef<HTMLButtonElement, ToothGlyphProps>(
             className="pointer-events-none absolute -inset-1 rounded-md border-2 border-dashed border-primary-500 dark:border-primary-300"
           />
         )}
-
-        <ToothStatusMark status={status} isUpper={isUpper} size={size} />
-
-        {!patientMode && procedures.length > 0 && (
-          <div className="flex max-w-full flex-wrap items-center justify-center gap-0.5" aria-hidden="true">
-            {procedures.slice(0, 4).map((procedure) => (
-              <span
-                key={procedure.id}
-                title={`${procedure.procedureName} (${t(`patients:dentalChart.procedureStatus.${procedure.status}`, {
-                  defaultValue: PROCEDURE_STATUS_META[procedure.status]?.fallback ?? procedure.status,
-                })})`}
-                className={`${procedureDotSize} rounded-full ${PROCEDURE_STATUS_META[procedure.status]?.dot ?? 'bg-gray-400'}`}
-              />
-            ))}
-          </div>
-        )}
       </button>
     );
   },
@@ -461,8 +512,8 @@ function areEqual(prev: ToothGlyphProps, next: ToothGlyphProps): boolean {
   return (
     prev.fdi === next.fdi &&
     prev.record === next.record &&
-    prev.procedures === next.procedures &&
     prev.isSelected === next.isSelected &&
+    prev.width === next.width &&
     prev.size === next.size &&
     prev.patientMode === next.patientMode &&
     prev.showOcclusal === next.showOcclusal &&
