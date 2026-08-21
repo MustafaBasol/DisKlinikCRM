@@ -15,6 +15,8 @@
     "test:clinic-bulk-export-selection": "tsx src/components/settings/__tests__/clinicBulkExportSelectionHelpers.test.ts",
     "test:communication-consent-matrix": "tsx src/components/__tests__/communicationConsentMatrixHelpers.test.ts",
     "test:patient-detail-tabs-helpers": "tsx src/pages/__tests__/patientDetailTabsHelpers.test.ts",
+    "test:dental-chart-helpers": "tsx src/components/__tests__/dentalChartHelpers.test.ts",
+    "test:dental-chart-dentition-i18n-parity": "tsx src/pages/__tests__/dentalChartDentitionI18nParity.test.ts",
     "test:patient-emergency-contacts-i18n-parity": "tsx src/pages/__tests__/patientEmergencyContactsI18nParity.test.ts",
     "test:patient-address-i18n-parity": "tsx src/pages/__tests__/patientAddressI18nParity.test.ts",
     "test:patient-detail-nav-i18n-parity": "tsx src/pages/__tests__/patientDetailNavI18nParity.test.ts",

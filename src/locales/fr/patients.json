@@ -314,6 +314,13 @@
     "noteOptional": "Note (facultatif)",
     "notePlaceholder": "Service prévu, note clinique...",
     "deleteRecord": "Supprimer l'enregistrement",
+    "dentition": {
+      "switchLabel": "Denture",
+      "permanent": "Définitive",
+      "primary": "Temporaire",
+      "permanentHint": "Dents permanentes, FDI 11-48.",
+      "primaryHint": "Dents temporaires (de lait), FDI 51-85."
+    },
     "status": {
       "planned": "Planifié",
       "in_progress": "En cours",

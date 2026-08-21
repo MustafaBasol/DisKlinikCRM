@@ -32,9 +32,18 @@ export function computeVisiblePatientDetailTabs(canSeeImaging: boolean): Patient
  * short and scannable as further patient modules are added, instead of
  * growing into an ever-longer single row. Order matches
  * PATIENT_DETAIL_TAB_KEYS — this is a grouping, not a reordering.
+ *
+ * DENTAL-CHART-UX-001: `dental` joins the primary row. It had been grouped
+ * with the low-frequency administrative tabs, but for a dental clinic the
+ * chart is a per-visit tool that sits alongside treatments and appointments in
+ * daily use — burying it one click deep in the More menu cost a click on the
+ * single most-opened clinical screen. Because the split preserves
+ * PATIENT_DETAIL_TAB_KEYS order rather than the order of this list, adding the
+ * key here yields the row: Overview · Appointments · Treatments · Payments ·
+ * Files · Dental Chart, with the chart last so no existing tab moves.
  */
 export const PRIMARY_PATIENT_DETAIL_TAB_KEYS: readonly PatientDetailTab[] = [
-  'overview', 'appointments', 'treatments', 'payments', 'files',
+  'overview', 'appointments', 'treatments', 'payments', 'files', 'dental',
 ];
 
 /**
