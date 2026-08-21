@@ -780,3 +780,55 @@ merge gate and counsel sign-off, both internal to the program, not external to a
 This task does **not** create the real NoraMedi GlitchTip organization/project or DSN, even
 though the hard-gate analysis above narrows toward eventual closure — that remains a
 subsequent, separately authorized task, exactly as scoped.
+
+---
+
+## 16. R5 addendum (2026-08-21) — `F3-C2-ERR-004-R5-LEGAL-GOVERNANCE-DECISION-PACKET`
+
+**Task type:** legal/governance decision-packet preparation. **No repository runtime code,
+route, schema, or migration was touched by R5.** No production mutation, no DSN creation, no
+production event, no LUKS configuration. Full detail:
+[`F3-C2-ERR-004_R5_IHS_LEGAL_GOVERNANCE_DECISION_PACKET.md`](F3-C2-ERR-004_R5_IHS_LEGAL_GOVERNANCE_DECISION_PACKET.md).
+
+**What changed since §15:**
+
+1. **PR #467 merged** 2026-08-20T21:31:34Z (`cdf0d66d`) — §15.3 reason 1 (register update
+   must be *merged*, not just committed) is **resolved**. §15.3 reason 2 (counsel
+   confirmation) is **not** resolved by the merge alone.
+2. **`I1–I5` (the "provider/DPA items" KVKK-context shorthand referenced in §15.2)
+   is now DEPRECATED** — confirmed by direct search that no discrete definition of it
+   ever existed in this repository, and confirmed that a different, unrelated,
+   genuinely-defined `I1–I5` exists in `docs/program/runbooks/F4_RECOVERY_OPERATIONS.md`
+   §22.7 (pgBackRest repo2 backup-independence evidence) that must not be conflated with
+   this usage. It is replaced by five named decision dimensions
+   (`PROCESSOR_CHARACTERIZATION`, `CONTRACT_DPA_SUFFICIENCY`, `TRANSFER_RESIDENCY_POSTURE`,
+   `ENCRYPTION_AT_REST_DISPOSITION`, `VENDOR_LIFECYCLE_EVIDENCE`) with an explicit human
+   decision matrix. §15.2's table stands as history; do not re-search this document's own
+   §7.1 or `F3-C2-ERR-002` §7.1/§9 expecting to find an `I1–I5` enumeration — direct search
+   confirms none exists in either.
+3. **Encryption-at-rest (guest-side LUKS) technical classification performed:** for
+   Workload A specifically, `RECOMMENDED_BUT_NOT_EXISTING_HARD_GATE` (Class B) — `F3-C2-ERR-002`
+   §12 row 14 is `EVIDENCE_REQUIRED`, not stage-gated, and §12.1 explicitly scopes the
+   "primary control" / hard-gate framing (§7.3 item 2, `B/C-4`) to Workloads B/C only,
+   which remain unauthorized and out of scope. Full evidence in the R5 packet §6.
+4. **Hard gate restated with an explicit binary structure:**
+   `IHS_KVKK_DSN_HARD_GATE = BLOCKED_PENDING_AUTHORIZED_DECISION` — narrower and more
+   explicit than §15.3's prose `BLOCKED`, but not a different substantive conclusion:
+   activation remains blocked on the same underlying counsel/program-owner sign-off,
+   now split into five independently answerable decisions (R5 packet §4).
+
+**Not done by R5, unchanged:** real NoraMedi GlitchTip organization/project; real DSN;
+`SENTRY_DSN` activation; any production event; PR #467 was already merged before R5 started
+and R5 does not deploy, restart, or touch VPS2/GlitchTip/pgBackRest/MinIO/imaging in any way;
+LUKS is not configured.
+
+**Lifecycle (R5):** `AGENT_COMPLETED = YES` (documentation/governance scope only) ·
+`MERGED = NO` · `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO` · `TELEMETRY_ACTIVE = NO` ·
+`DSN_ACTIVE = NO`. `F3-SEC-EXIT-001` §5 item 10 remains `NOT_SATISFIED`;
+`F3_EXIT_CRITERION_2` remains `NOT_SATISFIED`; `F3-C2-ERR-004` tracker token unchanged at
+`BLOCKED_WAITING_COUNSEL_AND_MERGE` in substance, now more precisely expressed as
+`IHS_KVKK_DSN_HARD_GATE = BLOCKED_PENDING_AUTHORIZED_DECISION` per the R5 packet.
+
+**Exact next task:** program owner/counsel completes the R5 packet's §4 DECISION-1 through
+DECISION-5. Only after all five are recorded may a subsequent, separately authorized
+technical task proceed to `F3-C2-ERR-002` §9 Stage 3.
