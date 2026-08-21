@@ -1,5 +1,7 @@
 import express, { Response } from 'express';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 import prisma from '../db.js';
 import {
   authenticatePlatformAdmin,
@@ -38,6 +40,9 @@ import { getSmsEntitlement } from '../services/sms/smsEntitlement.js';
 import { evaluateAuthLoginFailureSignal } from '../services/security/securityDetectionRules.js';
 import { writePlatformAdminAuditEventInTx, writePlatformAdminAuditEvent } from '../services/platformAdminAudit.js';
 import { safeErrorFields, boundedErrorType } from '../utils/safeError.js';
+import { generateResetToken, RESET_TOKEN_EXPIRY_MINUTES } from '../utils/passwordResetToken.js';
+import { buildStaffOnboardingEmail } from '../services/emailTemplates.js';
+import { sendMail } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -1059,6 +1064,201 @@ router.get('/clinics/:id/users', async (req, res: Response) => {
     res.json(users);
   } catch {
     res.status(500).json({ error: 'Failed to fetch clinic users' });
+  }
+});
+
+// ─── First-OWNER bootstrap (G1-TECH-PREFLIGHT-001) ───────────────────────────
+//
+// POST /api/platform/clinics/:id/owner
+//
+// Why this exists: POST /clinics creates an Organization + Clinic with ZERO
+// users, and POST /api/users requires an already-authenticated
+// OWNER/ORG_ADMIN/CLINIC_MANAGER of that same organization
+// (routes/users.ts + middleware/auth.ts authorize()). For a brand-new tenant
+// neither precondition can be met, so before this route the only way to give a
+// new clinic its first user was a manual, unaudited DB mutation. This route
+// closes that gap with the smallest additive mechanism that keeps every
+// existing contract intact.
+//
+// Safety properties (each one is asserted by platformAdminOwnerBootstrap.test.ts):
+//  1. Bootstrap-only. It refuses (409) if the clinic already has ANY user, so
+//     it can never inject an account into an established tenant. This is the
+//     single most important property of this route — it is what makes a
+//     platform-admin user-creation endpoint acceptable at all.
+//  2. Tenant scope is derived, never supplied. organizationId comes from the
+//     clinic row; the caller cannot point a new OWNER at another tenant.
+//  3. The operator never chooses or learns a long-term password. A random,
+//     discarded 64-hex secret is hashed at cost 12 purely so the column is
+//     never empty, and the owner sets their real password through the existing
+//     password-reset flow.
+//  4. Atomic with its audit row. User + UserClinic + Organization.ownerId +
+//     the reset token + the PlatformAdminAuditEvent all commit or none do
+//     (writePlatformAdminAuditEventInTx only accepts a TransactionClient).
+//  5. PII minimization: the audit row keys on the user's id, never their
+//     email — matching the contract stated at PATCH /users/:id/status below.
+//  6. Reversible: PATCH /api/platform/users/:id/status sets isActive=false,
+//     which both blocks login (routes/auth.ts) and invalidates a pending
+//     reset (routes/auth.ts reset-password checks user.isActive).
+const ownerBootstrapSchema = z.object({
+  firstName: z.string().trim().min(1).max(100),
+  lastName: z.string().trim().min(1).max(100),
+  email: z.string().trim().email().max(255),
+  phone: z.string().trim().max(50).optional(),
+});
+
+router.post('/clinics/:id/owner', async (req: PlatformAdminRequest, res: Response) => {
+  const clinicId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+  const validation = ownerBootstrapSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.format() });
+  }
+  const { firstName, lastName, phone } = validation.data;
+  const email = validation.data.email.toLowerCase();
+
+  try {
+    const clinic = await prisma.clinic.findUnique({
+      where: { id: clinicId },
+      select: { id: true, name: true, organizationId: true, maxUsers: true },
+    });
+    if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
+
+    // Property 1: bootstrap-only. Counting rather than a boolean keeps the
+    // failure message honest about why it refused.
+    const existingUserCount = await prisma.user.count({ where: { clinicId: clinic.id } });
+    if (existingUserCount > 0) {
+      return res.status(409).json({
+        error: 'Clinic already has users — the first-owner bootstrap is only available for a clinic with no users',
+        code: 'CLINIC_NOT_EMPTY',
+      });
+    }
+
+    if (clinic.maxUsers !== null && clinic.maxUsers < 1) {
+      return res.status(402).json({ error: 'Clinic plan does not allow any users', code: 'USER_LIMIT_REACHED' });
+    }
+
+    // Global email uniqueness, mirroring POST /api/users — a login collides
+    // across tenants, so this must be checked globally, not per clinic.
+    const emailTaken = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (emailTaken) {
+      return res.status(409).json({
+        error: 'This email address is already in use by another user account',
+        code: 'EMAIL_ALREADY_EXISTS',
+      });
+    }
+
+    // Property 3: unguessable, never returned, never logged. The owner reaches
+    // their account only through the reset link below.
+    const discardedSecret = crypto.randomBytes(32).toString('hex');
+    const passwordHash = await bcrypt.hash(discardedSecret, 12);
+    const { rawToken, tokenHash } = generateResetToken();
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MINUTES * 60 * 1000);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          clinicId: clinic.id,
+          // Property 2: derived from the clinic, never from the request body.
+          organizationId: clinic.organizationId,
+          firstName,
+          lastName,
+          email,
+          phone,
+          // role 'admin' + canAccessAllClinics=true is what normalizeRole()
+          // (utils/roles.ts) resolves to OWNER. Writing the literal 'OWNER'
+          // here would also normalize, but 'admin' keeps this row identical in
+          // shape to every existing owner account in the system.
+          role: 'admin',
+          canAccessAllClinics: true,
+          passwordHash,
+          isActive: true,
+          // The platform operator vouches for the address they were given;
+          // without this, routes/auth.ts login rejects the account outright.
+          emailVerifiedAt: new Date(),
+          defaultClinicId: clinic.id,
+        },
+        select: { id: true, firstName: true, lastName: true, email: true, role: true, isActive: true, createdAt: true },
+      });
+
+      await tx.userClinic.create({
+        data: { userId: user.id, clinicId: clinic.id, role: 'ADMIN', isActive: true },
+      });
+
+      // Informational only (schema.prisma Organization.ownerId) — never used
+      // for authorization. Only set when the org has no owner recorded yet.
+      const org = await tx.organization.findUnique({
+        where: { id: clinic.organizationId },
+        select: { id: true, ownerId: true },
+      });
+      if (org && !org.ownerId) {
+        await tx.organization.update({ where: { id: org.id }, data: { ownerId: user.id } });
+      }
+
+      // Created in-transaction rather than via createPasswordResetToken(),
+      // which uses the global client and would survive a rolled-back user.
+      await tx.passwordResetToken.create({ data: { userId: user.id, tokenHash, expiresAt } });
+
+      await writePlatformAdminAuditEventInTx(tx, {
+        actorPlatformAdminId: req.platformAdmin?.id ?? null,
+        action: 'platform_clinic.owner_bootstrapped',
+        resourceType: 'user',
+        // Property 5: the user's id, never their email.
+        resourceKey: user.id,
+        previousValue: null,
+        newValue: JSON.stringify({
+          clinicId: clinic.id,
+          organizationId: clinic.organizationId,
+          role: user.role,
+          canAccessAllClinics: true,
+        }),
+        outcome: 'success',
+      });
+
+      return user;
+    });
+
+    const appBaseUrl = (process.env.APP_BASE_URL ?? 'https://app.noramedi.com').replace(/\/$/, '');
+    const setPasswordUrl = `${appBaseUrl}/reset-password?token=${rawToken}`;
+
+    let emailSent = false;
+    try {
+      const { subject, html, text } = buildStaffOnboardingEmail({
+        firstName: created.firstName,
+        clinicName: clinic.name,
+        resetUrl: setPasswordUrl,
+        expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
+      });
+      const mailResult = await sendMail({ to: created.email, subject, html, text });
+      emailSent = mailResult.sent;
+      if (!emailSent) {
+        console.warn(`[platform.ownerBootstrap] onboarding email not sent for user ${created.id}: ${mailResult.reason}`);
+      }
+    } catch (err: unknown) {
+      console.warn(`[platform.ownerBootstrap] onboarding email failed for user ${created.id}: ${boundedErrorType(err)}`);
+    }
+
+    // The link is returned ONLY when the email could not be delivered, so a
+    // failed mail server does not dead-end an onboarding the operator is
+    // already standing in front of. On the happy path the operator never sees
+    // it, which is what keeps property 3 meaningful.
+    res.status(201).json({
+      id: created.id,
+      email: created.email,
+      role: created.role,
+      normalizedRole: 'OWNER',
+      clinicId: clinic.id,
+      organizationId: clinic.organizationId,
+      isActive: created.isActive,
+      createdAt: created.createdAt,
+      emailSent,
+      setPasswordExpiresAt: expiresAt,
+      ...(emailSent ? {} : { setPasswordUrl }),
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to bootstrap clinic owner' });
   }
 });
 

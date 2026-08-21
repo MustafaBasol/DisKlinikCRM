@@ -176,6 +176,7 @@
     "test:platform-admin-password-recovery": "tsx src/tests/platformAdminPasswordRecovery.test.ts",
     "test:platform-admin-session-revocation": "tsx src/tests/platformAdminSessionRevocation.test.ts",
     "test:platform-admin-login-totp-gate": "tsx src/tests/platformAdminLoginTotpGate.test.ts",
+    "test:platform-owner-bootstrap": "tsx src/tests/platformAdminOwnerBootstrap.test.ts",
     "test:http-log-privacy": "tsx src/tests/httpRequestLogPrivacy.test.ts",
     "test:file-backup": "tsx src/tests/fileBackupService.test.ts",
     "test:file-backup-imaging-ops-migration": "tsx src/tests/fileBackupImagingOpsPortMigration.test.ts",
