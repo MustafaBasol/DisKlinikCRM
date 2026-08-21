@@ -148,6 +148,7 @@
     "test:tenant-system-context-inventory": "tsx src/tests/tenantSystemContextInventory.test.ts",
     "test:tenant-guard-isolation": "tsx src/tests/dbVerification/tenantGuardIsolation.test.ts",
     "test:tenant-guard-benchmark": "tsx src/tests/dbVerification/tenantGuardBenchmark.ts",
+    "poc:f3-3-rls": "tsx src/tests/poc/rlsPgBouncerPoc.ts",
     "test:migration-patient-schema-drift": "tsx src/tests/migrationPatientSchemaDrift.test.ts",
     "test:patient-blood-group": "tsx src/tests/patientBloodGroup.test.ts",
     "test:migration-reports": "tsx src/tests/migrationReports.test.ts",
