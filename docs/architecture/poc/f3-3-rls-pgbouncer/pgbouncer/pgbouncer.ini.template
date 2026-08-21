@@ -1,0 +1,75 @@
+;; F3-3 PoC — PgBouncer configuration.
+;;
+;; ISOLATED, DISPOSABLE ENVIRONMENT ONLY. This is a TEMPLATE: the harness
+;; substitutes __POSTGRES_HOST__ and writes the result, together with a
+;; per-run randomly generated userlist, into a scratch directory that is
+;; mounted into the container. No credential is ever committed.
+;;
+;; pool_mode = transaction is the whole point of the experiment. It is the mode
+;; that makes an API tier horizontally scalable, and it is also the mode that
+;; would silently break a session-scoped tenant variable — which is precisely
+;; why the design uses `set_config(..., is_local => true)` (transaction-local)
+;; rather than `SET`. A connection is returned to the pool at COMMIT/ROLLBACK,
+;; and a transaction-local setting dies with the transaction, so the two are
+;; supposed to fit exactly. "Supposed to" is what the harness tests.
+
+[databases]
+;; No `user=` here on purpose: the client's own role is forwarded to PostgreSQL,
+;; so `noramedi_app` and `noramedi_platform` stay DISTINCT roles through the
+;; pooler. Pinning a single backend user here would collapse the role
+;; separation that the whole RLS design rests on — the pooler would connect as
+;; one role no matter who asked, and every policy would evaluate against that
+;; role instead of the caller's.
+noramedi_poc = host=__POSTGRES_HOST__ port=5432 dbname=noramedi_poc
+
+[pgbouncer]
+listen_addr = 0.0.0.0
+listen_port = 6432
+
+;; scram-sha-256, matching PostgreSQL 16's own default `password_encryption`.
+;;
+;; The first attempt at this PoC used md5 and failed with
+;; `client_login_timeout (server down)`: PostgreSQL 14+ stores SCRAM verifiers,
+;; so there is no md5 hash on the server for PgBouncer to authenticate against,
+;; and the pooler simply could not open a backend connection. Recorded because
+;; the error message points at the network and the cause is the password
+;; algorithm.
+;;
+;; The auth file therefore holds PLAINTEXT passwords: a SCRAM verifier cannot be
+;; replayed to the server, so a pooler that must authenticate onward needs the
+;; original secret. That is a real operational consequence of this design and it
+;; is called out in the evidence document, not buried here. In this PoC the file
+;; is generated per run into a scratch directory with random values and deleted
+;; at teardown; nothing is committed.
+auth_type = scram-sha-256
+auth_file = /etc/pgbouncer/userlist.txt
+
+pool_mode = transaction
+
+;; Small on purpose. The reuse experiments need connections to be RECYCLED
+;; between tenants; a pool large enough to give every client its own backend
+;; would make a leak impossible for the wrong reason and the test would pass
+;; vacuously.
+default_pool_size = 3
+max_client_conn = 100
+min_pool_size = 0
+reserve_pool_size = 0
+
+;; PgBouncer 1.21+ can track protocol-level prepared statements in transaction
+;; mode. Set to 0 (disabled) so this run measures the CONSERVATIVE case — the
+;; one a rollout would have to survive if the deployed PgBouncer were older.
+max_prepared_statements = 0
+
+ignore_startup_parameters = extra_float_digits,options
+
+server_reset_query =
+;; Deliberately EMPTY. `DISCARD ALL` is the usual session-mode reset and would
+;; hide the very thing being tested: if a transaction-local setting somehow
+;; survived its transaction, a reset query would paper over it and the leak
+;; test would report a false pass. The experiment must see the raw behaviour.
+
+log_connections = 1
+log_disconnections = 1
+
+;; Verbose on purpose: a PoC whose pooler fails silently teaches nothing.
+verbose = 1

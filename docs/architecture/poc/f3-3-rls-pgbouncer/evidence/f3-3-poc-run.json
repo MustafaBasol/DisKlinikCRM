@@ -1,0 +1,396 @@
+{
+  "postgresImage": "postgres@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+  "pgbouncerImage": "edoburu/pgbouncer@sha256:4c1ca296ef525f108f5d3552cc337c0c09587cf8dae7f0067fd93349e47dc1cd",
+  "results": [
+    {
+      "id": "S1",
+      "title": "the runtime role is not superuser and does NOT have BYPASSRLS",
+      "outcome": "PASS",
+      "detail": "noramedi_app: super=false bypassrls=false · noramedi_platform: super=false bypassrls=false · noramedi_migrator: bypassrls=true"
+    },
+    {
+      "id": "S2",
+      "title": "the runtime role owns NONE of the guarded tables",
+      "outcome": "PASS",
+      "detail": "all four owned by noramedi_migrator"
+    },
+    {
+      "id": "S3",
+      "title": "all four guarded tables have RLS ENABLED and FORCED",
+      "outcome": "PASS",
+      "detail": "Clinic, Patient, PaymentPlan, PaymentPlanInstallment — all ENABLE + FORCE"
+    },
+    {
+      "id": "S4",
+      "title": "no policy contains an IS NULL escape hatch",
+      "outcome": "PASS",
+      "detail": "4 tenant policies, all with USING + WITH CHECK, none permissive on a missing setting"
+    },
+    {
+      "id": "F1",
+      "title": "ENABLE only: the table OWNER bypasses a deny-all policy entirely",
+      "outcome": "PASS",
+      "detail": "owner sees 2/2 rows despite USING (false) — this is the trap FORCE exists to close"
+    },
+    {
+      "id": "F2",
+      "title": "adding FORCE closes it: the same owner, same policy, now sees nothing",
+      "outcome": "PASS",
+      "detail": "owner sees 0/2 rows — the ONLY thing that changed is the FORCE flag"
+    },
+    {
+      "id": "F3",
+      "title": "removing FORCE restores the bypass, confirming the flag is the cause",
+      "outcome": "PASS",
+      "detail": "bypass returns with NO FORCE and disappears with FORCE — reversible and attributable"
+    },
+    {
+      "id": "M1",
+      "title": "a query with NO tenant context returns zero rows on every guarded table",
+      "outcome": "PASS",
+      "detail": "Patient 0 · PaymentPlan 0 · PaymentPlanInstallment 0 · Clinic 0 — fail closed, not fail open"
+    },
+    {
+      "id": "M2",
+      "title": "an INSERT with NO tenant context is refused by WITH CHECK",
+      "outcome": "PASS",
+      "detail": "refused with P2010"
+    },
+    {
+      "id": "M3",
+      "title": "an EMPTY context value is treated as missing, not as a wildcard",
+      "outcome": "PASS",
+      "detail": "empty string -> NULL -> no rows (nullif() in app_current_organization_id is what does this)"
+    },
+    {
+      "id": "M4",
+      "title": "a MALFORMED context value returns zero rows",
+      "outcome": "PASS",
+      "detail": "zero rows. NOTE: NoraMedi ids are `text`, not `uuid`, so a malformed value cannot raise a cast error — it simply matches nothing. A uuid-typed column would fail LOUDER; see the evidence document."
+    },
+    {
+      "id": "M5",
+      "title": "a role with no policy at all on a FORCE'd table sees nothing (deny by default)",
+      "outcome": "PASS",
+      "detail": "RLS with no matching policy denies — a forgotten policy hides data rather than exposing it"
+    },
+    {
+      "id": "T1",
+      "title": "tenant A sees its own patients and nothing else",
+      "outcome": "PASS",
+      "detail": "2 rows, both organization A"
+    },
+    {
+      "id": "T2",
+      "title": "a clinic-1-restricted context does NOT see clinic 2 of its own organization",
+      "outcome": "PASS",
+      "detail": "cross-clinic-within-one-organization is a DIFFERENT boundary from cross-organization, and it holds"
+    },
+    {
+      "id": "T3",
+      "title": "the organization-scoped table returns only the caller’s organization",
+      "outcome": "PASS",
+      "detail": "2 clinics, both organization A"
+    },
+    {
+      "id": "T4",
+      "title": "a parent-scoped child is visible only through a parent the caller can read",
+      "outcome": "PASS",
+      "detail": "the EXISTS-through-parent policy resolves against a parent that is itself under RLS"
+    },
+    {
+      "id": "T5",
+      "title": "legitimate same-tenant writes are NOT blocked (false-denial bar)",
+      "outcome": "PASS",
+      "detail": "insert + update + delete of the caller’s own row all succeed — a guard that fails closed too aggressively breaks the product"
+    },
+    {
+      "id": "X1",
+      "title": "tenant A cannot READ tenant B’s patient by primary key",
+      "outcome": "PASS",
+      "detail": "0 rows — an explicit primary-key lookup is still filtered by the policy"
+    },
+    {
+      "id": "X2",
+      "title": "tenant A cannot UPDATE tenant B’s row (0 rows affected, not an error)",
+      "outcome": "PASS",
+      "detail": "0 rows affected; verified unchanged via the BYPASSRLS migrator role"
+    },
+    {
+      "id": "X3",
+      "title": "tenant A cannot DELETE tenant B’s row",
+      "outcome": "PASS",
+      "detail": "0 rows affected; row still present"
+    },
+    {
+      "id": "X4",
+      "title": "tenant A cannot INSERT a row carrying tenant B’s clinic",
+      "outcome": "PASS",
+      "detail": "refused with P2010"
+    },
+    {
+      "id": "X5",
+      "title": "THE PAIRING ATTACK: A’s organizationId with B’s clinicId is refused by WITH CHECK",
+      "outcome": "PASS",
+      "detail": "refused with P2010"
+    },
+    {
+      "id": "X6",
+      "title": "a tenant cannot MOVE its own row into another tenant",
+      "outcome": "PASS",
+      "detail": "refused with P2010"
+    },
+    {
+      "id": "X7",
+      "title": "a bulk UPDATE spanning both tenants touches only the caller’s rows",
+      "outcome": "PASS",
+      "detail": "an UNQUALIFIED `UPDATE \"Patient\" SET ...` affected 2 rows, not 4 — the policy is the WHERE clause"
+    },
+    {
+      "id": "X8",
+      "title": "a bulk DELETE spanning both tenants deletes only the caller’s rows",
+      "outcome": "PASS",
+      "detail": "1 row deleted, tenant B untouched"
+    },
+    {
+      "id": "X9",
+      "title": "tenant A cannot read tenant B’s clinic, payment plan or installment",
+      "outcome": "PASS",
+      "detail": "all three foreign lookups return 0"
+    },
+    {
+      "id": "FK1",
+      "title": "a row the caller CANNOT SEE is still a valid foreign-key target",
+      "outcome": "PASS",
+      "detail": "confirmed invisible — the next experiment inserts a row REFERENCING it anyway"
+    },
+    {
+      "id": "FK2",
+      "title": "RLS does NOT stop a cross-tenant FK reference when the policy does not mention it",
+      "outcome": "PASS",
+      "detail": "ROW WAS CREATED linking tenant A’s plan to tenant B’s patient. RLS is additive, not sufficient — the F3-2 Prisma guard refuses this same write (tenantGuardIsolation.test.ts §E)."
+    },
+    {
+      "id": "FK3",
+      "title": "a FK to a NON-EXISTENT row still fails normally (the gap is visibility, not integrity)",
+      "outcome": "PASS",
+      "detail": "refused with P2010 — referential integrity is intact; only VISIBILITY is bypassed"
+    },
+    {
+      "id": "TX1",
+      "title": "the context is visible for the whole interactive transaction",
+      "outcome": "PASS",
+      "detail": "stable across multiple statements and an intervening sleep"
+    },
+    {
+      "id": "TX2",
+      "title": "after COMMIT the setting is GONE — this is what makes transaction pooling safe",
+      "outcome": "PASS",
+      "detail": "setting is NULL and the query sees 0 rows — transaction-local, not session-local"
+    },
+    {
+      "id": "TX3",
+      "title": "after ROLLBACK the setting is gone too",
+      "outcome": "PASS",
+      "detail": "a failed transaction leaves no tenant residue on the connection"
+    },
+    {
+      "id": "TX4",
+      "title": "NEGATIVE CONTROL: a SESSION-scoped setting DOES leak past its transaction",
+      "outcome": "PASS",
+      "detail": "session-scoped value survived the commit, transaction-scoped value did not — the difference is is_local"
+    },
+    {
+      "id": "TX5",
+      "title": "tenant identity CANNOT be changed mid-transaction to escalate",
+      "outcome": "PASS",
+      "detail": "the policy re-evaluates per statement; the setting is application-issued, never client-supplied. This is why the Node-side context (F3-2) must remain the only writer."
+    },
+    {
+      "id": "P1",
+      "title": "40 interleaved transactions over a 3-connection pool never cross tenants",
+      "outcome": "PASS",
+      "detail": "40 transactions, 3 connections, 0 leaks"
+    },
+    {
+      "id": "W1",
+      "title": "the platform role reaches every tenant through a POLICY, not through BYPASSRLS",
+      "outcome": "PASS",
+      "detail": "4 rows across both organizations — granted by an explicit `TO noramedi_platform` policy on exactly the four tables, so break-glass is a reviewable grant rather than an unconditional override"
+    },
+    {
+      "id": "W2",
+      "title": "the platform role is NOT omnipotent: a table with no platform policy stays closed",
+      "outcome": "PASS",
+      "detail": "break-glass is scoped to the tables its policies name — adding a table does not silently widen it"
+    },
+    {
+      "id": "W3-metric",
+      "title": "per-tenant iteration cost",
+      "outcome": "INFO",
+      "detail": "3 tenants per sweep — median 24.529 ms · p95 30.725 ms · per-tenant median 8.176 ms (n=60)"
+    },
+    {
+      "id": "W3",
+      "title": "a per-tenant iteration loop (the reminders.ts shape) is viable",
+      "outcome": "PASS",
+      "detail": "switching tenant costs one extra round trip per iteration (two set_config calls inside the transaction it already opens); measured per-tenant median 8.176 ms"
+    },
+    {
+      "id": "L1",
+      "title": "RLS ON — SELECT 50 patients",
+      "outcome": "INFO",
+      "detail": "median 8.372 ms · p95 13.253 ms · p99 16.247 ms (n=200)"
+    },
+    {
+      "id": "L2",
+      "title": "RLS ON — COUNT patients",
+      "outcome": "INFO",
+      "detail": "median 8.110 ms · p95 10.883 ms · p99 15.339 ms (n=200)"
+    },
+    {
+      "id": "L3",
+      "title": "RLS ON — SELECT through the parent-scoped (EXISTS) policy",
+      "outcome": "INFO",
+      "detail": "median 7.817 ms · p95 9.973 ms (n=120)"
+    },
+    {
+      "id": "L3b",
+      "title": "RLS ON — SELECT 50, context set in ONE statement",
+      "outcome": "INFO",
+      "detail": "median 6.297 ms · p95 8.099 ms (n=200) — saves 2.075 ms vs two separate set_config calls"
+    },
+    {
+      "id": "L4",
+      "title": "EXPLAIN ANALYZE captured for each policy family",
+      "outcome": "PASS",
+      "detail": "captured 4 plans (printed in full at the end of this run)"
+    },
+    {
+      "id": "PB1",
+      "title": "Prisma + @prisma/adapter-pg works at all through transaction pooling",
+      "outcome": "PASS",
+      "detail": "simple query and raw SQL both work · PostgreSQL 16.14 behind PgBouncer"
+    },
+    {
+      "id": "PB2",
+      "title": "transaction-local tenant context works under transaction pooling",
+      "outcome": "PASS",
+      "detail": "own rows visible, foreign rows not — SET LOCAL semantics survive the pooler"
+    },
+    {
+      "id": "PB3",
+      "title": "a query with NO context on a POOLED connection still returns zero rows",
+      "outcome": "PASS",
+      "detail": "fail-closed holds identically under pooling"
+    },
+    {
+      "id": "PB4",
+      "title": "an interactive transaction is pinned to ONE backend for its whole duration",
+      "outcome": "PASS",
+      "detail": "both statements on backend pid 167"
+    },
+    {
+      "id": "PB5",
+      "title": "BACKENDS ARE GENUINELY REUSED — the leak test is not passing vacuously",
+      "outcome": "PASS",
+      "detail": "12 statements shared 1 backend(s) — connections ARE being recycled"
+    },
+    {
+      "id": "PB6",
+      "title": "60 interleaved tenants over a 3-backend pool never observe each other",
+      "outcome": "PASS",
+      "detail": "60 transactions, 3 backends, 0 leaks — the pool-exhaustion path is the one that matters and it holds"
+    },
+    {
+      "id": "PB7",
+      "title": "prepared statements: the adapter works with max_prepared_statements = 0",
+      "outcome": "PASS",
+      "detail": "25 parameterized queries, no prepared-statement errors, max_prepared_statements=0"
+    },
+    {
+      "id": "PB8",
+      "title": "write paths work through the pooler and stay tenant-constrained",
+      "outcome": "PASS",
+      "detail": "own-tenant insert persisted; cross-tenant insert refused by WITH CHECK through the pooler"
+    },
+    {
+      "id": "PB9",
+      "title": "RLS ON + PgBouncer — SELECT 50 patients",
+      "outcome": "INFO",
+      "detail": "median 10.182 ms · p95 14.187 ms · p99 18.058 ms (n=200)"
+    },
+    {
+      "id": "PB10",
+      "title": "killing PgBouncer degrades predictably rather than dropping tenant context",
+      "outcome": "PASS",
+      "detail": "queries ERROR while the pooler is down — they do not hang, and they do not silently run unscoped"
+    },
+    {
+      "id": "R1",
+      "title": "the rollback script removes every policy and both RLS flags",
+      "outcome": "PASS",
+      "detail": "all 4 tables: relrowsecurity=false, relforcerowsecurity=false, 0 policies"
+    },
+    {
+      "id": "R2",
+      "title": "the previously-DENIED cross-tenant read now succeeds — the enforcement was real",
+      "outcome": "PASS",
+      "detail": "tenant B’s row is readable again by the app role — proving X1’s denial was caused by the policy and nothing else"
+    },
+    {
+      "id": "R3",
+      "title": "rollback dropped NO column and NO row",
+      "outcome": "PASS",
+      "detail": "404 patients, 4 clinics, tenant columns intact"
+    },
+    {
+      "id": "L5",
+      "title": "RLS OFF — SELECT 50 patients (application predicate, same transaction shape)",
+      "outcome": "INFO",
+      "detail": "median 5.470 ms · p95 6.652 ms · p99 7.305 ms (n=200)"
+    },
+    {
+      "id": "L6",
+      "title": "RLS OFF — COUNT patients",
+      "outcome": "INFO",
+      "detail": "median 4.797 ms · p95 6.252 ms · p99 9.840 ms (n=200)"
+    },
+    {
+      "id": "L5b",
+      "title": "RLS OFF — with the same two set_config round trips",
+      "outcome": "INFO",
+      "detail": "median 7.961 ms · p95 10.213 ms (n=200)"
+    },
+    {
+      "id": "L7a",
+      "title": "DECOMPOSED — what the RLS path actually costs",
+      "outcome": "INFO",
+      "detail": "context round trips 2.491 ms (45.5% of baseline) · policy evaluation 0.411 ms (7.5% of baseline) · one-statement context saves 2.075 ms"
+    },
+    {
+      "id": "L7",
+      "title": "RLS overhead — SELECT 50",
+      "outcome": "INFO",
+      "detail": "p50 +53.0% · p95 +99.2% · p99 +122.4%"
+    },
+    {
+      "id": "L8",
+      "title": "RLS overhead — COUNT",
+      "outcome": "INFO",
+      "detail": "p50 +69.1% · p95 +74.1% · p99 +55.9%"
+    },
+    {
+      "id": "L9",
+      "title": "RLS + PgBouncer overhead vs direct baseline — SELECT 50",
+      "outcome": "INFO",
+      "detail": "p50 +86.1% · p95 +113.3%"
+    }
+  ],
+  "queryPlans": [
+    "direct dual-key (Patient):\n    Limit  (cost=0.15..13.53 rows=1 width=32) (actual time=0.049..0.077 rows=50 loops=1)\n      Buffers: shared hit=3\n      ->  Index Scan using \"Patient_clinicId_primaryPractitionerId_idx\" on \"Patient\"  (cost=0.15..13.53 rows=1 width=32) (actual time=0.048..0.073 rows=50 loops=1)\n            Index Cond: (\"clinicId\" = ANY (CASE WHEN (NULLIF(current_setting('app.clinic_ids'::text, true), ''::text) IS NULL) THEN NULL::text[] ELSE string_to_array(current_setting('app.clinic_ids'::text, true), ','::text) END))\n            Filter: (\"organizationId\" = NULLIF(current_setting('app.organization_id'::text, true), ''::text))\n            Buffers: shared hit=3\n    Planning Time: 0.137 ms\n    Execution Time: 0.183 ms",
+    "clinic-only (PaymentPlan):\n    Index Scan using \"PaymentPlan_clinicId_status_idx\" on \"PaymentPlan\"  (cost=0.16..13.57 rows=1 width=32) (actual time=0.047..0.050 rows=1 loops=1)\n      Index Cond: (\"clinicId\" = ANY (CASE WHEN (NULLIF(current_setting('app.clinic_ids'::text, true), ''::text) IS NULL) THEN NULL::text[] ELSE string_to_array(current_setting('app.clinic_ids'::text, true), ','::text) END))\n      Buffers: shared hit=3\n    Planning Time: 0.114 ms\n    Execution Time: 0.078 ms",
+    "organization-only (Clinic):\n    Index Scan using \"Clinic_organizationId_slug_key\" on \"Clinic\"  (cost=0.15..8.17 rows=1 width=32) (actual time=0.045..0.047 rows=2 loops=1)\n      Index Cond: (\"organizationId\" = NULLIF(current_setting('app.organization_id'::text, true), ''::text))\n      Buffers: shared hit=2\n    Planning Time: 0.118 ms\n    Execution Time: 0.074 ms",
+    "parent-scoped EXISTS (PaymentPlanInstallment):\n    Seq Scan on \"PaymentPlanInstallment\"  (cost=0.00..2887.00 rows=175 width=32) (actual time=0.022..0.023 rows=1 loops=1)\n      Filter: (hashed SubPlan 2)\n      Rows Removed by Filter: 1\n      Buffers: shared hit=2\n      SubPlan 2\n        ->  Seq Scan on \"PaymentPlan\" p  (cost=0.00..24.30 rows=1 width=32) (actual time=0.008..0.009 rows=1 loops=1)\n              Filter: ((\"clinicId\" = ANY (CASE WHEN (NULLIF(current_setting('app.clinic_ids'::text, true), ''::text) IS NULL) THEN NULL::text[] ELSE string_to_array(current_setting('app.clinic_ids'::text, true), ','::text) END)) AND (\"clinicId\" = ANY (CASE WHEN (NULLIF(current_setting('app.clinic_ids'::text, true), ''::text) IS NULL) THEN NULL::text[] ELSE string_to_array(current_setting('app.clinic_ids'::text, true), ','::text) END)))\n              Rows Removed by Filter: 1\n              Buffers: shared hit=1\n    Planning Time: 0.271 ms\n    Execution Time: 0.046 ms"
+  ]
+}

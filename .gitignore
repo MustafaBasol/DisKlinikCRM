@@ -42,3 +42,7 @@ dist.next/
 dist.next.stale-*/
 dist.rollback-*/
 .noramedi-frontend-release-state
+
+# F3-3 PoC harness output (regenerated on every `npm run poc:f3-3-rls`);
+# the recorded run lives in docs/architecture/poc/f3-3-rls-pgbouncer/evidence/
+server/f3-3-poc-results.json
