@@ -590,6 +590,12 @@ jobs:
           # and tr/en/fr/de parity for the adult/primary chart switch labels.
           npm run test:dental-chart-helpers
           npm run test:dental-chart-dentition-i18n-parity
+          # DENTAL-CHART-UX-001-R2: FDI-to-anatomy identity mapping + the
+          # lateral/occlusal artwork registries (root counts, closed paths,
+          # genuine left/right mirroring), and tr/en/fr/de parity for the
+          # orientation/view/toothFamily/surface/navigation/timeline strings.
+          npm run test:odontogram-anatomy
+          npm run test:dental-chart-orientation-i18n-parity
           npm run test:platform-migration-helpers
           # F3-DATA-MIG-TODAY-001-R11. Guards the frontend destination-group
           # whitelist against the backend catalog. It reads server contracts
