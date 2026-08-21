@@ -254,6 +254,7 @@
     "server/src/utils/roles.ts": "core-permissions-roles",
     "server/src/utils/secrets.ts": "core-platform-crypto",
     "server/src/utils/sessionCookies.ts": "core-identity-access",
+    "server/src/utils/tenantModelClassification.ts": "core-tenant-security",
     "server/src/utils/tenantGuard.ts": "core-tenant-security",
     "server/src/utils/totp.ts": "core-identity-access",
     "server/src/utils/webhookRouting.ts": "messaging-whatsapp",
