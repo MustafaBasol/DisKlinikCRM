@@ -7,6 +7,27 @@
 
 ---
 
+## 0-A. Program-owner decision (2026-08-22) — audit ACCEPTED, disposable PoC AUTHORIZED
+
+**This audit was reviewed and ACCEPTED by the program owner on 2026-08-22.** The decision below supersedes §6 item 5 and §7 of this document as the statement of what happens next; every finding in §1-§5 stands unedited and is not reopened.
+
+| Decision | State |
+|---|---|
+| F5-1 authorization audit | **ACCEPTED** by program owner |
+| ADR-006 (Transactional outbox) | **`NEEDS_POC` — unchanged** |
+| ADR-007 (Queue platform) | **`NEEDS_POC` — unchanged** |
+| BullMQ as NoraMedi's queue platform | **NOT selected** |
+| Production queue/outbox rollout | **NOT AUTHORIZED** |
+| Isolated / disposable queue-platform PoC | **EXPLICITLY AUTHORIZED** |
+
+**This decision supplies the "separate, future task with its own review" that [`../../architecture/queue-outbox-poc-design.md`](../../architecture/queue-outbox-poc-design.md) §12/§14 requires** — the authorization Blocker 1 (§4) correctly found to be absent at the time of the audit. Blocker 1 is therefore satisfied **for disposable PoC execution only**. Blockers 2, 3 and 4 are **unchanged and still in force** for anything beyond that: no platform is selected, the KVKK freeze is untouched, and F6 phase entry has not occurred.
+
+**Exact next task:** `F5-1P — Queue platform disposable PoC and ADR-007 evidence` (ClickUp [`869enfvvu`](https://app.clickup.com/t/869enfvvu), `IN PROGRESS`). It executes an isolated, disposable, comparative PoC — PostgreSQL outbox + in-process dispatcher **versus** BullMQ + Redis — to produce the evidence the human ADR-007 decision needs. It selects no winner in advance.
+
+**ClickUp `F5-2` and `F5-3` remain `TO DO`.** No production mutation of any kind is authorized by this decision.
+
+---
+
 ## 0. Headline
 
 **F5-1 as specified in ClickUp cannot be implemented at this baseline, and the block is not a matter of engineering judgement.** Four independent governance gates each prohibit it on their own, and one of them — `docs/architecture/queue-outbox-poc-design.md` — is the very document that would otherwise have supplied the authorization, in the same way `tenant-rls-pgbouncer-poc-design.md` §12 supplied it for F3-3.
@@ -173,6 +194,9 @@ Offered as input to the program owner, in dependency order. None is enacted here
 ---
 
 ## 7. Exact conditions that unblock implementation
+
+> **Superseded in part by §0-A (2026-08-22).** Condition 5 (a separately scheduled and reviewed PoC task) is now **satisfied** by the program-owner authorization of `F5-1P`. Conditions 1-4 remain **unmet and in force** — they gate production rollout, not the disposable PoC.
+
 
 1. External/program-owner acceptance of **ADR-006** and **ADR-007** (agent-level acceptance is forbidden by tracker §2.2/§2.3 and F5 brief §40).
 2. A program-owner decision on **which platform** ADR-007 selects — the Postgres-outbox candidate or an external queue. BullMQ is not currently selected.

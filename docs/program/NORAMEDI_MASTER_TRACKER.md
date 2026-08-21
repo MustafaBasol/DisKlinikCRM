@@ -1025,6 +1025,15 @@ Bu tablo, §2.2'deki `PRODUCTION_VERIFIED` release-gate durumu için resmî kay�
 
 ## 13. Exact next task (Kesin sonraki görev)
 
+**Exact next task, current for the EPIC F5 / queue-outbox lane (2026-08-22, set by the program-owner decision on F5-1's authorization audit).** This entry supersedes the F5-1 entry immediately below **only as the most recent record for this lane**; every other lane stands unedited. **No freeze boundary is lifted, no ADR is accepted, and no production work is authorized by this entry.**
+
+- **The F5-1 authorization audit is ACCEPTED by the program owner.** Its findings are not reopened. See [evidence/F5-1_QUEUE_PLATFORM_AUTHORIZATION_AUDIT.md](evidence/F5-1_QUEUE_PLATFORM_AUTHORIZATION_AUDIT.md) §0-A.
+- **Decisions recorded:** **ADR-006 `NEEDS_POC` (unchanged)**; **ADR-007 `NEEDS_POC` (unchanged)**; **BullMQ is NOT selected** as NoraMedi's queue platform; **production queue/outbox rollout remains NOT AUTHORIZED**; an **isolated/disposable queue-platform PoC is EXPLICITLY AUTHORIZED**.
+- **This supplies the "separate, future task with its own review" that [../architecture/queue-outbox-poc-design.md](../architecture/queue-outbox-poc-design.md) §12/§14 requires** — i.e. the audit's Blocker 1, **for disposable PoC execution only**. The audit's Blockers 2-4 (no platform selected; KVKK freeze §3 item 14 gated on §5 condition 5; F6 entry unmet, "F5 is NOT authorized") are **unchanged and still in force** for anything beyond a throwaway environment.
+- **Exact next task: `F5-1P` — Queue platform disposable PoC and ADR-007 evidence** (ClickUp [`869enfvvu`](https://app.clickup.com/t/869enfvvu), `IN PROGRESS`). It executes a comparative, isolated PoC — **PostgreSQL outbox + in-process dispatcher vs. BullMQ + Redis** — against [../architecture/f0-010-poc-test-matrix.md](../architecture/f0-010-poc-test-matrix.md), and **selects no winner in advance**. Its recommendation is evidence for, not a substitute for, the human ADR-007 decision.
+- **ClickUp `F5-2` and `F5-3` remain `TO DO`**, both still behind ADR-006/007 acceptance. `F6` phase status stays `TODO`.
+
+
 **Exact next task, current for the EPIC F5 / queue-outbox lane (2026-08-22, set by F5-1 — Redis Production Policy and BullMQ Platform: Authorization Audit, documentation and read-only repository evidence only; no code, schema, migration, dependency, configuration or production change).** This entry **adds a lane and supersedes nothing** — every other lane's entry below stands unedited, and no freeze, gate or ADR status is changed or reinterpreted by this task. Baseline `origin/main` @ `e7874422a818d8607f4c80032c3a800278550cdb`, clean, no drift. Branch `docs/f5-1-queue-platform-authorization-audit`. Full evidence: [evidence/F5-1_QUEUE_PLATFORM_AUTHORIZATION_AUDIT.md](evidence/F5-1_QUEUE_PLATFORM_AUTHORIZATION_AUDIT.md).
 
 - **ClickUp `EPIC F5` == repository phase `F6`.** ClickUp ran the tenant/RLS work under `F3-*` IDs, so the numbering is offset. Every gate written in this repository against "F6 entry" governs ClickUp's EPIC F5. Repository numbering was **not** changed and no history was rewritten.
