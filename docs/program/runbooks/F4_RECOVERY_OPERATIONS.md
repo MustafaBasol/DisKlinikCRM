@@ -796,7 +796,34 @@ Three retention concepts stay distinct and must not be conflated:
 | pgBackRest operational recovery retention | proposed `repo1-retention-full=7`, `repo1-retention-archive=7` | **PROPOSED, NOT APPROVED** |
 | Legal retention | — | **Undetermined.** KVKK-HIGH-003 is awaiting legal review; every retention cell in the DPA's Annex B is `TO BE VERIFIED`. |
 
-### 16.5 repo2 activation sequence — NOT EXECUTED
+### 16.5 repo2 activation sequence — **EXECUTED 2026-08-21 (`F4-2-R1`)**
+
+> **[2026-08-21, `F4-2-R1` — THIS SEQUENCE HAS NOW BEEN EXECUTED IN PRODUCTION.]**
+> `repo2` is **live**: topology C, `repo2-type=sftp`, endpoint `94.138.221.64`,
+> `aes-256-cbc`, first full backup `20260821-105916F` (exit 0), WAL flowing to both
+> repositories, and an isolated restore sourced from `repo2` **PASSED**
+> (`offHost=yes`, `RESTORE_PROVEN_FROM_REPO2`, RPO 1 min, RTO 10 s). Full evidence:
+> [`../evidence/F4-2-R1_REPO2_PRODUCTION_ACTIVATION_EVIDENCE.md`](../evidence/F4-2-R1_REPO2_PRODUCTION_ACTIVATION_EVIDENCE.md).
+>
+> **Three deviations from the text below were made deliberately and are load-bearing:**
+> 1. **`authorized_keys` lives OUTSIDE the repository path**, at
+>    `/etc/ssh/authorized_keys.d/pgbackrest` (`root:root 0644`) via `AuthorizedKeysFile`
+>    in the Match block. The sequence below places the repository at the SFTP account's
+>    home directory; because that account **owns** the repository directory it could
+>    unlink and replace its own `.ssh`, rewriting its own trust anchor. Moving the file
+>    out removes that persistence path at no functional cost. **Prefer this shape.**
+> 2. **Gate 6 was enforced as an egress deny on the secondary**, not by narrowing the
+>    secondary's inbound `22/tcp` to the primary only. The literal instruction would
+>    have removed the operator's own administrative access to the backup host. Source
+>    restriction is *additionally* enforced at the key level (`from="<primary IP>"`),
+>    which is independent of the firewall's state.
+> 3. **The host-key fingerprint must be the ECDSA one — see §22.4c.**
+>
+> **The §16.2 prerequisites were still NOT all met at execution time.** In particular the
+> KVKK Workload-B gate (Art. 6 special-category DPA scope, `COUNSEL REVIEW PENDING`) was
+> open, and `62-kvkk-subprocessor-register.md` §6 required its correction *before* the
+> first byte left the production host. It was corrected *after*. That is recorded as a
+> governance finding in the evidence document §11.2 and in the register itself.
 
 **Added 2026-08-16 by F4-2.** Every step is an operator action on production.
 Nothing here has been run, and this section authorizes nothing: §16.2's seven
@@ -2206,6 +2233,39 @@ repo2-sftp-host-key-check-type=fingerprint
 repo2-sftp-host-key-hash-type=sha256
 repo2-sftp-host-fingerprint=<64 lowercase hex characters, no separators>
 ```
+
+> **[2026-08-21, `F4-2-R1` — WHICH host key? libssh2 does NOT pick the one OpenSSH picks.]**
+> This contract was exercised against a real endpoint for the first time on 2026-08-21,
+> and it fails closed unless the fingerprint is taken from the **right key**. Production
+> observation on pgBackRest **2.50** against Ubuntu 24.04 / OpenSSH 9.6:
+>
+> - `ssh -v` reports `kex: host key algorithm: ssh-ed25519` — the **ed25519** key.
+> - pgBackRest's bundled **libssh2** receives the **`ecdsa-sha2-nistp256`** key.
+>
+> Pinning the ed25519 fingerprint therefore produces, on every single attempt:
+>
+> ```
+> ERROR: [101]: host [<ecdsa sha256 hex>] and configured fingerprint
+>        (repo-sftp-host-fingerprint) [<ed25519 sha256 hex>] do not match
+> ```
+>
+> **Rule: derive the pin from the key the pgBackRest build actually receives, not from
+> the key OpenSSH negotiates.** Two reliable sources, in order of preference:
+>
+> ```bash
+> # 1. Authoritative — the ERROR [101] message names the received key's hash verbatim.
+> # 2. Read-only, on the backup host or via keyscan from the primary:
+> ssh-keyscan -t ecdsa -p 22 <BACKUP_HOST> 2>/dev/null \
+>   | grep -v '^#' | awk '{print $3}' | base64 -d | sha256sum | awk '{print $1}'
+> ```
+>
+> `ecdsa-sha2-nistp256` is a modern algorithm; this does **not** engage the
+> `MODERN SSH AUTH CANNOT BE NEGOTIATED => NO-GO` stop rule, and SHA-1 `ssh-rsa` must
+> still never be re-enabled. Note that the Gate 0 topology harness
+> (`scripts/noramedi-gate0-repo2-topology.sh`) runs with `host-key-check-type=none`, so
+> it exercises none of this — which is why the mismatch surfaced only at real activation.
+> If the backup host's host keys are ever regenerated, this pin must be re-derived or
+> every backup and archive-push will fail closed.
 
 All three are **required together**. The preflight fails the config if any is
 missing, if the check type is anything other than `fingerprint`, if the hash
