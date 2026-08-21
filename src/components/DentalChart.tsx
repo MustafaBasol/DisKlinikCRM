@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ClipboardList,
@@ -12,15 +12,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import DentalChartFullscreenModal from './DentalChartFullscreenModal';
 import ToothDetailPanel from './ToothDetailPanel';
-import ToothIcon from './ToothIcon';
+import { Odontogram } from './odontogram';
 import {
   Dentition,
   getToothDentition,
   isToothStatus,
-  LOWER_LEFT,
-  LOWER_LEFT_PRIMARY,
-  LOWER_RIGHT,
-  LOWER_RIGHT_PRIMARY,
   PROCEDURE_STATUS_META,
   resolveInitialDentition,
   TOOTH_STATUSES,
@@ -28,10 +24,6 @@ import {
   ToothRecord,
   ToothStatus,
   TreatmentProcedure,
-  UPPER_LEFT,
-  UPPER_LEFT_PRIMARY,
-  UPPER_RIGHT,
-  UPPER_RIGHT_PRIMARY,
 } from './dentalChart.types';
 import { useAuth } from '../context/AuthContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
@@ -53,200 +45,11 @@ interface DentalChartProps {
 
 type ChartSize = 'regular' | 'large' | 'presentation';
 
-interface QuadrantProps {
-  label: string;
-  teeth: number[];
-  align: 'start' | 'end';
-  isUpper: boolean;
-  labelPosition: 'top' | 'bottom';
-  records: Map<number, ToothRecord>;
-  procedureMap: Map<number, TreatmentProcedure[]>;
-  selectedTooth: number | null;
-  size: ChartSize;
-  patientMode: boolean;
-  onSelect: (fdi: number) => void;
-}
-
-interface JawRowProps {
-  title: string;
-  leftLabel: string;
-  rightLabel: string;
-  leftTeeth: number[];
-  rightTeeth: number[];
-  isUpper: boolean;
-  labelPosition: 'top' | 'bottom';
-  records: Map<number, ToothRecord>;
-  procedureMap: Map<number, TreatmentProcedure[]>;
-  selectedTooth: number | null;
-  size: ChartSize;
-  patientMode: boolean;
-  onSelect: (fdi: number) => void;
-}
-
-interface FdiLineRowProps {
-  title: string;
-  leftTeeth: number[];
-  rightTeeth: number[];
-  isUpper: boolean;
-  labelPosition: 'top' | 'bottom';
-  records: Map<number, ToothRecord>;
-  procedureMap: Map<number, TreatmentProcedure[]>;
-  selectedTooth: number | null;
-  patientMode: boolean;
-  onSelect: (fdi: number) => void;
-}
-
 function statusLabel(status: ToothStatus, t: ReturnType<typeof useTranslation>['t']) {
   return t(`patients:dentalChart.status.${status}`, {
     defaultValue: TOOTH_STATUS_META[status].fallback,
   });
 }
-
-const Quadrant: React.FC<QuadrantProps> = ({
-  label,
-  teeth,
-  align,
-  isUpper,
-  labelPosition,
-  records,
-  procedureMap,
-  selectedTooth,
-  size,
-  patientMode,
-  onSelect,
-}) => (
-  <div className={`flex min-w-0 flex-col gap-2 ${align === 'end' ? 'items-end' : 'items-start'}`}>
-    <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</span>
-    <div
-      className={[
-        'flex max-w-full flex-wrap gap-1.5 sm:gap-2',
-        align === 'end' ? 'justify-end' : 'justify-start',
-      ].join(' ')}
-    >
-      {teeth.map((fdi) => (
-        <ToothIcon
-          key={fdi}
-          fdi={fdi}
-          record={records.get(fdi)}
-          procedures={procedureMap.get(fdi)}
-          labelPosition={labelPosition}
-          isUpper={isUpper}
-          isSelected={selectedTooth === fdi}
-          size={size}
-          patientMode={patientMode}
-          onSelect={onSelect}
-        />
-      ))}
-    </div>
-  </div>
-);
-
-const JawRow: React.FC<JawRowProps> = ({
-  title,
-  leftLabel,
-  rightLabel,
-  leftTeeth,
-  rightTeeth,
-  isUpper,
-  labelPosition,
-  records,
-  procedureMap,
-  selectedTooth,
-  size,
-  patientMode,
-  onSelect,
-}) => (
-  <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800/80 md:p-4">
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{title}</h4>
-      <span className="text-[11px] font-medium text-slate-400">
-        {leftLabel} / {rightLabel}
-      </span>
-    </div>
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-start">
-      <Quadrant
-        label={leftLabel}
-        teeth={leftTeeth}
-        align="end"
-        isUpper={isUpper}
-        labelPosition={labelPosition}
-        records={records}
-        procedureMap={procedureMap}
-        selectedTooth={selectedTooth}
-        size={size}
-        patientMode={patientMode}
-        onSelect={onSelect}
-      />
-      <div className="hidden h-full w-px rounded-full bg-slate-200 dark:bg-gray-700 lg:block" />
-      <Quadrant
-        label={rightLabel}
-        teeth={rightTeeth}
-        align="start"
-        isUpper={isUpper}
-        labelPosition={labelPosition}
-        records={records}
-        procedureMap={procedureMap}
-        selectedTooth={selectedTooth}
-        size={size}
-        patientMode={patientMode}
-        onSelect={onSelect}
-      />
-    </div>
-  </section>
-);
-
-const FdiLineRow: React.FC<FdiLineRowProps> = ({
-  title,
-  leftTeeth,
-  rightTeeth,
-  isUpper,
-  labelPosition,
-  records,
-  procedureMap,
-  selectedTooth,
-  patientMode,
-  onSelect,
-}) => (
-  <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
-    <div className="mb-3 flex items-center justify-between">
-      <h4 className="text-base font-bold text-slate-800 dark:text-slate-100">{title}</h4>
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">FDI</span>
-    </div>
-    <div className="overflow-x-auto pb-1">
-      <div className="mx-auto flex min-w-max items-start justify-center gap-2">
-        {leftTeeth.map((fdi) => (
-          <ToothIcon
-            key={fdi}
-            fdi={fdi}
-            record={records.get(fdi)}
-            procedures={procedureMap.get(fdi)}
-            labelPosition={labelPosition}
-            isUpper={isUpper}
-            isSelected={selectedTooth === fdi}
-            size="presentation"
-            patientMode={patientMode}
-            onSelect={onSelect}
-          />
-        ))}
-        <div className="mx-1 mt-7 h-24 w-px shrink-0 rounded-full bg-slate-300 dark:bg-gray-600" />
-        {rightTeeth.map((fdi) => (
-          <ToothIcon
-            key={fdi}
-            fdi={fdi}
-            record={records.get(fdi)}
-            procedures={procedureMap.get(fdi)}
-            labelPosition={labelPosition}
-            isUpper={isUpper}
-            isSelected={selectedTooth === fdi}
-            size="presentation"
-            patientMode={patientMode}
-            onSelect={onSelect}
-          />
-        ))}
-      </div>
-    </div>
-  </section>
-);
 
 const DentalChart: React.FC<DentalChartProps> = ({
   patientId,
@@ -346,24 +149,6 @@ const DentalChart: React.FC<DentalChartProps> = ({
   const activeDentition: Dentition = dentition ?? 'permanent';
   const isPrimaryView = activeDentition === 'primary';
 
-  const arch = useMemo(
-    () =>
-      isPrimaryView
-        ? {
-            upperRight: UPPER_RIGHT_PRIMARY,
-            upperLeft: UPPER_LEFT_PRIMARY,
-            lowerRight: LOWER_RIGHT_PRIMARY,
-            lowerLeft: LOWER_LEFT_PRIMARY,
-          }
-        : {
-            upperRight: UPPER_RIGHT,
-            upperLeft: UPPER_LEFT,
-            lowerRight: LOWER_RIGHT,
-            lowerLeft: LOWER_LEFT,
-          },
-    [isPrimaryView],
-  );
-
   /**
    * How many records exist in EACH dentition. Surfaced on the switch itself so
    * a clinician can see at a glance that a mixed-dentition child has charted
@@ -422,12 +207,15 @@ const DentalChart: React.FC<DentalChartProps> = ({
   const showPlan = !patientMode && showTreatmentPlan && activeProcTab === 'plan';
   const displayPatientName = patientName?.trim();
 
-  const handleSelectTooth = (fdi: number) => {
-    const existing = records.get(fdi);
-    setSelectedTooth(fdi);
-    setEditStatus(existing?.status ?? 'planned');
-    setEditNote(existing?.note ?? '');
-  };
+  const handleSelectTooth = useCallback(
+    (fdi: number) => {
+      const existing = records.get(fdi);
+      setSelectedTooth(fdi);
+      setEditStatus(existing?.status ?? 'planned');
+      setEditNote(existing?.note ?? '');
+    },
+    [records],
+  );
 
   const saveToothRecord = async (status: ToothStatus, note: string) => {
     if (!selectedTooth || !canEdit) return;
@@ -573,92 +361,24 @@ const DentalChart: React.FC<DentalChartProps> = ({
     </div>
   );
 
-  const renderChartStage = (size: ChartSize) => {
-    if (size === 'presentation') {
-      return (
-        <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40 xl:p-4">
-          <FdiLineRow
-            title={t('patients:dentalChart.upperJaw', { defaultValue: 'Upper Jaw' })}
-            leftTeeth={arch.upperRight}
-            rightTeeth={arch.upperLeft}
-            isUpper
-            labelPosition="top"
-            records={records}
-            procedureMap={procedureMap}
-            selectedTooth={selectedTooth}
-            patientMode={patientMode}
-            onSelect={handleSelectTooth}
-          />
-          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4">
-            <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              FDI
-            </span>
-            <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
-          </div>
-          <FdiLineRow
-            title={t('patients:dentalChart.lowerJaw', { defaultValue: 'Lower Jaw' })}
-            leftTeeth={arch.lowerRight}
-            rightTeeth={arch.lowerLeft}
-            isUpper={false}
-            labelPosition="bottom"
-            records={records}
-            procedureMap={procedureMap}
-            selectedTooth={selectedTooth}
-            patientMode={patientMode}
-            onSelect={handleSelectTooth}
-          />
-        </div>
-      );
-    }
-
-    return (
-      <div
-        className={[
-          'rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40 md:p-4',
-          size === 'large' ? 'space-y-5 lg:p-6' : 'space-y-4',
-        ].join(' ')}
-      >
-        <JawRow
-          title={t('patients:dentalChart.upperJaw', { defaultValue: 'Upper Jaw' })}
-          leftLabel={t('patients:dentalChart.upperRight', { defaultValue: 'Upper Right' })}
-          rightLabel={t('patients:dentalChart.upperLeft', { defaultValue: 'Upper Left' })}
-          leftTeeth={arch.upperRight}
-          rightTeeth={arch.upperLeft}
-          isUpper
-          labelPosition="top"
-          records={records}
-          procedureMap={procedureMap}
-          selectedTooth={selectedTooth}
-          size={size}
-          patientMode={patientMode}
-          onSelect={handleSelectTooth}
-        />
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4">
-          <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            FDI
-          </span>
-          <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
-        </div>
-        <JawRow
-          title={t('patients:dentalChart.lowerJaw', { defaultValue: 'Lower Jaw' })}
-          leftLabel={t('patients:dentalChart.lowerRight', { defaultValue: 'Lower Right' })}
-          rightLabel={t('patients:dentalChart.lowerLeft', { defaultValue: 'Lower Left' })}
-          leftTeeth={arch.lowerRight}
-          rightTeeth={arch.lowerLeft}
-          isUpper={false}
-          labelPosition="bottom"
-          records={records}
-          procedureMap={procedureMap}
-          selectedTooth={selectedTooth}
-          size={size}
-          patientMode={patientMode}
-          onSelect={handleSelectTooth}
-        />
-      </div>
-    );
-  };
+  const renderChartStage = (size: ChartSize) => (
+    <div
+      className={[
+        'rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40 md:p-4',
+        size === 'large' || size === 'presentation' ? 'lg:p-6' : '',
+      ].join(' ')}
+    >
+      <Odontogram
+        dentition={activeDentition}
+        records={records}
+        procedureMap={procedureMap}
+        selectedTooth={selectedTooth}
+        onSelect={handleSelectTooth}
+        size={size}
+        patientMode={patientMode}
+      />
+    </div>
+  );
 
   const renderDetailPanel = (mode: 'card' | 'fullscreen') => (
     <ToothDetailPanel
