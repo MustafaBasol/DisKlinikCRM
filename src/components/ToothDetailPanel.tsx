@@ -1,7 +1,9 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import {
   CalendarClock,
   ClipboardList,
+  History,
   Info,
   Loader2,
   Save,
@@ -12,7 +14,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import {
   getToothDentition,
-  getToothShape,
   PROCEDURE_STATUS_META,
   TOOTH_STATUSES,
   TOOTH_STATUS_META,
@@ -20,6 +21,13 @@ import {
   ToothStatus,
   TreatmentProcedure,
 } from './dentalChart.types';
+import { getToothIdentity } from './odontogram/toothIdentity';
+import {
+  buildToothTimeline,
+  getToothOrientationKey,
+  sortProceduresForPanel,
+  ToothTimelineEntryKind,
+} from './toothDetailHelpers';
 
 interface ToothDetailPanelProps {
   selectedTooth: number | null;
@@ -44,6 +52,21 @@ function statusLabel(status: ToothStatus, t: ReturnType<typeof useTranslation>['
   return t(`patients:dentalChart.status.${status}`, {
     defaultValue: TOOTH_STATUS_META[status].fallback,
   });
+}
+
+// MISSING i18n KEYS: none of patients:dentalChart.timeline.* exist in any
+// locale yet — every lookup below falls back to its English defaultValue.
+// See delivery report.
+const TIMELINE_ENTRY_FALLBACK: Record<ToothTimelineEntryKind, string> = {
+  record_created: 'Record created',
+  record_updated: 'Record updated',
+  procedure_added: 'Procedure added',
+  procedure_scheduled: 'Procedure scheduled',
+  procedure_completed: 'Procedure completed',
+};
+
+function timelineEntryLabel(kind: ToothTimelineEntryKind, t: ReturnType<typeof useTranslation>['t']) {
+  return t(`patients:dentalChart.timeline.${kind}`, { defaultValue: TIMELINE_ENTRY_FALLBACK[kind] });
 }
 
 const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
@@ -86,15 +109,34 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
 
   const activeMeta = TOOTH_STATUS_META[editStatus];
   const recordMeta = record ? TOOTH_STATUS_META[record.status] : activeMeta;
-  const shape = getToothShape(selectedTooth);
   // Stated in words, not just implied by the number: 55 and 15 are different
   // teeth and a chart that only prints the digits invites charting a child's
-  // second primary molar as an adult premolar.
+  // second primary molar as an adult premolar. `getToothIdentity` is the
+  // single source of truth for arch/side/family (DENTAL-CHART-UX-001-R2) —
+  // no local modulo arithmetic here.
+  const identity = getToothIdentity(selectedTooth);
   const dentition = getToothDentition(selectedTooth);
-  const lastUpdated = record?.updatedAt ? formatDateTime(record.updatedAt) : null;
+  const orientationKey = getToothOrientationKey(identity.arch, identity.side);
+  const orientationLabel = t(`patients:dentalChart.orientation.${orientationKey}`, {
+    defaultValue: orientationKey,
+  });
+  const familyLabel = t(`patients:dentalChart.toothFamily.${identity.family}`, {
+    defaultValue: identity.family.replace(/_/g, ' '),
+  });
+  // MISSING i18n KEY: patients:dentalChart.toothLabel does not exist yet in
+  // any locale. Falls back to English word order ("Upper Right First Molar")
+  // until it is added — see delivery report (word order differs per
+  // language, e.g. French puts the family before the quadrant).
+  const toothWords = t('patients:dentalChart.toothLabel', {
+    quadrant: orientationLabel,
+    family: familyLabel,
+    defaultValue: '{{quadrant}} {{family}}',
+  });
   const displayStatus = record?.status ?? editStatus;
   const displayMeta = record ? TOOTH_STATUS_META[record.status] : activeMeta;
   const showPatientNote = patientMode && Boolean(record?.note);
+  const orderedProcedures = sortProceduresForPanel(procedures);
+  const timeline = buildToothTimeline(record, procedures);
 
   return (
     <aside className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -111,7 +153,7 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
               {t('patients:dentalChart.selectedTooth', { defaultValue: 'Selected Tooth' })}
             </p>
             <h4 className="mt-0.5 text-lg font-bold text-slate-900 dark:text-white">
-              {t(`patients:dentalChart.toothShape.${shape}`, { defaultValue: shape })}
+              {toothWords}
             </h4>
             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
               <span>FDI {selectedTooth}</span>
@@ -236,7 +278,7 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
             </p>
           ) : (
             <div className="space-y-2">
-              {procedures.map((procedure) => {
+              {orderedProcedures.map((procedure) => {
                 const meta = PROCEDURE_STATUS_META[procedure.status] ?? PROCEDURE_STATUS_META.planned;
                 return (
                   <div
@@ -249,9 +291,18 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
                           {procedure.procedureName}
                         </p>
                         {procedure.treatmentCase?.title && (
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                            {procedure.treatmentCase.title}
-                          </p>
+                          patientMode ? (
+                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                              {procedure.treatmentCase.title}
+                            </p>
+                          ) : (
+                            <Link
+                              to={`/treatment-cases/${procedure.treatmentCase.id}`}
+                              className="mt-0.5 inline-block text-xs font-medium text-primary-600 hover:underline dark:text-primary-400"
+                            >
+                              {procedure.treatmentCase.title}
+                            </Link>
+                          )
                         )}
                       </div>
                       <span className={`whitespace-nowrap text-xs font-semibold ${meta.text}`}>
@@ -263,11 +314,25 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
                     {procedure.notes && (
                       <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{procedure.notes}</p>
                     )}
-                    {procedure.estimatedCost ? (
-                      <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                        {t('patients:dentalChart.estimated')}: {formatCurrency(procedure.estimatedCost)}
-                      </p>
-                    ) : null}
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                      {procedure.scheduledDate && (
+                        <span>
+                          {t('patients:dentalChart.scheduledFor', { defaultValue: 'Scheduled' })}:{' '}
+                          {formatDateTime(procedure.scheduledDate)}
+                        </span>
+                      )}
+                      {procedure.completedAt && (
+                        <span>
+                          {t('patients:dentalChart.completedOn', { defaultValue: 'Completed' })}:{' '}
+                          {formatDateTime(procedure.completedAt)}
+                        </span>
+                      )}
+                      {procedure.estimatedCost ? (
+                        <span className="font-medium">
+                          {t('patients:dentalChart.estimated')}: {formatCurrency(procedure.estimatedCost)}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
@@ -275,12 +340,56 @@ const ToothDetailPanel: React.FC<ToothDetailPanelProps> = ({
           )}
         </div>
 
-        {lastUpdated && (
-          <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-gray-900/40 dark:text-slate-400">
-            <CalendarClock size={14} />
-            {t('patients:dentalChart.lastUpdated', { defaultValue: 'Last update' })}: {lastUpdated}
+        {!patientMode && (
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-slate-400">
+              <History size={13} />
+              {t('patients:dentalChart.timeline.title', { defaultValue: 'Tooth Timeline' })}
+            </div>
+            {timeline.length === 0 ? (
+              <p className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-slate-400">
+                {t('patients:dentalChart.timeline.empty', {
+                  defaultValue: 'No dated history is available for this tooth yet.',
+                })}
+              </p>
+            ) : (
+              <>
+                <ul className="space-y-1.5 rounded-lg border border-slate-100 bg-slate-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+                  {timeline.map((entry) => (
+                    <li key={entry.id} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <CalendarClock size={13} className="mt-0.5 shrink-0 text-slate-400" />
+                      <span>
+                        <span className="font-medium text-slate-700 dark:text-slate-200">
+                          {timelineEntryLabel(entry.kind, t)}
+                        </span>
+                        {entry.procedureName && <> — {entry.procedureName}</>}
+                        {entry.createdByName && <> ({entry.createdByName})</>}
+                        <span className="ml-1 text-slate-400">· {formatDateTime(entry.at)}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {/*
+                  This tooth timeline is intentionally NOT a full clinical
+                  history. It is derived only from the single mutable
+                  ToothRecord row (created/last-updated) and the tooth's
+                  linked TreatmentProcedure rows — see toothDetailHelpers.ts
+                  for exactly what is and is not represented.
+                */}
+              </>
+            )}
           </div>
         )}
+
+        {/*
+          EXTENSION POINT (not implemented here): a future panel section for
+          related radiographs / intraoral photos / imaging studies / a
+          clinician-reviewed AI suggestion belongs here, as another
+          `<div>` sibling in this `space-y-4` column, between the timeline
+          above and the save/delete footer below. Nothing in this layout
+          (flex column, `space-y-4` spacing, `aside` scroll container) needs
+          to change to add it — it is a pure addition.
+        */}
 
         {canEdit && !patientMode && (
           <div className="flex items-center gap-2 border-t border-slate-100 pt-4 dark:border-gray-700">
