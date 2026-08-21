@@ -1,8 +1,92 @@
 # F4 — Storage and Backup Foundation
 
-Faz durumu: `TODO` · Son güncelleme: 2026-08-21 (**F4-2-R1 — `repo2` ÜRETİMDE AKTİF EDİLDİ.** Saha dışı şifreli pgBackRest `repo2`, Türkiye ikincil VPS'inde SFTP üzerinden aktif: `stanza-create`/`check` çıkış 0, ilk tam yedek `20260821-105916F` (8 s, 4.4 MB), WAL sürekliliği `failed_delta=0`, `repo2` kaynaklı izole restore tatbikatı **PASS** (**RPO 1 dk**, **RTO 10 sn**, migration 80/80, uygulama + kiracı izolasyon smoke passed) — `noramedi-pgbackrest-status.sh` program tarihinde **ilk kez** `offHost="yes"` / `RESTORE_PROVEN_FROM_REPO2` raporluyor. `repo1` **korundu** (7 yedek, aynı etiketler, `repo1-*` bayt bazında aynı); GlitchTip ve görüntüleme **değişmedi** ve izolasyonları teste tabi tutularak doğrulandı; görüntüleme MinIO'sunun `repo2` için kullanılması **reddedildi**. **Gate 6 kapatıldı** — aktivasyon öncesi VPS2 üretimin `2210` portuna ulaşabiliyordu (`REACHABLE_BAD`), şimdi tümü `UNREACHABLE_GOOD`. **`repo2-cipher-pass` VPS2'den kaldırıldı.** **YENİ BULGU:** libssh2 `ecdsa-sha2-nistp256` müzakere ediyor, `ssh-ed25519` değil — ed25519 parmak izi sabitlemek her seferinde `ERROR [101]` ile fail-closed olur. **Faz durumu `TODO` KALIR ve `R-030-DB` `OPEN` KALIR:** cipher-pass **emanete verilmedi**, `repo2` için **zamanlama yok**, dağıtılmış `opscheck` **PITR'ı desteklemiyor** (2026-08-13 yapısı, 0 `pitr` geçişi), ve **KVKK Workload-B kapısı açık** — register §6 düzeltmenin ilk bayt ayrılmadan **önce** yapılmasını şart koşuyordu, düzeltme **sonra** yapıldı; bu bir yönetişim bulgusu olarak kaydedildi. Öncesinde 2026-08-17 (F4-FCR-004 / F4-FCR-004-R1 — **SFTP güvenlik sözleşmesi + yönetişim düzeltmesi**, aşağıdaki bölüme bakınız: sonuç `BLOCKED_EXTERNAL`, PR #441 üzerindeki üç birleştirme blokajı düzeltildi, **`repo2` AKTİF EDİLMEDİ**, `R-030-DB` `OPEN` kalır. Öncesinde F4-FCR-003-R2 — **repo2 yedek topolojisi kararı**: `SELECTED TOPOLOGY = C`, yani **depo host'u OLMAYAN**, üretim birincili tarafından yazılan saha dışı bir `repo2`. §22.11 blokajı **çözüldü**: `ERROR [072]`'nin koşulu `--repo=2` değil, yalnızca **`repoN-host` ayarlanmış olması**; depo host'u olmayan bir `repo2` bu kontrolü tetikleyemez. Sabitlenmiş **pgBackRest 2.50** üzerinde uçtan uca doğrulandı — `repo2-host` negatif kontrolü **reddedildi (çıkış 72)**, `s3` ve `sftp` şekilleri ise birincilde `backup`/`info`/`verify` **ve tam `restore`** işlemlerini çıkış 0 ile tamamladı; `repo2` nesnelerinde **0 düz metin PHI**. Seçenek A (depo-host sürücülü) güveni **karşılıklı** hale getirdiği ve §16.5 ile §22.9'un kapısını ihlal ettiği için, seçenek B (yükseltme) ise elde bulunan bir yeteneği canlı bir PHI host'unda paket yükseltmesiyle satın aldığı için **reddedildi** (kontrol **2.55.0**'da kaldırılmıştı). Runbook yakınsandı: CHECKPOINT 5–8, restore ve rollback akışlarındaki **her komut artık `RUN ON:` işareti taşıyor**. **`R-030-DB` `OPEN` kalır** — ikincil VPS **TEDARİK EDİLMEMİŞ**. Öncesinde F4-FCR-003-R1 — mimari inceleme düzeltmeleri: CI kırmızısının kök nedeni bir `pipefail` + `SIGPIPE` yarışı yüzünden **sessizce geçen bir muhafızdı**, pgBackRest **2.50** sürüm eşitliği yerelde koşuldu (`OBSERVED_LOCAL_ONLY — SAME SEMANTICS`), **WAL birikim izlemesi** eklendi; 2.50 üzerinde `backup --repo=2` birincilde reddediliyor — §22.11 blokajı. Öncesinde F4-FCR-003 — `R-030-DB` saha dışı aktivasyon hazırlığı: dört sessiz-hata kusuru kapatıldı, **Gate 0 yerelde çalıştırıldı ve `PASS`**, operatör aktivasyon paketi yazıldı; **`R-030` / `R-030-DB` `OPEN`**, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` — kalan blokaj tedarik ve hukuk)
+Faz durumu: `TODO` · Son güncelleme: 2026-08-21 (**F4-2-R2 — `R-030-DB` kapanış doğrulaması: dört blokajın **üçü** kapandı (emanet, zamanlama, izleme), dördüncüsü — **KVKK Workload-B hukuki kapısı** — `COUNSEL_PENDING` olarak açık kaldı. `repo2` günlük 03:30 tam yedek + haftalık verify zamanlaması kuruldu; `repo1` için de hiç var olmayan zamanlama eklendi (izlemenin ön koşuluydu); PITR-farkındalıklı opscheck ve durum yazıcısı dağıtıldı ve armed; 16/16 arıza senaryosu fail-closed; `repo2` kaynaklı **yeni** restore `PASS` (RPO 2 dk / RTO 25 s, migration 80/80). **`R-030-DB` `OPEN`**, **`FIRST_CUSTOMER_RECOVERY_GATE` `NOT_SATISFIED`**, **F4 COMPLETE `NO`**, **F5 `NO`**. Ayrıntı aşağıda ve [evidence/F4-2-R2_R030DB_CLOSURE_VERIFICATION_AND_WORKLOAD_B_GATE.md](../evidence/F4-2-R2_R030DB_CLOSURE_VERIFICATION_AND_WORKLOAD_B_GATE.md).) · Önceki güncelleme: 2026-08-21 (**F4-2-R1 — `repo2` ÜRETİMDE AKTİF EDİLDİ.** Saha dışı şifreli pgBackRest `repo2`, Türkiye ikincil VPS'inde SFTP üzerinden aktif: `stanza-create`/`check` çıkış 0, ilk tam yedek `20260821-105916F` (8 s, 4.4 MB), WAL sürekliliği `failed_delta=0`, `repo2` kaynaklı izole restore tatbikatı **PASS** (**RPO 1 dk**, **RTO 10 sn**, migration 80/80, uygulama + kiracı izolasyon smoke passed) — `noramedi-pgbackrest-status.sh` program tarihinde **ilk kez** `offHost="yes"` / `RESTORE_PROVEN_FROM_REPO2` raporluyor. `repo1` **korundu** (7 yedek, aynı etiketler, `repo1-*` bayt bazında aynı); GlitchTip ve görüntüleme **değişmedi** ve izolasyonları teste tabi tutularak doğrulandı; görüntüleme MinIO'sunun `repo2` için kullanılması **reddedildi**. **Gate 6 kapatıldı** — aktivasyon öncesi VPS2 üretimin `2210` portuna ulaşabiliyordu (`REACHABLE_BAD`), şimdi tümü `UNREACHABLE_GOOD`. **`repo2-cipher-pass` VPS2'den kaldırıldı.** **YENİ BULGU:** libssh2 `ecdsa-sha2-nistp256` müzakere ediyor, `ssh-ed25519` değil — ed25519 parmak izi sabitlemek her seferinde `ERROR [101]` ile fail-closed olur. **Faz durumu `TODO` KALIR ve `R-030-DB` `OPEN` KALIR:** cipher-pass **emanete verilmedi**, `repo2` için **zamanlama yok**, dağıtılmış `opscheck` **PITR'ı desteklemiyor** (2026-08-13 yapısı, 0 `pitr` geçişi), ve **KVKK Workload-B kapısı açık** — register §6 düzeltmenin ilk bayt ayrılmadan **önce** yapılmasını şart koşuyordu, düzeltme **sonra** yapıldı; bu bir yönetişim bulgusu olarak kaydedildi. Öncesinde 2026-08-17 (F4-FCR-004 / F4-FCR-004-R1 — **SFTP güvenlik sözleşmesi + yönetişim düzeltmesi**, aşağıdaki bölüme bakınız: sonuç `BLOCKED_EXTERNAL`, PR #441 üzerindeki üç birleştirme blokajı düzeltildi, **`repo2` AKTİF EDİLMEDİ**, `R-030-DB` `OPEN` kalır. Öncesinde F4-FCR-003-R2 — **repo2 yedek topolojisi kararı**: `SELECTED TOPOLOGY = C`, yani **depo host'u OLMAYAN**, üretim birincili tarafından yazılan saha dışı bir `repo2`. §22.11 blokajı **çözüldü**: `ERROR [072]`'nin koşulu `--repo=2` değil, yalnızca **`repoN-host` ayarlanmış olması**; depo host'u olmayan bir `repo2` bu kontrolü tetikleyemez. Sabitlenmiş **pgBackRest 2.50** üzerinde uçtan uca doğrulandı — `repo2-host` negatif kontrolü **reddedildi (çıkış 72)**, `s3` ve `sftp` şekilleri ise birincilde `backup`/`info`/`verify` **ve tam `restore`** işlemlerini çıkış 0 ile tamamladı; `repo2` nesnelerinde **0 düz metin PHI**. Seçenek A (depo-host sürücülü) güveni **karşılıklı** hale getirdiği ve §16.5 ile §22.9'un kapısını ihlal ettiği için, seçenek B (yükseltme) ise elde bulunan bir yeteneği canlı bir PHI host'unda paket yükseltmesiyle satın aldığı için **reddedildi** (kontrol **2.55.0**'da kaldırılmıştı). Runbook yakınsandı: CHECKPOINT 5–8, restore ve rollback akışlarındaki **her komut artık `RUN ON:` işareti taşıyor**. **`R-030-DB` `OPEN` kalır** — ikincil VPS **TEDARİK EDİLMEMİŞ**. Öncesinde F4-FCR-003-R1 — mimari inceleme düzeltmeleri: CI kırmızısının kök nedeni bir `pipefail` + `SIGPIPE` yarışı yüzünden **sessizce geçen bir muhafızdı**, pgBackRest **2.50** sürüm eşitliği yerelde koşuldu (`OBSERVED_LOCAL_ONLY — SAME SEMANTICS`), **WAL birikim izlemesi** eklendi; 2.50 üzerinde `backup --repo=2` birincilde reddediliyor — §22.11 blokajı. Öncesinde F4-FCR-003 — `R-030-DB` saha dışı aktivasyon hazırlığı: dört sessiz-hata kusuru kapatıldı, **Gate 0 yerelde çalıştırıldı ve `PASS`**, operatör aktivasyon paketi yazıldı; **`R-030` / `R-030-DB` `OPEN`**, `FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` — kalan blokaj tedarik ve hukuk)
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
+
+## F4-2-R2 — `R-030-DB` kapanış doğrulaması: dört blokajın üçü kapandı, dördüncüsü hukukidir
+
+`F4-2-R2_STATUS = THREE_OF_FOUR_BLOCKERS_CLOSED` · `AGENT_COMPLETED = YES`
+`PR_OPENED = YES` · `MERGED = NO` · `DEPLOYED = N/A (uygulama kodu değişmedi)` · `PRODUCTION_VERIFIED = YES`
+`REPO2_SCHEDULE_ACTIVE = YES` · `OFFHOST_MONITORING_ACTIVE = YES` · `WAL_MONITORING_ACTIVE = YES`
+`CIPHER_ESCROWED = YES (operatör beyanı)` · `RESTORE_FRESHLY_PROVEN = YES`
+`REPO1_PRESERVED = YES` · `GLITCHTIP_CHANGED = NO` · `IMAGING_CHANGED = NO`
+`TENANT_ISOLATION_CHANGED = NO` · `AUTH_CHANGED = NO` · `APP_SCHEMA_CHANGED = NO` · `MIGRATION_CREATED = NO`
+`R-030-DB = OPEN` · `WORKLOAD_B_LEGAL_GATE = COUNSEL_PENDING`
+`FIRST_CUSTOMER_RECOVERY_GATE = NOT_SATISFIED` · `F4 COMPLETE = NO` · `F5 AUTHORIZED = NO`
+
+Kanıt: [evidence/F4-2-R2_R030DB_CLOSURE_VERIFICATION_AND_WORKLOAD_B_GATE.md](../evidence/F4-2-R2_R030DB_CLOSURE_VERIFICATION_AND_WORKLOAD_B_GATE.md).
+Runbook: §22.4d. Depo temeli `origin/main` @ `c036838`, üretim sürümü `c01c568`.
+
+Bu, `R-030-DB` satırının kendi çağırdığı **ayrı kapanış görevidir** (program konvansiyonu:
+bir görev kendi kapanışını ilan etmez). Dört kapanış kriteri tek tek doğrulandı.
+
+### Kapanmış olarak önerilen üç kriter
+
+1. **Emanet — KARŞILANDI (operatör beyanı).** `REPO2_CIPHER_ESCROW = COMPLETED`,
+   2026-08-21. Sır **istenmedi, okunmadı, yazdırılmadı**; yalnızca `grep -c` ile
+   varlık sayısı doğrulandı. Bunun ajan-doğrulamalı bir olgu değil, bir **beyan**
+   olduğu açıkça kaydedildi.
+2. **Zamanlama — KARŞILANDI (uygulandı).** `/etc/cron.d/noramedi-pgbackrest` kuruldu:
+   `repo2` günlük tam **03:30**, haftalık `verify` **Pazar 04:15**. **Kritik yan bulgu:**
+   `repo1` için de hiç zamanlama yoktu (en yeni yedek **47 saatlik**), ve opscheck'in
+   `pitr` kapısı `lastBackupAt`'ı **repo1** üzerinden ölçtüğü için saha dışı izleme
+   bunlar olmadan **hiç açılamıyordu** — bu yüzden aynı onaylı örnekten `repo1`
+   satırları da eklendi (**02:45** tam, Pazar **02:00** verify). Zamanlanmış yolun tam
+   komut satırıyla iki kontrollü çalıştırma: `repo2` **çıkış 0** (21 s, yeni etiket
+   `20260821-130506F`), `repo1` **çıkış 0** (12 s). `repo1` 7→8, `expire` hiçbir şeyi
+   silmedi; pg_dump katmanı ve 03:15 cron'u **dokunulmadı**.
+3. **İzleme — KARŞILANDI (uygulandı).** opscheck 2026-08-13 yapısından (17 301 B, **0**
+   `pitr`) mevcut depo yapısına (74 840 B, sha256 `2bdd90f8…`, **144** `pitr`)
+   yükseltildi; eksik olan PITR durum yazıcısı ve 15 dakikalık timer'ı kuruldu.
+   `REQUIRE_OFFHOST=true`, `REQUIRE_WAL_BACKLOG=true`, `MAX_WAL_READY_COUNT=32`,
+   `MAX_WAL_BYTES=16901096448` (PGDATA'da ölçülen `df -B1` boş alanın %25'i) — hiçbiri
+   etkisiz değil. Harici Healthchecks heartbeat'i **canlı** (`ping ok for 'pitr'`,
+   2xx); mevcut pm2/disk/backup kontrolleri korundu; `systemctl --failed` = 0.
+   **16 arıza senaryosu 16/16 fail-closed** davrandı; canlı WAL arşivleme, canlı config
+   ve canlı repo2 verisine dokunulmadı.
+
+### Yeni restore kanıtı (F4-2-R1'den ayrı)
+
+`run_id 20260821-103423-96465`, kaynak **repo2**, etiket `20260821-130506F` — yani
+**bu görevin yeni zamanlamasının ürettiği yedek**. WAL `…D5`–`…DE` repo2 arşivinden
+kurtarıldı. **RPO 2 dk** (hedef 60) · **RTO 25 s** (hedef 14400) · migration **80/80**
+(0 eksik, 0 fazla) · uygulama smoke **passed** · kiracı izolasyon smoke **passed**
+(0 çapraz-klinik, 0 yetim) · `PASS`, `R032_eligible = true`. İzolasyon temizlendi;
+üretim etkilenmedi (arşiv 1749/0, `ready` 0, `check` çıkış 0, API 200).
+
+### Bulunan iki kusur (yazılıp geçilmedi)
+
+- **Bu görevin kendi Step 3 tasarımı eksikti**: yalnızca `repo2` zamanlaması tasarlandı,
+  oysa kriter 3 `repo1` zamanlaması olmadan **erişilemezdi**. Düzeltildi ve kaydedildi.
+- **Depodaki durum-yazıcı systemd unit'i kusurluydu**: birleşik sertleştirme kümesi
+  altında systemd `CAP_SETUID`'i düşürüyor (ölçüldü: `CapEff` bit 7 boş; **tek bir
+  direktif** bunu üretmiyor), bu yüzden `as_pg()`'nin `runuser -u postgres` çağrısı
+  `cannot set user id` ile başarısız oluyor ve `psql_one()` stderr'i yuttuğu için yazıcı
+  **sessizce** `archive.mode:"unknown"` içeren bozuk bir belge üretiyordu — `pitr`
+  kontrolü sağlıklı bir küme üzerinde **sonsuza dek** başarısız olurdu.
+  `AmbientCapabilities=CAP_SETUID CAP_SETGID` ile düzeltildi (`NoNewPrivileges=no`
+  yerine tercih edildi: yalnızca gereken iki yetkiyi geri verir).
+
+### Kapanmayan dördüncü kriter
+
+**KVKK Workload-B hukuki kapısı = `COUNSEL_PENDING`.** DECISION-1 (işleyen/alt-işleyen
+nitelendirmesi), DECISION-2 (özel nitelikli sağlık verisi için KVKK Md. 6 DPA
+yeterliliği — IHS'in standart çevrimiçi hizmet modelinde ayrı/özel DPA **yoktur**),
+DECISION-3 (Workload B için Md. 9 / yurt dışı aktarım yeterliliği) ve DECISION-5
+(alt-alt-işleyen tasarrufu) **yanıtlanmamıştır**; depoda **hiçbir hukuk müşaviri kanıtı
+yoktur**. Mimari kanıttan hukuki uyum **çıkarılmamıştır** — `LAUNCH_GATES.md` §0
+"Production-verified (technical)" ile "Legally/externally compliant" ayrımını açıkça
+çökertilemez kılar. F4-2-R1'in **sıralama kusuru** da bu görevle giderilmemiştir.
+
+**Depo politikası teknik kapanışa izin vermiyor:** `R-030-DB` satırı dört blokajını
+**kendi kapanış kriterleri** olarak sayar ve KVKK kapısı bunlardan **4/4**'tür; satır
+ayrıca `FIRST_CUSTOMER_RECOVERY_GATE`'in **tek** blokajıdır. Bu nedenle
+**`R-030-DB` `OPEN`** ve **`FIRST_CUSTOMER_RECOVERY_GATE` `NOT_SATISFIED`** kalır.
+**Teknik kurtarılabilirlik KANITLANDI; hukuki/uyum lansman hazırlığı KURULMADI** — bu
+ikisi birbirine karıştırılmamıştır.
+
+---
 
 ## F4-2-R1 — `repo2` ÜRETİMDE AKTİF EDİLDİ: saha dışı şifreli depo, WAL sürekliliği ve `repo2` kaynaklı restore tatbikatı
 
