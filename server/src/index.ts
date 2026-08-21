@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import prisma from './db.js';
 import { authenticate } from './middleware/auth.js';
 import { csrfProtection } from './middleware/csrf.js';
+import { tenantContextMiddleware } from './middleware/tenantContext.js';
 import authRoutes from './routes/auth.js';
 import whatsappRoutes from './routes/whatsapp.js';
 import usersRoutes from './routes/users.js';
@@ -266,6 +267,10 @@ app.use('/api/register', clinicRegistrationRoutes);
 
 // Global auth middleware for all /api routes below
 app.use('/api', authenticate as express.RequestHandler);
+// F3-2 Layer 2: establish the tenant execution context from the just-verified
+// req.user. Behaviourally inert on its own — it filters nothing; see
+// middleware/tenantContext.ts and tenancy/prismaTenantGuard.ts.
+app.use('/api', tenantContextMiddleware as express.RequestHandler);
 app.use('/api', csrfProtection('clinic'));
 
 // Protected routes

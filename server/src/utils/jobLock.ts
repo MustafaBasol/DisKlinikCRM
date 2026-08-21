@@ -21,6 +21,7 @@ import { hostname } from 'os';
 import { randomUUID } from 'crypto';
 import prisma from '../db.js';
 import { safeErrorFields } from './safeError.js';
+import { runAsSystem } from '../tenancy/tenantContext.js';
 
 // Süreç kimliği: kilidin kim tarafından tutulduğu loglarda görünsün ve
 // release yalnızca kendi kilidimizi bıraksın diye.
@@ -84,6 +85,22 @@ export async function releaseJobLock(name: string): Promise<void> {
  * fn'i paylaşımlı kilit altında çalıştırır. Kilit alınamazsa (başka replika
  * koşuyordur) false döner ve fn hiç çağrılmaz. fn'in hatası çağırana fırlar;
  * kilit her durumda bırakılır.
+ *
+ * F3-2 — TENANT EXECUTION CONTEXT. `fn` runs inside
+ * `runAsSystem({ reason: 'background-job', detail: name })`.
+ *
+ * This one wrapper covers 12 of NoraMedi's 13 cron jobs, because every one of
+ * them already funnels through this function to take its lease. That is not a
+ * coincidence worth relying on silently, so `tests/tenantWorkerContext.test.ts`
+ * asserts it: any job file that schedules work without going through
+ * `withJobLock` must declare its own system context, and the test names the
+ * exceptions explicitly.
+ *
+ * A cron sweep is genuinely tenant-independent — `dataRetentionCleanupJob`
+ * walks every clinic by design — so system execution is the correct answer
+ * here, not a bypass. Jobs that DO narrow to one clinic should call
+ * `runAsTenant(...)` around that inner slice; nesting a tenant context inside a
+ * system context is explicitly allowed.
  */
 export async function withJobLock(
   name: string,
@@ -104,7 +121,7 @@ export async function withJobLock(
   }
 
   try {
-    await fn();
+    await runAsSystem({ reason: 'background-job', detail: name }, fn);
   } finally {
     await releaseJobLock(name);
   }

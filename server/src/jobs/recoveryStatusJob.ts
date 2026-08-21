@@ -9,6 +9,7 @@ import {
 import { reapStaleFileBackupRuns } from '../services/fileBackupService.js';
 import { reapStaleRecoveryDrills } from '../services/recoveryDrillService.js';
 import { safeErrorFields } from '../utils/safeError.js';
+import { runAsSystem } from '../tenancy/tenantContext.js';
 
 /**
  * F4-FCR-001 — refreshes the operational recovery status file that
@@ -69,10 +70,18 @@ async function reapAbandonedRecoveryRows(): Promise<void> {
 /**
  * One full tick: reap abandoned rows, then publish the status document (so the
  * document reflects the post-sweep state rather than a stale `running` row).
+ *
+ * F3-2 — this is the ONE background job that does not take a JobLock lease (see
+ * the header: the write is atomic and idempotent, so a lock would buy nothing),
+ * and therefore the one that does not inherit `withJobLock`'s system execution
+ * context. It declares its own. `tests/tenantWorkerContext.test.ts` holds that
+ * exception list to exactly this file.
  */
 export async function runRecoveryStatusTick(): Promise<void> {
-  await reapAbandonedRecoveryRows();
-  await writeRecoveryStatusFile();
+  await runAsSystem({ reason: 'background-job', detail: 'recovery-status' }, async () => {
+    await reapAbandonedRecoveryRows();
+    await writeRecoveryStatusFile();
+  });
 }
 
 export function startRecoveryStatusJob(): void {

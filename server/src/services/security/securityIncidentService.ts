@@ -31,6 +31,7 @@
 import { createHash } from 'node:crypto';
 import type { Prisma, SecurityIncident } from '@prisma/client';
 import prisma from '../../db.js';
+import { runAsSystem } from '../../tenancy/tenantContext.js';
 import {
   sanitizeSecurityMetadata,
   sanitizeSecurityOperatorText,
@@ -38,6 +39,31 @@ import {
   INCIDENT_ACTIVITY_METADATA_SCHEMA,
   type SecuritySignalSeverity,
 } from './securitySignalService.js';
+
+/**
+ * F3-2 — EVERY database access in this file runs as system execution.
+ *
+ * `SecurityIncident` and `SecurityIncidentActivity` are two of the five models
+ * F3-1 classified `EXPLICIT_REVIEW_REQUIRED`, and the F3-2 decision is that
+ * they are system-owned. The reasoning is specific to them, not a blanket rule:
+ *
+ *   - A cross-tenant incident is a REAL and important state. Its `organizationId`
+ *     and `clinicId` are nullable precisely so that "this attacker touched three
+ *     organizations" is representable. No single-tenant predicate is correct for
+ *     such a row, and inventing one would hide exactly the incidents that matter
+ *     most.
+ *   - The entire lifecycle (acknowledge → investigate → contain → resolve →
+ *     close) is platform-admin-only. Tenant users have no route to any of it.
+ *   - `SecurityIncidentActivity` has no tenant column at all and would inherit
+ *     from `SecurityIncident`, i.e. inherit the unresolved question.
+ *
+ * `upsertIncidentFromSignal` is the one entry point reached from inside a tenant
+ * request (a denial detected mid-request), which is why
+ * `security-incident-lifecycle` is on the short allowlist of reasons permitted
+ * to escalate from tenant execution.
+ */
+const asIncidentSystem = <T>(fn: () => Promise<T>): Promise<T> =>
+  runAsSystem({ reason: 'security-incident-lifecycle' }, fn);
 
 const SEVERITY_RANK: Record<string, number> = { low: 1, medium: 2, high: 3, critical: 4 };
 /** Exported (pure, no DB) so tests can verify the escalation ordering without a live database. */
@@ -178,6 +204,10 @@ async function escalateSeverityAtomic(
  * the prior terminal incident id for continuity.
  */
 export async function upsertIncidentFromSignal(input: UpsertIncidentFromSignalInput): Promise<UpsertIncidentResult> {
+  return asIncidentSystem(() => upsertIncidentFromSignalInner(input));
+}
+
+async function upsertIncidentFromSignalInner(input: UpsertIncidentFromSignalInput): Promise<UpsertIncidentResult> {
   const now = input.now ?? new Date();
   const baseKey = buildIncidentKey(input);
   const safeMetadata = sanitizeSecurityMetadata(input.metadata ?? null);
@@ -287,6 +317,18 @@ export type LifecycleResult =
  * do here on purpose (see the blocker writeup this fixes).
  */
 async function applyLifecycleTransition(params: {
+  incidentId: string;
+  actorPlatformAdminId: string;
+  action: string;
+  targetStatus: string;
+  allowedFromStatuses: string[];
+  note?: string | null;
+  extraData?: Prisma.SecurityIncidentUncheckedUpdateInput;
+}): Promise<LifecycleResult> {
+  return asIncidentSystem(() => applyLifecycleTransitionInner(params));
+}
+
+async function applyLifecycleTransitionInner(params: {
   incidentId: string;
   actorPlatformAdminId: string;
   action: string;
@@ -446,6 +488,14 @@ export async function assignIncident(p: {
   actorPlatformAdminId: string;
   assigneePlatformAdminId: string | null;
 }): Promise<AssignResult> {
+  return asIncidentSystem(() => assignIncidentInner(p));
+}
+
+async function assignIncidentInner(p: {
+  incidentId: string;
+  actorPlatformAdminId: string;
+  assigneePlatformAdminId: string | null;
+}): Promise<AssignResult> {
   return prisma.$transaction(async (tx) => {
     const existing = await tx.securityIncident.findUnique({ where: { id: p.incidentId } });
     if (!existing) return { ok: false, error: 'not_found' };
@@ -475,6 +525,10 @@ export type NoteResult =
   | { ok: false; error: 'not_found' | 'summary_required' };
 
 export async function addIncidentNote(p: { incidentId: string; actorPlatformAdminId: string; note: string }): Promise<NoteResult> {
+  return asIncidentSystem(() => addIncidentNoteInner(p));
+}
+
+async function addIncidentNoteInner(p: { incidentId: string; actorPlatformAdminId: string; note: string }): Promise<NoteResult> {
   const note = sanitizeSecurityOperatorText(p.note);
   if (!note) return { ok: false, error: 'summary_required' };
   return prisma.$transaction(async (tx) => {
@@ -528,28 +582,32 @@ export async function listIncidents(filters: ListIncidentsFilters, page: number,
     };
   }
 
-  const [total, data] = await Promise.all([
-    prisma.securityIncident.count({ where }),
-    prisma.securityIncident.findMany({
-      where,
-      orderBy: [{ lastDetectedAt: 'desc' }, { id: 'desc' }],
-      skip,
-      take: safeLimit,
-    }),
-  ]);
+  const [total, data] = await asIncidentSystem(() =>
+    Promise.all([
+      prisma.securityIncident.count({ where }),
+      prisma.securityIncident.findMany({
+        where,
+        orderBy: [{ lastDetectedAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: safeLimit,
+      }),
+    ]),
+  );
 
   return { total, page: safePage, limit: safeLimit, data };
 }
 
 export async function getIncidentById(incidentId: string): Promise<SecurityIncident | null> {
-  return prisma.securityIncident.findUnique({ where: { id: incidentId } });
+  return asIncidentSystem(() => prisma.securityIncident.findUnique({ where: { id: incidentId } }));
 }
 
 export async function getIncidentActivity(incidentId: string) {
-  return prisma.securityIncidentActivity.findMany({
-    where: { incidentId },
-    orderBy: { createdAt: 'desc' },
-  });
+  return asIncidentSystem(() =>
+    prisma.securityIncidentActivity.findMany({
+      where: { incidentId },
+      orderBy: { createdAt: 'desc' },
+    }),
+  );
 }
 
 export interface DashboardSummary {
@@ -566,13 +624,15 @@ const NON_TERMINAL_STATUSES = ['open', 'acknowledged', 'investigating', 'contain
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  const [openCritical, openHigh, unacknowledged, investigating, last24h] = await Promise.all([
-    prisma.securityIncident.count({ where: { status: { in: NON_TERMINAL_STATUSES }, severity: 'critical' } }),
-    prisma.securityIncident.count({ where: { status: { in: NON_TERMINAL_STATUSES }, severity: 'high' } }),
-    prisma.securityIncident.count({ where: { status: 'open' } }),
-    prisma.securityIncident.count({ where: { status: 'investigating' } }),
-    prisma.securityIncident.count({ where: { firstDetectedAt: { gte: since24h } } }),
-  ]);
+  const [openCritical, openHigh, unacknowledged, investigating, last24h] = await asIncidentSystem(() =>
+    Promise.all([
+      prisma.securityIncident.count({ where: { status: { in: NON_TERMINAL_STATUSES }, severity: 'critical' } }),
+      prisma.securityIncident.count({ where: { status: { in: NON_TERMINAL_STATUSES }, severity: 'high' } }),
+      prisma.securityIncident.count({ where: { status: 'open' } }),
+      prisma.securityIncident.count({ where: { status: 'investigating' } }),
+      prisma.securityIncident.count({ where: { firstDetectedAt: { gte: since24h } } }),
+    ]),
+  );
 
   return { openCritical, openHigh, unacknowledged, investigating, last24h };
 }

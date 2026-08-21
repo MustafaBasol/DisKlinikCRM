@@ -10,6 +10,23 @@
 
 import { Prisma } from '@prisma/client';
 import prisma from '../../db.js';
+import { runAsSystem } from '../../tenancy/tenantContext.js';
+
+/**
+ * F3-2 — `ExternalCalendarInboundEvent` is one of the five models F3-1
+ * classified `EXPLICIT_REVIEW_REQUIRED`, with the same pre-tenant-resolution
+ * shape as `MessagingInboundEvent`: the row is the provider's raw envelope,
+ * written before the connection (and therefore the clinic) is resolved. The
+ * F3-2 decision is identical — system-owned, reason
+ * `inbound-webhook-envelope`, deliberately NOT allowed to escalate from inside
+ * a tenant request, because every writer is a public webhook route.
+ *
+ * See services/messagingInboundIdempotency.ts for the full reasoning; the two
+ * models are kept on the same decision on purpose, since they are the same
+ * pattern and splitting them would invite drift.
+ */
+const asWebhookEnvelopeSystem = <T>(fn: () => Promise<T>): Promise<T> =>
+  runAsSystem({ reason: 'inbound-webhook-envelope', detail: 'external-calendar' }, fn);
 
 export type CreateInboundEventArgs = {
   provider: string;
@@ -52,7 +69,7 @@ export const createExternalCalendarInboundEventOrDetectDuplicate = async (
   }
 
   try {
-    const event = await prisma.externalCalendarInboundEvent.create({
+    const event = await asWebhookEnvelopeSystem(() => prisma.externalCalendarInboundEvent.create({
       data: {
         provider: args.provider,
         connectionId,
@@ -65,7 +82,7 @@ export const createExternalCalendarInboundEventOrDetectDuplicate = async (
         rawPayload: args.rawPayload ? (args.rawPayload as Prisma.InputJsonValue) : Prisma.DbNull,
       },
       select: { id: true },
-    });
+    }));
     return { status: 'created', eventId: event.id };
   } catch (error) {
     if (isPrismaUniqueConstraintError(error)) {
@@ -77,25 +94,25 @@ export const createExternalCalendarInboundEventOrDetectDuplicate = async (
 
 export const markExternalCalendarEventProcessed = async (eventId: string | null | undefined) => {
   if (!eventId) return null;
-  return prisma.externalCalendarInboundEvent.update({
+  return asWebhookEnvelopeSystem(() => prisma.externalCalendarInboundEvent.update({
     where: { id: eventId },
     data: { status: 'processed', processedAt: new Date(), errorMessage: null },
-  });
+  }));
 };
 
 export const markExternalCalendarEventIgnored = async (eventId: string | null | undefined, reason: string) => {
   if (!eventId) return null;
-  return prisma.externalCalendarInboundEvent.update({
+  return asWebhookEnvelopeSystem(() => prisma.externalCalendarInboundEvent.update({
     where: { id: eventId },
     data: { status: 'ignored', processedAt: new Date(), errorMessage: reason.slice(0, 1000) },
-  });
+  }));
 };
 
 export const markExternalCalendarEventFailed = async (eventId: string | null | undefined, error: unknown) => {
   if (!eventId) return null;
   const message = error instanceof Error ? error.message : String(error);
-  return prisma.externalCalendarInboundEvent.update({
+  return asWebhookEnvelopeSystem(() => prisma.externalCalendarInboundEvent.update({
     where: { id: eventId },
     data: { status: 'failed', errorMessage: message.slice(0, 1000), attempts: { increment: 1 } },
-  });
+  }));
 };
