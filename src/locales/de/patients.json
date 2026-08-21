@@ -382,6 +382,18 @@
       "jumpLabel": "Zu FDI springen",
       "jumpPlaceholder": "z. B. 36",
       "jumpInvalid": "Dieser Zahn gehört nicht zu diesem Gebiss."
+    },
+    "toothLabel": "{{family}} ({{quadrant}})",
+    "scheduledFor": "Geplant",
+    "completedOn": "Abgeschlossen",
+    "timeline": {
+      "title": "Zahnverlauf",
+      "empty": "Für diesen Zahn liegt noch kein datierter Verlauf vor.",
+      "record_created": "Eintrag erstellt",
+      "record_updated": "Eintrag aktualisiert",
+      "procedure_added": "Behandlung hinzugefügt",
+      "procedure_scheduled": "Behandlung geplant",
+      "procedure_completed": "Behandlung abgeschlossen"
     }
   },
   "status": {

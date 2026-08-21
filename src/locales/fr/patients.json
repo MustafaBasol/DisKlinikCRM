@@ -382,6 +382,18 @@
       "jumpLabel": "Aller au FDI",
       "jumpPlaceholder": "ex. 36",
       "jumpInvalid": "Cette dent n'existe pas dans cette denture."
+    },
+    "toothLabel": "{{family}} ({{quadrant}})",
+    "scheduledFor": "Planifié",
+    "completedOn": "Terminé",
+    "timeline": {
+      "title": "Historique de la dent",
+      "empty": "Aucun historique daté n'est disponible pour cette dent.",
+      "record_created": "Fiche créée",
+      "record_updated": "Fiche mise à jour",
+      "procedure_added": "Acte ajouté",
+      "procedure_scheduled": "Acte planifié",
+      "procedure_completed": "Acte terminé"
     }
   },
   "status": {

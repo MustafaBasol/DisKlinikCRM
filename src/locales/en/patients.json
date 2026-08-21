@@ -382,6 +382,18 @@
       "jumpLabel": "Go to FDI",
       "jumpPlaceholder": "e.g. 36",
       "jumpInvalid": "That tooth is not in this dentition."
+    },
+    "toothLabel": "{{quadrant}} {{family}}",
+    "scheduledFor": "Scheduled",
+    "completedOn": "Completed",
+    "timeline": {
+      "title": "Tooth Timeline",
+      "empty": "No dated history is available for this tooth yet.",
+      "record_created": "Record created",
+      "record_updated": "Record updated",
+      "procedure_added": "Procedure added",
+      "procedure_scheduled": "Procedure scheduled",
+      "procedure_completed": "Procedure completed"
     }
   },
   "status": {

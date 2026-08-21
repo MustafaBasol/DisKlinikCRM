@@ -382,6 +382,18 @@
       "jumpLabel": "FDI ile git",
       "jumpPlaceholder": "örn. 36",
       "jumpInvalid": "Bu diş bu diş dizisinde yok."
+    },
+    "toothLabel": "{{quadrant}} {{family}}",
+    "scheduledFor": "Planlanan",
+    "completedOn": "Tamamlanan",
+    "timeline": {
+      "title": "Diş Geçmişi",
+      "empty": "Bu diş için tarihli bir geçmiş bulunmuyor.",
+      "record_created": "Kayıt oluşturuldu",
+      "record_updated": "Kayıt güncellendi",
+      "procedure_added": "İşlem eklendi",
+      "procedure_scheduled": "İşlem planlandı",
+      "procedure_completed": "İşlem tamamlandı"
     }
   },
   "status": {
