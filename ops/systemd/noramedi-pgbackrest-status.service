@@ -111,6 +111,31 @@ ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
+#
+# CAP_SETUID/CAP_SETGID must be re-added explicitly (F4-2-R2, 2026-08-21).
+# Every command this writer runs against PostgreSQL goes through the script's
+# as_pg() helper, which is `runuser -u postgres -- …`. Under the COMBINED
+# hardening set above, systemd drops CAP_SETUID from the effective set, so
+# runuser fails with `cannot set user id: Operation not permitted`. Measured,
+# not inferred: inside this exact property set /proc/self/status reports
+#   CapEff: 000001fffffeff7f   (baseline 000001ffffffffff)
+# — bit 7 (CAP_SETUID) clear, and bit 16 (CAP_SYS_MODULE) clear, the latter
+# being the expected ProtectKernelModules drop. No SINGLE directive above
+# reproduces it; the combination does, which is why this went unnoticed.
+#
+# The failure is SILENT and fails closed in the worst way: psql_one() discards
+# stderr, so every PostgreSQL-derived field is simply omitted and the writer
+# emits a well-formed document reporting `archive.mode: "unknown"`,
+# `commandOk: false` and no walBytes/readyCount/lastArchivedAt. opscheck's
+# pitr check then FAILS on every run against a perfectly healthy cluster —
+# the "permanently red monitor" failure mode this repository warns about
+# elsewhere. It also means the WAL-backlog limits cannot be activated at all,
+# because a configured limit with a missing measurement is a FAIL by contract.
+#
+# Preferred over NoNewPrivileges=no (also verified to work): this restores
+# exactly the two capabilities runuser needs and leaves NoNewPrivileges and
+# every other hardening directive above in force.
+AmbientCapabilities=CAP_SETUID CAP_SETGID
 # MemoryDenyWriteExecute intentionally omitted: the script shells out to
 # `node -e` to parse `pgbackrest info --output=json` (jq is not a dependency
 # anywhere in this repository), and V8's JIT requires writable+executable

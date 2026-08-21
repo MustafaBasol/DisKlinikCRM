@@ -2348,6 +2348,112 @@ negotiated against the pinned build: **NO-GO** — escalate, do not weaken sshd.
 **Nothing in this section is activated.** `repo2` does not exist, the secondary
 is not procured, and `R-030-DB` remains OPEN.
 
+> **[2026-08-21, `F4-2-R1` / `F4-2-R2` — the paragraph immediately above is now
+> HISTORICAL and false as a statement of current state.]** `repo2` exists, the
+> secondary Türkiye VPS is procured and live, and the host-key contract in this
+> section is in force in production. `R-030-DB` does remain `OPEN`, but on a
+> different criterion — see §22.4d.
+
+---
+
+## 22.4d F4-2-R2 — the activated schedule and monitoring, as built
+
+**This section records production state, not a plan.** Everything below was
+installed and exercised on `disklinik-prod-01` on 2026-08-21. Full evidence:
+[`../evidence/F4-2-R2_R030DB_CLOSURE_VERIFICATION_AND_WORKLOAD_B_GATE.md`](../evidence/F4-2-R2_R030DB_CLOSURE_VERIFICATION_AND_WORKLOAD_B_GATE.md).
+
+### The backup schedule
+
+`/etc/cron.d/noramedi-pgbackrest`, root:root 0644. Neither this file nor
+`/usr/local/sbin/noramedi-pgbackrest-backup.sh` existed before this task, so
+**repo1 pgBackRest backups had also never been scheduled** — they were ad-hoc,
+and the newest was 47 h old.
+
+```cron
+45 2 * * *  root  …/noramedi-pgbackrest-backup.sh --type full          >> /var/log/noramedi-pgbackrest-cron.log 2>&1
+0  2 * * 0  root  …/noramedi-pgbackrest-backup.sh --verify             >> /var/log/noramedi-pgbackrest-cron.log 2>&1
+30 3 * * *  root  …/noramedi-pgbackrest-backup.sh --repo 2 --type full >> /var/log/noramedi-pgbackrest-cron.log 2>&1
+15 4 * * 0  root  …/noramedi-pgbackrest-backup.sh --repo 2 --verify    >> /var/log/noramedi-pgbackrest-cron.log 2>&1
+```
+
+Daily timeline (Europe/Istanbul): `02:30` uploads tar (pre-existing, untouched)
+→ `02:45` repo1 full → `03:15` pg_dump (pre-existing, untouched) → `03:30`
+repo2 full.
+
+Two deviations from `ops/pgbackrest/noramedi-pgbackrest.cron.example`, both
+deliberate: **02:45 not 02:30**, because root's crontab already runs the uploads
+backup at 02:30 on the same filesystem; and **log redirection instead of
+`MAILTO`**, because this host has no MTA and cron mail would silently discard
+the wrapper's exit-4 disk-exhaustion abort. Plain `>>`, never a pipe, so the
+exit code is not masked. No outer `flock` — the wrapper owns its lock (fd 9,
+exit 5) and an outer one self-deadlocks.
+
+### Why the repo1 entries are required, not optional
+
+opscheck's `pitr` check asserts `…_PITR_MAX_BACKUP_AGE_HOURS` (default 30)
+against the stanza's **repo1** `lastBackupAt`, *and separately* against
+`repo2LastBackupAgeMinutes`. With repo1 ad-hoc, the check failed at 47 h on a
+completely healthy cluster. **Off-host monitoring cannot be armed without
+recurring repo1 coverage.** If you are re-deriving this schedule, do not drop
+the repo1 lines as "out of scope for an off-host task" — that was this task's
+own first mistake.
+
+### Monitoring, as armed
+
+`/usr/local/sbin/noramedi-opscheck.sh` upgraded from the 2026-08-13 build
+(17 301 B, 0 `pitr` occurrences) to the current repository build
+(74 840 B, sha256 `2bdd90f8…`, 144 `pitr` occurrences), and the previously
+absent PITR status writer plus its 15-minute timer installed.
+
+`/etc/noramedi/opscheck.env` (root:root **0600**):
+
+```
+NORAMEDI_OPSCHECK_CHECKS=pm2,disk,backup,pitr
+NORAMEDI_OPSCHECK_PITR_REQUIRE_OFFHOST=true
+NORAMEDI_OPSCHECK_PITR_REQUIRE_WAL_BACKLOG=true
+NORAMEDI_OPSCHECK_PITR_MAX_WAL_READY_COUNT=32
+NORAMEDI_OPSCHECK_PITR_MAX_WAL_BYTES=16901096448
+NORAMEDI_OPSCHECK_PITR_PING_URL=<operator-supplied; never read or printed>
+```
+
+`MAX_WAL_BYTES` is 25 % of the measured `df -B1` available on the PGDATA
+filesystem (`67604385792`), per §22.4a. Observed `pg_wal` at activation was
+`83886454` B — about 0.5 % of the limit.
+
+**Two traps when repeating this, both hit here:**
+
+1. **Pin `NORAMEDI_OPSCHECK_CHECKS` BEFORE swapping the binary.** The old build
+   defaults to `pm2,disk,backup`; the current one defaults to
+   `pm2,disk,backup,filebackup,drill`. This host's `recovery-status.json` has
+   `fileBackup.enabled=false` and an empty `drill` object, so both added checks
+   fail immediately — measured: **exit 24** unpinned versus **exit 0** pinned.
+   §22.4a's sample block lists `filebackup,drill`; that assumes they are already
+   active, which here they are not.
+2. **The shipped status-writer unit could not switch users.** Under its combined
+   hardening set systemd drops `CAP_SETUID` (measured: `CapEff` bit 7 clear;
+   no single directive reproduces it), so `as_pg()`'s `runuser -u postgres`
+   failed with `cannot set user id: Operation not permitted`. Because
+   `psql_one()` discards stderr, the writer emitted a well-formed document with
+   `archive.mode: "unknown"` and every PostgreSQL-derived field missing — which
+   would have failed the `pitr` check on every run forever. Fixed by adding
+   `AmbientCapabilities=CAP_SETUID CAP_SETGID` to the unit (preferred over
+   `NoNewPrivileges=no`, which also works but relaxes more).
+
+### Fail-closed behaviour, characterized
+
+16 conditions were exercised with fixture status documents and threshold
+overrides — repo2 empty, repo2 age unmeasurable, `check` error, repo1/repo2/WAL
+staleness, `readyCount` breach, a real `walBytes` breach, a missing measurement
+with a limit armed, the exit-64 activation gate, `offHost` no/unproven, a dead
+writer, and `archive_mode=off`. **All 16 failed closed as specified.** Live WAL
+archiving, the live config and live repo2 data were never touched.
+
+### What this section does NOT establish
+
+It does not close `R-030-DB`. Three of that row's four blockers are closed by
+this work; the fourth — the **KVKK Workload-B legal gate** — is
+`COUNSEL_PENDING` and cannot be closed by architecture evidence.
+
 ---
 
 ## 22.5 CHECKPOINT 0 — release identity (local, read-only)

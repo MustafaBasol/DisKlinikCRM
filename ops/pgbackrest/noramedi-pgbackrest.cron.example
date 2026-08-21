@@ -2,9 +2,26 @@
 #
 # Host target: /etc/cron.d/noramedi-pgbackrest   (root:root, 0644)
 #
-# NOT INSTALLED. Installing this is the last step of the activation sequence in
-# docs/program/runbooks/F4_RECOVERY_OPERATIONS.md §13, after `pgbackrest check`
-# has passed. It requires the scoped freeze exception (§14, NOT GRANTED).
+# ⚠ STATUS CHANGED 2026-08-21 (F4-2-R2): THIS IS NOW INSTALLED IN PRODUCTION.
+# It was previously "NOT INSTALLED"; that is no longer true. All four entries
+# below (both repo1 lines and both repo2 lines) are live on disklinik-prod-01.
+# The as-built file, including two deliberate deviations from this template, is
+# recorded in docs/program/runbooks/F4_RECOVERY_OPERATIONS.md §22.4d and in
+# docs/program/evidence/F4-2-R2_R030DB_CLOSURE_VERIFICATION_AND_WORKLOAD_B_GATE.md.
+#
+# The two deviations, so this template is not read as describing the host:
+#   1. The repo1 full runs at 02:45, not 02:30 — root's crontab already runs
+#      noramedi-uploads-backup.sh at 02:30 on the same filesystem. This template
+#      predates that entry and reasoned only about the 03:15 pg_dump.
+#   2. Every entry redirects to /var/log/noramedi-pgbackrest-cron.log instead of
+#      relying on MAILTO. disklinik-prod-01 has no MTA (no sendmail, no postfix,
+#      no /var/mail/root), so cron mail would silently discard the exit-4
+#      disk-exhaustion abort — the single most important message these entries
+#      can emit. Plain >> redirection, never a pipe, so the exit code survives.
+#
+# Historical note: installing this was the last step of the activation sequence
+# in docs/program/runbooks/F4_RECOVERY_OPERATIONS.md §13, after `pgbackrest
+# check` had passed.
 #
 # ═════════════════════════════════════════════════════════════════════════
 # ⚠ THIS FILE DOES NOT REPLACE /etc/cron.d/noramedi-db-backup.
@@ -72,10 +89,18 @@ MAILTO=root
 # either check.
 0 2 * * 0   root  /usr/local/sbin/noramedi-pgbackrest-backup.sh --verify
 
-# ── OFF-HOST (repo2) — COMMENTED OUT AND NOT AUTHORIZED ──────────────────
-# Enable ONLY after the repo2 activation sequence in
-# F4_RECOVERY_OPERATIONS.md §16.5 has been completed, which itself requires
-# the seven §16.2 prerequisites and a procured secondary VPS.
+# ── OFF-HOST (repo2) — ACTIVATED IN PRODUCTION 2026-08-21 (F4-2-R2) ──────
+# The line at the end of this block is left commented in this TEMPLATE, but it
+# IS installed and running on disklinik-prod-01, together with a weekly
+# `--repo 2 --verify` entry that this template does not carry (added because
+# repo2 lives on infrastructure this program does not operate, where silent
+# corruption is otherwise unobservable from here). See §22.4d of the runbook.
+#
+# The prerequisites below were met: the repo2 activation sequence in
+# F4_RECOVERY_OPERATIONS.md §16.5 was completed by F4-2-R1 and the secondary
+# Türkiye VPS is procured and live. Note that this remains a TECHNICAL
+# statement only — the KVKK Workload-B legal gate is still COUNSEL_PENDING and
+# R-030-DB is still OPEN on that criterion.
 #
 # WHY THIS ENTRY MUST EXIST AND NOT BE SKIPPED: `pgbackrest backup` writes to
 # ONE repository. archive-push feeds WAL to every configured repository
