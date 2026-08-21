@@ -314,6 +314,13 @@
     "noteOptional": "Not (isteğe bağlı)",
     "notePlaceholder": "Planlanan hizmet, klinik not...",
     "deleteRecord": "Kaydı sil",
+    "dentition": {
+      "switchLabel": "Diş Dizisi",
+      "permanent": "Daimi",
+      "primary": "Süt Dişi",
+      "permanentHint": "Daimi dişler, FDI 11-48.",
+      "primaryHint": "Süt dişleri, FDI 51-85."
+    },
     "status": {
       "planned": "Planlandı",
       "in_progress": "Devam Ediyor",

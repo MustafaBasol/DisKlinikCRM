@@ -14,17 +14,24 @@ import DentalChartFullscreenModal from './DentalChartFullscreenModal';
 import ToothDetailPanel from './ToothDetailPanel';
 import ToothIcon from './ToothIcon';
 import {
+  Dentition,
+  getToothDentition,
   isToothStatus,
   LOWER_LEFT,
+  LOWER_LEFT_PRIMARY,
   LOWER_RIGHT,
+  LOWER_RIGHT_PRIMARY,
   PROCEDURE_STATUS_META,
+  resolveInitialDentition,
   TOOTH_STATUSES,
   TOOTH_STATUS_META,
   ToothRecord,
   ToothStatus,
   TreatmentProcedure,
   UPPER_LEFT,
+  UPPER_LEFT_PRIMARY,
   UPPER_RIGHT,
+  UPPER_RIGHT_PRIMARY,
 } from './dentalChart.types';
 import { useAuth } from '../context/AuthContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
@@ -36,6 +43,12 @@ interface DentalChartProps {
   patientName?: string;
   readOnly?: boolean;
   showTreatmentPlan?: boolean;
+  /**
+   * Optional — only ever used to pick which chart opens FIRST for a patient
+   * with no records yet (see resolveInitialDentition). The chart is fully
+   * usable without it, so every existing call site stays valid.
+   */
+  dateOfBirth?: string | Date | null;
 }
 
 type ChartSize = 'regular' | 'large' | 'presentation';
@@ -240,6 +253,7 @@ const DentalChart: React.FC<DentalChartProps> = ({
   patientName,
   readOnly = false,
   showTreatmentPlan = true,
+  dateOfBirth = null,
 }) => {
   const { t } = useTranslation(['patients', 'common']);
   const { user } = useAuth();
@@ -259,12 +273,18 @@ const DentalChart: React.FC<DentalChartProps> = ({
   const [activeProcTab, setActiveProcTab] = useState<'chart' | 'plan'>('chart');
   const [patientMode, setPatientMode] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  // null until the first load resolves an initial dentition from the patient's
+  // own records (see resolveInitialDentition). Once the clinician switches
+  // manually their choice sticks for the rest of the visit — the resolver only
+  // ever fills the initial null.
+  const [dentition, setDentition] = useState<Dentition | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadDentalChart() {
       setLoading(true);
+      setDentition(null);
       try {
         const [chartRes, procRes] = await Promise.allSettled([
           dentalChartService.getAll(patientId),
@@ -277,11 +297,18 @@ const DentalChart: React.FC<DentalChartProps> = ({
 
         if (chartRes.status === 'fulfilled') {
           const nextRecords = new Map<number, ToothRecord>();
+          let hasPrimaryRecords = false;
+          let hasPermanentRecords = false;
           for (const rawRecord of chartRes.value.data) {
             const safeStatus = isToothStatus(rawRecord.status) ? rawRecord.status : 'planned';
             nextRecords.set(rawRecord.toothFdi, { ...rawRecord, status: safeStatus });
+            if (getToothDentition(rawRecord.toothFdi) === 'primary') hasPrimaryRecords = true;
+            else hasPermanentRecords = true;
           }
           setRecords(nextRecords);
+          setDentition(
+            resolveInitialDentition({ dateOfBirth, hasPermanentRecords, hasPrimaryRecords }),
+          );
         }
 
         if (procRes.status === 'fulfilled') {
@@ -297,6 +324,10 @@ const DentalChart: React.FC<DentalChartProps> = ({
     return () => {
       cancelled = true;
     };
+    // dateOfBirth is deliberately NOT a dependency: it only seeds the initial
+    // view, and re-running on a prop identity change would yank a clinician
+    // back out of a chart they had switched to mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId, showTreatmentPlan]);
 
   const procedureMap = useMemo(() => {
@@ -310,13 +341,55 @@ const DentalChart: React.FC<DentalChartProps> = ({
     return nextMap;
   }, [procedures]);
 
+  // Falls back to the adult arch while the initial resolution is still null so
+  // the chart never renders an empty arch during the first paint.
+  const activeDentition: Dentition = dentition ?? 'permanent';
+  const isPrimaryView = activeDentition === 'primary';
+
+  const arch = useMemo(
+    () =>
+      isPrimaryView
+        ? {
+            upperRight: UPPER_RIGHT_PRIMARY,
+            upperLeft: UPPER_LEFT_PRIMARY,
+            lowerRight: LOWER_RIGHT_PRIMARY,
+            lowerLeft: LOWER_LEFT_PRIMARY,
+          }
+        : {
+            upperRight: UPPER_RIGHT,
+            upperLeft: UPPER_LEFT,
+            lowerRight: LOWER_RIGHT,
+            lowerLeft: LOWER_LEFT,
+          },
+    [isPrimaryView],
+  );
+
+  /**
+   * How many records exist in EACH dentition. Surfaced on the switch itself so
+   * a clinician can see at a glance that a mixed-dentition child has charted
+   * teeth on the arch they are not currently looking at — without that cue the
+   * other arch's records are invisible and look lost.
+   */
+  const dentitionCounts = useMemo(() => {
+    let permanent = 0;
+    let primary = 0;
+    for (const fdi of records.keys()) {
+      if (getToothDentition(fdi) === 'primary') primary += 1;
+      else permanent += 1;
+    }
+    return { permanent, primary };
+  }, [records]);
+
+  // Status tallies are scoped to the arch on screen: showing adult totals over
+  // a paediatric chart would misreport what the clinician is looking at.
   const counts = useMemo(() => {
     const nextCounts = Object.fromEntries(TOOTH_STATUSES.map((status) => [status, 0])) as Record<ToothStatus, number>;
-    for (const record of records.values()) {
+    for (const [fdi, record] of records.entries()) {
+      if ((getToothDentition(fdi) === 'primary') !== isPrimaryView) continue;
       nextCounts[record.status] += 1;
     }
     return nextCounts;
-  }, [records]);
+  }, [records, isPrimaryView]);
 
   const activeProcedures = useMemo(
     () => procedures.filter((procedure) => procedure.status !== 'cancelled'),
@@ -399,6 +472,75 @@ const DentalChart: React.FC<DentalChartProps> = ({
     }
   };
 
+  /**
+   * Switching arches clears the selection: a tooth selected on the adult chart
+   * has no counterpart on the paediatric one, and leaving the detail panel
+   * pointing at an off-screen tooth is how a note gets saved against the wrong
+   * tooth. Nothing is persisted by switching — records for both arches stay
+   * loaded and untouched.
+   */
+  const handleDentitionChange = (next: Dentition) => {
+    if (next === activeDentition) return;
+    setDentition(next);
+    setSelectedTooth(null);
+    setEditStatus('planned');
+    setEditNote('');
+  };
+
+  const renderDentitionSwitch = () => {
+    const options: { value: Dentition; label: string; count: number }[] = [
+      {
+        value: 'permanent',
+        label: t('patients:dentalChart.dentition.permanent', { defaultValue: 'Adult' }),
+        count: dentitionCounts.permanent,
+      },
+      {
+        value: 'primary',
+        label: t('patients:dentalChart.dentition.primary', { defaultValue: 'Primary' }),
+        count: dentitionCounts.primary,
+      },
+    ];
+
+    return (
+      <div
+        role="group"
+        aria-label={t('patients:dentalChart.dentition.switchLabel', { defaultValue: 'Dentition' })}
+        className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-gray-900"
+      >
+        {options.map((option) => {
+          const active = activeDentition === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={active}
+              data-dentition={option.value}
+              onClick={() => handleDentitionChange(option.value)}
+              className={[
+                'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition',
+                active
+                  ? 'bg-white text-slate-900 shadow-sm dark:bg-gray-700 dark:text-white'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200',
+              ].join(' ')}
+            >
+              {option.label}
+              {option.count > 0 && (
+                <span
+                  className={[
+                    'rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none',
+                    active ? 'bg-primary-600 text-white' : 'bg-slate-200 text-slate-600 dark:bg-gray-700 dark:text-slate-300',
+                  ].join(' ')}
+                >
+                  {option.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderLegend = (compact = false, patientFriendly = false) => (
     <div className={patientFriendly ? 'flex flex-wrap items-center gap-1.5' : 'flex flex-wrap items-center gap-2'}>
       {TOOTH_STATUSES.map((status) => {
@@ -437,8 +579,8 @@ const DentalChart: React.FC<DentalChartProps> = ({
         <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40 xl:p-4">
           <FdiLineRow
             title={t('patients:dentalChart.upperJaw', { defaultValue: 'Upper Jaw' })}
-            leftTeeth={UPPER_RIGHT}
-            rightTeeth={UPPER_LEFT}
+            leftTeeth={arch.upperRight}
+            rightTeeth={arch.upperLeft}
             isUpper
             labelPosition="top"
             records={records}
@@ -456,8 +598,8 @@ const DentalChart: React.FC<DentalChartProps> = ({
           </div>
           <FdiLineRow
             title={t('patients:dentalChart.lowerJaw', { defaultValue: 'Lower Jaw' })}
-            leftTeeth={LOWER_RIGHT}
-            rightTeeth={LOWER_LEFT}
+            leftTeeth={arch.lowerRight}
+            rightTeeth={arch.lowerLeft}
             isUpper={false}
             labelPosition="bottom"
             records={records}
@@ -481,8 +623,8 @@ const DentalChart: React.FC<DentalChartProps> = ({
           title={t('patients:dentalChart.upperJaw', { defaultValue: 'Upper Jaw' })}
           leftLabel={t('patients:dentalChart.upperRight', { defaultValue: 'Upper Right' })}
           rightLabel={t('patients:dentalChart.upperLeft', { defaultValue: 'Upper Left' })}
-          leftTeeth={UPPER_RIGHT}
-          rightTeeth={UPPER_LEFT}
+          leftTeeth={arch.upperRight}
+          rightTeeth={arch.upperLeft}
           isUpper
           labelPosition="top"
           records={records}
@@ -503,8 +645,8 @@ const DentalChart: React.FC<DentalChartProps> = ({
           title={t('patients:dentalChart.lowerJaw', { defaultValue: 'Lower Jaw' })}
           leftLabel={t('patients:dentalChart.lowerRight', { defaultValue: 'Lower Right' })}
           rightLabel={t('patients:dentalChart.lowerLeft', { defaultValue: 'Lower Left' })}
-          leftTeeth={LOWER_RIGHT}
-          rightTeeth={LOWER_LEFT}
+          leftTeeth={arch.lowerRight}
+          rightTeeth={arch.lowerLeft}
           isUpper={false}
           labelPosition="bottom"
           records={records}
@@ -620,6 +762,18 @@ const DentalChart: React.FC<DentalChartProps> = ({
 
           {showChart && (
             <>
+              <div className="flex flex-wrap items-center gap-3">
+                {renderDentitionSwitch()}
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {isPrimaryView
+                    ? t('patients:dentalChart.dentition.primaryHint', {
+                        defaultValue: 'Primary (deciduous) teeth, FDI 51-85.',
+                      })
+                    : t('patients:dentalChart.dentition.permanentHint', {
+                        defaultValue: 'Permanent teeth, FDI 11-48.',
+                      })}
+                </p>
+              </div>
               {renderLegend(false, patientMode)}
               <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
                 <div className="min-w-0">{renderChartStage('regular')}</div>
@@ -739,6 +893,7 @@ const DentalChart: React.FC<DentalChartProps> = ({
         showDetailPanel={!patientMode || selectedTooth !== null}
         onPatientModeChange={setPatientMode}
         onClose={() => setFullscreenOpen(false)}
+        toolbar={renderDentitionSwitch()}
         legend={renderLegend(true, patientMode)}
         chart={renderChartStage('presentation')}
         detailPanel={renderDetailPanel('fullscreen')}

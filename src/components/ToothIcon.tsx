@@ -2,6 +2,7 @@ import React from 'react';
 import { Activity, AlertTriangle, Check, CircleDot, Crown, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
+  getToothDentition,
   getToothShape,
   PROCEDURE_STATUS_META,
   TOOTH_STATUS_META,
@@ -9,6 +10,12 @@ import {
   TreatmentProcedure,
   ToothStatus,
 } from './dentalChart.types';
+import {
+  CROWN_MARGIN_PATH,
+  getToothGeometry,
+  IMPLANT_FIXTURE_PATH,
+  IMPLANT_THREAD_PATH,
+} from './toothGeometry';
 
 type ToothIconSize = 'regular' | 'large' | 'presentation';
 
@@ -23,13 +30,6 @@ interface ToothIconProps {
   patientMode?: boolean;
   onSelect: (fdi: number) => void;
 }
-
-const TOOTH_PATHS = {
-  molar: 'M18 10 C12 14 10 25 13 38 L18 67 C20 78 29 80 32 67 C36 80 45 78 47 67 L52 38 C55 25 52 14 45 10 C38 6 34 12 32 12 C30 12 25 6 18 10Z',
-  premolar: 'M21 10 C15 15 14 27 17 40 L22 66 C24 77 30 78 32 66 C35 78 42 77 44 66 L49 40 C52 27 49 15 43 10 C37 6 34 12 32 12 C30 12 26 6 21 10Z',
-  canine: 'M23 11 C16 18 16 31 20 44 L28 75 C30 82 34 82 36 75 L44 44 C48 31 48 18 41 11 C36 6 33 12 32 12 C31 12 28 6 23 11Z',
-  incisor: 'M24 11 C18 17 18 31 22 45 L28 73 C30 80 34 80 36 73 L42 45 C46 31 46 17 40 11 C35 7 33 12 32 12 C31 12 29 7 24 11Z',
-} as const;
 
 function statusLabel(status: ToothStatus, t: ReturnType<typeof useTranslation>['t']) {
   return t(`patients:dentalChart.status.${status}`, {
@@ -107,6 +107,8 @@ const ToothIcon: React.FC<ToothIconProps> = ({
 }) => {
   const { t } = useTranslation(['patients']);
   const shape = getToothShape(fdi);
+  const dentition = getToothDentition(fdi);
+  const geometry = getToothGeometry(shape, dentition, isUpper);
   const status = record?.status;
   const meta = status ? TOOTH_STATUS_META[status] : null;
   const buttonSize =
@@ -124,8 +126,14 @@ const ToothIcon: React.FC<ToothIconProps> = ({
       });
 
   const toothGroupTransform = isUpper ? 'translate(0 88) scale(1 -1)' : undefined;
-  const strokeClass = meta?.stroke ?? 'stroke-slate-300 dark:stroke-slate-500';
+  const strokeClass = meta?.stroke ?? 'stroke-slate-400 dark:stroke-slate-500';
   const fillClass = meta?.fill ?? 'fill-white dark:fill-gray-700';
+  // A full-coverage crown restores the whole clinical crown, so `crown` status
+  // fills the entire crown path with a solid (not tinted-white) indigo rather
+  // than drawing a separate cap on top of an otherwise natural-looking tooth.
+  const crownFillClass =
+    status === 'crown' ? 'fill-indigo-200 dark:fill-indigo-500/40' : fillClass;
+  const isMissing = status === 'missing';
   const statusClass = status ? `${meta?.border} ${meta?.soft}` : 'border-slate-200 bg-white dark:border-gray-600 dark:bg-gray-800';
 
   return (
@@ -141,6 +149,8 @@ const ToothIcon: React.FC<ToothIconProps> = ({
         aria-pressed={isSelected}
         aria-label={title}
         title={title}
+        data-tooth-fdi={fdi}
+        data-tooth-dentition={dentition}
         onClick={() => onSelect(fdi)}
         className={[
           'relative flex items-center justify-center rounded-xl border transition-all duration-150',
@@ -156,36 +166,89 @@ const ToothIcon: React.FC<ToothIconProps> = ({
           role="presentation"
           className={[
             'h-[88%] w-[88%] drop-shadow-sm',
-            status === 'missing' ? 'opacity-35' : 'opacity-100',
+            isMissing ? 'opacity-35' : 'opacity-100',
           ].join(' ')}
         >
+          {/*
+            Draw order is anatomical: roots first so the crown overlaps them at
+            the cervical line, then surface detail on top of the crown. The
+            whole group is flipped for upper teeth by the transform below —
+            the paths themselves are always authored crown-up.
+          */}
           <g transform={toothGroupTransform}>
-            {status === 'implant' && (
+            {status === 'implant' ? (
+              <>
+                <path
+                  d={IMPLANT_FIXTURE_PATH}
+                  className="fill-purple-200 stroke-purple-600 dark:fill-purple-500/40 dark:stroke-purple-300"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d={IMPLANT_THREAD_PATH}
+                  className="stroke-purple-600 opacity-70 dark:stroke-purple-200"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </>
+            ) : (
+              geometry.roots.map((rootPath, index) => (
+                <path
+                  key={index}
+                  d={rootPath}
+                  className={`${fillClass} ${strokeClass} opacity-75`}
+                  strokeWidth={isMissing ? 1.6 : 1.9}
+                  strokeDasharray={isMissing ? '4 3' : undefined}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ))
+            )}
+
+            <path
+              d={geometry.crown}
+              className={`${crownFillClass} ${strokeClass}`}
+              strokeWidth={isMissing ? 1.9 : 2.3}
+              strokeDasharray={isMissing ? '5 4' : undefined}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {!isMissing && (
+              <>
+                <path
+                  d={geometry.surface}
+                  className={`${strokeClass} opacity-45`}
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+                <path
+                  d={geometry.cervical}
+                  className={`${strokeClass} opacity-35`}
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </>
+            )}
+
+            {status === 'crown' && (
               <path
-                d="M32 54 L32 84 M25 62 H39 M26 69 H38 M27 76 H37"
-                className="stroke-purple-500 dark:stroke-purple-300"
-                strokeWidth="3"
+                d={CROWN_MARGIN_PATH}
+                className="stroke-indigo-600 dark:stroke-indigo-200"
+                strokeWidth="1.8"
                 strokeLinecap="round"
                 fill="none"
               />
             )}
-            <path
-              d={TOOTH_PATHS[shape]}
-              className={`${fillClass} ${strokeClass}`}
-              strokeWidth={status === 'missing' ? 2.2 : 2.6}
-              strokeDasharray={status === 'missing' ? '5 4' : undefined}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            {status === 'crown' && (
-              <path
-                d="M18 13 C25 5 29 12 32 12 C35 12 39 5 46 13 C48 18 48 23 46 27 C39 22 25 22 18 27 C16 23 16 18 18 13Z"
-                className="fill-indigo-200 stroke-indigo-500 dark:fill-indigo-400/40 dark:stroke-indigo-300"
-                strokeWidth="2"
-                strokeLinejoin="round"
-              />
-            )}
           </g>
+
+          {/*
+            Status marks that must stay upright regardless of jaw — they live
+            OUTSIDE the flip group on purpose (a mirrored tick reads as wrong).
+          */}
           {status === 'treated' && (
             <path
               d="M23 38 L30 45 L44 28"
@@ -196,7 +259,7 @@ const ToothIcon: React.FC<ToothIconProps> = ({
               fill="none"
             />
           )}
-          {status === 'missing' && (
+          {isMissing && (
             <path
               d="M20 44 H44"
               className="stroke-gray-400 dark:stroke-gray-300"

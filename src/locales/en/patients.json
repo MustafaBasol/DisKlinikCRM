@@ -314,6 +314,13 @@
     "noteOptional": "Note (optional)",
     "notePlaceholder": "Planned service, clinical note...",
     "deleteRecord": "Delete record",
+    "dentition": {
+      "switchLabel": "Dentition",
+      "permanent": "Adult",
+      "primary": "Primary",
+      "permanentHint": "Permanent teeth, FDI 11-48.",
+      "primaryHint": "Primary (deciduous) teeth, FDI 51-85."
+    },
     "status": {
       "planned": "Planned",
       "in_progress": "In Progress",

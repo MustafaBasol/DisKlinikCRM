@@ -314,6 +314,13 @@
     "noteOptional": "Notiz (optional)",
     "notePlaceholder": "Geplante Leistung, klinische Notiz...",
     "deleteRecord": "Eintrag löschen",
+    "dentition": {
+      "switchLabel": "Dentition",
+      "permanent": "Bleibend",
+      "primary": "Milchzahn",
+      "permanentHint": "Bleibende Zähne, FDI 11-48.",
+      "primaryHint": "Milchzähne, FDI 51-85."
+    },
     "status": {
       "planned": "Geplant",
       "in_progress": "In Bearbeitung",

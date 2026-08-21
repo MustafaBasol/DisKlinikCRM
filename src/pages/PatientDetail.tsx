@@ -1499,7 +1499,11 @@ const PatientDetail: React.FC = () => {
         )}
         {/* Dental Chart Tab */}
         {activeTab === 'dental' && (
-          <DentalChart patientId={id!} patientName={patientFullName} />
+          <DentalChart
+            patientId={id!}
+            patientName={patientFullName}
+            dateOfBirth={patient.dateOfBirth ?? null}
+          />
         )}
         {activeTab === 'activity' && (
           <div className="card p-6">

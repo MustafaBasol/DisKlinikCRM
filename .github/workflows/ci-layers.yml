@@ -586,6 +586,10 @@ jobs:
           npm run test:clinic-bulk-export-selection
           npm run test:communication-consent-matrix
           npm run test:patient-detail-tabs-helpers
+          # DENTAL-CHART-UX-001: FDI/dentition domain logic + tooth SVG geometry,
+          # and tr/en/fr/de parity for the adult/primary chart switch labels.
+          npm run test:dental-chart-helpers
+          npm run test:dental-chart-dentition-i18n-parity
           npm run test:platform-migration-helpers
           # F3-DATA-MIG-TODAY-001-R11. Guards the frontend destination-group
           # whitelist against the backend catalog. It reads server contracts
