@@ -48,7 +48,8 @@ import { getOcclusalArt } from './occlusalGeometry';
 import { OCCLUSAL_SURFACE_NAMES, type OcclusalSurfaceName, type SideStrategy } from './anatomy.types';
 import type { ToothIdentity } from './toothIdentity';
 import { CROWN_MARGIN_PATH, IMPLANT_FIXTURE_PATH, IMPLANT_THREAD_PATH } from '../toothGeometry';
-import { getLateralCrownBBox, getLateralViewBox } from './lateralBounds';
+import type { Dentition } from '../toothGeometry';
+import { getLateralAspect, getLateralCrownBBox, getLateralViewBox } from './lateralBounds';
 import { getOcclusalCrop } from './occlusalBounds';
 
 export type ChartSize = 'regular' | 'large' | 'presentation';
@@ -60,6 +61,26 @@ const LATERAL_HEIGHT: Record<ChartSize, number> = {
   large: 118,
   presentation: 160,
 };
+
+/**
+ * The occlusal view is a SUPPORTING view: it must be legible but must never
+ * out-weigh the lateral row. Fixed fraction of the lateral height rather than
+ * a share of the column width, so the ratio holds at every chart size.
+ */
+const OCCLUSAL_HEIGHT_RATIO = 0.46;
+
+/**
+ * The px width one tooth column needs at this size.
+ *
+ * Every tooth in an arch gets the SAME column width and the same rendered SVG
+ * box; the visible width difference between a molar and an incisor comes from
+ * the artwork drawn inside that shared box, which is how a paper odontogram
+ * works and what keeps the column pitch even. Exported so Odontogram lays out
+ * the grid from exactly the number the glyph renders at.
+ */
+export function getGlyphLateralWidth(dentition: Dentition, size: ChartSize): number {
+  return Math.round(LATERAL_HEIGHT[size] * getLateralAspect(dentition));
+}
 
 const NUMBER_BADGE_SIZE: Record<ChartSize, number> = {
   regular: 15,
@@ -187,7 +208,7 @@ const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width,
       viewBox={viewBox}
       width={width}
       height={height}
-      preserveAspectRatio="none"
+      preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-hidden="true"
       data-view="lateral"
@@ -302,12 +323,12 @@ interface OcclusalViewProps {
   fdi: number;
   identity: ToothIdentity;
   status?: ToothStatus;
-  width: number;
+  height: number;
   viewLabel: string;
   t: ReturnType<typeof useTranslation>['t'];
 }
 
-const OcclusalView: React.FC<OcclusalViewProps> = ({ fdi, identity, status, width, viewLabel, t }) => {
+const OcclusalView: React.FC<OcclusalViewProps> = ({ fdi, identity, status, height, viewLabel, t }) => {
   const art = useMemo(() => getOcclusalArt(identity), [identity]);
   const meta = status ? TOOTH_STATUS_META[status] : null;
   const strokeClass = meta?.stroke ?? DEFAULT_STROKE_CLASS;
@@ -322,13 +343,14 @@ const OcclusalView: React.FC<OcclusalViewProps> = ({ fdi, identity, status, widt
         : fillClass;
   const transform = occlusalTransform(identity, art.sideStrategy);
   const crop = useMemo(() => getOcclusalCrop(identity), [identity]);
-  const height = Math.round(width * crop.aspect);
+  const width = Math.round(height / crop.aspect);
 
   return (
     <svg
       viewBox={crop.viewBox}
       width={width}
       height={height}
+      preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-hidden="true"
       data-view="occlusal"
@@ -431,7 +453,14 @@ const ToothGlyphInner = React.forwardRef<HTMLButtonElement, ToothGlyphProps>(
     const lateralLabel = t('patients:dentalChart.view.lateral', { defaultValue: 'Lateral view' });
     const occlusalLabel = t('patients:dentalChart.view.occlusal', { defaultValue: 'Occlusal view' });
 
+    // Both views are sized from the FIXED height for this chart size and each
+    // view's own viewBox aspect, so x and y always scale by the same factor.
+    // `width` is the column box the glyph is centred in — it is deliberately
+    // NOT used to scale the SVG, because varying the box width against a fixed
+    // height is exactly the non-uniform scale that stretched crowns before.
     const lateralHeight = LATERAL_HEIGHT[size];
+    const lateralWidth = Math.round(lateralHeight * getLateralAspect(identity.dentition));
+    const occlusalHeight = Math.round(lateralHeight * OCCLUSAL_HEIGHT_RATIO);
 
     const lateralNode = (
       <LateralView
@@ -439,13 +468,21 @@ const ToothGlyphInner = React.forwardRef<HTMLButtonElement, ToothGlyphProps>(
         fdi={fdi}
         identity={identity}
         status={status}
-        width={width}
+        width={lateralWidth}
         height={lateralHeight}
         viewLabel={lateralLabel}
       />
     );
     const occlusalNode = showOcclusal ? (
-      <OcclusalView key="occlusal" fdi={fdi} identity={identity} status={status} width={width} viewLabel={occlusalLabel} t={t} />
+      <OcclusalView
+        key="occlusal"
+        fdi={fdi}
+        identity={identity}
+        status={status}
+        height={occlusalHeight}
+        viewLabel={occlusalLabel}
+        t={t}
+      />
     ) : null;
 
     // The status badge anchors to the CROWN seam — the edge where the

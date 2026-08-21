@@ -82,6 +82,26 @@ export function getLateralViewBoxHeight(dentition: Dentition): number {
 }
 
 /**
+ * width / height of the lateral viewBox for a dentition.
+ *
+ * Every tooth in a dentition shares this aspect (the window is always the full
+ * authored 64 units wide and one constant cropped height tall), which is what
+ * lets the renderer use a UNIFORM scale: pick the rendered height, derive the
+ * rendered width from this ratio, and `preserveAspectRatio="xMidYMid meet"`
+ * then scales x and y by exactly the same factor with no letterboxing.
+ *
+ * The earlier revision instead varied the rendered width per tooth and forced
+ * the height with `preserveAspectRatio="none"`. That is a non-uniform scale:
+ * it stretched narrow crowns sideways and squashed wide ones, so a central
+ * incisor rendered as a fat lozenge. Tooth width must come from the ARTWORK —
+ * Lane B already draws a molar wider than an incisor inside the shared box —
+ * never from distorting the viewport.
+ */
+export function getLateralAspect(dentition: Dentition): number {
+  return VIEWBOX_WIDTH / VIEWBOX_HEIGHT_BY_DENTITION[dentition];
+}
+
+/**
  * The per-tooth `viewBox` string. Crown's outer edge sits `PAD` units in
  * from whichever end of the box is adjacent to the occlusal view in the
  * finished stack (bottom for upper arch, top for lower arch) — see the

@@ -41,7 +41,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PROCEDURE_STATUS_META, ToothRecord, TreatmentProcedure, Dentition } from '../dentalChart.types';
-import ToothGlyph, { ChartSize } from './ToothGlyph';
+import ToothGlyph, { getGlyphLateralWidth, ChartSize } from './ToothGlyph';
 import { getToothIdentity } from './toothIdentity';
 import { getLateralArt } from './lateralGeometry';
 import { getUpperRow, getLowerRow } from './chartOrder';
@@ -56,20 +56,15 @@ export interface OdontogramProps {
   patientMode: boolean;
 }
 
-/** Px width for a widthRatio of 1.0 (a permanent upper central incisor). */
-const BASE_WIDTH: Record<ChartSize, number> = {
-  regular: 54,
-  large: 74,
-  presentation: 100,
-};
-
 const MIN_WIDTH = 28;
-const COLUMN_GAP: Record<ChartSize, number> = { regular: 3, large: 4, presentation: 5 };
+// Tight, even pitch: adjacent teeth in a real arch nearly touch, and every
+// px of gutter here is a px the 16-tooth adult arch cannot spend on anatomy.
+const COLUMN_GAP: Record<ChartSize, number> = { regular: 2, large: 3, presentation: 4 };
 
 const MARKER_WIDTH: Record<ChartSize, number> = {
-  regular: 36,
-  large: 46,
-  presentation: 60,
+  regular: 28,
+  large: 38,
+  presentation: 52,
 };
 
 // Prominent, high-contrast — the primary orientation cue, not a decoration.
@@ -139,19 +134,23 @@ const Odontogram: React.FC<OdontogramProps> = ({
   const upperRow = useMemo(() => getUpperRow(dentition), [dentition]);
   const lowerRow = useMemo(() => getLowerRow(dentition), [dentition]);
 
-  // One shared column width (px) per quadrant position, so the upper and
-  // lower arches (and the R/L markers, and the FDI number rows) all line up
-  // — the wider of the two arches' teeth at that position wins.
+  // ONE uniform column width for the whole arch.
+  //
+  // Column pitch is even and every tooth renders into an identically sized
+  // box; the visible width difference between a molar and an incisor comes
+  // from the ARTWORK Lane B drew inside that shared box. Deriving the pitch
+  // from per-tooth `widthRatio` instead looked plausible but was wrong twice
+  // over: it made the gaps uneven, and it forced the glyph to scale x and y by
+  // different factors, which visibly stretched narrow crowns. `widthRatio`
+  // remains part of the artwork contract (and is asserted by the anatomy
+  // tests) — it is simply not what drives the grid.
+  const columnWidth = useMemo(
+    () => Math.max(MIN_WIDTH, getGlyphLateralWidth(dentition, size)),
+    [dentition, size],
+  );
   const columnWidths = useMemo(
-    () =>
-      upperRow.map((upperFdi, index) => {
-        const lowerFdi = lowerRow[index];
-        const upperRatio = getLateralArt(getToothIdentity(upperFdi)).widthRatio;
-        const lowerRatio = lowerFdi != null ? getLateralArt(getToothIdentity(lowerFdi)).widthRatio : upperRatio;
-        const ratio = Math.max(upperRatio, lowerRatio);
-        return Math.max(MIN_WIDTH, Math.round(BASE_WIDTH[size] * ratio));
-      }),
-    [upperRow, lowerRow, size],
+    () => upperRow.map(() => columnWidth),
+    [upperRow, columnWidth],
   );
 
   const gridTemplateColumns = useMemo(
