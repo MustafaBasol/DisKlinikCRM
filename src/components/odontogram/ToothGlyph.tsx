@@ -458,8 +458,12 @@ const ToothGlyphInner = React.forwardRef<HTMLButtonElement, ToothGlyphProps>(
     // `width` is the column box the glyph is centred in — it is deliberately
     // NOT used to scale the SVG, because varying the box width against a fixed
     // height is exactly the non-uniform scale that stretched crowns before.
-    const lateralHeight = LATERAL_HEIGHT[size];
-    const lateralWidth = Math.round(lateralHeight * getLateralAspect(identity.dentition));
+    // The column width the arch resolved (responsive — see Odontogram) is the
+    // one input; both view heights derive from it through each view's own
+    // viewBox aspect, so x and y always scale by the same factor and the arch
+    // shrinks as one picture rather than distorting when space is tight.
+    const lateralWidth = width;
+    const lateralHeight = Math.round(width / getLateralAspect(identity.dentition));
     const occlusalHeight = Math.round(lateralHeight * OCCLUSAL_HEIGHT_RATIO);
 
     const lateralNode = (

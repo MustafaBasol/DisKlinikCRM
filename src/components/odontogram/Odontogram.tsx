@@ -131,6 +131,23 @@ const Odontogram: React.FC<OdontogramProps> = ({
 }) => {
   const { t } = useTranslation(['patients']);
 
+  // Measured width of the scroll wrapper, driving the responsive pitch above.
+  // ResizeObserver rather than a window listener so the chart also reacts to
+  // the detail panel opening/closing beside it, not just to viewport changes.
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect.width ?? 0;
+      setContainerWidth((current) => (Math.abs(current - next) < 1 ? current : next));
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const upperRow = useMemo(() => getUpperRow(dentition), [dentition]);
   const lowerRow = useMemo(() => getLowerRow(dentition), [dentition]);
 
@@ -144,10 +161,22 @@ const Odontogram: React.FC<OdontogramProps> = ({
   // different factors, which visibly stretched narrow crowns. `widthRatio`
   // remains part of the artwork contract (and is asserted by the anatomy
   // tests) — it is simply not what drives the grid.
-  const columnWidth = useMemo(
-    () => Math.max(MIN_WIDTH, getGlyphLateralWidth(dentition, size)),
-    [dentition, size],
-  );
+  //
+  // RESPONSIVE PITCH. The natural column width for this chart size is the
+  // ceiling; when the container is narrower than the whole arch needs, the
+  // columns shrink to fit instead of forcing a horizontal scroll. A dentist
+  // reads an odontogram as one picture, and a 16-tooth arch that always has
+  // to be scrolled at Patient Detail width is not one picture. Below
+  // MIN_WIDTH legibility loses to arithmetic and the container scrolls after
+  // all — which is why the scroll wrapper stays.
+  const naturalWidth = getGlyphLateralWidth(dentition, size);
+  const columnWidth = useMemo(() => {
+    const columns = upperRow.length;
+    if (!containerWidth || columns === 0) return Math.max(MIN_WIDTH, naturalWidth);
+    const chrome = MARKER_WIDTH[size] * 2 + COLUMN_GAP[size] * (columns + 1);
+    const available = Math.floor((containerWidth - chrome) / columns);
+    return Math.max(MIN_WIDTH, Math.min(naturalWidth, available));
+  }, [containerWidth, naturalWidth, upperRow.length, size]);
   const columnWidths = useMemo(
     () => upperRow.map(() => columnWidth),
     [upperRow, columnWidth],
@@ -324,7 +353,7 @@ const Odontogram: React.FC<OdontogramProps> = ({
   );
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div ref={containerRef} className="w-full overflow-x-auto">
       <div className="mx-auto flex min-w-fit flex-col gap-1 py-1">
         <div className="flex items-center justify-center gap-1.5">
           <Chip size={size}>{upperRightQuadrant}</Chip>
