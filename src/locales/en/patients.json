@@ -341,6 +341,47 @@
       "premolar": "Premolar",
       "canine": "Canine",
       "incisor": "Incisor"
+    },
+    "orientation": {
+      "rightShort": "R",
+      "leftShort": "L",
+      "rightLabel": "Patient's right",
+      "leftLabel": "Patient's left",
+      "upperRightQuadrant": "Upper Right",
+      "upperLeftQuadrant": "Upper Left",
+      "lowerRightQuadrant": "Lower Right",
+      "lowerLeftQuadrant": "Lower Left"
+    },
+    "view": {
+      "lateral": "Lateral view",
+      "occlusal": "Occlusal view",
+      "dualHint": "Top row lateral, bottom row occlusal."
+    },
+    "toothFamily": {
+      "central_incisor": "Central Incisor",
+      "lateral_incisor": "Lateral Incisor",
+      "canine": "Canine",
+      "first_premolar": "First Premolar",
+      "second_premolar": "Second Premolar",
+      "first_molar": "First Molar",
+      "second_molar": "Second Molar",
+      "third_molar": "Third Molar"
+    },
+    "surface": {
+      "mesial": "Mesial",
+      "distal": "Distal",
+      "buccal": "Buccal",
+      "lingual": "Lingual",
+      "palatal": "Palatal",
+      "central": "Occlusal",
+      "incisal": "Incisal"
+    },
+    "navigation": {
+      "previousTooth": "Previous tooth",
+      "nextTooth": "Next tooth",
+      "jumpLabel": "Go to FDI",
+      "jumpPlaceholder": "e.g. 36",
+      "jumpInvalid": "That tooth is not in this dentition."
     }
   },
   "status": {

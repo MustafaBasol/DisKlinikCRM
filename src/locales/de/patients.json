@@ -341,6 +341,47 @@
       "premolar": "Prämolar",
       "canine": "Eckzahn",
       "incisor": "Schneidezahn"
+    },
+    "orientation": {
+      "rightShort": "R",
+      "leftShort": "L",
+      "rightLabel": "Rechte Seite des Patienten",
+      "leftLabel": "Linke Seite des Patienten",
+      "upperRightQuadrant": "Oben rechts",
+      "upperLeftQuadrant": "Oben links",
+      "lowerRightQuadrant": "Unten rechts",
+      "lowerLeftQuadrant": "Unten links"
+    },
+    "view": {
+      "lateral": "Seitenansicht",
+      "occlusal": "Okklusalansicht",
+      "dualHint": "Obere Reihe seitlich, untere Reihe okklusal."
+    },
+    "toothFamily": {
+      "central_incisor": "Mittlerer Schneidezahn",
+      "lateral_incisor": "Seitlicher Schneidezahn",
+      "canine": "Eckzahn",
+      "first_premolar": "Erster Prämolar",
+      "second_premolar": "Zweiter Prämolar",
+      "first_molar": "Erster Molar",
+      "second_molar": "Zweiter Molar",
+      "third_molar": "Weisheitszahn"
+    },
+    "surface": {
+      "mesial": "Mesial",
+      "distal": "Distal",
+      "buccal": "Bukkal",
+      "lingual": "Lingual",
+      "palatal": "Palatinal",
+      "central": "Okklusal",
+      "incisal": "Inzisal"
+    },
+    "navigation": {
+      "previousTooth": "Vorheriger Zahn",
+      "nextTooth": "Nächster Zahn",
+      "jumpLabel": "Zu FDI springen",
+      "jumpPlaceholder": "z. B. 36",
+      "jumpInvalid": "Dieser Zahn gehört nicht zu diesem Gebiss."
     }
   },
   "status": {
