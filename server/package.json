@@ -149,6 +149,7 @@
     "test:tenant-guard-isolation": "tsx src/tests/dbVerification/tenantGuardIsolation.test.ts",
     "test:tenant-guard-benchmark": "tsx src/tests/dbVerification/tenantGuardBenchmark.ts",
     "poc:f3-3-rls": "tsx src/tests/poc/rlsPgBouncerPoc.ts",
+    "poc:f5-1p-queue": "tsx src/tests/poc/queuePlatformPoc.ts",
     "test:migration-patient-schema-drift": "tsx src/tests/migrationPatientSchemaDrift.test.ts",
     "test:patient-blood-group": "tsx src/tests/patientBloodGroup.test.ts",
     "test:migration-reports": "tsx src/tests/migrationReports.test.ts",
@@ -277,6 +278,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/pdfkit": "^0.17.6",
     "@types/pg": "8.20.0",
+    "bullmq": "^6.2.0",
     "prisma": "7.9.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
