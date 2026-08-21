@@ -66,7 +66,7 @@ error-tracking data has been sent here — see §7 for that separate status.
 | Independent network corroboration (E3) | **PARTIAL, unchanged since `F3-C2-ERR-004` §4.1** — RIPE RDAP `country: TR`, `netname: IHS-VPS-NET5`. This is geolocation-adjacent inference, not the stronger artifact §6 E3 originally asked for ("geolocation alone is not sufficient — it is inference"). This task did not strengthen E3. |
 | No overseas replication/failover/migration (E4) | Provider states there is **no overseas replication, failover or migration** for this service (program-owner-accepted, 2026-08-20). Recorded as `SATISFIED_BY_ACCEPTED_PROVIDER_EVIDENCE` — the documentary form (written contract clause vs. a recorded support statement) is not independently distinguished in what was supplied to this register. |
 | Backup/snapshot storage region (E5) | **Türkiye**, per program-owner-accepted provider evidence (2026-08-20). `SATISFIED_BY_ACCEPTED_PROVIDER_EVIDENCE`. |
-| Contract / DPA status | **No separate/custom DPA is offered by IHS under its standard online-service model** (program-owner-accepted finding, 2026-08-20). This register does **not** claim a DPA exists, and does not treat the standard online-service terms as a substitute for one. `F3-C2-ERR-002` §7.3 requires **`COUNSEL`** to confirm the precise subprocessor characterization and DPA sufficiency for this relationship; that confirmation has **not** been obtained. The **`I1–I5`** "provider/DPA items" referenced by `F3-C2-ERR-002` §7.1/§9, `F3-C2-ERR-004` §7.1, the master tracker, and `F4-IMAGING-001-R5` are used throughout this program only as a **bundled shorthand** — no discrete definition of I1 through I5 individually exists anywhere in this repository as of this task. **Not guessed here.** Recorded as `UNDEFINED_IN_REPOSITORY — COUNSEL_REVIEW_REQUIRED` pending a document that enumerates them the way `F3-C2-ERR-002` §6 enumerates E1–E5. |
+| Contract / DPA status | **No separate/custom DPA is offered by IHS under its standard online-service model** (program-owner-accepted finding, 2026-08-20). This register does **not** claim a DPA exists, and does not treat the standard online-service terms as a substitute for one. `F3-C2-ERR-002` §7.3 requires **`COUNSEL`** to confirm the precise subprocessor characterization and DPA sufficiency for this relationship; that confirmation has **not** been obtained. **[2026-08-21, `F3-C2-ERR-004-R5`.]** The **`I1–I5`** "provider/DPA items" bundled shorthand referenced by earlier entries here and elsewhere is **DEPRECATED — no discrete definition of it ever existed in this repository** (confirmed by direct search, not inferred; a different, unrelated, genuinely-defined `I1–I5` exists in `docs/program/runbooks/F4_RECOVERY_OPERATIONS.md` §22.7 for pgBackRest repo2 backup-independence evidence, which must not be conflated with this DPA/subprocessor usage). It is replaced by five named decision dimensions with an explicit human decision matrix — see [`F3-C2-ERR-004_R5_IHS_LEGAL_GOVERNANCE_DECISION_PACKET.md`](../program/evidence/F3-C2-ERR-004_R5_IHS_LEGAL_GOVERNANCE_DECISION_PACKET.md) §3–§4. |
 | Encryption at rest | **No provider-side encryption-at-rest** (program-owner-accepted finding, 2026-08-20) — matches this register's existing pattern for §1 and is the expected default for a standard VPS product. **Guest-level LUKS/dm-crypt is technically permitted** by the provider, which is the primary control `F3-C2-ERR-002` §7.3/§11.4 row 8 calls for precisely because provider-side encryption does not exist. **"Technically permitted" is a capability statement, not a configuration statement** — this register has no evidence that guest-side encryption is actually configured on this VPS today. Until it is confirmed configured, workload A's payload (and any future workload B/C payload) has **no encryption-at-rest guarantee at any layer** on this host. |
 | Support-access model | Provider staff do **not** retain routine access to the customer VM after credentials are changed; support access requires customer-provided access (program-owner-accepted finding, 2026-08-20). This is a real, positive control relevant to `F3-C2-ERR-002` §11.4 row 3/row 11 access-control requirements, **not independently audited** by NoraMedi. |
 | Resource expansion | VPS resources can be expanded while preserving existing data (program-owner-accepted finding, 2026-08-20) — operationally relevant to future workload B/C sizing (`F3-C2-ERR-002` §11.3, still `UNRESOLVED`), not evaluated further here as that remains out of this task's scope. |
@@ -161,7 +161,7 @@ error-tracking data has been sent here — see §7 for that separate status.
 | # | Provider / category | Status | Data-transfer relevance | Contract/DPA status |
 |---|---|---|---|---|
 | 1 | Hosting / VPS (primary production host) | `ACTIVE` (provider identity `TO BE VERIFIED`) | `TO BE VERIFIED` (depends on region) | `TO BE VERIFIED` |
-| 1a | Hosting / VPS (**NoraMedi Türkiye Secondary Infrastructure VPS — IHS**, Workload A/GlitchTip) | `ACTIVE` as an infrastructure hosting relationship (added 2026-08-20, `F3-C2-ERR-004-R1`); **NOT** the same as error-tracking data flow, which stays `NO SUBPROCESSOR IDENTIFIED` in row `7c` until `SENTRY_DSN` is set | `NOT ENGAGED` for Workload A, conditional on E1/E2/E4/E5 (Türkiye/NGN Data Center; §1a) continuing to hold | No separate/custom DPA exists (program-owner-accepted); `COUNSEL REVIEW PENDING` on subprocessor characterization; `I1–I5` undefined in this repository |
+| 1a | Hosting / VPS (**NoraMedi Türkiye Secondary Infrastructure VPS — IHS**, Workload A/GlitchTip) | `ACTIVE` as an infrastructure hosting relationship (added 2026-08-20, `F3-C2-ERR-004-R1`); **NOT** the same as error-tracking data flow, which stays `NO SUBPROCESSOR IDENTIFIED` in row `7c` until `SENTRY_DSN` is set | `NOT ENGAGED` for Workload A, conditional on E1/E2/E4/E5 (Türkiye/NGN Data Center; §1a) continuing to hold | No separate/custom DPA exists (program-owner-accepted); `COUNSEL REVIEW PENDING` on subprocessor characterization; `I1–I5` shorthand **deprecated** 2026-08-21 — see the R5 decision packet's human decision matrix |
 | 2 | Google (Gemini) | `ACTIVE` | International transfer likely — mechanism not selected | `TO BE VERIFIED` |
 | 3 | Meta (WhatsApp/Instagram) | `ACTIVE` | International transfer likely — mechanism not selected | `TO BE VERIFIED` |
 | 4 | Email (SMTP, vendor-agnostic) | `CONFIGURABLE, NOT CONFIRMED ACTIVE` | `TO BE VERIFIED` | `TO BE VERIFIED` |
@@ -186,15 +186,20 @@ error-tracking data has been sent here — see §7 for that separate status.
 6. Re-run this register's classification whenever a new provider category (SMS, object
    storage, monitoring) moves from `NOT YET INTEGRATED`/`NO SUBPROCESSOR IDENTIFIED` to
    `ACTIVE` — do not let that transition happen without an update here.
-7. **[Added 2026-08-20, `F3-C2-ERR-004-R1`.]** Before `SENTRY_DSN` may be set in any
-   NoraMedi environment: (a) merge this register update (§1a, row `7c`'s reconciliation
-   entry) to `main` — `F3-C2-ERR-002` §9 Stage 4 step 1's hard gate requires *merged*,
-   not merely committed; (b) obtain counsel confirmation of the `I1–I5` "provider/DPA
-   items" — no discrete definition of them exists anywhere in this repository, so counsel
-   must either supply one or confirm the §1a evidence is sufficient without it; and
-   (c) resolve `F3-C2-ERR-002` §7.3's `COUNSEL REVIEW PENDING` marker on the IHS hosting
-   relationship's precise subprocessor characterization. None of (a)–(c) is performed by
-   this update.
+7. **[Added 2026-08-20, `F3-C2-ERR-004-R1`; updated 2026-08-21, `F3-C2-ERR-004-R5`.]**
+   Before `SENTRY_DSN` may be set in any NoraMedi environment: (a) merge this register
+   update (§1a, row `7c`'s reconciliation entry) to `main` — `F3-C2-ERR-002` §9 Stage 4
+   step 1's hard gate requires *merged*, not merely committed — **DONE**: PR #467 merged
+   2026-08-20T21:31:34Z; (b) obtain an authorized program-owner/counsel answer to each of
+   the five named decision dimensions that replace the deprecated `I1–I5` shorthand
+   (`PROCESSOR_CHARACTERIZATION`, `CONTRACT_DPA_SUFFICIENCY`, `TRANSFER_RESIDENCY_POSTURE`,
+   `ENCRYPTION_AT_REST_DISPOSITION`, `VENDOR_LIFECYCLE_EVIDENCE`) — **NOT DONE**, see
+   [`F3-C2-ERR-004_R5_IHS_LEGAL_GOVERNANCE_DECISION_PACKET.md`](../program/evidence/F3-C2-ERR-004_R5_IHS_LEGAL_GOVERNANCE_DECISION_PACKET.md)
+   §4; and (c) resolve `F3-C2-ERR-002` §7.3's `COUNSEL REVIEW PENDING` marker on the IHS
+   hosting relationship's precise subprocessor characterization — **NOT DONE**, folded into
+   (b) DECISION-1. The R5 decision packet also defines the explicit binary hard gate
+   (`IHS_KVKK_DSN_HARD_GATE`) this next-action item feeds. None of (a)–(c) is performed by
+   this update beyond recording (a)'s already-true state and restructuring (b)/(c).
 
 ---
 

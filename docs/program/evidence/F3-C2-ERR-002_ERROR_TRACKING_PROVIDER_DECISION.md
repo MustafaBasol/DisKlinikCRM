@@ -24,6 +24,15 @@
 **Baseline:** `origin/main` @ `c600ea70022546dd503209002123efa3260666a3` (PR #416 merge commit; head `a115a670f4547713d68fea09ba0b8c59c69d9628`)
 **Predecessor:** `F3-C2-ERR-001` (PR #416, merged, 13/13 CI) — see [F3-OBS-001_PRODUCTION_OBSERVABILITY_MINIMUM.md](F3-OBS-001_PRODUCTION_OBSERVABILITY_MINIMUM.md) §15
 
+> **[2026-08-21, provenance correction, `F3-C2-ERR-004-R5`.]** Later documents (the
+> subprocessor register, `F3-C2-ERR-004`, the master tracker) cite an `I1–I5` "provider/DPA
+> items" shorthand as originating in this document's §7.1/§9. **It does not appear
+> anywhere in this document** — confirmed by direct search. That shorthand has been
+> deprecated as `UNDEFINED_IN_REPOSITORY` and replaced by five named decision dimensions;
+> see [F3-C2-ERR-004_R5_IHS_LEGAL_GOVERNANCE_DECISION_PACKET.md](F3-C2-ERR-004_R5_IHS_LEGAL_GOVERNANCE_DECISION_PACKET.md)
+> §3. This document's own §6 (E1–E5) and §7 (KVKK classification, incl. the §7.3
+> `COUNSEL REVIEW PENDING` marker) are unaffected and remain authoritative as written.
+
 > **This document is a decision and a runbook. Nothing in it has been executed.**
 > No provider is deployed. No `SENTRY_DSN` exists in any environment. No production
 > synthetic event has been sent. PR #416 itself is **not deployed**. **`F3-SEC-EXIT-001`
