@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -0.3 64 79.2" width="64" height="79.2" data-tooth-fdi="17" data-view="lateral" role="img">
+  <title>Tooth 17 — permanent (adult) upper right second molar — lateral view</title>
+  <desc>Standalone lateral (buccal/facial) anatomy for tooth 17 (permanent (adult), upper right second molar), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(0 88) scale(1 -1)">
+    <path d="M28.5 39.7 L35.5 39.7 C36.2 46.5 35.8 54 34.3 60.7 C33.5 64.3 32.2 66.7 31 67 C29.8 66.7 28.6 64.3 27.8 60.7 C26.3 54 26 46.5 28.5 39.7 Z" fill="#f0e6d2" stroke="#a1866a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-part="root" data-root-index="0"/>
+    <path d="M36 40 C38.3 45 39.2 50.5 38 56 C37.2 59.6 35.4 62 33.6 61.5 C32 61 31.2 58 31.3 54 C31.4 48.5 33 43.5 35 40 Z" fill="#f0e6d2" stroke="#a1866a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-part="root" data-root-index="1"/>
+    <path d="M20.5 40 C18 45 17 50 18 55 C18.6 58.3 20.1 60.3 21.7 59.8 C23.2 59.3 24 56.5 23.9 53 C23.7 48 22.5 43.5 21 40 Z" fill="#f0e6d2" stroke="#a1866a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-part="root" data-root-index="2"/>
+    <path d="M45.5 25 C45.2 19.3 42.7 15 39.5 13 C37.4 11.7 35.8 12.5 35.1 14.7 C34.3 17 33 18.2 32 18.2 C31 18.2 29.7 17 28.9 14.7 C28.2 12.4 26 11.6 23.5 13.2 C20 15.4 17.6 19.6 17.2 25 C17 29 17.6 32.8 19 35.8 C20.4 38.5 22.5 40 25 40.3 L39 40 C41.7 39.4 43.8 37.5 44.7 34.2 C45.6 31 45.8 27.7 45.5 25 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-part="crown"/>
+    <path d="M23.5 14.5 L26 20 M40 14.5 L37.5 20 M32 18.2 V26 M28.5 18 L32 21.3 L35.5 18" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.55" stroke-linecap="round" data-part="surface"/>
+    <path d="M18.5 39.5 C25 42.3 39 42.3 44 38" fill="none" stroke="#b39a7c" stroke-width="1.1" stroke-opacity="0.75" stroke-linecap="round" data-part="cervical"/>
+  </g>
+</svg>

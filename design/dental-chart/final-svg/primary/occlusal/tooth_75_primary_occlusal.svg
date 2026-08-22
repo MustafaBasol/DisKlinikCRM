@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="14 11.2 36 40.1" width="36" height="40.1" data-tooth-fdi="75" data-view="occlusal" role="img">
+  <title>Tooth 75 — primary (deciduous) lower left second molar — occlusal view</title>
+  <desc>Standalone occlusal/incisal anatomy for tooth 75 (primary (deciduous), lower left second molar), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(64 0) scale(-1 1) translate(0 64) scale(1 -1)">
+    <path d="M22 22 C24 20.2 26.7 21.2 30 20 C33.3 18.8 39.3 15.3 42 15 C44.7 14.7 45.5 15.8 46 18 C46.5 20.2 45.3 23.7 45 28 C44.7 32.3 45.2 40.8 44 44 C42.8 47.2 40.8 46.8 38 47 C35.2 47.2 30 45.8 27 45 C24 44.2 21.5 44.3 20 42 C18.5 39.7 17.7 34.3 18 31 C18.3 27.7 20 23.8 22 22 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
+    <path d="M46 18 C46.5 20.2 45.3 23.7 45 28 C44.7 32.3 45.2 40.8 44 44 L37 40 L39 23 Z" data-surface="mesial" data-tooth-fdi="75" fill="none" stroke="none"><title>mesial</title></path>
+    <path d="M20 42 C18.5 39.7 17.7 34.3 18 31 C18.3 27.7 20 23.8 22 22 L26 26 L24 37 Z" data-surface="distal" data-tooth-fdi="75" fill="none" stroke="none"><title>distal</title></path>
+    <path d="M22 22 C24 20.2 26.7 21.2 30 20 C33.3 18.8 39.3 15.3 42 15 C44.7 14.7 45.5 15.8 46 18 L39 23 L26 26 Z" data-surface="buccal" data-tooth-fdi="75" fill="none" stroke="none"><title>buccal</title></path>
+    <path d="M44 44 C42.8 47.2 40.8 46.8 38 47 C35.2 47.2 30 45.8 27 45 C24 44.2 21.5 44.3 20 42 L24 37 L37 40 Z" data-surface="lingual" data-tooth-fdi="75" fill="none" stroke="none"><title>lingual</title></path>
+    <path d="M26 26 L39 23 L37 40 L24 37 Z" data-surface="central" data-tooth-fdi="75" fill="none" stroke="none"><title>occlusal</title></path>
+    <path d="M39 19 L30 28 L21 30 M30 28 L27 39 M30 28 L36 37" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
+  </g>
+</svg>

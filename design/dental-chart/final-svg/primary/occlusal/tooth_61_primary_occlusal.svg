@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="14 11.2 36 40.1" width="36" height="40.1" data-tooth-fdi="61" data-view="occlusal" role="img">
+  <title>Tooth 61 — primary (deciduous) upper left central incisor — occlusal view</title>
+  <desc>Standalone occlusal/incisal anatomy for tooth 61 (primary (deciduous), upper left central incisor), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(64 0) scale(-1 1)">
+    <path d="M23 27 C24.8 25.5 28.8 24.3 32 24 C35.2 23.7 40.5 23.8 42 25 C43.5 26.2 41.2 29 41 31 C40.8 33 42.8 35.2 41 37 C39.2 38.8 33.2 41.7 30 42 C26.8 42.3 23.5 40.5 22 39 C20.5 37.5 20.8 35 21 33 C21.2 31 21.2 28.5 23 27 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
+    <path d="M42 25 C43.5 26.2 41.2 29 41 31 C40.8 33 42.8 35.2 41 37 L36 34 L38 28 Z" data-surface="mesial" data-tooth-fdi="61" fill="none" stroke="none"><title>mesial</title></path>
+    <path d="M22 39 C20.5 37.5 20.8 35 21 33 C21.2 31 21.2 28.5 23 27 L27 29 L26 35 Z" data-surface="distal" data-tooth-fdi="61" fill="none" stroke="none"><title>distal</title></path>
+    <path d="M23 27 C24.8 25.5 28.8 24.3 32 24 C35.2 23.7 40.5 23.8 42 25 L38 28 L27 29 Z" data-surface="buccal" data-tooth-fdi="61" fill="none" stroke="none"><title>buccal</title></path>
+    <path d="M41 37 C39.2 38.8 33.2 41.7 30 42 C26.8 42.3 23.5 40.5 22 39 L26 35 L36 34 Z" data-surface="lingual" data-tooth-fdi="61" fill="none" stroke="none"><title>palatal</title></path>
+    <path d="M27 29 L38 28 L36 34 L26 35 Z" data-surface="central" data-tooth-fdi="61" fill="none" stroke="none"><title>incisal</title></path>
+    <path d="M27 28 L38 27" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
+  </g>
+</svg>

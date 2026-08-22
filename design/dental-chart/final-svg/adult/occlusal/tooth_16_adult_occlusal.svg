@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 7 44 49.7" width="44" height="49.7" data-tooth-fdi="16" data-view="occlusal" role="img">
+  <title>Tooth 16 — permanent (adult) upper right first molar — occlusal view</title>
+  <desc>Standalone occlusal/incisal anatomy for tooth 16 (permanent (adult), upper right first molar), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g>
+    <path d="M18 20 C20.3 17.3 23.3 17.7 27 16 C30.7 14.3 36.5 10.5 40 10 C43.5 9.5 47.3 9.5 48 13 C48.7 16.5 44.3 24.8 44 31 C43.7 37.2 46.7 46.2 46 50 C45.3 53.8 43.7 54.2 40 54 C36.3 53.8 28.2 50.7 24 49 C19.8 47.3 16.8 46.8 15 44 C13.2 41.2 12.5 36 13 32 C13.5 28 15.7 22.7 18 20 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
+    <path d="M48 13 C48.7 16.5 44.3 24.8 44 31 C43.7 37.2 46.7 46.2 46 50 L40 44 L42 23 Z" data-surface="mesial" data-tooth-fdi="16" fill="none" stroke="none"><title>mesial</title></path>
+    <path d="M15 44 C13.2 41.2 12.5 36 13 32 C13.5 28 15.7 22.7 18 20 L26 28 L25 40 Z" data-surface="distal" data-tooth-fdi="16" fill="none" stroke="none"><title>distal</title></path>
+    <path d="M18 20 C20.3 17.3 23.3 17.7 27 16 C30.7 14.3 36.5 10.5 40 10 C43.5 9.5 47.3 9.5 48 13 L42 23 L26 28 Z" data-surface="buccal" data-tooth-fdi="16" fill="none" stroke="none"><title>buccal</title></path>
+    <path d="M46 50 C45.3 53.8 43.7 54.2 40 54 C36.3 53.8 28.2 50.7 24 49 C19.8 47.3 16.8 46.8 15 44 L25 40 L40 44 Z" data-surface="lingual" data-tooth-fdi="16" fill="none" stroke="none"><title>palatal</title></path>
+    <path d="M26 28 L42 23 L40 44 L25 40 Z" data-surface="central" data-tooth-fdi="16" fill="none" stroke="none"><title>occlusal</title></path>
+    <path d="M40 12 L34 26 L27 44 M30 22 L36 40 M22 22 L27 27 M38 42 L43 47 M42 52 L44 50" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
+  </g>
+</svg>
