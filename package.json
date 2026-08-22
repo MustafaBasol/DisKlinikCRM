@@ -45,7 +45,8 @@
     "test:shell:pgbackrest": "bash scripts/noramedi-pgbackrest.test.sh",
     "test:shell:pitr-app-smoke": "bash scripts/noramedi-pitr-app-smoke.test.sh",
     "test:shell:frontend-deploy": "bash scripts/noramedi-frontend-deploy.test.sh",
-    "test:shell": "npm run test:shell:opscheck && npm run test:shell:pgbackrest && npm run test:shell:pitr-app-smoke && npm run test:shell:frontend-deploy",
+    "test:shell:attachment-vps2": "bash scripts/noramedi-attachment-vps2.test.sh",
+    "test:shell": "npm run test:shell:opscheck && npm run test:shell:pgbackrest && npm run test:shell:pitr-app-smoke && npm run test:shell:frontend-deploy && npm run test:shell:attachment-vps2",
     "typecheck:log-privacy-guard": "tsc --noEmit -p scripts/log-privacy-guard/tsconfig.json"
   },
   "dependencies": {

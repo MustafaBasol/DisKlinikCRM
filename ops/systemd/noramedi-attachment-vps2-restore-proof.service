@@ -1,0 +1,75 @@
+# noramedi-attachment-vps2-restore-proof.service — F4-ATTACH-001-R1
+#
+# NOT INSTALLED ON PRODUCTION. See noramedi-attachment-vps2-backup.service for
+# shared provisioning prerequisites; reuses the same OS account and
+# credentials file.
+#
+# Runs scripts/noramedi-attachment-vps2-restore-proof.sh: generates a
+# synthetic, non-PHI file, backs it up, restores it, and compares SHA-256 —
+# proving restorability against the SAME repository the real attachment
+# backups use, WITHOUT ever touching a real patient file. See that script's
+# header for the exact sequence and why the source temp dir is deleted before
+# the restore step (the proof must show the bytes came back from VPS2).
+#
+# Installation (in addition to the backup unit's steps):
+#   install -o root -g root -m 0755 scripts/noramedi-attachment-vps2-restore-proof.sh \
+#           /usr/local/sbin/noramedi-attachment-vps2-restore-proof.sh
+#   install -o root -g root -m 0644 ops/systemd/noramedi-attachment-vps2-restore-proof.service \
+#           /etc/systemd/system/noramedi-attachment-vps2-restore-proof.service
+#   install -o root -g root -m 0644 ops/systemd/noramedi-attachment-vps2-restore-proof.timer \
+#           /etc/systemd/system/noramedi-attachment-vps2-restore-proof.timer
+#   systemctl daemon-reload
+#   systemctl enable --now noramedi-attachment-vps2-restore-proof.timer
+#
+# This unit is also the exact command an operator runs ONCE, manually, to
+# produce the Stage-6/ClickUp-completion-gate restore-proof evidence before
+# ever enabling the recurring timer — see the discovery document §6:
+#   sudo systemctl start noramedi-attachment-vps2-restore-proof.service
+#   journalctl -u noramedi-attachment-vps2-restore-proof.service -n 50 --no-pager
+#
+# Rollback: systemctl disable --now noramedi-attachment-vps2-restore-proof.timer;
+# rm -f the two unit files; systemctl daemon-reload.
+
+[Unit]
+Description=NoraMedi attachment VPS2 synthetic restore proof (F4-ATTACH-001-R1)
+Documentation=file:///var/www/noramedi/docs/program/evidence/F4-ATTACH-001-R1_VPS2_ENCRYPTED_SECONDARY_REPLICA_DISCOVERY_AND_PLAN.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=noramedi-attach-backup
+Group=noramedi-attach-backup
+EnvironmentFile=-/etc/noramedi/attachment-vps2/backup.env
+# See noramedi-attachment-vps2-backup.service's own comment: repoints $HOME
+# so `ssh` resolves this account's dedicated, non-home .ssh/config.
+Environment=HOME=/etc/noramedi/attachment-vps2
+ExecStart=/usr/local/sbin/noramedi-attachment-vps2-restore-proof.sh
+TimeoutStartSec=1800
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+# See noramedi-attachment-vps2-backup.service's own comment: ProtectHome=yes
+# is compatible because credentials live under /etc/noramedi/attachment-vps2,
+# never under the (non-existent) /home/noramedi-attach-backup.
+ProtectHome=yes
+# /var/lib/noramedi-attachment-vps2 is the same NEW, DEDICATED directory the
+# other two units use — never the pre-existing, shared /var/lib/noramedi.
+# /var/lock is required for this unit's OWN operation lock
+# (NORAMEDI_ATTACHMENT_VPS2_RESTOREPROOF_LOCK_FILE, separate from backup's and
+# check's own lock files) and the shared status-write lock.
+ReadWritePaths=/var/lib/noramedi-attachment-vps2 /var/lock
+# PrivateTmp=yes is REQUIRED (not merely good hygiene) here: the script's
+# mktemp -d calls must land somewhere this unit is guaranteed write access to
+# regardless of the host's global /tmp permissions, and must never be able to
+# collide with another process's temp files given this script writes,
+# restores, and deletes real (synthetic) file content there.
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
