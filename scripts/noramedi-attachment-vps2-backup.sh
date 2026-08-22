@@ -199,7 +199,15 @@ with_status_lock() {
   # statement aborts the script before the next line runs; wrapping it in
   # `&&`/`||` is one of `set -e`'s own documented exemptions.
   flock -w 10 "$STATUS_LOCK_FILE" "$@" && rc=0 || rc=$?
-  [[ "$rc" -ne 0 ]] && fail "status-write lock could not be acquired within 10s, or the status write itself failed (exit ${rc}) — status may be left unchanged this run"
+  # `if`, not a bare `[[ ]] && fail`: under `set -e`, a bare
+  # `test && action` line is ITSELF a "failing command" whenever the test is
+  # false — i.e. exactly on the SUCCESS path (rc=0) — which would abort this
+  # function before it ever reaches `return` below. `if`'s condition is one
+  # of `set -e`'s own documented exemptions, regardless of which way it
+  # evaluates.
+  if [[ "$rc" -ne 0 ]]; then
+    fail "status-write lock could not be acquired within 10s, or the status write itself failed (exit ${rc}) — status may be left unchanged this run"
+  fi
   return "$rc"
 }
 

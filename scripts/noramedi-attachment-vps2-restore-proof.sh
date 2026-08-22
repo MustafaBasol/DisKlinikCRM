@@ -101,7 +101,13 @@ with_status_lock() {
   # once subshell-scoped — a bare subshell statement aborting the whole
   # script under `set -e` before its exit status could ever be captured).
   flock -w 10 "$STATUS_LOCK_FILE" "$@" && rc=0 || rc=$?
-  [[ "$rc" -ne 0 ]] && fail "status-write lock could not be acquired within 10s, or the status write itself failed (exit ${rc}) — status may be left unchanged this run"
+  # `if`, not a bare `[[ ]] && fail` — see noramedi-attachment-vps2-backup.sh's
+  # own comment: under `set -e`, a bare `test && action` line is ITSELF a
+  # "failing command" whenever the test is false (i.e. on the success path),
+  # which would abort this function before it ever reaches `return` below.
+  if [[ "$rc" -ne 0 ]]; then
+    fail "status-write lock could not be acquired within 10s, or the status write itself failed (exit ${rc}) — status may be left unchanged this run"
+  fi
   return "$rc"
 }
 
