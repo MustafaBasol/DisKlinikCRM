@@ -216,6 +216,30 @@ export async function startPocEnvironment(): Promise<PocEnvironment> {
   const schema = await readFile(SCHEMA_FILE, 'utf8');
   await pool.query(schema);
 
+  let destroyed = false;
+  const destroyOnce = async () => {
+    if (destroyed) return;
+    destroyed = true;
+    await pool.end().catch(() => {});
+    await compose(['down', '-v', '--remove-orphans'], 120_000).catch(() => {});
+  };
+
+  /**
+   * A `finally` block is not enough. An unhandled 'error' event or an uncaught
+   * exception terminates the process without unwinding, which during this PoC's
+   * development left two containers running for four hours. These handlers make
+   * teardown survive a hard crash or a Ctrl-C.
+   */
+  const emergencyTeardown = (why: string) => (payload?: unknown) => {
+    process.stderr.write(`\n[f5-1p] ${why} - destroying disposable environment\n`);
+    if (payload instanceof Error) process.stderr.write(`[f5-1p] ${payload.stack ?? payload.message}\n`);
+    void destroyOnce().finally(() => process.exit(1));
+  };
+  process.once('uncaughtException', emergencyTeardown('uncaught exception'));
+  process.once('unhandledRejection', emergencyTeardown('unhandled rejection'));
+  process.once('SIGINT', emergencyTeardown('SIGINT'));
+  process.once('SIGTERM', emergencyTeardown('SIGTERM'));
+
   const env: PocEnvironment = {
     projectName,
     pg: pgCfg,
@@ -253,8 +277,7 @@ export async function startPocEnvironment(): Promise<PocEnvironment> {
       `);
     },
     async destroy() {
-      await pool.end().catch(() => {});
-      await compose(['down', '-v', '--remove-orphans'], 120_000).catch(() => {});
+      await destroyOnce();
     },
   };
 

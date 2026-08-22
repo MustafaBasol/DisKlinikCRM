@@ -5,7 +5,7 @@
 **Branch:** `feature/f5-1p-queue-platform-disposable-poc`, cut from fresh `origin/main` (**not** stacked on PR #478).
 **Raw results:** [`../../architecture/poc/f5-1p-queue-platform/evidence/f5-1p-poc-run.json`](../../architecture/poc/f5-1p-queue-platform/evidence/f5-1p-poc-run.json)
 
-**44 experiments · 44 PASS · 0 FAIL · 0 BLOCKED · 0 N/A.** No production system was contacted.
+**44 experiments · 44 PASS · 0 FAIL · 0 BLOCKED · 0 N/A**, reproduced across two independent full runs. No production system was contacted.
 
 ---
 
@@ -54,6 +54,12 @@ random and bound to `127.0.0.1`; PostgreSQL storage is `tmpfs`; teardown
 baseline (PostgreSQL 16.14, Redis 7.0.15) without touching production. The PoC
 schema lives in `docs/architecture/poc/f5-1p-queue-platform/sql/01_schema.sql`,
 **outside** `server/prisma/migrations/`, so nothing can apply it by accident.
+
+> **A `finally` block turned out not to be enough.** During development an
+> unhandled `error` event killed the process without unwinding, leaving two
+> containers running for four hours. The harness now also tears down on
+> `uncaughtException`, `unhandledRejection`, `SIGINT` and `SIGTERM`. Verified: a
+> full re-run finishes 44/44 and leaves **zero** containers and **zero** volumes.
 
 ---
 
