@@ -25,7 +25,7 @@ Per F3-WA-META-COEX-002A's §5 proposal and this task's own explicit approval: a
 
 - No `organizationId`, no `clinicId`, no `ClinicWhatsAppConnection`-style linking relation, no tenant message/inbox relation.
 - Every Meta-path field the tenant `WhatsAppConnection` model has (`name`, `provider` fixed to `meta_cloud_api`, `status`, `phoneNumber`, `displayName`, `metaBusinessId`, `metaWabaId`, `metaPhoneNumberId`, `metaAppId`, `metaAccessTokenEncrypted`, `metaWebhookVerifyToken`, `metaWebhookSecret`, `webhookSecret`, `metaTokenStatus`/`metaTokenExpiresAt`/`metaTokenLastCheckedAt`, `lastConnectedAt`, `lastError`, `isActive`, timestamps) — no Evolution-only fields, since this task is Meta-only.
-- A `singleton Boolean @default(true) @unique` column: a **DB-level**, not just application-level, guarantee that at most one row can ever exist (a second row's `singleton = true` violates the unique index even under a concurrent create race). **[TEST]** proven directly: a raw second `prisma.platformWhatsAppConnection.create()` bypassing the service layer's pre-check throws `Unique constraint failed`.
+- A `singleton Boolean @default(true) @unique` column, **plus a hand-added `CHECK ("singleton" = true)` constraint in the migration SQL (`PlatformWhatsAppConnection_singleton_true_check`, corrected in review round 3, see §19)** — together, not the `@unique` index alone, a **DB-level**, not just application-level, guarantee that at most one row can ever exist. **Corrected claim:** a `UNIQUE` index on a boolean column by itself only forbids two `TRUE` rows or two `FALSE` rows — it does **not** forbid one of each, since `TRUE` and `FALSE` are distinct non-NULL values and unique constraints only dedupe equal values against each other. The `CHECK` constraint rules out a `FALSE` row ever existing at all; the `UNIQUE` index then rules out a second `TRUE` row; together they guarantee at most one row total, even under a concurrent create race. **[TEST]** proven directly, three ways: (A) the first default/`TRUE` row succeeds; (B) a raw second `prisma.platformWhatsAppConnection.create()` bypassing the service layer's pre-check throws `Unique constraint failed`; (C) a raw SQL `INSERT ... singleton=false` via `prisma.$executeRawUnsafe` — bypassing the service layer AND the Prisma Client's query builder — throws a Postgres check-constraint violation, proving the `CHECK` half of the invariant on its own (a `FALSE` row would not collide with the `UNIQUE` index at all).
 - `metaPhoneNumberId String? @unique` and `@@index([provider])`, mirroring the tenant table's own invariants.
 
 ## 3. Current → target data ownership
@@ -39,7 +39,7 @@ Per F3-WA-META-COEX-002A's §5 proposal and this task's own explicit approval: a
 ## 4. Migration
 
 - **Name:** `20260822140000_add_platform_whatsapp_connection`
-- **SQL summary:** one `CREATE TABLE "PlatformWhatsAppConnection"` and three `CREATE INDEX`/`CREATE UNIQUE INDEX` statements. No `ALTER TABLE`, no `DROP`, no data migration, no backfill.
+- **SQL summary (updated in review round 3, §19):** one `CREATE TABLE "PlatformWhatsAppConnection"`, three `CREATE INDEX`/`CREATE UNIQUE INDEX` statements, and one `ALTER TABLE ... ADD CONSTRAINT ... CHECK ("singleton" = true)` — added to this same, not-yet-deployed migration file rather than as a second migration, since it had not been applied to any real environment yet. No `DROP`, no data migration, no backfill.
 - **Additive/destructive:** purely additive.
 - **Hand-authored, not machine-diffed verbatim** — `npx prisma migrate dev --create-only` against a fresh, empty disposable Postgres produced a diff containing this task's `CreateTable`/`CreateIndex` statements **plus a large amount of unrelated pre-existing schema drift** (index renames, `ALTER COLUMN ... SET DATA TYPE`, dropped/re-added foreign keys on `ImagingStudy`/`InventoryItem`/`InventoryTransaction`/`Patient`/`WhatsAppConversationMessage`, a `Clinic.status` default change) — the exact "never paste `migrate diff` output into a migration" trap this program has hit before. The generated migration file was discarded and replaced with a hand-authored `migration.sql` containing **only** the `PlatformWhatsAppConnection` `CREATE TABLE`/`CREATE INDEX` statements; every other statement from the machine diff was excluded.
 - **Status:** `[TEST]` applied cleanly via `npx prisma migrate deploy` against a disposable Postgres 16 container seeded from empty, after all 82 pre-existing migrations were already applied — i.e. tested from both "empty production-like DB" (the container started empty) and "current schema → new schema upgrade" (the container was first brought to the current 82-migration schema, matching origin/main, before this one migration was applied). `npx prisma migrate status` reports `Database schema is up to date!` afterward.
@@ -121,7 +121,7 @@ Exact commands run in this session, all against a disposable local PostgreSQL 16
 | `cd server && npx prisma generate` | Generated Prisma Client v7.9.1 | 0 |
 | `cd server && npx tsc --noEmit` (canonical: `npm run typecheck`) | No errors | 0 |
 | `npx tsc -b` (root) | No errors | 0 |
-| `cd server && npx tsx src/tests/platformWhatsAppConnection.test.ts` | **28 passed, 0 failed** | 0 |
+| `cd server && npx tsx src/tests/platformWhatsAppConnection.test.ts` | 28 passed, 0 failed (round 1; **29/0 as of review round 3, §19**) | 0 |
 | `cd server && npx tsx src/tests/whatsappProvider.test.ts` | 143 passed, 0 failed | 0 |
 | `cd server && npx tsx src/tests/metaWhatsAppWebhook.test.ts` | 17 passed, 0 failed | 0 |
 | `cd server && npx tsx src/tests/platformAdmin.test.ts` | 118 passed, 0 failed | 0 |
@@ -143,7 +143,21 @@ Exact commands run in this session, all against a disposable local PostgreSQL 16
 | `cd server && npm run typecheck` | No errors | 0 |
 | `npx tsc -b` (root) | No errors | 0 |
 
-No count is invented; every number above is copied from the actual run's summary line. The new test file's 28 cases cover, in two layers:
+**Review round 3 (this follow-up), re-run against a fresh disposable PostgreSQL 16 container, port 55903 — see §19:**
+
+| Command | Result | Exit code |
+|---|---|---|
+| `cd server && npx prisma migrate deploy` | Applied all 83 migrations (incl. the amended `20260822140000_add_platform_whatsapp_connection`, now including the `CHECK` constraint) cleanly from empty | 0 |
+| `cd server && npx prisma migrate status` | `83 migrations found in prisma/migrations` · `Database schema is up to date!` | 0 |
+| `docker exec ... psql ... \d "PlatformWhatsAppConnection"` (manual DB inspection, not an automated test) | Confirms `Check constraints: "PlatformWhatsAppConnection_singleton_true_check" CHECK (singleton = true)` live in the database, alongside the pre-existing `UNIQUE, btree (singleton)` index | n/a |
+| `cd server && npx tsx src/tests/platformWhatsAppConnection.test.ts` | **29 passed, 0 failed** (28 in round 1 → 29: the single "raw insert" singleton test was split into three explicit A/B/C tests per §19, net +1) | 0 |
+| `cd server && npm run test:messaging-connection-scope` | 33 passed, 0 failed (unchanged) | 0 |
+| `cd server && npx tsx src/tests/whatsappProvider.test.ts` | 143 passed, 0 failed (53 + 90, unchanged) | 0 |
+| `cd server && npx tsx src/tests/metaWhatsAppWebhook.test.ts` | 17 passed, 0 failed (unchanged) | 0 |
+| `cd server && npm run typecheck` | No errors | 0 |
+| `npx tsc -b` (root) | No errors | 0 |
+
+No count is invented; every number above is copied from the actual run's summary line. The new test file's 28 cases (round 1; 29 as of round 3) cover, in two layers:
 
 1. **Real HTTP server, real router** (proves the `router.use(authenticatePlatformAdmin, csrfProtection('platform'))` gate on this specific router, which direct-chain invocation would bypass): unauthenticated → 401; a clinic-shaped/wrong-secret token → 401; a valid platform bearer token → 200; a cookie-session POST with no CSRF token → 403; the same request with a correct CSRF cookie+header → 201.
 2. **Direct route-handler-chain invocation** (same technique as `platformAdminOwnerBootstrap.test.ts`): Meta manual-config validation, Zod validation, create/secret-encryption/audit, singleton enforcement (both the service pre-check and the raw DB-level unique-constraint race), update leave-unchanged/rotate semantics, re-validation on update, test-connection success/failure paths (provider fetch stubbed, matching `whatsappProvider.test.ts`'s convention), the four tenant-isolation checks in §8, disconnect, delete, and 404s for every operation against a nonexistent connection.
@@ -206,3 +220,51 @@ This is a **UI-only, replacement-only-input treatment** of the field, not a chan
 **New HEAD SHA after this round:** see the top of this document / PR #487 — updated to the commit that includes this round's `PlatformWhatsApp.tsx` fix and this document's corrections.
 
 **Lifecycle after this round (unchanged from §16/original report):** `AGENT_COMPLETED=YES · TESTS_PASSED=YES · PR_OPENED=YES · MERGED=NO · MIGRATION_DEPLOYED=NO · APPLICATION_DEPLOYED=NO · PRODUCTION_VERIFIED=NO`. **DO NOT MERGE. DO NOT DEPLOY.**
+
+## 19. Review round 3 — singleton invariant blocker fixed (same PR, same migration, no redesign)
+
+A follow-up review found that the singleton claim in §2/§8/§9 (and in the schema doc-comment) was **not literally true as stated**. The design was:
+
+```
+singleton Boolean @default(true) @unique
+```
+
+A `UNIQUE` index on a boolean column forbids two rows sharing the *same* value — it permits one `TRUE` row **and** one `FALSE` row simultaneously, since `TRUE` and `FALSE` are two distinct non-`NULL` values and a unique constraint only dedupes equal values against each other. So the schema as originally written did **not**, by itself, guarantee at most one row could ever exist — a second row with `singleton = false` would have been perfectly legal at the database level. This was a correctness gap in the claim, not (yet) an exploited bug, and the finding is accepted as-is; no counter-argument is offered.
+
+**Fix — amended the existing, not-yet-deployed migration, no new migration file:**
+
+`server/prisma/migrations/20260822140000_add_platform_whatsapp_connection/migration.sql` now additionally contains:
+
+```sql
+ALTER TABLE "PlatformWhatsAppConnection"
+ADD CONSTRAINT "PlatformWhatsAppConnection_singleton_true_check"
+CHECK ("singleton" = true);
+```
+
+This is safe to do in place because this migration **had not been deployed to production** (per §16/§17, `MIGRATION_DEPLOYED = NO` throughout this task's history) — amending it rather than adding a second migration avoids two migrations that together do what one should have done from the start, and there is no environment anywhere that has the old (incomplete) version of this migration applied that this change could conflict with.
+
+The Prisma schema model (`schema.prisma`) is **unchanged in its field/column list** — `singleton Boolean @default(true) @unique` still stands, because this generator block has no `@@check`/check-constraint preview feature enabled and adding one would be a broader, unrequested change. Instead, the model's doc-comment and a comment directly on the `singleton` field were corrected to state the invariant precisely: `@unique` alone is *not* the guarantee; `CHECK(singleton = true)` (hand-added in migration SQL, not expressible in this schema) **combined with** `UNIQUE(singleton)` together are.
+
+**Corrected invariant, stated exactly (do not cite the old wording):**
+
+> At most one `PlatformWhatsAppConnection` row can ever exist because (a) `CHECK(singleton = true)` makes a `FALSE` row impossible at the database level, and (b) `UNIQUE(singleton)` then makes a second `TRUE` row impossible. Neither constraint alone is sufficient; both together are.
+
+**[TEST] Three explicit DB-level tests added to `platformWhatsAppConnection.test.ts`** (`Singleton enforcement` section), each targeting one part of the corrected claim:
+
+- **A.** the first, default/`TRUE` row succeeds (baseline, re-asserted explicitly rather than only implied by an earlier create).
+- **B.** a second `TRUE`/default row fails — both through the route (409, service-layer pre-check) and through a raw `prisma.platformWhatsAppConnection.create()` call that bypasses `platformWhatsAppConnectionService.ts` entirely, throwing `Unique constraint failed` — proving the `UNIQUE` half.
+- **C.** a raw SQL `INSERT INTO "PlatformWhatsAppConnection" (... singleton ...) VALUES (..., false, ...)` via `prisma.$executeRawUnsafe` — bypassing **both** the service layer and the Prisma Client's query builder, i.e. a literal SQL statement exactly like an attacker or a future buggy script could run directly — is rejected with a Postgres check-constraint violation (`PlatformWhatsAppConnection_singleton_true_check`). This proves the `CHECK` half on its own: a `FALSE` row does not collide with the `UNIQUE` index at all, so only the `CHECK` constraint can be stopping it, which is exactly what this test isolates.
+
+**Migration re-validation (fresh disposable PostgreSQL 16, port 55903, empty → current):**
+
+- `npx prisma migrate deploy` — all **83** migrations applied cleanly, including the amended `20260822140000_add_platform_whatsapp_connection` with its new `CHECK` constraint.
+- `npx prisma migrate status` — `83 migrations found in prisma/migrations`, `Database schema is up to date!`.
+- Manual `psql \d "PlatformWhatsAppConnection"` confirms, verbatim: `Check constraints: "PlatformWhatsAppConnection_singleton_true_check" CHECK (singleton = true)`, alongside the pre-existing `UNIQUE, btree (singleton)` index — both present simultaneously in the live schema, as designed.
+
+**Full re-run results:** see the "Review round 3" table in §10 — `platformWhatsAppConnection.test.ts` **29/29** (28 → 29: the old single combined singleton test was split into the three A/B/C tests above, net +1 test), `test:messaging-connection-scope` 33/33, `whatsappProvider.test.ts` 143/143, `metaWhatsAppWebhook.test.ts` 17/17, `server` `npm run typecheck` and root `npx tsc -b` both exit 0. All against a fresh, disposable, then-destroyed Postgres container — no shared/production database touched.
+
+**Not changed in this round:** provider architecture, encryption treatment of any field (§18's `metaWebhookVerifyToken` correction stands unchanged), the frontend, the route file, the audit convention, tenant isolation, or any other migration. This round is confined to the `singleton` invariant's SQL and the tests/docs proving it.
+
+**New HEAD SHA after this round:** see the top of this document / PR #487.
+
+**Lifecycle after this round:** `AGENT_COMPLETED=YES · TESTS_PASSED=YES · PR_OPENED=YES · MERGED=NO · MIGRATION_DEPLOYED=NO · APPLICATION_DEPLOYED=NO · PRODUCTION_VERIFIED=NO`. **DO NOT MERGE. DO NOT DEPLOY.**

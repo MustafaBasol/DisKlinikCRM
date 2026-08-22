@@ -4,10 +4,15 @@
 -- backfill, no data migration. WhatsAppConnection / ClinicWhatsAppConnection
 -- and every existing tenant WhatsApp route/row are untouched.
 --
--- The "singleton" column's UNIQUE index is the DB-level guarantee that at
--- most one row can ever exist here (it is always TRUE, and Postgres treats
--- repeated non-NULL values in a unique index as a violation) — this is
--- enforced even under a concurrent create race, not just by application code.
+-- The "singleton" column is the DB-level guarantee that at most one row can
+-- ever exist here — but the UNIQUE index on it is not sufficient by itself:
+-- a UNIQUE index on a boolean column only forbids two TRUE rows or two FALSE
+-- rows, not one of each (TRUE and FALSE are distinct non-NULL values, so one
+-- row of each satisfies uniqueness). The CHECK constraint below rules out a
+-- FALSE row ever existing at all; the UNIQUE index then rules out a second
+-- TRUE row. Together — CHECK(singleton = true) + UNIQUE(singleton) — they
+-- guarantee at most one row total, enforced even under a concurrent create
+-- race, not just by application code.
 --
 -- BACKWARD COMPATIBILITY: the previous application version never queries
 -- this table, so it keeps working unchanged against a migrated database.
@@ -49,6 +54,13 @@ CREATE TABLE "PlatformWhatsAppConnection" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PlatformWhatsAppConnection_singleton_key" ON "PlatformWhatsAppConnection"("singleton");
+
+-- AddCheckConstraint: the UNIQUE index above only rules out two TRUE rows or
+-- two FALSE rows; this CHECK rules out a FALSE row ever existing at all, so
+-- the two together guarantee at most one row can ever exist.
+ALTER TABLE "PlatformWhatsAppConnection"
+ADD CONSTRAINT "PlatformWhatsAppConnection_singleton_true_check"
+CHECK ("singleton" = true);
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PlatformWhatsAppConnection_metaPhoneNumberId_key" ON "PlatformWhatsAppConnection"("metaPhoneNumberId");

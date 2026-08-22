@@ -337,21 +337,58 @@ await test('exactly one platform_whatsapp_connection.created audit row is writte
 
 section('Singleton enforcement');
 
-await test('a second create is rejected with 409, and the DB unique constraint backs it (not just the pre-check)', async () => {
+// The DB-level invariant is CHECK(singleton = true) + UNIQUE(singleton)
+// TOGETHER, not the UNIQUE index alone — a UNIQUE index on a boolean column
+// only forbids two TRUE rows or two FALSE rows, not one of each (TRUE and
+// FALSE are distinct non-NULL values, so one row of each would satisfy
+// uniqueness by itself). See the CHECK constraint added to this task's
+// migration.sql (`PlatformWhatsAppConnection_singleton_true_check`) and the
+// schema.prisma doc-comment on this model. The three tests below prove each
+// half of the invariant directly against the database, not just through the
+// application layer.
+
+await test('A. a first, default/TRUE row succeeds (baseline — already proven by the create above, re-asserted here)', async () => {
+  const row = await prisma.platformWhatsAppConnection.findUniqueOrThrow({ where: { id: connectionId } });
+  assert.equal(row.singleton, true);
+  assert.equal(await prisma.platformWhatsAppConnection.count(), 1);
+});
+
+await test('B. a second TRUE/default row is rejected — 409 at the route, and the DB unique constraint backs it (not just the pre-check)', async () => {
   const res = await callPlatform('post', '/whatsapp/meta-connection', {
     name: 'Second attempt', metaPhoneNumberId: `phone2-${suffix}`, metaAccessTokenEncrypted: 'x',
   });
   assert.equal(res.statusCode, 409);
   assert.equal(await prisma.platformWhatsAppConnection.count(), 1);
-});
 
-await test('the singleton column truly is DB-unique — a raw second insert violates the constraint', async () => {
+  // Bypass the service layer entirely (platformWhatsAppConnectionService.ts
+  // is never called here) — the Prisma client's own default `singleton: true`
+  // still hits the UNIQUE index on a raw create.
   await assert.rejects(
     prisma.platformWhatsAppConnection.create({
       data: { name: 'Raw bypass attempt', metaPhoneNumberId: `raw-${suffix}` },
     }),
     /Unique constraint/,
   );
+});
+
+await test('C. a raw SQL INSERT with singleton=FALSE is rejected by the CHECK constraint, proving the DB invariant itself (not the UNIQUE index, which a FALSE row would satisfy)', async () => {
+  // Deliberately bypasses BOTH the service layer AND the Prisma Client's
+  // query builder (which would otherwise coerce/validate the column) via
+  // $executeRawUnsafe — a literal INSERT statement, exactly what an
+  // attacker or a buggy future migration/script could run directly against
+  // the database. A FALSE value does not collide with the existing TRUE
+  // row's unique index entry, so if this insert succeeded the singleton
+  // invariant would be broken by exactly the two-distinct-values gap the
+  // review flagged; only the CHECK constraint can stop it.
+  await assert.rejects(
+    prisma.$executeRawUnsafe(
+      `INSERT INTO "PlatformWhatsAppConnection" (id, singleton, name, "updatedAt") VALUES ($1, false, $2, now())`,
+      randomUUID(),
+      'Raw FALSE-row bypass attempt',
+    ),
+    /PlatformWhatsAppConnection_singleton_true_check|check constraint/i,
+  );
+  assert.equal(await prisma.platformWhatsAppConnection.count(), 1);
 });
 
 // ── Update — leave-unchanged secret convention ──────────────────────────────

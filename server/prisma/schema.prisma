@@ -1955,15 +1955,29 @@ model ClinicWhatsAppConnection {
 /// docs/program/evidence/F3-WA-META-COEX-002A_PLATFORM_ADMIN_WHATSAPP_ARCHITECTURE_BLOCKER.md.
 ///
 /// Meta-only: no evolutionApi* fields, no ClinicWhatsAppConnection-style
-/// linking table, no organizationId/clinicId. The `singleton` column is a
-/// DB-level (not just application-level) guarantee that at most one row can
-/// ever exist: it is always `true` and carries a unique index, so a second
-/// INSERT fails the constraint even under a concurrent create race.
+/// linking table, no organizationId/clinicId. At most one row can ever exist
+/// — but this is NOT `@unique` alone: a UNIQUE index on a boolean column only
+/// forbids two TRUE rows OR two FALSE rows, not one of each (Postgres unique
+/// constraints permit any number of NULLs and dedupe only equal non-NULL
+/// values against each other; TRUE and FALSE are two distinct non-NULL
+/// values). The real DB-level (not just application-level) invariant is the
+/// UNIQUE index on `singleton` COMBINED WITH a CHECK(singleton = true)
+/// constraint hand-added to this model's migration
+/// (server/prisma/migrations/20260822140000_add_platform_whatsapp_connection/migration.sql,
+/// `PlatformWhatsAppConnection_singleton_true_check`) that Prisma's schema
+/// language cannot express here (no `@@check` preview feature is enabled in
+/// this generator block) — the CHECK rules out a FALSE row ever existing at
+/// all, and the UNIQUE index then rules out a second TRUE row, together
+/// guaranteeing at most one row total, even under a concurrent create race.
 /// server/src/routes/metaWhatsAppWebhook.ts's inbound webhook resolver reads
 /// only WhatsAppConnection, never this table — a row here can never become a
 /// tenant inbox routing destination.
 model PlatformWhatsAppConnection {
   id        String  @id @default(uuid())
+  // @unique alone is NOT the singleton guarantee — see the model doc-comment
+  // above. A hand-added CHECK(singleton = true) in this migration's SQL
+  // (not representable here without a Prisma preview feature) is required
+  // too; together they guarantee at most one row.
   singleton Boolean @default(true) @unique
 
   name String
