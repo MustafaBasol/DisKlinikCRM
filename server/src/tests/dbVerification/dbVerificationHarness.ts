@@ -256,6 +256,13 @@ export async function cleanupAllFixtures(): Promise<void> {
   const clinicIds = clinics.map((c) => c.id);
 
   await prisma.activityLog.deleteMany({ where: { clinicId: { in: clinicIds } } });
+  // F5-2 — the outbox tables are scalar-only (no FK to Clinic/Organization), so
+  // they never BLOCK a delete below. They are cleared anyway: leaving rows
+  // behind would let one suite's events appear in another suite's backlog
+  // metrics, and a leaked idempotency marker would silently suppress a later
+  // suite's send.
+  await prisma.outboxEvent.deleteMany({ where: { organizationId: { in: orgIds } } });
+  await prisma.outboxConsumerExecution.deleteMany({ where: { organizationId: { in: orgIds } } });
   // ExternalCalendarAppointmentLink.appointmentId references Appointment.id —
   // must clear before Appointment (and before AppointmentRequest, since a
   // link may also reference the clinic independently of the appointment FK).
