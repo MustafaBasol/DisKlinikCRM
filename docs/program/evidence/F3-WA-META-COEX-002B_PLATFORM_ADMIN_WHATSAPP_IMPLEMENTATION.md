@@ -281,6 +281,8 @@ After round 3 was pushed, GitHub Actions' `ci-layers / Layer 2: non-disposable b
 
 **Not changed:** schema, migration, routes, service, frontend, or any other file — this is purely a missing registry entry for an unrelated, pre-existing repo-wide guard that every new Prisma model must satisfy.
 
-**New HEAD SHA after this fix:** see the top of this document / PR #487.
+**New HEAD SHA after this fix:** `8369d2cf65e660a1f3b5c225000e362add643b0a`.
+
+**GitHub Actions confirmed green on this HEAD** (run [32587051864](https://github.com/MustafaBasol/DisKlinikCRM/actions/runs/32587051864), all 13 checks, including the overall `PR Gate`): Changed-path classification, Layer 1 (architecture guardrail, frontend typecheck+build, log privacy guard, server typecheck, test-runtime tooling, workflow/shell/PowerShell/JSON validation), **Layer 2: non-disposable backend tests (now passing — was the failure this section fixes)**, Layer 3: disposable PostgreSQL tests, Layer 4: disposable PostgreSQL + MinIO storage integration tests, Layer 5 (backend full-suite fail-safe, frontend full-suite fail-safe) — all `pass`.
 
 **Lifecycle after this fix:** `AGENT_COMPLETED=YES · TESTS_PASSED=YES · PR_OPENED=YES · MERGED=NO · MIGRATION_DEPLOYED=NO · APPLICATION_DEPLOYED=NO · PRODUCTION_VERIFIED=NO`. **DO NOT MERGE. DO NOT DEPLOY.**
