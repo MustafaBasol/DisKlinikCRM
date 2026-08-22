@@ -1734,6 +1734,52 @@ export const TENANT_MODEL_CLASSIFICATION: readonly TenantModelEntry[] = Object.f
     rls: 'CANDIDATE',
     futureSchemaWork: 'NONE',
   },
+  {
+    model: 'OutboxEvent',
+    classification: 'ORGANIZATION_SCOPED_DIRECT',
+    organizationIdField: 'organizationId',
+    organizationIdNullable: false,
+    clinicIdField: 'clinicId',
+    clinicIdNullable: true,
+    organizationDerivedVia: null,
+    parent: null,
+    guardMode: 'AUTO_FILTER_ORGANIZATION_ID',
+    rls: 'CANDIDATE',
+    futureSchemaWork: 'NONE',
+    rationale:
+      'F5-2 transactional outbox. TENANT-OWNED, not SYSTEM_INTERNAL — and that is a decision, not ' +
+      'a default. It would have been easier to call an infrastructure table system-internal, but ' +
+      'every event registered today asserts a fact about ONE organization, its payload references ' +
+      'that tenant\'s records, and an operator inspecting a dead-letter backlog must be answering ' +
+      '"whose event is this". Classifying it SYSTEM_INTERNAL would make tenant data reachable ' +
+      'through a table nobody filters, which is exactly the failure this registry exists to stop. ' +
+      'Same shape as AuditLog and OperationalEvent: organizationId NOT NULL is the complete tenant ' +
+      'predicate; clinicId is nullable because an ORGANIZATION_OWNED contract legitimately has no ' +
+      'single clinic (see outbox/outboxEventRegistry.ts, OutboxEventTenancy), so filtering on it ' +
+      'as a second required key would hide organization-level events from their own owner. The ' +
+      'DISPATCHER reads across every organization and therefore runs under runAsSystem({ reason: ' +
+      '"background-job" }); it narrows to runAsTenant per row before any consumer sees it.',
+  },
+  {
+    model: 'OutboxConsumerExecution',
+    classification: 'ORGANIZATION_SCOPED_DIRECT',
+    organizationIdField: 'organizationId',
+    organizationIdNullable: false,
+    clinicIdField: 'clinicId',
+    clinicIdNullable: true,
+    organizationDerivedVia: null,
+    parent: null,
+    guardMode: 'AUTO_FILTER_ORGANIZATION_ID',
+    rls: 'CANDIDATE',
+    futureSchemaWork: 'NONE',
+    rationale:
+      'F5-2 consumer-side business idempotency ledger. Ownership is copied from the OutboxEvent ' +
+      'that produced it and is therefore identical: organizationId NOT NULL, clinicId nullable. ' +
+      'It carries no message content — only a consumer key, a business idempotency key, a status ' +
+      'and a stable outcome code — but it is still tenant-owned, because "was this obligation ' +
+      'already applied for this tenant" is a tenant question and the answer must not be readable ' +
+      'across organizations.',
+  },
 ]);
 
 /** Model name -> entry. Built once at module load; no per-call allocation. */

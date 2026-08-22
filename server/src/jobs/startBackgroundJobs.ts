@@ -22,6 +22,8 @@ import { startRestoreRehearsalJob } from './restoreRehearsalJob.js';
 import { startRecoveryStatusJob } from './recoveryStatusJob.js';
 import { startExternalCalendarInboundRetryJob } from './externalCalendarInboundRetryJob.js';
 import { startExternalCalendarOutboundSyncJob } from './externalCalendarOutboundSyncJob.js';
+import { startOutboxDispatcherJob } from './outboxDispatcherJob.js';
+import { registerOutboxConsumers } from '../outbox/startOutbox.js';
 
 export function startBackgroundJobs(): void {
   startReminderJobs();
@@ -38,4 +40,12 @@ export function startBackgroundJobs(): void {
   startRecoveryStatusJob();
   startExternalCalendarInboundRetryJob();
   startExternalCalendarOutboundSyncJob();
+
+  // F5-2 — outbox. Registration is unconditional and inert (it schedules
+  // nothing); startOutboxDispatcherJob() is a no-op unless
+  // OUTBOX_DISPATCH_ENABLED is exactly 'true'. See outbox/outboxConfig.ts for
+  // why the dispatcher and the producer have separate flags and why the
+  // rollout order between them matters.
+  registerOutboxConsumers();
+  startOutboxDispatcherJob();
 }

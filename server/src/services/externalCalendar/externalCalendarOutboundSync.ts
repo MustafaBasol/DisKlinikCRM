@@ -49,6 +49,12 @@ import {
   ExternalCalendarValidationError,
 } from './externalCalendarErrors.js';
 import { sendAppointmentRequestConfirmationNotification } from '../appointmentRequestNotification.js';
+import { isOutboxProducerEnabled } from '../../outbox/outboxConfig.js';
+import { beginConsumerExecution, completeConsumerExecution } from '../../outbox/outboxIdempotency.js';
+import {
+  APPOINTMENT_REQUEST_CONFIRMATION_CONSUMER_KEY,
+  buildAppointmentConfirmationIdempotencyKey,
+} from '../../outbox/consumers/appointmentRequestConfirmationConsumer.js';
 import { recordOperationalEvent } from '../operationalEventService.js';
 import { logger } from '../../utils/logger.js';
 import { getZonedDateTimeParts } from '../../utils/helpers.js';
@@ -239,16 +245,23 @@ export async function ensurePendingSyncLink(params: {
  *
  * A no-op when no integration is configured/enabled for the clinic —
  * preserves the "disabled clinics behave exactly as before" contract.
+ *
+ * F5-2: now REPORTS whether it created a link, because that is precisely the
+ * question "does a durable obligation already exist for this appointment's
+ * confirmation?". When a link exists the confirmation rides on the link's own
+ * retry ledger and needs no outbox event; when one does not, the confirmation
+ * has no durable record at all, and that gap is what the outbox closes. The
+ * return value is additive — every existing caller ignores it.
  */
 export async function ensurePendingSyncLinkInConversionTransaction(
   tx: Prisma.TransactionClient,
   params: { appointmentId: string; clinicId: string },
-): Promise<void> {
+): Promise<{ syncLinkCreated: boolean }> {
   const integration = await tx.externalCalendarIntegration.findUnique({
     where: { clinicId: params.clinicId },
     select: { id: true, enabled: true, organizationId: true },
   });
-  if (!integration || !integration.enabled) return;
+  if (!integration || !integration.enabled) return { syncLinkCreated: false };
 
   const idempotencyKey = computeOutboundSyncIdempotencyKey(params.appointmentId);
   await tx.externalCalendarAppointmentLink.upsert({
@@ -268,6 +281,8 @@ export async function ensurePendingSyncLinkInConversionTransaction(
     },
     update: {},
   });
+
+  return { syncLinkCreated: true };
 }
 
 /**
@@ -396,6 +411,44 @@ async function sendConfirmationForConvertedAppointment(
   });
   if (!sourceRequest) return;
 
+  /**
+   * F5-2 — the ONE window where this path and the outbox could both send.
+   *
+   * The route publishes an outbox event only when the conversion transaction
+   * saw NO enabled integration. If an integration is enabled in the
+   * milliseconds between that transaction committing and the post-commit
+   * `scheduleExternalCalendarSyncOrNotify` running, a link IS created after
+   * all, this path syncs it, and both paths would then owe the patient the
+   * same confirmation.
+   *
+   * Rather than reach into the outbox's tables — or pretend a millisecond-wide
+   * race does not exist — this path takes the SAME business idempotency key
+   * from the SAME public ledger contract the outbox consumer uses. Whichever
+   * arrives first sends; the other observes `completed` and does not.
+   *
+   * Gated on the producer flag so that with the outbox off this function is
+   * byte-for-byte the behaviour it has today: no extra read, no extra write,
+   * no new failure mode on a working path.
+   */
+  let ledgerExecutionId: string | null = null;
+  if (isOutboxProducerEnabled()) {
+    const begin = await beginConsumerExecution({
+      consumerKey: APPOINTMENT_REQUEST_CONFIRMATION_CONSUMER_KEY,
+      idempotencyKey: buildAppointmentConfirmationIdempotencyKey(appointmentId),
+      organizationId: appointment.clinic.organizationId,
+      clinicId: appointment.clinicId,
+      executedBy: 'external-calendar-outbound-sync',
+    });
+    if (begin.decision !== 'PROCEED') {
+      logger.info(
+        { appointmentId, decision: begin.decision },
+        'external-calendar-outbound-sync: confirmation already owned elsewhere; not sending',
+      );
+      return;
+    }
+    ledgerExecutionId = begin.executionId;
+  }
+
   await sendConfirmation({
     clinicId: appointment.clinicId,
     source: sourceRequest.source,
@@ -414,6 +467,18 @@ async function sendConfirmationForConvertedAppointment(
       },
     },
   });
+
+  // Marked applied only AFTER the send returns. `sendConfirmation` swallows
+  // provider-level failures itself, so reaching here means the send path
+  // completed; if it had thrown, the marker deliberately stays `in_progress`
+  // and the outbox side treats a later expiry as ambiguous rather than
+  // re-sending to a patient.
+  if (ledgerExecutionId) {
+    await completeConsumerExecution({
+      executionId: ledgerExecutionId,
+      outcomeCode: 'CONFIRMATION_SENT',
+    });
+  }
 }
 
 /**
@@ -602,6 +667,19 @@ export async function scheduleExternalCalendarSyncOrNotify(
     appointmentId: string;
     clinicId: string;
     notification: ConfirmationNotificationArgs;
+    /**
+     * F5-2 — the conversion transaction already published a durable outbox
+     * event that owes this patient the confirmation, so this function must not
+     * ALSO send it inline. Set only by the conversion route, and only when it
+     * actually published (producer flag on AND no sync link existed).
+     *
+     * The calendar-sync half of this function still runs: if an integration was
+     * enabled between the transaction committing and this call, the appointment
+     * must still be synchronized. The confirmation that path would send is
+     * suppressed by the shared idempotency ledger in
+     * `sendConfirmationForConvertedAppointment`, not by this flag.
+     */
+    confirmationOwnedByOutbox?: boolean;
   },
   deps: AttemptExternalCalendarSyncDeps = {},
 ): Promise<void> {
@@ -611,6 +689,7 @@ export async function scheduleExternalCalendarSyncOrNotify(
   ]);
 
   if (!enabled || !connection) {
+    if (input.confirmationOwnedByOutbox) return;
     const sendConfirmation = deps.sendConfirmation ?? sendAppointmentRequestConfirmationNotification;
     await sendConfirmation({
       clinicId: input.clinicId,

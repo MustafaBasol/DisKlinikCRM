@@ -85,6 +85,7 @@ export interface RawSqlAuditEntry {
  * nobody reviewed.
  */
 export type RawSqlRegistryKey =
+  | 'outbox/outboxDispatcher'
   | 'routes/imaging'
   | 'routes/inventory'
   | 'routes/reports'
@@ -93,6 +94,7 @@ export type RawSqlRegistryKey =
   | 'services/revenueByPeriodQuery';
 
 export const RAW_SQL_REGISTRY_KEYS: readonly RawSqlRegistryKey[] = Object.freeze([
+  'outbox/outboxDispatcher',
   'routes/imaging',
   'routes/inventory',
   'routes/reports',
@@ -116,6 +118,25 @@ export const RAW_SQL_AUDIT_REGISTRY: readonly RawSqlAuditEntry[] = Object.freeze
           'Two `SELECT 1` probes: the /health liveness check and the readiness checkDatabase ' +
           'callback. They read no table and therefore cross no tenant boundary. Under the guard ' +
           'they belong in runAsSystem({ reason: "database-health-check" }).',
+      },
+    ],
+  },
+  {
+    file: 'server/src/outbox/outboxDispatcher.ts',
+    sites: [
+      {
+        classification: 'SYSTEM_ONLY',
+        count: 1,
+        justification:
+          'The F5-2 outbox claim: an `UPDATE "OutboxEvent" ... WHERE id IN (SELECT ... FOR UPDATE ' +
+          'SKIP LOCKED LIMIT n) RETURNING ...`. Raw because Prisma has neither SKIP LOCKED nor a ' +
+          'LIMIT on updateMany, and both are what make multi-replica claiming safe (F5-1P E16b). ' +
+          'It carries NO tenant predicate BY DESIGN — a dispatcher that could see only one ' +
+          'organization could not drain the queue — and it is reachable only from ' +
+          'outboxDispatcherJob.ts under runAsSystem({ reason: "background-job" }). Tenant context ' +
+          'is established per row, from the row\'s own server-written organizationId/clinicId, ' +
+          'before any consumer runs. Executed inside runWithAuditedRawSql({ registryKey: ' +
+          '"outbox/outboxDispatcher" }).',
       },
     ],
   },

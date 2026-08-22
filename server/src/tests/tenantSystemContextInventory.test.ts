@@ -130,6 +130,12 @@ const JOB_FILES_WITHOUT_JOB_LOCK: Readonly<Record<string, string>> = Object.free
     'Takes its lease one level deeper: fileBackupService.runFileBackup() owns the withJobLock so that the ' +
     'cron tick and the manual admin route share one lock name. Re-wrapping here would double-acquire it. ' +
     'The system context therefore arrives through that inner withJobLock, so this file declares nothing.',
+  'outboxDispatcherJob.ts':
+    'F5-2. Deliberately lock-free for the same reason as clinicBulkExportWorker, only more so: a cluster-wide ' +
+    'named lock would mean only ONE replica could ever drain the outbox, which is exactly what the ' +
+    'FOR UPDATE SKIP LOCKED claim exists to avoid (F5-1P E16b measured four concurrent dispatchers, 60 ' +
+    'claims, 60 distinct). Non-overlap is process-local; cross-replica correctness is the claim statement. ' +
+    'It declares runAsSystem itself and narrows to runAsTenant per claimed row.',
 });
 
 /**
@@ -141,6 +147,7 @@ const JOB_FILES_WITHOUT_JOB_LOCK: Readonly<Record<string, string>> = Object.free
 const LOCK_FREE_JOBS_THAT_MUST_DECLARE_THEIR_OWN: readonly string[] = Object.freeze([
   'recoveryStatusJob.ts',
   'clinicBulkExportWorker.ts',
+  'outboxDispatcherJob.ts',
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
