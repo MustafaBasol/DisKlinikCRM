@@ -177,45 +177,29 @@ with_status_lock() {
   local lock_dir rc
   lock_dir="$(dirname "$STATUS_LOCK_FILE")"
   mkdir -p "$lock_dir" 2>/dev/null || true
-  # Everything below runs in a SUBSHELL specifically so that a bare `exec`
-  # (needed to attach fd 8 to a file so `flock` can lock it) scopes its
-  # redirections to this subshell only. `exec N>file` with no command word
-  # applies ALL its redirections PERMANENTLY to the CURRENT shell — an
-  # earlier revision called it directly in this function's own shell, which
-  # silently and permanently redirected this script's own stderr to
-  # /dev/null after the first status write, masking every later error
-  # message. The subshell's fd table (and any lock held through it) is
-  # discarded when it exits, so no explicit unlock/close is needed either.
+  # `flock FILE COMMAND [ARGS...]` (not the bash `exec N>FILE` + `flock -n N`
+  # form this script's OWN operation lock above uses) — flock itself opens
+  # (creating if needed), locks, execs the command, and releases the lock
+  # when it exits, entirely in flock's own C code. An earlier revision used
+  # `exec 8>FILE` inside a subshell instead, chasing two separate,
+  # hard-to-diagnose bash pitfalls in turn: (1) `exec N>FILE` with no
+  # command word applies its redirections PERMANENTLY to whatever shell
+  # runs it — done directly in this function's own shell, it silently and
+  # permanently redirected this script's own stderr to /dev/null after the
+  # first status write; (2) even moved into a subshell, a bare `(...)`
+  # subshell statement that returns non-zero aborts the ENTIRE calling
+  # script immediately under `set -e` — before the very next line could
+  # capture its exit status — which is exactly why the success path died
+  # silently on CI with no error output at all. This form has neither
+  # problem: it is one plain external command, handled by normal `&&`/`||`
+  # like any other.
   #
-  # `&& rc=0 || rc=$?`, NOT a bare statement, is load-bearing here: under
-  # `set -e` (active in every caller of this function), a subshell used as a
-  # PLAIN statement aborts the ENTIRE calling script the instant it returns
-  # non-zero — before the very next line, `local rc=$?`, ever runs. Wrapping
-  # it in `&&`/`||` is one of `set -e`'s own documented exemptions, so a
-  # failure here is only ever this function's own controlled `return`, never
-  # an immediate, unannounced abort of the whole script (this was caught
-  # directly against a real CI run: the prior revision's success path died
-  # silently right after entering this subshell, with no error output at
-  # all, because the abort happened before `fail()` or `return` ever ran).
-  echo "DEBUG wsl: before subshell" >&2
-  (
-    echo "DEBUG wsl: in subshell, about to exec" >&2
-    exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
-      echo "DEBUG wsl: exec branch taken" >&2
-      fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
-      exit 1
-    }
-    echo "DEBUG wsl: exec ok, about to flock" >&2
-    if ! flock -w 10 8; then
-      echo "DEBUG wsl: flock branch taken" >&2
-      fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
-      exit 1
-    fi
-    echo "DEBUG wsl: flock ok, running \$@ = $*" >&2
-    "$@"
-    echo "DEBUG wsl: \$@ finished with rc=$?" >&2
-  ) && rc=0 || rc=$?
-  echo "DEBUG wsl: after subshell, rc=$rc" >&2
+  # `&& rc=0 || rc=$?`, not a bare statement, is still required: under
+  # `set -e` (active in every caller), a failing command used as a plain
+  # statement aborts the script before the next line runs; wrapping it in
+  # `&&`/`||` is one of `set -e`'s own documented exemptions.
+  flock -w 10 "$STATUS_LOCK_FILE" "$@" && rc=0 || rc=$?
+  [[ "$rc" -ne 0 ]] && fail "status-write lock could not be acquired within 10s, or the status write itself failed (exit ${rc}) — status may be left unchanged this run"
   return "$rc"
 }
 

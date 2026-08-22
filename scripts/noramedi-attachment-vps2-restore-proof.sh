@@ -93,25 +93,15 @@ with_status_lock() {
   local lock_dir rc
   lock_dir="$(dirname "$STATUS_LOCK_FILE")"
   mkdir -p "$lock_dir" 2>/dev/null || true
-  # Subshell-scoped for the same reason noramedi-attachment-vps2-backup.sh's
-  # with_status_lock() is — a bare `exec N>file` applies its redirections
-  # PERMANENTLY to whatever shell runs it, which would otherwise silently
-  # and permanently redirect this script's own stderr to /dev/null after the
-  # first status write. `&& rc=0 || rc=$?`, NOT a bare statement, is also
-  # load-bearing: see that script's own comment — under `set -e`, a bare
-  # subshell statement aborts the WHOLE calling script the instant it
-  # returns non-zero, before this function ever gets to `return`.
-  (
-    exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
-      fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
-      exit 1
-    }
-    if ! flock -w 10 8; then
-      fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
-      exit 1
-    fi
-    "$@"
-  ) && rc=0 || rc=$?
+  # `flock FILE COMMAND [ARGS...]` — see noramedi-attachment-vps2-backup.sh's
+  # own with_status_lock() for why this form (flock opens/locks/execs/
+  # releases entirely in its own C code) replaced an earlier `exec N>FILE`
+  # + subshell design that hit two separate bash pitfalls in turn (a bare
+  # `exec` permanently redirecting this script's own stderr, then — even
+  # once subshell-scoped — a bare subshell statement aborting the whole
+  # script under `set -e` before its exit status could ever be captured).
+  flock -w 10 "$STATUS_LOCK_FILE" "$@" && rc=0 || rc=$?
+  [[ "$rc" -ne 0 ]] && fail "status-write lock could not be acquired within 10s, or the status write itself failed (exit ${rc}) — status may be left unchanged this run"
   return "$rc"
 }
 
