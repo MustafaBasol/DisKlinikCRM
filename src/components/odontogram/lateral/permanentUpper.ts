@@ -1,5 +1,5 @@
 /**
- * lateral/permanentUpper.ts — DENTAL-CHART-ASSET-R3
+ * lateral/permanentUpper.ts — DENTAL-CHART-ASSET-R3 (Lane B rewrite)
  *
  * One author-owned slice of the LATERAL_ART registry. Split out of the
  * single 700-line module so the R3 asset lanes can rewrite disjoint files in
@@ -7,6 +7,27 @@
  * subset and the surface-tiling scheme are unchanged and are documented in
  * anatomy.types.ts and design/dental-chart/AUTHORING.md — read those before
  * touching a coordinate here.
+ *
+ * R3 REWRITE — every entry below was rebuilt from AUTHORING.md §2.1's shared
+ * coordinate table to fix the four R2 defects named in AUTHORING.md §0:
+ *   1. every crown now has a real cervical constriction (widest at the
+ *      contact points, pinched back in at the CEJ);
+ *   2. the crown's width AT CERVIX_Y and each root's width AT CERVIX_Y are
+ *      the same authored number (both derive from one shared `cervixW`
+ *      value per tooth, and each root holds that exact width through a
+ *      2-unit "collar" that starts above CERVIX_Y so the crown, painted on
+ *      top, always overlaps the seam);
+ *   3. roots are ~2/3 of total tooth length, continuously tapering, ending
+ *      in a narrow flat cap (2.6-3.4 units) instead of a rounded club;
+ *   4. every CERVIX_Y / APEX_Y / crown-width value below is read verbatim
+ *      from the AUTHORING.md §2.1 table, not chosen to fill a box.
+ *
+ * Multi-rooted teeth (the upper first premolar and all three molars) draw
+ * each root as its own path that carries its share of the cervical "trunk"
+ * width down to a furcation point before diverging to its own apex — see
+ * AUTHORING.md §3.2. The palatal root is listed FIRST in `roots` for all
+ * four of these entries, as required, so the renderer paints the buccal
+ * roots over it and the furcation reads as depth.
  */
 
 import type { PermanentUpperKey, LateralToothArt } from '../anatomy.types';
@@ -14,221 +35,235 @@ import type { PermanentUpperKey, LateralToothArt } from '../anatomy.types';
 export const PERMANENT_UPPER_LATERAL: Readonly<Record<PermanentUpperKey, LateralToothArt>> = {
   // ── PERMANENT UPPER ───────────────────────────────────────────────────
 
-  // Mesioincisal angle sharp/square (mesial = large x, right side of the
-  // path); distoincisal angle rounded and the distal contour's height of
-  // contour sits low, close to the cervical line, per the task brief.
+  // CERVIX_Y 34.5, APEX_Y 72.0, crown MD width 24.6 (root count 1).
+  // Mesioincisal corner (top-mesial, x=40.4) is a real sharp/square corner;
+  // distoincisal corner (top-distal, x=24.2) is rounded and its height of
+  // contour sits lower (y=16.2) than the mesial one (y=11.9) — the classic
+  // incisor asymmetry, and what keeps 'mirror' from being a no-op here.
   'permanent:upper:central_incisor': {
     crown:
-      'M43 7 C40 5.3 36 5 33 6.3 C30 7.6 26 7.4 23 8.8 ' +
-      'C20.3 10 18 12.5 17 16.5 C16.2 20 16.6 24 18 27.5 ' +
-      'C19.2 30.5 20.3 32.5 22 34 L38 34.3 C40.3 32 41.8 28.5 42.6 24 ' +
-      'C43.4 19.5 43.5 14.5 43.5 10.5 C43.5 9.2 43.3 8 43 7 Z',
+      'M24.2 4.0 L40.4 4.0 C40.4 4.0 44.9 7.6 45.2 11.9 ' +
+      'C45.4 16.3 42.0 34.5 42.0 34.5 L23.3 34.5 ' +
+      'C23.3 34.5 20.4 20.6 20.6 16.2 C20.7 11.8 24.2 4.0 24.2 4.0 Z',
     roots: [
-      'M26.5 34 C27.8 46 29.3 58.5 31 69.5 C31.3 70.4 31.7 70.4 32 69.5 ' +
-        'C33.7 58.5 35.2 46 37.5 34 C35.5 32.3 28.5 32.3 26.5 34 Z',
+      'M42.0 32.5 L42.0 34.5 L33.3 72.0 L30.1 72.0 ' +
+        'L23.3 34.5 L23.3 32.5 L42.0 32.5 Z',
     ],
-    surface: 'M23 9.5 V16 M32 6.5 V14 M40 8 V15',
-    cervical: 'M20 33.5 C25 35.8 36 35.8 41 32.5',
+    surface: 'M27.5 6.5 V12.5 M32.5 5.5 V11.0 M37.5 6.5 V13.0',
+    cervical: 'M23.3 33.7 C27.7 34.0 37.0 34.0 42.0 33.7',
     widthRatio: 1.0,
     sideStrategy: 'mirror',
     simplification:
-      'Mamelon ridges simplified to three short straight grooves rather ' +
-      'than the real, subtly curved developmental lobes; the root apex is ' +
-      'drawn with a small rounded cap rather than a mathematically sharp ' +
-      'point.',
+      'Root apex drawn as a flat 3.2-unit cap rather than tapering to an ' +
+      'anatomically fine point; mamelon ridges reduced to three short ' +
+      'verticals rather than the real, subtly curved developmental lobes.',
   },
 
-  // Same distal/mesial contour logic as the central, but smaller and more
-  // rounded overall, as a lateral incisor genuinely is.
+  // CERVIX_Y 30.0, APEX_Y 68.0, crown MD width 18.9 (root count 1).
+  // Same sharp-mesial/rounded-distal corner logic as the central, scaled
+  // down; smaller and more rounded overall as a lateral incisor genuinely is.
   'permanent:upper:lateral_incisor': {
     crown:
-      'M40 8 C37.5 6.5 33.5 6.3 31 7.5 C28.5 8.6 25.5 8.4 23 10 ' +
-      'C20.8 11.4 19.3 13.8 19 17 C18.7 20 19.3 23.3 20.6 26.5 ' +
-      'C21.6 28.8 22.5 30.5 24 32 L35.5 32.3 C37.4 30.2 38.6 27.2 39.3 23.3 ' +
-      'C40 19.5 40.2 15 40.2 11.3 C40.2 10.1 40.1 9 40 8 Z',
+      'M26.2 4.0 L38.3 4.0 C38.3 4.0 41.9 7.0 42.1 10.8 ' +
+      'C42.3 14.5 39.7 30.0 39.7 30.0 L25.3 30.0 ' +
+      'C25.3 30.0 23.1 18.6 23.2 14.9 C23.3 11.2 26.2 4.0 26.2 4.0 Z',
     roots: [
-      'M25 32 C26.2 42 28 53 30 63 C30.3 63.8 30.7 63.8 31 63 ' +
-        'C33 53 34.8 42 35 32 C33 30.6 27 30.6 25 32 Z',
+      'M39.7 28.0 L39.7 30.0 L33.0 68.0 L30.2 68.0 ' +
+        'L25.3 30.0 L25.3 28.0 L39.7 28.0 Z',
     ],
-    surface: 'M24 11 L24 17 M31 7.5 V14.5 M37 10 L37 16',
-    cervical: 'M22.5 31.5 C27 33.6 33.5 33.6 37.5 30.8',
-    widthRatio: 0.78,
+    surface: 'M28.5 6.5 V11.5 M32.5 5.8 V10.2 M36.0 7.0 V12.0',
+    cervical: 'M25.3 29.2 C28.7 29.5 35.9 29.5 39.7 29.2',
+    widthRatio: 0.77,
     sideStrategy: 'mirror',
     simplification:
-      'Root tapers smoothly toward the apex but on an essentially straight ' +
-      'axis; the slight distal curvature real lateral incisor roots often ' +
-      'show near the apex is not modelled, and the apex itself is capped ' +
-      'slightly rounded rather than a sharp point.',
+      'Root apex capped at a flat 2.8 units rather than a true fine point; ' +
+      "the root's own mid-length curvature is simplified to a single " +
+      'smooth taper rather than the subtle distal deflection real lateral ' +
+      'incisor roots sometimes show near the apex.',
   },
 
-  // Cusp tip displaced mesially (x=36, off the x=32 crown midline). Mesial
-  // slope (tip to x=44) is spatially shorter than the distal slope (tip to
-  // x=18), matching the brief. Root apex leans distally (toward small x) —
-  // the longest root in the arch.
+  // CERVIX_Y 33.0, APEX_Y 82.0, crown MD width 21.8 (root count 1) — the
+  // longest root in the arch, per the table. Cusp tip (x=38.0) is displaced
+  // mesially off the x=32 crown midline; the mesial slope from the tip
+  // (short, to the Wm contact point near x=42.9) is spatially shorter than
+  // the distal slope (long, toward the Wd contact point near x=21.1), and
+  // the root's apex leans distally via a single mid-root bend.
   'permanent:upper:canine': {
     crown:
-      'M36 5 C38.3 6.3 41 10.5 42.3 15.5 C43.3 19.5 43.3 24.5 42.7 29 ' +
-      'C42.2 32.3 41.2 34.3 40 35.2 L23 35.2 C21 33.3 19.5 30 18.8 26 ' +
-      'C18 21.5 18.3 16.5 20.3 12.3 C22.5 7.8 29 5.3 36 5 Z',
+      'M38.0 4.0 C38.0 4.0 42.5 4.5 42.9 8.6 C43.3 12.8 40.6 33.0 40.6 33.0 ' +
+      'L24.0 33.0 C24.0 33.0 19.1 21.5 21.1 17.3 C23.1 13.2 38.0 4.0 38.0 4.0 Z',
     roots: [
-      'M24 35 C25.5 50 27 65 28.5 78.3 C28.8 79.2 29.2 79.2 29.5 78.3 ' +
-        'C31.5 65 33.5 50 36 35 C33.5 33 26.5 33 24 35 Z',
+      'M40.6 31.0 L40.6 33.0 C40.6 33.0 40.7 54.5 39.6 60.0 ' +
+        'C38.6 65.4 31.0 82.0 31.0 82.0 L27.8 82.0 ' +
+        'C27.8 82.0 26.0 65.4 25.5 60.0 C25.1 54.5 24.0 33.0 24.0 33.0 ' +
+        'L24.0 31.0 L40.6 31.0 Z',
     ],
-    surface: 'M36 5 V15 M27 11 L36 5 L40 14',
-    cervical: 'M21 34.3 C26.5 36.8 38.5 36.8 41 32.8',
+    surface: 'M38.0 4.0 V14.0 M27.0 14.0 L38.0 4.0 L42.0 8.5',
+    cervical: 'M24.0 32.2 C28.0 32.5 36.3 32.5 40.6 32.2',
     widthRatio: 0.89,
     sideStrategy: 'mirror',
     simplification:
-      'Root apex is drawn with a small rounded cap rather than tapering to ' +
-      'an anatomically fine point, so it reads as rounded rather than ' +
-      'spiky at chart size.',
+      "The root's lean toward the distal is modelled with a single " +
+      'mid-root bend rather than continuous curvature, and it ends in a ' +
+      'flat ~3-unit apex cap rather than tapering to a true fine point.',
   },
 
-  // The task calls this one out explicitly: bifurcated (buccal + palatal)
-  // roots, palatal first. Angular mesial marginal-ridge notch (the zig-zag
-  // at the bottom of the crown, mesial/large-x side) stands in for the
-  // developmental groove that crosses onto the root.
+  // CERVIX_Y 28.5, APEX_Y 69.0, crown MD width 20.3, root count 2 (palatal
+  // FIRST). Buccal cusp tip sits distal of centre (the crown's top edge is
+  // shifted toward smaller x) and a mesial marginal-ridge developmental
+  // groove is hinted near the cervical third — both upper-first-premolar-
+  // specific traits called out in AUTHORING.md §3.3.
   'permanent:upper:first_premolar': {
     crown:
-      'M41.8 22 C41.6 16.5 39 12 35.3 10.2 C33.4 9.3 32.3 10.4 32 13 ' +
-      'C31.7 10.4 30 9.2 28 10.1 C24.2 11.8 21.1 16.3 20.2 22 ' +
-      'C19.5 26.3 19.7 30.3 20.9 33.7 C21.9 36.5 23.5 38.4 25.5 39.2 ' +
-      'L30 38.6 L32.5 36.5 L35 38.6 L38.5 39.4 C40.2 38.2 41.2 35.7 41.7 32 ' +
-      'C42.2 28.7 42.1 25 41.8 22 Z',
+      'M22.9 4.0 L37.9 4.0 C37.9 4.0 42.8 15.6 43.1 18.7 ' +
+      'C43.4 21.8 40.4 28.5 40.4 28.5 L25.0 28.5 ' +
+      'C25.0 28.5 23.1 25.7 22.8 21.6 C22.4 17.6 22.9 4.0 22.9 4.0 Z',
     roots: [
-      // palatal — centred, tallest, drawn first so the buccal root overpaints it
-      'M28 38.5 L36 38.5 C36.7 45 36.2 52.5 34.5 59.5 C33.6 63.3 32.6 65.7 32 66.3 ' +
-        'C31.4 65.7 30.4 63.3 29.5 59.5 C27.8 52.5 27.3 45 28 38.5 Z',
-      // buccal — shorter, offset, forms the visible bifurcation
-      'M25 38.5 C22.5 43.5 21 49 21.8 55 C22.3 58.8 23.6 61.5 25.2 62.3 ' +
-        'C26.8 61.5 27.9 58.8 28.1 55 C28.5 49 27.7 43.5 25.8 38.5 Z',
+      // palatal — centred trunk chunk, drawn first so the buccal root paints
+      // over it and the bifurcation reads as depth
+      'M27.7 26.5 L27.7 28.5 L30.4 69.0 L33.6 69.0 ' +
+        'L36.6 28.5 L36.6 26.5 L27.7 26.5 Z',
+      // buccal — spans the full cervical width, offset apex forms the
+      // visible bifurcation against the palatal root behind it
+      'M25.0 26.5 L25.0 28.5 L30.0 60.9 L33.0 60.9 ' +
+        'L40.4 28.5 L40.4 26.5 L25.0 26.5 Z',
     ],
-    surface:
-      'M32 13 V19 M28 10.5 L32 13 L35.3 10.5 M37.5 34 C37.7 38 37 42 36.5 46',
-    cervical: 'M21 37.5 C25 40.3 39 40.3 41 35.5',
+    surface: 'M30.0 11.0 L32.0 8.0 L34.5 11.5 M32.0 8.0 V16.0 M36.0 22.0 L38.5 25.5',
+    cervical: 'M25.0 27.7 C28.5 28.0 36.2 28.0 40.4 27.7',
     widthRatio: 0.83,
     sideStrategy: 'mirror',
     simplification:
-      'Buccal and palatal roots drawn as a simple two-root V rather than a ' +
-      'shared root trunk that bifurcates partway down, and the mesial ' +
-      'marginal developmental groove is a single line rather than a true ' +
-      'fissure.',
+      'Buccal and palatal roots are drawn as two independently-tapering ' +
+      'paths that share their cervical shoulder width, rather than a ' +
+      'single trunk that visibly bifurcates lower down; each apex is a ' +
+      'flat 3-unit cap. The mesial marginal-ridge developmental groove is ' +
+      'hinted as a single stroke rather than a true fissure.',
   },
 
-  // Single root, mesial outline deliberately smoother/rounder than the first
-  // premolar's — the second premolar genuinely has less mesiodistal
-  // asymmetry, but still real asymmetry, so 'mirror' is still correct.
+  // CERVIX_Y 28.5, APEX_Y 70.5, crown MD width 20.3, root count 1. Mesial
+  // and distal contours drawn with only mild difference in height of
+  // contour — the second premolar genuinely has less mesiodistal asymmetry
+  // than the first, but real (small) asymmetry is still present so
+  // 'mirror' stays meaningful.
   'permanent:upper:second_premolar': {
     crown:
-      'M41 22 C40.6 16.5 38 12.3 34.5 10.5 C33 9.7 32.2 10.5 32 12.8 ' +
-      'C31.8 10.5 31 9.7 29.5 10.5 C26 12.3 23.2 16.5 22.6 22 ' +
-      'C22 26.5 22.3 30.7 23.5 34 C24.6 37 26.3 38.9 28.5 39.4 ' +
-      'L35.5 39.2 C37.6 38.6 39.2 36.6 40.2 33.5 C41.3 30.2 41.5 26.2 41 22 Z',
+      'M24.4 4.0 L39.6 4.0 C39.6 4.0 42.8 16.1 42.9 19.2 ' +
+      'C42.9 22.3 40.2 28.5 40.2 28.5 L24.8 28.5 ' +
+      'C24.8 28.5 22.6 25.7 22.6 21.6 C22.5 17.6 24.4 4.0 24.4 4.0 Z',
     roots: [
-      'M25.5 38.7 C24.3 46 24.5 54.5 26.5 62 C27.7 66.3 29.3 69 30.7 69.6 ' +
-        'C32 69 33.4 66.3 34.4 62 C36.2 54.5 36.3 46 35 38.7 Z',
+      'M40.2 26.5 L40.2 28.5 L33.7 70.5 L30.3 70.5 ' +
+        'L24.8 28.5 L24.8 26.5 L40.2 26.5 Z',
     ],
-    surface: 'M32 12.8 V20 M28.5 11 L32 12.8 L35 11',
-    cervical: 'M23.5 38 C27.5 40.5 37 40.5 39.5 36.5',
+    surface: 'M30.5 11.5 L32.0 8.5 L34.0 12.0 M32.0 8.5 V16.5',
+    cervical: 'M24.8 27.7 C28.4 28.0 36.1 28.0 40.2 27.7',
     widthRatio: 0.83,
     sideStrategy: 'mirror',
     simplification:
-      'Mesial and distal outlines drawn with only mild asymmetry, matching ' +
-      'this tooth genuinely being more symmetric than the first premolar; ' +
-      'no mesial developmental groove is shown since it is not a defining ' +
-      'feature here.',
+      'Root apex is a flat ~3.4-unit cap rather than a fine point; mesial ' +
+      'and distal crown contours are drawn with only mild height-of-' +
+      "contour difference, matching this tooth's genuinely more symmetric " +
+      'form relative to the first premolar. No mesial developmental ' +
+      'groove is shown, since it is not a defining feature here.',
   },
 
-  // Three roots, palatal first. Mesial (large-x) crown contour drawn
-  // straighter, distal (small-x) more rounded/bulging. Root apices drift
-  // toward smaller x than their crown bases — the classic distally-inclined
-  // "leaning back" molar.
+  // CERVIX_Y 26.0, APEX_Y 64.0, crown MD width 29.0, root count 3 (palatal
+  // FIRST). Crown tapers narrower toward the distal (small x); the distal
+  // contour is more rounded, the mesial nearer to flat. Root apices drift
+  // slightly toward the crown's own centre rather than staying under their
+  // own shoulders — the "leaning back" molar silhouette.
   'permanent:upper:first_molar': {
     crown:
-      'M47 24 C46.7 18 44 13.5 40.5 11.5 C38.2 10.2 36.5 11 35.8 13.3 ' +
-      'C35 16 33.5 17.3 32 17.3 C30.5 17.3 29 16 28.2 13.3 ' +
-      'C27.4 10.6 25 9.7 22 11.3 C18 13.4 15.3 18 15 24 ' +
-      'C14.8 28.5 15.5 32.7 17 36 C18.5 39 20.7 40.6 23.5 40.9 L40 40.6 ' +
-      'C43 40 45.3 38 46.3 34.5 C47.3 31 47.3 27.3 47 24 Z',
+      'M20.4 4.0 L43.6 4.0 C43.6 4.0 47.8 14.0 47.8 16.8 ' +
+      'C47.9 19.5 44.0 26.0 44.0 26.0 L22.0 26.0 ' +
+      'C22.0 26.0 19.1 23.1 18.8 19.4 C18.5 15.7 20.4 4.0 20.4 4.0 Z',
     roots: [
-      // palatal — centred, apex drifts distal
-      'M28 40 L36 40 C36.9 47.5 36.3 56 34.3 64 C33.4 68.2 31.8 71 30.3 71.3 ' +
-        'C28.9 71 27.6 68.2 27 64 C25.8 56 25.9 47.5 28 40 Z',
-      // mesiobuccal — base mesial (large x), apex leans distal
-      'M37 40.5 C40 46 41 52.5 39.5 59 C38.6 63 36.5 66 34.3 65.5 ' +
-        'C32.3 65 30.8 61.5 30.3 57 C29.7 51 31.5 45 34.5 40.5 Z',
-      // distobuccal — base distal (small x), shorter/straighter
-      'M20 40.5 C17 46 15.8 51.5 17 57 C17.7 60.3 19.3 62.5 21 62 ' +
-        'C22.7 61.5 23.7 58.5 23.6 54.5 C23.5 49 22.3 44 20.8 40.5 Z',
+      // palatal — centred, drawn first, deepest apex of the three
+      'M25.4 24.0 L25.4 26.0 C25.4 26.0 24.7 33.2 25.2 37.4 ' +
+        'C25.6 41.6 29.5 64.0 29.5 64.0 L32.9 64.0 ' +
+        'C32.9 64.0 37.7 41.6 38.4 37.4 C39.0 33.2 38.6 26.0 38.6 26.0 ' +
+        'L38.6 24.0 L25.4 24.0 Z',
+      // mesiobuccal — base at the mesial shoulder, shorter than palatal
+      'M35.3 24.0 L35.3 26.0 L38.7 57.2 L41.7 57.2 ' +
+        'L44.0 26.0 L44.0 24.0 L35.3 24.0 Z',
+      // distobuccal — base at the distal shoulder, shortest and straightest
+      'M22.0 24.0 L22.0 26.0 L23.3 57.2 L26.1 57.2 ' +
+        'L28.7 26.0 L28.7 24.0 L22.0 24.0 Z',
     ],
-    surface: 'M22 13 L24.5 19 M40.5 13 L38 19 M32 17.3 V25 M28 17 L32 20.5 L36 17',
-    cervical: 'M17 39 C24 42 40 42 45 37.5',
-    widthRatio: 1.19,
+    surface:
+      'M22.0 12.5 L24.5 18.0 M40.0 12.5 L37.5 18.0 M32.0 15.0 V22.0 ' +
+      'M28.0 15.5 L32.0 19.0 L36.0 15.5',
+    cervical: 'M22.0 25.2 C27.0 25.5 38.0 25.5 44.0 25.2',
+    widthRatio: 1.18,
     sideStrategy: 'mirror',
     simplification:
-      'Three roots drawn as a stylised trifurcation (palatal centred, ' +
-      'mesiobuccal/distobuccal divergent) rather than a true tapering root ' +
-      'trunk; individual buccal/palatal occlusal cusps are only hinted at ' +
-      'through the surface ridge lines, not separately outlined.',
+      'The three roots are drawn as independently-tapering paths that ' +
+      'share their cervical shoulder rather than a trunk that visibly ' +
+      'forks partway down; the two buccal apices are simplified to flat ' +
+      'caps under 3 units rather than the finer tapering real molar roots ' +
+      'show, and individual occlusal cusps are only hinted at through the ' +
+      'surface ridge lines, not separately outlined.',
   },
 
-  // Same trifurcated logic, slightly smaller, roots drawn closer together —
-  // second molar roots are commonly closer/more nearly fused than the
-  // first's.
+  // CERVIX_Y 24.5, APEX_Y 59.0, crown MD width 26.1, root count 3 (palatal
+  // FIRST). Same asymmetry logic as the first molar, slightly smaller; roots
+  // drawn with their buccal apices closer to the crown's own centre —
+  // second-molar roots are commonly closer to fused than the first's.
   'permanent:upper:second_molar': {
     crown:
-      'M45.5 25 C45.2 19.3 42.7 15 39.5 13 C37.4 11.7 35.8 12.5 35.1 14.7 ' +
-      'C34.3 17 33 18.2 32 18.2 C31 18.2 29.7 17 28.9 14.7 ' +
-      'C28.2 12.4 26 11.6 23.5 13.2 C20 15.4 17.6 19.6 17.2 25 ' +
-      'C17 29 17.6 32.8 19 35.8 C20.4 38.5 22.5 40 25 40.3 L39 40 ' +
-      'C41.7 39.4 43.8 37.5 44.7 34.2 C45.6 31 45.8 27.7 45.5 25 Z',
+      'M21.6 4.0 L42.4 4.0 C42.4 4.0 46.3 13.3 46.4 15.9 ' +
+      'C46.4 18.5 42.9 24.5 42.9 24.5 L23.1 24.5 ' +
+      'C23.1 24.5 20.5 21.8 20.3 18.4 C20.0 14.9 21.6 4.0 21.6 4.0 Z',
     roots: [
-      'M28.5 39.7 L35.5 39.7 C36.2 46.5 35.8 54 34.3 60.7 ' +
-        'C33.5 64.3 32.2 66.7 31 67 C29.8 66.7 28.6 64.3 27.8 60.7 ' +
-        'C26.3 54 26 46.5 28.5 39.7 Z',
-      'M36 40 C38.3 45 39.2 50.5 38 56 C37.2 59.6 35.4 62 33.6 61.5 ' +
-        'C32 61 31.2 58 31.3 54 C31.4 48.5 33 43.5 35 40 Z',
-      'M20.5 40 C18 45 17 50 18 55 C18.6 58.3 20.1 60.3 21.7 59.8 ' +
-        'C23.2 59.3 24 56.5 23.9 53 C23.7 48 22.5 43.5 21 40 Z',
+      'M26.1 22.5 L26.1 24.5 C26.1 24.5 25.4 31.0 25.8 34.9 ' +
+        'C26.2 38.7 29.6 59.0 29.6 59.0 L32.8 59.0 ' +
+        'C32.8 59.0 37.1 38.7 37.7 34.9 C38.3 31.0 37.9 24.5 37.9 24.5 ' +
+        'L37.9 22.5 L26.1 22.5 Z',
+      'M35.0 22.5 L35.0 24.5 L38.1 52.8 L40.9 52.8 ' +
+        'L42.9 24.5 L42.9 22.5 L35.0 22.5 Z',
+      'M23.1 22.5 L23.1 24.5 L24.2 52.8 L26.8 52.8 ' +
+        'L29.0 24.5 L29.0 22.5 L23.1 22.5 Z',
     ],
-    surface: 'M23.5 14.5 L26 20 M40 14.5 L37.5 20 M32 18.2 V26 M28.5 18 L32 21.3 L35.5 18',
-    cervical: 'M18.5 39.5 C25 42.3 39 42.3 44 38',
-    widthRatio: 1.13,
-    sideStrategy: 'mirror',
-    simplification:
-      "Second molar's three roots drawn shorter and closer together than " +
-      "the first molar's to reflect their common proximity/near-fusion, " +
-      'but true partial root fusion (frequent in this tooth) is not ' +
-      'modelled as a single fused mass.',
-  },
-
-  // Visibly smaller and more irregular, per the brief. Kept at 3 roots
-  // (rather than the anatomically-variable 2-4) so upper-molar root count
-  // stays consistent, but drawn compact/tightly fused rather than splayed.
-  'permanent:upper:third_molar': {
-    crown:
-      'M43.5 27 C43.2 21.5 40.8 17.5 37.8 15.7 C35.9 14.6 34.5 15.4 33.8 17.3 ' +
-      'C33.1 19 32.3 19.6 31.8 19.6 C31 19.6 30 18.8 29.3 16.8 ' +
-      'C28.5 14.6 26.5 14 24.3 15.5 C21.2 17.6 19 21.7 18.7 27 ' +
-      'C18.5 30.5 19 33.8 20.2 36.3 C21.4 38.6 23.2 39.9 25.3 40.1 L38 39.8 ' +
-      'C40.3 39.2 42 37.4 42.8 34.5 C43.6 31.7 43.7 29.2 43.5 27 Z',
-    roots: [
-      'M28.5 39.5 L35 39.5 C35.6 44.5 35.1 49.7 33.6 54.3 ' +
-        'C32.9 56.5 32 57.5 31.7 57.5 C31.4 57.5 30.6 56.5 30 54.3 ' +
-        'C28.6 49.7 28 44.5 28.5 39.5 Z',
-      'M35.5 40 C37.3 44 37.8 47.7 36.7 51.3 C36.1 53.3 34.8 54.5 33.6 54 ' +
-        'C32.5 53.5 32 51.3 32.3 48.5 C32.7 45 34 42 35.5 40 Z',
-      'M23 40 C21.3 44 20.9 47.7 22 51 C22.7 53 23.9 54.2 25.1 53.7 ' +
-        'C26.3 53.2 26.8 51 26.5 48.3 C26.1 45 24.7 42 23 40 Z',
-    ],
-    surface: 'M24.5 16 L27 21 M38 16 L35.5 21 M31.8 19.6 V26',
-    cervical: 'M20 38.5 C26 41 38 41 42 37',
+    surface:
+      'M23.5 12.0 L26.0 17.0 M39.0 12.0 L36.5 17.0 M32.0 14.5 V21.0 ' +
+      'M28.5 15.0 L32.0 18.0 L35.5 15.0',
+    cervical: 'M23.1 23.7 C27.6 24.0 37.5 24.0 42.9 23.7',
     widthRatio: 1.06,
     sideStrategy: 'mirror',
     simplification:
-      'Root complex drawn as a compact, largely fused three-root mass ' +
-      'rather than the highly variable 2-4 root morphology real third ' +
-      'molars show; the crown outline is deliberately more irregular than ' +
-      'the other molars but still schematic.',
+      "Roots drawn shorter and their buccal apices set closer to the " +
+      "crown's own centre than the first molar's, reflecting these roots' " +
+      'common near-proximity, but true partial root fusion (frequent in ' +
+      'this tooth) is not modelled as a single fused mass.',
+  },
+
+  // CERVIX_Y 23.0, APEX_Y 55.0, crown MD width 24.7, root count 3 (palatal
+  // FIRST). Visibly smaller and more irregular per the brief; roots kept at
+  // 3 for registry consistency but drawn short and only lightly divergent.
+  'permanent:upper:third_molar': {
+    crown:
+      'M22.1 4.0 L41.9 4.0 C41.9 4.0 45.5 12.6 45.6 15.0 ' +
+      'C45.6 17.4 42.3 23.0 42.3 23.0 L23.5 23.0 ' +
+      'C23.5 23.0 21.1 20.1 20.9 16.9 C20.6 13.8 22.1 4.0 22.1 4.0 Z',
+    roots: [
+      'M26.4 21.0 L26.4 23.0 C26.4 23.0 25.7 30.3 26.1 33.9 ' +
+        'C26.5 37.4 29.7 55.0 29.7 55.0 L32.7 55.0 ' +
+        'C32.7 55.0 36.8 37.4 37.4 33.9 C37.9 30.3 37.6 23.0 37.6 23.0 ' +
+        'L37.6 21.0 L26.4 21.0 Z',
+      'M34.8 21.0 L34.8 23.0 L37.8 48.0 L40.5 48.0 ' +
+        'L42.3 23.0 L42.3 21.0 L34.8 21.0 Z',
+      'M23.5 21.0 L23.5 23.0 L24.5 48.0 L27.1 48.0 ' +
+        'L29.2 23.0 L29.2 21.0 L23.5 21.0 Z',
+    ],
+    surface: 'M23.5 11.5 L25.5 16.0 M38.5 11.5 L36.5 16.0 M32.0 14.0 V19.5',
+    cervical: 'M23.5 22.2 C27.8 22.5 37.2 22.5 42.3 22.2',
+    widthRatio: 1.0,
+    sideStrategy: 'mirror',
+    simplification:
+      'Root complex kept at the full three roots for registry consistency, ' +
+      'but each is drawn short and only lightly divergent to suggest the ' +
+      'compact, often partially fused form real third molar roots show; ' +
+      'the highly variable 2-4 root morphology is not modelled, and the ' +
+      'crown outline is deliberately more irregular than the other molars ' +
+      'but still schematic.',
   },
 };
