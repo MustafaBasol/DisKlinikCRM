@@ -233,7 +233,12 @@ const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width,
   // Globally unique per mounted SVG (not per fdi) — safe with 52 glyphs x 2
   // views on one page, and safe across multiple Odontogram instances, unlike
   // an id built from `fdi` which repeats across separate chart instances.
-  const gradientId = useId();
+  // `useId()` alone is not safe to drop into a FuncIRI: React 18 formats it as
+  // `:r1:`, and a colon inside `url(#...)` is a documented cross-browser
+  // hazard (it also makes the id unusable with querySelector/CSS). Chrome
+  // resolves it, which is exactly why the bug would ship unnoticed. Stripping
+  // the delimiters keeps the uniqueness guarantee and costs nothing.
+  const gradientId = `enamel-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   // Base enamel fill: a subtle vertical gradient, translucent at the incisal
   // edge (y=0 of the crown's own bounding box, i.e. `art.crown`'s smallest
   // authored y) and opaque toward the cervical line (bbox y=1) — the crown
