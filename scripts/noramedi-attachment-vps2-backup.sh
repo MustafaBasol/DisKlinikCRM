@@ -328,7 +328,14 @@ fi
 # rather than dependent on restic's own behavior).
 with_status_lock node -e '
   const fs = require("fs");
-  const [, , rawOutPath, statusFile, generatedAt, durationStr] = process.argv;
+  // `node -e` positional args start at argv[1] — there is no script-path
+  // placeholder to skip (unlike `node script.js arg1`), so this destructures
+  // with ONE leading skip (argv[0], the node binary), not two. An earlier
+  // revision skipped two, silently reading this and every later argument
+  // one slot early — this crashed with an uncaught ENOENT the very first
+  // time this path ever ran against a real flock on CI (locally, on a host
+  // without flock, this whole block is skipped, so it was never exercised).
+  const [, rawOutPath, statusFile, generatedAt, durationStr] = process.argv;
   const lines = fs.readFileSync(rawOutPath, "utf8").split("\n").filter(Boolean);
   let summary = null;
   for (const line of lines) {

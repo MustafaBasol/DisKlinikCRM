@@ -202,7 +202,9 @@ STATUS="passed"
 
 with_status_lock node -e '
   const fs = require("fs");
-  const [, , statusFile, generatedAt, status, exitCode, durationStr, subset, lineCount] = process.argv;
+  // `node -e` positional args start at argv[1] — no script-path placeholder
+  // to also skip (unlike `node script.js arg1`). One leading skip only.
+  const [, statusFile, generatedAt, status, exitCode, durationStr, subset, lineCount] = process.argv;
   let doc = {};
   try { doc = JSON.parse(fs.readFileSync(statusFile, "utf8")); } catch { doc = {}; }
   doc.schemaVersion = 1;
