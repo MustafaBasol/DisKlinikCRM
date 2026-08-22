@@ -174,7 +174,7 @@ ping_fail() { [[ -n "$PING_URL" ]] && curl -fsS --max-time 10 --retry 2 -o /dev/
 #    return non-zero, but the caller does not treat that as this run's own
 #    failure.
 with_status_lock() {
-  local lock_dir
+  local lock_dir rc
   lock_dir="$(dirname "$STATUS_LOCK_FILE")"
   mkdir -p "$lock_dir" 2>/dev/null || true
   # Everything below runs in a SUBSHELL specifically so that a bare `exec`
@@ -186,30 +186,29 @@ with_status_lock() {
   # /dev/null after the first status write, masking every later error
   # message. The subshell's fd table (and any lock held through it) is
   # discarded when it exits, so no explicit unlock/close is needed either.
+  #
+  # `&& rc=0 || rc=$?`, NOT a bare statement, is load-bearing here: under
+  # `set -e` (active in every caller of this function), a subshell used as a
+  # PLAIN statement aborts the ENTIRE calling script the instant it returns
+  # non-zero — before the very next line, `local rc=$?`, ever runs. Wrapping
+  # it in `&&`/`||` is one of `set -e`'s own documented exemptions, so a
+  # failure here is only ever this function's own controlled `return`, never
+  # an immediate, unannounced abort of the whole script (this was caught
+  # directly against a real CI run: the prior revision's success path died
+  # silently right after entering this subshell, with no error output at
+  # all, because the abort happened before `fail()` or `return` ever ran).
   (
-    echo "DEBUG wsl: entering subshell, STATUS_LOCK_FILE=$STATUS_LOCK_FILE" >&2
-    exec 8>"$STATUS_LOCK_FILE" 2>/tmp/wsl_exec_err_$$ || {
-      echo "DEBUG wsl: exec failed, stderr=$(cat /tmp/wsl_exec_err_$$ 2>/dev/null)" >&2
-      rm -f /tmp/wsl_exec_err_$$
+    exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
       fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
       exit 1
     }
-    rm -f /tmp/wsl_exec_err_$$ 2>/dev/null
-    echo "DEBUG wsl: exec 8 succeeded, trying flock" >&2
     if ! flock -w 10 8; then
-      echo "DEBUG wsl: flock -w 10 8 failed, rc=$?" >&2
       fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
       exit 1
     fi
-    echo "DEBUG wsl: flock acquired, running: $*" >&2
     "$@"
-    _rc=$?
-    echo "DEBUG wsl: \"\$@\" returned rc=$_rc" >&2
-    exit "$_rc"
-  )
-  local _outer_rc=$?
-  echo "DEBUG wsl: subshell returned $_outer_rc" >&2
-  return "$_outer_rc"
+  ) && rc=0 || rc=$?
+  return "$rc"
 }
 
 # ── overlap guard — identical shape to noramedi-pgbackrest-backup.sh; see that

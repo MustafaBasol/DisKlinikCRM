@@ -121,14 +121,17 @@ ping_fail() { [[ -n "$PING_URL" ]] && curl -fsS --max-time 10 --retry 2 -o /dev/
 #    for the full rationale (unsynchronized read-modify-write can otherwise
 #    silently drop another job's fields).
 with_status_lock() {
-  local lock_dir
+  local lock_dir rc
   lock_dir="$(dirname "$STATUS_LOCK_FILE")"
   mkdir -p "$lock_dir" 2>/dev/null || true
   # Subshell-scoped for the same reason noramedi-attachment-vps2-backup.sh's
   # with_status_lock() is — a bare `exec N>file` applies its redirections
   # PERMANENTLY to whatever shell runs it, which would otherwise silently
   # and permanently redirect this script's own stderr to /dev/null after the
-  # first status write.
+  # first status write. `&& rc=0 || rc=$?`, NOT a bare statement, is also
+  # load-bearing: see that script's own comment — under `set -e`, a bare
+  # subshell statement aborts the WHOLE calling script the instant it
+  # returns non-zero, before this function ever gets to `return`.
   (
     exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
       fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
@@ -139,7 +142,8 @@ with_status_lock() {
       exit 1
     fi
     "$@"
-  )
+  ) && rc=0 || rc=$?
+  return "$rc"
 }
 
 if [[ "$DRY_RUN" != true ]]; then
