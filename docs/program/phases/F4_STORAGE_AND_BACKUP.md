@@ -7,7 +7,7 @@ Faz durumu: `TODO` · Son güncelleme: 2026-08-21 (**F4-2-R2 — `R-030-DB` kapa
 ## F4-ATTACH-001-R1 — Hasta eki VPS2 şifreli ikincil kopyası: keşif ve uygulama planı
 
 `F4-ATTACH-001-R1_STATUS = PLAN_AND_SCRIPTS_PREPARED_NOT_ACTIVATED` · `AGENT_COMPLETED = YES`
-`PR_OPENED = YES` · `MERGED = NO` · `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO`
+`PR_OPENED = YES (#484, DRAFT)` · `MERGED = NO` · `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO`
 `APPLICATION_CODE_CHANGED = NO` (`server/src/**`, `src/**` dokunulmadı) · `MIGRATION_REQUIRED = NO` · `MIGRATION_CREATED = NO`
 `R-030-FILES` durumu değişmedi (bu satır kendi kapanışını ilan etmiyor) · `PRODUCTION_MUTATION = NONE`
 

@@ -5,6 +5,7 @@
 **Branched from:** `origin/main` @ `31eb79f0d2a68445ccd835943d0d67600710f08c`
 **Worktree:** `DisKlinikCRM-worktrees/f4-attach-001-r1` (isolated, per this program's established one-worktree-per-parallel-task convention)
 **Branch:** `feature/f4-attach-001-r1-vps2-encrypted-secondary-replica`
+**PR:** [#484](https://github.com/MustafaBasol/DisKlinikCRM/pull/484) — **DRAFT**, not merged, not deployed, not production-verified
 
 **Status: `PLAN_AND_SCRIPTS_PREPARED_NOT_ACTIVATED`.** This is a discovery-and-plan round. It ships reviewed scripts, systemd unit templates and documentation. **No command in this document was executed against VPS1 or VPS2. No production account, key, MinIO instance or restic repository was created. No recurring job is running. No restore has been proven against real infrastructure.** Every "Stage 2" command below is a plan, not a log. See §11 for the exact, honest gap list against the ClickUp completion gate.
 
@@ -274,17 +275,17 @@ A real bug was found and fixed by this suite before being committed: an earlier 
 ### 8.2 Existing suites re-run to confirm zero regression
 
 ```
-npx tsc -b                                    exit 0  (frontend + server typecheck, per this
-                                                        repository's documented convention —
-                                                        `npm run lint` is known-broken on `main`
-                                                        independent of this task, per prior memory)
 npm run test:shell                            exit 0  (all five suites — opscheck, pgBackRest,
                                                         PITR app smoke, frontend-deploy, and the
-                                                        new attachment-vps2 suite)
-git diff --check                              exit 0  (no whitespace-conflict markers)
+                                                        new attachment-vps2 suite; run twice —
+                                                        the new suite standalone, then the full
+                                                        chain — both exit 0)
+git diff --cached --check                     exit 0  (no whitespace-conflict markers)
+node -e "JSON.parse(...package.json...)"      exit 0  (package.json stays valid JSON after the
+                                                        new test:shell:attachment-vps2 entry)
 ```
 
-`server/`'s Postgres-backed suites (`test:runtime:postgres`, etc.) were **not** run in this session — no live/disposable PostgreSQL was provisioned for this task, and none was needed: no `server/src` file changed, so there is no application behavior for those suites to regress. This is stated honestly rather than glossed over, per this program's evidentiary convention.
+**`npx tsc -b` was NOT run in this session, stated plainly rather than glossed over.** This task's isolated worktree has no `node_modules` installed, and installing the full monorepo dependency tree merely to typecheck zero changed `.ts`/`.tsx` files was judged not worth the time/network cost — `git diff --stat origin/main` (§12) independently confirms **zero** files changed under `server/src/**` or `src/**`, which is the only thing a typecheck run could have caught. This is a real gap in this session's validation, not a claim of a passing run that did not happen — a future round should run it once before merge if any doubt remains. `server/`'s Postgres-backed suites (`test:runtime:postgres`, etc.) were similarly **not** run — no live/disposable PostgreSQL was provisioned for this task, and none was needed for the same reason.
 
 ### 8.3 Why no infra/integration test against real restic or a real VPS2 exists yet
 
@@ -325,7 +326,7 @@ Explicitly recorded, per instruction:
 |---|---|
 | Agent completed | **YES** |
 | Focused tests/validation passed | **YES** — see §8 |
-| PR opened (repo/runbook changes required) | **YES** — see §13 for the PR reference once opened |
+| PR opened (repo/runbook changes required) | **YES** — [#484](https://github.com/MustafaBasol/DisKlinikCRM/pull/484), **DRAFT** |
 | Merged | **NO** |
 | Deployed/configured | **NO** |
 | VPS1 attachment set copied/snapshotted to VPS2 encrypted-at-rest | **NO** — no VPS2 account/repository exists yet |
@@ -371,6 +372,7 @@ package.json                                                                    
 
 - **Not claimed:** that `S3_BUCKET` is currently unset in production. This document relies on the prior `FILE_BACKUP_COVERAGE_001` task's directly-verified 2026-07-28 evidence, unchanged by anything else in this repository since — but this task did not itself re-run that check against live production (§0/§2.1 name the exact command to do so before any activation decision).
 - **Not claimed:** that a restore has ever succeeded against real VPS2 infrastructure. Only the fake-`restic` unit-test path has been exercised (§8.1).
+- **Not claimed:** that `npx tsc -b` was run this session — it was not (§8.2). The commit that first opened this PR incorrectly stated it exited `0`; that was a documentation error, caught and corrected in this branch's next commit, before any review or merge.
 - **Not claimed:** that `R-030-FILES` or any tracked risk-register line is closed by this task.
 - **Not claimed:** that any KVKK/subprocessor legal gate is satisfied (§10).
 - **Not claimed:** that this is the final imaging/DICOM/CBCT backup architecture, or a substitute for the deferred third independent failure domain.
