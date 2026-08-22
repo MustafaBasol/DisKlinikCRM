@@ -9,8 +9,9 @@
 #
 # Runs `restic check` against the attachment-vps2 repository and merges the
 # result into the SAME status file noramedi-attachment-vps2-backup.sh writes
-# (read-modify-write under this script's own lock, so a concurrent backup run
-# cannot interleave a partial write — see merge_status_document below).
+# (read-modify-write under a SEPARATE, shared status-write lock — never this
+# script's own operation lock — so a concurrent backup/restore-proof run
+# cannot interleave a partial write; see with_status_lock() below).
 #
 # WHY THIS IS A SEPARATE UNIT FROM THE BACKUP SCRIPT (same reasoning as
 # ops/systemd/noramedi-pgbackrest-status.service's header comment): `restic
@@ -48,7 +49,15 @@
 #                                             allowed to run concurrently
 #                                             rather than serialize behind one
 #                                             lock)
-#   NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE     /var/lib/noramedi/attachment-vps2-status.json
+#   NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE     /var/lib/noramedi-attachment-vps2/status/attachment-vps2-status.json
+#   NORAMEDI_ATTACHMENT_VPS2_STATUS_LOCK_FILE /var/lock/noramedi-attachment-vps2-status.lock
+#                                             A SEPARATE, short-lived lock held
+#                                             only while merging this run's
+#                                             result into the status document —
+#                                             shared with backup.sh/
+#                                             restore-proof.sh against the SAME
+#                                             file so a concurrent writer never
+#                                             loses the other's fields.
 #   NORAMEDI_ATTACHMENT_VPS2_CHECK_SUBSET    5%
 #   NORAMEDI_ATTACHMENT_VPS2_CMD_TIMEOUT     3600
 #   NORAMEDI_ATTACHMENT_VPS2_CHECK_PING_URL  Healthchecks.io-style heartbeat,
@@ -95,7 +104,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 LOCK_FILE="${NORAMEDI_ATTACHMENT_VPS2_LOCK_FILE:-/var/lock/noramedi-attachment-vps2-check.lock}"
-STATUS_FILE="${NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE:-/var/lib/noramedi/attachment-vps2-status.json}"
+STATUS_FILE="${NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE:-/var/lib/noramedi-attachment-vps2/status/attachment-vps2-status.json}"
+STATUS_LOCK_FILE="${NORAMEDI_ATTACHMENT_VPS2_STATUS_LOCK_FILE:-/var/lock/noramedi-attachment-vps2-status.lock}"
 CMD_TIMEOUT="${NORAMEDI_ATTACHMENT_VPS2_CMD_TIMEOUT:-3600}"
 PING_URL="${NORAMEDI_ATTACHMENT_VPS2_CHECK_PING_URL:-}"
 
@@ -104,6 +114,31 @@ PING_URL="${NORAMEDI_ATTACHMENT_VPS2_CHECK_PING_URL:-}"
 
 ping_ok()   { [[ -n "$PING_URL" ]] && curl -fsS --max-time 10 --retry 2 -o /dev/null "$PING_URL"      || true; }
 ping_fail() { [[ -n "$PING_URL" ]] && curl -fsS --max-time 10 --retry 2 -o /dev/null "$PING_URL/fail" || true; }
+
+# ── status-write lock — SEPARATE from this script's own operation lock above,
+#    and SHARED with noramedi-attachment-vps2-backup.sh/-restore-proof.sh
+#    against the same status document. See noramedi-attachment-vps2-backup.sh
+#    for the full rationale (unsynchronized read-modify-write can otherwise
+#    silently drop another job's fields).
+with_status_lock() {
+  local lock_dir
+  lock_dir="$(dirname "$STATUS_LOCK_FILE")"
+  mkdir -p "$lock_dir" 2>/dev/null || true
+  exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
+    fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
+    return 1
+  }
+  if ! flock -w 10 8; then
+    fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
+    exec 8>&-
+    return 1
+  fi
+  "$@"
+  local rc=$?
+  flock -u 8
+  exec 8>&-
+  return "$rc"
+}
 
 if [[ "$DRY_RUN" != true ]]; then
   command -v flock >/dev/null 2>&1 || {
@@ -163,7 +198,7 @@ ERROR_LINE_COUNT="$(printf '%s\n' "$CHECK_OUT" | grep -c . || true)"
 STATUS="passed"
 [[ "$RESTIC_EXIT" -ne 0 ]] && STATUS="failed"
 
-node -e '
+with_status_lock node -e '
   const fs = require("fs");
   const [, , statusFile, generatedAt, status, exitCode, durationStr, subset, lineCount] = process.argv;
   let doc = {};
@@ -178,7 +213,12 @@ node -e '
     readDataSubset: subset || null,
     outputLineCount: Number(lineCount),
   };
-  fs.writeFileSync(statusFile, JSON.stringify(doc, null, 2) + "\n");
+  const tmp = statusFile + ".tmp." + process.pid;
+  const fd = fs.openSync(tmp, "w");
+  fs.writeSync(fd, JSON.stringify(doc, null, 2) + "\n");
+  fs.fsyncSync(fd);
+  fs.closeSync(fd);
+  fs.renameSync(tmp, statusFile);
 ' "$STATUS_FILE" "$(timestamp)" "$STATUS" "$RESTIC_EXIT" "$DURATION" "$SUBSET" "$ERROR_LINE_COUNT"
 
 if [[ "$RESTIC_EXIT" -ne 0 ]]; then

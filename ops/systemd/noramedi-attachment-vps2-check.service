@@ -4,7 +4,7 @@
 # the shared installation/provisioning prerequisites (VPS2 account, restic
 # repository, passphrase escrow) — this unit reuses the SAME
 # noramedi-attach-backup OS account and the SAME /etc/noramedi/
-# attachment-vps2-backup.env credentials file (RESTIC_REPOSITORY and
+# attachment-vps2/backup.env credentials file (RESTIC_REPOSITORY and
 # RESTIC_PASSWORD_FILE are identical for backup and check; only the ping URL
 # differs, see the script's own header).
 #
@@ -33,17 +33,28 @@ Wants=network-online.target
 Type=oneshot
 User=noramedi-attach-backup
 Group=noramedi-attach-backup
-EnvironmentFile=-/etc/noramedi/attachment-vps2-backup.env
+EnvironmentFile=-/etc/noramedi/attachment-vps2/backup.env
+# See noramedi-attachment-vps2-backup.service's own comment: repoints $HOME
+# so `ssh` resolves this account's dedicated, non-home .ssh/config.
+Environment=HOME=/etc/noramedi/attachment-vps2
 ExecStart=/usr/local/sbin/noramedi-attachment-vps2-check.sh
 TimeoutStartSec=4200
 
 NoNewPrivileges=yes
 ProtectSystem=strict
+# See noramedi-attachment-vps2-backup.service's own comment: ProtectHome=yes
+# is compatible because credentials live under /etc/noramedi/attachment-vps2,
+# never under the (non-existent) /home/noramedi-attach-backup.
 ProtectHome=yes
 # check never reads primary storage at all (it only talks to the VPS2
 # repository via restic), so unlike the backup unit it needs no ACL against
 # /var/www/noramedi/server/uploads.
-ReadWritePaths=/var/lib/noramedi-attachment-vps2 /var/lib/noramedi
+#
+# /var/lib/noramedi-attachment-vps2 is the same NEW, DEDICATED directory the
+# backup unit uses — never the pre-existing, shared /var/lib/noramedi.
+# /var/lock is required for this script's own operation lock and the shared
+# status-write lock (see noramedi-attachment-vps2-backup.service's comment).
+ReadWritePaths=/var/lib/noramedi-attachment-vps2 /var/lock
 PrivateTmp=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes

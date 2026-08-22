@@ -26,7 +26,20 @@
 #   noramedi-attachment-vps2-restore-proof.sh [--dry-run] [-h|--help]
 #
 # Environment (optional; defaults shown):
-#   NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE      /var/lib/noramedi/attachment-vps2-status.json
+#   NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE      /var/lib/noramedi-attachment-vps2/status/attachment-vps2-status.json
+#   NORAMEDI_ATTACHMENT_VPS2_STATUS_LOCK_FILE /var/lock/noramedi-attachment-vps2-status.lock
+#     A SEPARATE, short-lived lock held only while merging this script's own
+#     result into the shared status document — never for the duration of the
+#     restic calls themselves. Shared with backup.sh/check.sh against the
+#     SAME status document so a concurrent writer always merges onto the
+#     other's freshest write instead of losing it to an unsynchronized
+#     read-modify-write.
+#   NORAMEDI_ATTACHMENT_VPS2_RESTOREPROOF_LOCK_FILE
+#                                              /var/lock/noramedi-attachment-vps2-restore-proof.lock
+#     This job's OWN operation lock — deliberately separate from backup's and
+#     check's own operation locks (see those scripts' headers) so a slow or
+#     stuck restore-proof run never blocks a daily backup or weekly check,
+#     and vice versa.
 #   NORAMEDI_ATTACHMENT_VPS2_RESTOREPROOF_PING_URL  Healthchecks.io-style
 #     heartbeat, same convention as the backup/check scripts. A missed
 #     restore-proof run is exactly as diagnostic as a missed backup: a
@@ -40,12 +53,15 @@
 #   1  restore proof FAILED (checksum mismatch, or restic reported an error)
 #   2  usage / CLI error
 #   3  precondition failure
+#   5  another restore-proof run holds this job's own operation lock (not an
+#      error; scheduler overlap — same convention as backup.sh/check.sh)
 
 set -euo pipefail
 export LC_ALL=C
 
 USAGE_ERROR_EXIT_CODE=2
 PRECONDITION_EXIT_CODE=3
+LOCKED_EXIT_CODE=5
 
 usage() { grep '^#' "$0" | grep -v '^#!/' | sed 's/^# \{0,1\}//'; exit 0; }
 timestamp() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
@@ -61,11 +77,37 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-STATUS_FILE="${NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE:-/var/lib/noramedi/attachment-vps2-status.json}"
+LOCK_FILE="${NORAMEDI_ATTACHMENT_VPS2_RESTOREPROOF_LOCK_FILE:-/var/lock/noramedi-attachment-vps2-restore-proof.lock}"
+STATUS_FILE="${NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE:-/var/lib/noramedi-attachment-vps2/status/attachment-vps2-status.json}"
+STATUS_LOCK_FILE="${NORAMEDI_ATTACHMENT_VPS2_STATUS_LOCK_FILE:-/var/lock/noramedi-attachment-vps2-status.lock}"
 PING_URL="${NORAMEDI_ATTACHMENT_VPS2_RESTOREPROOF_PING_URL:-}"
 
 ping_ok()   { [[ -n "$PING_URL" ]] && curl -fsS --max-time 10 --retry 2 -o /dev/null "$PING_URL"      || true; }
 ping_fail() { [[ -n "$PING_URL" ]] && curl -fsS --max-time 10 --retry 2 -o /dev/null "$PING_URL/fail" || true; }
+
+# ── status-write lock — SEPARATE from this job's own operation lock below,
+#    and SHARED with noramedi-attachment-vps2-backup.sh/-check.sh against the
+#    same status document. See noramedi-attachment-vps2-backup.sh for the
+#    full rationale.
+with_status_lock() {
+  local lock_dir
+  lock_dir="$(dirname "$STATUS_LOCK_FILE")"
+  mkdir -p "$lock_dir" 2>/dev/null || true
+  exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
+    fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
+    return 1
+  }
+  if ! flock -w 10 8; then
+    fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
+    exec 8>&-
+    return 1
+  fi
+  "$@"
+  local rc=$?
+  flock -u 8
+  exec 8>&-
+  return "$rc"
+}
 
 command -v restic    >/dev/null 2>&1 || { fail "restic is not installed"; exit "$PRECONDITION_EXIT_CODE"; }
 command -v node      >/dev/null 2>&1 || { fail "node is not available"; exit "$PRECONDITION_EXIT_CODE"; }
@@ -82,6 +124,25 @@ if [[ "$DRY_RUN" == true ]]; then
   log "DRY-RUN: would generate a synthetic file, restic backup --tag restore-proof it, restore it, and compare SHA-256"
   log "DRY-RUN: nothing was invoked"
   exit 0
+fi
+
+# ── overlap guard — this job's OWN operation lock, identical shape to
+#    noramedi-attachment-vps2-backup.sh/-check.sh's own guards (a fd-held
+#    flock, not `flock -n file cmd`) but a SEPARATE lock file from both, so a
+#    slow restore-proof never blocks a backup or check and vice versa.
+command -v flock >/dev/null 2>&1 || {
+  fail "flock is not available; refusing to run without an overlap guard"
+  exit "$PRECONDITION_EXIT_CODE"
+}
+LOCK_DIR="$(dirname "$LOCK_FILE")"
+[[ -d "$LOCK_DIR" ]] && [[ -w "$LOCK_DIR" ]] || {
+  fail "lock directory '$LOCK_DIR' does not exist or is not writable"
+  exit "$PRECONDITION_EXIT_CODE"
+}
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  fail "another attachment-vps2 restore-proof run holds $LOCK_FILE — skipping this run"
+  exit "$LOCKED_EXIT_CODE"
 fi
 
 SRC_DIR="$(mktemp -d)"
@@ -155,7 +216,7 @@ CHECKSUM_MATCH=false
 
 STATUS_DIR="$(dirname "$STATUS_FILE")"
 mkdir -p "$STATUS_DIR" 2>/dev/null || true
-node -e '
+with_status_lock node -e '
   const fs = require("fs");
   const [, , statusFile, generatedAt, snapshotId, match] = process.argv;
   let doc = {};
@@ -168,7 +229,12 @@ node -e '
     snapshotId,
     checksumMatch: match === "true",
   };
-  fs.writeFileSync(statusFile, JSON.stringify(doc, null, 2) + "\n");
+  const tmp = statusFile + ".tmp." + process.pid;
+  const fd = fs.openSync(tmp, "w");
+  fs.writeSync(fd, JSON.stringify(doc, null, 2) + "\n");
+  fs.fsyncSync(fd);
+  fs.closeSync(fd);
+  fs.renameSync(tmp, statusFile);
 ' "$STATUS_FILE" "$(timestamp)" "$SNAPSHOT_ID" "$CHECKSUM_MATCH" 2>/dev/null || true
 
 if [[ "$CHECKSUM_MATCH" != true ]]; then

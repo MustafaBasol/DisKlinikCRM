@@ -28,9 +28,27 @@
 #   # grant read-only access to the primary uploads tree, e.g.:
 #   #   setfacl -R -m u:noramedi-attach-backup:rX /var/www/noramedi/server/uploads
 #   #   setfacl -R -d -m u:noramedi-attach-backup:rX /var/www/noramedi/server/uploads
+#   #
+#   # Credentials/keys live under a DEDICATED, non-home path — this account is
+#   # --no-create-home AND every unit below sets ProtectHome=yes, so nothing
+#   # may live under /home/noramedi-attach-backup/. See
+#   # ops/restic/noramedi-attachment-vps2.env.example for the full contract
+#   # (IdentityFile/UserKnownHostsFile/StrictHostKeyChecking=yes/BatchMode=yes).
+#   install -d -o root -g noramedi-attach-backup -m 0750 /etc/noramedi/attachment-vps2
+#   install -d -o noramedi-attach-backup -g noramedi-attach-backup -m 0700 /etc/noramedi/attachment-vps2/.ssh
+#   # (private key, known_hosts, .ssh/config, and the env file itself all live
+#   # here — see the env-example for exact per-file modes/ownership and the
+#   # .ssh/config contents. `HOME=/etc/noramedi/attachment-vps2` below is what
+#   # makes the OS `ssh` client resolve `.ssh/config` from this directory
+#   # instead of a real, nonexistent home directory.)
+#   #
+#   # Every path below is DEDICATED to this task — none of them is the shared
+#   # /var/lib/noramedi directory other NoraMedi components (e.g. the
+#   # pgBackRest status writer) already use, and this installation never
+#   # touches that directory's ownership/mode.
 #   install -d -o noramedi-attach-backup -g noramedi-attach-backup -m 0750 /var/lib/noramedi-attachment-vps2
 #   install -d -o noramedi-attach-backup -g noramedi-attach-backup -m 0750 /var/lib/noramedi-attachment-vps2/cache
-#   install -d -o root -g noramedi-attach-backup -m 0770 /var/lib/noramedi   # shared with the status file (see below)
+#   install -d -o noramedi-attach-backup -g noramedi-attach-backup -m 0750 /var/lib/noramedi-attachment-vps2/status
 #   install -o root -g root -m 0755 scripts/noramedi-attachment-vps2-backup.sh \
 #           /usr/local/sbin/noramedi-attachment-vps2-backup.sh
 #   install -o root -g root -m 0644 ops/systemd/noramedi-attachment-vps2-backup.service \
@@ -38,7 +56,7 @@
 #   install -o root -g root -m 0644 ops/systemd/noramedi-attachment-vps2-backup.timer \
 #           /etc/systemd/system/noramedi-attachment-vps2-backup.timer
 #   install -o root -g noramedi-attach-backup -m 0640 <prepared env file> \
-#           /etc/noramedi/attachment-vps2-backup.env         # see
+#           /etc/noramedi/attachment-vps2/backup.env         # see
 #           ops/restic/noramedi-attachment-vps2.env.example — RESTIC_REPOSITORY
 #           and RESTIC_PASSWORD_FILE live here, never in this unit file
 #   systemctl daemon-reload
@@ -46,7 +64,7 @@
 #
 # Smoke test BEFORE enabling the timer (writes nothing, invokes nothing):
 #   sudo -u noramedi-attach-backup \
-#     env $(cat /etc/noramedi/attachment-vps2-backup.env | xargs) \
+#     env $(cat /etc/noramedi/attachment-vps2/backup.env | xargs) \
 #     /usr/local/sbin/noramedi-attachment-vps2-backup.sh --dry-run
 #
 # Rollback:
@@ -68,7 +86,14 @@ Wants=network-online.target
 Type=oneshot
 User=noramedi-attach-backup
 Group=noramedi-attach-backup
-EnvironmentFile=-/etc/noramedi/attachment-vps2-backup.env
+EnvironmentFile=-/etc/noramedi/attachment-vps2/backup.env
+# Repoints $HOME at this dedicated, non-home directory so the OS `ssh` client
+# restic's sftp backend shells out to resolves `.ssh/config` (IdentityFile /
+# UserKnownHostsFile / StrictHostKeyChecking=yes / BatchMode=yes) from there —
+# see ops/restic/noramedi-attachment-vps2.env.example's SSH transport section.
+# Unrelated to, and unaffected by, ProtectHome=yes below (which governs the
+# real /home, /root, /run/user/* paths, never wherever $HOME points).
+Environment=HOME=/etc/noramedi/attachment-vps2
 ExecStart=/usr/local/sbin/noramedi-attachment-vps2-backup.sh
 
 # The script's own NORAMEDI_ATTACHMENT_VPS2_CMD_TIMEOUT (default 3600s) bounds
@@ -84,6 +109,13 @@ TimeoutStartSec=4200
 # AmbientCapabilities are needed — this unit never calls runuser/su.
 NoNewPrivileges=yes
 ProtectSystem=strict
+# ProtectHome=yes is compatible with this account despite --no-create-home:
+# the private SSH key, known_hosts, and env file all live under
+# /etc/noramedi/attachment-vps2 (see the installation block above and
+# ops/restic/noramedi-attachment-vps2.env.example), never under
+# /home/noramedi-attach-backup — which does not exist and is never assumed
+# to. /etc is left read-only (ProtectSystem=strict's default) rather than
+# added to ReadWritePaths: this unit only ever needs to READ its credentials.
 ProtectHome=yes
 # /var/www/noramedi/server/uploads is read via the POSIX ACL granted at
 # provisioning time, NOT via ReadWritePaths — this unit must never be able to
@@ -91,7 +123,17 @@ ProtectHome=yes
 # ReadWritePaths/ReadOnlyPaths list here; ProtectSystem=strict already makes
 # it read-only by default for a path this unit does not otherwise own, and
 # the ACL is what grants readability at all.
-ReadWritePaths=/var/lib/noramedi-attachment-vps2 /var/lib/noramedi
+#
+# /var/lib/noramedi-attachment-vps2 is a NEW, DEDICATED directory (cache +
+# status subdirectories) — this unit never touches the pre-existing, shared
+# /var/lib/noramedi directory other NoraMedi components already use, and
+# never changes that directory's ownership or mode.
+#
+# /var/lock is required for this script's own flock-based overlap guard
+# (NORAMEDI_ATTACHMENT_VPS2_LOCK_FILE) and the shared status-write lock
+# (NORAMEDI_ATTACHMENT_VPS2_STATUS_LOCK_FILE) — both are plain lock files,
+# never used to store or transit any secret/patient data.
+ReadWritePaths=/var/lib/noramedi-attachment-vps2 /var/lock
 PrivateTmp=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes

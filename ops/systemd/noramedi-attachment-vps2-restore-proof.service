@@ -40,14 +40,25 @@ Wants=network-online.target
 Type=oneshot
 User=noramedi-attach-backup
 Group=noramedi-attach-backup
-EnvironmentFile=-/etc/noramedi/attachment-vps2-backup.env
+EnvironmentFile=-/etc/noramedi/attachment-vps2/backup.env
+# See noramedi-attachment-vps2-backup.service's own comment: repoints $HOME
+# so `ssh` resolves this account's dedicated, non-home .ssh/config.
+Environment=HOME=/etc/noramedi/attachment-vps2
 ExecStart=/usr/local/sbin/noramedi-attachment-vps2-restore-proof.sh
 TimeoutStartSec=1800
 
 NoNewPrivileges=yes
 ProtectSystem=strict
+# See noramedi-attachment-vps2-backup.service's own comment: ProtectHome=yes
+# is compatible because credentials live under /etc/noramedi/attachment-vps2,
+# never under the (non-existent) /home/noramedi-attach-backup.
 ProtectHome=yes
-ReadWritePaths=/var/lib/noramedi-attachment-vps2 /var/lib/noramedi
+# /var/lib/noramedi-attachment-vps2 is the same NEW, DEDICATED directory the
+# other two units use — never the pre-existing, shared /var/lib/noramedi.
+# /var/lock is required for this unit's OWN operation lock
+# (NORAMEDI_ATTACHMENT_VPS2_RESTOREPROOF_LOCK_FILE, separate from backup's and
+# check's own lock files) and the shared status-write lock.
+ReadWritePaths=/var/lib/noramedi-attachment-vps2 /var/lock
 # PrivateTmp=yes is REQUIRED (not merely good hygiene) here: the script's
 # mktemp -d calls must land somewhere this unit is guaranteed write access to
 # regardless of the host's global /tmp permissions, and must never be able to

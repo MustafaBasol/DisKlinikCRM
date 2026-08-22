@@ -21,11 +21,22 @@
 # restic encrypts every chunk client-side (AES-256 + Poly1305) BEFORE it ever
 # leaves this host, deduplicates content-addressed chunks (so a re-run is
 # cheap and idempotent without any bookkeeping this script has to invent), and
-# stores data as an append-only, natively versioned snapshot chain — deleting
-# one snapshot (`forget`) does not touch any other snapshot's data until a
-# separate, explicit `prune` runs. That combination is exactly the "append/
-# versioned snapshot semantics rather than destructive mirror" property the
-# task requires and a plain `rsync --delete` mirror cannot provide.
+# stores data as a VERSIONED, CONTENT-ADDRESSED SNAPSHOT REPOSITORY: deleting
+# a source file does not propagate as a destructive mirror deletion, because
+# an ordinary backup run never removes an existing snapshot — only a separate,
+# explicit `forget` (reference removal) followed by `prune` (reclamation)
+# does. That is a plain `rsync --delete` mirror cannot provide.
+#
+# ⚠ THIS IS NOT ENFORCED APPEND-ONLY / IMMUTABLE / WORM STORAGE. The SFTP
+# account this repository lives behind has ordinary read/write/delete rights
+# over the repository path (see the env-example's account contract) — a
+# compromised credential, an operator running `forget`+`prune`, or a direct
+# `rm` against the repository path on VPS2 CAN destroy snapshot history.
+# restic's snapshot model only means normal backup operation never deletes
+# data as a side effect; it is not a substitute for object-lock/WORM storage,
+# which this restricted-SFTP topology does not provide and which remains a
+# DEFERRED, not-yet-selected future hardening option (discovery document
+# §3.2/§4).
 #
 # NEVER logs a patient filename, clinic id, storage key, or file path. Only
 # aggregate counts/bytes/duration from restic's own `--json` summary line are
@@ -48,7 +59,28 @@
 # Environment (optional; defaults shown):
 #   NORAMEDI_ATTACHMENT_VPS2_SOURCE_DIR   /var/www/noramedi/server/uploads
 #   NORAMEDI_ATTACHMENT_VPS2_LOCK_FILE    /var/lock/noramedi-attachment-vps2.lock
-#   NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE  /var/lib/noramedi/attachment-vps2-status.json
+#                                          (this job's OWN operation lock —
+#                                          deliberately separate from check's
+#                                          and restore-proof's own operation
+#                                          locks, and from the status-write
+#                                          lock below, so a slow check or
+#                                          restore-proof never blocks a
+#                                          backup from starting)
+#   NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE  /var/lib/noramedi-attachment-vps2/status/attachment-vps2-status.json
+#   NORAMEDI_ATTACHMENT_VPS2_STATUS_LOCK_FILE
+#                                          /var/lock/noramedi-attachment-vps2-status.lock
+#                                          A SEPARATE, short-lived lock held
+#                                          ONLY while reading-merging-writing
+#                                          the shared status document — never
+#                                          held for the duration of the
+#                                          restic call itself. Shared by all
+#                                          three attachment-vps2 scripts (this
+#                                          one, check, restore-proof) so a
+#                                          concurrent writer always merges
+#                                          onto the other's freshest write
+#                                          instead of losing it to an
+#                                          unsynchronized read-modify-write —
+#                                          see with_status_lock() below.
 #   NORAMEDI_ATTACHMENT_VPS2_CMD_TIMEOUT  3600   seconds; the whole restic call is
 #                                          wrapped in `timeout`
 #   NORAMEDI_ATTACHMENT_VPS2_PING_URL     Healthchecks.io-style heartbeat: a
@@ -115,7 +147,8 @@ if [[ -n "$EXTRA_TAG" ]] && [[ ! "$EXTRA_TAG" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; 
 fi
 
 LOCK_FILE="${NORAMEDI_ATTACHMENT_VPS2_LOCK_FILE:-/var/lock/noramedi-attachment-vps2.lock}"
-STATUS_FILE="${NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE:-/var/lib/noramedi/attachment-vps2-status.json}"
+STATUS_FILE="${NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE:-/var/lib/noramedi-attachment-vps2/status/attachment-vps2-status.json}"
+STATUS_LOCK_FILE="${NORAMEDI_ATTACHMENT_VPS2_STATUS_LOCK_FILE:-/var/lock/noramedi-attachment-vps2-status.lock}"
 CMD_TIMEOUT="${NORAMEDI_ATTACHMENT_VPS2_CMD_TIMEOUT:-3600}"
 PING_URL="${NORAMEDI_ATTACHMENT_VPS2_PING_URL:-}"
 
@@ -127,6 +160,38 @@ PING_URL="${NORAMEDI_ATTACHMENT_VPS2_PING_URL:-}"
 #    MISSING ping alarms on its own, so a network blip here degrades safely) ──
 ping_ok()   { [[ -n "$PING_URL" ]] && curl -fsS --max-time 10 --retry 2 -o /dev/null "$PING_URL"      || true; }
 ping_fail() { [[ -n "$PING_URL" ]] && curl -fsS --max-time 10 --retry 2 -o /dev/null "$PING_URL/fail" || true; }
+
+# ── status-write lock (SEPARATE from this script's own operation lock above)
+#    — held only for the brief read-merge-write below, never for the restic
+#    call itself, and shared by all three attachment-vps2 scripts against the
+#    SAME status document. Without this, two scripts finishing around the
+#    same time can each read the same on-disk version, merge their own field
+#    in, and write back — the second writer's version silently overwrites the
+#    first writer's update (a classic unsynchronized read-modify-write lost
+#    update), even though each script's own JSON merge code only ever touches
+#    its own top-level key. Never let a stuck status write fail the run whose
+#    real result (backup/check/restore-proof) already happened — log and
+#    return non-zero, but the caller does not treat that as this run's own
+#    failure.
+with_status_lock() {
+  local lock_dir
+  lock_dir="$(dirname "$STATUS_LOCK_FILE")"
+  mkdir -p "$lock_dir" 2>/dev/null || true
+  exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
+    fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
+    return 1
+  }
+  if ! flock -w 10 8; then
+    fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
+    exec 8>&-
+    return 1
+  fi
+  "$@"
+  local rc=$?
+  flock -u 8
+  exec 8>&-
+  return "$rc"
+}
 
 # ── overlap guard — identical shape to noramedi-pgbackrest-backup.sh; see that
 #    script's comment for why this is a fd-held flock and not `flock -n file cmd`.
@@ -214,19 +279,26 @@ DURATION=$(( $(date -u +%s) - START_EPOCH ))
 if [[ "$RESTIC_EXIT" -ne 0 ]]; then
   OUT_LINE_COUNT="$(grep -c . "$RESTIC_OUT" || true)"
   fail "restic backup failed (exit ${RESTIC_EXIT}) after ${DURATION}s — ${OUT_LINE_COUNT} output lines captured, no line content logged (no file path or filename is ever added by this wrapper)"
-  node -e '
+  with_status_lock node -e '
     const fs = require("fs");
     const statusFile = process.argv[1];
     let doc = {};
     try { doc = JSON.parse(fs.readFileSync(statusFile, "utf8")); } catch { doc = {}; }
     doc.schemaVersion = 1;
-    doc.generatedAt = new Date(0).toISOString(); // overwritten by caller below
+    doc.generatedAt = process.argv[2];
     doc.backup = doc.backup || {};
     doc.backup.lastRunAt = process.argv[2];
     doc.backup.lastRunStatus = "failed";
     doc.backup.lastRunExitCode = Number(process.argv[3]);
     doc.backup.lastRunDurationSeconds = Number(process.argv[4]);
-    fs.writeFileSync(statusFile, JSON.stringify(doc, null, 2) + "\n");
+    // Atomic write: temp file in the same directory + fsync + rename, so a
+    // concurrent reader (or a crash mid-write) never observes a partial file.
+    const tmp = statusFile + ".tmp." + process.pid;
+    const fd = fs.openSync(tmp, "w");
+    fs.writeSync(fd, JSON.stringify(doc, null, 2) + "\n");
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fs.renameSync(tmp, statusFile);
   ' "$STATUS_FILE" "$(timestamp)" "$RESTIC_EXIT" "$DURATION" 2>/dev/null || true
   ping_fail
   exit 1
@@ -236,7 +308,7 @@ fi
 # echoes the raw restic output (which restic itself never populates with
 # filenames in --json summary mode, but this keeps the guarantee structural
 # rather than dependent on restic's own behavior).
-node -e '
+with_status_lock node -e '
   const fs = require("fs");
   const [, , rawOutPath, statusFile, generatedAt, durationStr] = process.argv;
   const lines = fs.readFileSync(rawOutPath, "utf8").split("\n").filter(Boolean);
@@ -266,7 +338,12 @@ node -e '
     filesUnmodified: summary.files_unmodified ?? null,
     totalBytesProcessed: summary.total_bytes_processed ?? null,
   };
-  fs.writeFileSync(statusFile, JSON.stringify(doc, null, 2) + "\n");
+  const tmp = statusFile + ".tmp." + process.pid;
+  const fd = fs.openSync(tmp, "w");
+  fs.writeSync(fd, JSON.stringify(doc, null, 2) + "\n");
+  fs.fsyncSync(fd);
+  fs.closeSync(fd);
+  fs.renameSync(tmp, statusFile);
 ' "$RESTIC_OUT" "$STATUS_FILE" "$(timestamp)" "$DURATION"
 
 log "backup completed in ${DURATION}s"
