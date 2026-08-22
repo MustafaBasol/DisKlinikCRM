@@ -1940,6 +1940,71 @@ model ClinicWhatsAppConnection {
   @@index([whatsappConnectionId])
 }
 
+/// F3-WA-META-COEX-002B — the platform's own (NoraMedi-owned) Meta Cloud API
+/// WhatsApp connection, used for platform-level Meta App/WABA management —
+/// NOT a tenant inbox or message-routing destination. Deliberately NOT
+/// layered onto WhatsAppConnection: that model's organizationId is a
+/// required, non-nullable, FK-constrained column depended on by 12+ tenant
+/// call sites in organizationWhatsApp.ts, and there is no safe existing
+/// platform-level ownership mechanism (no reserved/internal Organization
+/// row, no nullable-ownership convention) — forcing this through
+/// WhatsAppConnection would mean either a risky nullability change to a
+/// widely-depended-on column or a fake/synthetic Organization, both
+/// rejected. Same precedent as SecuritySignalEvent vs OperationalEvent
+/// above: a small dedicated table instead of either workaround. See
+/// docs/program/evidence/F3-WA-META-COEX-002A_PLATFORM_ADMIN_WHATSAPP_ARCHITECTURE_BLOCKER.md.
+///
+/// Meta-only: no evolutionApi* fields, no ClinicWhatsAppConnection-style
+/// linking table, no organizationId/clinicId. The `singleton` column is a
+/// DB-level (not just application-level) guarantee that at most one row can
+/// ever exist: it is always `true` and carries a unique index, so a second
+/// INSERT fails the constraint even under a concurrent create race.
+/// server/src/routes/metaWhatsAppWebhook.ts's inbound webhook resolver reads
+/// only WhatsAppConnection, never this table — a row here can never become a
+/// tenant inbox routing destination.
+model PlatformWhatsAppConnection {
+  id        String  @id @default(uuid())
+  singleton Boolean @default(true) @unique
+
+  name String
+  /// Always "meta_cloud_api" — validated at the application layer; column kept
+  /// (not hardcoded) for parity with WhatsAppConnection.provider and so the
+  /// shared WhatsAppConnectionRecord/provider-factory contract needs no special-casing.
+  provider String @default("meta_cloud_api")
+  // disconnected | connecting | connected | error
+  status String @default("disconnected")
+
+  phoneNumber String?
+  displayName String?
+
+  metaBusinessId    String?
+  metaWabaId        String?
+  metaPhoneNumberId String? @unique
+  metaAppId         String?
+  // Encrypted at rest with AES-256-GCM (utils/encryption.ts encryptSecret)
+  metaAccessTokenEncrypted String?
+  metaWebhookVerifyToken   String?
+  // Encrypted at rest with enc:v1: prefix (utils/encryption.ts encryptSecretTagged);
+  // legacy plaintext rows would be readable until re-saved (mirrors WhatsAppConnection)
+  metaWebhookSecret String?
+  // Token lifecycle tracking — Meta tokens expire ~60 days unless refreshed
+  // valid | expiring | expired | unknown
+  metaTokenStatus        String?   @default("unknown")
+  metaTokenExpiresAt     DateTime?
+  metaTokenLastCheckedAt DateTime?
+
+  // Shared webhook secret for this connection — encrypted at rest (enc:v1: prefix)
+  webhookSecret   String?
+  lastConnectedAt DateTime?
+  lastError       String?
+  isActive        Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([provider])
+}
+
 /// Incoming WhatsApp messages that could not be automatically assigned to a clinic.
 /// Priority A-C resolution routes to existing flow; Priority D creates one of these.
 /// After staff resolution: clinicId is set, needsClinicResolution=false, status=resolved.

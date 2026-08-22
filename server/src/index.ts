@@ -43,6 +43,7 @@ import platformAdminRoutes from './routes/platformAdmin.js';
 import platformSecurityIncidentsRoutes from './routes/platformSecurityIncidents.js';
 import platformExternalCalendarRoutes from './routes/platformExternalCalendar.js';
 import platformMigrationRoutes from './routes/platformMigration.js';
+import platformWhatsAppRoutes from './routes/platformWhatsApp.js';
 import externalCalendarOutboundSyncStatusRoutes from './routes/externalCalendarOutboundSyncStatus.js';
 import clinicRegistrationRoutes from './routes/clinicRegistration.js';
 import gdprExportRoutes from './routes/gdprExport.js';
@@ -261,6 +262,12 @@ app.use('/api/platform', platformExternalCalendarRoutes);
 // never reach it. Entirely separate from the clinic-facing basic patient
 // importer at /api/patients/import-*, which is unchanged.
 app.use('/api/platform', platformMigrationRoutes);
+// F3-WA-META-COEX-002B — the platform's own (NoraMedi-owned) Meta Cloud API
+// WhatsApp connection. Own authenticatePlatformAdmin + csrfProtection('platform')
+// gate, kept separate for the same reason as the routers above. Entirely
+// distinct from organizationWhatsAppRoutes below (tenant-owned WhatsAppConnection) —
+// see routes/platformWhatsApp.ts for the tenant-isolation contract.
+app.use('/api/platform', platformWhatsAppRoutes);
 
 // Self-service klinik kaydı (public)
 app.use('/api/register', clinicRegistrationRoutes);

@@ -28,6 +28,26 @@ import type {
   WhatsAppConnectionRecord,
 } from './WhatsAppProvider.js';
 
+/**
+ * Manual Meta Cloud API setup (as opposed to the Embedded Signup OAuth flow)
+ * requires enough credential data to actually run a test — otherwise the
+ * connection is saved in a state that can never succeed. Shared by the
+ * tenant route (organizationWhatsApp.ts) and the platform-owned connection
+ * service (platformWhatsAppConnectionService.ts) so the completeness rule
+ * can never drift between the two.
+ */
+export const META_MANUAL_SETUP_ERROR =
+  'Meta Cloud API manual setup requires Phone Number ID and Access Token. ' +
+  'Use "Connect with Meta" for automatic setup instead.';
+
+/** True when a Meta Cloud API manual configuration has enough data to be tested. */
+export function isMetaManualConfigComplete(
+  phoneNumberId: string | null | undefined,
+  accessTokenPresent: boolean,
+): boolean {
+  return Boolean(phoneNumberId?.trim()) && accessTokenPresent;
+}
+
 // Build a legacy connection record from env vars (never exposes key in logs).
 function buildLegacyConnectionRecord(): WhatsAppConnectionRecord {
   const cfg = getLegacyEvolutionConfig();
@@ -152,6 +172,36 @@ export async function sendWhatsAppMessage(
   return provider.sendMessage(connection, payload);
 }
 
+/**
+ * Run a connection test against a provider for an already-loaded connection
+ * record, with no DB read/write of its own. Extracted so a caller with its
+ * own persistence model (e.g. PlatformWhatsAppConnection — see
+ * platformWhatsAppConnectionService.ts) can reuse the exact same
+ * provider-dispatch behavior as testWhatsAppConnection() below without going
+ * through prisma.whatsAppConnection.
+ */
+export async function runConnectionTest(
+  record: WhatsAppConnectionRecord,
+): Promise<TestConnectionResult> {
+  const provider = getWhatsAppProvider(record.provider);
+  return provider.testConnection(record);
+}
+
+/** The persistence shape a test result maps to — shared by every caller so status/lastConnectedAt/lastError semantics never drift between tenant and platform connections. */
+export function testResultToPersistData(result: TestConnectionResult) {
+  return result.success
+    ? { status: 'connected' as const, lastConnectedAt: new Date(), lastError: null }
+    : { status: 'error' as const, lastError: result.message };
+}
+
+/** Same extraction as runConnectionTest(), for the disconnect provider hook. */
+export async function runProviderDisconnect(record: WhatsAppConnectionRecord): Promise<void> {
+  const provider = getWhatsAppProvider(record.provider);
+  if (provider.disconnect) {
+    await provider.disconnect(record);
+  }
+}
+
 export async function testWhatsAppConnection(
   connectionId: string,
 ): Promise<TestConnectionResult> {
@@ -163,16 +213,13 @@ export async function testWhatsAppConnection(
     return { success: false, message: 'WhatsApp connection not found' };
   }
 
-  const provider = getWhatsAppProvider(record.provider);
-  const result = await provider.testConnection(record as WhatsAppConnectionRecord);
+  const result = await runConnectionTest(record as WhatsAppConnectionRecord);
 
   // Persist the outcome so status/lastConnectedAt/lastError reflect the real
   // last-known reachability of this connection, not just the ephemeral response.
   await prisma.whatsAppConnection.update({
     where: { id: connectionId },
-    data: result.success
-      ? { status: 'connected', lastConnectedAt: new Date(), lastError: null }
-      : { status: 'error', lastError: result.message },
+    data: testResultToPersistData(result),
   });
 
   return result;
@@ -205,10 +252,7 @@ export async function disconnectWhatsAppConnection(connectionId: string): Promis
 
   if (!record) return;
 
-  const provider = getWhatsAppProvider(record.provider);
-  if (provider.disconnect) {
-    await provider.disconnect(record as WhatsAppConnectionRecord);
-  }
+  await runProviderDisconnect(record as WhatsAppConnectionRecord);
 
   await prisma.whatsAppConnection.update({
     where: { id: connectionId },

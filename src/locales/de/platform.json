@@ -73,6 +73,7 @@
       "backups": "Sicherungen",
       "securityIncidents": "Sicherheitsvorfälle",
       "externalCalendar": "Externer Kalender",
+      "whatsapp": "Meta WhatsApp",
       "migration": "Datenmigration"
     }
   },
@@ -147,6 +148,45 @@
         "blocked": "Blockiert",
         "selectedProvider": "Ausgewählter Anbieter"
       }
+    }
+  },
+  "whatsapp": {
+    "title": "Plattform-Meta-WhatsApp-Verbindung",
+    "subtitle": "NoraMedis eigene Meta-Cloud-API-WhatsApp-Verbindung für die Verwaltung auf Plattformebene — keine Klinikverbindung.",
+    "metaConnection": "Meta-Cloud-API-Verbindung",
+    "status": {
+      "disconnected": "Getrennt",
+      "connecting": "Verbindung wird aufgebaut",
+      "connected": "Verbunden",
+      "error": "Fehler"
+    },
+    "fields": {
+      "name": "Name",
+      "phoneNumber": "Telefonnummer",
+      "displayName": "Anzeigename",
+      "metaBusinessId": "Meta-Business-ID",
+      "metaWabaId": "WABA-ID",
+      "metaPhoneNumberId": "Telefonnummer-ID",
+      "metaAppId": "Meta-App-ID",
+      "metaWebhookVerifyToken": "Webhook-Verifizierungstoken",
+      "metaAccessToken": "Zugriffstoken",
+      "metaWebhookSecret": "Meta-Webhook-Geheimnis",
+      "webhookSecret": "Gemeinsames Webhook-Geheimnis"
+    },
+    "leaveBlankUnchanged": "leer lassen, um unverändert zu bleiben",
+    "configuredPlaceholder": "•••• konfiguriert",
+    "testConnection": "Verbindung testen",
+    "disconnect": "Trennen",
+    "disconnectConfirm": "Die Plattform-Meta-WhatsApp-Verbindung trennen?",
+    "deleteConfirm": "Die Plattform-Meta-WhatsApp-Verbindung löschen? Dies kann nicht rückgängig gemacht werden.",
+    "lastConnectedAt": "Zuletzt verbunden",
+    "lastError": "Letzter Fehler",
+    "errors": {
+      "loadFailed": "Die Plattform-WhatsApp-Verbindung konnte nicht geladen werden",
+      "saveFailed": "Die Plattform-WhatsApp-Verbindung konnte nicht gespeichert werden",
+      "testFailed": "Verbindungstest fehlgeschlagen",
+      "disconnectFailed": "Trennen fehlgeschlagen",
+      "deleteFailed": "Verbindung konnte nicht gelöscht werden"
     }
   },
   "externalCalendar": {

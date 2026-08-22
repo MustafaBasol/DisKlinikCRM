@@ -743,6 +743,12 @@ export const whatsappConnectionService = {
     api.post('/organization/whatsapp-connections/meta/callback', data),
 };
 
+// ─── Platform WhatsApp Connection Service (F3-WA-META-COEX-002B) ─────────────
+// The platform's own (NoraMedi-owned) Meta Cloud API connection — NOT a
+// tenant connection. Uses the Platform Admin api instance (usePlatformApi()
+// in PlatformAdminLayout pages), not this `api` instance — see
+// PlatformWhatsAppConnection.tsx.
+
 export const clinicWhatsAppService = {
   getAssignments: (clinicId: string) => api.get(`/clinics/${clinicId}/whatsapp`),
   assign: (clinicId: string, whatsappConnectionId: string) =>
