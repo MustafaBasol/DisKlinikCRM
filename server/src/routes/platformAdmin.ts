@@ -1484,6 +1484,44 @@ router.get('/system', async (_req, res: Response) => {
   }
 });
 
+// ─── F5-3R: Messaging reliability (platform-wide, AGGREGATE ONLY) ─────────────
+
+// GET /api/platform/messaging/reliability/metrics
+//
+// The cross-tenant "is messaging healthy everywhere" signal — status counts,
+// two ages, failure counts by stable code, and a channel/provider breakdown
+// bounded by the three real channel/provider pairs.
+//
+// WHAT A PLATFORM ADMIN DELIBERATELY DOES NOT GET HERE
+// ---------------------------------------------------
+// There is no platform-wide dead-event LISTING, and that is a decision rather
+// than an omission. A dead-letter row names a tenant, a connection and a
+// provider message id; reading one across tenants is support access to a
+// customer's operational data, and this repository has no break-glass /
+// support-access architecture to hang that on — no elevation flow, no
+// customer-visible record, no scoped-and-expiring grant. Inventing one inside
+// a metrics task would be exactly the "broad support impersonation" that must
+// not be introduced casually.
+//
+// So the platform view is minimized to aggregates, which is what actually
+// answers the platform question ("is a provider down for everyone?"). A
+// tenant-specific inspection need is a separate, separately reviewed contract;
+// until then a platform admin asks the tenant's own OWNER/ORG_ADMIN, who has
+// the scoped route at GET /api/ops/messaging/reliability/dead.
+//
+// Being platform-wide, the numbers here are sums across organizations and
+// therefore disclose no single tenant's identity or content.
+router.get('/messaging/reliability/metrics', async (_req: PlatformAdminRequest, res: Response) => {
+  try {
+    const { getMessagingInboundMetrics } = await import('../messaging/messagingInboundDlq.js');
+    const metrics = await getMessagingInboundMetrics();
+    res.json(metrics);
+  } catch (err: unknown) {
+    console.error('[platform-admin] messaging reliability metrics failed', safeErrorFields(err));
+    res.status(500).json({ error: 'Failed to fetch messaging reliability metrics' });
+  }
+});
+
 // ─── Privacy / Data Retention ─────────────────────────────────────────────────
 
 function buildPolicyResponse(

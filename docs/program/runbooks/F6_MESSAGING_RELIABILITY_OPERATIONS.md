@@ -12,15 +12,15 @@ Related: [`../evidence/F5-3_MESSAGING_RELIABILITY_DLQ_AND_REPLAY.md`](../evidenc
 
 | Action | Clinic operator | Platform operator | Engineer |
 |---|---|---|---|
-| See their own clinic's failed/terminal messages | ✅ (once a route exists) | ✅ | ✅ |
+| See their own clinic's failed/terminal messages | ✅ scoped to their clinics (§14) | ✅ | ✅ |
 | See another organization's messages | ❌ never | Only under an explicitly authorized platform contract | ❌ by default |
 | Read platform-wide messaging health metrics | ❌ | ✅ | ✅ |
-| Replay a terminal inbound message | ✅ within their clinic scope (once a route exists) | Under an authorized contract | Via a reviewed operation |
+| Replay a terminal inbound message | ✅ within their clinic scope (§14) | Aggregate metrics only — no cross-tenant listing or replay (§14) | Via a reviewed operation |
 | Flip `MESSAGING_DURABLE_ACK_ENABLED` | ❌ | ❌ | ✅ |
 | Change `MESSAGING_HTTP_TIMEOUT_MS` | ❌ | ❌ | ✅ |
 | Edit `status`, `attempts`, `rawPayload` by hand | ❌ | ❌ | ❌ without a reviewed plan |
 
-**There is no operator HTTP route yet.** `getMessagingInboundMetrics()`, `listDeadInboundEvents()` and `replayDeadInboundEvent()` ship as services. Until a route with a reviewed authorization contract exists, every action below is an engineer action.
+**F5-3R added the operator HTTP routes — see §14 for the full contract.** `GET /api/ops/messaging/reliability/metrics`, `GET /api/ops/messaging/reliability/dead` and `POST /api/ops/messaging/reliability/dead/:id/replay`, behind the normal clinic session and the role table above. The platform-admin surface is the cross-tenant **aggregate metric only**. `MESSAGING_DURABLE_ACK_ENABLED` remains OFF and is unaffected.
 
 ---
 
@@ -115,7 +115,7 @@ They cannot be replayed either — `replayDeadInboundEvent` refuses with `NO_RED
 
 ## 9. Manual replay
 
-`replayDeadInboundEvent({ eventId, authorization })`.
+`POST /api/ops/messaging/reliability/dead/:id/replay` (§14), or `replayDeadInboundEvent({ eventId, authorization })` directly from a reviewed script.
 
 Replay **reuses the row** — it does not clone the envelope, because the provider's message id is the row's identity and a second row would violate the dedupe constraint that makes the ledger work. The row returns to `failed` with `attempts: 0`, `nextAttemptAt: now`, and `replayCount` incremented. Every success writes an `AuditLog` row (`messaging_inbound_event_replayed`) carrying identifiers and stable codes only.
 
@@ -130,7 +130,7 @@ Replay **reuses the row** — it does not clone the envelope, because the provid
 | `UNROUTABLE` | No `connectionId`; it cannot be routed to a tenant at all |
 | `NO_STORED_PAYLOAD` | No envelope to re-drive |
 
-**Before replaying in bulk after an outage, ask whether the patient still wants the answer.** The six-hour retry window exists because a stale AI reply is its own kind of failure.
+**There is deliberately no bulk-replay endpoint**, and before replaying several rows by hand after an outage, ask whether the patient still wants the answer. The six-hour retry window exists because a stale AI reply is its own kind of failure.
 
 ---
 
@@ -163,6 +163,109 @@ A steady trickle is normal (deploys, restarts). A rising count means processes a
 Messaging has no separate failure domain — the ledger is the application's own PostgreSQL. If the database is down, see [`F4_RECOVERY_OPERATIONS.md`](F4_RECOVERY_OPERATIONS.md).
 
 Note the interaction with §11: with durable-ack **on**, a database outage makes the webhooks answer 503 and the providers retry — messages that arrive during the outage are redelivered afterwards. With it **off**, those messages are 200'd and lost. That is the single strongest argument for turning it on.
+
+---
+
+## 14. The operator routes (F5-3R)
+
+As of F5-3R the three services have an authenticated HTTP surface. Everything in §1, §4 and §9 is now an operator action rather than an engineer action, within the scope table in §0.
+
+All three live behind the normal clinic session: `authenticate` → tenant context → `csrfProtection('clinic')` → `authorize(['OWNER','ORG_ADMIN','CLINIC_MANAGER'])`. **`MESSAGING_DURABLE_ACK_ENABLED` is untouched and still OFF** — these routes are merge- and deploy-ready with the fast-ack path disabled.
+
+### Who may do what
+
+| | OWNER / ORG_ADMIN | CLINIC_MANAGER | DENTIST / RECEPTIONIST / BILLING / ASSISTANT | Platform admin |
+|---|---|---|---|---|
+| Read organization metrics | ✅ whole organization | ✅ own clinics only | ❌ 403 | ✅ but only the **platform-wide aggregate** |
+| List dead events | ✅ whole organization | ✅ own clinics only | ❌ 403 | ❌ — see below |
+| Replay a dead event | ✅ | ✅ own clinics only | ❌ 403 | ❌ |
+
+An **unrouted** event (`clinicId` null — routing never resolved a clinic) is reachable **only** organization-wide. A clinic-scoped operator neither sees it in a listing nor may replay it, so they can never be shown a row they would then be refused permission to act on.
+
+An operator's clinic reach comes from their session, never from the request. An **empty** authorized clinic list reaches **nothing** — an empty array has never meant "all" in this system.
+
+### `GET /api/ops/messaging/reliability/metrics`
+
+Organization-scoped. Status counts, `retryDue`/`retryScheduled`, `oldestUnresolvedAgeMs`, `oldestDeadAgeMs`, `deadByCode`, and a `byChannelProvider` breakdown.
+
+This is **not** the platform-wide metric. A clinic operator asking "is messaging healthy" must not be told how many messages every other organization is failing to process.
+
+### `GET /api/ops/messaging/reliability/dead`
+
+| Query | Behaviour |
+|---|---|
+| `page` | 1-based. Nonsense, zero or negative → page 1. |
+| `limit` | Default 25, **maximum 100**. An oversized value is **clamped**, never honoured; a nonsense value falls back to the default. |
+| `clinicId` | Must be inside your scope, or **403 `CROSS_CLINIC_REFUSED`** — deliberately not an empty list, because "I asked for clinic X and got nothing" is indistinguishable from "clinic X is clean". |
+| `channel`, `provider` | Optional filters. |
+
+Response: `{ rows, total, page, pageSize, maxPageSize, defaultPageSize }`. `total` is computed from the **same** predicate as `rows`, scope included.
+
+Each row carries: `id`, `channel`, `provider`, `connectionId`, `clinicId`, `providerMessageId`, `attempts`, `lastErrorCode`, `deadLetteredAt`, `createdAt`, `ageMs`, `replayCount`.
+
+It does **not** carry `rawPayload`, `errorMessage`, `fromPhone` or `toPhone`. To see the conversation, use `providerMessageId` + `connectionId` in the provider's own console — that keeps a patient identifier off the operator's screen and out of your browser history.
+
+Sorting is `deadLetteredAt DESC, id ASC`. The `id` tiebreak is load-bearing: rows dead-lettered by one sweep share a timestamp to the millisecond, and paging a non-total order shows one row twice and silently skips another.
+
+### `POST /api/ops/messaging/reliability/dead/:id/replay`
+
+Body must be **empty**. Any of `organizationId`, `clinicId`, `provider`, `channel`, `connectionId`, `providerMessageId`, `rawPayload`, `payload`, `status`, `attempts`, `replayCount` (and the snake_case spellings) is **refused 400 `TENANT_FIELDS_NOT_ACCEPTED`**. Replay re-drives the stored event exactly as it arrived; there is no supported way to alter what gets re-delivered, or whose it is.
+
+| Status | Code | Meaning |
+|---|---|---|
+| 200 | — | Requeued. `{ eventId, replayCount, maxReplays }` |
+| 400 | `TENANT_FIELDS_NOT_ACCEPTED` | The body tried to name a tenant, a provider or a payload |
+| 403 | `FORBIDDEN` | Your role may not replay |
+| 403 | `CROSS_CLINIC_REFUSED` | The event's clinic is outside your scope — **escalate to an org admin**, the event exists |
+| 404 | `NOT_FOUND` | No such event, **or** it belongs to another organization. Deliberately indistinguishable |
+| 409 | `NOT_TERMINAL` | Only `dead` may be replayed. A `failed` row is already the retry job's |
+| 409 | `ALREADY_PROCESSED` | It succeeded; replaying would duplicate the patient's reply |
+| 409 | `REPLAY_LIMIT_EXCEEDED` | 2 replays already |
+| 422 | `NO_REDELIVERY_HANDLER` | §8 — this channel has no handler, so a replay would do nothing |
+| 422 | `UNROUTABLE` | No `connectionId`; it cannot be routed to a tenant at all |
+| 422 | `NO_STORED_PAYLOAD` | No envelope to re-drive |
+
+**404 vs 403 is a deliberate split.** Another organization's id must be indistinguishable from a nonexistent one, or the endpoint is a cross-tenant id oracle. A **sibling clinic inside your own organization** is different: you already know your organization has other clinics, so `403` discloses nothing new and tells you to escalate rather than to file a bug about a vanished event.
+
+### Concurrent replay
+
+The transition is guarded on `status = 'dead'`, so **N simultaneous replays produce exactly one requeue**. The losers get `409 NOT_TERMINAL`. `replayCount` increments once and exactly one `AuditLog` row is written — the audit trail never claims three replays happened.
+
+### Audit
+
+Every **successful** replay writes `AuditLog` `messaging_inbound_event_replayed`, attributed to the session user (not a system principal), carrying `channel`, `provider`, `providerMessageId`, `previousErrorCode` and `previousAttempts`. No message content, no phone number, no provider body.
+
+**Refusals write no audit row.** That is deliberate: an id-guessing script would otherwise be an unbounded write amplifier against the compliance trail. Refusals are visible in the ordinary request logs.
+
+To verify a replay after the fact:
+
+```sql
+SELECT "createdAt", "actorUserId", "actorRole", "entityId", metadata
+FROM "AuditLog"
+WHERE action = 'messaging_inbound_event_replayed'
+  AND "organizationId" = '<org>'
+ORDER BY "createdAt" DESC LIMIT 20;
+```
+
+### Provider outage
+
+During an outage the DLQ fills with `PROVIDER_OUTAGE`/`NO_REDELIVERY_HANDLER`. **Do not page through it replaying rows one at a time** — there is deliberately no bulk replay (§13), and §9's warning still applies: ask whether the patient still wants an answer to a question from six hours ago before re-driving it.
+
+### Platform-admin visibility
+
+`GET /api/platform/messaging/reliability/metrics` returns the **cross-tenant aggregate only** — the same status/channel/provider counts, summed across organizations. There is deliberately **no** platform-wide dead-event listing and no platform-wide replay.
+
+That is a decision, not an omission. A dead-letter row names a tenant, a connection and a provider message id; reading one across tenants is support access to a customer's operational data, and this repository has no break-glass architecture to hang it on — no elevation flow, no customer-visible record, no scoped-and-expiring grant. Inventing one inside this task would be exactly the broad support impersonation that must not be introduced casually. A platform admin who needs a specific tenant's rows asks that tenant's OWNER/ORG_ADMIN, who has the scoped route above.
+
+### Disabling or rolling back the routes
+
+The routes are read-plus-one-guarded-mutation over data that already exists, so there is nothing to un-apply. If they must be withdrawn:
+
+1. **Narrowest** — revoke the capability: move affected users off `CLINIC_MANAGER`/`ORG_ADMIN`, or ship a one-line change to `canReplayMessagingInboundEvent` in `utils/roles.ts`. Inspection and replay are separate functions precisely so replay can be narrowed without also blinding operators.
+2. **Whole surface** — remove the `app.use('/api', messagingReliabilityRoutes)` line in `server/src/index.ts` and redeploy. Nothing else imports the router; the services keep working for the retry job.
+3. **Do not** disable by deleting rows, editing `status` by hand, or turning off the retry job.
+
+No migration was created by F5-3R, so there is no schema state to reverse.
 
 ---
 

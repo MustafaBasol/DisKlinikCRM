@@ -198,15 +198,20 @@ const REVIEW_MODEL_ACCESS: readonly ReviewModelAccessEntry[] = Object.freeze([
   },
   {
     file: 'server/src/messaging/messagingInboundDlq.ts',
-    callSites: 9,
+    callSites: 18,
     mechanism: 'runAsSystem',
     reason: 'inbound-webhook-envelope',
     justification:
       'F5-3 terminal-state transition, dead-letter inspection and platform metrics over the inbound ' +
       'ledger. Reuses the SAME reason messagingInboundIdempotency.ts already declares for this model ' +
       '— no new system reason. System execution is what lets the row be read at all; tenant safety ' +
-      'comes from a REQUIRED organizationId predicate on every caller-facing function (the metrics ' +
-      'snapshot is deliberately platform-wide, and exposes only status/channel/provider counts).',
+      'comes from a REQUIRED organizationId predicate on every caller-facing function (the ' +
+      'PLATFORM-WIDE metrics snapshot is the one deliberate exception, and exposes only ' +
+      'status/channel/provider counts). F5-3R added nine more sites and NO new reason: a paginated ' +
+      'dead-letter page whose total and rows share one predicate, and an ORGANIZATION-scoped metrics ' +
+      'view added precisely so a tenant operator is never handed the platform-wide one. Both take a ' +
+      'required organizationId plus an authorization-derived clinic scope in which an empty explicit ' +
+      'clinic list reaches nothing rather than everything.',
   },
   {
     file: 'server/src/messaging/messagingInboundReplay.ts',

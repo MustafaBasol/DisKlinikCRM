@@ -46,6 +46,15 @@ import {
   isRedeliverySupported,
 } from '../messaging/messagingRedeliveryRegistry.js';
 import { isDurableAckBeforeResponseEnabled } from '../messaging/messagingReliabilityConfig.js';
+// F5-3R — the operator route contract.
+import {
+  MESSAGING_DLQ_MAX_PAGE_SIZE,
+  MESSAGING_DLQ_DEFAULT_PAGE_SIZE,
+} from '../messaging/messagingInboundDlq.js';
+import {
+  canViewMessagingReliability,
+  canReplayMessagingInboundEvent,
+} from '../utils/roles.js';
 import { createWebhookAckGate } from '../messaging/webhookAckGate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -640,6 +649,233 @@ async function main() {
     const dlq = readSource('messaging/messagingInboundDlq.ts');
     const listing = dlq.slice(dlq.indexOf('export async function listDeadInboundEvents'));
     assert.match(listing, /organizationId: string;/, 'organizationId must be REQUIRED, not optional');
+  });
+
+  // ── F5-3R. The operator route contract ────────────────────────────────────
+  //
+  // DB-free half. What lives here is everything that is a property of the
+  // ROUTE MODULE and of the role helpers: which roles are admitted, that the
+  // refusal→status map is total, that the tenant-override refusal list is
+  // complete, and the structural rules that keep this route from quietly
+  // growing into something else. Every "operator X cannot see/do Y" claim is
+  // proved against a real database in
+  // `dbVerification/messagingOperatorRoutes.test.ts` instead — an isolation
+  // claim proved against a mock is not proved.
+
+  section('J. F5-3R — operator role model');
+
+  await test('the two capabilities admit exactly OWNER, ORG_ADMIN and CLINIC_MANAGER', () => {
+    const admitted = ['OWNER', 'ORG_ADMIN', 'CLINIC_MANAGER'];
+    const refused = ['DENTIST', 'RECEPTIONIST', 'BILLING', 'ASSISTANT'];
+
+    for (const role of admitted) {
+      assert.equal(canViewMessagingReliability({ role }), true, `${role} may inspect`);
+      assert.equal(canReplayMessagingInboundEvent({ role }), true, `${role} may replay`);
+    }
+    for (const role of refused) {
+      assert.equal(canViewMessagingReliability({ role }), false, `${role} must not inspect`);
+      assert.equal(canReplayMessagingInboundEvent({ role }), false, `${role} must not replay`);
+    }
+  });
+
+  await test('the role set matches the ACCEPTED runbook table — this task does not reopen it', () => {
+    // F6_MESSAGING_RELIABILITY_OPERATIONS.md §0 already states who may inspect
+    // and who may replay, with "(once a route exists)" against both. Building
+    // the route is not licence to change the answer, so the table is the
+    // specification and this test is the check.
+    const runbook = readFileSync(
+      resolve(SRC_ROOT, '../../docs/program/runbooks/F6_MESSAGING_RELIABILITY_OPERATIONS.md'),
+      'utf8',
+    );
+    assert.match(runbook, /Replay a terminal inbound message/, 'the role table still names the replay action');
+    assert.match(runbook, /within their clinic scope/, 'and still grants it to a clinic operator, scoped');
+  });
+
+  await test('an unknown or absent user is refused by both capabilities', () => {
+    for (const user of [null, undefined, { role: '' }, { role: 'not-a-real-role' }]) {
+      assert.equal(canViewMessagingReliability(user as never), false);
+      assert.equal(canReplayMessagingInboundEvent(user as never), false);
+    }
+  });
+
+  await test('inspection and replay are SEPARATE functions, so one can be narrowed without the other', () => {
+    const source = readSource('utils/roles.ts');
+    assert.match(source, /export function canViewMessagingReliability/);
+    assert.match(source, /export function canReplayMessagingInboundEvent/);
+    assert.notEqual(
+      canViewMessagingReliability.name,
+      canReplayMessagingInboundEvent.name,
+      'not an alias of one another',
+    );
+  });
+
+  section('K. F5-3R — the route contract, structurally');
+
+  await test('the refusal→status map is TOTAL over the service refusal union', () => {
+    // A refusal the route does not know about would fall through to a generic
+    // 400 and tell an operator nothing. The union lives in the service, so the
+    // map is checked against the service's own source rather than a copy.
+    const service = readSource('messaging/messagingInboundReplay.ts');
+    const unionBlock = service.slice(
+      service.indexOf('export type MessagingReplayRefusal'),
+      service.indexOf('export type MessagingReplayResult'),
+    );
+    const refusals = [...unionBlock.matchAll(/\|\s*'([A-Z_]+)'/g)].map((m) => m[1]!);
+    assert.ok(refusals.length >= 8, `expected the full refusal union, saw ${refusals.length}`);
+
+    const route = readSource('routes/messagingReliability.ts');
+    const mapBlock = route.slice(route.indexOf('REPLAY_REFUSAL_STATUS'), route.indexOf('router.post('));
+    for (const refusal of refusals) {
+      assert.match(mapBlock, new RegExp(`\\b${refusal}:\\s*\\d{3}`), `${refusal} has no mapped status`);
+    }
+  });
+
+  await test('cross-ORGANIZATION is 404 and cross-CLINIC is 403 — the distinction is in the code, not just prose', () => {
+    const route = readSource('routes/messagingReliability.ts');
+    const mapBlock = route.slice(route.indexOf('REPLAY_REFUSAL_STATUS'), route.indexOf('router.post('));
+    assert.match(mapBlock, /NOT_FOUND:\s*404/);
+    assert.match(mapBlock, /CROSS_CLINIC_REFUSED:\s*403/);
+  });
+
+  await test('every tenant-describing field a caller might send is on the refusal list', () => {
+    const route = readSource('routes/messagingReliability.ts');
+    const listBlock = route.slice(
+      route.indexOf('const TENANT_OVERRIDE_FIELDS'),
+      route.indexOf('function findTenantOverride'),
+    );
+    for (const field of [
+      'organizationId', 'organization_id', 'clinicId', 'clinic_id',
+      'provider', 'channel', 'connectionId', 'providerMessageId',
+      'rawPayload', 'payload', 'status', 'attempts', 'replayCount',
+    ]) {
+      assert.match(listBlock, new RegExp(`'${field}'`), `${field} must be refused if a body supplies it`);
+    }
+  });
+
+  await test('the route derives tenant scope from the SESSION and never from the request', () => {
+    const route = readSource('routes/messagingReliability.ts');
+    const code = codeLines(route).join('\n');
+
+    assert.match(code, /organizationId: req\.user!\.organizationId/);
+    // The only places a body/query may influence anything are the operator's
+    // own filters and paging — never a tenant, and never an actor.
+    assert.equal(/organizationId:\s*(req\.body|req\.query)/.test(code), false, 'organization never from the request');
+    assert.equal(/clinicScope:\s*(req\.body|req\.query)/.test(code), false, 'scope never from the request');
+    assert.equal(/actorUserId:\s*(req\.body|req\.query)/.test(code), false, 'actor never from the request');
+    assert.equal(/\.\.\.req\.body/.test(code), false, 'the body is never spread into a service call');
+  });
+
+  await test('an EXPLICIT clinic scope is built from allowedClinicIds, and an empty list is not widened', () => {
+    const route = readSource('routes/messagingReliability.ts');
+    const scopeFn = route.slice(route.indexOf('function deriveClinicScope'), route.indexOf('function isClinicRequestable'));
+    assert.match(scopeFn, /allowedClinicIds \?\? \[\]/, 'a missing list becomes empty, never organization-wide');
+    assert.match(scopeFn, /kind: 'ORGANIZATION_WIDE'/);
+    // The org-wide branch must be reachable ONLY from the canonical role check.
+    assert.match(scopeFn, /role === 'OWNER' \|\| role === 'ORG_ADMIN'/);
+  });
+
+  await test('the route touches NO outbox module — F5-2 replay is a different lifecycle', () => {
+    // F5-2's replay creates a NEW event with causation; this one reuses the row
+    // because the provider's message id IS the identity. Exposing the outbox
+    // through a messaging route would collapse two lifecycles that were
+    // deliberately kept apart, and would hand an operator a generic replay
+    // button whose semantics change with the row it lands on.
+    // CODE lines only: the module docstring names `replayDeadOutboxEvent`
+    // precisely in order to explain why it is NOT reachable here, and a scan
+    // that cannot tell an explanation from a call would forbid documenting the
+    // decision at all.
+    const code = codeLines(readSource('routes/messagingReliability.ts')).join('\n');
+    assert.equal(code.includes('outbox/'), false, 'no outbox import');
+    assert.equal(/replayDeadOutboxEvent/.test(code), false, 'no outbox replay reachable from here');
+    assert.equal(/OutboxEvent/.test(code), false);
+  });
+
+  await test('the route adds NO new system-context reason and takes no system context of its own', () => {
+    const route = readSource('routes/messagingReliability.ts');
+    assert.equal(/runAsSystem/.test(route), false, 'system execution stays inside the services');
+    assert.equal(/SystemContextReason/.test(route), false);
+  });
+
+  await test('the route never selects, returns or logs a payload, a phone number or an error body', () => {
+    const route = readSource('routes/messagingReliability.ts');
+    const code = codeLines(route).join('\n');
+    for (const forbidden of ['fromPhone', 'toPhone', 'errorMessage', 'prisma.']) {
+      assert.equal(code.includes(forbidden), false, `the route must not reference ${forbidden}`);
+    }
+    // `rawPayload` appears exactly once in code — in the refusal list, as a
+    // field name a caller is forbidden to send.
+    const rawPayloadHits = (code.match(/rawPayload/g) ?? []).length;
+    assert.equal(rawPayloadHits, 1, 'rawPayload appears only as a refused input field name');
+  });
+
+  await test('the DLQ page size is bounded by a constant, and the maximum is sane', () => {
+    assert.ok(Number.isInteger(MESSAGING_DLQ_MAX_PAGE_SIZE));
+    assert.ok(Number.isInteger(MESSAGING_DLQ_DEFAULT_PAGE_SIZE));
+    assert.ok(MESSAGING_DLQ_DEFAULT_PAGE_SIZE >= 1);
+    assert.ok(MESSAGING_DLQ_DEFAULT_PAGE_SIZE <= MESSAGING_DLQ_MAX_PAGE_SIZE);
+    assert.ok(MESSAGING_DLQ_MAX_PAGE_SIZE <= 500, 'an operator page is not a bulk export');
+  });
+
+  await test('the DLQ page is a deterministic TOTAL order', () => {
+    const dlq = readSource('messaging/messagingInboundDlq.ts');
+    const pageFn = dlq.slice(dlq.indexOf('export async function listDeadInboundEventPage'));
+    // deadLetteredAt alone is not a total order: rows dead-lettered by one
+    // sweep share a timestamp to the millisecond, and paging a non-total order
+    // shows one row twice and skips another.
+    assert.match(pageFn, /orderBy: \[\{ deadLetteredAt: 'desc' \}, \{ id: 'asc' \}\]/);
+  });
+
+  await test('the page and its total are computed from the SAME predicate', () => {
+    const dlq = readSource('messaging/messagingInboundDlq.ts');
+    const pageFn = dlq.slice(dlq.indexOf('export async function listDeadInboundEventPage'));
+    assert.match(pageFn, /const where = buildDeadInboundEventWhere\(args\)/);
+    const countAndFind = pageFn.slice(pageFn.indexOf('Promise.all'), pageFn.indexOf('return {'));
+    // `count({ where })` uses the shorthand and `findMany({ where, ... })` does
+    // not, so both spellings of the SAME binding have to be accepted here.
+    const sharedWhereUses = (countAndFind.match(/\bwhere\s*[,}]/g) ?? []).length;
+    assert.ok(sharedWhereUses >= 2, `count and findMany must share it, saw ${sharedWhereUses}`);
+    assert.equal(/where:\s*\{/.test(countAndFind), false, 'neither builds a second predicate inline');
+  });
+
+  await test('the organization-scoped metrics require an organizationId and apply the clinic scope', () => {
+    const dlq = readSource('messaging/messagingInboundDlq.ts');
+    const fn = dlq.slice(dlq.indexOf('export async function getOrganizationMessagingMetrics'));
+    assert.match(fn, /organizationId: string;/, 'organizationId is REQUIRED, not optional');
+    assert.match(fn, /scope\.kind === 'EXPLICIT' \? \{ clinicId: \{ in:/, 'clinic scope is a predicate');
+    assert.match(fn, /organizationId: args\.organizationId/);
+  });
+
+  await test('platform-wide metrics stay AGGREGATE — no cross-tenant dead-event listing exists', () => {
+    // §29: a platform admin needing tenant-specific inspection would need a
+    // break-glass/support-access architecture, and this repository has none.
+    // Inventing one inside a metrics task is exactly what must not happen, so
+    // the platform surface is counts only and this test pins that.
+    const platform = readSource('routes/platformAdmin.ts');
+    const block = platform.slice(platform.indexOf("router.get('/messaging/reliability/metrics'"));
+    const handler = block.slice(0, block.indexOf('});') + 3);
+    assert.match(handler, /getMessagingInboundMetrics/);
+    assert.equal(handler.includes('listDeadInboundEvent'), false, 'no cross-tenant listing');
+    assert.equal(handler.includes('replayDeadInboundEvent'), false, 'no cross-tenant replay');
+    assert.equal(platform.includes('listDeadInboundEventPage'), false, 'and none anywhere on the platform router');
+  });
+
+  await test('the operator route is mounted BEHIND authentication, tenant context and CSRF', () => {
+    const index = readSource('index.ts');
+    const authAt = index.indexOf("app.use('/api', authenticate");
+    const csrfAt = index.indexOf("app.use('/api', csrfProtection('clinic'))");
+    const routeAt = index.indexOf("app.use('/api', messagingReliabilityRoutes)");
+    assert.ok(authAt > 0 && csrfAt > 0 && routeAt > 0, 'all three mount points exist');
+    assert.ok(routeAt > authAt, 'the route is mounted after authenticate');
+    assert.ok(routeAt > csrfAt, 'and after the clinic CSRF gate — replay is a mutation');
+  });
+
+  await test('F5-3R activates NO feature flag: MESSAGING_DURABLE_ACK_ENABLED is untouched', () => {
+    // The route is merge- and deploy-ready while durable acceptance stays off.
+    // Nothing in this task reads, writes or defaults that flag.
+    const route = readSource('routes/messagingReliability.ts');
+    assert.equal(route.includes('MESSAGING_DURABLE_ACK_ENABLED'), false);
+    assert.equal(route.includes('isDurableAckBeforeResponseEnabled'), false);
+    assert.equal(isDurableAckBeforeResponseEnabled({} as NodeJS.ProcessEnv), false, 'still OFF by default');
   });
 
   console.log(`\n${'─'.repeat(60)}`);
