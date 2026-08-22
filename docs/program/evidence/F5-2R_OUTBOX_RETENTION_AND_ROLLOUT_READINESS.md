@@ -233,7 +233,7 @@ PostgreSQL evaluates that predicate and removes the rows **in the same statement
 
 Each test first asserts the row **was** selected as a candidate. Without that, "the row survived" would be indistinguishable from "the row was never eligible" and the section would pass vacuously.
 
-The eleven §H tests were run against a deliberately reverted implementation (the old snapshot delete restored): **8 failed**, including all three required race scenarios. They fail on the defect and pass on the fix.
+The eleven §H tests were run against a deliberately reverted implementation (the old snapshot delete restored): **8 of the 11 failed**, including all three required race scenarios. Every failure was in §H — the **27 pre-existing tests all still passed**, which is the sharpest statement available about the original suite: it could not detect this defect, and 27 green tests were not evidence that the guard worked. The new tests fail on the defect and pass on the fix.
 
 One of them, `A2`, pins the defect itself rather than only its consequence: mid-race it rebuilds the *old* delete's `WHERE` from the guard set loaded before the batch and shows it **still matches** the row the guarded delete just refused.
 
