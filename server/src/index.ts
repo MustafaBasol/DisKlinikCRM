@@ -56,6 +56,7 @@ import instagramInboxRoutes from './routes/instagramInbox.js';
 import financeDashboardRoutes from './routes/financeDashboard.js';
 import schedulesRoutes from './routes/schedules.js';
 import operationalMonitoringRoutes from './routes/operationalMonitoring.js';
+import messagingReliabilityRoutes from './routes/messagingReliability.js';
 import metaWhatsAppWebhookRoutes from './routes/metaWhatsAppWebhook.js';
 import instagramWebhookRoutes from './routes/instagramWebhook.js';
 import noShowsRoutes from './routes/noShows.js';
@@ -318,6 +319,10 @@ app.use('/api', instagramInboxRoutes);
 app.use('/api', financeDashboardRoutes);
 app.use('/api', schedulesRoutes);
 app.use('/api', operationalMonitoringRoutes);
+// F5-3R — operator DLQ/metrics/replay for messaging reliability. Mounted next
+// to the other /api/ops surface so both share the same authenticated router
+// prefix and the same operator vocabulary.
+app.use('/api', messagingReliabilityRoutes);
 app.use('/api', noShowsRoutes);
 app.use('/api', recallRoutes);
 app.use('/api', usersImportRoutes);

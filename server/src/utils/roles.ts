@@ -540,3 +540,46 @@ export function canResolveInstagramConversation(user: UserForRole | null | undef
 }
 
 
+
+// ── F5-3R: Mesajlaşma dayanıklılığı operatör izinleri ────────────────────────
+
+/**
+ * Mesajlaşma dayanıklılığı okuma: DLQ (terminal gelen mesaj) listesi ve
+ * organizasyon kapsamlı metrikler.
+ *
+ * OWNER / ORG_ADMIN: organizasyon genelinde.
+ * CLINIC_MANAGER: yalnızca atandığı şubeler (rota kapsamı zorlar).
+ * DENTIST / RECEPTIONIST / BILLING / ASSISTANT: erişim yok.
+ *
+ * `canViewOperations` ile aynı rol kümesi — bu bilinçli: DLQ görünümü,
+ * denetim günlüğü/operasyonel olay görünümüyle aynı sınıf operasyonel
+ * meta veridir.
+ */
+export function canViewMessagingReliability(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
+
+/**
+ * Terminal (dead) bir gelen mesajı yeniden kuyruğa alma.
+ *
+ * OWNER / ORG_ADMIN / CLINIC_MANAGER — CLINIC_MANAGER yalnızca kendi şube
+ * kapsamındaki olaylar için (rota + servis katmanı birlikte zorlar).
+ * F6_MESSAGING_RELIABILITY_OPERATIONS.md §0'daki kabul edilmiş rol tablosuyla
+ * birebir aynı; bu görev o kararı yeniden açmıyor.
+ *
+ * BUGÜN `canViewMessagingReliability` ile AYNI rol kümesine sahip olmasına
+ * rağmen AYRI bir fonksiyon, ve bunun nedeni üslup değil: bu iki fonksiyon
+ * farklı soruları yanıtlıyor. Biri "operasyonel meta veriyi okuyabilir mi",
+ * diğeri "bir hastaya giden bir mesajın yeniden üretilmesine sebep olabilir
+ * mi". Replay'i daraltmak isteyen biri, aynı hareketle görüntülemeyi de
+ * daraltmak zorunda KALMAMALI. Depoda aynı desenin emsali var:
+ * `canViewOperations` ve `canResolveOperationalEvents` de bugün aynı rol
+ * kümesini paylaşıyor ve ayrı duruyor.
+ */
+export function canReplayMessagingInboundEvent(user: UserForRole | null | undefined): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role, user.canAccessAllClinics);
+  return role === 'OWNER' || role === 'ORG_ADMIN' || role === 'CLINIC_MANAGER';
+}
