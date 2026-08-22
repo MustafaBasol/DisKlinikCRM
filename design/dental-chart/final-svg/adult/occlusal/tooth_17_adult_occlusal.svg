@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2.5 60 60.5" width="60" height="60.5" data-tooth-fdi="17" data-view="occlusal" role="img">
+  <title>Tooth 17 — permanent (adult) upper right second molar — occlusal view</title>
+  <desc>Standalone occlusal/incisal anatomy for tooth 17 (permanent (adult), upper right second molar), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g>
+    <path d="M15.3 14.3 C21.1 7.7 45.4 5.0 50.2 11.7 C55.0 18.4 47.8 47.9 43.9 54.2 C40.0 60.5 31.5 50.0 26.7 49.6 C21.9 49.2 17.2 57.5 15.3 51.6 C13.4 45.7 9.5 21.0 15.3 14.3 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
+    <path d="M50.2 11.7 C55.0 18.4 47.8 47.9 43.9 54.2 L35.4 41.3 L37.5 25.3 Z" data-surface="mesial" data-tooth-fdi="17" fill="none" stroke="none"><title>mesial</title></path>
+    <path d="M15.3 51.6 C13.4 45.7 9.5 21.0 15.3 14.3 L23.7 26.4 L24.2 40.8 Z" data-surface="distal" data-tooth-fdi="17" fill="none" stroke="none"><title>distal</title></path>
+    <path d="M15.3 14.3 C21.1 7.7 45.4 5.0 50.2 11.7 L37.5 25.3 L23.7 26.4 Z" data-surface="buccal" data-tooth-fdi="17" fill="none" stroke="none"><title>buccal</title></path>
+    <path d="M43.9 54.2 C40.0 60.5 31.5 50.0 26.7 49.6 C21.9 49.2 17.2 57.5 15.3 51.6 L24.2 40.8 L35.4 41.3 Z" data-surface="lingual" data-tooth-fdi="17" fill="none" stroke="none"><title>palatal</title></path>
+    <path d="M23.7 26.4 L37.5 25.3 L35.4 41.3 L24.2 40.8 Z" data-surface="central" data-tooth-fdi="17" fill="none" stroke="none"><title>occlusal</title></path>
+    <path d="M43.9 54.2 L29.0 33.6 L15.3 14.3 M34.3 25.9 L38.6 20.7" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
+  </g>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 1.5 64 83" width="64" height="83" data-tooth-fdi="35" data-view="lateral" role="img">
+  <title>Tooth 35 — permanent (adult) lower left second premolar — lateral view</title>
+  <desc>Standalone lateral (buccal/facial) anatomy for tooth 35 (permanent (adult), lower left second premolar), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(64 0) scale(-1 1)">
+    <path d="M24.8 25.0 C24.8 25.6 24.7 25.1 24.8 27.0 C24.9 29.1 25.0 37.5 25.7 41.7 C26.4 45.9 28.8 52.9 29.5 56.4 C30.1 59.5 30.2 64.9 30.4 66.5 C30.7 67.9 31.2 68.8 31.4 69.0 C31.7 68.8 32.2 68.8 32.5 69.0 C32.7 68.8 33.2 67.9 33.4 66.5 C33.7 64.9 33.7 59.5 34.4 56.4 C35.2 52.9 38.0 45.9 38.8 41.7 C39.6 37.5 40.1 29.1 40.2 27.0 C40.4 25.1 40.2 25.6 40.2 25.0 C38.5 24.8 26.6 24.8 24.8 25.0 Z" fill="#f0e6d2" stroke="#a1866a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-part="root" data-root-index="0"/>
+    <path d="M24.8 4.0 C28.1 4.3 36.5 4.3 39.8 4.0 C42.4 6.0 42.7 14.9 42.9 17.8 C43.0 19.6 41.3 23.1 40.9 24.2 C40.6 25.3 40.5 26.0 40.2 27.0 C38.2 27.3 26.9 27.2 24.8 27.0 C24.6 26.3 24.4 25.8 24.1 25.1 C23.8 24.0 22.5 22.5 22.6 20.6 C22.7 16.3 24.1 9.0 24.8 4.0 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-part="crown"/>
+    <path d="M28.5 9.5 L32.0 8.5 L35.0 10.0 M32.0 8.5 V16.0" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.55" stroke-linecap="round" data-part="surface"/>
+    <path d="M24.8 26.2 C28.4 26.5 36.1 26.5 40.2 26.2" fill="none" stroke="#b39a7c" stroke-width="1.1" stroke-opacity="0.75" stroke-linecap="round" data-part="cervical"/>
+  </g>
+</svg>

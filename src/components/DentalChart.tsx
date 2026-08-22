@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   ExternalLink,
   Eye,
@@ -12,19 +14,18 @@ import {
 import { useTranslation } from 'react-i18next';
 import DentalChartFullscreenModal from './DentalChartFullscreenModal';
 import ToothDetailPanel from './ToothDetailPanel';
-import ToothIcon from './ToothIcon';
+import { getChartOrder, Odontogram } from './odontogram';
 import {
+  Dentition,
+  getToothDentition,
   isToothStatus,
-  LOWER_LEFT,
-  LOWER_RIGHT,
   PROCEDURE_STATUS_META,
+  resolveInitialDentition,
   TOOTH_STATUSES,
   TOOTH_STATUS_META,
   ToothRecord,
   ToothStatus,
   TreatmentProcedure,
-  UPPER_LEFT,
-  UPPER_RIGHT,
 } from './dentalChart.types';
 import { useAuth } from '../context/AuthContext';
 import { useClinicPreferences } from '../context/ClinicPreferencesContext';
@@ -36,52 +37,15 @@ interface DentalChartProps {
   patientName?: string;
   readOnly?: boolean;
   showTreatmentPlan?: boolean;
+  /**
+   * Optional — only ever used to pick which chart opens FIRST for a patient
+   * with no records yet (see resolveInitialDentition). The chart is fully
+   * usable without it, so every existing call site stays valid.
+   */
+  dateOfBirth?: string | Date | null;
 }
 
 type ChartSize = 'regular' | 'large' | 'presentation';
-
-interface QuadrantProps {
-  label: string;
-  teeth: number[];
-  align: 'start' | 'end';
-  isUpper: boolean;
-  labelPosition: 'top' | 'bottom';
-  records: Map<number, ToothRecord>;
-  procedureMap: Map<number, TreatmentProcedure[]>;
-  selectedTooth: number | null;
-  size: ChartSize;
-  patientMode: boolean;
-  onSelect: (fdi: number) => void;
-}
-
-interface JawRowProps {
-  title: string;
-  leftLabel: string;
-  rightLabel: string;
-  leftTeeth: number[];
-  rightTeeth: number[];
-  isUpper: boolean;
-  labelPosition: 'top' | 'bottom';
-  records: Map<number, ToothRecord>;
-  procedureMap: Map<number, TreatmentProcedure[]>;
-  selectedTooth: number | null;
-  size: ChartSize;
-  patientMode: boolean;
-  onSelect: (fdi: number) => void;
-}
-
-interface FdiLineRowProps {
-  title: string;
-  leftTeeth: number[];
-  rightTeeth: number[];
-  isUpper: boolean;
-  labelPosition: 'top' | 'bottom';
-  records: Map<number, ToothRecord>;
-  procedureMap: Map<number, TreatmentProcedure[]>;
-  selectedTooth: number | null;
-  patientMode: boolean;
-  onSelect: (fdi: number) => void;
-}
 
 function statusLabel(status: ToothStatus, t: ReturnType<typeof useTranslation>['t']) {
   return t(`patients:dentalChart.status.${status}`, {
@@ -89,157 +53,12 @@ function statusLabel(status: ToothStatus, t: ReturnType<typeof useTranslation>['
   });
 }
 
-const Quadrant: React.FC<QuadrantProps> = ({
-  label,
-  teeth,
-  align,
-  isUpper,
-  labelPosition,
-  records,
-  procedureMap,
-  selectedTooth,
-  size,
-  patientMode,
-  onSelect,
-}) => (
-  <div className={`flex min-w-0 flex-col gap-2 ${align === 'end' ? 'items-end' : 'items-start'}`}>
-    <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</span>
-    <div
-      className={[
-        'flex max-w-full flex-wrap gap-1.5 sm:gap-2',
-        align === 'end' ? 'justify-end' : 'justify-start',
-      ].join(' ')}
-    >
-      {teeth.map((fdi) => (
-        <ToothIcon
-          key={fdi}
-          fdi={fdi}
-          record={records.get(fdi)}
-          procedures={procedureMap.get(fdi)}
-          labelPosition={labelPosition}
-          isUpper={isUpper}
-          isSelected={selectedTooth === fdi}
-          size={size}
-          patientMode={patientMode}
-          onSelect={onSelect}
-        />
-      ))}
-    </div>
-  </div>
-);
-
-const JawRow: React.FC<JawRowProps> = ({
-  title,
-  leftLabel,
-  rightLabel,
-  leftTeeth,
-  rightTeeth,
-  isUpper,
-  labelPosition,
-  records,
-  procedureMap,
-  selectedTooth,
-  size,
-  patientMode,
-  onSelect,
-}) => (
-  <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800/80 md:p-4">
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{title}</h4>
-      <span className="text-[11px] font-medium text-slate-400">
-        {leftLabel} / {rightLabel}
-      </span>
-    </div>
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-start">
-      <Quadrant
-        label={leftLabel}
-        teeth={leftTeeth}
-        align="end"
-        isUpper={isUpper}
-        labelPosition={labelPosition}
-        records={records}
-        procedureMap={procedureMap}
-        selectedTooth={selectedTooth}
-        size={size}
-        patientMode={patientMode}
-        onSelect={onSelect}
-      />
-      <div className="hidden h-full w-px rounded-full bg-slate-200 dark:bg-gray-700 lg:block" />
-      <Quadrant
-        label={rightLabel}
-        teeth={rightTeeth}
-        align="start"
-        isUpper={isUpper}
-        labelPosition={labelPosition}
-        records={records}
-        procedureMap={procedureMap}
-        selectedTooth={selectedTooth}
-        size={size}
-        patientMode={patientMode}
-        onSelect={onSelect}
-      />
-    </div>
-  </section>
-);
-
-const FdiLineRow: React.FC<FdiLineRowProps> = ({
-  title,
-  leftTeeth,
-  rightTeeth,
-  isUpper,
-  labelPosition,
-  records,
-  procedureMap,
-  selectedTooth,
-  patientMode,
-  onSelect,
-}) => (
-  <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
-    <div className="mb-3 flex items-center justify-between">
-      <h4 className="text-base font-bold text-slate-800 dark:text-slate-100">{title}</h4>
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">FDI</span>
-    </div>
-    <div className="overflow-x-auto pb-1">
-      <div className="mx-auto flex min-w-max items-start justify-center gap-2">
-        {leftTeeth.map((fdi) => (
-          <ToothIcon
-            key={fdi}
-            fdi={fdi}
-            record={records.get(fdi)}
-            procedures={procedureMap.get(fdi)}
-            labelPosition={labelPosition}
-            isUpper={isUpper}
-            isSelected={selectedTooth === fdi}
-            size="presentation"
-            patientMode={patientMode}
-            onSelect={onSelect}
-          />
-        ))}
-        <div className="mx-1 mt-7 h-24 w-px shrink-0 rounded-full bg-slate-300 dark:bg-gray-600" />
-        {rightTeeth.map((fdi) => (
-          <ToothIcon
-            key={fdi}
-            fdi={fdi}
-            record={records.get(fdi)}
-            procedures={procedureMap.get(fdi)}
-            labelPosition={labelPosition}
-            isUpper={isUpper}
-            isSelected={selectedTooth === fdi}
-            size="presentation"
-            patientMode={patientMode}
-            onSelect={onSelect}
-          />
-        ))}
-      </div>
-    </div>
-  </section>
-);
-
 const DentalChart: React.FC<DentalChartProps> = ({
   patientId,
   patientName,
   readOnly = false,
   showTreatmentPlan = true,
+  dateOfBirth = null,
 }) => {
   const { t } = useTranslation(['patients', 'common']);
   const { user } = useAuth();
@@ -259,12 +78,18 @@ const DentalChart: React.FC<DentalChartProps> = ({
   const [activeProcTab, setActiveProcTab] = useState<'chart' | 'plan'>('chart');
   const [patientMode, setPatientMode] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  // null until the first load resolves an initial dentition from the patient's
+  // own records (see resolveInitialDentition). Once the clinician switches
+  // manually their choice sticks for the rest of the visit — the resolver only
+  // ever fills the initial null.
+  const [dentition, setDentition] = useState<Dentition | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadDentalChart() {
       setLoading(true);
+      setDentition(null);
       try {
         const [chartRes, procRes] = await Promise.allSettled([
           dentalChartService.getAll(patientId),
@@ -277,11 +102,18 @@ const DentalChart: React.FC<DentalChartProps> = ({
 
         if (chartRes.status === 'fulfilled') {
           const nextRecords = new Map<number, ToothRecord>();
+          let hasPrimaryRecords = false;
+          let hasPermanentRecords = false;
           for (const rawRecord of chartRes.value.data) {
             const safeStatus = isToothStatus(rawRecord.status) ? rawRecord.status : 'planned';
             nextRecords.set(rawRecord.toothFdi, { ...rawRecord, status: safeStatus });
+            if (getToothDentition(rawRecord.toothFdi) === 'primary') hasPrimaryRecords = true;
+            else hasPermanentRecords = true;
           }
           setRecords(nextRecords);
+          setDentition(
+            resolveInitialDentition({ dateOfBirth, hasPermanentRecords, hasPrimaryRecords }),
+          );
         }
 
         if (procRes.status === 'fulfilled') {
@@ -297,6 +129,10 @@ const DentalChart: React.FC<DentalChartProps> = ({
     return () => {
       cancelled = true;
     };
+    // dateOfBirth is deliberately NOT a dependency: it only seeds the initial
+    // view, and re-running on a prop identity change would yank a clinician
+    // back out of a chart they had switched to mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId, showTreatmentPlan]);
 
   const procedureMap = useMemo(() => {
@@ -310,13 +146,37 @@ const DentalChart: React.FC<DentalChartProps> = ({
     return nextMap;
   }, [procedures]);
 
+  // Falls back to the adult arch while the initial resolution is still null so
+  // the chart never renders an empty arch during the first paint.
+  const activeDentition: Dentition = dentition ?? 'permanent';
+  const isPrimaryView = activeDentition === 'primary';
+
+  /**
+   * How many records exist in EACH dentition. Surfaced on the switch itself so
+   * a clinician can see at a glance that a mixed-dentition child has charted
+   * teeth on the arch they are not currently looking at — without that cue the
+   * other arch's records are invisible and look lost.
+   */
+  const dentitionCounts = useMemo(() => {
+    let permanent = 0;
+    let primary = 0;
+    for (const fdi of records.keys()) {
+      if (getToothDentition(fdi) === 'primary') primary += 1;
+      else permanent += 1;
+    }
+    return { permanent, primary };
+  }, [records]);
+
+  // Status tallies are scoped to the arch on screen: showing adult totals over
+  // a paediatric chart would misreport what the clinician is looking at.
   const counts = useMemo(() => {
     const nextCounts = Object.fromEntries(TOOTH_STATUSES.map((status) => [status, 0])) as Record<ToothStatus, number>;
-    for (const record of records.values()) {
+    for (const [fdi, record] of records.entries()) {
+      if ((getToothDentition(fdi) === 'primary') !== isPrimaryView) continue;
       nextCounts[record.status] += 1;
     }
     return nextCounts;
-  }, [records]);
+  }, [records, isPrimaryView]);
 
   const activeProcedures = useMemo(
     () => procedures.filter((procedure) => procedure.status !== 'cancelled'),
@@ -349,12 +209,15 @@ const DentalChart: React.FC<DentalChartProps> = ({
   const showPlan = !patientMode && showTreatmentPlan && activeProcTab === 'plan';
   const displayPatientName = patientName?.trim();
 
-  const handleSelectTooth = (fdi: number) => {
-    const existing = records.get(fdi);
-    setSelectedTooth(fdi);
-    setEditStatus(existing?.status ?? 'planned');
-    setEditNote(existing?.note ?? '');
-  };
+  const handleSelectTooth = useCallback(
+    (fdi: number) => {
+      const existing = records.get(fdi);
+      setSelectedTooth(fdi);
+      setEditStatus(existing?.status ?? 'planned');
+      setEditNote(existing?.note ?? '');
+    },
+    [records],
+  );
 
   const saveToothRecord = async (status: ToothStatus, note: string) => {
     if (!selectedTooth || !canEdit) return;
@@ -399,6 +262,173 @@ const DentalChart: React.FC<DentalChartProps> = ({
     }
   };
 
+  /**
+   * Switching arches clears the selection: a tooth selected on the adult chart
+   * has no counterpart on the paediatric one, and leaving the detail panel
+   * pointing at an off-screen tooth is how a note gets saved against the wrong
+   * tooth. Nothing is persisted by switching — records for both arches stay
+   * loaded and untouched.
+   */
+  const handleDentitionChange = (next: Dentition) => {
+    if (next === activeDentition) return;
+    setDentition(next);
+    setSelectedTooth(null);
+    setEditStatus('planned');
+    setEditNote('');
+    setJumpValue('');
+    setJumpInvalid(false);
+  };
+
+  /**
+   * Prev/next-tooth + jump-to-FDI (US: DENTAL-CHART-UX-001-R2 item 10). Pure
+   * local-selection navigation — reuses handleSelectTooth so it never issues
+   * a new API call and never mutates a record; jumping to an FDI that is not
+   * part of the arch currently on screen surfaces jumpInvalid instead of
+   * silently switching dentition or crashing.
+   */
+  const chartOrder = useMemo(() => getChartOrder(activeDentition), [activeDentition]);
+  const [jumpValue, setJumpValue] = useState('');
+  const [jumpInvalid, setJumpInvalid] = useState(false);
+
+  const handlePreviousTooth = () => {
+    if (chartOrder.length === 0) return;
+    const currentIndex = selectedTooth !== null ? chartOrder.indexOf(selectedTooth) : -1;
+    const previousIndex = currentIndex <= 0 ? chartOrder.length - 1 : currentIndex - 1;
+    handleSelectTooth(chartOrder[previousIndex]);
+  };
+
+  const handleNextTooth = () => {
+    if (chartOrder.length === 0) return;
+    const currentIndex = selectedTooth !== null ? chartOrder.indexOf(selectedTooth) : -1;
+    const nextIndex = currentIndex === -1 || currentIndex === chartOrder.length - 1 ? 0 : currentIndex + 1;
+    handleSelectTooth(chartOrder[nextIndex]);
+  };
+
+  const handleJumpToFdi = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const fdi = Number(jumpValue.trim());
+    if (!Number.isInteger(fdi) || !chartOrder.includes(fdi)) {
+      setJumpInvalid(true);
+      return;
+    }
+    setJumpInvalid(false);
+    setJumpValue('');
+    handleSelectTooth(fdi);
+  };
+
+  const renderDentitionSwitch = () => {
+    const options: { value: Dentition; label: string; count: number }[] = [
+      {
+        value: 'permanent',
+        label: t('patients:dentalChart.dentition.permanent', { defaultValue: 'Adult' }),
+        count: dentitionCounts.permanent,
+      },
+      {
+        value: 'primary',
+        label: t('patients:dentalChart.dentition.primary', { defaultValue: 'Primary' }),
+        count: dentitionCounts.primary,
+      },
+    ];
+
+    return (
+      <div
+        role="group"
+        aria-label={t('patients:dentalChart.dentition.switchLabel', { defaultValue: 'Dentition' })}
+        className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-gray-900"
+      >
+        {options.map((option) => {
+          const active = activeDentition === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={active}
+              data-dentition={option.value}
+              onClick={() => handleDentitionChange(option.value)}
+              className={[
+                'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition',
+                active
+                  ? 'bg-white text-slate-900 shadow-sm dark:bg-gray-700 dark:text-white'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200',
+              ].join(' ')}
+            >
+              {option.label}
+              {option.count > 0 && (
+                <span
+                  className={[
+                    'rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none',
+                    active ? 'bg-primary-600 text-white' : 'bg-slate-200 text-slate-600 dark:bg-gray-700 dark:text-slate-300',
+                  ].join(' ')}
+                >
+                  {option.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderToothNav = () => {
+    if (patientMode) return null;
+    const jumpErrorId = 'dental-chart-jump-error';
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1 dark:bg-gray-900">
+          <button
+            type="button"
+            onClick={handlePreviousTooth}
+            aria-label={t('patients:dentalChart.navigation.previousTooth', { defaultValue: 'Previous tooth' })}
+            title={t('patients:dentalChart.navigation.previousTooth', { defaultValue: 'Previous tooth' })}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white hover:text-slate-800 dark:hover:bg-gray-700 dark:hover:text-white"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={handleNextTooth}
+            aria-label={t('patients:dentalChart.navigation.nextTooth', { defaultValue: 'Next tooth' })}
+            title={t('patients:dentalChart.navigation.nextTooth', { defaultValue: 'Next tooth' })}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white hover:text-slate-800 dark:hover:bg-gray-700 dark:hover:text-white"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        <form onSubmit={handleJumpToFdi} className="flex items-center gap-1.5">
+          <label htmlFor="dental-chart-jump-fdi" className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            {t('patients:dentalChart.navigation.jumpLabel', { defaultValue: 'Go to FDI' })}
+          </label>
+          <input
+            id="dental-chart-jump-fdi"
+            type="text"
+            inputMode="numeric"
+            value={jumpValue}
+            onChange={(event) => {
+              setJumpValue(event.target.value);
+              if (jumpInvalid) setJumpInvalid(false);
+            }}
+            placeholder={t('patients:dentalChart.navigation.jumpPlaceholder', { defaultValue: 'e.g. 36' })}
+            aria-invalid={jumpInvalid}
+            aria-describedby={jumpInvalid ? jumpErrorId : undefined}
+            className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 dark:border-gray-600 dark:bg-gray-800 dark:text-slate-200"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-200 dark:bg-gray-800 dark:text-slate-300 dark:hover:bg-gray-700"
+          >
+            {t('patients:dentalChart.navigation.jumpLabel', { defaultValue: 'Go to FDI' })}
+          </button>
+        </form>
+        {jumpInvalid && (
+          <span id={jumpErrorId} role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
+            {t('patients:dentalChart.navigation.jumpInvalid', { defaultValue: 'That tooth is not in this dentition.' })}
+          </span>
+        )}
+      </div>
+    );
+  };
+
   const renderLegend = (compact = false, patientFriendly = false) => (
     <div className={patientFriendly ? 'flex flex-wrap items-center gap-1.5' : 'flex flex-wrap items-center gap-2'}>
       {TOOTH_STATUSES.map((status) => {
@@ -431,92 +461,24 @@ const DentalChart: React.FC<DentalChartProps> = ({
     </div>
   );
 
-  const renderChartStage = (size: ChartSize) => {
-    if (size === 'presentation') {
-      return (
-        <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40 xl:p-4">
-          <FdiLineRow
-            title={t('patients:dentalChart.upperJaw', { defaultValue: 'Upper Jaw' })}
-            leftTeeth={UPPER_RIGHT}
-            rightTeeth={UPPER_LEFT}
-            isUpper
-            labelPosition="top"
-            records={records}
-            procedureMap={procedureMap}
-            selectedTooth={selectedTooth}
-            patientMode={patientMode}
-            onSelect={handleSelectTooth}
-          />
-          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4">
-            <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              FDI
-            </span>
-            <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
-          </div>
-          <FdiLineRow
-            title={t('patients:dentalChart.lowerJaw', { defaultValue: 'Lower Jaw' })}
-            leftTeeth={LOWER_RIGHT}
-            rightTeeth={LOWER_LEFT}
-            isUpper={false}
-            labelPosition="bottom"
-            records={records}
-            procedureMap={procedureMap}
-            selectedTooth={selectedTooth}
-            patientMode={patientMode}
-            onSelect={handleSelectTooth}
-          />
-        </div>
-      );
-    }
-
-    return (
-      <div
-        className={[
-          'rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40 md:p-4',
-          size === 'large' ? 'space-y-5 lg:p-6' : 'space-y-4',
-        ].join(' ')}
-      >
-        <JawRow
-          title={t('patients:dentalChart.upperJaw', { defaultValue: 'Upper Jaw' })}
-          leftLabel={t('patients:dentalChart.upperRight', { defaultValue: 'Upper Right' })}
-          rightLabel={t('patients:dentalChart.upperLeft', { defaultValue: 'Upper Left' })}
-          leftTeeth={UPPER_RIGHT}
-          rightTeeth={UPPER_LEFT}
-          isUpper
-          labelPosition="top"
-          records={records}
-          procedureMap={procedureMap}
-          selectedTooth={selectedTooth}
-          size={size}
-          patientMode={patientMode}
-          onSelect={handleSelectTooth}
-        />
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4">
-          <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            FDI
-          </span>
-          <div className="h-px flex-1 border-t border-dashed border-slate-300 dark:border-gray-600" />
-        </div>
-        <JawRow
-          title={t('patients:dentalChart.lowerJaw', { defaultValue: 'Lower Jaw' })}
-          leftLabel={t('patients:dentalChart.lowerRight', { defaultValue: 'Lower Right' })}
-          rightLabel={t('patients:dentalChart.lowerLeft', { defaultValue: 'Lower Left' })}
-          leftTeeth={LOWER_RIGHT}
-          rightTeeth={LOWER_LEFT}
-          isUpper={false}
-          labelPosition="bottom"
-          records={records}
-          procedureMap={procedureMap}
-          selectedTooth={selectedTooth}
-          size={size}
-          patientMode={patientMode}
-          onSelect={handleSelectTooth}
-        />
-      </div>
-    );
-  };
+  const renderChartStage = (size: ChartSize) => (
+    <div
+      className={[
+        'rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-gray-700 dark:bg-gray-900/40 md:p-4',
+        size === 'large' || size === 'presentation' ? 'lg:p-6' : '',
+      ].join(' ')}
+    >
+      <Odontogram
+        dentition={activeDentition}
+        records={records}
+        procedureMap={procedureMap}
+        selectedTooth={selectedTooth}
+        onSelect={handleSelectTooth}
+        size={size}
+        patientMode={patientMode}
+      />
+    </div>
+  );
 
   const renderDetailPanel = (mode: 'card' | 'fullscreen') => (
     <ToothDetailPanel
@@ -620,6 +582,19 @@ const DentalChart: React.FC<DentalChartProps> = ({
 
           {showChart && (
             <>
+              <div className="flex flex-wrap items-center gap-3">
+                {renderDentitionSwitch()}
+                {renderToothNav()}
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {isPrimaryView
+                    ? t('patients:dentalChart.dentition.primaryHint', {
+                        defaultValue: 'Primary (deciduous) teeth, FDI 51-85.',
+                      })
+                    : t('patients:dentalChart.dentition.permanentHint', {
+                        defaultValue: 'Permanent teeth, FDI 11-48.',
+                      })}
+                </p>
+              </div>
               {renderLegend(false, patientMode)}
               <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
                 <div className="min-w-0">{renderChartStage('regular')}</div>
@@ -739,6 +714,12 @@ const DentalChart: React.FC<DentalChartProps> = ({
         showDetailPanel={!patientMode || selectedTooth !== null}
         onPatientModeChange={setPatientMode}
         onClose={() => setFullscreenOpen(false)}
+        toolbar={
+          <>
+            {renderDentitionSwitch()}
+            {renderToothNav()}
+          </>
+        }
         legend={renderLegend(true, patientMode)}
         chart={renderChartStage('presentation')}
         detailPanel={renderDetailPanel('fullscreen')}

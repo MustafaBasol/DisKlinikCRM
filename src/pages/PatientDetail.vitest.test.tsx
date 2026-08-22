@@ -342,12 +342,50 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
     await waitForFullPageLoad();
 
     // canViewImaging is false by default here, so 13 of the 14 declared tab
-    // keys are visible: 5 in the primary row, and the remaining 8 collapsed
+    // keys are visible: 6 in the primary row, and the remaining 7 collapsed
     // into the More menu (the More trigger itself is a plain button, not a
     // tab, so it is not counted here).
-    expect(screen.getAllByRole('tab')).toHaveLength(5);
+    //
+    // DENTAL-CHART-UX-001 moved `dental` from the More group into the primary
+    // row, which is why these counts are 6/7 rather than the earlier 5/8. The
+    // invariant the test actually guards is unchanged: 6 + 7 === 13 visible
+    // keys, nothing lost between the two groups.
+    expect(screen.getAllByRole('tab')).toHaveLength(6);
     await userEvent.click(screen.getByRole('button', { name: /^More$/ }));
-    expect(screen.getAllByRole('menuitemradio')).toHaveLength(8);
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(7);
+  });
+
+  it('DENTAL-CHART-UX-001: Dental Chart is a top-level tab, not an item in the More menu', async () => {
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    // Present as a real tab in the always-visible primary row...
+    expect(screen.getByRole('tab', { name: 'patients:dentalChart.title' })).toBeInTheDocument();
+
+    // ...and absent from the overflow menu, which is the regression this
+    // guards: re-ordering the primary list must never push it back under More.
+    await userEvent.click(screen.getByRole('button', { name: /^More$/ }));
+    expect(
+      screen.queryByRole('menuitemradio', { name: 'patients:dentalChart.title' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('the Dental Chart tab sits after Files, so no previously-visible tab moved', async () => {
+    renderPatientDetail();
+    await waitForFullPageLoad();
+
+    const labels = screen.getAllByRole('tab').map((tab) => tab.textContent);
+    // The mocked `t` returns opts.defaultValue when one is given, which is why
+    // the four generic tabs render capitalised while the two tabs whose labels
+    // come from explicit keys render as the raw key.
+    expect(labels).toEqual([
+      'Overview',
+      'Appointments',
+      'Treatments',
+      'Payments',
+      'patients:detail.filesTab',
+      'patients:dentalChart.title',
+    ]);
   });
 
   it('role-hidden tab: imaging never appears in the primary row or the More menu when canViewImaging is false', async () => {
@@ -408,7 +446,11 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
     renderPatientDetail();
     await waitForFullPageLoad();
 
-    const lastPrimaryTab = screen.getByRole('tab', { name: 'patients:detail.filesTab' });
+    // Read the last tab off the rendered row rather than naming one: this test
+    // is about the END of the row, and hard-coding a label meant it broke the
+    // moment DENTAL-CHART-UX-001 appended the Dental Chart tab after Files.
+    const primaryTabs = screen.getAllByRole('tab');
+    const lastPrimaryTab = primaryTabs[primaryTabs.length - 1]!;
     lastPrimaryTab.focus();
     await userEvent.keyboard('{ArrowRight}');
 
@@ -420,7 +462,8 @@ describe('PatientDetail — US-01.X scalable tab navigation contract', () => {
     renderPatientDetail();
     await waitForFullPageLoad();
 
-    const lastPrimaryTab = screen.getByRole('tab', { name: 'patients:detail.filesTab' });
+    const primaryTabs = screen.getAllByRole('tab');
+    const lastPrimaryTab = primaryTabs[primaryTabs.length - 1]!;
     lastPrimaryTab.focus();
     await userEvent.tab();
 

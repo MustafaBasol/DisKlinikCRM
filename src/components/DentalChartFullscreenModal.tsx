@@ -9,6 +9,10 @@ interface DentalChartFullscreenModalProps {
   showDetailPanel: boolean;
   onPatientModeChange: (enabled: boolean) => void;
   onClose: () => void;
+  /** Chart-level controls (e.g. the adult/primary dentition switch) — kept a
+   *  slot rather than a concrete prop so the modal stays agnostic of what the
+   *  chart happens to expose. */
+  toolbar?: React.ReactNode;
   legend: React.ReactNode;
   chart: React.ReactNode;
   detailPanel?: React.ReactNode;
@@ -21,6 +25,7 @@ const DentalChartFullscreenModal: React.FC<DentalChartFullscreenModalProps> = ({
   showDetailPanel,
   onPatientModeChange,
   onClose,
+  toolbar,
   legend,
   chart,
   detailPanel,
@@ -59,6 +64,7 @@ const DentalChartFullscreenModal: React.FC<DentalChartFullscreenModalProps> = ({
             </h2>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {toolbar}
             <button
               type="button"
               onClick={() => onPatientModeChange(!patientMode)}

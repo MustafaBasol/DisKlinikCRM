@@ -314,6 +314,13 @@
     "noteOptional": "Note (facultatif)",
     "notePlaceholder": "Service prévu, note clinique...",
     "deleteRecord": "Supprimer l'enregistrement",
+    "dentition": {
+      "switchLabel": "Denture",
+      "permanent": "Définitive",
+      "primary": "Temporaire",
+      "permanentHint": "Dents permanentes, FDI 11-48.",
+      "primaryHint": "Dents temporaires (de lait), FDI 51-85."
+    },
     "status": {
       "planned": "Planifié",
       "in_progress": "En cours",
@@ -334,6 +341,59 @@
       "premolar": "Prémolaire",
       "canine": "Canine",
       "incisor": "Incisive"
+    },
+    "orientation": {
+      "rightShort": "D",
+      "leftShort": "G",
+      "rightLabel": "Droite du patient",
+      "leftLabel": "Gauche du patient",
+      "upperRightQuadrant": "Supérieur droit",
+      "upperLeftQuadrant": "Supérieur gauche",
+      "lowerRightQuadrant": "Inférieur droit",
+      "lowerLeftQuadrant": "Inférieur gauche"
+    },
+    "view": {
+      "lateral": "Vue latérale",
+      "occlusal": "Vue occlusale",
+      "dualHint": "Rangée du haut latérale, rangée du bas occlusale."
+    },
+    "toothFamily": {
+      "central_incisor": "Incisive centrale",
+      "lateral_incisor": "Incisive latérale",
+      "canine": "Canine",
+      "first_premolar": "Première prémolaire",
+      "second_premolar": "Deuxième prémolaire",
+      "first_molar": "Première molaire",
+      "second_molar": "Deuxième molaire",
+      "third_molar": "Troisième molaire"
+    },
+    "surface": {
+      "mesial": "Mésial",
+      "distal": "Distal",
+      "buccal": "Vestibulaire",
+      "lingual": "Lingual",
+      "palatal": "Palatin",
+      "central": "Occlusal",
+      "incisal": "Incisif"
+    },
+    "navigation": {
+      "previousTooth": "Dent précédente",
+      "nextTooth": "Dent suivante",
+      "jumpLabel": "Aller au FDI",
+      "jumpPlaceholder": "ex. 36",
+      "jumpInvalid": "Cette dent n'existe pas dans cette denture."
+    },
+    "toothLabel": "{{family}} ({{quadrant}})",
+    "scheduledFor": "Planifié",
+    "completedOn": "Terminé",
+    "timeline": {
+      "title": "Historique de la dent",
+      "empty": "Aucun historique daté n'est disponible pour cette dent.",
+      "record_created": "Fiche créée",
+      "record_updated": "Fiche mise à jour",
+      "procedure_added": "Acte ajouté",
+      "procedure_scheduled": "Acte planifié",
+      "procedure_completed": "Acte terminé"
     }
   },
   "status": {

@@ -6,13 +6,38 @@ import { safeErrorFields } from '../utils/safeError.js';
 
 const router = express.Router();
 
-// FDI tooth numbers (valid range)
-const VALID_FDI = new Set([
+// FDI tooth numbers (valid range).
+//
+// DENTAL-CHART-UX-001: quadrants 5-8 (the deciduous / primary dentition) are
+// accepted alongside the permanent quadrants 1-4. This allowlist is the ONLY
+// place primary teeth were ever rejected — ToothRecord.toothFdi is a plain
+// `Int` column with no database-level range constraint, so no schema change
+// or migration is involved (see prisma/schema.prisma model ToothRecord and
+// migrations/20260518120000_add_tooth_records/migration.sql).
+//
+// The two ranges are disjoint by construction (11-48 vs 51-85), so a stored
+// integer always identifies exactly one tooth in exactly one dentition. That
+// is what makes this purely ADDITIVE: every previously-valid number is still
+// valid and still means the same tooth, and a mixed-dentition child can hold
+// permanent and primary records side by side under the existing
+// (patientId, toothFdi) unique key without collision.
+const PERMANENT_FDI = [
   11, 12, 13, 14, 15, 16, 17, 18,
   21, 22, 23, 24, 25, 26, 27, 28,
   31, 32, 33, 34, 35, 36, 37, 38,
   41, 42, 43, 44, 45, 46, 47, 48,
-]);
+];
+
+// Five teeth per quadrant: central incisor, lateral incisor, canine, first
+// molar, second molar. There are no primary premolars, hence no 56/66/76/86.
+const PRIMARY_FDI = [
+  51, 52, 53, 54, 55,
+  61, 62, 63, 64, 65,
+  71, 72, 73, 74, 75,
+  81, 82, 83, 84, 85,
+];
+
+const VALID_FDI = new Set([...PERMANENT_FDI, ...PRIMARY_FDI]);
 
 const VALID_STATUS = new Set(['planned', 'in_progress', 'treated', 'issue', 'missing', 'crown', 'implant']);
 

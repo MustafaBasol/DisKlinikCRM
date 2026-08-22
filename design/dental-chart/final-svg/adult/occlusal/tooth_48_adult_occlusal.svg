@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2.5 60 60.5" width="60" height="60.5" data-tooth-fdi="48" data-view="occlusal" role="img">
+  <title>Tooth 48 — permanent (adult) lower right third molar — occlusal view</title>
+  <desc>Standalone occlusal/incisal anatomy for tooth 48 (permanent (adult), lower right third molar), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(0 64) scale(1 -1)">
+    <path d="M13.7 14.6 C19.8 9.1 46.3 10.4 51.7 16.0 C57.1 21.6 52.2 42.9 46.1 48.4 C40.0 53.9 20.5 54.6 15.1 49.0 C9.7 43.4 7.6 20.1 13.7 14.6 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
+    <path d="M51.7 16.0 C57.1 21.6 52.2 42.9 46.1 48.4 L36.8 38.3 L39.0 25.3 Z" data-surface="mesial" data-tooth-fdi="48" fill="none" stroke="none"><title>mesial</title></path>
+    <path d="M15.1 49.0 C9.7 43.4 7.6 20.1 13.7 14.6 L23.3 24.8 L24.4 38.6 Z" data-surface="distal" data-tooth-fdi="48" fill="none" stroke="none"><title>distal</title></path>
+    <path d="M13.7 14.6 C19.8 9.1 46.3 10.4 51.7 16.0 L39.0 25.3 L23.3 24.8 Z" data-surface="buccal" data-tooth-fdi="48" fill="none" stroke="none"><title>buccal</title></path>
+    <path d="M46.1 48.4 C40.0 53.9 20.5 54.6 15.1 49.0 L24.4 38.6 L36.8 38.3 Z" data-surface="lingual" data-tooth-fdi="48" fill="none" stroke="none"><title>lingual</title></path>
+    <path d="M23.3 24.8 L39.0 25.3 L36.8 38.3 L24.4 38.6 Z" data-surface="central" data-tooth-fdi="48" fill="none" stroke="none"><title>occlusal</title></path>
+    <path d="M30.6 17.4 L25.0 40.0 M39.0 25.9 L33.4 38.6" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
+  </g>
+</svg>

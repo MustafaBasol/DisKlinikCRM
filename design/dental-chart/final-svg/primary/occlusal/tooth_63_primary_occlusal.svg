@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4.6 4.7 54.8 57.2" width="54.8" height="57.2" data-tooth-fdi="63" data-view="occlusal" role="img">
+  <title>Tooth 63 — primary (deciduous) upper left canine — occlusal view</title>
+  <desc>Standalone occlusal/incisal anatomy for tooth 63 (primary (deciduous), upper left canine), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(64 0) scale(-1 1)">
+    <path d="M19.9 29 C23.6 26 32.8 16 37.5 15.3 C42.2 14.6 46.2 21.8 47.9 24.6 C49.6 27.4 48.6 29 47.9 32.3 C47.2 35.6 46.7 41.7 43.7 44.4 C40.8 47.2 34.4 49.2 30.2 48.8 C26.1 48.4 21.3 44.8 18.8 42.2 C16.3 39.6 15 35.6 15.2 33.4 C15.4 31.2 16.2 32 19.9 29 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
+    <path d="M47.9 24.6 C49.6 27.4 48.6 29 47.9 32.3 C47.2 35.6 46.7 41.7 43.7 44.4 L36.8 38.6 L38.4 31.1 Z" data-surface="mesial" data-tooth-fdi="63" fill="none" stroke="none"><title>mesial</title></path>
+    <path d="M18.8 42.2 C16.3 39.6 15 35.6 15.2 33.4 C15.4 31.2 16.2 32 19.9 29 L27.8 32.8 L27.3 37.8 Z" data-surface="distal" data-tooth-fdi="63" fill="none" stroke="none"><title>distal</title></path>
+    <path d="M19.9 29 C23.6 26 32.8 16 37.5 15.3 C42.2 14.6 46.2 21.8 47.9 24.6 L38.4 31.1 L27.8 32.8 Z" data-surface="buccal" data-tooth-fdi="63" fill="none" stroke="none"><title>buccal</title></path>
+    <path d="M43.7 44.4 C40.8 47.2 34.4 49.2 30.2 48.8 C26.1 48.4 21.3 44.8 18.8 42.2 L27.3 37.8 L36.8 38.6 Z" data-surface="lingual" data-tooth-fdi="63" fill="none" stroke="none"><title>palatal</title></path>
+    <path d="M27.8 32.8 L38.4 31.1 L36.8 38.6 L27.3 37.8 Z" data-surface="central" data-tooth-fdi="63" fill="none" stroke="none"><title>incisal</title></path>
+    <path d="M37.5 15.3 L47.9 24.6 M37.5 15.3 L19.9 29 M32 33 L30.2 48.8" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
+  </g>
+</svg>

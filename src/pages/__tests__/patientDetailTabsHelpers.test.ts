@@ -160,6 +160,30 @@ async function main() {
     assert.ok(!more.includes('imaging'));
   });
 
+  await test('DENTAL-CHART-UX-001: dental is a PRIMARY tab, never collapsed into the More menu', () => {
+    const { primary, more } = splitPatientDetailTabsForNav(computeVisiblePatientDetailTabs(true));
+    assert.ok(primary.includes('dental'), 'the dental chart must be a top-level tab');
+    assert.ok(!more.includes('dental'), 'the dental chart must not be reachable only via More');
+  });
+
+  await test('dental stays primary even for a role that cannot see imaging (it is not feature-gated)', () => {
+    const { primary, more } = splitPatientDetailTabsForNav(computeVisiblePatientDetailTabs(false));
+    assert.ok(primary.includes('dental'));
+    assert.ok(!more.includes('dental'));
+  });
+
+  await test('the primary row is exactly the six daily-workflow tabs, in PATIENT_DETAIL_TAB_KEYS order', () => {
+    const { primary } = splitPatientDetailTabsForNav(computeVisiblePatientDetailTabs(true));
+    assert.deepEqual(primary, ['overview', 'appointments', 'treatments', 'payments', 'files', 'dental']);
+  });
+
+  await test('promoting dental did not displace any previously-primary tab', () => {
+    const { primary } = splitPatientDetailTabsForNav(computeVisiblePatientDetailTabs(true));
+    for (const tab of ['overview', 'appointments', 'treatments', 'payments', 'files'] as const) {
+      assert.ok(primary.includes(tab), `"${tab}" must remain a primary tab`);
+    }
+  });
+
   await test('imaging (when visible) is grouped under More, not the primary row', () => {
     const { primary, more } = splitPatientDetailTabsForNav(computeVisiblePatientDetailTabs(true));
     assert.ok(!primary.includes('imaging'));

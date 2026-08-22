@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4.6 4.7 54.8 57.2" width="54.8" height="57.2" data-tooth-fdi="71" data-view="occlusal" role="img">
+  <title>Tooth 71 — primary (deciduous) lower left central incisor — occlusal view</title>
+  <desc>Standalone occlusal/incisal anatomy for tooth 71 (primary (deciduous), lower left central incisor), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(64 0) scale(-1 1) translate(0 64) scale(1 -1)">
+    <path d="M23.5 25.8 C24.9 24.4 27.5 23 30.5 22.6 C33.5 22.2 39.7 22.3 41.4 23.4 C43.1 24.5 41.1 26.5 40.6 28.9 C40.1 31.3 39.7 35.5 38.3 37.6 C36.9 39.7 34.3 41.7 32.1 41.6 C29.9 41.5 26.8 38.5 25.1 36.8 C23.4 35.1 22.3 33.1 22 31.3 C21.7 29.5 22.1 27.3 23.5 25.8 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
+    <path d="M41.4 23.4 C43.1 24.5 41.1 26.5 40.6 28.9 C40.1 31.3 39.7 35.5 38.3 37.6 L34.4 33.4 L35.6 28.1 Z" data-surface="mesial" data-tooth-fdi="71" fill="none" stroke="none"><title>mesial</title></path>
+    <path d="M25.1 36.8 C23.4 35.1 22.3 33.1 22 31.3 C21.7 29.5 22.1 27.3 23.5 25.8 L28.8 29 L29.4 33.1 Z" data-surface="distal" data-tooth-fdi="71" fill="none" stroke="none"><title>distal</title></path>
+    <path d="M23.5 25.8 C24.9 24.4 27.5 23 30.5 22.6 C33.5 22.2 39.7 22.3 41.4 23.4 L35.6 28.1 L28.8 29 Z" data-surface="buccal" data-tooth-fdi="71" fill="none" stroke="none"><title>buccal</title></path>
+    <path d="M38.3 37.6 C36.9 39.7 34.3 41.7 32.1 41.6 C29.9 41.5 26.8 38.5 25.1 36.8 L29.4 33.1 L34.4 33.4 Z" data-surface="lingual" data-tooth-fdi="71" fill="none" stroke="none"><title>lingual</title></path>
+    <path d="M28.8 29 L35.6 28.1 L34.4 33.4 L29.4 33.1 Z" data-surface="central" data-tooth-fdi="71" fill="none" stroke="none"><title>incisal</title></path>
+    <path d="M27 25 L38 24 M29 38 L32.1 41.6 L35 37" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
+  </g>
+</svg>
