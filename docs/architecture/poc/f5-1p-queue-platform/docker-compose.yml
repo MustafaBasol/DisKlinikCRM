@@ -1,0 +1,79 @@
+# F5-1P — disposable queue-platform PoC environment.
+#
+# Throwaway only. Every container here is created and destroyed by
+# `npm run poc:f5-1p-queue` (server/src/tests/poc/queuePocEnvironment.ts).
+# Nothing in this file may ever point at a production or shared host.
+#
+# Versions track the production baseline recorded in
+# docs/program/PRODUCTION_TOPOLOGY.md (PostgreSQL 16.14, Redis 7.0.15) so the
+# evidence is comparable to production, without touching production.
+#
+# Ports are deliberately non-default so a running local PostgreSQL/Redis
+# cannot be hit by accident, and credentials are generated per run by the
+# harness and injected as environment variables -- never read from .env,
+# never a production DATABASE_URL or REDIS_URL.
+
+name: noramedi-f5-1p-queue-poc
+
+services:
+  postgres:
+    image: postgres:16
+    # PoC-only credentials, generated per run and passed in by the harness.
+    environment:
+      POSTGRES_USER: ${POC_PG_USER:?generated per run by the harness}
+      POSTGRES_PASSWORD: ${POC_PG_PASSWORD:?generated per run by the harness}
+      POSTGRES_DB: ${POC_PG_DB:?generated per run by the harness}
+    ports:
+      - '127.0.0.1:${POC_PG_PORT:?generated per run by the harness}:5432'
+    # No volume: the database must not survive the run.
+    tmpfs:
+      - /var/lib/postgresql/data
+    command:
+      - postgres
+      # Keep the PoC honest about concurrency: several dispatchers plus
+      # several BullMQ workers plus the harness all connect at once.
+      - -c
+      - max_connections=200
+      # Deterministic-ish timing for the lease/claim experiments.
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 1s
+      timeout: 3s
+      retries: 40
+
+  redis:
+    image: redis:7.0
+    ports:
+      - '127.0.0.1:${POC_REDIS_PORT:?generated per run by the harness}:6379'
+    # appendonly yes so the "Redis restart loses/keeps jobs" experiment
+    # measures a real persistence mode rather than a memory-only default.
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      - --appendfsync
+      - everysec
+      - --requirepass
+      - ${POC_REDIS_PASSWORD:?generated per run by the harness}
+    # A named volume, NOT tmpfs: a Docker tmpfs mount is destroyed when the
+    # container stops, which would wipe the AOF on every restart and make the
+    # Redis-durability experiment measure the harness instead of Redis.
+    # `docker compose down -v` still removes it, so the run stays disposable.
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 1s
+      timeout: 3s
+      retries: 40
+    environment:
+      REDIS_PASSWORD: ${POC_REDIS_PASSWORD:?generated per run by the harness}
+
+volumes:
+  redis-data:

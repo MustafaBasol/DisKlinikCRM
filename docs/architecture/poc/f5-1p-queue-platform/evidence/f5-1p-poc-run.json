@@ -1,0 +1,694 @@
+{
+  "task": "F5-1P — Queue platform disposable PoC and ADR-007 evidence",
+  "clickup": "869enfvvu",
+  "generatedAtIso": "2026-08-21T23:11:41.491Z",
+  "environment": {
+    "postgres": "postgres:16 (production baseline 16.14)",
+    "redis": "redis:7.0, appendonly=yes, appendfsync=everysec (production baseline 7.0.15)",
+    "node": "v24.18.0",
+    "bullmq": "6.2.0",
+    "isolation": "throwaway Docker containers, generated credentials, 127.0.0.1-bound random ports, tmpfs storage, destroyed at end",
+    "productionContact": "NONE — assertNoProductionEnvLeak() refuses to run if DATABASE_URL/REDIS_URL is set"
+  },
+  "summary": {
+    "PASS": 44,
+    "FAIL": 0,
+    "BLOCKED": 0,
+    "NOT_APPLICABLE": 0
+  },
+  "performance": {
+    "n100": {
+      "n": 100,
+      "postgres": {
+        "publishTotalMs": 306,
+        "publishP50Ms": 3,
+        "publishP95Ms": 4,
+        "claimP50Ms": 4,
+        "claimP95Ms": 7,
+        "drainMs": 137,
+        "throughputPerSec": 730,
+        "dispatchers": 2
+      },
+      "bullmq": {
+        "enqueueTotalMs": 138,
+        "enqueueP50Ms": 1,
+        "enqueueP95Ms": 2,
+        "drainMs": 150,
+        "throughputPerSec": 667,
+        "workers": 2,
+        "concurrency": 10,
+        "methodologyNote": "workers started only after the full backlog was enqueued, matching candidate A"
+      }
+    },
+    "n1000": {
+      "n": 1000,
+      "postgres": {
+        "publishTotalMs": 2976,
+        "publishP50Ms": 3,
+        "publishP95Ms": 4,
+        "claimP50Ms": 5,
+        "claimP95Ms": 7,
+        "drainMs": 530,
+        "throughputPerSec": 1887,
+        "dispatchers": 2
+      },
+      "bullmq": {
+        "enqueueTotalMs": 1022,
+        "enqueueP50Ms": 1,
+        "enqueueP95Ms": 2,
+        "drainMs": 594,
+        "throughputPerSec": 1684,
+        "workers": 2,
+        "concurrency": 10,
+        "methodologyNote": "workers started only after the full backlog was enqueued, matching candidate A"
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "E11",
+      "title": "transaction rollback leaves neither business row nor event",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "business write and outbox insert rolled back together; no orphan event",
+      "evidence": {
+        "appointments": 0,
+        "events": 0
+      },
+      "durationMs": 17
+    },
+    {
+      "id": "E11b",
+      "title": "successful commit persists business row AND event atomically",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "one appointment, one outbox event, one transaction",
+      "evidence": {
+        "appointments": 1,
+        "events": 1
+      },
+      "durationMs": 14
+    },
+    {
+      "id": "E11c",
+      "title": "BullMQ cannot offer commit-and-publish atomicity",
+      "candidate": "bullmq",
+      "status": "PASS",
+      "detail": "confirmed: a queued job survives a rolled-back business transaction — an orphan event. BullMQ alone cannot close this gap; an outbox can.",
+      "evidence": {
+        "waitingJobs": 1,
+        "appointments": 0
+      },
+      "durationMs": 30
+    },
+    {
+      "id": "E16",
+      "title": "multi-dispatcher race, guarded-update: no row claimed twice",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "50 claims across 4 dispatchers, 50 distinct — no double claim",
+      "evidence": {
+        "mode": "guarded-update",
+        "totalClaims": 50,
+        "distinctRows": 50,
+        "dispatchers": 4
+      },
+      "durationMs": 217
+    },
+    {
+      "id": "E16b",
+      "title": "multi-dispatcher race, skip-locked: no row claimed twice",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "60 claims across 4 dispatchers, 60 distinct — no double claim",
+      "evidence": {
+        "mode": "skip-locked",
+        "totalClaims": 60,
+        "distinctRows": 60,
+        "dispatchers": 4
+      },
+      "durationMs": 315
+    },
+    {
+      "id": "E02",
+      "title": "crash before claim leaves the event pending and reclaimable",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "event status after pre-claim crash: processed (not lost)",
+      "evidence": {
+        "status": "processed"
+      },
+      "durationMs": 215
+    },
+    {
+      "id": "E03/E17",
+      "title": "crash after claim: lease expires and another dispatcher recovers the row",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "row held as 'claimed', lease expired, 1 row recovered and processed exactly once",
+      "evidence": {
+        "claimedByDeadHolder": 1,
+        "statusWhileHeld": "claimed",
+        "leasesRecovered": 1,
+        "sideEffects": 1
+      },
+      "durationMs": 982
+    },
+    {
+      "id": "E04",
+      "title": "crash AFTER side effect, before finalise: retried but executed exactly once",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "2 delivery attempts, 1 business side effect — the duplicate was suppressed by the DB idempotency key, not by the transport",
+      "evidence": {
+        "attempts": 2,
+        "sideEffects": 1
+      },
+      "durationMs": 86
+    },
+    {
+      "id": "E01",
+      "title": "duplicate event: same idempotency key executes once",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "2 distinct events sharing one business key → 1 side effect",
+      "evidence": {
+        "sideEffects": 1,
+        "attempts": 2
+      },
+      "durationMs": 81
+    },
+    {
+      "id": "E01b",
+      "title": "BullMQ duplicate delivery: jobId dedupe is NOT business idempotency",
+      "candidate": "bullmq",
+      "status": "PASS",
+      "detail": "2 deliveries with distinct jobIds, 1 side effect — suppressed by the PostgreSQL key. BullMQ dedupe alone would have allowed 2.",
+      "evidence": {
+        "attempts": 2,
+        "sideEffects": 1
+      },
+      "durationMs": 78
+    },
+    {
+      "id": "E04b",
+      "title": "BullMQ crash after side effect: retry, still exactly once",
+      "candidate": "bullmq",
+      "status": "PASS",
+      "detail": "2 attempts, 1 side effect",
+      "evidence": {
+        "attempts": 2,
+        "sideEffects": 1
+      },
+      "durationMs": 120
+    },
+    {
+      "id": "E12",
+      "title": "poison event is dead-lettered immediately, without burning retries",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "status=dead attempts=1 code=POISON_EVENT — permanent failure did not consume the retry budget",
+      "evidence": {
+        "status": "dead",
+        "attempts": 1,
+        "code": "POISON_EVENT"
+      },
+      "durationMs": 86
+    },
+    {
+      "id": "E13",
+      "title": "transient failure retries with backoff, then dead-letters at max attempts",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "retried to attempt 3/3 then dead-lettered; 0 side effects (correct: the effect never succeeded)",
+      "evidence": {
+        "status": "dead",
+        "attempts": 3,
+        "sideEffects": 0
+      },
+      "durationMs": 120
+    },
+    {
+      "id": "E14",
+      "title": "dead-letter rows are inspectable and carry no payload",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "dead-letter row exposes id, candidate, event_id, event_type, organization_id, clinic_id, attempt_count, last_error_code, payload_digest, dead_lettered_at, replayed_at — digest only, no payload column",
+      "evidence": {
+        "columns": [
+          "id",
+          "candidate",
+          "event_id",
+          "event_type",
+          "organization_id",
+          "clinic_id",
+          "attempt_count",
+          "last_error_code",
+          "payload_digest",
+          "dead_lettered_at",
+          "replayed_at"
+        ],
+        "hasPayloadColumn": false,
+        "digestPresent": true
+      },
+      "durationMs": 79
+    },
+    {
+      "id": "E15",
+      "title": "replay from dead-letter re-processes exactly once",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "dead-lettered event replayed under an explicit platform-administration system context and executed exactly once",
+      "evidence": {
+        "sideEffects": 1
+      },
+      "durationMs": 142
+    },
+    {
+      "id": "E15b",
+      "title": "BullMQ failed jobs are inspectable and retryable",
+      "candidate": "bullmq",
+      "status": "PASS",
+      "detail": "UnrecoverableError stopped retries at attempt 1; failed job retained and inspectable; 1 dead-letter row(s) mirrored to PostgreSQL for operator visibility",
+      "evidence": {
+        "failedCount": 1,
+        "attemptsMade": 1,
+        "dlqRows": 1
+      },
+      "durationMs": 67
+    },
+    {
+      "id": "E20",
+      "title": "malformed / non-minimal payload is rejected at publish AND at consume",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "producer rejected non-minimal payload (true); consumer dead-lettered it as MALFORMED_PAYLOAD without infinite retry",
+      "evidence": {
+        "publishRejected": true,
+        "consumerCode": "MALFORMED_PAYLOAD"
+      },
+      "durationMs": 71
+    },
+    {
+      "id": "E21",
+      "title": "unsupported event version is refused, not best-effort deserialized",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "v99 refused as UNSUPPORTED_EVENT_VERSION after 1 attempt; no side effect",
+      "evidence": {
+        "code": "UNSUPPORTED_EVENT_VERSION",
+        "attempts": 1,
+        "sideEffects": 0
+      },
+      "durationMs": 85
+    },
+    {
+      "id": "T1",
+      "title": "tenant A job may not act on tenant B data",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "refused: CROSS_TENANT_REFUSED: context org org-alpha may not act for org-beta",
+      "evidence": {
+        "refused": true,
+        "sideEffects": 0
+      },
+      "durationMs": 9
+    },
+    {
+      "id": "T2",
+      "title": "same-org sibling clinic outside scope is refused",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "refused: CROSS_CLINIC_REFUSED: clinic clinic-a2 outside scope [clinic-a1]",
+      "evidence": {
+        "refused": true
+      },
+      "durationMs": 6
+    },
+    {
+      "id": "T3",
+      "title": "missing tenant context is refused (no implicit privilege)",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "outside any context the side effect raised TENANT_CONTEXT_MISSING",
+      "evidence": {
+        "code": "TENANT_CONTEXT_MISSING"
+      },
+      "durationMs": 6
+    },
+    {
+      "id": "T4",
+      "title": "malformed tenant identity is refused by the real primitive",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "empty organizationId raised TENANT_CONTEXT_INVALID",
+      "evidence": {
+        "code": "TENANT_CONTEXT_INVALID"
+      },
+      "durationMs": 6
+    },
+    {
+      "id": "T5",
+      "title": "forged tenant id in a job payload cannot widen scope",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "payload-level org injection rejected (true); side effect recorded under server-derived org org-alpha",
+      "evidence": {
+        "injectionRejected": true,
+        "effectOrg": "org-alpha"
+      },
+      "durationMs": 75
+    },
+    {
+      "id": "T6",
+      "title": "concurrent duplicate processing of one key yields one effect",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "8 concurrent workers on one key → 1 executed, 7 suppressed",
+      "evidence": {
+        "executed": 1,
+        "suppressed": 7
+      },
+      "durationMs": 22
+    },
+    {
+      "id": "T7",
+      "title": "system context cannot be invented, and cannot borrow tenant semantics",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "invented reason rejected (true); SYSTEM context refused tenant semantics (true)",
+      "evidence": {
+        "unknownReasonRejected": true,
+        "systemCannotBeTenant": true
+      },
+      "durationMs": 7
+    },
+    {
+      "id": "E05",
+      "title": "Redis unavailable BEFORE enqueue: producer fails loudly, never silently drops",
+      "candidate": "bullmq",
+      "status": "PASS",
+      "detail": "enqueue rejected while Redis was down (Stream isn't writeable and enableOfflineQueue options is false) — the caller learns the event was NOT accepted, which is the required behaviour",
+      "evidence": {
+        "threw": true,
+        "message": "Stream isn't writeable and enableOfflineQueue options is false"
+      },
+      "durationMs": 1309
+    },
+    {
+      "id": "E05b",
+      "title": "PostgreSQL candidate is unaffected by Redis being down",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "publish and dispatch completed with Redis stopped — Candidate A has no Redis dependency at all",
+      "evidence": {
+        "sideEffects": 1
+      },
+      "durationMs": 1362
+    },
+    {
+      "id": "E06/E07",
+      "title": "graceful Redis restart: enqueued jobs survive and clients reconnect",
+      "candidate": "bullmq",
+      "status": "PASS",
+      "detail": "waiting before=1, after=1 — a SIGTERM restart flushed the AOF and the job survived; a reconnected client saw it again",
+      "evidence": {
+        "waitingBefore": 1,
+        "waitingAfter": 1,
+        "stopMode": "SIGTERM (graceful)",
+        "persistence": "appendonly=yes, appendfsync=everysec"
+      },
+      "durationMs": 1278
+    },
+    {
+      "id": "E06b",
+      "title": "abrupt Redis kill: appendfsync=everysec has a real loss window",
+      "candidate": "bullmq",
+      "status": "PASS",
+      "detail": "all 50 jobs survived SIGKILL in this run (after=50). everysec still permits a ~1s loss window in principle; this run simply did not land inside it, which is itself why Redis persistence must not be relied on as transactional durability.",
+      "evidence": {
+        "waitingBefore": 50,
+        "waitingAfter": 50,
+        "lost": 0,
+        "stopMode": "SIGKILL (abrupt)",
+        "persistence": "appendonly=yes, appendfsync=everysec"
+      },
+      "durationMs": 1348
+    },
+    {
+      "id": "E08",
+      "title": "BullMQ worker restart resumes pending work",
+      "candidate": "bullmq",
+      "status": "PASS",
+      "detail": "worker 1 processed 3/10 then stopped; worker 2 resumed and completed all 10 with no duplicates",
+      "evidence": {
+        "processedByFirstWorker": 3,
+        "total": 10
+      },
+      "durationMs": 238
+    },
+    {
+      "id": "E09",
+      "title": "dispatcher restart resumes pending work",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "dispatcher 1 processed 6/10 then stopped gracefully; dispatcher 2 completed all 10",
+      "evidence": {
+        "processedByFirst": 6,
+        "total": 10
+      },
+      "durationMs": 169
+    },
+    {
+      "id": "E10",
+      "title": "PostgreSQL connection loss: pool recovers and work completes",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "7 backends terminated mid-flight; pool reconnected and all 8 events completed exactly once",
+      "evidence": {
+        "terminatedBackends": 7,
+        "sideEffects": 8
+      },
+      "durationMs": 195
+    },
+    {
+      "id": "E22",
+      "title": "graceful shutdown finishes in-flight work and leaves nothing stuck",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "after graceful stop, 0 rows left in 'claimed' (0 required — the in-flight batch was finalised before exit)",
+      "evidence": {
+        "stuckClaimed": 0,
+        "processed": 12
+      },
+      "durationMs": 104
+    },
+    {
+      "id": "E23",
+      "title": "forced shutdown strands rows, and the lease is what recovers them",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "forced kill stranded 6 claimed rows; after lease expiry all 6 were recovered and processed exactly once",
+      "evidence": {
+        "strandedAfterKill": 6,
+        "recoveredAndProcessed": 6
+      },
+      "durationMs": 1139
+    },
+    {
+      "id": "E19-nocap",
+      "title": "PostgreSQL dispatcher, per-tenant cap DISABLED: quiet-tenant latency under a noisy backlog",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "cap=none — quiet-tenant completion latency p50=292ms p95=315ms vs noisy p50=175ms (30 quiet / 240 noisy events). Lower quiet latency with the cap enabled is the fairness effect; the two E19 rows are meant to be read against each other.",
+      "evidence": {
+        "perTenantConcurrency": null,
+        "quietP50": 292,
+        "quietP95": 315,
+        "noisyP50": 175,
+        "quietCount": 30,
+        "noisyCount": 240,
+        "noisyBacklog": 240,
+        "quietPerTenant": 10,
+        "handlerDelayMs": 3
+      },
+      "durationMs": 1279
+    },
+    {
+      "id": "E19",
+      "title": "PostgreSQL dispatcher, per-tenant cap 4: quiet-tenant latency under a noisy backlog",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "cap=4 — quiet-tenant completion latency p50=1962ms p95=2009ms vs noisy p50=1006ms (30 quiet / 240 noisy events). Lower quiet latency with the cap enabled is the fairness effect; the two E19 rows are meant to be read against each other.",
+      "evidence": {
+        "perTenantConcurrency": 4,
+        "quietP50": 1962,
+        "quietP95": 2009,
+        "noisyP50": 1006,
+        "quietCount": 30,
+        "noisyCount": 240,
+        "noisyBacklog": 240,
+        "quietPerTenant": 10,
+        "handlerDelayMs": 3
+      },
+      "durationMs": 2978
+    },
+    {
+      "id": "E19b",
+      "title": "BullMQ single FIFO queue: quiet-tenant latency behind a noisy backlog",
+      "candidate": "bullmq",
+      "status": "PASS",
+      "detail": "plain FIFO, no tenant-aware control — quiet-tenant completion latency p50=523ms p95=548ms vs noisy p50=275ms. Quiet tenants sit behind the entire enqueued noisy backlog; BullMQ can fix this (groups / per-key rate limiting) but does NOT do it by default.",
+      "evidence": {
+        "fairnessControl": "none (plain FIFO)",
+        "quietP50": 523,
+        "quietP95": 548,
+        "noisyP50": 275,
+        "quietCount": 30,
+        "noisyCount": 240,
+        "noisyBacklog": 240,
+        "quietPerTenant": 10,
+        "handlerDelayMs": 3
+      },
+      "durationMs": 811
+    },
+    {
+      "id": "E25",
+      "title": "queue depth and oldest-waiting age are observable for both candidates",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "PostgreSQL: depth=5, oldest_waiting=179ms, dead=0 via one SQL query. BullMQ: {\"waiting\":5,\"active\":0,\"completed\":0,\"failed\":0,\"delayed\":0} via getJobCounts(). Both expose depth; BullMQ gives richer per-state counts out of the box, PostgreSQL gives arbitrary per-tenant slicing for free.",
+      "evidence": {
+        "postgres": {
+          "depth": 5,
+          "oldest_ms": 179,
+          "dead": 0
+        },
+        "bullmq": {
+          "waiting": 5,
+          "active": 0,
+          "completed": 0,
+          "failed": 0,
+          "delayed": 0
+        }
+      },
+      "durationMs": 200
+    },
+    {
+      "id": "M1",
+      "title": "durable inbound acceptance dedupes at the DB before any queue exists",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "provider redelivery of the same wamid: first=accepted, second=duplicate, ledger rows=1. This is the guarantee MessagingInboundEvent ALREADY provides in production today — a queue placed after this point cannot improve it, and a Redis-only acceptance path would weaken it.",
+      "evidence": {
+        "first": "accepted",
+        "second": "duplicate",
+        "ledgerRows": 1
+      },
+      "durationMs": 10
+    },
+    {
+      "id": "P-100",
+      "title": "throughput and latency at 100 events, both candidates",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "PG: publish p50=3ms p95=4ms, drain 137ms (730/s). BullMQ: enqueue p50=1ms p95=2ms, drain 150ms (667/s). Local disposable containers — NOT production capacity.",
+      "evidence": {
+        "n": 100,
+        "postgres": {
+          "publishTotalMs": 306,
+          "publishP50Ms": 3,
+          "publishP95Ms": 4,
+          "claimP50Ms": 4,
+          "claimP95Ms": 7,
+          "drainMs": 137,
+          "throughputPerSec": 730,
+          "dispatchers": 2
+        },
+        "bullmq": {
+          "enqueueTotalMs": 138,
+          "enqueueP50Ms": 1,
+          "enqueueP95Ms": 2,
+          "drainMs": 150,
+          "throughputPerSec": 667,
+          "workers": 2,
+          "concurrency": 10,
+          "methodologyNote": "workers started only after the full backlog was enqueued, matching candidate A"
+        }
+      },
+      "durationMs": 777
+    },
+    {
+      "id": "P-1000",
+      "title": "throughput and latency at 1000 events, both candidates",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "PG: publish p50=3ms p95=4ms, drain 530ms (1887/s). BullMQ: enqueue p50=1ms p95=2ms, drain 594ms (1684/s). Local disposable containers — NOT production capacity.",
+      "evidence": {
+        "n": 1000,
+        "postgres": {
+          "publishTotalMs": 2976,
+          "publishP50Ms": 3,
+          "publishP95Ms": 4,
+          "claimP50Ms": 5,
+          "claimP95Ms": 7,
+          "drainMs": 530,
+          "throughputPerSec": 1887,
+          "dispatchers": 2
+        },
+        "bullmq": {
+          "enqueueTotalMs": 1022,
+          "enqueueP50Ms": 1,
+          "enqueueP95Ms": 2,
+          "drainMs": 594,
+          "throughputPerSec": 1684,
+          "workers": 2,
+          "concurrency": 10,
+          "methodologyNote": "workers started only after the full backlog was enqueued, matching candidate A"
+        }
+      },
+      "durationMs": 5173
+    },
+    {
+      "id": "E24",
+      "title": "backlog recovery: a cold start drains an existing backlog",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "backlog of 300 drained by 3 cold-started dispatchers in 140ms with no duplicates (300 effects)",
+      "evidence": {
+        "backlog": 300,
+        "drainMs": 140,
+        "effects": 300
+      },
+      "durationMs": 1107
+    },
+    {
+      "id": "E-RETRY-STORM",
+      "title": "retry storm stays bounded and does not spin",
+      "candidate": "postgres-outbox",
+      "status": "PASS",
+      "detail": "40 permanently-failing events consumed exactly 120 attempts (40×3 cap) in 181ms — backoff held, no unbounded spin",
+      "evidence": {
+        "events": 40,
+        "totalAttempts": 120,
+        "expectedAttempts": 120,
+        "elapsedMs": 181
+      },
+      "durationMs": 315
+    },
+    {
+      "id": "E-CONN",
+      "title": "connection footprint of each candidate",
+      "candidate": "both",
+      "status": "PASS",
+      "detail": "PostgreSQL backends for the dispatcher pool: 30. Redis connected_clients with 1 queue + 2 workers (concurrency 5): 7. BullMQ adds a second connection-pool dimension that must be budgeted separately from the existing DB pool.",
+      "evidence": {
+        "postgresBackends": 30,
+        "redisConnectedClients": 7,
+        "redisProbeError": "",
+        "note": "BullMQ requires >=1 connection per Worker plus blocking connections; the DB pool is unchanged for candidate A."
+      },
+      "durationMs": 527
+    }
+  ]
+}
