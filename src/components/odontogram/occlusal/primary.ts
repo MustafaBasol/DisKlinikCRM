@@ -50,41 +50,46 @@ export const PRIMARY_OCCLUSAL: Readonly<Record<PrimaryAnatomyKey, OcclusalToothA
   // ============================================================
 
   /**
-   * Primary upper central incisor. Wide wedge, mesioincisal corner (MB)
-   * drawn tighter/sharper than the more open distoincisal corner (DB); a
-   * prominent cingulum bulge is its own outline point on the lingual edge,
-   * not just a detail stroke.
+   * Primary upper central incisor. R4B: redrawn plumper/more oval against
+   * design/dental-chart/source-plates-svg/07_primary_upper_incisors_canine.svg
+   * — the traced plate shows primary incisors reading distinctly rounder
+   * than the permanent "wedge" AUTHORING.md §3.4 describes (real deciduous
+   * crowns are more bulbous, having seen no occlusal wear). Mesioincisal
+   * corner (MB) is still drawn tighter/sharper than the more open
+   * distoincisal corner (DB); a prominent cingulum bulge is its own outline
+   * point on the lingual edge, not just a detail stroke.
    */
   'primary:upper:central_incisor': {
-    outline: 'M18.7 23.5 C20.3 22 21.8 20.5 26.3 20.1 C30.8 19.8 42.5 20.2 45.8 21.4 C49.1 22.6 46.9 24.3 46.3 27.2 C45.7 30.1 44.8 35.9 42.3 38.7 C39.8 41.5 35.2 44.4 31.6 44 C28 43.7 23.4 39.1 20.9 36.6 C18.4 34.2 16.9 31.5 16.5 29.3 C16.1 27.1 17.1 25 18.7 23.5 Z',
+    outline: 'M18.5 25.5 C25.9 22.6 30 21 32 20.2 C34.1 20.7 38.3 21.7 46 23.5 C46.9 28.2 47.4 30.7 47.6 32 C47 33.3 45.8 35.8 43.5 40.5 C37.2 42.5 33.7 43.6 32 44.2 C30.1 43.4 26.4 41.9 19.5 39 C17.7 35.3 16.8 33.3 16.3 32.3 C16.6 31.3 17.3 29.2 18.5 25.5 Z',
     surfaces: {
-      mesial: 'M45.8 21.4 C49.1 22.6 46.9 24.3 46.3 27.2 C45.7 30.1 44.8 35.9 42.3 38.7 L36.1 33.5 L37.5 26.6 Z',
-      distal: 'M20.9 36.6 C18.4 34.2 16.9 31.5 16.5 29.3 C16.1 27.1 17.1 25 18.7 23.5 L26.6 27.4 L27.5 32.7 Z',
-      buccal: 'M18.7 23.5 C20.3 22 21.8 20.5 26.3 20.1 C30.8 19.8 42.5 20.2 45.8 21.4 L37.5 26.6 L26.6 27.4 Z',
-      lingual: 'M42.3 38.7 C39.8 41.5 35.2 44.4 31.6 44 C28 43.7 23.4 39.1 20.9 36.6 L27.5 32.7 L36.1 33.5 Z',
-      central: 'M26.6 27.4 L37.5 26.6 L36.1 33.5 L27.5 32.7 Z',
+      mesial: 'M46 23.5 C46.9 28.2 47.4 30.7 47.6 32 C47 33.3 45.8 35.8 43.5 40.5 L39.5 37.5 L41.1 26.5 Z',
+      distal: 'M19.5 39 C17.7 35.3 16.8 33.3 16.3 32.3 C16.6 31.3 17.3 29.2 18.5 25.5 L23.2 27.8 L23.9 36.6 Z',
+      buccal: 'M18.5 25.5 C25.9 22.6 30 21 32 20.2 C34.1 20.7 38.3 21.7 46 23.5 L41.1 26.5 L23.2 27.8 Z',
+      lingual: 'M43.5 40.5 C37.2 42.5 33.7 43.6 32 44.2 C30.1 43.4 26.4 41.9 19.5 39 L23.9 36.6 L39.5 37.5 Z',
+      central: 'M23.2 27.8 L41.1 26.5 L39.5 37.5 L23.9 36.6 Z',
     },
-    detail: 'M25 25 L40 24 M27 39 L31.6 44 L36 40',
+    detail: 'M24 24.5 L40 23.8 M27 42 L32 44.2 L37 41.3',
     sideStrategy: 'mirror',
     simplification:
       'Mamelon marks omitted (smooth incisal edge, consistent with minimal mamelon expression at this scale); the cingulum bulge is drawn as one prominent lingual point rather than a modelled fossa.',
   },
 
   /**
-   * Primary upper lateral incisor. Smaller, rounder version of the central,
-   * with the same mesial-sharp / distal-rounded asymmetry and a slightly
-   * less pronounced cingulum bulge.
+   * Primary upper lateral incisor. R4B: redrawn plumper/more oval, same
+   * plate and rationale as the central incisor above — smaller, rounder
+   * version of it, with the same mesial-sharp / distal-rounded asymmetry
+   * and a slightly less pronounced cingulum bulge.
    */
   'primary:upper:lateral_incisor': {
-    outline: 'M21.4 25.2 C22.8 24 24.9 22.8 28.5 22.5 C32.1 22.2 40.8 22.6 43.2 23.6 C45.6 24.6 43.3 26.2 42.7 28.5 C42.1 30.9 41.5 35.5 39.6 37.7 C37.7 39.9 34.3 42 31.5 41.6 C28.7 41.3 24.8 37.6 22.9 35.6 C21 33.6 20.1 31.3 19.8 29.6 C19.6 27.9 20 26.4 21.4 25.2 Z',
+    outline: 'M21 26.5 C27.1 24 30.4 22.6 32 21.9 C33.7 22.4 37 23.4 43 25.3 C43.7 29 44.1 31 44.3 32 C43.9 32.9 43 34.8 41.4 38.3 C36.2 39.9 33.4 40.8 32 41.3 C30.5 40.6 27.5 39.3 22 36.9 C20.7 34.2 20 32.7 19.7 32 C19.9 31.2 20.3 29.5 21 26.5 Z',
     surfaces: {
-      mesial: 'M43.2 23.6 C45.6 24.6 43.3 26.2 42.7 28.5 C42.1 30.9 41.5 35.5 39.6 37.7 L34.7 33.3 L36.1 27.9 Z',
-      distal: 'M22.9 35.6 C21 33.6 20.1 31.3 19.8 29.6 C19.6 27.9 20 26.4 21.4 25.2 L27.8 28.5 L28.4 32.5 Z',
-      buccal: 'M21.4 25.2 C22.8 24 24.9 22.8 28.5 22.5 C32.1 22.2 40.8 22.6 43.2 23.6 L36.1 27.9 L27.8 28.5 Z',
-      lingual: 'M39.6 37.7 C37.7 39.9 34.3 42 31.5 41.6 C28.7 41.3 24.8 37.6 22.9 35.6 L28.4 32.5 L34.7 33.3 Z',
-      central: 'M27.8 28.5 L36.1 27.9 L34.7 33.3 L28.4 32.5 Z',
+      mesial: 'M43 25.3 C43.7 29 44.1 31 44.3 32 C43.9 32.9 43 34.8 41.4 38.3 L38.4 36.3 L39.5 27.4 Z',
+      distal: 'M22 36.9 C20.7 34.2 20 32.7 19.7 32 C19.9 31.2 20.3 29.5 21 26.5 L24.5 28.3 L25.2 35.3 Z',
+      buccal: 'M21 26.5 C27.1 24 30.4 22.6 32 21.9 C33.7 22.4 37 23.4 43 25.3 L39.5 27.4 L24.5 28.3 Z',
+      lingual: 'M41.4 38.3 C36.2 39.9 33.4 40.8 32 41.3 C30.5 40.6 27.5 39.3 22 36.9 L25.2 35.3 L38.4 36.3 Z',
+      central: 'M24.5 28.3 L39.5 27.4 L38.4 36.3 L25.2 35.3 Z',
     },
-    detail: 'M24 27 L38 26 M26 33 L31.5 41.6 L34.5 32',
+    detail: 'M23.5 26.8 L39 26 M26 35.5 L32 41.3 L35.5 35',
     sideStrategy: 'mirror',
     simplification:
       'Drawn as a smaller, rounder version of the primary central incisor; no distinct cingulum pit, only the bulge.',
@@ -162,40 +167,44 @@ export const PRIMARY_OCCLUSAL: Readonly<Record<PrimaryAnatomyKey, OcclusalToothA
   // ============================================================
 
   /**
-   * Primary lower central incisor. Smallest tooth in the whole registry;
-   * real mesiodistal asymmetry is minimal but genuine (mesioincisal corner
-   * still drawn tighter than distoincisal), with a modest cingulum bulge.
+   * Primary lower central incisor. R4B: redrawn plumper/more oval against
+   * design/dental-chart/source-plates-svg/09_primary_lower_incisors_canine.svg
+   * — same rationale as the primary upper incisors above. Smallest tooth in
+   * the whole registry; real mesiodistal asymmetry is minimal but genuine
+   * (mesioincisal corner still drawn tighter than distoincisal), with a
+   * modest cingulum bulge.
    */
   'primary:lower:central_incisor': {
-    outline: 'M23.5 25.8 C24.9 24.4 27.5 23 30.5 22.6 C33.5 22.2 39.7 22.3 41.4 23.4 C43.1 24.5 41.1 26.5 40.6 28.9 C40.1 31.3 39.7 35.5 38.3 37.6 C36.9 39.7 34.3 41.7 32.1 41.6 C29.9 41.5 26.8 38.5 25.1 36.8 C23.4 35.1 22.3 33.1 22 31.3 C21.7 29.5 22.1 27.3 23.5 25.8 Z',
+    outline: 'M23.2 26.8 C28 24.5 30.7 23.2 32 22.6 C33.3 23 36 23.8 40.8 25.3 C41.5 29 41.8 31 42 32 C41.7 32.9 41.1 34.7 40 38 C35.6 39.9 33.2 40.9 32 41.4 C30.7 40.7 28.2 39.2 23.6 36.5 C22.7 34 22.2 32.7 22 32 C22.2 31.2 22.5 29.7 23.2 26.8 Z',
     surfaces: {
-      mesial: 'M41.4 23.4 C43.1 24.5 41.1 26.5 40.6 28.9 C40.1 31.3 39.7 35.5 38.3 37.6 L34.4 33.4 L35.6 28.1 Z',
-      distal: 'M25.1 36.8 C23.4 35.1 22.3 33.1 22 31.3 C21.7 29.5 22.1 27.3 23.5 25.8 L28.8 29 L29.4 33.1 Z',
-      buccal: 'M23.5 25.8 C24.9 24.4 27.5 23 30.5 22.6 C33.5 22.2 39.7 22.3 41.4 23.4 L35.6 28.1 L28.8 29 Z',
-      lingual: 'M38.3 37.6 C36.9 39.7 34.3 41.7 32.1 41.6 C29.9 41.5 26.8 38.5 25.1 36.8 L29.4 33.1 L34.4 33.4 Z',
-      central: 'M28.8 29 L35.6 28.1 L34.4 33.4 L29.4 33.1 Z',
+      mesial: 'M40.8 25.3 C41.5 29 41.8 31 42 32 C41.7 32.9 41.1 34.7 40 38 L37.6 36.2 L38.2 27.3 Z',
+      distal: 'M23.6 36.5 C22.7 34 22.2 32.7 22 32 C22.2 31.2 22.5 29.7 23.2 26.8 L25.8 28.4 L26.1 35.2 Z',
+      buccal: 'M23.2 26.8 C28 24.5 30.7 23.2 32 22.6 C33.3 23 36 23.8 40.8 25.3 L38.2 27.3 L25.8 28.4 Z',
+      lingual: 'M40 38 C35.6 39.9 33.2 40.9 32 41.4 C30.7 40.7 28.2 39.2 23.6 36.5 L26.1 35.2 L37.6 36.2 Z',
+      central: 'M25.8 28.4 L38.2 27.3 L37.6 36.2 L26.1 35.2 Z',
     },
-    detail: 'M27 25 L38 24 M29 38 L32.1 41.6 L35 37',
+    detail: 'M26.5 26.3 L37.5 25.5 M28.5 37.5 L32 41.4 L35.5 37',
     sideStrategy: 'mirror',
     simplification:
       'Smallest tooth in the registry; drawn with minimal mesiodistal asymmetry since the real crown is nearly symmetric, but still genuinely broken about x=32 so the mirror is not a no-op.',
   },
 
   /**
-   * Primary lower lateral incisor. Slightly larger, slightly more
-   * asymmetric than the central, with a marginally more pronounced
-   * cingulum bulge.
+   * Primary lower lateral incisor. R4B: redrawn plumper/more oval, same
+   * plate and rationale as the primary lower central incisor above.
+   * Slightly larger, slightly more asymmetric than the central, with a
+   * marginally more pronounced cingulum bulge.
    */
   'primary:lower:lateral_incisor': {
-    outline: 'M24.1 26 C25.5 24.7 27.6 22.9 30.4 22.5 C33.2 22.2 39.4 22.7 41.1 23.9 C42.8 25.1 41 27.3 40.5 29.6 C40 32 39.5 36 38 38 C36.5 40 33.8 42 31.7 41.6 C29.6 41.3 26.9 37.8 25.3 35.9 C23.7 34 22.4 32 22.2 30.3 C22 28.7 22.7 27.3 24.1 26 Z',
+    outline: 'M23 26.6 C28 24.3 30.7 23.1 32 22.5 C33.4 22.9 36.1 23.7 41 25.2 C41.7 28.9 42 31 42.2 32 C41.9 32.9 41.2 34.8 40 38.2 C35.6 40 33.2 41 32 41.5 C30.7 40.8 28 39.3 23.2 36.6 C22.4 34.1 22 32.7 21.8 32 C22 31.2 22.3 29.6 23 26.6 Z',
     surfaces: {
-      mesial: 'M41.1 23.9 C42.8 25.1 41 27.3 40.5 29.6 C40 32 39.5 36 38 38 L34.4 33.6 L35.5 28.3 Z',
-      distal: 'M25.3 35.9 C23.7 34 22.4 32 22.2 30.3 C22 28.7 22.7 27.3 24.1 26 L29.1 29.1 L29.5 32.8 Z',
-      buccal: 'M24.1 26 C25.5 24.7 27.6 22.9 30.4 22.5 C33.2 22.2 39.4 22.7 41.1 23.9 L35.5 28.3 L29.1 29.1 Z',
-      lingual: 'M38 38 C36.5 40 33.8 42 31.7 41.6 C29.6 41.3 26.9 37.8 25.3 35.9 L29.5 32.8 L34.4 33.6 Z',
-      central: 'M29.1 29.1 L35.5 28.3 L34.4 33.6 L29.5 32.8 Z',
+      mesial: 'M41 25.2 C41.7 28.9 42 31 42.2 32 C41.9 32.9 41.2 34.8 40 38.2 L37.6 36.3 L38.3 27.2 Z',
+      distal: 'M23.2 36.6 C22.4 34.1 22 32.7 21.8 32 C22 31.2 22.3 29.6 23 26.6 L25.7 28.2 L25.8 35.2 Z',
+      buccal: 'M23 26.6 C28 24.3 30.7 23.1 32 22.5 C33.4 22.9 36.1 23.7 41 25.2 L38.3 27.2 L25.7 28.2 Z',
+      lingual: 'M40 38.2 C35.6 40 33.2 41 32 41.5 C30.7 40.8 28 39.3 23.2 36.6 L25.8 35.2 L37.6 36.3 Z',
+      central: 'M25.7 28.2 L38.3 27.2 L37.6 36.3 L25.8 35.2 Z',
     },
-    detail: 'M27 25 L37 24 M29 37 L31.7 41.6 L35 36',
+    detail: 'M26.3 26.1 L37.7 25 M28.3 37.7 L32 41.5 L35.7 37.2',
     sideStrategy: 'mirror',
     simplification:
       'Drawn as a slightly larger, slightly more asymmetric version of the primary central incisor.',

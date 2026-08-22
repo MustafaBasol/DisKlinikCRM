@@ -285,6 +285,11 @@ Generic asymmetry is not enough; use the real distinctions:
 - Anteriors: incisal view is a **wedge** — wide mesiodistally, shallow
   buccolingually, with the cingulum as a bulge on the lingual edge. The canine
   is a rounded diamond with a labial point at the cusp tip.
+  **Primary incisors are an exception to "wedge":** deciduous crowns read
+  distinctly more bulbous/oval than their permanent counterparts (no
+  occlusal wear yet), confirmed against `source-plates-svg/07` and `/09` —
+  keep the mesial-sharp/distal-rounded asymmetry and cingulum bulge, but
+  round the whole outline off rather than drawing a true wedge.
 - Primary molar occlusal outlines must **not** be scaled-down permanent
   molars: the primary upper first molar is atypical and narrow with a
   prominent mesiobuccal cervical bulge; the primary second molars resemble the
@@ -348,9 +353,15 @@ So you know what your silhouette has to survive:
 
 ## 6. Reference plates
 
-`design/dental-chart/reference-plates/` — morphology guidance only.
+`design/dental-chart/reference-plates/` (raster, gitignored) and
+`design/dental-chart/source-plates-svg/` (vector, committed, added R4B) —
+morphology guidance only.
 
 **Do not trace them, do not embed them, do not reuse their typography or
 layout.** Look at the plate, understand the form, then build the silhouette
-from the coordinate system above. The plates are not committed to the
-repository; see the README in that directory.
+from the coordinate system above. `reference-plates/` is not committed to
+the repository; see the README in that directory.
+`source-plates-svg/` IS committed — read its own README before using it: the
+eleven plates draw crown-up/root-down for most families but crown-down/
+root-up for four specific ones, and none of them show a root for anterior
+teeth at all.
