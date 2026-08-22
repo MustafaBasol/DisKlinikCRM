@@ -158,6 +158,26 @@ EOF
   chmod +x "$FAKEBIN/curl"
 }
 
+# Symlinks real system tools the wrapper scripts need into FAKEBIN — which
+# always stays first in PATH — so the "flock absent" precondition test below
+# can remove flock's directory from PATH without ALSO removing tools that
+# happen to live in the SAME directory. This is not hypothetical: on a
+# distro with usrmerge, `flock` typically resolves via /usr/bin, but /bin
+# (a symlink to /usr/bin) ALSO provides it, and so does /usr/bin itself for
+# node/sha256sum/timeout/mkdir/dirname/bash — a naive single-directory strip
+# leaves flock reachable via the OTHER directory, and a strip aggressive
+# enough to remove every directory that also serves flock would otherwise
+# ALSO remove these tools, making a precondition check fail for the WRONG
+# reason (missing node, not missing flock) while still coincidentally
+# reporting the same exit code.
+preserve_tools_in_fakebin() {
+  local tool real
+  for tool in bash node sha256sum timeout mkdir dirname; do
+    real="$(command -v "$tool" 2>/dev/null || true)"
+    [[ -n "$real" ]] && [[ ! -e "$FAKEBIN/$tool" ]] && ln -sf "$real" "$FAKEBIN/$tool"
+  done
+}
+
 setup_common_env() {
   RESTIC_PW="$WORK/restic-password"
   echo -n "not-a-real-passphrase" > "$RESTIC_PW"
@@ -182,6 +202,7 @@ setup_common_env() {
 write_fake_restic
 write_fake_curl
 setup_common_env
+preserve_tools_in_fakebin
 
 # ── syntax ───────────────────────────────────────────────────────────────
 section "Syntax"
@@ -277,14 +298,35 @@ run "$BACKUP" --dry-run
 # ── preconditions: flock absent ──────────────────────────────────────────
 # On a host that genuinely has no flock (this dev host may be one — see
 # HAVE_FLOCK above), FAKEBIN's PATH already exercises this precondition, no
-# surgery needed. On a host that DOES have flock (every CI runner), its
-# directory is stripped from PATH for exactly this one invocation so the
-# precondition is exercised there too, rather than only ever on hosts that
-# happen to lack the tool.
+# surgery needed. On a host that DOES have flock (every CI runner), every
+# PATH directory that would ALSO resolve `flock` to the SAME real binary is
+# stripped for exactly this one invocation, so the precondition is exercised
+# there too, rather than only ever on hosts that happen to lack the tool.
+#
+# A naive "strip the one directory `command -v flock` reported" approach is
+# NOT enough: on a distro with usrmerge, `/bin` is a symlink to `/usr/bin`,
+# so flock (and everything else normally found via /usr/bin) stays
+# resolvable through the OTHER, unstripped name for the SAME directory —
+# this was caught directly against a real CI run, not simulated. The fix
+# below resolves symlinks and strips EVERY PATH entry that provides a file
+# equivalent to the one `command -v flock` found, however many there are;
+# preserve_tools_in_fakebin() (above) is what keeps node/sha256sum/timeout/
+# mkdir/dirname/bash themselves available afterwards, since those often live
+# in the very same directories being stripped.
 section "Preconditions: flock absent"
 if $HAVE_FLOCK; then
-  FLOCK_DIR="$(dirname "$(command -v flock)")"
-  NOFLOCK_PATH="$(printf '%s' "$FAKEBIN:$PATH" | awk -v RS=: -v ORS=: -v d="$FLOCK_DIR" '$0!=d' | sed 's/:$//')"
+  FLOCK_REAL="$(readlink -f "$(command -v flock)" 2>/dev/null || command -v flock)"
+  NOFLOCK_PATH=""
+  IFS=: read -r -a _noflock_dirs <<< "$FAKEBIN:$PATH"
+  for _d in "${_noflock_dirs[@]}"; do
+    [[ -z "$_d" ]] && continue
+    if [[ -e "$_d/flock" ]]; then
+      _resolved="$(readlink -f "$_d/flock" 2>/dev/null || printf '%s' "$_d/flock")"
+      [[ "$_resolved" == "$FLOCK_REAL" ]] && continue
+    fi
+    NOFLOCK_PATH="${NOFLOCK_PATH:+$NOFLOCK_PATH:}$_d"
+  done
+  unset _d _resolved _noflock_dirs
 else
   NOFLOCK_PATH="$FAKEBIN:$PATH"
 fi
@@ -292,10 +334,6 @@ CODE_NOFLOCK=0
 OUT_NOFLOCK="$(PATH="$NOFLOCK_PATH" env RESTIC_REPOSITORY=x RESTIC_PASSWORD_FILE="$RESTIC_PW" NORAMEDI_ATTACHMENT_VPS2_SOURCE_DIR="$SOURCE_DIR" bash "$BACKUP" 2>&1)" || CODE_NOFLOCK=$?
 [[ "$CODE_NOFLOCK" -eq 3 ]] && pass "backup: exits 3 when flock is absent" \
   || fail "backup flock-absent: exit=$CODE_NOFLOCK (expected 3), out=$OUT_NOFLOCK"
-
-echo "DIAG: NOFLOCK_PATH=$NOFLOCK_PATH" >&2
-echo "DIAG: direct command -v flock with NOFLOCK_PATH: $(PATH="$NOFLOCK_PATH" command -v flock 2>&1; echo "[rc=$?]")" >&2
-echo "DIAG: minimal env+bash -c harness: $(PATH="$NOFLOCK_PATH" env RESTIC_REPOSITORY=x RESTIC_PASSWORD_FILE="$RESTIC_PW" bash -c 'echo "PATH=$PATH"; command -v flock; echo "rc=$?"' 2>&1)" >&2
 
 CODE_NOFLOCK_RP=0
 OUT_NOFLOCK_RP="$(PATH="$NOFLOCK_PATH" env RESTIC_REPOSITORY=x RESTIC_PASSWORD_FILE="$RESTIC_PW" bash "$RESTOREPROOF" 2>&1)" || CODE_NOFLOCK_RP=$?
