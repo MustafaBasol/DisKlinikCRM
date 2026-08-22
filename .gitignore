@@ -56,4 +56,4 @@ dist.rollback-*/
 # forever, in exchange for provenance that design/dental-chart/final-svg/ and
 # the AUTHORING.md tables already record in text. See the README in that
 # directory for how to restore them.
-design/dental-chart/reference-plates/
+design/dental-chart/reference-plates/*.png
