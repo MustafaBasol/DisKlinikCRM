@@ -1,9 +1,9 @@
 # F5-3 — Messaging Fast-Ack, Retry/Backoff, DLQ and Replay
 
 **Task:** ClickUp `F5-3` ([`869ed1t5e`](https://app.clickup.com/t/869ed1t5e)), under `EPIC F5` ([`869ed1jvf`](https://app.clickup.com/t/869ed1jvf)) — repository phase `F6`.
-**Baseline:** `origin/main` @ `6e1d2e0b881a96f10aaf92d05984a7369448310b`, re-fetched and re-verified after F5-2; no drift.
-**Branch:** `feature/f5-3-messaging-reliability-dlq-replay`, cut from fresh `origin/main`.
-**Stacked?** **NO** — see §1.
+**Baseline:** originally `origin/main` @ `6e1d2e0b881a96f10aaf92d05984a7369448310b`. **Restacked 2026-08-22 onto `origin/main` @ `11956cfcce37a56f5be2f9bb4e8b9e5340a50f35`** — the PR #480 (F5-2) merge commit — after F5-2 landed. See §1.
+**Branch:** `feature/f5-3-messaging-reliability-dlq-replay`, rebased (not merged) onto the post-F5-2 `main`.
+**Stacked?** **NO** — see §1. The reasons held, and the predicted conflict was resolved additively on the restack.
 
 **77 tests · 77 PASS · 0 FAIL** (49 DB-free contract tests, 28 against real disposable PostgreSQL 16.14), plus twelve existing suites re-run green and three webhook suites re-run a second time with the new flag **enabled**.
 
@@ -19,7 +19,28 @@ F5-3 could plausibly have been stacked on F5-2 to reuse its retry-category vocab
 2. **F5-3 needs nothing F5-2 introduced.** Its whole surface is `MessagingInboundEvent`, the retry job, the three provider clients and two webhook routes — all present on `main`. It publishes no `OutboxEvent`, uses no dispatcher, and imports nothing from `server/src/outbox/`.
 3. **Merge order becomes free.** Either PR can merge first, in either order, with no conflict beyond `package.json` script lines and two aggregate suite strings.
 
-**The duplication this costs, stated plainly:** `messaging/messagingFailureClassification.ts` defines the same failure categories and the same full-jitter backoff shape as F5-2's `outbox/outboxErrors.ts`. They are deliberately *identical in vocabulary* so that unifying them once both PRs merge is a deletion rather than a reconciliation. **Recorded as a follow-up, not pretended away.**
+**The duplication this costs, stated plainly:** `messaging/messagingFailureClassification.ts` defined the same failure categories and the same full-jitter backoff shape as F5-2's `outbox/outboxErrors.ts`. Recorded at the time as a follow-up rather than pretended away.
+
+### 1.1 The restack, and what happened to that follow-up (2026-08-22)
+
+F5-2 merged first as PR #480. F5-3 was rebased onto the resulting `main` (`11956cf`). Three files conflicted, all additively, all resolved with **both** tasks' entries surviving: `NORAMEDI_MASTER_TRACKER.md` §13 (the F5-3 lane entry now sits above the F5-2 one, which stands verbatim), `F6_QUEUE_OUTBOX_AND_RELIABILITY.md` (both change-history rows present, ascending as that table is ordered), and `server/package.json` (the aggregate suites now run the outbox **and** the messaging suites; no duplicated entries).
+
+The follow-up was then re-examined against the merged F5-2 code rather than against the assumption. **It was half right, and the half that was wrong is the more important one.**
+
+| | Identical? | Disposition |
+|---|---|---|
+| Full-jitter backoff arithmetic | **Yes** — line for line, differing only in which base table and ceiling were read | **Unified.** Extracted to `utils/backoff.ts` as `computeFullJitterBackoffMs`; both domains delegate. |
+| Failure categories | **No** — messaging has `TIMEOUT`, which the outbox has no way to raise (the dispatcher runs in-process; no socket to time out) | Retained per domain |
+| Per-category base delays | **No** — messaging is 4–5x the outbox in every retryable category, because a provider redelivery is a far slower loop than an in-process dispatch | Retained per domain |
+| Retry ceiling | **No** — 30 minutes (outbox) vs 1 hour (messaging) | Retained per domain |
+| Persisted error codes | **No** — seven members each, sharing exactly one (`MAX_ATTEMPTS_EXCEEDED`); the rest are `UNREGISTERED_EVENT`/`NO_CONSUMER`/`AMBIGUOUS_SIDE_EFFECT` against `MISSING_CONNECTION`/`NO_RETRY_HANDLER`/`STUCK_IN_PROCESSING` | Retained per domain |
+| Error classes | **No** — `OutboxConsumerError` carries `cause`; `MessagingProviderError` carries `httpStatus` | Retained per domain |
+
+So the unification is real but deliberately narrow: **one pure function, no domain vocabulary moved.** `utils/backoff.ts` imports nothing, knows nothing of Prisma, tenants, the outbox or messaging, and is therefore safe for both to depend on. There is **no `outbox` → `messaging` import and no `messaging` → `outbox` import** in either direction, and no cycle.
+
+Forcing the vocabularies together would have handed each domain codes it can never emit — exactly the cross-domain business coupling both lanes exist to prevent — so it was not forced. The remaining difference is **intentional, not residual debt**, and is recorded here so nobody re-opens it as an oversight.
+
+The behaviour-preservation of the one change that touches F5-2 code is proven rather than asserted: `test:outbox-contracts` (53 passed, 0 failed) exercises `computeBackoffMs` through its cap, growth, zero-jitter, `Retry-After` floor and per-category ordering assertions, and passes unchanged against the delegating implementation.
 
 ---
 

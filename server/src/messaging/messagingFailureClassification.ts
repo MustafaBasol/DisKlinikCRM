@@ -27,18 +27,28 @@
  * code** and nothing else. The provider body is read to make the decision and
  * then discarded — it is never returned, never stored, never logged.
  *
- * DELIBERATELY THE SAME SHAPE AS THE OUTBOX'S POLICY
- * --------------------------------------------------
- * F5-2's `outbox/outboxErrors.ts` defines the same categories for the same
- * reasons. The two are NOT shared here, because F5-3 is based on `origin/main`
- * and is not stacked on F5-2 (see the F5-3 evidence document, "Stacking"), and
- * duplicating a small pure function is a smaller cost than a hidden branch
- * dependency that would leave this PR with no CI at all. **Unifying them once
- * both merge is a recorded follow-up**, and the vocabularies are deliberately
- * identical so that unification is a deletion rather than a reconciliation.
+ * RELATIONSHIP TO THE OUTBOX'S POLICY, SETTLED AFTER F5-2 MERGED
+ * --------------------------------------------------------------
+ * F5-2's `outbox/outboxErrors.ts` solves the same class of problem. The F5-3 PR
+ * recorded the overlap as a follow-up, on the assumption the two vocabularies
+ * were identical and unification would be a deletion. Re-read against the
+ * merged F5-2 code, only half of that held.
+ *
+ * The *arithmetic* was identical line for line, so it moved to
+ * `utils/backoff.ts` and both domains now call it. The *vocabulary* was not,
+ * and the differences are load-bearing rather than cosmetic: `TIMEOUT` below
+ * has no outbox equivalent (the dispatcher runs in-process, so there is no
+ * socket to time out); the base delays here are four to five times the
+ * outbox's, because a provider redelivery is a far slower loop than an
+ * in-process dispatch; the ceilings differ; and the two persisted code unions
+ * share exactly one member. Merging those would hand each domain codes it can
+ * never emit, so they stay apart. This module does not import `outbox/`, and
+ * `outbox/` does not import it.
  */
 
-/** Why a messaging operation failed. Mirrors `OutboxErrorCategory` on purpose. */
+import { computeFullJitterBackoffMs } from '../utils/backoff.js';
+
+/** Why a messaging operation failed. CLOSED SET, and messaging-specific. */
 export type MessagingFailureCategory =
   /** A blip: connection reset, DNS hiccup, momentary unavailability. */
   | 'TRANSIENT'
@@ -314,12 +324,11 @@ export function computeMessagingBackoffMs(
   attempts: number,
   options?: { retryAfterMs?: number; random?: () => number },
 ): number {
-  const base = BASE_BACKOFF_MS[category];
-  const safeAttempt = Math.max(1, Math.floor(attempts));
-  const growth = 2 ** Math.min(safeAttempt - 1, 16);
-  const uncapped = Math.min(base * growth, MAX_MESSAGING_BACKOFF_MS);
-  const rnd = options?.random ?? Math.random;
-  const jittered = Math.floor(uncapped * rnd());
-  const floor = Math.max(0, Math.floor(options?.retryAfterMs ?? 0));
-  return Math.min(Math.max(jittered, floor), MAX_MESSAGING_BACKOFF_MS);
+  return computeFullJitterBackoffMs({
+    baseMs: BASE_BACKOFF_MS[category],
+    attempt: attempts,
+    maxMs: MAX_MESSAGING_BACKOFF_MS,
+    ...(options?.retryAfterMs !== undefined ? { retryAfterMs: options.retryAfterMs } : {}),
+    ...(options?.random !== undefined ? { random: options.random } : {}),
+  });
 }
