@@ -38,7 +38,7 @@
  *     aspect ratio, sized off the shared `width` (which is itself driven by
  *     widthRatio), so molars still read larger than incisors.
  */
-import React, { useMemo } from 'react';
+import React, { useId, useMemo } from 'react';
 import { Activity, AlertTriangle, Check, Crown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { TOOTH_STATUS_META, ToothRecord, ToothStatus } from '../dentalChart.types';
@@ -51,6 +51,7 @@ import { CROWN_MARGIN_PATH, IMPLANT_FIXTURE_PATH, IMPLANT_THREAD_PATH } from '..
 import type { Dentition } from '../toothGeometry';
 import { getLateralAspect, getLateralCrownBBox, getLateralViewBox } from './lateralBounds';
 import { getOcclusalCrop } from './occlusalBounds';
+import { TOOTH_MATERIAL_CLASS, TOOTH_MATERIAL_HEX, TOOTH_STROKE_OPACITY, TOOTH_STROKE_WIDTH } from './toothPalette';
 
 export type ChartSize = 'regular' | 'large' | 'presentation';
 
@@ -108,10 +109,27 @@ const SURFACE_FALLBACK: Record<string, string> = {
   incisal: 'Incisal',
 };
 
-// Base (no-status) contrast — bumped in the refinement pass; the old
-// slate-400/slate-500 pairing nearly disappeared against a plain workspace.
-const DEFAULT_STROKE_CLASS = 'stroke-slate-500 dark:stroke-slate-300';
-const DEFAULT_FILL_CLASS = 'fill-white dark:fill-gray-700/70';
+// Two-tone material defaults (R3): an UNTINTED tooth already reads as enamel
+// crown over dentin root instead of one flat fill — see toothPalette.ts, the
+// single source for these. Kept as four separate defaults (crown/root/
+// cervical/surface) rather than one shared constant because that is exactly
+// the stroke-weight hierarchy the palette documents: a flat hierarchy is what
+// made the R2 glyphs read as line-art icons.
+const DEFAULT_CROWN_STROKE_CLASS = TOOTH_MATERIAL_CLASS.enamelStroke;
+const DEFAULT_ROOT_STROKE_CLASS = TOOTH_MATERIAL_CLASS.dentinStroke;
+const DEFAULT_CERVICAL_STROKE_CLASS = TOOTH_MATERIAL_CLASS.cervicalStroke;
+const DEFAULT_SURFACE_STROKE_CLASS = TOOTH_MATERIAL_CLASS.surfaceStroke;
+
+// Status tint composes with the material fill rather than replacing it: a
+// second, fill-only path reusing the SAME `d` as the material path, painted
+// over it at reduced opacity, so a `treated` tooth still reads as enamel/
+// dentin with a colour wash rather than a solid status-coloured blob.
+// Deliberately not in toothPalette.ts — that module documents itself as "not
+// a status palette", so the composition rule lives here, next to the only
+// code that knows both material and status exist. A plain number (applied
+// via inline `style`) rather than a Tailwind opacity utility class, since the
+// value (0.6) is not on Tailwind's default opacity scale.
+const STATUS_TINT_OPACITY = 0.6;
 
 // Missing status: previously just faded everything to opacity-35, which read
 // as "very light" rather than "absent". Now: normal-contrast dashed ghost
@@ -193,15 +211,35 @@ interface LateralViewProps {
 const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width, height, viewLabel }) => {
   const art = useMemo(() => getLateralArt(identity), [identity]);
   const meta = status ? TOOTH_STATUS_META[status] : null;
-  const strokeClass = meta?.stroke ?? DEFAULT_STROKE_CLASS;
-  const fillClass = meta?.fill ?? DEFAULT_FILL_CLASS;
-  // Full-coverage crown restoration fills the WHOLE clinical crown.
-  const crownFillClass = status === 'crown' ? 'fill-indigo-200 dark:fill-indigo-500/40' : fillClass;
   const isMissing = status === 'missing';
   const isImplant = status === 'implant';
+  // Full-coverage crown restoration REPLACES the enamel (it is a different
+  // material, not a tint of enamel); every other status TINTS the material —
+  // see the two-path (base + overlay) rendering below.
+  const isCrownRestoration = status === 'crown';
+
+  // Status recolours crown, root, cervical and surface strokes TOGETHER (see
+  // AUTHORING.md §4) rather than each keeping its own material-default tone;
+  // the material defaults only apply when there is no status.
+  const crownStrokeClass = meta?.stroke ?? DEFAULT_CROWN_STROKE_CLASS;
+  const rootStrokeClass = meta?.stroke ?? DEFAULT_ROOT_STROKE_CLASS;
+  const cervicalStrokeClass = meta?.stroke ?? DEFAULT_CERVICAL_STROKE_CLASS;
+  const surfaceStrokeClass = meta?.stroke ?? DEFAULT_SURFACE_STROKE_CLASS;
+  const crownFillClass = isCrownRestoration ? 'fill-indigo-200 dark:fill-indigo-500/40' : undefined;
+
   const transform = lateralTransform(identity, art.sideStrategy);
   const viewBox = useMemo(() => getLateralViewBox(identity, art), [identity, art]);
   const crownBBox = useMemo(() => getLateralCrownBBox(identity, art), [identity, art]);
+  // Globally unique per mounted SVG (not per fdi) — safe with 52 glyphs x 2
+  // views on one page, and safe across multiple Odontogram instances, unlike
+  // an id built from `fdi` which repeats across separate chart instances.
+  const gradientId = useId();
+  // Base enamel fill: a subtle vertical gradient, translucent at the incisal
+  // edge (y=0 of the crown's own bounding box, i.e. `art.crown`'s smallest
+  // authored y) and opaque toward the cervical line (bbox y=1) — the crown
+  // "thickens" toward the gum line the way real enamel translucency reads.
+  // Skipped for the crown-restoration and missing cases, which never use it.
+  const useEnamelGradient = !isMissing && !isCrownRestoration;
 
   return (
     <svg
@@ -215,6 +253,21 @@ const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width,
       data-tooth-fdi={fdi}
     >
       <title>{viewLabel}</title>
+      {useEnamelGradient && (
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            {/* Light value read from TOOTH_MATERIAL_HEX (the exporter's own
+                literal) so the two never drift apart. The dark override has
+                no exported counterpart — TOOTH_MATERIAL_HEX is light-only by
+                design (see toothPalette.ts) — so it is a literal here, kept
+                in sync with TOOTH_MATERIAL_CLASS.enamelFill's `dark:` value
+                by hand; a Tailwind class must be a static string for the JIT
+                scanner to see it, so it cannot be built from that constant. */}
+            <stop offset="0%" stopColor={TOOTH_MATERIAL_HEX.enamelFill} stopOpacity={0.55} className="dark:[stop-color:#e8eef2]" />
+            <stop offset="100%" stopColor={TOOTH_MATERIAL_HEX.enamelFill} stopOpacity={1} className="dark:[stop-color:#e8eef2]" />
+          </linearGradient>
+        </defs>
+      )}
       <g transform={transform}>
         {isMissing ? (
           <>
@@ -248,6 +301,10 @@ const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width,
           </>
         ) : (
           <>
+            {/* Roots FIRST (underneath) in the dentin material — a root's
+                path starts ~2 units above the CEJ precisely so the crown
+                painted after it overlaps the seam; paint order does the
+                work, nothing here clips. */}
             {isImplant ? (
               <>
                 <path
@@ -266,27 +323,52 @@ const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width,
               </>
             ) : (
               art.roots.map((rootPath, index) => (
-                <path
-                  key={index}
-                  d={rootPath}
-                  className={`${fillClass} ${strokeClass} opacity-85`}
-                  strokeWidth={1.9}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+                <React.Fragment key={index}>
+                  <path
+                    d={rootPath}
+                    className={`${TOOTH_MATERIAL_CLASS.dentinFill} ${rootStrokeClass}`}
+                    strokeWidth={TOOTH_STROKE_WIDTH.root}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* Status tint OVER the dentin fill, not instead of it —
+                      same `d`, fill-only, reduced opacity. */}
+                  {meta && (
+                    <path d={rootPath} className={meta.fill} style={{ opacity: STATUS_TINT_OPACITY }} />
+                  )}
+                </React.Fragment>
               ))
             )}
 
+            {/* Crown OVER the roots, in the enamel material. */}
             <path
               d={art.crown}
-              className={`${crownFillClass} ${strokeClass}`}
-              strokeWidth={2.2}
+              fill={useEnamelGradient ? `url(#${gradientId})` : undefined}
+              className={isCrownRestoration ? `${crownFillClass} ${crownStrokeClass}` : crownStrokeClass}
+              strokeWidth={TOOTH_STROKE_WIDTH.crown}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+            {!isCrownRestoration && meta && (
+              <path d={art.crown} className={meta.fill} style={{ opacity: STATUS_TINT_OPACITY }} />
+            )}
 
-            <path d={art.surface} className={`${strokeClass} opacity-50`} strokeWidth={1.1} fill="none" strokeLinecap="round" />
-            <path d={art.cervical} className={`${strokeClass} opacity-40`} strokeWidth={1.1} fill="none" strokeLinecap="round" />
+            <path
+              d={art.surface}
+              className={surfaceStrokeClass}
+              strokeWidth={TOOTH_STROKE_WIDTH.surface}
+              style={{ opacity: TOOTH_STROKE_OPACITY.surface }}
+              fill="none"
+              strokeLinecap="round"
+            />
+            <path
+              d={art.cervical}
+              className={cervicalStrokeClass}
+              strokeWidth={TOOTH_STROKE_WIDTH.cervical}
+              style={{ opacity: TOOTH_STROKE_OPACITY.cervical }}
+              fill="none"
+              strokeLinecap="round"
+            />
 
             {status === 'crown' && (
               <path
@@ -331,16 +413,18 @@ interface OcclusalViewProps {
 const OcclusalView: React.FC<OcclusalViewProps> = ({ fdi, identity, status, height, viewLabel, t }) => {
   const art = useMemo(() => getOcclusalArt(identity), [identity]);
   const meta = status ? TOOTH_STATUS_META[status] : null;
-  const strokeClass = meta?.stroke ?? DEFAULT_STROKE_CLASS;
-  const fillClass = meta?.fill ?? DEFAULT_FILL_CLASS;
   const isMissing = status === 'missing';
-  const isImplant = status === 'implant';
-  const outlineFillClass =
-    status === 'crown'
-      ? 'fill-indigo-200 dark:fill-indigo-500/40'
-      : isImplant
-        ? 'fill-purple-100 dark:fill-purple-500/30'
-        : fillClass;
+  // Occlusal is a plan view of the crown alone (no root split), so it takes
+  // the same enamel default the lateral crown uses, and composes status the
+  // same way: material fill/stroke as the base, a translucent status tint
+  // OVER it — except full-coverage crown restoration, a different material
+  // that replaces the enamel outright, same rule as the lateral view.
+  const isCrownRestoration = status === 'crown';
+  const strokeClass = meta?.stroke ?? DEFAULT_CROWN_STROKE_CLASS;
+  const detailStrokeClass = meta?.stroke ?? DEFAULT_SURFACE_STROKE_CLASS;
+  const outlineFillClass = isCrownRestoration
+    ? 'fill-indigo-200 dark:fill-indigo-500/40'
+    : TOOTH_MATERIAL_CLASS.enamelFill;
   const transform = occlusalTransform(identity, art.sideStrategy);
   const crop = useMemo(() => getOcclusalCrop(identity), [identity]);
   const width = Math.round(height / crop.aspect);
@@ -372,11 +456,20 @@ const OcclusalView: React.FC<OcclusalViewProps> = ({ fdi, identity, status, heig
             <path
               d={art.outline}
               className={`${outlineFillClass} ${strokeClass}`}
-              strokeWidth={1.8}
+              strokeWidth={TOOTH_STROKE_WIDTH.occlusalOutline}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+            {/* Status tint OVER the enamel fill, not instead of it — same
+                `d`, fill-only, reduced opacity. */}
+            {!isCrownRestoration && meta && (
+              <path d={art.outline} className={meta.fill} style={{ opacity: STATUS_TINT_OPACITY }} />
+            )}
 
+            {/* Future per-surface charting hook: each of the five surfaces
+                stays its own element carrying data-surface (and data-tooth-fdi
+                so a future click handler can address it directly) — no
+                persisted state, no click handler, added here. */}
             {OCCLUSAL_SURFACE_NAMES.map((name) => {
               const key = surfaceLabelKey(name, identity);
               return (
@@ -386,7 +479,7 @@ const OcclusalView: React.FC<OcclusalViewProps> = ({ fdi, identity, status, heig
                   data-surface={name}
                   data-tooth-fdi={fdi}
                   style={{ pointerEvents: 'none' }}
-                  className={status ? `${fillClass} opacity-70` : 'fill-slate-400/15 dark:fill-slate-300/20'}
+                  className={meta ? `${meta.fill} opacity-70` : 'fill-slate-400/15 dark:fill-slate-300/20'}
                 >
                   <title>
                     {t(`patients:dentalChart.surface.${key}`, { defaultValue: SURFACE_FALLBACK[key] ?? key })}
@@ -395,7 +488,14 @@ const OcclusalView: React.FC<OcclusalViewProps> = ({ fdi, identity, status, heig
               );
             })}
 
-            <path d={art.detail} className={`${strokeClass} opacity-45`} strokeWidth={1} fill="none" strokeLinecap="round" />
+            <path
+              d={art.detail}
+              className={detailStrokeClass}
+              strokeWidth={TOOTH_STROKE_WIDTH.occlusalDetail}
+              style={{ opacity: TOOTH_STROKE_OPACITY.occlusalDetail }}
+              fill="none"
+              strokeLinecap="round"
+            />
           </>
         )}
       </g>
@@ -506,6 +606,7 @@ const ToothGlyphInner = React.forwardRef<HTMLButtonElement, ToothGlyphProps>(
         title={title}
         data-tooth-fdi={fdi}
         data-tooth-dentition={identity.dentition}
+        data-tooth-status={status ?? undefined}
         tabIndex={tabIndex}
         onClick={() => onSelect(fdi)}
         onKeyDown={onKeyDownNav}
