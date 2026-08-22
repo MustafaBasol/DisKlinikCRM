@@ -34,7 +34,11 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 FAKEBIN="$WORK/bin"
 STORE="$WORK/fake-restic-store"
-mkdir -p "$FAKEBIN" "$STORE"
+# Isolated from $FAKEBIN on purpose — see mirror_dir_except_flock()'s own
+# comment: only the "flock absent" precondition test's own NOFLOCK_PATH ever
+# includes this directory, never the general run() PATH every other test uses.
+NOFLOCK_BIN="$WORK/noflock-bin"
+mkdir -p "$FAKEBIN" "$STORE" "$NOFLOCK_BIN"
 
 PASSED=0
 FAILED=0
@@ -158,23 +162,30 @@ EOF
   chmod +x "$FAKEBIN/curl"
 }
 
-# Symlinks real system tools the wrapper scripts need into FAKEBIN — which
-# always stays first in PATH — so the "flock absent" precondition test below
-# can remove flock's directory from PATH without ALSO removing tools that
-# happen to live in the SAME directory. This is not hypothetical: on a
-# distro with usrmerge, `flock` typically resolves via /usr/bin, but /bin
-# (a symlink to /usr/bin) ALSO provides it, and so does /usr/bin itself for
-# node/sha256sum/timeout/mkdir/dirname/bash — a naive single-directory strip
-# leaves flock reachable via the OTHER directory, and a strip aggressive
-# enough to remove every directory that also serves flock would otherwise
-# ALSO remove these tools, making a precondition check fail for the WRONG
-# reason (missing node, not missing flock) while still coincidentally
-# reporting the same exit code.
-preserve_tools_in_fakebin() {
-  local tool real
-  for tool in bash node sha256sum timeout mkdir dirname; do
-    real="$(command -v "$tool" 2>/dev/null || true)"
-    [[ -n "$real" ]] && [[ ! -e "$FAKEBIN/$tool" ]] && ln -sf "$real" "$FAKEBIN/$tool"
+# Mirrors (as symlinks) every OTHER file from a directory that provides the
+# same real `flock` binary into a DEDICATED $NOFLOCK_BIN directory — NEVER
+# into $FAKEBIN itself, which every OTHER test in this file also uses via
+# run()'s PATH — so the "flock absent" precondition test below can make
+# `flock` itself genuinely unresolvable, for exactly the two invocations
+# that need it, without ALSO taking down every other tool that happens to
+# live in the same directory (env, date, node, sha256sum, timeout, mkdir,
+# dirname, bash, ... — an enumerated allowlist here turned out to be a
+# whack-a-mole: a distro with usrmerge serves ALL of coreutils out of
+# /usr/bin, and stripping that directory to hide flock silently took `env`
+# down with it on the first attempt, breaking the test harness's own
+# invocation, not just the script under test) and without risking that
+# mirroring ~1000 system binaries into the SHARED $FAKEBIN silently shadows
+# something a LATER, unrelated test in this file depends on. $1 = the
+# directory to mirror.
+mirror_dir_except_flock() {
+  local dir="$1" f name
+  for f in "$dir"/*; do
+    [[ -f "$f" ]] && [[ -x "$f" ]] || continue
+    name="$(basename "$f")"
+    [[ "$name" == "flock" ]] && continue
+    [[ -e "$FAKEBIN/$name" ]] && continue
+    [[ -e "$NOFLOCK_BIN/$name" ]] && continue
+    ln -sf "$f" "$NOFLOCK_BIN/$name" 2>/dev/null || true
   done
 }
 
@@ -202,7 +213,6 @@ setup_common_env() {
 write_fake_restic
 write_fake_curl
 setup_common_env
-preserve_tools_in_fakebin
 
 # ── syntax ───────────────────────────────────────────────────────────────
 section "Syntax"
@@ -307,26 +317,37 @@ run "$BACKUP" --dry-run
 # NOT enough: on a distro with usrmerge, `/bin` is a symlink to `/usr/bin`,
 # so flock (and everything else normally found via /usr/bin) stays
 # resolvable through the OTHER, unstripped name for the SAME directory —
-# this was caught directly against a real CI run, not simulated. The fix
-# below resolves symlinks and strips EVERY PATH entry that provides a file
-# equivalent to the one `command -v flock` found, however many there are;
-# preserve_tools_in_fakebin() (above) is what keeps node/sha256sum/timeout/
-# mkdir/dirname/bash themselves available afterwards, since those often live
-# in the very same directories being stripped.
+# this was caught directly against a real CI run, not simulated. Worse, a
+# strip aggressive enough to remove every directory that also serves flock
+# takes the REST of that directory's contents down with it — including
+# tools this very test harness's own invocation needs (its first attempt at
+# fixing this broke `env` itself, one line below). The fix: resolve
+# symlinks, and for every PATH entry that provides a file equivalent to the
+# one `command -v flock` found, mirror everything else in that directory
+# into the dedicated $NOFLOCK_BIN (mirror_dir_except_flock, above) before
+# excluding it, so only `flock` itself becomes unresolvable.
 section "Preconditions: flock absent"
 if $HAVE_FLOCK; then
   FLOCK_REAL="$(readlink -f "$(command -v flock)" 2>/dev/null || command -v flock)"
-  NOFLOCK_PATH=""
-  IFS=: read -r -a _noflock_dirs <<< "$FAKEBIN:$PATH"
+  NOFLOCK_REST=""
+  IFS=: read -r -a _noflock_dirs <<< "$PATH"
   for _d in "${_noflock_dirs[@]}"; do
-    [[ -z "$_d" ]] && continue
+    [[ -z "$_d" ]] || [[ ! -d "$_d" ]] && continue
     if [[ -e "$_d/flock" ]]; then
       _resolved="$(readlink -f "$_d/flock" 2>/dev/null || printf '%s' "$_d/flock")"
-      [[ "$_resolved" == "$FLOCK_REAL" ]] && continue
+      if [[ "$_resolved" == "$FLOCK_REAL" ]]; then
+        mirror_dir_except_flock "$_d"
+        continue
+      fi
     fi
-    NOFLOCK_PATH="${NOFLOCK_PATH:+$NOFLOCK_PATH:}$_d"
+    NOFLOCK_REST="${NOFLOCK_REST:+$NOFLOCK_REST:}$_d"
   done
   unset _d _resolved _noflock_dirs
+  # $NOFLOCK_BIN (the mirrored real tools, minus flock) is inserted right
+  # after $FAKEBIN — never merged into it — so $FAKEBIN's own restic/curl
+  # fakes still win, and this directory is reachable ONLY for this one
+  # invocation's PATH, never for run()'s.
+  NOFLOCK_PATH="$FAKEBIN:$NOFLOCK_BIN${NOFLOCK_REST:+:$NOFLOCK_REST}"
 else
   NOFLOCK_PATH="$FAKEBIN:$PATH"
 fi
