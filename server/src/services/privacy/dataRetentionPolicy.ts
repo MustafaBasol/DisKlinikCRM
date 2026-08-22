@@ -16,6 +16,13 @@
  *   - OperationalEvent rows (integration failure / webhook error events)
  *   - ContactRequest PII fields (phone, name, note, lastMessage) — resolved/closed only
  *   - WhatsAppInboxEntry.lastMessageText / rawPayload — resolved entries only (row kept)
+ *   - OutboxEvent rows in a TERMINAL state only (F5-2R): `processed` past
+ *     DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS, and `dead` past
+ *     DATA_RETENTION_OUTBOX_DEAD_EVENT_DAYS. `pending` and `claimed` rows are
+ *     UNDELIVERED OBLIGATIONS and are never eligible at any age.
+ *   - OutboxConsumerExecution rows that are `completed` only, and only once no
+ *     OutboxEvent still carries their idempotencyKey (F5-2R — see
+ *     outbox/outboxRetention.ts for the invariant this protects).
  *   - MigrationPreservedSourceValue rows (F3-DATA-MIG-TODAY-001-R10 — raw
  *     legacy values preserved verbatim from a clinic's PREVIOUS system
  *     because they had no canonical destination: parents' names, extra phone
@@ -36,6 +43,11 @@
  *     decisions tracked in docs/compliance/53-kvkk-attachment-imaging-lifecycle.md
  *     ("Remaining legal decisions"). Anonymization (patientAnonymization.ts)
  *     redacts their metadata but never deletes the underlying files.
+ *   - OutboxEvent rows in `pending` or `claimed` (an undelivered obligation —
+ *     deleting one loses a patient's confirmation with no trace), and
+ *     OutboxConsumerExecution rows in `in_progress` or `ambiguous` (deleting
+ *     one re-opens the duplicate-side-effect hole the ledger exists to close).
+ *     Enforced structurally in outbox/outboxRetention.ts, not by convention.
  *   - PatientPrivacyExportArchive rows/files — these ARE cleaned, but by a
  *     separate dedicated job (patientPrivacyExportCleanupJob.ts, mirroring
  *     publicBookingNoticeEvidenceCleanupJob.ts) rather than this one, so that
@@ -55,6 +67,34 @@
  *     CommunicationConsentConflictBucket rows (KVKK-HIGH-007 legacy/central
  *     conflict aggregates — already PII-free, but bounded like every other
  *     category so it doesn't grow unbounded either).
+ *   DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS  integer ≥ 30 (default: 180) —
+ *     OutboxEvent rows whose status is `processed`, aged on `processedAt`
+ *     (F5-2R). A processed event is a DISCHARGED obligation: the side effect
+ *     happened and the consumer ledger recorded it. What remains is
+ *     operational diagnostics — "did this confirmation actually go out, and
+ *     when" — which is the same question OperationalEvent answers, so it
+ *     inherits the same 180-day window rather than inventing a new one. The
+ *     durable OUTBOUND record is `SentMessage`, which this job never touches,
+ *     so 180 days destroys no delivery evidence.
+ *
+ *   DATA_RETENTION_OUTBOX_DEAD_EVENT_DAYS  integer ≥ 30 (default: 365) —
+ *     OutboxEvent rows whose status is `dead`, aged on `deadLetteredAt`
+ *     (F5-2R). LONGER than the processed window, deliberately: a dead row is
+ *     the record of an obligation that was NOT discharged — a patient who may
+ *     never have learned their appointment was approved — and it is also the
+ *     only object a replay can be issued against (outbox/outboxReplay.ts).
+ *     365 days matches the one-year family already used for
+ *     WhatsAppConversationMessage and resolved ContactRequest rows, and
+ *     comfortably exceeds any operational triage horizon.
+ *
+ *     NOT configurable below the minimum, and never zero: a dead-letter queue
+ *     that empties itself is a dead-letter queue nobody can audit.
+ *
+ *   (no env var) outboxConsumerExecutionDays — DERIVED, not configured.
+ *     max(outboxProcessedEventDays, outboxDeadEventDays). See
+ *     deriveOutboxConsumerExecutionDays() below for why this one knob is
+ *     deliberately withheld from operators.
+ *
  *   DATA_RETENTION_MIGRATION_PRESERVED_SOURCE_DAYS  integer ≥ 30 (default: 3650)
  *     MigrationPreservedSourceValue rows (F3-DATA-MIG-TODAY-001-R10).
  *
@@ -94,6 +134,16 @@ export type DataRetentionConfig = {
   communicationConsentConflictBucketsDays: number;
   /** F3-DATA-MIG-TODAY-001-R10 — MigrationPreservedSourceValue rows. */
   migrationPreservedSourceDays: number;
+  /** F5-2R — OutboxEvent rows in `processed`, aged on `processedAt`. */
+  outboxProcessedEventDays: number;
+  /** F5-2R — OutboxEvent rows in `dead`, aged on `deadLetteredAt`. */
+  outboxDeadEventDays: number;
+  /**
+   * F5-2R — OutboxConsumerExecution rows in `completed`, aged on `completedAt`.
+   * DERIVED from the two windows above; there is no environment variable for it
+   * on purpose (deriveOutboxConsumerExecutionDays).
+   */
+  outboxConsumerExecutionDays: number;
   batchSize: number;
 };
 
@@ -116,6 +166,11 @@ const DEFAULTS = {
   // 10 years — see the DATA_RETENTION_MIGRATION_PRESERVED_SOURCE_DAYS block
   // in this file's header for the full reasoning.
   migrationPreservedSourceDays: 3650,
+  // F5-2R. See the env-var block in this file's header for the reasoning
+  // behind each number and for why the consumer-execution window is derived
+  // rather than configured.
+  outboxProcessedEventDays: 180,
+  outboxDeadEventDays: 365,
   batchSize: 500,
 } as const;
 
@@ -135,7 +190,54 @@ function parseSafeBatchSize(): number {
   return Math.min(parsed, DATA_RETENTION_MAX_BATCH_SIZE);
 }
 
+/**
+ * F5-2R — the consumer-execution retention window, DERIVED from the event
+ * windows rather than configured independently.
+ *
+ * THE INVARIANT THIS EXISTS TO ENFORCE
+ * ------------------------------------
+ * `OutboxConsumerExecution` is the ONLY thing standing between a replay (or a
+ * redelivery, or a second event asserting the same business fact) and a second
+ * WhatsApp message to a patient. `outboxReplay.ts` refuses a replay with
+ * `ALREADY_APPLIED` by reading that ledger row — not the event row, because an
+ * event can be `dead` with the side effect already performed (that is exactly
+ * what `AMBIGUOUS_SIDE_EFFECT` means).
+ *
+ * So there must be NO supported state in which an event still exists but its
+ * business idempotency protection has already been deleted. If the ledger window
+ * were shorter than the dead-event window, a dead event replayed on day 200
+ * against a ledger pruned on day 180 would re-send a message the patient already
+ * received — and nothing in the system would notice.
+ *
+ * WHY THIS IS NOT AN ENVIRONMENT VARIABLE
+ * ---------------------------------------
+ * Every other window in this file is a policy choice an operator may legitimately
+ * tune. This one is not: a lower value is not a shorter retention period, it is a
+ * silent duplicate-patient-message defect with a several-month fuse. Deriving it
+ * makes the wrong value unrepresentable rather than merely discouraged.
+ *
+ * `outboxRetention.ts` additionally guards each individual deletion on "no
+ * OutboxEvent still carries this idempotencyKey", so the invariant survives even
+ * a hand-edited database or a category that errored out mid-sweep. This
+ * derivation is the policy layer of that same rule, not a substitute for it.
+ */
+export function deriveOutboxConsumerExecutionDays(
+  outboxProcessedEventDays: number,
+  outboxDeadEventDays: number,
+): number {
+  return Math.max(outboxProcessedEventDays, outboxDeadEventDays);
+}
+
 export function loadDataRetentionConfig(): DataRetentionConfig {
+  const outboxProcessedEventDays = parseSafeDays(
+    'DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS',
+    DEFAULTS.outboxProcessedEventDays,
+  );
+  const outboxDeadEventDays = parseSafeDays(
+    'DATA_RETENTION_OUTBOX_DEAD_EVENT_DAYS',
+    DEFAULTS.outboxDeadEventDays,
+  );
+
   return {
     enabled: process.env.DATA_RETENTION_CLEANUP_ENABLED !== 'false',
     cronSchedule: process.env.DATA_RETENTION_CLEANUP_CRON ?? '0 3 * * *',
@@ -146,6 +248,12 @@ export function loadDataRetentionConfig(): DataRetentionConfig {
     resolvedContactRequestDays: parseSafeDays('DATA_RETENTION_RESOLVED_CONTACT_REQUEST_DAYS', DEFAULTS.resolvedContactRequestDays),
     communicationConsentConflictBucketsDays: parseSafeDays('DATA_RETENTION_CONSENT_CONFLICT_BUCKETS_DAYS', DEFAULTS.communicationConsentConflictBucketsDays),
     migrationPreservedSourceDays: parseSafeDays('DATA_RETENTION_MIGRATION_PRESERVED_SOURCE_DAYS', DEFAULTS.migrationPreservedSourceDays),
+    outboxProcessedEventDays,
+    outboxDeadEventDays,
+    outboxConsumerExecutionDays: deriveOutboxConsumerExecutionDays(
+      outboxProcessedEventDays,
+      outboxDeadEventDays,
+    ),
     batchSize: parseSafeBatchSize(),
   };
 }
