@@ -54,9 +54,12 @@ function statusLabel(status: ToothStatus, t: ReturnType<typeof useTranslation>['
   });
 }
 
-// MISSING i18n KEYS: none of patients:dentalChart.timeline.* exist in any
-// locale yet — every lookup below falls back to its English defaultValue.
-// See delivery report.
+// The patients:dentalChart.timeline.* keys DO exist, in all four locales
+// (tr/en/fr/de). An earlier comment here claimed they were missing and that
+// every lookup fell back to English — that was true when it was written and
+// stopped being true when the keys landed, so it was quietly telling readers
+// the panel was half-translated when it is not. The defaultValue below stays
+// as a genuine last resort, not as the expected path.
 const TIMELINE_ENTRY_FALLBACK: Record<ToothTimelineEntryKind, string> = {
   record_created: 'Record created',
   record_updated: 'Record updated',

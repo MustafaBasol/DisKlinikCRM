@@ -66,6 +66,19 @@ export interface ToothGeometry {
  * Shape-agnostic on purpose: a fixture looks the same whichever tooth it
  * replaces, and hard-coding one path avoids four near-identical variants.
  */
+/**
+ * SUPERSEDED by `odontogram/restorationGeometry.ts` — do not use in new code.
+ *
+ * These three paths hard-code coordinates from the era when every tooth in the
+ * chart shared one generic outline whose cervical line sat around y = 34-40.
+ * R3 gives each tooth its own CEJ (y = 23.0 to y = 36.0) and its own cervical
+ * width, so a fixed fixture floats in the gap above a detached crown and a
+ * fixed margin lands off the tooth entirely on short-crowned molars — both
+ * observed before the derived versions replaced them.
+ *
+ * Kept only because `dentalChartHelpers.test.ts` still pins them alongside the
+ * rest of the R1 geometry it covers. Nothing in the rendered chart reads them.
+ */
 export const IMPLANT_FIXTURE_PATH =
   'M27.4 39 L36.6 39 L35.2 72.5 C35 77 29 77 28.8 72.5 Z';
 

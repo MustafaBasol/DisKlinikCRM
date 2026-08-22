@@ -47,7 +47,7 @@ import { getLateralArt } from './lateralGeometry';
 import { getOcclusalArt } from './occlusalGeometry';
 import { OCCLUSAL_SURFACE_NAMES, type OcclusalSurfaceName, type SideStrategy } from './anatomy.types';
 import type { ToothIdentity } from './toothIdentity';
-import { CROWN_MARGIN_PATH, IMPLANT_FIXTURE_PATH, IMPLANT_THREAD_PATH } from '../toothGeometry';
+import { getCrownMarginPath, getImplantArtwork } from './restorationGeometry';
 import type { Dentition } from '../toothGeometry';
 import { getLateralAspect, getLateralCrownBBox, getLateralViewBox } from './lateralBounds';
 import { getOcclusalCrop } from './occlusalBounds';
@@ -230,6 +230,13 @@ const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width,
   const transform = lateralTransform(identity, art.sideStrategy);
   const viewBox = useMemo(() => getLateralViewBox(identity, art), [identity, art]);
   const crownBBox = useMemo(() => getLateralCrownBBox(identity, art), [identity, art]);
+  // Restoration artwork is DERIVED from this tooth's own cervical line rather
+  // than shared as one fixed path. R3 moved every CEJ (they now span y = 23.0
+  // to y = 36.0, per tooth), which left the old literal-coordinate fixture
+  // floating in the gap above a detached crown and put the crown margin off
+  // the tooth entirely on short-crowned molars. See restorationGeometry.ts.
+  const implant = useMemo(() => getImplantArtwork(identity, art), [identity, art]);
+  const crownMargin = useMemo(() => getCrownMarginPath(identity, art), [identity, art]);
   // Globally unique per mounted SVG (not per fdi) — safe with 52 glyphs x 2
   // views on one page, and safe across multiple Odontogram instances, unlike
   // an id built from `fdi` which repeats across separate chart instances.
@@ -313,13 +320,19 @@ const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width,
             {isImplant ? (
               <>
                 <path
-                  d={IMPLANT_FIXTURE_PATH}
+                  d={implant.body}
                   className="fill-purple-200 stroke-purple-600 dark:fill-purple-500/40 dark:stroke-purple-300"
                   strokeWidth={1.6}
                   strokeLinejoin="round"
                 />
                 <path
-                  d={IMPLANT_THREAD_PATH}
+                  d={implant.collar}
+                  className="fill-purple-300 stroke-purple-600 dark:fill-purple-500/60 dark:stroke-purple-300"
+                  strokeWidth={1.4}
+                  strokeLinejoin="round"
+                />
+                <path
+                  d={implant.threads}
                   className="stroke-purple-600 opacity-70 dark:stroke-purple-200"
                   strokeWidth={1.1}
                   strokeLinecap="round"
@@ -377,7 +390,7 @@ const LateralView: React.FC<LateralViewProps> = ({ fdi, identity, status, width,
 
             {status === 'crown' && (
               <path
-                d={CROWN_MARGIN_PATH}
+                d={crownMargin}
                 className="stroke-indigo-600 dark:stroke-indigo-200"
                 strokeWidth={1.6}
                 strokeLinecap="round"
