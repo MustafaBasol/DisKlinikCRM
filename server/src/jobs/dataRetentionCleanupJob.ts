@@ -9,6 +9,9 @@
  *   - Never deletes AuditLog rows (immutable compliance trail).
  *   - Never deletes ActivityLog rows (FK-linked operational history).
  *   - Never deletes pending or in-progress ContactRequest rows.
+ *   - Never deletes pending or claimed OutboxEvent rows (undelivered
+ *     obligations), nor in_progress/ambiguous OutboxConsumerExecution rows
+ *     (the duplicate-side-effect protection) - see outbox/outboxRetention.ts.
  *   - Prefers anonymization over deletion for ContactRequest PII.
  *   - Never logs raw phone numbers, names, message text, or tokens.
  *   - Idempotent — safe to run multiple times.
@@ -28,6 +31,14 @@ import {
 import { getPlatformSetting } from '../services/platformSettings.js';
 import { withJobLock } from '../utils/jobLock.js';
 import { safeErrorFields } from '../utils/safeError.js';
+import {
+  countEligibleProcessedOutboxEvents,
+  deleteProcessedOutboxEventBatch,
+  countEligibleDeadOutboxEvents,
+  deleteDeadOutboxEventBatch,
+  countEligibleCompletedConsumerExecutions,
+  deleteCompletedConsumerExecutionBatch,
+} from '../outbox/outboxRetention.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,6 +52,12 @@ export type DataRetentionSummary = {
   redactedInboxEntries: number;
   deletedCommunicationConsentConflictBuckets: number;
   deletedMigrationPreservedSourceValues: number;
+  /** F5-2R — OutboxEvent rows in `processed`. Never `pending` or `claimed`. */
+  deletedOutboxProcessedEvents: number;
+  /** F5-2R — OutboxEvent rows in `dead`, past the longer dead-letter window. */
+  deletedOutboxDeadEvents: number;
+  /** F5-2R — OutboxConsumerExecution rows in `completed` with no event left holding their key. */
+  deletedOutboxConsumerExecutions: number;
   skippedCategories: string[];
   errors: string[];
   dryRun: boolean;
@@ -66,6 +83,9 @@ export type DataRetentionDeps = {
   inboxEntries: DataRetentionCategoryDeps;
   communicationConsentConflictBuckets: DataRetentionCategoryDeps;
   migrationPreservedSourceValues: DataRetentionCategoryDeps;
+  outboxProcessedEvents: DataRetentionCategoryDeps;
+  outboxDeadEvents: DataRetentionCategoryDeps;
+  outboxConsumerExecutions: DataRetentionCategoryDeps;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -283,6 +303,41 @@ function makeMigrationPreservedSourceValuesDeps(): DataRetentionCategoryDeps {
   };
 }
 
+/** F5-2R — outbox lifecycle categories.
+ *
+ *  Which rows are eligible is decided by outbox/outboxRetention.ts, next to the
+ *  dispatcher, lease and replay code whose semantics define it. This job keeps
+ *  what it already owns: batching, dry-run, the two kill switches and the shared
+ *  job lock. That split is deliberate — a future change to replay must be made
+ *  in sight of the retention rule it would break, not three directories away.
+ *
+ *  THREE CATEGORIES, NOT ONE, because `processed` and `dead` events have
+ *  genuinely different windows (a discharged obligation vs. a lost one that is
+ *  still replayable) and the runner takes exactly one threshold per category. */
+function makeOutboxProcessedEventsDeps(): DataRetentionCategoryDeps {
+  return {
+    countEligible: (threshold) => countEligibleProcessedOutboxEvents(threshold),
+    executeCleanupBatch: (threshold, batchSize) =>
+      deleteProcessedOutboxEventBatch(threshold, batchSize),
+  };
+}
+
+function makeOutboxDeadEventsDeps(): DataRetentionCategoryDeps {
+  return {
+    countEligible: (threshold) => countEligibleDeadOutboxEvents(threshold),
+    executeCleanupBatch: (threshold, batchSize) =>
+      deleteDeadOutboxEventBatch(threshold, batchSize),
+  };
+}
+
+function makeOutboxConsumerExecutionsDeps(): DataRetentionCategoryDeps {
+  return {
+    countEligible: (threshold) => countEligibleCompletedConsumerExecutions(threshold),
+    executeCleanupBatch: (threshold, batchSize) =>
+      deleteCompletedConsumerExecutionBatch(threshold, batchSize),
+  };
+}
+
 function makeInboxEntriesDeps(): DataRetentionCategoryDeps {
   return {
     countEligible: (threshold) =>
@@ -327,6 +382,9 @@ function defaultDeps(): DataRetentionDeps {
     inboxEntries: makeInboxEntriesDeps(),
     communicationConsentConflictBuckets: makeCommunicationConsentConflictBucketsDeps(),
     migrationPreservedSourceValues: makeMigrationPreservedSourceValuesDeps(),
+    outboxProcessedEvents: makeOutboxProcessedEventsDeps(),
+    outboxDeadEvents: makeOutboxDeadEventsDeps(),
+    outboxConsumerExecutions: makeOutboxConsumerExecutionsDeps(),
   };
 }
 
@@ -372,6 +430,9 @@ export async function runDataRetentionCleanup(
     redactedInboxEntries: 0,
     deletedCommunicationConsentConflictBuckets: 0,
     deletedMigrationPreservedSourceValues: 0,
+    deletedOutboxProcessedEvents: 0,
+    deletedOutboxDeadEvents: 0,
+    deletedOutboxConsumerExecutions: 0,
     skippedCategories: [],
     errors: [],
     dryRun,
@@ -460,6 +521,48 @@ export async function runDataRetentionCleanup(
     summary,
   );
 
+  // ── F5-2R: outbox lifecycle ─────────────────────────────────────────────────
+  //
+  // THE ORDER OF THESE THREE IS PART OF THE SAFETY ARGUMENT, not cosmetic.
+  //
+  // Events are swept BEFORE the consumer-execution ledger, so that within a
+  // single run every event that is going to disappear has already disappeared
+  // by the time the ledger category asks "is any event still holding this
+  // key?". Reversing them would not corrupt anything — the per-batch guard in
+  // outboxRetention.ts refuses on the same condition either way — but it would
+  // make the ledger lag a full day behind for no reason.
+  //
+  // Processed before dead is likewise deliberate: processed rows are the bulk
+  // of the table and the cheapest to remove, so a batch-limited run spends its
+  // budget on them first and leaves the small, guarded dead-letter set for a
+  // run with headroom.
+  summary.deletedOutboxProcessedEvents = await runCategory(
+    'outboxProcessedEvents',
+    daysAgo(config.outboxProcessedEventDays),
+    config,
+    resolved.outboxProcessedEvents,
+    dryRun,
+    summary,
+  );
+
+  summary.deletedOutboxDeadEvents = await runCategory(
+    'outboxDeadEvents',
+    daysAgo(config.outboxDeadEventDays),
+    config,
+    resolved.outboxDeadEvents,
+    dryRun,
+    summary,
+  );
+
+  summary.deletedOutboxConsumerExecutions = await runCategory(
+    'outboxConsumerExecutions',
+    daysAgo(config.outboxConsumerExecutionDays),
+    config,
+    resolved.outboxConsumerExecutions,
+    dryRun,
+    summary,
+  );
+
   console.log(
     `[data-retention] Complete dryRun=${dryRun}` +
     ` messages=${summary.deletedConversationMessages}` +
@@ -471,6 +574,12 @@ export async function runDataRetentionCleanup(
     ` inboxEntries=${summary.redactedInboxEntries}` +
     ` consentConflictBuckets=${summary.deletedCommunicationConsentConflictBuckets}` +
     ` migrationPreservedSourceValues=${summary.deletedMigrationPreservedSourceValues}` +
+    // Counts only. An idempotencyKey is a contract-derived identifier and a
+    // payload is never read by this job at all, so there is nothing here that
+    // could carry patient content into a log line.
+    ` outboxProcessedEvents=${summary.deletedOutboxProcessedEvents}` +
+    ` outboxDeadEvents=${summary.deletedOutboxDeadEvents}` +
+    ` outboxConsumerExecutions=${summary.deletedOutboxConsumerExecutions}` +
     (summary.errors.length ? ` errors=${summary.errors.length}` : ''),
   );
 

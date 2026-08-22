@@ -86,6 +86,7 @@ export interface RawSqlAuditEntry {
  */
 export type RawSqlRegistryKey =
   | 'outbox/outboxDispatcher'
+  | 'outbox/outboxRetention'
   | 'routes/imaging'
   | 'routes/inventory'
   | 'routes/reports'
@@ -95,6 +96,7 @@ export type RawSqlRegistryKey =
 
 export const RAW_SQL_REGISTRY_KEYS: readonly RawSqlRegistryKey[] = Object.freeze([
   'outbox/outboxDispatcher',
+  'outbox/outboxRetention',
   'routes/imaging',
   'routes/inventory',
   'routes/reports',
@@ -137,6 +139,30 @@ export const RAW_SQL_AUDIT_REGISTRY: readonly RawSqlAuditEntry[] = Object.freeze
           'is established per row, from the row\'s own server-written organizationId/clinicId, ' +
           'before any consumer runs. Executed inside runWithAuditedRawSql({ registryKey: ' +
           '"outbox/outboxDispatcher" }).',
+      },
+    ],
+  },
+  {
+    file: 'server/src/outbox/outboxRetention.ts',
+    sites: [
+      {
+        classification: 'SYSTEM_ONLY',
+        count: 2,
+        justification:
+          'The two F5-2R guarded retention deletes: `DELETE FROM "OutboxEvent" ... NOT EXISTS ' +
+          '(ambiguous execution) AND NOT EXISTS (in-flight replay child)` and `DELETE FROM ' +
+          '"OutboxConsumerExecution" ... NOT EXISTS (event that can still act)`. Raw because Prisma ' +
+          'cannot express a correlated NOT EXISTS: these tables meet on a business idempotencyKey ' +
+          'and on a self-referential causationId, neither of which is a declared relation, and ' +
+          'evaluating the protection from a loaded JS array instead of in the database is the exact ' +
+          'select/delete race these statements exist to close. Both carry NO tenant predicate BY ' +
+          'DESIGN — a retention sweep that could see one organization could not clean the table, and ' +
+          'an idempotency key is pinned by an event in ANY organization holding it. Reachable only ' +
+          'from jobs/dataRetentionCleanupJob.ts under the shared job lock (whose callback runs as ' +
+          'system) and from the platform-admin manual-run route; neither is tenant execution. Each ' +
+          'returns an affected-row count and no rows, so no payload or business key ever leaves the ' +
+          'database. All values, including the candidate id array, are parameterized. Executed ' +
+          'inside runWithAuditedRawSql({ registryKey: "outbox/outboxRetention" }).',
       },
     ],
   },

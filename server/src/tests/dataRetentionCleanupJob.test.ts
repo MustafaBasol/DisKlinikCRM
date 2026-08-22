@@ -65,7 +65,22 @@ import {
   DATA_RETENTION_MIN_DAYS,
   DATA_RETENTION_MAX_BATCH_SIZE,
   DATA_RETENTION_DEFAULTS,
+  deriveOutboxConsumerExecutionDays,
 } from '../services/privacy/dataRetentionPolicy.js';
+
+// F5-2R — the outbox lifecycle rules live with the outbox, not with the job.
+import {
+  buildProcessedEventRetentionWhere,
+  buildDeadEventRetentionWhere,
+  buildCompletedExecutionRetentionWhere,
+  OUTBOX_RETENTION_GUARD_SET_LIMIT,
+  OutboxRetentionGuardLimitError,
+} from '../outbox/outboxRetention.js';
+
+import {
+  RAW_SQL_AUDIT_REGISTRY,
+  RAW_SQL_REGISTRY_KEYS,
+} from '../tenancy/rawSqlAuditRegistry.js';
 
 import {
   runDataRetentionCleanup,
@@ -599,6 +614,9 @@ await test('all categories fail: summary has errors but does not throw', async (
     inboxEntries: failingDeps('f'),
     communicationConsentConflictBuckets: failingDeps('g'),
     migrationPreservedSourceValues: failingDeps('i'),
+    outboxProcessedEvents: failingDeps('j'),
+    outboxDeadEvents: failingDeps('k'),
+    outboxConsumerExecutions: failingDeps('l'),
   };
 
   let threw = false;
@@ -610,7 +628,7 @@ await test('all categories fail: summary has errors but does not throw', async (
   }
   assert.equal(threw, false, 'runDataRetentionCleanup must not throw even if all categories fail');
   assert.ok(summary, 'summary should be returned');
-  assert.ok((summary?.errors?.length ?? 0) >= 9, 'should have collected all 9 errors');
+  assert.ok((summary?.errors?.length ?? 0) >= 12, 'should have collected all 12 errors');
 });
 
 // ── Section L: Log safety ─────────────────────────────────────────────────────
@@ -802,6 +820,629 @@ await test('batchSize from config is passed to executeCleanupBatch', async () =>
   );
 
   assert.equal(msgDeps.executeCalls[0]?.batchSize, 42);
+});
+
+
+// ── Section P: F5-2R — outbox retention policy ───────────────────────────────
+//
+// The DB-free half of F5-2R. Everything here is a property of the POLICY and of
+// the WHERE predicates: which statuses can appear in a sweep at all, how the
+// windows relate to one another, and that a dry run cannot mutate. The
+// behaviour only a real database can prove — that a live lease survives a
+// sweep, that a guarded delete actually leaves the guarded row in place — is in
+// src/tests/dbVerification/outboxRetention.test.ts and is deliberately not
+// faked here.
+
+section('P. F5-2R — outbox retention policy defaults and derivation');
+
+await test('default outboxProcessedEventDays is 180 (matches the operational-event family)', () => {
+  const cfg = withEnv({ DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS: undefined }, () =>
+    loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(cfg.outboxProcessedEventDays, 180);
+});
+
+await test('default outboxDeadEventDays is 365 and is LONGER than the processed window', () => {
+  const cfg = withEnv({
+    DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS: undefined,
+    DATA_RETENTION_OUTBOX_DEAD_EVENT_DAYS: undefined,
+  }, () => loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(cfg.outboxDeadEventDays, 365);
+  assert.ok(
+    cfg.outboxDeadEventDays > cfg.outboxProcessedEventDays,
+    'a lost obligation must be retained longer than a discharged one',
+  );
+});
+
+await test('env override: outboxProcessedEventDays', () => {
+  const cfg = withEnv({ DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS: '240' }, () =>
+    loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(cfg.outboxProcessedEventDays, 240);
+});
+
+await test('env override: outboxDeadEventDays', () => {
+  const cfg = withEnv({ DATA_RETENTION_OUTBOX_DEAD_EVENT_DAYS: '730' }, () =>
+    loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(cfg.outboxDeadEventDays, 730);
+});
+
+await test('below-minimum outbox windows fall back to their defaults, never to the raw value', () => {
+  const cfg = withEnv({
+    DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS: '1',
+    DATA_RETENTION_OUTBOX_DEAD_EVENT_DAYS: '7',
+  }, () => loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(cfg.outboxProcessedEventDays, 180);
+  assert.equal(cfg.outboxDeadEventDays, 365);
+  assert.equal(DATA_RETENTION_MIN_DAYS, 30, 'minimum is the shared 30-day floor');
+});
+
+await test('non-numeric outbox windows fall back to their defaults', () => {
+  const cfg = withEnv({
+    DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS: 'forever',
+    DATA_RETENTION_OUTBOX_DEAD_EVENT_DAYS: '',
+  }, () => loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(cfg.outboxProcessedEventDays, 180);
+  assert.equal(cfg.outboxDeadEventDays, 365);
+});
+
+await test('THE INVARIANT: consumer-execution retention is never shorter than any event window', () => {
+  const cases: Array<[number, number]> = [
+    [180, 365], [365, 180], [30, 30], [900, 45], [45, 900],
+  ];
+  for (const [processed, dead] of cases) {
+    const derived = deriveOutboxConsumerExecutionDays(processed, dead);
+    assert.ok(
+      derived >= processed && derived >= dead,
+      `derived ${derived} must cover both ${processed} and ${dead}`,
+    );
+  }
+});
+
+await test('the derived window tracks env overrides in both directions', () => {
+  const raised = withEnv({ DATA_RETENTION_OUTBOX_DEAD_EVENT_DAYS: '1000' }, () =>
+    loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(raised.outboxConsumerExecutionDays, 1000);
+
+  const processedWins = withEnv({ DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS: '2000' }, () =>
+    loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(processedWins.outboxConsumerExecutionDays, 2000);
+});
+
+await test('there is NO environment variable that can shorten the consumer-execution window', () => {
+  // The whole point of deriving it: an operator cannot create the state in
+  // which an event outlives its own duplicate-suppression record.
+  const attempted = withEnv({
+    DATA_RETENTION_OUTBOX_CONSUMER_EXECUTION_DAYS: '30',
+    DATA_RETENTION_OUTBOX_CONSUMER_EXECUTION_RETENTION_DAYS: '30',
+    OUTBOX_CONSUMER_EXECUTION_RETENTION_DAYS: '30',
+  }, () => loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(attempted.outboxConsumerExecutionDays, 365);
+});
+
+await test('DATA_RETENTION_DEFAULTS exports the outbox windows', () => {
+  assert.equal(DATA_RETENTION_DEFAULTS.outboxProcessedEventDays, 180);
+  assert.equal(DATA_RETENTION_DEFAULTS.outboxDeadEventDays, 365);
+});
+
+await test('no outbox default is short enough to delete data on a first production deploy', () => {
+  // The tables are new and empty. A window of 180 days means nothing written
+  // after the migration is deletable for six months, which is what makes the
+  // rollout sequence safe to run without first proving the sweep.
+  const cfg = loadDataRetentionConfig();
+  for (const days of [cfg.outboxProcessedEventDays, cfg.outboxDeadEventDays, cfg.outboxConsumerExecutionDays]) {
+    assert.ok(days >= 180, `outbox retention window ${days} is far too aggressive for a first deploy`);
+  }
+});
+
+section('P2. F5-2R — protected states are unrepresentable in a sweep predicate');
+
+await test('the processed-event predicate pins status to `processed` and ages on processedAt', () => {
+  const threshold = new Date('2026-01-01T00:00:00.000Z');
+  const where = buildProcessedEventRetentionWhere(threshold);
+  assert.equal(where.status, 'processed');
+  assert.deepEqual(where.processedAt, { not: null, lt: threshold });
+  // createdAt is NOT the ageing column: an event published long ago and
+  // delivered yesterday is fresh evidence of a recent delivery.
+  assert.equal((where as Record<string, unknown>).createdAt, undefined);
+});
+
+await test('the dead-event predicate pins status to `dead` and ages on deadLetteredAt', () => {
+  const threshold = new Date('2026-01-01T00:00:00.000Z');
+  const where = buildDeadEventRetentionWhere(threshold, {
+    liveReplayParentIds: [],
+    ambiguousIdempotencyKeys: [],
+  });
+  assert.equal(where.status, 'dead');
+  assert.deepEqual(where.deadLetteredAt, { not: null, lt: threshold });
+});
+
+await test('the execution predicate pins status to `completed` and ages on completedAt', () => {
+  const threshold = new Date('2026-01-01T00:00:00.000Z');
+  const where = buildCompletedExecutionRetentionWhere(threshold, {
+    idempotencyKeysStillHeldByEvents: [],
+  });
+  assert.equal(where.status, 'completed');
+  assert.deepEqual(where.completedAt, { not: null, lt: threshold });
+});
+
+await test('NO sweep predicate can ever select a pending, claimed, in_progress or ambiguous row', () => {
+  const threshold = new Date('2026-01-01T00:00:00.000Z');
+  const predicates: Array<Record<string, unknown>> = [
+    buildProcessedEventRetentionWhere(threshold) as Record<string, unknown>,
+    buildDeadEventRetentionWhere(threshold, {
+      liveReplayParentIds: ['a'],
+      ambiguousIdempotencyKeys: ['k'],
+    }) as Record<string, unknown>,
+    buildCompletedExecutionRetentionWhere(threshold, {
+      idempotencyKeysStillHeldByEvents: ['k'],
+    }) as Record<string, unknown>,
+  ];
+  const terminal = new Set(['processed', 'dead', 'completed']);
+  for (const where of predicates) {
+    // A literal string, not an `in`/`not` filter: a sweep may name exactly one
+    // status, and it must be a terminal one.
+    assert.equal(typeof where.status, 'string', 'status must be an exact literal, never a filter');
+    assert.ok(terminal.has(where.status as string), `refuses to sweep status=${String(where.status)}`);
+  }
+});
+
+await test('an in-flight replay parent is excluded from the dead-event predicate', () => {
+  const where = buildDeadEventRetentionWhere(new Date(), {
+    liveReplayParentIds: ['dead-1', 'dead-2'],
+    ambiguousIdempotencyKeys: [],
+  });
+  assert.deepEqual(where.id, { notIn: ['dead-1', 'dead-2'] });
+});
+
+await test('an unresolved ambiguity excludes its dead event from the predicate', () => {
+  const where = buildDeadEventRetentionWhere(new Date(), {
+    liveReplayParentIds: [],
+    ambiguousIdempotencyKeys: ['appointment-request-confirmation:appt-1'],
+  });
+  assert.deepEqual(where.idempotencyKey, { notIn: ['appointment-request-confirmation:appt-1'] });
+});
+
+await test('a key still held by a live event excludes its ledger row from the predicate', () => {
+  const where = buildCompletedExecutionRetentionWhere(new Date(), {
+    idempotencyKeysStillHeldByEvents: ['appointment-request-confirmation:appt-9'],
+  });
+  assert.deepEqual(where.idempotencyKey, { notIn: ['appointment-request-confirmation:appt-9'] });
+});
+
+await test('empty guard sets add no clause at all (never an empty NOT IN)', () => {
+  const dead = buildDeadEventRetentionWhere(new Date(), {
+    liveReplayParentIds: [],
+    ambiguousIdempotencyKeys: [],
+  }) as Record<string, unknown>;
+  assert.equal(dead.id, undefined);
+  assert.equal(dead.idempotencyKey, undefined);
+
+  const exec = buildCompletedExecutionRetentionWhere(new Date(), {
+    idempotencyKeysStillHeldByEvents: [],
+  }) as Record<string, unknown>;
+  assert.equal(exec.idempotencyKey, undefined);
+});
+
+await test('the guard-set ceiling is bounded and its breach is a stable code, not free text', () => {
+  assert.ok(Number.isInteger(OUTBOX_RETENTION_GUARD_SET_LIMIT));
+  assert.ok(OUTBOX_RETENTION_GUARD_SET_LIMIT > 0 && OUTBOX_RETENTION_GUARD_SET_LIMIT <= 100000);
+  const err = new OutboxRetentionGuardLimitError('events-that-can-still-act');
+  assert.equal(err.reason, 'GUARD_SET_LIMIT_EXCEEDED');
+  assert.equal(err.name, 'OutboxRetentionGuardLimitError');
+});
+
+section('P3. F5-2R — sweep behaviour inside the existing retention runner');
+
+function outboxDepsOnly(overrides: Partial<DataRetentionDeps>): Partial<DataRetentionDeps> {
+  return {
+    conversationMessages: zeroDeps(),
+    conversationStates: zeroDeps(),
+    operationalEvents: zeroDeps(),
+    inboundEvents: zeroDeps(),
+    externalCalendarInboundEvents: zeroDeps(),
+    contactRequests: zeroDeps(),
+    inboxEntries: zeroDeps(),
+    communicationConsentConflictBuckets: zeroDeps(),
+    migrationPreservedSourceValues: zeroDeps(),
+    outboxProcessedEvents: zeroDeps(),
+    outboxDeadEvents: zeroDeps(),
+    outboxConsumerExecutions: zeroDeps(),
+    ...overrides,
+  };
+}
+
+await test('each outbox category receives its OWN window as the threshold', async () => {
+  const processed = makeCategoryDeps(1);
+  const dead = makeCategoryDeps(1);
+  const executions = makeCategoryDeps(1);
+  const config = {
+    ...DEFAULT_TEST_CONFIG,
+    outboxProcessedEventDays: 180,
+    outboxDeadEventDays: 365,
+    outboxConsumerExecutionDays: 365,
+  };
+
+  await runDataRetentionCleanup({ dryRun: false, config }, outboxDepsOnly({
+    outboxProcessedEvents: processed,
+    outboxDeadEvents: dead,
+    outboxConsumerExecutions: executions,
+  }));
+
+  const ageDays = (d: Date) => Math.round((Date.now() - d.getTime()) / 86400000);
+  assert.equal(ageDays(processed.executeCalls[0]!.threshold), 180);
+  assert.equal(ageDays(dead.executeCalls[0]!.threshold), 365);
+  assert.equal(ageDays(executions.executeCalls[0]!.threshold), 365);
+});
+
+await test('DELETION ORDER: both event categories are swept before the ledger', async () => {
+  const order: string[] = [];
+  const record = (label: string): DataRetentionCategoryDeps => ({
+    countEligible: async () => 0,
+    executeCleanupBatch: async () => { order.push(label); return 0; },
+  });
+
+  await runDataRetentionCleanup(
+    { dryRun: false, config: DEFAULT_TEST_CONFIG },
+    outboxDepsOnly({
+      outboxProcessedEvents: record('processed'),
+      outboxDeadEvents: record('dead'),
+      outboxConsumerExecutions: record('executions'),
+    }),
+  );
+
+  assert.deepEqual(order, ['processed', 'dead', 'executions']);
+  assert.ok(
+    order.indexOf('executions') > order.indexOf('dead'),
+    'the ledger must be swept last, once the events that hold its keys have gone',
+  );
+});
+
+await test('DRY RUN performs zero mutations on every outbox category', async () => {
+  const summary = await runDataRetentionCleanup(
+    { dryRun: true, config: DEFAULT_TEST_CONFIG },
+    outboxDepsOnly({
+      // neverExecuteDeps throws if executeCleanupBatch is reached at all, and
+      // runCategory records a thrown error in the summary rather than
+      // rethrowing - so an empty errors array is the proof of zero mutation.
+      outboxProcessedEvents: neverExecuteDeps(41),
+      outboxDeadEvents: neverExecuteDeps(7),
+      outboxConsumerExecutions: neverExecuteDeps(13),
+    }),
+  );
+
+  assert.equal(summary.dryRun, true);
+  assert.equal(summary.errors.length, 0, 'a dry run that touched an executor would be recorded here');
+  assert.equal(summary.deletedOutboxProcessedEvents, 41);
+  assert.equal(summary.deletedOutboxDeadEvents, 7);
+  assert.equal(summary.deletedOutboxConsumerExecutions, 13);
+});
+
+await test('dry-run output is categorised counts and carries no row data', async () => {
+  const summary = await runDataRetentionCleanup(
+    { dryRun: true, config: DEFAULT_TEST_CONFIG },
+    outboxDepsOnly({
+      outboxProcessedEvents: neverExecuteDeps(3),
+      outboxDeadEvents: neverExecuteDeps(2),
+      outboxConsumerExecutions: neverExecuteDeps(1),
+    }),
+  );
+  for (const value of [
+    summary.deletedOutboxProcessedEvents,
+    summary.deletedOutboxDeadEvents,
+    summary.deletedOutboxConsumerExecutions,
+  ]) {
+    assert.equal(typeof value, 'number', 'the summary exposes counts only');
+  }
+  const serialised = JSON.stringify(summary);
+  assert.equal(serialised.includes('payload'), false, 'no payload key anywhere in the summary');
+  assert.equal(serialised.includes('idempotencyKey'), false, 'no business keys in the summary');
+});
+
+await test('BATCH LIMIT: the configured batch size is forwarded to every outbox category', async () => {
+  const processed = makeCategoryDeps(1);
+  const dead = makeCategoryDeps(1);
+  const executions = makeCategoryDeps(1);
+  const config = { ...DEFAULT_TEST_CONFIG, batchSize: 250 };
+
+  await runDataRetentionCleanup({ dryRun: false, config }, outboxDepsOnly({
+    outboxProcessedEvents: processed,
+    outboxDeadEvents: dead,
+    outboxConsumerExecutions: executions,
+  }));
+
+  assert.equal(processed.executeCalls[0]?.batchSize, 250);
+  assert.equal(dead.executeCalls[0]?.batchSize, 250);
+  assert.equal(executions.executeCalls[0]?.batchSize, 250);
+});
+
+await test('REPEAT RUN: a second sweep over a drained category is a no-op, not an error', async () => {
+  let remaining = 2;
+  const draining: DataRetentionCategoryDeps = {
+    countEligible: async () => remaining,
+    executeCleanupBatch: async () => { const n = remaining; remaining = 0; return n; },
+  };
+
+  const first = await runDataRetentionCleanup(
+    { dryRun: false, config: DEFAULT_TEST_CONFIG },
+    outboxDepsOnly({ outboxDeadEvents: draining }),
+  );
+  const second = await runDataRetentionCleanup(
+    { dryRun: false, config: DEFAULT_TEST_CONFIG },
+    outboxDepsOnly({ outboxDeadEvents: draining }),
+  );
+
+  assert.equal(first.deletedOutboxDeadEvents, 2);
+  assert.equal(second.deletedOutboxDeadEvents, 0);
+  assert.equal(second.errors.length, 0);
+});
+
+await test('a guard that fails closed skips ONLY its own category and is recorded', async () => {
+  const guardTripped: DataRetentionCategoryDeps = {
+    countEligible: async () => { throw new OutboxRetentionGuardLimitError('events-that-can-still-act'); },
+    executeCleanupBatch: async () => { throw new OutboxRetentionGuardLimitError('events-that-can-still-act'); },
+  };
+  const processed = makeCategoryDeps(5);
+
+  const summary = await runDataRetentionCleanup(
+    { dryRun: false, config: DEFAULT_TEST_CONFIG },
+    outboxDepsOnly({
+      outboxConsumerExecutions: guardTripped,
+      outboxProcessedEvents: processed,
+    }),
+  );
+
+  assert.equal(summary.deletedOutboxConsumerExecutions, 0, 'the guarded category deleted nothing');
+  assert.ok(summary.skippedCategories.includes('outboxConsumerExecutions'));
+  assert.equal(summary.deletedOutboxProcessedEvents, 5, 'unrelated categories still ran');
+});
+
+await test('an outbox category failure never aborts the rest of the sweep', async () => {
+  const later = makeCategoryDeps(4);
+  const summary = await runDataRetentionCleanup(
+    { dryRun: false, config: DEFAULT_TEST_CONFIG },
+    outboxDepsOnly({
+      outboxProcessedEvents: failingDeps('outboxProcessedEvents'),
+      outboxConsumerExecutions: later,
+    }),
+  );
+  assert.ok(summary.errors.some((e) => e.startsWith('outboxProcessedEvents:')));
+  assert.equal(summary.deletedOutboxConsumerExecutions, 4);
+});
+
+section('P4. F5-2R — kill switches still govern the outbox surfaces');
+
+await test('the env kill switch is not weakened by the new categories', () => {
+  const disabled = withEnv({ DATA_RETENTION_CLEANUP_ENABLED: 'false' }, () =>
+    loadDataRetentionConfig()) as ReturnType<typeof loadDataRetentionConfig>;
+  assert.equal(disabled.enabled, false);
+  // The windows are still LOADED when cleanup is off: the policy stays readable
+  // for the rollout's "is the outbox recognised?" check without cleanup running.
+  assert.equal(disabled.outboxProcessedEventDays, 180);
+  assert.equal(disabled.outboxDeadEventDays, 365);
+});
+
+await test('outbox rows are deletable only through the shared runner, so both kill switches cover them', async () => {
+  // There is no separate outbox scheduler and no separate entry point: the only
+  // way an outbox row is deleted is runDataRetentionCleanup, which
+  // startDataRetentionCleanupJob gates on config.enabled AND the runtime
+  // PlatformSetting, and which the platform-admin manual route gates on both
+  // again before a live run. This test pins the structural fact that makes that
+  // argument valid - a future "outboxRetentionJob.ts" would break it.
+  const fs = await import('node:fs/promises');
+  const jobSource = await fs.readFile(
+    new URL('../jobs/dataRetentionCleanupJob.ts', import.meta.url), 'utf8');
+
+  for (const category of ['outboxProcessedEvents', 'outboxDeadEvents', 'outboxConsumerExecutions']) {
+    assert.ok(jobSource.includes(`'${category}'`), `${category} is swept by the shared runner`);
+  }
+
+  const retentionSource = await fs.readFile(
+    new URL('../outbox/outboxRetention.ts', import.meta.url), 'utf8');
+  assert.equal(retentionSource.includes('node-cron'), false, 'the outbox retention module schedules nothing');
+  assert.equal(/\bcron\.schedule\b/.test(retentionSource), false, 'no second scheduler');
+  assert.equal(retentionSource.includes('withJobLock'), false, 'it does not take its own lock either');
+});
+
+section('P5. F5-2R — log and payload privacy');
+
+await test('the outbox retention module never reads, selects or logs a payload', async () => {
+  const fs = await import('node:fs/promises');
+  const src = await fs.readFile(new URL('../outbox/outboxRetention.ts', import.meta.url), 'utf8');
+  const code = src
+    .split('\n')
+    .filter((line) => {
+      const t = line.trimStart();
+      return !t.startsWith('*') && !t.startsWith('//') && !t.startsWith('/*');
+    })
+    .join('\n');
+
+  assert.equal(/payload\s*:/.test(code), false, 'no payload selected');
+  assert.equal(/console\.(log|error|warn|info)/.test(code), false, 'the module logs nothing at all');
+  for (const forbidden of ['phone', 'patientName', 'tcKimlik', 'rawPayload']) {
+    assert.equal(code.includes(forbidden), false, `must not reference ${forbidden}`);
+  }
+});
+
+await test('the job log line adds counts only for the outbox categories', async () => {
+  const fs = await import('node:fs/promises');
+  const src = await fs.readFile(
+    new URL('../jobs/dataRetentionCleanupJob.ts', import.meta.url), 'utf8');
+  for (const key of [
+    'outboxProcessedEvents=${summary.deletedOutboxProcessedEvents}',
+    'outboxDeadEvents=${summary.deletedOutboxDeadEvents}',
+    'outboxConsumerExecutions=${summary.deletedOutboxConsumerExecutions}',
+  ]) {
+    assert.ok(src.includes(key), `log line reports ${key} as a count`);
+  }
+  assert.equal(src.includes('${summary.payload'), false);
+});
+
+section('P6. F5-2R-R1 — the final delete re-checks in the DATABASE, never from a loaded array');
+
+// A select/delete race cannot be reproduced without a real database, so the
+// behavioural proof lives in src/tests/dbVerification/outboxRetention.test.ts
+// §H. What is provable here, DB-free and on every CI run, is the structural
+// property that makes that behaviour possible: the statement that actually
+// removes a row carries the protection itself, expressed against the live
+// tables, with every value bound as a parameter.
+
+async function readOutboxRetentionSource(): Promise<string> {
+  const fs = await import('node:fs/promises');
+  return fs.readFile(new URL('../outbox/outboxRetention.ts', import.meta.url), 'utf8');
+}
+
+/** The bodies of the `prisma.$executeRaw` tagged templates, in source order. */
+function rawStatements(src: string): string[] {
+  return [...src.matchAll(/\$executeRaw`([\s\S]*?)`/g)].map((m) => m[1]);
+}
+
+await test('there are exactly two guarded statements, one per cross-table protection', async () => {
+  const statements = rawStatements(await readOutboxRetentionSource());
+  assert.equal(statements.length, 2, 'the dead-event delete and the ledger delete — no more, no fewer');
+  assert.equal(statements.filter((s) => /DELETE FROM "OutboxEvent"/.test(s)).length, 1);
+  assert.equal(statements.filter((s) => /DELETE FROM "OutboxConsumerExecution"/.test(s)).length, 1);
+});
+
+await test('both guarded statements run inside the audited raw-SQL escape, under a registered key', async () => {
+  const src = await readOutboxRetentionSource();
+  assert.match(src, /import \{ runWithAuditedRawSql \} from '\.\.\/tenancy\/auditedRawSql\.js';/);
+  assert.equal(
+    (src.match(/registryKey: 'outbox\/outboxRetention'/g) ?? []).length,
+    2,
+    'each guarded statement declares its own registry key and justification',
+  );
+  assert.ok(
+    RAW_SQL_REGISTRY_KEYS.includes('outbox/outboxRetention'),
+    'the escape key must exist in the reviewed registry, or the escape is unreviewed',
+  );
+});
+
+await test('the raw-SQL audit registry records the two statements as SYSTEM_ONLY', () => {
+  const entry = RAW_SQL_AUDIT_REGISTRY.find((e) => e.file === 'server/src/outbox/outboxRetention.ts');
+  assert.ok(entry, 'outboxRetention.ts has no raw-SQL audit entry');
+  assert.equal(entry!.sites.length, 1);
+  assert.equal(entry!.sites[0].classification, 'SYSTEM_ONLY');
+  assert.equal(entry!.sites[0].count, 2);
+  // The sweep is deliberately cross-tenant; the justification must say so
+  // rather than implying a tenant predicate nobody can find in the statement.
+  assert.match(entry!.sites[0].justification, /NO tenant predicate BY DESIGN/);
+});
+
+await test('EVERY interpolated value is a bound parameter — no SQL is ever composed from a string', async () => {
+  const statements = rawStatements(await readOutboxRetentionSource());
+  const composed: string[] = [];
+  for (const statement of statements) {
+    for (const match of statement.matchAll(/\$\{([^}]*)\}/g)) {
+      // A bare identifier becomes `$n` in the prepared statement. Anything else
+      // — a concatenation, a call, a member expression — would be pasted into
+      // the SQL text itself.
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(match[1].trim())) composed.push(match[1].trim());
+    }
+  }
+  assert.deepEqual(composed, [], 'these interpolations are not parameters');
+  const src = await readOutboxRetentionSource();
+  assert.equal(/\$(?:executeRawUnsafe|queryRawUnsafe)/.test(src), false, 'no unsafe raw variant');
+});
+
+await test('THE DEAD-EVENT DELETE re-derives both protections as correlated NOT EXISTS', async () => {
+  const statement = rawStatements(await readOutboxRetentionSource())
+    .find((s) => /DELETE FROM "OutboxEvent"/.test(s))!;
+
+  // Status and age come from the row being deleted, in the delete itself.
+  assert.match(statement, /e\."status" = 'dead'/);
+  assert.match(statement, /e\."deadLetteredAt" IS NOT NULL/);
+  assert.match(statement, /e\."deadLetteredAt" < \$\{threshold\}/);
+
+  assert.equal((statement.match(/NOT EXISTS/g) ?? []).length, 2, 'one per protection');
+
+  // An unresolved ambiguity, matched against the LIVE execution table.
+  assert.match(statement, /FROM "OutboxConsumerExecution" x/);
+  assert.match(statement, /x\."idempotencyKey" = e\."idempotencyKey"/);
+  assert.match(statement, /x\."status" = \$\{ambiguous\}/);
+
+  // An in-flight replay child, matched against the LIVE event table.
+  assert.match(statement, /c\."causationId" = e\."id"/);
+  assert.match(statement, /c\."status" = ANY\(\$\{inFlight\}::text\[\]\)/);
+
+  // The candidate list may narrow, and only narrow.
+  assert.match(statement, /e\."id" = ANY\(\$\{ids\}::text\[\]\)/);
+});
+
+await test('THE LEDGER DELETE re-derives "no event still holds this key" as a correlated NOT EXISTS', async () => {
+  const statement = rawStatements(await readOutboxRetentionSource())
+    .find((s) => /DELETE FROM "OutboxConsumerExecution"/.test(s))!;
+
+  assert.match(statement, /x\."status" = 'completed'/);
+  assert.match(statement, /x\."completedAt" IS NOT NULL/);
+  assert.match(statement, /x\."completedAt" < \$\{threshold\}/);
+  assert.equal((statement.match(/NOT EXISTS/g) ?? []).length, 1);
+  assert.match(statement, /FROM "OutboxEvent" e/);
+  assert.match(statement, /e\."idempotencyKey" = x\."idempotencyKey"/);
+  assert.match(statement, /e\."status" = ANY\(\$\{stillActing\}::text\[\]\)/);
+  assert.match(statement, /x\."id" = ANY\(\$\{ids\}::text\[\]\)/);
+});
+
+await test('the protected status sets in SQL come from the same frozen constants the guards use', async () => {
+  const src = await readOutboxRetentionSource();
+  // If these ever diverge, the guard set and the guarded delete would disagree
+  // about what "can still act" means — the delete would win, silently.
+  assert.match(src, /const stillActing = \[\.\.\.EVENT_STATUSES_THAT_CAN_STILL_ACT\];/);
+  assert.match(src, /const inFlight = \[\.\.\.REPLAY_CHILD_STATUSES_IN_FLIGHT\];/);
+  assert.match(src, /const ambiguous = EXECUTION_STATUS_AMBIGUOUS;/);
+  assert.match(
+    src,
+    /where: \{ status: \{ in: \[\.\.\.REPLAY_CHILD_STATUSES_IN_FLIGHT\] \}, causationId: \{ not: null \} \}/,
+  );
+  assert.match(src, /where: \{ status: EXECUTION_STATUS_AMBIGUOUS \}/);
+});
+
+await test('NO guarded delete takes its protection from a JS array', async () => {
+  const statements = rawStatements(await readOutboxRetentionSource());
+  for (const statement of statements) {
+    assert.equal(/notIn/.test(statement), false, 'a notIn inside the delete would be the stale snapshot again');
+  }
+  // The one remaining `deleteMany` is the processed-event category, whose whole
+  // predicate is columns of the row it deletes — there is no second table whose
+  // state could change underneath it.
+  const src = await readOutboxRetentionSource();
+  assert.equal(
+    (src.match(/prisma\.outboxEvent\.deleteMany/g) ?? []).length,
+    1,
+    'only the unguarded processed-event category may delete through Prisma',
+  );
+  assert.equal(
+    /prisma\.outboxConsumerExecution\.deleteMany/.test(src),
+    false,
+    'the ledger is the highest-consequence table here; it may only be deleted through the guarded statement',
+  );
+});
+
+await test('the test seam is a parameter, so production has no way to switch it on', async () => {
+  const retentionSrc = await readOutboxRetentionSource();
+  assert.match(retentionSrc, /export interface OutboxRetentionBatchHooks/);
+  assert.match(retentionSrc, /hooks\?: OutboxRetentionBatchHooks/);
+  // No module-level mutable state that a forgotten assignment could leave live.
+  assert.equal(/^let \w+Hooks/m.test(retentionSrc), false);
+
+  const fs = await import('node:fs/promises');
+  const jobSrc = await fs.readFile(new URL('../jobs/dataRetentionCleanupJob.ts', import.meta.url), 'utf8');
+  assert.equal(jobSrc.includes('afterCandidateSelection'), false, 'the job never passes a hook');
+  assert.equal(jobSrc.includes('OutboxRetentionBatchHooks'), false);
+  // The runner's own contract is two arguments, so the seam is unreachable from
+  // every production entry point that goes through it.
+  assert.match(jobSrc, /executeCleanupBatch: \(threshold: Date, batchSize: number\) => Promise<number>;/);
+});
+
+await test('a guarded delete still honours the batch bound it was given', async () => {
+  // The runner is what enforces this end to end; here it is enough to pin that
+  // the bound is still forwarded, unchanged, to the category function.
+  const deps = makeCategoryDeps(0);
+  const summary = await runDataRetentionCleanup(
+    { dryRun: false, config: { ...loadDataRetentionConfig(), batchSize: 7 } },
+    outboxDepsOnly({ outboxDeadEvents: deps, outboxConsumerExecutions: deps }),
+  );
+  assert.equal(summary.errors.length, 0);
+  assert.ok(deps.executeCalls.length >= 2);
+  for (const call of deps.executeCalls) assert.equal(call.batchSize, 7);
 });
 
 // ── Results ───────────────────────────────────────────────────────────────────

@@ -1,10 +1,12 @@
 # F6 — Outbox Operations Runbook
 
-**Status: NOT YET OPERATIONAL.** As of F5-2 the outbox exists in the repository with both flags **OFF**; nothing in this runbook has been exercised in production. This document is written now, with the mechanism, so that whoever turns the flags on is not writing it under pressure.
+**Status: NOT YET OPERATIONAL.** As of F5-2/F5-2R the outbox exists in the repository with both flags **OFF**; nothing in this runbook has been exercised in production. This document is written now, with the mechanism, so that whoever turns the flags on is not writing it under pressure.
+
+**F5-2R (2026-08-22)** closed the retention rollout blocker: both tables are now governed by the existing data-retention architecture (§13). The flags remain OFF and no production action has been taken.
 
 **Scope.** The F5-2 transactional outbox: `OutboxEvent`, `OutboxConsumerExecution`, the dispatcher, and the one registered contract (`appointment_request.confirmation_requested@1`). Messaging inbound/outbound reliability is a separate lane (F5-3) with its own runbook.
 
-Related: [`../evidence/F5-2_TRANSACTIONAL_OUTBOX_AND_EVENT_REGISTRY.md`](../evidence/F5-2_TRANSACTIONAL_OUTBOX_AND_EVENT_REGISTRY.md) · [`../phases/F6_QUEUE_OUTBOX_AND_RELIABILITY.md`](../phases/F6_QUEUE_OUTBOX_AND_RELIABILITY.md) · [`F3_FIRST_CUSTOMER_INCIDENT_RESPONSE.md`](F3_FIRST_CUSTOMER_INCIDENT_RESPONSE.md)
+Related: [`../evidence/F5-2_TRANSACTIONAL_OUTBOX_AND_EVENT_REGISTRY.md`](../evidence/F5-2_TRANSACTIONAL_OUTBOX_AND_EVENT_REGISTRY.md) · [`../evidence/F5-2R_OUTBOX_RETENTION_AND_ROLLOUT_READINESS.md`](../evidence/F5-2R_OUTBOX_RETENTION_AND_ROLLOUT_READINESS.md) · [`../phases/F6_QUEUE_OUTBOX_AND_RELIABILITY.md`](../phases/F6_QUEUE_OUTBOX_AND_RELIABILITY.md) · [`F3_FIRST_CUSTOMER_INCIDENT_RESPONSE.md`](F3_FIRST_CUSTOMER_INCIDENT_RESPONSE.md)
 
 ---
 
@@ -30,7 +32,8 @@ Related: [`../evidence/F5-2_TRANSACTIONAL_OUTBOX_AND_EVENT_REGISTRY.md`](../evid
 Order matters. Do not collapse these steps.
 
 1. **Deploy the migration.** `20260822120000_add_outbox_event_and_consumer_execution` is strictly additive; the previous application version ignores both tables. Safe to deploy ahead of the application.
-2. **Confirm retention is wired.** ⚠️ **BLOCKER as of F5-2.** `OutboxEvent` and `OutboxConsumerExecution` are new retention surfaces and are not yet in `dataRetentionCleanupJob`. Do not activate until they are.
+2. **Confirm retention is wired.** ✅ **Closed by F5-2R.** Both tables are governed by `dataRetentionCleanupJob` (§13). Verify with `GET /api/platform/privacy/data-retention/policy`: `outboxProcessedEventDays`, `outboxDeadEventDays` and `outboxConsumerExecutionDays` must all be present, and the third must be ≥ the first two. Optionally run a **dry run** and confirm the three `outbox*` counts come back as numbers — on a fresh deploy they are all `0`, because the tables are new and no row can be 180 days old.
+   **Confirm the kill switches still gate it**: with `privacy.dataRetention.runtimeEnabled` false, a manual live run must refuse. Retention being globally OFF is a perfectly acceptable state to activate the outbox in — the tables simply grow until it is turned on.
 3. **Deploy the application with both flags still OFF.** Verify normal traffic is unchanged; the dispatcher logs `OUTBOX_DISPATCH_ENABLED is not "true" — dispatcher not scheduled.`
 4. **`OUTBOX_DISPATCH_ENABLED=true`, restart.** The dispatcher now drains an *empty* table. Confirm it schedules (`[outbox-dispatcher] scheduled`) and that ticks are silent (a tick with nothing to do logs nothing, by design).
 5. **`OUTBOX_PRODUCER_ENABLED=true`, restart.** Convert one appointment request at a clinic with **no** external-calendar integration. Expect: one `OutboxEvent` row `pending` → `processed` within a minute, and one `OutboxConsumerExecution` row `completed`/`CONFIRMATION_SENT`.
@@ -163,10 +166,113 @@ On recovery, nothing special is needed. Published events are durable; claimed ev
 
 ---
 
+## 13. Retention — what ages out, and what never does (F5-2R)
+
+Both outbox tables are governed by the **existing** data-retention architecture: `jobs/dataRetentionCleanupJob.ts`, on its normal cron, behind both normal kill switches. There is no separate outbox cleanup job, no separate schedule and no separate switch — if data retention is off, outbox retention is off with it.
+
+Which rows are eligible is decided by `server/src/outbox/outboxRetention.ts`, next to the lease/replay code whose semantics define it.
+
+### The three categories
+
+| Category | Rows | Aged on | Default window | Env var |
+|---|---|---|---|---|
+| `outboxProcessedEvents` | `OutboxEvent` `status = 'processed'` | `processedAt` | **180 days** | `DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS` |
+| `outboxDeadEvents` | `OutboxEvent` `status = 'dead'` | `deadLetteredAt` | **365 days** | `DATA_RETENTION_OUTBOX_DEAD_EVENT_DAYS` |
+| `outboxConsumerExecutions` | `OutboxConsumerExecution` `status = 'completed'` | `completedAt` | **derived** = max of the two above | *(none — deliberately)* |
+
+Minimum for either env var is the shared 30-day floor; anything lower, or non-numeric, silently falls back to the default rather than being honoured.
+
+### What is NEVER eligible, at any age
+
+| Row | Why it is protected |
+|---|---|
+| `OutboxEvent` `pending` | An undelivered obligation. Age is not evidence of anything — a row can sit `pending` for weeks behind a provider outage and still be owed. |
+| `OutboxEvent` `claimed`, live lease | Work in flight. |
+| `OutboxEvent` `claimed`, **expired** lease | Also protected. An expired lease is not an abandoned row; it is the crash-recovery mechanism, and the dispatcher's next tick reclaims it. |
+| `OutboxConsumerExecution` `in_progress` | The marker is committed *before* the side effect. Deleting it lets a retry re-send. |
+| `OutboxConsumerExecution` `ambiguous` | An open operator question — "did the patient actually get this?" Deleting it answers the question by forgetting it, and un-blocks a replay that `outboxReplay.ts` was deliberately refusing. |
+| `OutboxEvent` `dead` whose idempotency key has an `ambiguous` ledger row | The dead row is the operator's only handle on that unresolved question. Protected past its window until a human resolves it. |
+| `OutboxEvent` `dead` with a `pending`/`claimed` replay descendant | The parent explains why the child exists, and `REPLAY_IN_FLIGHT` reads exactly that relationship. |
+| `OutboxConsumerExecution` `completed` whose key is still held by a `pending`, `claimed` or `dead` event | **The replay invariant.** See below. |
+
+### The replay invariant
+
+> There is no supported state in which an `OutboxEvent` still exists while its business idempotency record has already been deleted.
+
+This matters because `replayDeadOutboxEvent` refuses a replay with `ALREADY_APPLIED` by reading the **ledger**, not the event row — an event can be `dead` with the side effect already performed, which is exactly what `AMBIGUOUS_SIDE_EFFECT` means. A ledger row pruned ahead of its event would let a replay re-send a message the patient already received, and nothing would notice.
+
+It is enforced twice:
+
+1. **In policy** — the consumer-execution window is *derived* as `max(processed, dead)` and has no environment variable, so an operator cannot configure the unsafe relationship at all.
+2. **Per deletion** — a `completed` ledger row is only removed once no event in `pending`, `claimed` or `dead` carries its `idempotencyKey`. A `processed` event does *not* pin it: a processed event is not replayable (`NOT_TERMINAL`) and so cannot cause a second side effect.
+
+The sweep runs events first, ledger last, for the same reason.
+
+### Where the protection is checked (F5-2R-R1)
+
+The guarded categories — `dead` events and `completed` ledger rows — do **not** delete through Prisma. Each removes rows with a single PostgreSQL statement whose `WHERE` re-derives the status, the age threshold and every protection as a correlated `NOT EXISTS` against the live tables:
+
+```sql
+DELETE FROM "OutboxConsumerExecution" AS x
+WHERE x."id" = ANY($1::text[])          -- the batch bound
+  AND x."status" = 'completed'
+  AND x."completedAt" < $2
+  AND NOT EXISTS (
+    SELECT 1 FROM "OutboxEvent" e
+    WHERE e."idempotencyKey" = x."idempotencyKey"
+      AND e."status" = ANY($3::text[])   -- pending | claimed | dead
+  )
+```
+
+**What this means operationally.** A replay you issue, or an ambiguity that opens, **while the nightly sweep is running** still protects its rows. The bounded candidate list the sweep picked seconds earlier cannot override a protection that has since committed — the database re-checks it as the rows are removed. You do not need to time anything around the 03:00 cron, and you do not need to pause retention to replay.
+
+If a row is refused for this reason nothing is logged about it individually: the category simply reports a smaller count. That is normal, not an error, and the next run offers the row again once the protection resolves.
+
+Both statements run inside `runWithAuditedRawSql({ registryKey: 'outbox/outboxRetention' })` and are registered `SYSTEM_ONLY` in the raw-SQL tenant audit inventory.
+
+### Fail-closed guard ceiling
+
+The protection sets (undelivered backlog, dead-letter queue, open ambiguities) are each small in a healthy system. If any of them exceeds **10,000 rows**, that category **deletes nothing**, records itself in `skippedCategories` with `OutboxRetentionGuardLimitError` / `GUARD_SET_LIMIT_EXCEEDED`, and the next run retries. A DLQ that large is an incident, and the worst possible moment to prune idempotency evidence is during one. Nothing is lost by waiting.
+
+Since R1 this ceiling is an **incident circuit-breaker**, not the safety check — it decides whether the category runs at all. The per-row protection is enforced by the guarded statements above, so a category that passes the ceiling is not thereby trusting a stale snapshot.
+
+### Dry run
+
+`POST /api/platform/privacy/data-retention/run` with the dry-run option (platform admin) reports, per category:
+
+```
+outboxProcessedEvents=<n> outboxDeadEvents=<n> outboxConsumerExecutions=<n>
+```
+
+Counts only. The sweep never selects, returns or logs `payload`, and the summary carries no organization id, clinic id, appointment id or business key. A dry run performs **zero** mutations — a dry run that reached an executor at all would surface as an error in the summary.
+
+The dry-run count is produced by the **same predicate** the delete uses, guards included, so a guarded row is absent from the count as well as from the delete. An operator is never shown a number the sweep would not actually act on.
+
+### Batching
+
+Bounded by `DATA_RETENTION_BATCH_SIZE` (default 500, max 1000), the same knob every other category uses. Each batch selects ids under the limit and deletes by id with the full predicate re-applied, so a row that stops being eligible between the select and the delete is left alone. Partial progress is safe; a rerun resumes.
+
+### Verifying the policy is recognised, without shell access
+
+`GET /api/platform/privacy/data-retention/policy` (platform admin) now returns `outboxProcessedEventDays`, `outboxDeadEventDays` and `outboxConsumerExecutionDays`. Step 2 of §1 is satisfied when all three are present and the third is greater than or equal to the first two.
+
+### Rollback of retention itself
+
+Retention is not a deployment with a cutover. To stop it:
+
+- **Immediate, everything:** set the runtime toggle `privacy.dataRetention.runtimeEnabled` to false (platform admin, audited). Both the cron and the manual live-run route check it.
+- **Environment level:** `DATA_RETENTION_CLEANUP_ENABLED=false`, restart. The job does not schedule at all.
+- **Outbox only, keeping the rest of retention running:** raise `DATA_RETENTION_OUTBOX_PROCESSED_EVENT_DAYS` and `DATA_RETENTION_OUTBOX_DEAD_EVENT_DAYS` to a value beyond any existing row's age and restart. The derived ledger window follows automatically.
+
+There is nothing to un-delete: retention only ever removes rows that were, by construction, no longer able to do anything.
+
+---
+
 ## 12. Things that are NOT operator actions
 
 - **Editing `status`, `attemptCount`, `payload` or `eventVersion` by hand.** Every one of these defeats a guarantee. Use replay.
 - **Setting a dead event back to `pending`.** This is exactly what replay exists to replace: it destroys the failure record, is unaudited, and can duplicate an applied side effect.
 - **Deleting rows to clear a backlog.** Each row is an obligation someone is owed. Dead-letter and inspect instead.
+- **Deleting `OutboxConsumerExecution` rows to "unstick" a replay.** That row is the only thing preventing a duplicate patient message. To replay past an ambiguity, use `acknowledgeAmbiguousSideEffect` — which clears the marker under audit — after checking the provider (§7). Retention will never delete one on your behalf while any event still holds its key (§13).
 - **Dropping the tables during a rollback.** §2.
 - **Adding a Redis/BullMQ path "temporarily".** ADR-007 defers it pending a measured trigger; `tests/outboxContracts.test.ts` fails the build if an outbox runtime module imports `bullmq` or `ioredis`.

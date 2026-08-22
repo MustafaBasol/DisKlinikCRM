@@ -1508,6 +1508,17 @@ function buildPolicyResponse(
     operationalEventsDays: config.operationalEventsDays,
     inboundEventDays: config.inboundEventDays,
     resolvedContactRequestDays: config.resolvedContactRequestDays,
+    // F5-2R. Surfaced here because the F5-2 rollout sequence has an explicit
+    // "verify the retention policy recognises the outbox surfaces" step BEFORE
+    // either outbox flag is turned on, and an operator must be able to perform
+    // that check without shell access to the server. Counts and day windows
+    // only - no row data, no payloads.
+    outboxProcessedEventDays: config.outboxProcessedEventDays,
+    outboxDeadEventDays: config.outboxDeadEventDays,
+    // Derived, never configured (dataRetentionPolicy.ts
+    // deriveOutboxConsumerExecutionDays). Returned so the operator can SEE that
+    // it is >= both event windows rather than take it on trust.
+    outboxConsumerExecutionDays: config.outboxConsumerExecutionDays,
     batchSize: config.batchSize,
   };
 }
