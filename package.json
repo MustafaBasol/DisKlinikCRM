@@ -18,6 +18,7 @@
     "test:dental-chart-helpers": "tsx src/components/__tests__/dentalChartHelpers.test.ts",
     "test:dental-chart-dentition-i18n-parity": "tsx src/pages/__tests__/dentalChartDentitionI18nParity.test.ts",
     "test:odontogram-anatomy": "tsx src/components/odontogram/__tests__/odontogramAnatomy.test.ts",
+    "test:odontogram-proportions": "tsx src/components/odontogram/__tests__/odontogramProportions.test.ts",
     "assets:teeth": "tsx scripts/dental-assets/exportToothSvgs.ts",
     "assets:teeth:sheet": "tsx scripts/dental-assets/buildContactSheet.ts",
     "test:dental-assets": "tsx scripts/dental-assets/__tests__/toothSvgAssets.test.ts",

@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 6.3 64 79.2" width="64" height="79.2" data-tooth-fdi="21" data-view="lateral" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 3.5 64 83" width="64" height="83" data-tooth-fdi="21" data-view="lateral" role="img">
   <title>Tooth 21 — permanent (adult) upper left central incisor — lateral view</title>
   <desc>Standalone lateral (buccal/facial) anatomy for tooth 21 (permanent (adult), upper left central incisor), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
   <g transform="translate(0 88) scale(1 -1) translate(64 0) scale(-1 1)">
-    <path d="M26.5 34 C27.8 46 29.3 58.5 31 69.5 C31.3 70.4 31.7 70.4 32 69.5 C33.7 58.5 35.2 46 37.5 34 C35.5 32.3 28.5 32.3 26.5 34 Z" fill="#f0e6d2" stroke="#a1866a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-part="root" data-root-index="0"/>
-    <path d="M43 7 C40 5.3 36 5 33 6.3 C30 7.6 26 7.4 23 8.8 C20.3 10 18 12.5 17 16.5 C16.2 20 16.6 24 18 27.5 C19.2 30.5 20.3 32.5 22 34 L38 34.3 C40.3 32 41.8 28.5 42.6 24 C43.4 19.5 43.5 14.5 43.5 10.5 C43.5 9.2 43.3 8 43 7 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-part="crown"/>
-    <path d="M23 9.5 V16 M32 6.5 V14 M40 8 V15" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.55" stroke-linecap="round" data-part="surface"/>
-    <path d="M20 33.5 C25 35.8 36 35.8 41 32.5" fill="none" stroke="#b39a7c" stroke-width="1.1" stroke-opacity="0.75" stroke-linecap="round" data-part="cervical"/>
+    <path d="M23.3 32.5 C23.3 33.1 23.2 32.8 23.3 34.5 C23.4 36.4 23.2 43.9 23.9 47.6 C24.6 51.4 27.3 57.6 28.1 60.8 C28.8 63.5 29.2 68.1 29.6 69.5 C29.8 70.8 30.3 71.8 30.5 72.0 C30.8 71.8 31.3 71.8 31.6 72.0 C31.8 71.8 32.3 70.8 32.6 69.5 C32.9 68.1 33.1 63.5 34.0 60.8 C35.1 57.6 38.7 51.4 39.8 47.6 C40.9 43.9 41.7 36.4 42.0 34.5 C42.2 32.8 42.0 33.1 42.0 32.5 C39.9 32.3 25.4 32.3 23.3 32.5 Z" fill="#f0e6d2" stroke="#a1866a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-part="root" data-root-index="0"/>
+    <path d="M24.2 4.0 C27.8 4.3 36.9 4.3 40.4 4.0 C42.3 4.7 44.8 7.9 45.2 11.9 C45.5 16.0 43.0 25.4 42.6 28.2 C42.3 30.7 42.2 32.3 42.0 34.5 C39.6 35.3 25.7 35.1 23.3 34.5 C23.1 32.7 23.0 31.4 22.7 29.4 C22.3 26.8 20.3 20.4 20.6 16.2 C20.9 9.9 23.1 7.7 24.2 4.0 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-part="crown"/>
+    <path d="M27.5 6.5 V12.5 M32.5 5.5 V11.0 M37.5 6.5 V13.0" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.55" stroke-linecap="round" data-part="surface"/>
+    <path d="M23.3 33.7 C27.7 34.0 37.0 34.0 42.0 33.7" fill="none" stroke="#b39a7c" stroke-width="1.1" stroke-opacity="0.75" stroke-linecap="round" data-part="cervical"/>
   </g>
 </svg>

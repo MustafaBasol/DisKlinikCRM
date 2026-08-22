@@ -596,6 +596,18 @@ jobs:
           # orientation/view/toothFamily/surface/navigation/timeline strings.
           npm run test:odontogram-anatomy
           npm run test:dental-chart-orientation-i18n-parity
+          # DENTAL-CHART-ASSET-R3: the artwork registries were rewritten by
+          # several authors in parallel, so these two guard what a structural
+          # test cannot see. odontogram-proportions measures the flattened
+          # geometry against the published coordinate table in
+          # design/dental-chart/AUTHORING.md (scale agreement across all 52
+          # teeth, the cervical constriction, curve quality, root divergence);
+          # dental-assets checks the 104 exported SVGs still exist, cover every
+          # FDI, pair coherently left/right, and regenerate byte-for-byte from
+          # the live registries — that last one is the drift guard, and it fails
+          # with an instruction to run `npm run assets:teeth`.
+          npm run test:odontogram-proportions
+          npm run test:dental-assets
           npm run test:platform-migration-helpers
           # F3-DATA-MIG-TODAY-001-R11. Guards the frontend destination-group
           # whitelist against the backend catalog. It reads server contracts
