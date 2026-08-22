@@ -208,9 +208,33 @@ It is enforced twice:
 
 The sweep runs events first, ledger last, for the same reason.
 
+### Where the protection is checked (F5-2R-R1)
+
+The guarded categories — `dead` events and `completed` ledger rows — do **not** delete through Prisma. Each removes rows with a single PostgreSQL statement whose `WHERE` re-derives the status, the age threshold and every protection as a correlated `NOT EXISTS` against the live tables:
+
+```sql
+DELETE FROM "OutboxConsumerExecution" AS x
+WHERE x."id" = ANY($1::text[])          -- the batch bound
+  AND x."status" = 'completed'
+  AND x."completedAt" < $2
+  AND NOT EXISTS (
+    SELECT 1 FROM "OutboxEvent" e
+    WHERE e."idempotencyKey" = x."idempotencyKey"
+      AND e."status" = ANY($3::text[])   -- pending | claimed | dead
+  )
+```
+
+**What this means operationally.** A replay you issue, or an ambiguity that opens, **while the nightly sweep is running** still protects its rows. The bounded candidate list the sweep picked seconds earlier cannot override a protection that has since committed — the database re-checks it as the rows are removed. You do not need to time anything around the 03:00 cron, and you do not need to pause retention to replay.
+
+If a row is refused for this reason nothing is logged about it individually: the category simply reports a smaller count. That is normal, not an error, and the next run offers the row again once the protection resolves.
+
+Both statements run inside `runWithAuditedRawSql({ registryKey: 'outbox/outboxRetention' })` and are registered `SYSTEM_ONLY` in the raw-SQL tenant audit inventory.
+
 ### Fail-closed guard ceiling
 
 The protection sets (undelivered backlog, dead-letter queue, open ambiguities) are each small in a healthy system. If any of them exceeds **10,000 rows**, that category **deletes nothing**, records itself in `skippedCategories` with `OutboxRetentionGuardLimitError` / `GUARD_SET_LIMIT_EXCEEDED`, and the next run retries. A DLQ that large is an incident, and the worst possible moment to prune idempotency evidence is during one. Nothing is lost by waiting.
+
+Since R1 this ceiling is an **incident circuit-breaker**, not the safety check — it decides whether the category runs at all. The per-row protection is enforced by the guarded statements above, so a category that passes the ceiling is not thereby trusting a stale snapshot.
 
 ### Dry run
 

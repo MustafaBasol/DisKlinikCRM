@@ -78,6 +78,11 @@ import {
 } from '../outbox/outboxRetention.js';
 
 import {
+  RAW_SQL_AUDIT_REGISTRY,
+  RAW_SQL_REGISTRY_KEYS,
+} from '../tenancy/rawSqlAuditRegistry.js';
+
+import {
   runDataRetentionCleanup,
   type DataRetentionCategoryDeps,
   type DataRetentionDeps,
@@ -1269,6 +1274,175 @@ await test('the job log line adds counts only for the outbox categories', async 
     assert.ok(src.includes(key), `log line reports ${key} as a count`);
   }
   assert.equal(src.includes('${summary.payload'), false);
+});
+
+section('P6. F5-2R-R1 — the final delete re-checks in the DATABASE, never from a loaded array');
+
+// A select/delete race cannot be reproduced without a real database, so the
+// behavioural proof lives in src/tests/dbVerification/outboxRetention.test.ts
+// §H. What is provable here, DB-free and on every CI run, is the structural
+// property that makes that behaviour possible: the statement that actually
+// removes a row carries the protection itself, expressed against the live
+// tables, with every value bound as a parameter.
+
+async function readOutboxRetentionSource(): Promise<string> {
+  const fs = await import('node:fs/promises');
+  return fs.readFile(new URL('../outbox/outboxRetention.ts', import.meta.url), 'utf8');
+}
+
+/** The bodies of the `prisma.$executeRaw` tagged templates, in source order. */
+function rawStatements(src: string): string[] {
+  return [...src.matchAll(/\$executeRaw`([\s\S]*?)`/g)].map((m) => m[1]);
+}
+
+await test('there are exactly two guarded statements, one per cross-table protection', async () => {
+  const statements = rawStatements(await readOutboxRetentionSource());
+  assert.equal(statements.length, 2, 'the dead-event delete and the ledger delete — no more, no fewer');
+  assert.equal(statements.filter((s) => /DELETE FROM "OutboxEvent"/.test(s)).length, 1);
+  assert.equal(statements.filter((s) => /DELETE FROM "OutboxConsumerExecution"/.test(s)).length, 1);
+});
+
+await test('both guarded statements run inside the audited raw-SQL escape, under a registered key', async () => {
+  const src = await readOutboxRetentionSource();
+  assert.match(src, /import \{ runWithAuditedRawSql \} from '\.\.\/tenancy\/auditedRawSql\.js';/);
+  assert.equal(
+    (src.match(/registryKey: 'outbox\/outboxRetention'/g) ?? []).length,
+    2,
+    'each guarded statement declares its own registry key and justification',
+  );
+  assert.ok(
+    RAW_SQL_REGISTRY_KEYS.includes('outbox/outboxRetention'),
+    'the escape key must exist in the reviewed registry, or the escape is unreviewed',
+  );
+});
+
+await test('the raw-SQL audit registry records the two statements as SYSTEM_ONLY', () => {
+  const entry = RAW_SQL_AUDIT_REGISTRY.find((e) => e.file === 'server/src/outbox/outboxRetention.ts');
+  assert.ok(entry, 'outboxRetention.ts has no raw-SQL audit entry');
+  assert.equal(entry!.sites.length, 1);
+  assert.equal(entry!.sites[0].classification, 'SYSTEM_ONLY');
+  assert.equal(entry!.sites[0].count, 2);
+  // The sweep is deliberately cross-tenant; the justification must say so
+  // rather than implying a tenant predicate nobody can find in the statement.
+  assert.match(entry!.sites[0].justification, /NO tenant predicate BY DESIGN/);
+});
+
+await test('EVERY interpolated value is a bound parameter — no SQL is ever composed from a string', async () => {
+  const statements = rawStatements(await readOutboxRetentionSource());
+  const composed: string[] = [];
+  for (const statement of statements) {
+    for (const match of statement.matchAll(/\$\{([^}]*)\}/g)) {
+      // A bare identifier becomes `$n` in the prepared statement. Anything else
+      // — a concatenation, a call, a member expression — would be pasted into
+      // the SQL text itself.
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(match[1].trim())) composed.push(match[1].trim());
+    }
+  }
+  assert.deepEqual(composed, [], 'these interpolations are not parameters');
+  const src = await readOutboxRetentionSource();
+  assert.equal(/\$(?:executeRawUnsafe|queryRawUnsafe)/.test(src), false, 'no unsafe raw variant');
+});
+
+await test('THE DEAD-EVENT DELETE re-derives both protections as correlated NOT EXISTS', async () => {
+  const statement = rawStatements(await readOutboxRetentionSource())
+    .find((s) => /DELETE FROM "OutboxEvent"/.test(s))!;
+
+  // Status and age come from the row being deleted, in the delete itself.
+  assert.match(statement, /e\."status" = 'dead'/);
+  assert.match(statement, /e\."deadLetteredAt" IS NOT NULL/);
+  assert.match(statement, /e\."deadLetteredAt" < \$\{threshold\}/);
+
+  assert.equal((statement.match(/NOT EXISTS/g) ?? []).length, 2, 'one per protection');
+
+  // An unresolved ambiguity, matched against the LIVE execution table.
+  assert.match(statement, /FROM "OutboxConsumerExecution" x/);
+  assert.match(statement, /x\."idempotencyKey" = e\."idempotencyKey"/);
+  assert.match(statement, /x\."status" = \$\{ambiguous\}/);
+
+  // An in-flight replay child, matched against the LIVE event table.
+  assert.match(statement, /c\."causationId" = e\."id"/);
+  assert.match(statement, /c\."status" = ANY\(\$\{inFlight\}::text\[\]\)/);
+
+  // The candidate list may narrow, and only narrow.
+  assert.match(statement, /e\."id" = ANY\(\$\{ids\}::text\[\]\)/);
+});
+
+await test('THE LEDGER DELETE re-derives "no event still holds this key" as a correlated NOT EXISTS', async () => {
+  const statement = rawStatements(await readOutboxRetentionSource())
+    .find((s) => /DELETE FROM "OutboxConsumerExecution"/.test(s))!;
+
+  assert.match(statement, /x\."status" = 'completed'/);
+  assert.match(statement, /x\."completedAt" IS NOT NULL/);
+  assert.match(statement, /x\."completedAt" < \$\{threshold\}/);
+  assert.equal((statement.match(/NOT EXISTS/g) ?? []).length, 1);
+  assert.match(statement, /FROM "OutboxEvent" e/);
+  assert.match(statement, /e\."idempotencyKey" = x\."idempotencyKey"/);
+  assert.match(statement, /e\."status" = ANY\(\$\{stillActing\}::text\[\]\)/);
+  assert.match(statement, /x\."id" = ANY\(\$\{ids\}::text\[\]\)/);
+});
+
+await test('the protected status sets in SQL come from the same frozen constants the guards use', async () => {
+  const src = await readOutboxRetentionSource();
+  // If these ever diverge, the guard set and the guarded delete would disagree
+  // about what "can still act" means — the delete would win, silently.
+  assert.match(src, /const stillActing = \[\.\.\.EVENT_STATUSES_THAT_CAN_STILL_ACT\];/);
+  assert.match(src, /const inFlight = \[\.\.\.REPLAY_CHILD_STATUSES_IN_FLIGHT\];/);
+  assert.match(src, /const ambiguous = EXECUTION_STATUS_AMBIGUOUS;/);
+  assert.match(
+    src,
+    /where: \{ status: \{ in: \[\.\.\.REPLAY_CHILD_STATUSES_IN_FLIGHT\] \}, causationId: \{ not: null \} \}/,
+  );
+  assert.match(src, /where: \{ status: EXECUTION_STATUS_AMBIGUOUS \}/);
+});
+
+await test('NO guarded delete takes its protection from a JS array', async () => {
+  const statements = rawStatements(await readOutboxRetentionSource());
+  for (const statement of statements) {
+    assert.equal(/notIn/.test(statement), false, 'a notIn inside the delete would be the stale snapshot again');
+  }
+  // The one remaining `deleteMany` is the processed-event category, whose whole
+  // predicate is columns of the row it deletes — there is no second table whose
+  // state could change underneath it.
+  const src = await readOutboxRetentionSource();
+  assert.equal(
+    (src.match(/prisma\.outboxEvent\.deleteMany/g) ?? []).length,
+    1,
+    'only the unguarded processed-event category may delete through Prisma',
+  );
+  assert.equal(
+    /prisma\.outboxConsumerExecution\.deleteMany/.test(src),
+    false,
+    'the ledger is the highest-consequence table here; it may only be deleted through the guarded statement',
+  );
+});
+
+await test('the test seam is a parameter, so production has no way to switch it on', async () => {
+  const retentionSrc = await readOutboxRetentionSource();
+  assert.match(retentionSrc, /export interface OutboxRetentionBatchHooks/);
+  assert.match(retentionSrc, /hooks\?: OutboxRetentionBatchHooks/);
+  // No module-level mutable state that a forgotten assignment could leave live.
+  assert.equal(/^let \w+Hooks/m.test(retentionSrc), false);
+
+  const fs = await import('node:fs/promises');
+  const jobSrc = await fs.readFile(new URL('../jobs/dataRetentionCleanupJob.ts', import.meta.url), 'utf8');
+  assert.equal(jobSrc.includes('afterCandidateSelection'), false, 'the job never passes a hook');
+  assert.equal(jobSrc.includes('OutboxRetentionBatchHooks'), false);
+  // The runner's own contract is two arguments, so the seam is unreachable from
+  // every production entry point that goes through it.
+  assert.match(jobSrc, /executeCleanupBatch: \(threshold: Date, batchSize: number\) => Promise<number>;/);
+});
+
+await test('a guarded delete still honours the batch bound it was given', async () => {
+  // The runner is what enforces this end to end; here it is enough to pin that
+  // the bound is still forwarded, unchanged, to the category function.
+  const deps = makeCategoryDeps(0);
+  const summary = await runDataRetentionCleanup(
+    { dryRun: false, config: { ...loadDataRetentionConfig(), batchSize: 7 } },
+    outboxDepsOnly({ outboxDeadEvents: deps, outboxConsumerExecutions: deps }),
+  );
+  assert.equal(summary.errors.length, 0);
+  assert.ok(deps.executeCalls.length >= 2);
+  for (const call of deps.executeCalls) assert.equal(call.batchSize, 7);
 });
 
 // ── Results ───────────────────────────────────────────────────────────────────

@@ -4,9 +4,11 @@
 **Baseline:** `origin/main` @ `70ba73e0b2d3cc0b92462c281acba4619ad0d634` (PR #481 merge), fetched and verified at task start. Both required merges confirmed as ancestors: `11956cf` (PR #480 — F5-2) and `70ba73e` (PR #481 — F5-3).
 **Branch:** `feature/f5-2r-outbox-retention-rollout-readiness`, cut from fresh `origin/main` — **not** stacked on anything.
 
-**59 new tests · 59 PASS · 0 FAIL** — 32 DB-free contract tests appended to the existing retention suite, and 27 against a real disposable PostgreSQL 16 — plus server typecheck, frontend typecheck/build, the log-privacy guard, the architecture guardrail, and eight existing suites re-run.
+**80 new tests · 80 PASS · 0 FAIL** — 42 DB-free contract tests appended to the existing retention suite, and 38 against a real disposable PostgreSQL 16 — plus server typecheck, frontend typecheck/build, the log-privacy guard, the architecture guardrail, and eight existing suites re-run.
 
 **No production system was contacted. Nothing is merged, deployed, migrated in production, or activated.** No schema migration was created. Both outbox flags remain default OFF and untouched.
+
+> **R1 (review revision).** Review found the original select/delete guard did not actually close the race it claimed to close: it re-applied a predicate built from a guard set loaded into JavaScript *before* the select, so a protection that appeared mid-sweep was invisible to the delete. The final delete is now a guarded PostgreSQL statement that re-derives every protection as a correlated `NOT EXISTS` against the live tables, in the same statement that removes the rows. **§7a** records the defect, the fix, and its proof; **§6**, **§7** and **§8** are corrected accordingly, and the sections they replace are left visible rather than quietly rewritten.
 
 ---
 
@@ -29,11 +31,12 @@ That is the whole scope of F5-2R. **No F5-2 architecture was reopened**: the Pos
 | Area | Module | Change |
 |---|---|---|
 | Retention windows + the derived invariant | `services/privacy/dataRetentionPolicy.ts` | two env vars, one derived value, documentation |
-| Outbox lifecycle eligibility rules | `outbox/outboxRetention.ts` | **new** |
+| Outbox lifecycle eligibility rules | `outbox/outboxRetention.ts` | **new**; R1 added the two guarded deletes (§7a) |
 | Sweep execution | `jobs/dataRetentionCleanupJob.ts` | three categories added to the existing runner |
 | Operator verification surface | `routes/platformAdmin.ts` | three fields added to the policy response |
-| Contract tests | `tests/dataRetentionCleanupJob.test.ts` | +32 |
-| Real-database tests | `tests/dbVerification/outboxRetention.test.ts` | **new**, 27 |
+| Raw-SQL tenant audit inventory | `tenancy/rawSqlAuditRegistry.ts` | R1: the two guarded deletes registered `SYSTEM_ONLY` |
+| Contract tests | `tests/dataRetentionCleanupJob.test.ts` | +42 (32, then +10 in R1) |
+| Real-database tests | `tests/dbVerification/outboxRetention.test.ts` | **new**, 38 (27, then +11 in R1) |
 
 **No migration.** `processedAt`, `deadLetteredAt`, `completedAt`, `status`, `idempotencyKey` and `causationId` already exist and already carry the required meaning, and the `[status, …]` composite indexes F5-2 shipped serve the sweep. Adding a column or an index "for convenience" would have meant a migration for a job that runs once a day at 03:00 over a table that is currently empty.
 
@@ -101,7 +104,7 @@ Every other window in `dataRetentionPolicy.ts` is a policy choice an operator ma
 
 **(2) Per deletion — a structural guard.**
 
-A `completed` ledger row is removed only once **no** `OutboxEvent` in `pending`, `claimed` or `dead` carries its `idempotencyKey`. This survives a hand-edited database, a category that errored out mid-sweep, and a batch limit that left events behind — none of which the policy layer alone would survive.
+A `completed` ledger row is removed only once **no** `OutboxEvent` in `pending`, `claimed` or `dead` carries its `idempotencyKey`. This survives a hand-edited database, a category that errored out mid-sweep, and a batch limit that left events behind — none of which the policy layer alone would survive. Since R1 it also survives an event that appears *while the sweep is running*, because the condition is evaluated by PostgreSQL inside the DELETE itself rather than from a predicate built earlier in JavaScript — see §7a.
 
 `processed` events deliberately do **not** pin the ledger. A processed event is not replayable (`replayDeadOutboxEvent` refuses it with `NOT_TERMINAL`) and its side effect is already recorded, so it cannot cause a second one. Including it would pin the ledger to the largest population in the table for no safety gain. This distinction is tested directly, against a real database, in both directions.
 
@@ -141,7 +144,9 @@ Processed events → dead events → consumer executions, and the order is part 
 
 ## 6. Dry run
 
-`countEligible` is the dry-run path and is **the same predicate the delete uses, guards included**. A guarded row is absent from the count as well as from the delete, so an operator is never shown a number the sweep would not actually act on. Verified against a real database: a `completed` ledger row pinned by a `dead` event reports `0` eligible *and* deletes `0`.
+`countEligible` is the dry-run path and applies **the same rule the delete applies, guards included**. A guarded row is absent from the count as well as from the delete, so an operator is never shown a number the sweep would not actually act on. Verified against a real database: a `completed` ledger row pinned by a `dead` event reports `0` eligible *and* deletes `0`.
+
+The one honest difference after R1: a dry run reads the guard sets as a snapshot, while the delete re-derives them in the database (§7a). The *rule* is identical; a dry run is by nature a point-in-time estimate, and the direction of any disagreement is that a dry run may count a row the sweep then declines to delete. It can never under-report a deletion. `countEligible` mutates nothing, which is unchanged and re-verified.
 
 Output is three integers:
 
@@ -155,13 +160,82 @@ A dry run performs **zero** mutations. In the DB-free suite the executors are st
 
 ---
 
-## 7. Batching
+## 7. Batching, and the select/delete race (revised — R1)
 
-Bounded by `DATA_RETENTION_BATCH_SIZE` (default 500, max 1000) — the same knob every other category uses. Each batch selects ids under the limit, then deletes by id **with the full predicate re-applied**, so a row that stopped being eligible between the select and the delete (a concurrent replay creating a pending event for its key) is left alone. The select/delete gap is small, but it is exactly the window in which the guard matters most.
+Bounded by `DATA_RETENTION_BATCH_SIZE` (default 500, max 1000) — the same knob every other category uses. Each batch selects ids under the limit, then deletes by id.
 
-Measured against a real database: five eligible rows with `batchSize = 2` delete `2, 2, 1, 0` — never more than the limit, no phantom fifth row, and a clean no-op once drained. Repeat runs reach the same state with no errors and no over-deletion.
+**The first cut of this section was wrong, and the correction is §7a.** It claimed that "re-applying the full predicate in the delete" left a row alone if it stopped being eligible between the select and the delete. It did not: the predicate it re-applied carried the guard sets *as a JavaScript array loaded before the select*. Re-using a snapshot is not re-checking. See §7a for what the sweep does now.
 
-There is deliberately no single unbounded `deleteMany` on the predicate: that takes row locks proportional to the whole eligible set in one transaction, which is the long-lock behaviour the retention design forbids.
+Measured against a real database: five eligible rows with `batchSize = 2` delete `2, 2, 1, 0` — never more than the limit, no phantom fifth row, and a clean no-op once drained. Repeat runs reach the same state with no errors and no over-deletion. Both measurements were repeated against the guarded path (§H of the DB suite).
+
+There is deliberately no single unbounded `DELETE` on the predicate: that takes row locks proportional to the whole eligible set in one transaction, which is the long-lock behaviour the retention design forbids.
+
+---
+
+## 7a. The guarded delete — where the safety check actually happens
+
+### The defect
+
+A protection like *"no event still holds this idempotency key"* is a statement about **another table**, and it is only true at an instant. The original implementation evaluated it like this:
+
+```
+1. load the protected keys into a JS array          (a snapshot)
+2. build a Prisma `notIn` from that array
+3. SELECT candidate ids under the batch limit
+4. DELETE ... WHERE <same array-derived predicate> AND id IN (candidates)
+```
+
+Step 4 re-sent the *snapshot*. So:
+
+| | |
+|---|---|
+| T1 | retention loads held idempotency keys; key `K` is absent |
+| T2 | a replay (or a producer) commits a `pending` event carrying key `K` |
+| T1 | deletes the `completed` ledger row for `K`, because its stale `notIn` still says `K` is free |
+
+The ledger row was the only thing suppressing a duplicate side effect for `K`. Losing it re-arms a message to a patient, months later, silently — the exact failure §4 was written to prevent. The same shape of hole existed for a dead event that acquired an `ambiguous` marker or an in-flight replay child mid-sweep.
+
+### The fix
+
+The final delete never consults application memory for safety. Each guarded category now removes rows through **one statement** whose `WHERE` re-derives, in PostgreSQL, at delete time: the terminal status, the age threshold, and every protection as a correlated `NOT EXISTS` against the live tables.
+
+```sql
+DELETE FROM "OutboxConsumerExecution" AS x
+WHERE x."id" = ANY($1::text[])          -- the batch bound, and nothing else
+  AND x."status" = 'completed'
+  AND x."completedAt" IS NOT NULL
+  AND x."completedAt" < $2
+  AND NOT EXISTS (
+    SELECT 1 FROM "OutboxEvent" e
+    WHERE e."idempotencyKey" = x."idempotencyKey"
+      AND e."status" = ANY($3::text[])   -- pending | claimed | dead
+  )
+```
+
+and, for a dead event, the same shape with two `NOT EXISTS` clauses — one for an open `ambiguous` execution on its key, one for a `pending`/`claimed` event naming it as `causationId`.
+
+PostgreSQL evaluates that predicate and removes the rows **in the same statement**, under one snapshot taken when the statement begins. No row can be deleted whose protection had already committed when the delete started. The candidate id list is the only thing carried over from the select, and it can only **narrow**: it decides how *many* rows may go, never *which* rows are safe.
+
+**Why raw SQL.** Prisma cannot express a correlated `NOT EXISTS` here. `OutboxEvent` has no declared relation to `OutboxConsumerExecution` — they meet on a business `idempotencyKey`, not a foreign key — nor to itself through `causationId`. `deleteMany` therefore has no way to say *"and nothing over there refers to me"*, and expressing it as a loaded `notIn` **is** the defect. Both statements are parameterized in full (a test asserts every interpolation is a bare identifier, never composed SQL), return an affected-row count and no rows, and run inside `runWithAuditedRawSql({ registryKey: 'outbox/outboxRetention' })`.
+
+### What did NOT change
+
+- **Bounded batch selection.** The Prisma predicate builders still choose the candidates, still under `DATA_RETENTION_BATCH_SIZE`.
+- **The guard sets and the 10,000-row fail-closed ceiling.** They are still loaded, and are still the incident circuit-breaker of §4. What they no longer are is the safety check. They can only exclude rows that were *already* protected when the snapshot was taken; they can never admit one the delete would refuse.
+- **Every protected state.** `pending`, `claimed`, `in_progress` and `ambiguous` remain unrepresentable in any sweep predicate, and the guarded statements pin `status` to a terminal literal in the DELETE itself.
+- **Dry run.** `countEligible` is unchanged and still mutates nothing.
+- **No new locks.** The statements take row locks on the rows they match; the `NOT EXISTS` subqueries are plain reads. Nothing locks the table.
+- **The processed-event category.** It has no cross-table protection — `status` and `processedAt` are columns of the row being deleted, so the existing `deleteMany` already re-evaluates them in the database at delete time. It stays Prisma; adding raw SQL there would enlarge the audited surface for no safety gain.
+
+### How it is proved
+
+`src/tests/dbVerification/outboxRetention.test.ts` §H drives a **real sweep** and suspends it at the one moment that matters — after the bounded candidate select, before the delete — through an optional `OutboxRetentionBatchHooks` parameter. The competing write is committed from that seam, on its own connection, so the sweep resumes against a database that genuinely changed underneath it. The seam is a **parameter**, not module state: `DataRetentionCategoryDeps.executeCleanupBatch` is `(threshold, batchSize)`, so no production entry point can pass a hook, and a test asserts the job never mentions one.
+
+Each test first asserts the row **was** selected as a candidate. Without that, "the row survived" would be indistinguishable from "the row was never eligible" and the section would pass vacuously.
+
+The eleven §H tests were run against a deliberately reverted implementation (the old snapshot delete restored): **8 failed**, including all three required race scenarios. They fail on the defect and pass on the fix.
+
+One of them, `A2`, pins the defect itself rather than only its consequence: mid-race it rebuilds the *old* delete's `WHERE` from the guard set loaded before the batch and shows it **still matches** the row the guarded delete just refused.
 
 ---
 
@@ -171,7 +245,9 @@ There is deliberately no single unbounded `deleteMany` on the predicate: that ta
 
 **The sweep is deliberately global, with no tenant predicate.** A retention job that could see only one organization could not clean the table — the same reasoning that makes the dispatcher's claim `SYSTEM_ONLY`. It runs from the existing `dataRetentionCleanupJob`, which establishes no tenant context, exactly as its nine existing categories do. **No new `SystemContextReason` was added; `test:tenant-system-context-inventory` passes unchanged (16 tests).**
 
-**No raw SQL was added.** Everything is Prisma. `test:raw-sql-tenant-audit` passes unchanged (21 files, 37 call sites, zero `UNSAFE_BLOCKER`).
+**Two raw-SQL call sites were added (R1).** The guarded deletes of §7a, in `server/src/outbox/outboxRetention.ts`, classified **`SYSTEM_ONLY`** and registered under the new escape key `outbox/outboxRetention`. `test:raw-sql-tenant-audit` passes with the inventory updated: **22 files, 39 call sites, zero `UNSAFE_BLOCKER`, zero `NEEDS_TENANT_CONTEXT_HELPER`** (was 21 / 37).
+
+Both statements carry **no tenant predicate, by design**, for the reason above — and the ledger delete could not correctly carry one even if the sweep were per-tenant, because an idempotency key is pinned by an event in **any** organization that holds it. A tenant predicate there would make the guard weaker, not safer, and that is exactly what the DB suite's §F test measures. They are reachable only from `dataRetentionCleanupJob.ts` under the shared job lock (whose callback runs as system) and from the platform-admin manual-run route; neither is tenant execution. Every value, including the candidate id array, is bound as a parameter, and each statement returns an affected-row count and no rows — so no payload, organization id or business key ever leaves the database through them.
 
 **KVKK / minimisation.**
 - Nothing in `outboxRetention.ts` reads, selects, returns or logs `payload`. Queries select `id`, plus `idempotencyKey` for the guards — a contract-derived identifier that never reaches a log line.
@@ -213,8 +289,8 @@ Retention itself has no cutover to roll back. To stop it: the runtime toggle (im
 
 | Command | Layer | Exit | Pass | Fail |
 |---|---|---|---|---|
-| `npm run test:data-retention` (48 → **80**, +32) | 2 | 0 | 80 | 0 |
-| `npm run test:outbox-retention-db` (**new**, real PostgreSQL 16) | 3 | 0 | 27 | 0 |
+| `npm run test:data-retention` (48 → 80 → **90**, +42) | 2 | 0 | 90 | 0 |
+| `npm run test:outbox-retention-db` (**new**, real PostgreSQL 16; 27 → **38**) | 3 | 0 | 38 | 0 |
 | `npm run test:outbox-contracts` | 2 | 0 | 53 | 0 |
 | `npm run test:auth` (`platformAdmin.test.ts` — policy response) | 2 | 0 | 118 | 0 |
 | `npm run test:retention-manual-run-audit` | 2 | 0 | 29 | 0 |
@@ -239,12 +315,15 @@ On the very first `test:outbox-dispatcher-db` run — against a database that ha
 
 ### Coverage against the task's required test matrix
 
+Covered (R1): **the ledger race** — a `pending` event committed between candidate selection and delete, ledger row survives · **the dead-ambiguity race** — an `ambiguous` execution created before the final delete, dead event survives · **the replay-child race** — a `pending`/`claimed` child with `causationId` = the candidate, parent survives · each of the three released once the protection resolves · the row deletes normally when no protection appears · batch bounds hold on the guarded path (`2, 2, 1`) · repeated cleanup after a refused race stays idempotent · dry run over the same race mutates nothing · every interpolation in both guarded statements is a bound parameter · the SQL status sets come from the same frozen constants the guards use · the test seam is unreachable from production.
+
 Covered: pending never deleted · claimed with a live lease never deleted · stale claimed lease consistent with dispatcher recovery (never deleted) · processed old eligible · processed young retained · dead retained until its own longer window · dead retained past its window while an ambiguity is open, and released once resolved · dead retained while a replay is in flight, released once the replay settles · ambiguous execution protected · in-progress execution protected · completed-execution retention invariant (all three holder statuses) · replay-horizon/idempotency invariant end to end, run out of order on purpose · dry run performs zero mutations · dry-run counts agree with the delete predicate · batch limit · repeat-run idempotence · tenant behaviour of a global sweep · no payload read or logged · no PHI in dry-run output · env kill switch honoured · runtime kill switch structurally covered · data-retention regression suite · outbox contract suite · outbox dispatcher DB suite · tenant classification · log privacy.
 
 **Not covered, and honestly so:**
 - **The runtime kill switch is not re-proved end to end here.** It is a property of `startDataRetentionCleanupJob` and the platform-admin route, already proved by `platformAdmin.test.ts` and `retentionManualRunAudit.test.ts`, both of which pass unchanged. What F5-2R adds is the structural assertion that the outbox categories have no path around them.
 - **The guard ceiling is not exercised with 10,001 real rows.** Its behaviour is proved by injecting the error through the runner (the category deletes nothing, is recorded skipped, neighbours still run) and by asserting the constant is bounded. Materialising 10,001 rows would test PostgreSQL, not this code.
-- **No performance measurement of the sweep at volume.** The tables are empty in production and the batch is bounded; a projection would be a guess. The existing backlog metrics are the trigger if that changes.
+- **No performance measurement of the sweep at volume.** The tables are empty in production and the batch is bounded; a projection would be a guess. The existing backlog metrics are the trigger if that changes. R1 note: the guarded deletes add two anti-joins, planned **once per bounded batch** rather than once per row. `OutboxEvent` already has `@@index([idempotencyKey])`, which serves the ledger guard; the `causationId` guard has no index and is expected to plan as a hash anti-join over a table that is empty today. No index was added because that would require a production migration, which this task explicitly excludes; it is recorded as the thing to revisit if the DLQ ever becomes large, which is itself already an incident signal (§4).
+- **The residual single-statement window is not closed, and cannot be by this mechanism.** A guarded delete cannot see a row a *concurrent, still-uncommitted* transaction is about to insert — that is the standard phantom, and only `SERIALIZABLE` would close it. `SERIALIZABLE` is deliberately not used: PostgreSQL guarantees serializability only among serializable transactions, so it would buy nothing against the plain-`READ COMMITTED` producer and replay paths while risking aborting a patient-message-producing transaction to prune old rows. What R1 removes is the unbounded, multi-round-trip application-memory window; what remains is the duration of one statement. For the replay path even that is closed by ordering: `replayDeadOutboxEvent` reads the **ledger** before creating a child, so a replay that inserts a `pending` event for key `K` must have found `K`'s ledger row already gone.
 
 ---
 
@@ -252,7 +331,7 @@ Covered: pending never deleted · claimed with a live lease never deleted · sta
 
 ```
 F5_2R_AGENT_COMPLETED      = YES
-F5_2R_TESTS_PASSED         = YES   (59 new, 0 failed; 8 existing suites re-run green)
+F5_2R_TESTS_PASSED         = YES   (80 new, 0 failed; 8 existing suites re-run green)
 F5_2R_PR_OPENED            = YES   (draft)
 F5_2R_CI_PASSED            = see the PR record
 F5_2R_MERGED               = NO

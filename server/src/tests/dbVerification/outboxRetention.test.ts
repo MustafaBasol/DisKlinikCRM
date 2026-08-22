@@ -41,6 +41,11 @@ import {
   deleteDeadOutboxEventBatch,
   countEligibleCompletedConsumerExecutions,
   deleteCompletedConsumerExecutionBatch,
+  // F5-2R-R1 — used only by section H, to rebuild the OLD delete's stale
+  // snapshot predicate and show it still matches a row the guarded delete now
+  // refuses.
+  buildCompletedExecutionRetentionWhere,
+  loadIdempotencyKeysStillHeldByEvents,
 } from '../../outbox/outboxRetention.js';
 
 import { loadDataRetentionConfig } from '../../services/privacy/dataRetentionPolicy.js';
@@ -673,6 +678,346 @@ async function scenarioPayloadPrivacy(): Promise<void> {
   });
 }
 
+async function scenarioSelectDeleteRaces(): Promise<void> {
+  section('H. THE SELECT/DELETE RACE — a protection that appears mid-sweep still holds');
+
+  // Every test in this section drives a REAL sweep and suspends it at the one
+  // moment that matters: after the bounded candidate select, before the delete.
+  // The competing write is committed from that seam on its own connection, so
+  // the sweep resumes against a database that genuinely changed underneath it.
+  //
+  // Each test first asserts that the row WAS selected as a candidate. Without
+  // that, "the row survived" would be indistinguishable from "the row was never
+  // eligible", and the whole section would pass vacuously.
+
+  await test('A. LEDGER RACE: a pending event created after selection saves its ledger row', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const key = `${CONSUMER_KEY}:${randomUUID()}`;
+    const execId = await makeExecution({
+      status: 'completed',
+      ageDays: CONFIG.outboxConsumerExecutionDays + 5,
+      idempotencyKey: key,
+    });
+
+    // Nothing holds the key yet: the row is genuinely eligible going in.
+    assert.equal(await countEligibleCompletedConsumerExecutions(t.executions), 1);
+
+    let selected = false;
+    let raceEventId = '';
+    const deleted = await deleteCompletedConsumerExecutionBatch(t.executions, CONFIG.batchSize, {
+      afterCandidateSelection: async (ids) => {
+        selected = ids.includes(execId);
+        // A replay — or a producer republishing the same obligation — commits a
+        // NEW event carrying this key while the sweep is mid-batch.
+        raceEventId = await makeEvent({ status: 'pending', ageDays: 0, idempotencyKey: key });
+      },
+    });
+
+    assert.ok(selected, 'the ledger row must actually have been a candidate, or this proves nothing');
+    assert.ok(await eventExists(raceEventId), 'the racing event really was committed');
+    assert.equal(deleted, 0, 'the guarded delete must refuse a key a live event now holds');
+    assert.ok(
+      await executionExists(execId),
+      'THE INVARIANT: the only record suppressing a duplicate patient message survived the race',
+    );
+  });
+
+  await test('A2. THE STALE SNAPSHOT IS THE BUG: the pre-race predicate still matches the row the delete refused', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const key = `${CONSUMER_KEY}:${randomUUID()}`;
+    const execId = await makeExecution({
+      status: 'completed',
+      ageDays: CONFIG.outboxConsumerExecutionDays + 5,
+      idempotencyKey: key,
+    });
+
+    // The guard set as the sweep loads it: this key is absent, because no event
+    // holds it yet. This array is exactly what the previous implementation
+    // carried into its delete as a `notIn`.
+    const guardsAtStart = await loadIdempotencyKeysStillHeldByEvents();
+    assert.ok(!guardsAtStart.includes(key), 'precondition: the key is not yet protected');
+
+    let stalePredicateStillMatches = -1;
+    const deleted = await deleteCompletedConsumerExecutionBatch(t.executions, CONFIG.batchSize, {
+      afterCandidateSelection: async (ids) => {
+        await makeEvent({ status: 'pending', ageDays: 0, idempotencyKey: key });
+        // Re-apply the OLD delete's WHERE, verbatim, against the raced database.
+        const staleWhere = buildCompletedExecutionRetentionWhere(t.executions, {
+          idempotencyKeysStillHeldByEvents: guardsAtStart,
+        });
+        stalePredicateStillMatches = await prisma.outboxConsumerExecution.count({
+          where: { AND: [staleWhere, { id: { in: [...ids] } }] },
+        });
+      },
+    });
+
+    assert.equal(
+      stalePredicateStillMatches,
+      1,
+      're-applying a snapshot predicate is not re-checking: it still matches the now-protected row, ' +
+        'which is precisely how the old delete removed it',
+    );
+    assert.equal(deleted, 0, 'the guarded delete asks the database instead, and refuses');
+    assert.ok(await executionExists(execId));
+  });
+
+  await test('A3. once the racing event reaches a terminal, non-acting state the ledger row ages out', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const key = `${CONSUMER_KEY}:${randomUUID()}`;
+    const execId = await makeExecution({
+      status: 'completed',
+      ageDays: CONFIG.outboxConsumerExecutionDays + 5,
+      idempotencyKey: key,
+    });
+
+    let raceEventId = '';
+    await deleteCompletedConsumerExecutionBatch(t.executions, CONFIG.batchSize, {
+      afterCandidateSelection: async () => {
+        raceEventId = await makeEvent({ status: 'pending', ageDays: 0, idempotencyKey: key });
+      },
+    });
+    assert.ok(await executionExists(execId), 'held during the race');
+
+    // The obligation is discharged. A `processed` event cannot be replayed and
+    // so can no longer cause a second side effect — the ledger row is released.
+    await prisma.outboxEvent.update({
+      where: { id: raceEventId },
+      data: { status: 'processed', processedAt: new Date() },
+    });
+
+    const deleted = await deleteCompletedConsumerExecutionBatch(t.executions, CONFIG.batchSize);
+    assert.equal(deleted, 1, 'the guard releases: protection is a live question, not a permanent block');
+    assert.equal(await executionExists(execId), false);
+  });
+
+  await test('B. DEAD/AMBIGUITY RACE: an ambiguity opened after selection saves its dead event', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const key = `${CONSUMER_KEY}:${randomUUID()}`;
+    const deadId = await makeEvent({
+      status: 'dead',
+      ageDays: CONFIG.outboxDeadEventDays + 5,
+      idempotencyKey: key,
+    });
+
+    assert.equal(await countEligibleDeadOutboxEvents(t.dead), 1);
+
+    let selected = false;
+    const deleted = await deleteDeadOutboxEventBatch(t.dead, CONFIG.batchSize, {
+      afterCandidateSelection: async (ids) => {
+        selected = ids.includes(deadId);
+        // A consumer whose in-progress lease expired mid-sweep: nobody knows
+        // whether the patient got the message, and this dead row is the
+        // operator's only handle on the question.
+        await makeExecution({ status: 'ambiguous', ageDays: 0, idempotencyKey: key });
+      },
+    });
+
+    assert.ok(selected, 'the dead event must actually have been a candidate');
+    assert.equal(deleted, 0, 'the guarded delete must refuse a dead event with an open ambiguity');
+    assert.ok(await eventExists(deadId), 'the operator keeps the row the open question is about');
+  });
+
+  await test('B2. resolving the ambiguity releases the dead event on the next sweep', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const key = `${CONSUMER_KEY}:${randomUUID()}`;
+    const deadId = await makeEvent({
+      status: 'dead',
+      ageDays: CONFIG.outboxDeadEventDays + 5,
+      idempotencyKey: key,
+    });
+
+    let ambiguousId = '';
+    await deleteDeadOutboxEventBatch(t.dead, CONFIG.batchSize, {
+      afterCandidateSelection: async () => {
+        ambiguousId = await makeExecution({ status: 'ambiguous', ageDays: 0, idempotencyKey: key });
+      },
+    });
+    assert.ok(await eventExists(deadId), 'held during the race');
+
+    await prisma.outboxConsumerExecution.update({
+      where: { id: ambiguousId },
+      data: { status: 'completed', completedAt: new Date(), outcomeCode: 'SENT' },
+    });
+
+    const deleted = await deleteDeadOutboxEventBatch(t.dead, CONFIG.batchSize);
+    assert.equal(deleted, 1);
+    assert.equal(await eventExists(deadId), false);
+  });
+
+  await test('C. REPLAY-CHILD RACE: a replay started after selection saves its dead parent', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const deadId = await makeEvent({ status: 'dead', ageDays: CONFIG.outboxDeadEventDays + 5 });
+
+    assert.equal(await countEligibleDeadOutboxEvents(t.dead), 1);
+
+    let selected = false;
+    let childId = '';
+    const deleted = await deleteDeadOutboxEventBatch(t.dead, CONFIG.batchSize, {
+      afterCandidateSelection: async (ids) => {
+        selected = ids.includes(deadId);
+        // An operator replays the dead event exactly now. The child carries its
+        // own fresh idempotency key, so ONLY the causation guard can save the
+        // parent here.
+        childId = await makeEvent({ status: 'pending', ageDays: 0, causationId: deadId });
+      },
+    });
+
+    assert.ok(selected, 'the dead parent must actually have been a candidate');
+    assert.equal(deleted, 0, 'the guarded delete must refuse a parent with a replay in flight');
+    assert.ok(await eventExists(deadId), 'the child keeps its only explanation of what it is replaying');
+    assert.ok(await eventExists(childId));
+  });
+
+  await test('C2. a `claimed` replay child pins its parent just as a `pending` one does', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const deadId = await makeEvent({ status: 'dead', ageDays: CONFIG.outboxDeadEventDays + 5 });
+
+    let childId = '';
+    const deleted = await deleteDeadOutboxEventBatch(t.dead, CONFIG.batchSize, {
+      afterCandidateSelection: async () => {
+        childId = await makeEvent({
+          status: 'claimed',
+          ageDays: 0,
+          causationId: deadId,
+          leaseExpiresAt: new Date(Date.now() + 60_000),
+        });
+      },
+    });
+
+    assert.equal(deleted, 0);
+    assert.ok(await eventExists(deadId));
+
+    // Settle the replay: the parent is then released.
+    await prisma.outboxEvent.update({
+      where: { id: childId },
+      data: { status: 'processed', processedAt: new Date(), leaseExpiresAt: null },
+    });
+    assert.equal(await deleteDeadOutboxEventBatch(t.dead, CONFIG.batchSize), 1);
+    assert.equal(await eventExists(deadId), false);
+  });
+
+  await test('D. NO PROTECTION APPEARS: the guarded delete removes the row normally', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const key = `${CONSUMER_KEY}:${randomUUID()}`;
+    const deadId = await makeEvent({ status: 'dead', ageDays: CONFIG.outboxDeadEventDays + 5, idempotencyKey: key });
+    const execId = await makeExecution({
+      status: 'completed',
+      ageDays: CONFIG.outboxConsumerExecutionDays + 5,
+      idempotencyKey: `${CONSUMER_KEY}:${randomUUID()}`,
+    });
+
+    // The seam fires, and commits rows that are deliberately NOT protections:
+    // an unrelated dead event's ambiguity, and a replay child of nothing.
+    let deadSeamFired = false;
+    const deadDeleted = await deleteDeadOutboxEventBatch(t.dead, CONFIG.batchSize, {
+      afterCandidateSelection: async () => {
+        deadSeamFired = true;
+        await makeExecution({ status: 'ambiguous', ageDays: 0, idempotencyKey: `${CONSUMER_KEY}:${randomUUID()}` });
+      },
+    });
+    assert.ok(deadSeamFired, 'the seam is real — it ran');
+    assert.equal(deadDeleted, 1, 'an unrelated ambiguity protects nothing');
+    assert.equal(await eventExists(deadId), false);
+
+    let execSeamFired = false;
+    const execDeleted = await deleteCompletedConsumerExecutionBatch(t.executions, CONFIG.batchSize, {
+      afterCandidateSelection: async () => {
+        execSeamFired = true;
+        await makeEvent({ status: 'pending', ageDays: 0, idempotencyKey: `${CONSUMER_KEY}:${randomUUID()}` });
+      },
+    });
+    assert.ok(execSeamFired);
+    assert.equal(execDeleted, 1, 'an event holding a DIFFERENT key protects nothing');
+    assert.equal(await executionExists(execId), false);
+  });
+
+  await test('E. BATCH BOUNDS hold on the guarded path: never more candidates than the batch size', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const deadIds: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      deadIds.push(await makeEvent({ status: 'dead', ageDays: CONFIG.outboxDeadEventDays + 10 + i }));
+    }
+
+    const candidateBatchSizes: number[] = [];
+    let deletedTotal = 0;
+    for (let i = 0; i < 10; i++) {
+      const n = await deleteDeadOutboxEventBatch(t.dead, 2, {
+        afterCandidateSelection: async (ids) => {
+          candidateBatchSizes.push(ids.length);
+        },
+      });
+      deletedTotal += n;
+      if (n === 0) break;
+    }
+
+    assert.deepEqual(candidateBatchSizes, [2, 2, 1], 'each guarded delete is offered at most batchSize rows');
+    assert.equal(deletedTotal, 5, 'bounded batches still reach the whole eligible set');
+    for (const id of deadIds) assert.equal(await eventExists(id), false);
+  });
+
+  await test('F. REPEATED CLEANUP after a refused race stays idempotent and error-free', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const key = `${CONSUMER_KEY}:${randomUUID()}`;
+    const execId = await makeExecution({
+      status: 'completed',
+      ageDays: CONFIG.outboxConsumerExecutionDays + 5,
+      idempotencyKey: key,
+    });
+    await deleteCompletedConsumerExecutionBatch(t.executions, CONFIG.batchSize, {
+      afterCandidateSelection: async () => {
+        await makeEvent({ status: 'pending', ageDays: 0, idempotencyKey: key });
+      },
+    });
+
+    // Three further sweeps. The row stays protected, nothing throws, and the
+    // count never drifts — a refused row is not a poisoned one.
+    for (let i = 0; i < 3; i++) {
+      assert.equal(await deleteCompletedConsumerExecutionBatch(t.executions, CONFIG.batchSize), 0);
+    }
+    assert.ok(await executionExists(execId));
+    assert.equal(await countEligibleCompletedConsumerExecutions(t.executions), 0, 'a dry run agrees: nothing to do');
+  });
+
+  await test('G. DRY RUN over the same race performs zero mutations', async () => {
+    await resetOutboxTables();
+    const t = thresholds();
+    const key = `${CONSUMER_KEY}:${randomUUID()}`;
+    const execId = await makeExecution({
+      status: 'completed',
+      ageDays: CONFIG.outboxConsumerExecutionDays + 5,
+      idempotencyKey: key,
+    });
+    const deadId = await makeEvent({ status: 'dead', ageDays: CONFIG.outboxDeadEventDays + 5 });
+
+    const before = {
+      events: await prisma.outboxEvent.count({ where: { organizationId: fixtures.orgId } }),
+      executions: await prisma.outboxConsumerExecution.count({ where: { organizationId: fixtures.orgId } }),
+    };
+
+    await countEligibleProcessedOutboxEvents(t.processed);
+    await countEligibleDeadOutboxEvents(t.dead);
+    await countEligibleCompletedConsumerExecutions(t.executions);
+
+    assert.equal(await prisma.outboxEvent.count({ where: { organizationId: fixtures.orgId } }), before.events);
+    assert.equal(
+      await prisma.outboxConsumerExecution.count({ where: { organizationId: fixtures.orgId } }),
+      before.executions,
+    );
+    assert.ok(await executionExists(execId));
+    assert.ok(await eventExists(deadId));
+  });
+}
+
 async function main(): Promise<void> {
   fixtures = await createClinicFixtureSet('outbox-retention');
 
@@ -683,6 +1028,7 @@ async function main(): Promise<void> {
   await scenarioDryRunAndBatching();
   await scenarioTenantBehaviour();
   await scenarioPayloadPrivacy();
+  await scenarioSelectDeleteRaces();
 
   const ok = summary();
   await resetOutboxTables();
