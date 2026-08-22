@@ -4493,3 +4493,149 @@ model PatientIdentityDocument {
   @@index([organizationId, docType, lookupHash])
   @@index([clinicId])
 }
+
+/// F5-2 — Transactional outbox event (ADR-006, repository phase F6 / ClickUp EPIC F5).
+///
+/// THE INVARIANT THIS TABLE EXISTS FOR: a business state change and the record
+/// of the side effect it obliges are written in ONE transaction. If the
+/// business transaction rolls back, the obligation vanishes with it; if it
+/// commits, the obligation is durable even if the process dies in the next
+/// instruction. F5-1P experiment E11/E11b measured exactly this, and E11c
+/// measured why a Redis-backed queue structurally cannot provide it.
+///
+/// SCALAR-ONLY, no Prisma relations — deliberately, following AuditLog and
+/// MessagingInboundEvent. An operational ledger must not add back-relation
+/// fields to Organization/Clinic, and must stay writable in the same
+/// transaction as any business model without ordering constraints.
+///
+/// KVKK: `payload` carries IDENTIFIERS ONLY. The per-version field allowlist in
+/// outbox/outboxEventRegistry.ts is enforced at publish AND at dispatch, so a
+/// poison event cannot park PHI in an operational table. `lastErrorCode` and
+/// `deadLetterCode` are stable classification codes, never provider bodies.
+model OutboxEvent {
+  id String @id @default(uuid())
+
+  /// Tenant ownership. NOT NULL: every event type registered today is
+  /// tenant-owned. A future system-owned event type would need this decision
+  /// re-opened in a reviewable diff, not a nullable column now.
+  organizationId String
+  /// Null for organization-level events that legitimately have no one clinic.
+  clinicId       String?
+
+  /// Contract identity. (eventType, eventVersion) MUST resolve in the registry;
+  /// an unregistered pair is refused at publish and dead-lettered at dispatch.
+  eventType    String
+  eventVersion Int
+
+  /// What the event is about (e.g. 'AppointmentRequest' + its id).
+  aggregateType String
+  aggregateId   String
+
+  /// Identifiers only — see the model docstring.
+  payload Json
+
+  /// Business idempotency key handed to the consumer. Stable across retries AND
+  /// across replays, so a replay cannot duplicate an already-applied effect.
+  idempotencyKey String
+
+  /// Producer-side duplicate suppression. UNIQUE where present; NULL for event
+  /// types that are legitimately allowed to repeat (Postgres treats NULLs as
+  /// distinct, so this stays a partial-unique in practice).
+  dedupeKey String? @unique
+
+  /// Request/correlation id when the producer already has one. `causationId`
+  /// points at the event that caused this one (a replay records its parent).
+  correlationId String?
+  causationId   String?
+
+  /// pending | claimed | processed | dead
+  status String @default("pending")
+
+  /// When the business fact happened (producer clock, inside the transaction).
+  occurredAt  DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  /// Not claimable before this. Backoff and delayed dispatch both move it.
+  availableAt DateTime
+
+  attemptCount  Int       @default(0)
+  lastAttemptAt DateTime?
+  /// Stable OutboxErrorCode only.
+  lastErrorCode String?
+
+  /// Lease. A dispatcher that stops renewing lets `leaseExpiresAt` pass and the
+  /// row becomes reclaimable — crash recovery without a distributed lock.
+  claimedAt      DateTime?
+  claimedBy      String?
+  leaseExpiresAt DateTime?
+
+  processedAt    DateTime?
+  deadLetteredAt DateTime?
+  /// Why the event is terminal. Stable code, never free text.
+  deadLetterCode String?
+
+  /// Replay audit. The full audit row goes to AuditLog; these make the state
+  /// visible without a join.
+  replayCount    Int       @default(0)
+  lastReplayedAt DateTime?
+  lastReplayedBy String?
+
+  /// The dispatcher's claim query. Covers the hot path: pending rows whose
+  /// availableAt has passed, oldest first.
+  @@index([status, availableAt, occurredAt])
+  /// Stale-lease reclaim sweep.
+  @@index([status, leaseExpiresAt])
+  /// Per-tenant backlog metrics and operator DLQ inspection.
+  @@index([organizationId, status, occurredAt])
+  @@index([clinicId, status, occurredAt])
+  /// Per-contract backlog/failure slicing.
+  @@index([eventType, eventVersion, status])
+  @@index([idempotencyKey])
+}
+
+/// F5-2 — consumer-side business idempotency ledger.
+///
+/// The outbox guarantees AT-LEAST-ONCE delivery: a dispatcher that crashes
+/// between performing a side effect and finalizing the row WILL retry. That is
+/// not a defect to design away — it is the cost of durability, and the only
+/// honest answer is a consumer-side record of what has already been applied.
+///
+/// The protocol (outbox/outboxIdempotency.ts):
+///   1. commit an `in_progress` marker with a lease BEFORE the side effect;
+///   2. perform the side effect;
+///   3. mark `completed`.
+/// A retry that finds `completed` suppresses the duplicate. A retry that finds
+/// a LIVE `in_progress` defers (another dispatcher owns it). A retry that finds
+/// an EXPIRED `in_progress` is genuinely ambiguous — the side effect may or may
+/// not have happened — and is recorded `ambiguous` and dead-lettered rather
+/// than silently re-sent to a patient or silently dropped.
+model OutboxConsumerExecution {
+  id String @id @default(uuid())
+
+  /// Registered consumer key that owns this execution.
+  consumerKey    String
+  /// The event's business idempotency key.
+  idempotencyKey String
+
+  organizationId String
+  clinicId       String?
+
+  /// in_progress | completed | ambiguous
+  status String
+
+  /// Dispatcher instance holding the in-progress marker.
+  executedBy     String?
+  leaseExpiresAt DateTime?
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  /// Stable outcome code. Never PII, never a provider body.
+  outcomeCode String?
+  updatedAt   DateTime  @updatedAt
+
+  /// THE constraint that makes duplicate suppression a database property rather
+  /// than an application convention.
+  @@unique([consumerKey, idempotencyKey])
+  @@index([organizationId, status])
+  @@index([status, leaseExpiresAt])
+}

@@ -43,6 +43,14 @@ dist.next.stale-*/
 dist.rollback-*/
 .noramedi-frontend-release-state
 
+# F3-3 PoC harness output (regenerated on every `npm run poc:f3-3-rls`);
+# the recorded run lives in docs/architecture/poc/f3-3-rls-pgbouncer/evidence/
+server/f3-3-poc-results.json
+
+# F5-1P PoC harness output (regenerated on every `npm run poc:f5-1p-queue`);
+# the recorded run lives in docs/architecture/poc/f5-1p-queue-platform/evidence/
+server/f5-1p-poc-results.json
+
 # DENTAL-CHART-ASSET-R3 — odontogram morphology reference plates.
 #
 # Ten ~1 MB raster study plates used as MORPHOLOGY GUIDANCE ONLY while

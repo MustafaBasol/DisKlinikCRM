@@ -20,6 +20,9 @@ import {
 } from '../services/externalCalendar/externalCalendarOutboundSync.js';
 import { logger } from '../utils/logger.js';
 import { safeErrorFields } from '../utils/safeError.js';
+import { publishOutboxEventInTx } from '../outbox/outboxProducer.js';
+import { isOutboxProducerEnabled } from '../outbox/outboxConfig.js';
+import { buildAppointmentConfirmationIdempotencyKey } from '../outbox/consumers/appointmentRequestConfirmationConsumer.js';
 
 const router = express.Router();
 
@@ -301,7 +304,7 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
       });
     }
 
-    let appointment, updatedRequest;
+    let appointment, updatedRequest, publishOutboxConfirmation = false;
     try {
       const result = await prisma.$transaction(async (tx) => {
         // MUST be first, before acquireAppointmentSlotLock: serializes ALL
@@ -405,12 +408,53 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
         // commits can never permanently lose the outbound sync task. A no-op
         // when the clinic has no enabled integration. See
         // ensurePendingSyncLinkInConversionTransaction's doc comment.
-        await ensurePendingSyncLinkInConversionTransaction(tx, { appointmentId: appointment.id, clinicId });
+        const { syncLinkCreated } = await ensurePendingSyncLinkInConversionTransaction(tx, {
+          appointmentId: appointment.id,
+          clinicId,
+        });
 
-        return { appointment, updatedRequest };
+        // F5-2 — the transactional outbox closes the one remaining
+        // commit-then-obligation gap in this handler.
+        //
+        // When a sync link WAS created, the confirmation already has a durable
+        // obligation: it rides on that link's own retry ledger. When one was
+        // NOT — no external calendar integration, the ordinary case — the
+        // confirmation is sent below, after the response, with `.catch(log)`
+        // and nothing else. A process exit or a provider failure in that window
+        // loses it permanently, with no record that it was ever owed.
+        //
+        // Publishing INSIDE this transaction is the whole point: if anything
+        // after this line rolls the conversion back, the obligation disappears
+        // with it (F5-1P E11); if it commits, the obligation is durable even if
+        // the process dies in the next instruction (E11b).
+        const publishOutboxConfirmation = !syncLinkCreated && isOutboxProducerEnabled();
+        if (publishOutboxConfirmation) {
+          await publishOutboxEventInTx(tx, {
+            eventType: 'appointment_request.confirmation_requested',
+            eventVersion: 1,
+            organizationId: req.user!.organizationId,
+            clinicId,
+            aggregateId: id,
+            // Identifiers only — the consumer re-reads everything it renders
+            // from durable state, which is also what makes a replay hours later
+            // produce a correct message rather than a stale one.
+            payload: { appointmentRequestId: id, appointmentId: appointment.id },
+            idempotencyKey: buildAppointmentConfirmationIdempotencyKey(appointment.id),
+            // One confirmation obligation per converted appointment, enforced by
+            // the database rather than by convention.
+            dedupeKey: `appointment_request.confirmation_requested:${appointment.id}`,
+            // pino-http assigns req.id per request (see middleware/requestId.ts);
+            // it is a per-process counter, never client-supplied. Never
+            // invented here — null when no id exists.
+            correlationId: req.id !== undefined ? String(req.id) : null,
+          });
+        }
+
+        return { appointment, updatedRequest, publishOutboxConfirmation };
       });
       appointment = result.appointment;
       updatedRequest = result.updatedRequest;
+      publishOutboxConfirmation = result.publishOutboxConfirmation;
     } catch (txErr) {
       // Every branch below maps 1:1 onto the exact status/body the
       // pre-transaction version of this handler already returned for the
@@ -460,6 +504,11 @@ router.post('/appointment-requests/:id/convert', authorize(['OWNER', 'ORG_ADMIN'
     scheduleExternalCalendarSyncOrNotify({
       appointmentId: appointment.id,
       clinicId,
+      // When the outbox published above, the dispatcher owns the confirmation
+      // and this call must not send it a second time. The calendar-sync half
+      // still runs, for the narrow case where an integration was enabled
+      // between the transaction committing and this line.
+      confirmationOwnedByOutbox: publishOutboxConfirmation,
       notification: {
         source: request.source,
         phone: request.phone,

@@ -36,6 +36,7 @@ import {
 import { upsertIncidentFromSignal } from './securityIncidentService.js';
 import prisma from '../../db.js';
 import { safeErrorFields } from '../../utils/safeError.js';
+import { runAsSystem } from '../../tenancy/tenantContext.js';
 
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -206,16 +207,21 @@ export function evaluateCrossTenantDenialSignal(params: CrossTenantDenialParams)
     const threshold = CROSS_TENANT_THRESHOLD();
     if (count < threshold) return;
 
-    const distinctResources = await prisma.securitySignalEvent.findMany({
-      where: {
-        ruleKey,
-        dedupeDimension: actorHash,
-        createdAt: { gte: new Date(Date.now() - windowMs) },
-      },
-      distinct: ['resourceId'],
-      select: { resourceId: true },
-      take: 25,
-    });
+    // F3-2: SecuritySignalEvent is system-owned (EXPLICIT_REVIEW_REQUIRED in
+    // F3-1). This read runs INSIDE the tenant request that was just denied, and
+    // it must see signals across tenants — that breadth is the detection.
+    const distinctResources = await runAsSystem({ reason: 'security-signal-recording' }, () =>
+      prisma.securitySignalEvent.findMany({
+        where: {
+          ruleKey,
+          dedupeDimension: actorHash,
+          createdAt: { gte: new Date(Date.now() - windowMs) },
+        },
+        distinct: ['resourceId'],
+        select: { resourceId: true },
+        take: 25,
+      }),
+    );
     const isMultiResourceProbing = distinctResources.length > 1;
 
     await upsertIncidentFromSignal({
@@ -458,12 +464,17 @@ export function evaluateExportRequestBurstSignal(ctx: ExportActorContext): void 
     const threshold = EXPORT_REQUEST_BURST_THRESHOLD();
     if (count < threshold) return;
 
-    const distinctClinics = await prisma.securitySignalEvent.findMany({
-      where: { ruleKey, dedupeDimension: actorHash, createdAt: { gte: new Date(Date.now() - windowMs) } },
-      distinct: ['clinicId'],
-      select: { clinicId: true },
-      take: 25,
-    });
+    // F3-2: see the note on the cross-tenant rule above. The whole point of
+    // this read is to count DISTINCT clinics, so a tenant predicate would
+    // guarantee the answer 1 and disable the rule.
+    const distinctClinics = await runAsSystem({ reason: 'security-signal-recording' }, () =>
+      prisma.securitySignalEvent.findMany({
+        where: { ruleKey, dedupeDimension: actorHash, createdAt: { gte: new Date(Date.now() - windowMs) } },
+        distinct: ['clinicId'],
+        select: { clinicId: true },
+        take: 25,
+      }),
+    );
     const isMultiClinic = distinctClinics.length > 1;
 
     await upsertIncidentFromSignal({

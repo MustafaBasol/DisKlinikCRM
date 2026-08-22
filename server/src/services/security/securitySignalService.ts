@@ -46,6 +46,7 @@ import { z } from 'zod';
 import prisma from '../../db.js';
 import type { Prisma } from '@prisma/client';
 import { safeErrorFields } from '../../utils/safeError.js';
+import { runAsSystem } from '../../tenancy/tenantContext.js';
 
 const MIN_SECRET_LENGTH = 32;
 /** Clearly-labelled, non-production-only fallback — never used when NODE_ENV=production. */
@@ -385,6 +386,21 @@ export function sanitizeSecurityOperatorText(raw: string | null | undefined): st
  * Records one raw security-signal occurrence. NEVER throws — see rule 6 in
  * the file header. Callers should fire this without awaiting-and-handling
  * errors themselves (though it is safe to await for ordering).
+ *
+ * F3-2 — SYSTEM EXECUTION, DELIBERATELY. `SecuritySignalEvent` is one of the
+ * five models F3-1 classified `EXPLICIT_REVIEW_REQUIRED`: both tenant columns
+ * are nullable BY DESIGN, because a failed login or an unauthenticated probe
+ * legitimately has no tenant. The F3-2 decision is that the model is
+ * system-owned, not tenant-owned, so every access declares it here rather than
+ * inheriting whichever tenant happened to be executing.
+ *
+ * That distinction is load-bearing rather than cosmetic: the single most
+ * important signal this function records is a CROSS-TENANT DENIAL, fired from
+ * `clinicScope.ts` while organization A is being refused access to
+ * organization B. Writing that row "as A" would attribute B's incident to A;
+ * refusing to write it (this function swallows errors) would lose the alert
+ * silently, which is worse. `security-signal-recording` is therefore one of the
+ * three reasons allowed to escalate from inside a tenant request.
  */
 export async function recordSecuritySignal(input: RecordSecuritySignalInput): Promise<void> {
   try {
@@ -392,7 +408,8 @@ export async function recordSecuritySignal(input: RecordSecuritySignalInput): Pr
     const userAgentFingerprint = fingerprintUserAgent(input.userAgent ?? null);
     const safeMetadata = sanitizeSecurityMetadata(input.safeMetadata ?? null);
 
-    await prisma.securitySignalEvent.create({
+    await runAsSystem({ reason: 'security-signal-recording' }, () =>
+      prisma.securitySignalEvent.create({
       data: {
         signalType: input.signalType,
         category: input.category,
@@ -409,7 +426,8 @@ export async function recordSecuritySignal(input: RecordSecuritySignalInput): Pr
         dedupeDimension: input.dedupeDimension,
         safeMetadata: safeMetadata != null ? (safeMetadata as Prisma.InputJsonValue) : undefined,
       },
-    });
+      }),
+    );
   } catch (err) {
     // Signal-recording failure must never break the primary request, and
     // must never be interpreted as permission to change an allow/deny
@@ -433,13 +451,19 @@ export async function countSignalsInWindow(params: {
 }): Promise<number> {
   try {
     const now = params.now ?? new Date();
-    return await prisma.securitySignalEvent.count({
-      where: {
-        ruleKey: params.ruleKey,
-        dedupeDimension: params.dedupeDimension,
-        createdAt: { gte: new Date(now.getTime() - params.windowMs) },
-      },
-    });
+    // F3-2: same system-owned model as recordSecuritySignal above. The window
+    // count is deliberately NOT tenant-scoped — a threshold rule that only
+    // counted one organization's signals would miss exactly the distributed
+    // probe it exists to catch.
+    return await runAsSystem({ reason: 'security-signal-recording' }, () =>
+      prisma.securitySignalEvent.count({
+        where: {
+          ruleKey: params.ruleKey,
+          dedupeDimension: params.dedupeDimension,
+          createdAt: { gte: new Date(now.getTime() - params.windowMs) },
+        },
+      }),
+    );
   } catch (err) {
     console.error('[security-signal] Failed to count signals in window:', safeErrorFields(err));
     return 0;

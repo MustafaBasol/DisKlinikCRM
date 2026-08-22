@@ -43,6 +43,27 @@ import {
   failActiveGenerationForWorkerShutdown,
 } from '../services/privacy/clinicBulkExportPackage.js';
 import { safeErrorFields } from '../utils/safeError.js';
+import { runAsSystem } from '../tenancy/tenantContext.js';
+
+/**
+ * F3-2 — this worker deliberately does NOT take a `withJobLock` lease (see the
+ * file header: cluster-wide serialization would defeat the whole point of
+ * running several replicas), so it does not inherit the system execution
+ * context that `withJobLock` gives the other twelve jobs. It declares its own.
+ *
+ * `background-job` is the right reason even though each CLAIMED job belongs to
+ * exactly one clinic: the claim itself — `claimQueuedClinicBulkExportJobs` —
+ * polls the queue across every clinic, and a tenant predicate on that poll
+ * would mean a replica could only ever drain one clinic's exports. Narrowing to
+ * `runAsTenant` per claimed job, once the row's owner is known, is a
+ * refinement recorded for the F5 rollout; it is not needed for correctness
+ * here, because the guard is not installed on the shared client.
+ *
+ * `tests/tenantSystemContextInventory.test.ts` holds the list of lock-free jobs
+ * to exactly the files with a recorded reason, so this cannot quietly regress.
+ */
+const asExportWorkerSystem = <T>(fn: () => Promise<T>): Promise<T> =>
+  runAsSystem({ reason: 'background-job', detail: 'clinic-bulk-export-worker' }, fn);
 
 function getWorkerConcurrency(): number {
   const raw = Number(process.env.CLINIC_BULK_EXPORT_WORKER_CONCURRENCY);
@@ -74,7 +95,7 @@ const activeGenerationJobIds = new Set<string>();
  */
 async function runStaleTempSweep(): Promise<void> {
   try {
-    const deleted = await sweepStaleClinicBulkExportTempFiles();
+    const deleted = await asExportWorkerSystem(() => sweepStaleClinicBulkExportTempFiles());
     if (deleted > 0) {
       console.log(`[clinic-bulk-export-worker] stale-temp sweep deleted ${deleted} orphaned temp file(s) on this host.`);
     }
@@ -98,7 +119,7 @@ async function runTick(): Promise<void> {
     if (shuttingDown) return;
 
     const concurrency = getWorkerConcurrency();
-    const claimedIds = await claimQueuedClinicBulkExportJobs(concurrency);
+    const claimedIds = await asExportWorkerSystem(() => claimQueuedClinicBulkExportJobs(concurrency));
     if (claimedIds.length === 0) return;
 
     if (shuttingDown) {
@@ -108,7 +129,9 @@ async function runTick(): Promise<void> {
       // down. Fail them the exact same stable way an already-in-flight
       // generation gets cancelled (final review round, P0) instead of
       // calling generateClinicBulkExport at all.
-      await Promise.allSettled(claimedIds.map((jobId) => failActiveGenerationForWorkerShutdown(jobId)));
+      await asExportWorkerSystem(() =>
+        Promise.allSettled(claimedIds.map((jobId) => failActiveGenerationForWorkerShutdown(jobId))),
+      );
       return;
     }
 
@@ -119,11 +142,13 @@ async function runTick(): Promise<void> {
 
     // Bounded concurrency — never an unbounded Promise.all: claimedIds.length
     // is already capped at `concurrency` by claimQueuedClinicBulkExportJobs.
-    await Promise.all(
-      claimedIds.map((jobId) =>
-        generateClinicBulkExport(jobId).finally(() => {
-          activeGenerationJobIds.delete(jobId);
-        }),
+    await asExportWorkerSystem(() =>
+      Promise.all(
+        claimedIds.map((jobId) =>
+          generateClinicBulkExport(jobId).finally(() => {
+            activeGenerationJobIds.delete(jobId);
+          }),
+        ),
       ),
     );
   } catch (err) {
@@ -190,7 +215,9 @@ export function stopClinicBulkExportWorker(): Promise<void> {
   shutdownPromise = (async () => {
     if (jobIds.length === 0) return;
     console.log(`[clinic-bulk-export-worker] shutting down — cancelling ${jobIds.length} active generation job(s).`);
-    await Promise.allSettled(jobIds.map((jobId) => failActiveGenerationForWorkerShutdown(jobId)));
+    await asExportWorkerSystem(() =>
+      Promise.allSettled(jobIds.map((jobId) => failActiveGenerationForWorkerShutdown(jobId))),
+    );
   })();
   return shutdownPromise;
 }

@@ -334,6 +334,12 @@
     "server/src/services/treatmentProposalPdf.ts": "clinical-treatment-cases",
     "server/src/services/treatmentCaseOrganizationMetrics.ts": "clinical-treatment-cases",
     "server/src/utils/money.ts": "clinical-treatment-cases",
-    "server/src/services/imaging/public.ts": "imaging-server-viewer"
+    "server/src/services/imaging/public.ts": "imaging-server-viewer",
+    "server/src/middleware/tenantContext.ts": "core-tenant-security",
+    "server/src/tenancy/auditedRawSql.ts": "core-tenant-security",
+    "server/src/tenancy/prismaTenantGuard.ts": "core-tenant-security",
+    "server/src/tenancy/rawSqlAuditRegistry.ts": "core-tenant-security",
+    "server/src/tenancy/tenantContext.ts": "core-tenant-security",
+    "server/src/tenancy/tenantGuardErrors.ts": "core-tenant-security"
   }
 }
