@@ -1,6 +1,8 @@
 # F6 — Queue, Outbox, Idempotency, and Reliability
 
-Faz durumu: `TODO` · Son güncelleme: 2026-07-17 (F0-001)
+Faz durumu: `TODO` · Son güncelleme: 2026-08-22 (F5-1 — yetkilendirme denetimi; faz durumu **değişmedi**, giriş koşulları hâlâ karşılanmadı)
+
+> **Numaralandırma uyuşmazlığı (F5-1, 2026-08-22).** ClickUp'taki `EPIC F5 — BullMQ, Transactional Outbox ve Messaging Dayanıklılığı` (`869ed1jvf`) **bu faz dokümanına karşılık gelir**; ClickUp'ta tenant/RLS işi `F3-*` ID'leriyle yürütüldüğü için numaralar bir kaydırma ile ilerliyor (ClickUp `F5` == depo `F6`). Depo numaralandırması **değiştirilmedi**; tarih yeniden yazılmadı. "F6 entry" diye yazılmış her kapı, ClickUp EPIC F5'i yönetir. Ayrıntı ve kanıt: [../evidence/F5-1_QUEUE_PLATFORM_AUTHORIZATION_AUDIT.md](../evidence/F5-1_QUEUE_PLATFORM_AUTHORIZATION_AUDIT.md).
 
 ## Objective (Hedef)
 
@@ -83,3 +85,5 @@ WhatsApp/SMS/e-posta/resmî entegrasyon hacmi büyüdükçe; kaybolan event'ler 
 | Tarih | Görev | Değişiklik |
 |---|---|---|
 | 2026-07-17 | F0-001 | Faz dokümanı oluşturuldu (yüksek seviyeli). |
+| 2026-08-22 | F5-1 | Yetkilendirme denetimi ve mevcut-durum kanıtı eklendi (salt-okunur; kod/şema/bağımlılık değişmedi). ClickUp EPIC F5 == depo F6 eşleşmesi kayıt altına alındı. Giriş koşulları (F5 çıkışı + ADR-006/007 kabulü) **karşılanmadı**; faz `TODO` kaldı. |
+| 2026-08-22 | F5-1P | Program sahibi kararı: F5-1 denetimi **KABUL EDİLDİ**. ADR-006/ADR-007 `NEEDS_POC` **değişmedi**, BullMQ **seçilmedi**, production rollout **yetkilendirilmedi**. **İzole/tek-kullanımlık PoC açıkça YETKİLENDİRİLDİ** (ClickUp `869enfvvu`) — `queue-outbox-poc-design.md` §12/§14'ün gerektirdiği ayrı görev budur. Faz `TODO` kaldı. |
