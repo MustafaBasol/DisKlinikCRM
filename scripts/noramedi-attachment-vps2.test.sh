@@ -406,6 +406,8 @@ section "Successful backup run"
 rm -f "$STATUS_FILE" "$WORK/curl-calls.log"
 EXTRA_ENV=(RESTIC_REPOSITORY=x RESTIC_PASSWORD_FILE="$RESTIC_PW" NORAMEDI_ATTACHMENT_VPS2_SOURCE_DIR="$SOURCE_DIR" NORAMEDI_ATTACHMENT_VPS2_STATUS_FILE="$STATUS_FILE" NORAMEDI_ATTACHMENT_VPS2_LOCK_FILE="$WORK/backup2.lock" NORAMEDI_ATTACHMENT_VPS2_PING_URL="http://x/PINGSECRET" FAKE_RESTIC_SNAPSHOT_ID="snapaaa111")
 run "$BACKUP"
+echo "DIAG: successful-run CODE=$CODE OUT=$OUT" >&2
+echo "DIAG: STATUS_FILE=$STATUS_FILE exists=$([[ -f "$STATUS_FILE" ]] && echo yes || echo no); dir listing: $(ls -la "$(dirname "$STATUS_FILE")" 2>&1)" >&2
 [[ "$CODE" -eq 0 ]] && pass "backup: successful run exits 0" || fail "backup successful run: exit=$CODE, out=$OUT"
 
 if [[ -f "$STATUS_FILE" ]]; then
