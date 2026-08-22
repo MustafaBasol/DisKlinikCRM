@@ -1,13 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="14 11.2 36 40.1" width="36" height="40.1" data-tooth-fdi="83" data-view="occlusal" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4.6 4.7 54.8 57.2" width="54.8" height="57.2" data-tooth-fdi="83" data-view="occlusal" role="img">
   <title>Tooth 83 — primary (deciduous) lower right canine — occlusal view</title>
   <desc>Standalone occlusal/incisal anatomy for tooth 83 (primary (deciduous), lower right canine), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
   <g transform="translate(0 64) scale(1 -1)">
-    <path d="M26 28 C27.7 25.8 31.7 20.8 34 20 C36.3 19.2 39 21.3 40 23 C41 24.7 40.2 27.7 40 30 C39.8 32.3 40.3 35 39 37 C37.7 39 34.3 41.7 32 42 C29.7 42.3 26.3 40.5 25 39 C23.7 37.5 23.8 34.8 24 33 C24.2 31.2 24.3 30.2 26 28 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
-    <path d="M40 23 C41 24.7 40.2 27.7 40 30 C39.8 32.3 40.3 35 39 37 L35 34 L36 26 Z" data-surface="mesial" data-tooth-fdi="83" fill="none" stroke="none"><title>mesial</title></path>
-    <path d="M25 39 C23.7 37.5 23.8 34.8 24 33 C24.2 31.2 24.3 30.2 26 28 L29 29 L28 35 Z" data-surface="distal" data-tooth-fdi="83" fill="none" stroke="none"><title>distal</title></path>
-    <path d="M26 28 C27.7 25.8 31.7 20.8 34 20 C36.3 19.2 39 21.3 40 23 L36 26 L29 29 Z" data-surface="buccal" data-tooth-fdi="83" fill="none" stroke="none"><title>buccal</title></path>
-    <path d="M39 37 C37.7 39 34.3 41.7 32 42 C29.7 42.3 26.3 40.5 25 39 L28 35 L35 34 Z" data-surface="lingual" data-tooth-fdi="83" fill="none" stroke="none"><title>lingual</title></path>
-    <path d="M29 29 L36 26 L35 34 L28 35 Z" data-surface="central" data-tooth-fdi="83" fill="none" stroke="none"><title>incisal</title></path>
-    <path d="M34 20 L40 23 M34 20 L26 28 M32 27 L32 39" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
+    <path d="M23.8 29.3 C26.6 27.3 33.3 21.3 36.6 20.6 C39.9 19.9 42.6 23.3 43.6 25 C44.7 26.7 43.6 28.6 42.9 31 C42.3 33.5 41.8 37.6 39.7 39.7 C37.6 41.8 33.1 43.6 30.2 43.5 C27.4 43.4 24.3 40.9 22.6 39.1 C20.9 37.3 19.8 34.2 20 32.6 C20.2 31 21 31.3 23.8 29.3 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
+    <path d="M43.6 25 C44.7 26.7 43.6 28.6 42.9 31 C42.3 33.5 41.8 37.6 39.7 39.7 L35.2 35.7 L36.7 30.1 Z" data-surface="mesial" data-tooth-fdi="83" fill="none" stroke="none"><title>mesial</title></path>
+    <path d="M22.6 39.1 C20.9 37.3 19.8 34.2 20 32.6 C20.2 31 21 31.3 23.8 29.3 L29.1 31.8 L28.7 35.5 Z" data-surface="distal" data-tooth-fdi="83" fill="none" stroke="none"><title>distal</title></path>
+    <path d="M23.8 29.3 C26.6 27.3 33.3 21.3 36.6 20.6 C39.9 19.9 42.6 23.3 43.6 25 L36.7 30.1 L29.1 31.8 Z" data-surface="buccal" data-tooth-fdi="83" fill="none" stroke="none"><title>buccal</title></path>
+    <path d="M39.7 39.7 C37.6 41.8 33.1 43.6 30.2 43.5 C27.4 43.4 24.3 40.9 22.6 39.1 L28.7 35.5 L35.2 35.7 Z" data-surface="lingual" data-tooth-fdi="83" fill="none" stroke="none"><title>lingual</title></path>
+    <path d="M29.1 31.8 L36.7 30.1 L35.2 35.7 L28.7 35.5 Z" data-surface="central" data-tooth-fdi="83" fill="none" stroke="none"><title>incisal</title></path>
+    <path d="M36.6 20.6 L43.6 25 M36.6 20.6 L23.8 29.3 M31 33 L30.2 43.5" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
   </g>
 </svg>
