@@ -298,6 +298,24 @@ const MIN_ROOT_CURVES = 4;
  * ~1.08 and ~0.75 — more divergent, which is the deciduous signature, but
  * nowhere near a 'roots splay outward all the way to the tips' caricature.
  */
+/**
+ * Multi-rooted teeth whose roots do NOT separate in this projection.
+ *
+ * The upper first premolar is bifurcated buccal/palatal — the split runs in
+ * the buccolingual plane, perpendicular to the screen. Seen from the buccal
+ * aspect the two roots are superimposed, so the tooth reads as essentially
+ * single-rooted with at most a hint of the split near the apex; plate 02
+ * shows exactly that. Measuring mesiodistal "divergence" on it is therefore
+ * asking the wrong question, and the artwork was right when this assertion
+ * first flagged it (widest 0.73x, apices 0.05x apart).
+ *
+ * This is an exemption for a projection that cannot show the feature, not a
+ * tolerance widened to admit a drawing. Upper MOLARS stay in scope: their
+ * mesiobuccal and distobuccal roots genuinely do separate mesiodistally and
+ * are plainly visible in plate 03.
+ */
+const SUPERIMPOSED_ROOTS = new Set<AnatomyKey>(['permanent:upper:first_premolar']);
+
 const PERMANENT_SPREAD = { widestMin: 0.8, widestMax: 1.1, apexMin: 0.4, apexMax: 0.75 };
 const PRIMARY_SPREAD = { widestMin: 0.9, widestMax: 1.25, apexMin: 0.6, apexMax: 1.0 };
 
@@ -582,6 +600,7 @@ async function main() {
     for (const key of allAnatomyKeys()) {
       const art = LATERAL_ART[key];
       if (art.roots.length < 2) continue;
+      if (SUPERIMPOSED_ROOTS.has(key)) continue;
       const m = measurements.get(key)!;
       const spread = measureRootSpread(art.roots, m.crownBottom);
       const limits = key.startsWith('primary:') ? PRIMARY_SPREAD : PERMANENT_SPREAD;
@@ -609,6 +628,18 @@ async function main() {
       }
     }
     assert.equal(bad.length, 0, `\n      ${bad.join('\n      ')}`);
+  });
+
+  await test('the superimposed-root exemption covers exactly the teeth it should', () => {
+    // Guards the exemption itself: if someone adds a key here to silence a
+    // failure, this states out loud what was excused and why it is legitimate.
+    assert.deepEqual([...SUPERIMPOSED_ROOTS], ['permanent:upper:first_premolar']);
+    assert.equal(
+      LATERAL_ART['permanent:upper:first_premolar'].roots.length,
+      2,
+      'the exemption is about PROJECTION, not about the tooth having one root — it must still be drawn bifurcated',
+    );
+    console.log('      exempt from mesiodistal divergence: permanent:upper:first_premolar (buccal/palatal split, superimposed in this view)');
   });
 
   await test('primary molar roots are more divergent than their permanent counterparts', () => {
