@@ -187,16 +187,29 @@ with_status_lock() {
   # message. The subshell's fd table (and any lock held through it) is
   # discarded when it exits, so no explicit unlock/close is needed either.
   (
-    exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
+    echo "DEBUG wsl: entering subshell, STATUS_LOCK_FILE=$STATUS_LOCK_FILE" >&2
+    exec 8>"$STATUS_LOCK_FILE" 2>/tmp/wsl_exec_err_$$ || {
+      echo "DEBUG wsl: exec failed, stderr=$(cat /tmp/wsl_exec_err_$$ 2>/dev/null)" >&2
+      rm -f /tmp/wsl_exec_err_$$
       fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
       exit 1
     }
+    rm -f /tmp/wsl_exec_err_$$ 2>/dev/null
+    echo "DEBUG wsl: exec 8 succeeded, trying flock" >&2
     if ! flock -w 10 8; then
+      echo "DEBUG wsl: flock -w 10 8 failed, rc=$?" >&2
       fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
       exit 1
     fi
+    echo "DEBUG wsl: flock acquired, running: $*" >&2
     "$@"
+    _rc=$?
+    echo "DEBUG wsl: \"\$@\" returned rc=$_rc" >&2
+    exit "$_rc"
   )
+  local _outer_rc=$?
+  echo "DEBUG wsl: subshell returned $_outer_rc" >&2
+  return "$_outer_rc"
 }
 
 # ── overlap guard — identical shape to noramedi-pgbackrest-backup.sh; see that
