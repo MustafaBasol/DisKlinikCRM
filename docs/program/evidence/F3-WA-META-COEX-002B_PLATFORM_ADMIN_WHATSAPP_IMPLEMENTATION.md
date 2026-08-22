@@ -268,3 +268,19 @@ The Prisma schema model (`schema.prisma`) is **unchanged in its field/column lis
 **New HEAD SHA after this round:** see the top of this document / PR #487.
 
 **Lifecycle after this round:** `AGENT_COMPLETED=YES · TESTS_PASSED=YES · PR_OPENED=YES · MERGED=NO · MIGRATION_DEPLOYED=NO · APPLICATION_DEPLOYED=NO · PRODUCTION_VERIFIED=NO`. **DO NOT MERGE. DO NOT DEPLOY.**
+
+## 20. CI failure fixed (Layer 2: non-disposable backend tests) — same PR, no redesign
+
+After round 3 was pushed, GitHub Actions' `ci-layers / Layer 2: non-disposable backend tests` job failed. Root cause: `PlatformWhatsAppConnection` (added in round 1) was never registered in `server/src/utils/tenantModelClassification.ts` — a repo-wide schema/registry drift guard (`tenantModelClassification.test.ts`) that fails closed whenever a Prisma model exists with no explicit tenant-ownership classification, specifically so a new model can never become "effectively unprotected just because it has no `clinicId` column" by omission. This guard is unrelated to, and predates, this task; it was simply never satisfied for the new model.
+
+**Fix:** added one registry entry for `PlatformWhatsAppConnection`, classified `PLATFORM_GLOBAL` (no `organizationId`/`clinicId`, `guardMode: 'NO_TENANT_FILTER'`, `rls: 'NOT_APPLICABLE'`), positioned immediately after `ClinicWhatsAppConnection`'s entry to match the model's declaration position in `schema.prisma` (the guard also checks registry order mirrors schema order). Its `rationale` field cites the singleton invariant from §19, the platform-admin-only mutation surface, and that the tenant inbound webhook resolver never reads this table (§8).
+
+**[TEST]** `npx tsx src/tests/tenantModelClassification.test.ts` — was 23 passed/5 failed before this fix (the 5 failures: missing classification entry, registry-count mismatch 116≠117, registry-order check, an "unprotected by omission" check, and a per-class-count-sum check — all five were the same single root cause manifesting in five separate assertions, not five independent defects); now **28 passed, 0 failed**, `TOTAL` climbs from 116 to 117 and the summary reports `PLATFORM_GLOBAL: 7` (was 6).
+
+**Confirmed no other suite was affected by the same gap:** `test:tenant-context` (29/29), `test:tenant-guard-unit` (73/73), `test:raw-sql-tenant-audit` (12/12), `test:tenant-system-context-inventory` (16/16), `test:outbox-contracts` (53/53), `test:messaging-reliability` (49/49) — all re-run locally, all green, all unaffected (they don't consume this registry the same way). `server` `npm run typecheck` and root `npx tsc -b` both re-run, both exit 0.
+
+**Not changed:** schema, migration, routes, service, frontend, or any other file — this is purely a missing registry entry for an unrelated, pre-existing repo-wide guard that every new Prisma model must satisfy.
+
+**New HEAD SHA after this fix:** see the top of this document / PR #487.
+
+**Lifecycle after this fix:** `AGENT_COMPLETED=YES · TESTS_PASSED=YES · PR_OPENED=YES · MERGED=NO · MIGRATION_DEPLOYED=NO · APPLICATION_DEPLOYED=NO · PRODUCTION_VERIFIED=NO`. **DO NOT MERGE. DO NOT DEPLOY.**
