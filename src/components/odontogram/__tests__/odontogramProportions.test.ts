@@ -276,6 +276,81 @@ const TOL = {
   apexWidthMax: 6.0,
 };
 
+/**
+ * Minimum curve segments on an outer contour.
+ *
+ * Not an aesthetic preference: the first R3 permanent lateral pass satisfied
+ * every measurement in the table above and was still rejected on sight,
+ * because its contours were straight chords between correctly-placed anchor
+ * points. Its crowns had 4 curve segments and its single roots had ZERO. The
+ * R2 artwork it replaced had 8-16 and 4-12 respectively, so on curve quality
+ * it was a regression that no other assertion in this file could see.
+ */
+const MIN_CROWN_CURVES = 6;
+const MIN_ROOT_CURVES = 4;
+
+/**
+ * Root separation, as a fraction of the tooth's own crown width.
+ *
+ * Measured off the reference plates, not assumed. Permanent: plate 06's lower
+ * first molar spans ~0.93 of its crown width at the widest point of the roots
+ * and ~0.54 between the apices. Primary: plate 08's upper first molar reaches
+ * ~1.08 and ~0.75 — more divergent, which is the deciduous signature, but
+ * nowhere near a 'roots splay outward all the way to the tips' caricature.
+ */
+const PERMANENT_SPREAD = { widestMin: 0.8, widestMax: 1.1, apexMin: 0.4, apexMax: 0.75 };
+const PRIMARY_SPREAD = { widestMin: 0.9, widestMax: 1.25, apexMin: 0.6, apexMax: 1.0 };
+
+function countCommand(d: string, command: string): number {
+  let n = 0;
+  for (const ch of d) if (ch === command) n++;
+  return n;
+}
+
+interface RootSpread {
+  /** Widest outer separation anywhere between the furcation and the apices. */
+  widest: number;
+  /** Outer separation measured across the root apices themselves. */
+  apex: number;
+}
+
+/**
+ * How far apart a multi-rooted tooth's roots actually get, and how far apart
+ * their tips end up. Scanned rather than derived from control points, so a
+ * root that curves outward and back is measured where it really is widest.
+ */
+function measureRootSpread(roots: string[], cervixY: number): RootSpread {
+  const polylines = roots.map(flattenPath);
+  const deepest = Math.max(...polylines.map((pts) => bbox(pts).maxY));
+  let widest = 0;
+  for (let y = cervixY + 2; y <= deepest; y += 0.5) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (const pts of polylines) {
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const a = pts[i];
+        const b = pts[i + 1];
+        if (a.y === b.y) continue;
+        const lo = Math.min(a.y, b.y);
+        const hi = Math.max(a.y, b.y);
+        if (y < lo || y > hi) continue;
+        const t = (y - a.y) / (b.y - a.y);
+        const x = a.x + t * (b.x - a.x);
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+      }
+    }
+    if (Number.isFinite(minX) && maxX - minX > widest) widest = maxX - minX;
+  }
+
+  // Each root's own tip x, so 'apex separation' is between tips rather than
+  // between whatever happens to be widest at the deepest scanline.
+  const apexXs = polylines.map((pts) => pts.reduce((best, p) => (p.y > best.y ? p : best), pts[0]).x);
+  const apex = apexXs.length > 1 ? Math.max(...apexXs) - Math.min(...apexXs) : 0;
+
+  return { widest, apex };
+}
+
 const INCISAL_Y = 4.0;
 
 interface LateralMeasurement {
@@ -457,6 +532,103 @@ async function main() {
       }
     }
     assert.equal(bad.length, 0, `\n      ${bad.join('\n      ')}`);
+  });
+
+  section('Curve quality — a silhouette built from straight chords reads as CAD, not anatomy');
+
+  await test('every crown outline is drawn predominantly with curves rather than facets', () => {
+    // A tooth measured perfectly against the table can still be unshippable.
+    // The first R3 permanent lateral pass hit every tabulated number and was
+    // rejected on sight: its crowns were 4-curve/2-line loops, i.e. rounded
+    // hexagons, and next to the reference plates they read as CAD output.
+    // Curve count is a crude proxy for 'organic', but it is the one that
+    // catches the specific regression that actually happened.
+    const bad: string[] = [];
+    for (const key of allAnatomyKeys()) {
+      const curves = countCommand(LATERAL_ART[key].crown, 'C');
+      if (curves < MIN_CROWN_CURVES) {
+        bad.push(`${key}: crown has ${curves} curve segments (minimum ${MIN_CROWN_CURVES})`);
+      }
+    }
+    assert.equal(bad.length, 0, `\n      ${bad.join('\n      ')}`);
+  });
+
+  await test('no root is a straight-sided polygon', () => {
+    // The same rejected pass produced single roots with ZERO curve commands.
+    // A straight-sided cone is the loudest 'this was generated, not drawn'
+    // signal in the whole glyph — it is what made the incisor roots read as
+    // carrots.
+    const bad: string[] = [];
+    for (const key of allAnatomyKeys()) {
+      LATERAL_ART[key].roots.forEach((root, index) => {
+        const curves = countCommand(root, 'C');
+        if (curves < MIN_ROOT_CURVES) {
+          bad.push(`${key} root[${index}]: ${curves} curve segments (minimum ${MIN_ROOT_CURVES})`);
+        }
+      });
+    }
+    assert.equal(bad.length, 0, `\n      ${bad.join('\n      ')}`);
+  });
+
+  section('Root divergence — multi-rooted teeth must read as a pincer, not as parallel prongs');
+
+  await test('multi-rooted teeth separate at the furcation and converge again at the apices', () => {
+    // Measured off the reference plates rather than assumed: on plate 06 the
+    // lower first molar's crown is ~205px wide, its roots span ~190px at
+    // their widest and only ~110px between the apices. A real multi-rooted
+    // tooth is a lyre, not a letter V — and it is precisely the inward turn
+    // near the apices that forces the roots to be curved.
+    const bad: string[] = [];
+    for (const key of allAnatomyKeys()) {
+      const art = LATERAL_ART[key];
+      if (art.roots.length < 2) continue;
+      const m = measurements.get(key)!;
+      const spread = measureRootSpread(art.roots, m.crownBottom);
+      const limits = key.startsWith('primary:') ? PRIMARY_SPREAD : PERMANENT_SPREAD;
+      const widestRatio = spread.widest / m.crownWidth;
+      const apexRatio = spread.apex / m.crownWidth;
+
+      if (widestRatio < limits.widestMin || widestRatio > limits.widestMax) {
+        bad.push(
+          `${key}: widest root separation ${widestRatio.toFixed(2)}x crown width ` +
+            `(expected ${limits.widestMin}-${limits.widestMax})`,
+        );
+      }
+      if (apexRatio < limits.apexMin || apexRatio > limits.apexMax) {
+        bad.push(
+          `${key}: apex separation ${apexRatio.toFixed(2)}x crown width ` +
+            `(expected ${limits.apexMin}-${limits.apexMax})`,
+        );
+      }
+      if (spread.apex >= spread.widest) {
+        bad.push(
+          `${key}: apices (${spread.apex.toFixed(1)}) are no closer together than the widest ` +
+            `point of the roots (${spread.widest.toFixed(1)}) — the roots flare outward instead ` +
+            `of curving back in`,
+        );
+      }
+    }
+    assert.equal(bad.length, 0, `\n      ${bad.join('\n      ')}`);
+  });
+
+  await test('primary molar roots are more divergent than their permanent counterparts', () => {
+    for (const arch of ['upper', 'lower'] as const) {
+      const primaryKey = `primary:${arch}:second_molar` as AnatomyKey;
+      const permanentKey = `permanent:${arch}:first_molar` as AnatomyKey;
+      const primary = measurements.get(primaryKey)!;
+      const permanent = measurements.get(permanentKey)!;
+      const primaryRatio =
+        measureRootSpread(LATERAL_ART[primaryKey].roots, primary.crownBottom).widest /
+        primary.crownWidth;
+      const permanentRatio =
+        measureRootSpread(LATERAL_ART[permanentKey].roots, permanent.crownBottom).widest /
+        permanent.crownWidth;
+      assert.ok(
+        primaryRatio > permanentRatio,
+        `${primaryKey} root spread ${primaryRatio.toFixed(2)}x should exceed ` +
+          `${permanentKey} ${permanentRatio.toFixed(2)}x — divergent roots are the deciduous signature`,
+      );
+    }
   });
 
   section('Relative scale — the arch must not read as a collage');

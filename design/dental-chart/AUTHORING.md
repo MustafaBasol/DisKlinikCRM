@@ -25,7 +25,9 @@ one of them is a rule below, not a matter of taste:
    split on (§4).
 3. **Roots too short and too blunt.** Most teeth are roughly two-thirds root
    by length. R2 drew them about half, with rounded club ends, which is the
-   single strongest "cartoon tooth" signal.
+   single strongest "cartoon tooth" signal. Do not overcorrect into straight
+   chords: see §3.2, and note that the first R3 attempt at this file's own
+   tables produced numerically perfect polygons that had to be redrawn.
 4. **Made-up proportions.** Every tooth was drawn to fill the same box, so a
    lower central incisor was as wide as a first molar. §2 fixes this with one
    table derived from published mean crown dimensions.
@@ -194,27 +196,61 @@ Walking down one side of a crown you must pass three distinct x values:
 - **The crown's width at `CERVIX_Y` and the root's width at `CERVIX_Y` must be
   the same number.** This is what makes the crown and the root read as one
   tooth once they are painted in two different colours.
+- **The crown contour must be curved too** — minimum 6 `C` segments, with the
+  mesial and distal contours bowing outward through the height of contour and
+  curving back in to the CEJ. No straight vertical sides. A 4-curve/2-line loop
+  is a rounded hexagon and reads as a box.
+- The incisal/occlusal edge is **narrower than the contact points**, not the
+  full crown width.
 
 ### 3.2 Roots
 
-- A root **tapers continuously** from its cervical width to a **narrow, blunt
-  apex** — about 2.5–4 units across at the tip, never a rounded club and never
-  a mathematical point.
+- A root **tapers continuously** from its cervical width to a **narrow, rounded
+  apex** — about 2.5-4 units across measured 2.5 units up from the tip, never a
+  flat cap, never a rounded club, never a needle point.
+- **Every root contour must be CURVED.** Minimum 4 `C` segments per root, and no
+  straight `L` on the mesial or distal contour. This is a hard rule with a
+  history: the first R3 permanent lateral pass hit every number in §2.1 exactly
+  and was still rejected on sight, because its single roots contained ZERO
+  curve commands. A straight-sided cone reads as a carrot, and it is the
+  loudest "this was generated, not drawn" signal in the whole glyph. Measuring
+  correctly is necessary and not sufficient.
+- A root leaves the CEJ almost vertically, the taper accelerates through the
+  middle third, and it eases into the apex. It is slightly convex overall.
 - Multi-rooted teeth: draw the **root trunk** as part of each root path from
   `CERVIX_Y` down to the furcation, then diverge. The furcation sits roughly
   **0.3 of the way** from the CEJ to the apex on permanent molars, and much
-  **closer to the CEJ (≈0.15)** on primary molars — that high furcation plus
-  the flare below it is the primary-molar signature.
-- **Root order in the `roots` array: palatal/lingual root FIRST.** The
-  renderer paints in array order, so the first entry sits behind and the
-  furcation reads as depth. Applies to upper molars, upper first premolar and
-  primary upper molars.
-- Upper molars are **3-rooted**: mesiobuccal and distobuccal roots visibly
-  separated, palatal root behind and between them, drawn wider and extending
-  slightly further. Lower molars are **2-rooted**: mesial (broader, often with
-  a distal curve at the apex) and distal (narrower, straighter).
+  **closer to the CEJ (~0.15)** on primary molars — that high furcation plus the
+  flare below it is the primary-molar signature.
+- **Divergence is a lyre, not a letter V.** Roots separate at the furcation,
+  reach maximum separation in the middle third, and their apices then curve
+  back IN toward each other. Measured off the plates, as a fraction of that
+  tooth's own crown mesiodistal width:
+
+  | | widest separation | separation at the apices |
+  |---|---|---|
+  | permanent multi-rooted | 0.80 - 1.10 | 0.40 - 0.75 |
+  | primary molars | 0.90 - 1.25 | 0.60 - 1.00 |
+
+  Apex separation must always be strictly less than the widest separation.
+  Note the useful consequence: because the apices turn back inward, a
+  compliant root *cannot* be a straight line — the divergence rule and the
+  curve rule are satisfied by the same drawing.
+- **Root order in the `roots` array: palatal/lingual root FIRST.** The renderer
+  paints in array order, so the first entry sits behind and the furcation reads
+  as depth. Applies to upper molars, upper first premolar and primary upper
+  molars.
+- Upper molars are **3-rooted**: mesiobuccal and distobuccal roots make the
+  visible pincer, palatal root behind and between them, drawn wider, straighter
+  and slightly longer. Lower molars are **2-rooted**: mesial (broader, hooking
+  distally near the apex — that hook is much of why the pair reads as anatomy)
+  and distal (narrower, straighter).
 - Roots must start **~2 units above `CERVIX_Y`** so the crown, painted on top,
   always overlaps them. A visible seam between crown and root is a bug.
+- **Match the tangent at the CEJ, not just the width.** If the crown's contour
+  arrives at the cervical line travelling in a different direction from the one
+  the root's contour departs in, the junction reads as a step even when both
+  widths are identical to the decimal.
 
 ### 3.3 Mesiodistal asymmetry — required, and specific
 
@@ -291,7 +327,13 @@ So you know what your silhouette has to survive:
       points.
 - [ ] Crown width at the CEJ is 0.72–0.80 of the crown MD width, and the
       root's cervical width is the same number.
-- [ ] Roots start ~2 units above `CERVIX_Y`; apex is 2.5–4 units across.
+- [ ] Roots start ~2 units above `CERVIX_Y`; apex is 2.5-4 units across and
+      rounded.
+- [ ] Crown has >= 6 curve segments; every root has >= 4 and no straight
+      segment on its mesial or distal contour.
+- [ ] Multi-rooted: widest and apex separations are inside the §3.2 table, and
+      the apices are closer together than the widest point.
+- [ ] Your rewrite has no FEWER curve segments than the entry it replaced.
 - [ ] Root count matches §2 exactly (a test pins this).
 - [ ] Palatal/lingual root is first in the array where applicable.
 - [ ] The crown is genuinely asymmetric about `x = 32` for a *stated*
