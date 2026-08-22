@@ -42,3 +42,18 @@ dist.next/
 dist.next.stale-*/
 dist.rollback-*/
 .noramedi-frontend-release-state
+
+# DENTAL-CHART-ASSET-R3 — odontogram morphology reference plates.
+#
+# Ten ~1 MB raster study plates used as MORPHOLOGY GUIDANCE ONLY while
+# authoring the vector tooth registry. They are never traced, never embedded
+# and never shipped: nothing under src/ references them, and the production
+# assets are the hand-authored SVG paths in
+# src/components/odontogram/{lateral,occlusal}/.
+#
+# Deliberately not committed. ~10 MB of binaries that no build, test or
+# runtime path reads would be paid for by every clone and every CI checkout
+# forever, in exchange for provenance that design/dental-chart/final-svg/ and
+# the AUTHORING.md tables already record in text. See the README in that
+# directory for how to restore them.
+design/dental-chart/reference-plates/

@@ -75,6 +75,20 @@ export type AnatomyKey = PermanentAnatomyKey | PrimaryAnatomyKey;
 
 export type AnatomyRegistry<T> = Readonly<Record<AnatomyKey, T>>;
 
+/**
+ * Author-ownership slices of AnatomyKey — DENTAL-CHART-ASSET-R3.
+ *
+ * The 26-entry registries are split across three files each so parallel asset
+ * lanes edit disjoint modules. These three subtypes are what make that split
+ * safe: each sub-module is typed `Record<Slice, Art>`, so the compiler still
+ * rejects a missing entry inside a slice, and the assembler spreading all
+ * three into `AnatomyRegistry<Art>` still rejects a missing slice. Splitting
+ * the file therefore cannot silently lose a tooth.
+ */
+export type PermanentUpperKey = Extract<PermanentAnatomyKey, `permanent:upper:${string}`>;
+export type PermanentLowerKey = Extract<PermanentAnatomyKey, `permanent:lower:${string}`>;
+
+
 /** How the left side of the arch is produced from the authored right side. */
 export type SideStrategy =
   /** Reflect horizontally. Correct for any form with real mesiodistal shape. */
