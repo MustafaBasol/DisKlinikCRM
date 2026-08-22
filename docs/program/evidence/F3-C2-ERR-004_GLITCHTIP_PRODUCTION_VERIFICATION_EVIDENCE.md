@@ -832,3 +832,112 @@ LUKS is not configured.
 **Exact next task:** program owner/counsel completes the R5 packet's §4 DECISION-1 through
 DECISION-5. Only after all five are recorded may a subsequent, separately authorized
 technical task proceed to `F3-C2-ERR-002` §9 Stage 3.
+
+## 17. R-CLOSE addendum (2026-08-22) — `F3-C2-ERR-004-CLOSE` production evidence reconciliation
+
+**Task type:** documentation/governance reconciliation only. This addendum records
+**operator-supplied, already-completed** production activation evidence; it does not
+itself activate, deploy, restart, or configure anything, and cannot independently
+re-verify infrastructure state beyond what was supplied.
+
+**Program-owner override, dated 2026-08-22:** `TECHNICAL_ACTIVATION_AUTHORIZED = YES`.
+The program owner explicitly authorized proceeding with the technical `SENTRY_DSN`
+activation ahead of completion of the R5 packet's §4 DECISION-1 through DECISION-5, as a
+**sequencing/risk-acceptance override only**. This is **not** `LEGAL_EXTERNAL_APPROVED`
+and is **not** KVKK legal-compliance, DPA-sufficiency, or counsel approval — those remain
+`PENDING`. `IHS_KVKK_DSN_HARD_GATE` (R5 packet §5) stays `BLOCKED_PENDING_AUTHORIZED_DECISION`
+**in its legal substance** — all five decisions are still blank; the override authorizes
+only the technical/sequencing step of activation ahead of them, not any of the five
+themselves.
+
+**Production activation evidence (operator-supplied):**
+
+- Checkout at activation: `3cc37474de829960e35015c08b578f7b7f1cbfa0`.
+- GlitchTip 6.2.6, self-hosted on VPS2/IHS Türkiye; `errors.noramedi.com` public HTTPS;
+  organization `NoraMedi`, project `NoraMedi Production`; real production DSN provisioned
+  and active on VPS1 (value never recorded here or anywhere in this repository).
+- **Verification #1** (`requestId=f3-c2-err-004-verify-189301`): committed verifier
+  executed with explicit `--send-one-synthetic-event`; `SENTRY_DSN_CONFIGURED=YES`;
+  `RELEASE_SHA_CONFIGURED=YES` (`RELEASE_SHA_VALUE=3cc37474de829960e35015c08b578f7b7f1cbfa0`);
+  `NODE_ENV=production`; `FLUSH_STATUS=FLUSHED`; `EVENTS_SENT=1`; provider raw JSON
+  confirmed: title/message exactly `internal error captured`, `role=api`,
+  `errType=Error`, `environment=production`, release matches checkout,
+  `route=/:unsafe-route`; all verifier NORAMEDI synthetic PHI/credential/DICOM/raw-route
+  canaries absent.
+- **Observed provider normalization:** raw JSON contained `user.username=[Filtered]` and
+  `ip_address=[Filtered]`, `modules={}` — no real user/IP/module inventory leaked.
+  Provider-side configuration confirmed: `GLITCHTIP_PII_SCRUB_DEFAULT` enabled, sensitive
+  keys include `tckn`, `tc_kimlik_no`, `diagnosis`, `diagnosis_note`, `patient_note`,
+  `anamnesis`, `icd10`, `treatment_note`, `national_id`, `phone`, `birthdate`,
+  `ip_address`, `username`. Classified as **provider-side scrubbing/normalization, not a
+  PHI/PII leak** — consistent with, and not a new finding beyond, §3/§6 above.
+- **Security incident during verification:** a `docker compose config` diagnostic
+  rendered the resolved Compose environment and printed GlitchTip's `POSTGRES_PASSWORD`
+  and `SECRET_KEY` into operator terminal/chat evidence. Both values were immediately
+  treated as compromised. **No secret value is reproduced anywhere in this document or
+  this task's changes.**
+- **Containment:** Postgres role password rotated; `POSTGRES_PASSWORD` and
+  `DATABASE_URL` updated consistently; GlitchTip `SECRET_KEY` rotated; active `.env`
+  mode `0600`; `gt-web` and `gt-worker` recreated using the new environment; operator
+  login re-verified successfully.
+- **Post-rotation runtime:** `gt-postgres` healthy, `gt-valkey` healthy, `gt-web`
+  healthy, `gt-worker` up, local GlitchTip HTTP `200`, public
+  `https://errors.noramedi.com` HTTP `200`.
+- **Verification #2** (`requestId=f3-c2-err-004-verify-190582`, post-rotation):
+  committed verifier executed exactly once; `FLUSH_STATUS=FLUSHED`; `EVENTS_SENT=1`;
+  provider raw JSON again verified with the same fixed safe fields; all sensitive
+  verifier canaries absent — confirms NoraMedi → GlitchTip ingest remained operational
+  after rotation.
+- **Secret-backup cleanup:** obsolete files removed —
+  `.env.pre-errors-fqdn-20260820-195250`,
+  `.env.pre-secret-rotation-20260822-164602`,
+  `.env.pre-secret-rotation-20260822-164815` — final `LEGACY_ENV_BACKUP_COUNT=0`; active
+  `.env` present, mode `0600`. Recorded as **logical file removal plus credential
+  rotation only** — no physical secure-erase (SSD block level) claim is made.
+
+**Lifecycle (R-CLOSE):**
+
+```
+AGENT_COMPLETED (this docs task)      = YES
+AGENT_COMPLETED (prior activation)    = YES (operator-executed, not performed by this task)
+TECHNICAL_ACTIVATION_AUTHORIZED       = YES (2026-08-22 program-owner override, sequencing/risk-acceptance only)
+TESTS_PASSED                          = implementation PR's prior scoped automated evidence unchanged;
+                                         this activation additionally evidenced by the committed
+                                         production verifier + runtime/provider checks above —
+                                         no new automated-test count invented
+PR_OPENED (new runtime PR)            = NO
+MERGED (new runtime merge)            = NO
+DEPLOYED                              = YES, narrowly: SENTRY_DSN activation + GlitchTip secret
+                                         rotation/recreate (config/runtime activation only) —
+                                         NO NoraMedi application code deployed
+PRODUCTION_VERIFIED                   = YES (Workload A technical activation, privacy boundary,
+                                         delivery, runtime — verifications #1/#2 above)
+LEGAL_EXTERNAL_APPROVED               = NO / PENDING
+```
+
+`F3-SEC-EXIT-001` §5 item 10 is now stale on its literal "confirmed absent in-repo"
+premise and is annotated `TECHNICALLY_SATISFIED_PENDING_LEGAL_RATIFICATION` (see that
+document's own addendum). `F3_EXIT_CRITERION_2` and `F3_EXIT_GATE` remain `NOT SATISFIED`
+overall — other independently-sufficient, unrelated reasons (e.g. the platform-admin
+MFA negative-test-coverage gap; the separately-tracked `R-030-DB` Workload-B legal gate)
+are each alone sufficient and are unchanged by this task. `F3_COMPLETE = NO`;
+`F4_TRANSITION_AUTHORIZED = NO`.
+
+**Migration:** NONE. **Rollback:** telemetry rollback is removal/restoration of the
+`SENTRY_DSN` configuration followed by a PM2 reload on the same deployed release; no
+DB/schema migration rollback applies; the compromised pre-rotation GlitchTip credentials
+must **not** be restored; the deleted pre-rotation `.env` backups are not rollback
+sources; if GlitchTip must be disabled, NoraMedi's existing fail-open telemetry behavior
+(`errorTracking.ts` is a no-op without a reachable DSN) is preserved unchanged.
+
+**Tenant/security impact:** telemetry boundary stays deny-by-default; no patient name,
+TCKN, phone, email, address, diagnosis, appointment note, message body, `Authorization`,
+cookie, `DATABASE_URL`, storage credential, Meta secret, DICOM identifier, filename,
+`clinicId`, unsafe route, or unsafe role/request ID reached the provider in the
+controlled verifications above; tenant/clinic identifiers are not exported by this event
+boundary; no schema/migration change; no cross-domain modular-monolith boundary change.
+
+**Exact next task:** unchanged from §16 — program owner/counsel completes R5 packet §4
+DECISION-1 through DECISION-5; this override does not resolve, and must not be read as
+resolving, any of the five. `F3-C2-ERR-004-R6-IHS-LUKS-ENABLEMENT` remains named but not
+opened, pending DECISION-4's disposition.
