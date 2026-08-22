@@ -19,7 +19,6 @@ import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import type { Pool } from 'pg';
 import type { Queue, Worker } from 'bullmq';
-import { Redis as IORedis } from 'ioredis';
 import { startPocEnvironment, type PocEnvironment } from './queuePocEnvironment.js';
 import {
   PostgresOutboxDispatcher,
@@ -30,6 +29,9 @@ import {
   makeEnvelope,
   createBullQueue,
   createBullWorker,
+  installHarnessRedisOwnership,
+  createTrackedRedis,
+  openRedisClientCount,
   enqueueBull,
   assertMinimalPayload,
   PayloadMinimizationError,
@@ -194,6 +196,9 @@ async function bullRig(
 // ===========================================================================
 
 async function main(): Promise<void> {
+  // Must run before the first Queue/Worker exists: from here on every
+  // Redis connection BullMQ makes is one the harness owns and can close.
+  installHarnessRedisOwnership();
   console.log('F5-1P — queue platform disposable PoC');
   console.log('Bringing up throwaway PostgreSQL 16 + Redis 7.0 …');
   const env = await startPocEnvironment();
@@ -1227,7 +1232,7 @@ async function main(): Promise<void> {
       await new Promise((r) => setTimeout(r, 500));
       let redisClients = -1;
       let redisProbeError = '';
-      const probe = new IORedis({ host: env.redis.host, port: env.redis.port, password: env.redis.password, maxRetriesPerRequest: 1 });
+      const probe = createTrackedRedis({ host: env.redis.host, port: env.redis.port, password: env.redis.password, maxRetriesPerRequest: 1 });
       try {
         const clients = await probe.info('clients');
         redisClients = Number(/connected_clients:(\d+)/.exec(clients)?.[1] ?? -1);
@@ -1235,6 +1240,7 @@ async function main(): Promise<void> {
         redisProbeError = (err as Error).message;
       } finally {
         await probe.quit().catch(() => {});
+        probe.disconnect(false);
       }
       await rig.close();
       return {
@@ -1281,6 +1287,12 @@ async function main(): Promise<void> {
     console.log('\nDestroying disposable environment …');
     await env.destroy();
     console.log('done.');
+    // Proves the lifecycle rather than assuming it: if any harness-owned
+    // Redis connection is still open here, the run reports it and fails
+    // instead of hanging silently.
+    const openClients = openRedisClientCount();
+    console.log(`redis clients still open after teardown: ${openClients}`);
+    if (openClients > 0) process.exitCode = 1;
   }
 }
 

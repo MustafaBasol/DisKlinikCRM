@@ -28,7 +28,16 @@
 
 import { randomUUID, createHash } from 'crypto';
 import type { Pool, PoolClient } from 'pg';
-import { Queue, Worker, UnrecoverableError, type Job } from 'bullmq';
+import {
+  Queue,
+  Worker,
+  UnrecoverableError,
+  RedisConnection,
+  createIORedisClient,
+  type Job,
+  type RedisOptions,
+} from 'bullmq';
+import { Redis as IORedis, type RedisOptions as IORedisOptions } from 'ioredis';
 import {
   runAsTenant,
   runAsSystem,
@@ -521,6 +530,132 @@ export class PostgresOutboxDispatcher {
 }
 
 // ===========================================================================
+// Connection ownership and deterministic teardown
+// ===========================================================================
+
+/**
+ * Why this exists.
+ *
+ * Given a plain options object, BullMQ constructs its own ioredis client for
+ * every Queue and every Worker, and applies a default `retryStrategy` that
+ * never gives up (`bullmq/classes/redis-connection`: it always returns a delay,
+ * never `null`). Closing is therefore not guaranteed to release the socket: if
+ * a client happens to be mid-reconnect when `close()` runs, ioredis rejects the
+ * QUIT because the stream is not writeable and `enableOfflineQueue` is false,
+ * BullMQ swallows that as a connection error, and nothing ever calls
+ * `disconnect()`. The client keeps retrying for the lifetime of the process.
+ *
+ * E05 stops Redis underneath a live queue, which is exactly that situation, so
+ * one BullMQ-owned client survived every run and kept the event loop alive —
+ * the PoC finished all 44 experiments, tore down its containers, and then hung
+ * forever reconnecting to a Redis that no longer existed.
+ *
+ * The harness therefore owns every Redis connection explicitly: it creates them
+ * through `RedisConnection.clientFactory` (BullMQ's documented hook for exactly
+ * this), tracks them alongside the queues and workers that use them, and closes
+ * all three in a defined order. Reconnection behaviour during the run is
+ * unchanged — E06/E07 asserts that clients *do* reconnect — but once teardown
+ * starts, the retry strategy gives up so teardown can converge.
+ */
+
+const trackedRedisClients = new Set<IORedis>();
+const trackedQueues = new Set<Queue>();
+const trackedWorkers = new Set<Worker>();
+let harnessShuttingDown = false;
+
+/** BullMQ's own default: exponential, clamped to [1s, 20s], never gives up. */
+const defaultBackoffMs = (times: number) => Math.max(Math.min(Math.exp(times), 20_000), 1_000);
+
+/**
+ * Creates an ioredis client the harness owns and can always close. Reconnect
+ * behaviour matches BullMQ's default until teardown begins, then stops.
+ */
+export function createTrackedRedis(opts: RedisOptions): IORedis {
+  const client = new IORedis({
+    ...(opts as IORedisOptions),
+    retryStrategy: (times: number) => (harnessShuttingDown ? null : defaultBackoffMs(times)),
+  });
+  // BullMQ removes its own 'error' listener in close(), after which ioredis
+  // reports every reconnect attempt as an unhandled error event. The owner
+  // keeps a listener for the whole lifetime instead. Command failures still
+  // reject normally, so experiments that assert a loud failure (E05) are
+  // unaffected.
+  client.on('error', () => {});
+  trackedRedisClients.add(client);
+  client.once('end', () => trackedRedisClients.delete(client));
+  return client;
+}
+
+/**
+ * Routes every connection BullMQ would create through {@link createTrackedRedis}.
+ * Must be called before the first Queue or Worker is constructed.
+ */
+export function installHarnessRedisOwnership(): void {
+  RedisConnection.clientFactory = (opts: RedisOptions) =>
+    createIORedisClient(createTrackedRedis(opts));
+}
+
+/** Bounds a teardown step so one stuck connection cannot hang the process. */
+async function withTimeout(work: Promise<unknown>, ms: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([
+    work.catch(() => undefined),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, ms);
+      // An unref'd timer cannot itself keep the event loop alive.
+      timer.unref();
+    }),
+  ]);
+  if (timer) clearTimeout(timer);
+}
+
+/**
+ * Closes every queue, worker and Redis client the harness created, in the only
+ * order that is safe: workers first (they hold blocking connections and would
+ * otherwise keep reading from a queue that is closing), then queues, then any
+ * client BullMQ could not close itself.
+ *
+ * Idempotent, and safe to call while Redis is still running — which is the
+ * point: called before the containers are destroyed, every client can still
+ * complete a real QUIT instead of being stranded mid-reconnect.
+ */
+export async function closeAllQueueResources(): Promise<void> {
+  harnessShuttingDown = true;
+
+  const workers = [...trackedWorkers];
+  trackedWorkers.clear();
+  await withTimeout(Promise.all(workers.map((w) => w.close().catch(() => {}))), 15_000);
+
+  const queues = [...trackedQueues];
+  trackedQueues.clear();
+  await withTimeout(Promise.all(queues.map((q) => q.close().catch(() => {}))), 15_000);
+
+  const clients = [...trackedRedisClients];
+  trackedRedisClients.clear();
+  await withTimeout(
+    Promise.all(
+      clients.map(async (c) => {
+        try {
+          if (c.status === 'ready') await c.quit();
+        } catch {
+          // Falls through to disconnect(), which is what actually releases the
+          // handle when QUIT cannot be written.
+        } finally {
+          // disconnect(false): release the socket and schedule no reconnect.
+          c.disconnect(false);
+        }
+      }),
+    ),
+    15_000,
+  );
+}
+
+/** Test seam: how many harness-owned Redis clients are still open. */
+export function openRedisClientCount(): number {
+  return [...trackedRedisClients].filter((c) => c.status !== 'end').length;
+}
+
+// ===========================================================================
 // Candidate B — BullMQ + Redis
 // ===========================================================================
 
@@ -542,7 +677,9 @@ export const bullConnection = (redis: BullSetupOptions['redis']) => ({
 });
 
 export function createBullQueue(opts: BullSetupOptions): Queue {
-  return new Queue(opts.queueName, { connection: bullConnection(opts.redis) });
+  const queue = new Queue(opts.queueName, { connection: bullConnection(opts.redis) });
+  trackedQueues.add(queue);
+  return queue;
 }
 
 export function createBullWorker(
@@ -569,6 +706,8 @@ export function createBullWorker(
       concurrency: opts.concurrency ?? 5,
     },
   );
+
+  trackedWorkers.add(worker);
 
   worker.on('failed', (job, err) => {
     if (!job) return;

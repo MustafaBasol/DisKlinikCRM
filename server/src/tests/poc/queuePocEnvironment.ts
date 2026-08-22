@@ -23,6 +23,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { Client, Pool } from 'pg';
 import { readFile } from 'fs/promises';
+import { closeAllQueueResources } from './queuePocCandidates.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POC_DIR = path.resolve(HERE, '../../../../docs/architecture/poc/f5-1p-queue-platform');
@@ -220,6 +221,11 @@ export async function startPocEnvironment(): Promise<PocEnvironment> {
   const destroyOnce = async () => {
     if (destroyed) return;
     destroyed = true;
+    // Order matters. Redis clients are closed while Redis is still
+    // running, so each one completes a real QUIT instead of being left
+    // reconnecting to a container that no longer exists — which is what
+    // previously kept the event loop alive after the run had finished.
+    await closeAllQueueResources().catch(() => {});
     await pool.end().catch(() => {});
     await compose(['down', '-v', '--remove-orphans'], 120_000).catch(() => {});
   };
