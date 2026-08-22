@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 25.6 64 58.6" width="64" height="58.6" data-tooth-fdi="52" data-view="lateral" role="img">
+  <title>Tooth 52 — primary (deciduous) upper right lateral incisor — lateral view</title>
+  <desc>Standalone lateral (buccal/facial) anatomy for tooth 52 (primary (deciduous), upper right lateral incisor), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(0 88) scale(1 -1)">
+    <path d="M25.5 26 C26.6 32.7 28 39.7 29.3 46.6 C29.6 47.2 30 47.2 30.3 46.6 C31.7 39.7 33.2 32.7 34.5 26 C32.3 24.7 27.7 24.7 25.5 26 Z" fill="#f0e6d2" stroke="#a1866a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-part="root" data-root-index="0"/>
+    <path d="M37.5 8.5 C37.3 7 35.3 6.3 32.7 6.5 L27.5 6.8 C24.8 7.2 22.8 8.5 22.1 10.8 C21.4 13 21.8 15.5 22.8 18 C23.4 19.5 23.7 21 24.6 22.2 C25.6 23.6 26.7 24.6 28.1 25.1 L34.9 24.9 C36.2 24.3 37.1 23 37.8 21.2 C38.5 19.3 38.8 17 38.8 14.6 C38.8 12.4 38.4 10.3 37.5 8.5 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-part="crown"/>
+    <path d="M25 11.5 L34.5 11 M27.7 7.3 V12 M32.7 7.1 V12.3" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.55" stroke-linecap="round" data-part="surface"/>
+    <path d="M23 25.3 C27 27.3 32 27.3 36.3 24" fill="none" stroke="#b39a7c" stroke-width="1.1" stroke-opacity="0.75" stroke-linecap="round" data-part="cervical"/>
+  </g>
+</svg>

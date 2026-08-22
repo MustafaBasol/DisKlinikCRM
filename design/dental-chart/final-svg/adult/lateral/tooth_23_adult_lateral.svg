@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 6.3 64 79.2" width="64" height="79.2" data-tooth-fdi="23" data-view="lateral" role="img">
+  <title>Tooth 23 — permanent (adult) upper left canine — lateral view</title>
+  <desc>Standalone lateral (buccal/facial) anatomy for tooth 23 (permanent (adult), upper left canine), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(0 88) scale(1 -1) translate(64 0) scale(-1 1)">
+    <path d="M24 35 C25.5 50 27 65 28.5 78.3 C28.8 79.2 29.2 79.2 29.5 78.3 C31.5 65 33.5 50 36 35 C33.5 33 26.5 33 24 35 Z" fill="#f0e6d2" stroke="#a1866a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-part="root" data-root-index="0"/>
+    <path d="M36 5 C38.3 6.3 41 10.5 42.3 15.5 C43.3 19.5 43.3 24.5 42.7 29 C42.2 32.3 41.2 34.3 40 35.2 L23 35.2 C21 33.3 19.5 30 18.8 26 C18 21.5 18.3 16.5 20.3 12.3 C22.5 7.8 29 5.3 36 5 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-part="crown"/>
+    <path d="M36 5 V15 M27 11 L36 5 L40 14" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.55" stroke-linecap="round" data-part="surface"/>
+    <path d="M21 34.3 C26.5 36.8 38.5 36.8 41 32.8" fill="none" stroke="#b39a7c" stroke-width="1.1" stroke-opacity="0.75" stroke-linecap="round" data-part="cervical"/>
+  </g>
+</svg>

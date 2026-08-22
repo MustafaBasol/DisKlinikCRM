@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 5.1 64 79.2" width="64" height="79.2" data-tooth-fdi="41" data-view="lateral" role="img">
+  <title>Tooth 41 — permanent (adult) lower right central incisor — lateral view</title>
+  <desc>Standalone lateral (buccal/facial) anatomy for tooth 41 (permanent (adult), lower right central incisor), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g>
+    <path d="M27 30 C27.9 38 29 47 30.2 55.6 C30.5 56.3 30.9 56.3 31.2 55.6 C32.9 47 34 38 34.5 30 C32.7 28.8 28.8 28.8 27 30 Z" fill="#f0e6d2" stroke="#a1866a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-part="root" data-root-index="0"/>
+    <path d="M38 9 C36 7.8 32.5 7.6 30.5 8.5 C28.5 9.3 26.3 9.2 25 10.5 C23.8 11.6 23 13.5 23 16 C23 18.7 23.7 21.3 25 24 C25.9 26 26.7 28 27.8 29.5 L36.5 30 C37.5 28.3 38.2 25.8 38.6 22.5 C39 19 39.1 15.3 38.9 12.3 C38.8 11 38.5 9.9 38 9 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-part="crown"/>
+    <path d="M26.5 10.5 L37 10 M30.5 8.5 V13.5 M34.5 9.3 V13.7" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.55" stroke-linecap="round" data-part="surface"/>
+    <path d="M24.5 29.3 C28.5 31.3 34 31.3 37.5 28.5" fill="none" stroke="#b39a7c" stroke-width="1.1" stroke-opacity="0.75" stroke-linecap="round" data-part="cervical"/>
+  </g>
+</svg>

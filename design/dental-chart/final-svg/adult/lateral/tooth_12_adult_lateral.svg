@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 5 64 79.2" width="64" height="79.2" data-tooth-fdi="12" data-view="lateral" role="img">
+  <title>Tooth 12 — permanent (adult) upper right lateral incisor — lateral view</title>
+  <desc>Standalone lateral (buccal/facial) anatomy for tooth 12 (permanent (adult), upper right lateral incisor), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(0 88) scale(1 -1)">
+    <path d="M25 32 C26.2 42 28 53 30 63 C30.3 63.8 30.7 63.8 31 63 C33 53 34.8 42 35 32 C33 30.6 27 30.6 25 32 Z" fill="#f0e6d2" stroke="#a1866a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-part="root" data-root-index="0"/>
+    <path d="M40 8 C37.5 6.5 33.5 6.3 31 7.5 C28.5 8.6 25.5 8.4 23 10 C20.8 11.4 19.3 13.8 19 17 C18.7 20 19.3 23.3 20.6 26.5 C21.6 28.8 22.5 30.5 24 32 L35.5 32.3 C37.4 30.2 38.6 27.2 39.3 23.3 C40 19.5 40.2 15 40.2 11.3 C40.2 10.1 40.1 9 40 8 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-part="crown"/>
+    <path d="M24 11 L24 17 M31 7.5 V14.5 M37 10 L37 16" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.55" stroke-linecap="round" data-part="surface"/>
+    <path d="M22.5 31.5 C27 33.6 33.5 33.6 37.5 30.8" fill="none" stroke="#b39a7c" stroke-width="1.1" stroke-opacity="0.75" stroke-linecap="round" data-part="cervical"/>
+  </g>
+</svg>

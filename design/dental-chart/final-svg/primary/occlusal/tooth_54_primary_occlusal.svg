@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="14 11.2 36 40.1" width="36" height="40.1" data-tooth-fdi="54" data-view="occlusal" role="img">
+  <title>Tooth 54 — primary (deciduous) upper right first molar — occlusal view</title>
+  <desc>Standalone occlusal/incisal anatomy for tooth 54 (primary (deciduous), upper right first molar), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g>
+    <path d="M23 24 C24.8 22.2 29.7 20.8 33 20 C36.3 19.2 41.5 17.5 43 19 C44.5 20.5 42.3 24.7 42 29 C41.7 33.3 42.3 41.8 41 45 C39.7 48.2 36.8 48.8 34 48 C31.2 47.2 26 42.8 24 40 C22 37.2 22.2 33.7 22 31 C21.8 28.3 21.2 25.8 23 24 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
+    <path d="M43 19 C44.5 20.5 42.3 24.7 42 29 C41.7 33.3 42.3 41.8 41 45 L36 39 L38 24 Z" data-surface="mesial" data-tooth-fdi="54" fill="none" stroke="none"><title>mesial</title></path>
+    <path d="M24 40 C22 37.2 22.2 33.7 22 31 C21.8 28.3 21.2 25.8 23 24 L27 27 L27 36 Z" data-surface="distal" data-tooth-fdi="54" fill="none" stroke="none"><title>distal</title></path>
+    <path d="M23 24 C24.8 22.2 29.7 20.8 33 20 C36.3 19.2 41.5 17.5 43 19 L38 24 L27 27 Z" data-surface="buccal" data-tooth-fdi="54" fill="none" stroke="none"><title>buccal</title></path>
+    <path d="M41 45 C39.7 48.2 36.8 48.8 34 48 C31.2 47.2 26 42.8 24 40 L27 36 L36 39 Z" data-surface="lingual" data-tooth-fdi="54" fill="none" stroke="none"><title>palatal</title></path>
+    <path d="M27 27 L38 24 L36 39 L27 36 Z" data-surface="central" data-tooth-fdi="54" fill="none" stroke="none"><title>occlusal</title></path>
+    <path d="M33 23 L30 30 M36 27 L34 36 M28 33 L32 38" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
+  </g>
+</svg>

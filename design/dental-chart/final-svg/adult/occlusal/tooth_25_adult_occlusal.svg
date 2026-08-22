@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 7 44 49.7" width="44" height="49.7" data-tooth-fdi="25" data-view="occlusal" role="img">
+  <title>Tooth 25 — permanent (adult) upper left second premolar — occlusal view</title>
+  <desc>Standalone occlusal/incisal anatomy for tooth 25 (permanent (adult), upper left second premolar), generated from the app's anatomy registries. Base &quot;no record&quot; status only — no clinical status tint applied.</desc>
+  <g transform="translate(64 0) scale(-1 1)">
+    <path d="M22 21 C24.2 17.8 29.5 17.2 33 17 C36.5 16.8 41.5 17.3 43 20 C44.5 22.7 42.3 28.5 42 33 C41.7 37.5 42.8 44.2 41 47 C39.2 49.8 34.3 49.8 31 50 C27.7 50.2 22.8 50.3 21 48 C19.2 45.7 19.8 40.5 20 36 C20.2 31.5 19.8 24.2 22 21 Z" fill="#fbfdfe" stroke="#64748b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-part="outline"/>
+    <path d="M43 20 C44.5 22.7 42.3 28.5 42 33 C41.7 37.5 42.8 44.2 41 47 L36 41 L38 26 Z" data-surface="mesial" data-tooth-fdi="25" fill="none" stroke="none"><title>mesial</title></path>
+    <path d="M21 48 C19.2 45.7 19.8 40.5 20 36 C20.2 31.5 19.8 24.2 22 21 L26 27 L26 42 Z" data-surface="distal" data-tooth-fdi="25" fill="none" stroke="none"><title>distal</title></path>
+    <path d="M22 21 C24.2 17.8 29.5 17.2 33 17 C36.5 16.8 41.5 17.3 43 20 L38 26 L26 27 Z" data-surface="buccal" data-tooth-fdi="25" fill="none" stroke="none"><title>buccal</title></path>
+    <path d="M41 47 C39.2 49.8 34.3 49.8 31 50 C27.7 50.2 22.8 50.3 21 48 L26 42 L36 41 Z" data-surface="lingual" data-tooth-fdi="25" fill="none" stroke="none"><title>palatal</title></path>
+    <path d="M26 27 L38 26 L36 41 L26 42 Z" data-surface="central" data-tooth-fdi="25" fill="none" stroke="none"><title>occlusal</title></path>
+    <path d="M39 32 L22 33 M32 27 L32 29 M31 40 L31 42" fill="none" stroke="#94a3b8" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" data-part="detail"/>
+  </g>
+</svg>
