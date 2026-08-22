@@ -293,6 +293,10 @@ OUT_NOFLOCK="$(PATH="$NOFLOCK_PATH" env RESTIC_REPOSITORY=x RESTIC_PASSWORD_FILE
 [[ "$CODE_NOFLOCK" -eq 3 ]] && pass "backup: exits 3 when flock is absent" \
   || fail "backup flock-absent: exit=$CODE_NOFLOCK (expected 3), out=$OUT_NOFLOCK"
 
+echo "DIAG: NOFLOCK_PATH=$NOFLOCK_PATH" >&2
+echo "DIAG: direct command -v flock with NOFLOCK_PATH: $(PATH="$NOFLOCK_PATH" command -v flock 2>&1; echo "[rc=$?]")" >&2
+echo "DIAG: minimal env+bash -c harness: $(PATH="$NOFLOCK_PATH" env RESTIC_REPOSITORY=x RESTIC_PASSWORD_FILE="$RESTIC_PW" bash -c 'echo "PATH=$PATH"; command -v flock; echo "rc=$?"' 2>&1)" >&2
+
 CODE_NOFLOCK_RP=0
 OUT_NOFLOCK_RP="$(PATH="$NOFLOCK_PATH" env RESTIC_REPOSITORY=x RESTIC_PASSWORD_FILE="$RESTIC_PW" bash "$RESTOREPROOF" 2>&1)" || CODE_NOFLOCK_RP=$?
 [[ "$CODE_NOFLOCK_RP" -eq 3 ]] && pass "restore-proof: exits 3 when flock is absent" \

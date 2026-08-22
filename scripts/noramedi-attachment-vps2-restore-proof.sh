@@ -93,20 +93,22 @@ with_status_lock() {
   local lock_dir
   lock_dir="$(dirname "$STATUS_LOCK_FILE")"
   mkdir -p "$lock_dir" 2>/dev/null || true
-  exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
-    fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
-    return 1
-  }
-  if ! flock -w 10 8; then
-    fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
-    exec 8>&-
-    return 1
-  fi
-  "$@"
-  local rc=$?
-  flock -u 8
-  exec 8>&-
-  return "$rc"
+  # Subshell-scoped for the same reason noramedi-attachment-vps2-backup.sh's
+  # with_status_lock() is — a bare `exec N>file` applies its redirections
+  # PERMANENTLY to whatever shell runs it, which would otherwise silently
+  # and permanently redirect this script's own stderr to /dev/null after the
+  # first status write.
+  (
+    exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
+      fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
+      exit 1
+    }
+    if ! flock -w 10 8; then
+      fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
+      exit 1
+    fi
+    "$@"
+  )
 }
 
 command -v restic    >/dev/null 2>&1 || { fail "restic is not installed"; exit "$PRECONDITION_EXIT_CODE"; }

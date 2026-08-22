@@ -177,20 +177,26 @@ with_status_lock() {
   local lock_dir
   lock_dir="$(dirname "$STATUS_LOCK_FILE")"
   mkdir -p "$lock_dir" 2>/dev/null || true
-  exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
-    fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
-    return 1
-  }
-  if ! flock -w 10 8; then
-    fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
-    exec 8>&-
-    return 1
-  fi
-  "$@"
-  local rc=$?
-  flock -u 8
-  exec 8>&-
-  return "$rc"
+  # Everything below runs in a SUBSHELL specifically so that a bare `exec`
+  # (needed to attach fd 8 to a file so `flock` can lock it) scopes its
+  # redirections to this subshell only. `exec N>file` with no command word
+  # applies ALL its redirections PERMANENTLY to the CURRENT shell — an
+  # earlier revision called it directly in this function's own shell, which
+  # silently and permanently redirected this script's own stderr to
+  # /dev/null after the first status write, masking every later error
+  # message. The subshell's fd table (and any lock held through it) is
+  # discarded when it exits, so no explicit unlock/close is needed either.
+  (
+    exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
+      fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
+      exit 1
+    }
+    if ! flock -w 10 8; then
+      fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
+      exit 1
+    fi
+    "$@"
+  )
 }
 
 # ── overlap guard — identical shape to noramedi-pgbackrest-backup.sh; see that
