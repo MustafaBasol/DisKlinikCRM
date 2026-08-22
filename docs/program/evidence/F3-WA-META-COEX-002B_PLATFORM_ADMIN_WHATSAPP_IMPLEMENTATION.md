@@ -73,7 +73,7 @@ Per F3-WA-META-COEX-002A's §5 proposal and this task's own explicit approval: a
 
 - **Provider dispatch:** `platformWhatsAppConnectionService.ts`'s `testPlatformWhatsAppConnection`/`disconnectPlatformWhatsAppConnection` call the **exact same** `runConnectionTest`/`runProviderDisconnect` functions (`whatsappService.ts`) that the tenant path's `testWhatsAppConnection`/`disconnectWhatsAppConnection` call — same `getWhatsAppProvider('meta_cloud_api')` → `MetaCloudWhatsAppProvider` instance, same Graph API calls, same error handling. **[TEST]** proven: the disconnect/test tests stub `globalThis.fetch` exactly like `whatsappProvider.test.ts` does for the tenant path, and a static-source assertion confirms `platformWhatsAppConnectionService.ts` never references `whatsAppConnection.` (the tenant Prisma delegate) anywhere.
 - **Manual-config completeness validation:** `isMetaManualConfigComplete`/`META_MANUAL_SETUP_ERROR`, now exported from `whatsappService.ts` and imported by both `organizationWhatsApp.ts` (tenant) and `platformWhatsAppConnectionService.ts` (platform) — one implementation, not two.
-- **Secret encryption:** `encryptSecret`/`encryptSecretTagged` from `utils/encryption.ts`, unchanged, called identically to the tenant route's create/update handlers.
+- **Secret encryption — not uniform across all four sensitive fields (corrected in review round 2, see §18):** `metaAccessTokenEncrypted` is encrypted with `encryptSecret`; `metaWebhookSecret` and `webhookSecret` are encrypted with `encryptSecretTagged` (`enc:v1:` prefix) — all three exactly as `utils/encryption.ts` is called by the tenant route's create/update handlers. `metaWebhookVerifyToken` is the exception: it is persisted as **plaintext**, using the exact same tenant-compatible convention `organizationWhatsApp.ts` already uses for this field (Meta's webhook-verification GET handshake compares it directly against the query-string value it receives, so the tenant path never encrypts it either — this task did not change that persistence convention). It is still never returned by any API response (`sanitizePlatformConnection` strips it) and the Platform Admin UI now treats it as a sensitive, replacement-only field (password-style input, blank-on-load, blank-after-save) even though its storage is plaintext.
 - **Secret sanitization:** `sanitizePlatformConnection()` in `routes/platformWhatsApp.ts` strips the same four fields (`metaAccessTokenEncrypted`, `metaWebhookVerifyToken`, `metaWebhookSecret`, `webhookSecret`) that `organizationWhatsApp.ts`'s `sanitizeConnection()` strips.
 - **Platform Admin routing convention:** `authenticatePlatformAdmin` + `csrfProtection('platform')` on `router.use(...)`, same as `platformExternalCalendar.ts`/`platformMigration.ts`/`platformSecurityIncidents.ts`.
 - **Audit convention:** `writePlatformAdminAuditEventInTx`/`writePlatformAdminAuditEvent` from `services/platformAdminAudit.ts`, same action-naming style (`platform_whatsapp_connection.created/updated/tested/disconnected/deleted`), atomic with the mutation via `prisma.$transaction` for create/update/disconnect/delete (test is audited non-atomically, matching `organizationWhatsApp.ts`'s own POST `/test` route, which also calls `writeAuditLog` after `testWhatsAppConnection()` completes, not inside a shared transaction).
@@ -88,7 +88,7 @@ No second `testWhatsAppConnection`-equivalent, no second Meta Graph API client, 
 - New nav item **"Meta WhatsApp"** under Platform Admin, route `/platform/whatsapp`.
 - Single-panel form (no clinic list — this is a singleton, not a per-clinic screen): Name, Phone Number, Display Name, Meta Business ID, WABA ID, Phone Number ID, Meta App ID, Webhook Verify Token, Access Token, Meta Webhook Secret, Shared Webhook Secret.
 - **Not shown:** `linkedClinicIds`, clinic assignment, clinic legal-profile/service readiness, template-purpose readiness, Evolution QR controls, Embedded Signup — per the task's explicit exclusion list. This is a **manual-configuration-only** screen; the platform connection is NoraMedi's own App, not a customer's, so there is no Embedded Signup flow to reuse for it.
-- Status badge (disconnected/connecting/connected/error), Test connection, Disconnect, Delete actions; secret fields always redisplay blank (never pre-filled) and an update only rotates a secret when the operator actually types a new value — verified against a real bug this task caught and fixed in its own first draft (see §11).
+- Status badge (disconnected/connecting/connected/error), Test connection, Disconnect, Delete actions; the four sensitive fields (`metaAccessTokenEncrypted`, `metaWebhookSecret`, `webhookSecret`, and — since review round 2, see §18 — `metaWebhookVerifyToken`) are all rendered as password-style inputs, always redisplay blank (never pre-filled), and an update only rotates one when the operator actually types a new value — verified against a real bug this task caught and fixed in its own first draft (see §11), with a second, reviewer-caught gap in the same field closed in §18.
 
 ## 8. Tenant isolation
 
@@ -104,7 +104,8 @@ No second `testWhatsAppConnection`-equivalent, no second Meta Graph API client, 
 
 - `metaAccessTokenEncrypted` is AES-256-GCM encrypted (`encryptSecret`) before persistence — **[TEST]** confirmed the stored value differs from the plaintext input and decrypts back to it.
 - `metaWebhookSecret`/`webhookSecret` are tagged-encrypted (`encryptSecretTagged`, `enc:v1:` prefix) — **[TEST]** confirmed.
-- **[TEST]** every route response (`create`, `get`) was asserted to never contain the substring `"plaintext"` anywhere in its serialized JSON, and to have `metaAccessTokenEncrypted`/`metaWebhookSecret`/`webhookSecret`/`metaWebhookVerifyToken` all `undefined`.
+- `metaWebhookVerifyToken` is **not encrypted** — it is stored as plaintext, using the existing tenant-compatible persistence convention already used by `organizationWhatsApp.ts` for this exact field (see §6). This is a deliberate, pre-existing convention this task reused, not something introduced here, and this task did not change it. It is still never returned by any API response, and the Platform Admin UI now presents it as a sensitive, replacement-only input (password-style field, always blank on load and after save) — see §18.
+- **[TEST]** every route response (`create`, `get`) was asserted to never contain the substring `"plaintext"` anywhere in its serialized JSON, and to have `metaAccessTokenEncrypted`/`metaWebhookSecret`/`webhookSecret`/`metaWebhookVerifyToken` all `undefined` (the last one because it is stripped from responses, not because it is encrypted).
 - **[TEST]** every audit row's `safeMetadata` carries only field **names** (`{ fields: ['metaAccessTokenEncrypted'] }`), never values; the created-connection audit row's serialized form was asserted to never contain the substring `"plaintext"`.
 - No secret value appears in any commit, test fixture, or this document — every test uses synthetic strings (`'plaintext-access-token'`, `'rotated-token'`, etc.), never a real Meta credential.
 - Audited actions: `platform_whatsapp_connection.created`, `.updated`, `.tested` (both success and failure outcomes), `.disconnected`, `.deleted`.
@@ -128,6 +129,19 @@ Exact commands run in this session, all against a disposable local PostgreSQL 16
 | `cd server && npx tsx src/tests/platformAdminSessionRevocation.test.ts` | 15 passed, 0 failed | 0 |
 | `cd server && npx tsx src/tests/platformAdminLoginTotpGate.test.ts` | 30 passed, 0 failed | 0 |
 | `cd server && npx tsx src/tests/sessionCookieCsrf.test.ts` | 15 passed, 0 failed | 0 |
+
+**Review round 2 (this follow-up), re-run against a fresh disposable PostgreSQL 16 container, port 55902 — see §18:**
+
+| Command | Result | Exit code |
+|---|---|---|
+| `cd server && npx prisma migrate deploy` | Applied all 83 migrations (incl. `20260822140000_add_platform_whatsapp_connection`) cleanly from empty | 0 |
+| `cd server && npx prisma migrate status` | `Database schema is up to date!` | 0 |
+| `cd server && npm run test:messaging-connection-scope` | 33 passed, 0 failed | 0 |
+| `cd server && npx tsx src/tests/platformWhatsAppConnection.test.ts` | 28 passed, 0 failed | 0 |
+| `cd server && npx tsx src/tests/whatsappProvider.test.ts` | 143 passed, 0 failed (53 + 90, unchanged) | 0 |
+| `cd server && npx tsx src/tests/metaWhatsAppWebhook.test.ts` | 17 passed, 0 failed | 0 |
+| `cd server && npm run typecheck` | No errors | 0 |
+| `npx tsc -b` (root) | No errors | 0 |
 
 No count is invented; every number above is copied from the actual run's summary line. The new test file's 28 cases cover, in two layers:
 
@@ -173,3 +187,22 @@ Additive migration; application rollback never requires dropping `PlatformWhatsA
 ## 17. Exact next task
 
 Program owner: (a) obtains/provisions NoraMedi's own Meta Business/App/WABA credentials, (b) reviews and merges this draft PR, (c) follows the deployment order in §14 in a controlled release, (d) performs the real (non-stubbed) provider connection test in §14.12, (e) updates this evidence document's lifecycle fields to reflect `MERGED`/`DEPLOYED`/`PRODUCTION_VERIFIED` once each is actually true — none of those are true as of this document.
+
+## 18. Review round 2 — fixes applied to the same PR (no redesign, no new migration)
+
+A code review of the original implementation found two remaining gaps, both confined to `src/pages/platform/PlatformWhatsApp.tsx` (no backend, schema, or migration change):
+
+1. **`metaWebhookVerifyToken` was not cleared from local form state after a successful save.** The other three sensitive fields (`metaAccessTokenEncrypted`, `metaWebhookSecret`, `webhookSecret`) were reset to `''` in the post-save `setForm` call; `metaWebhookVerifyToken` was left out of that reset. **Fixed:** it is now cleared alongside the other three. The "leave blank = unchanged" semantics were not affected by this bug (the save payload already only included the field when non-empty) — the bug was purely that a just-typed value stayed visible in the input after a successful save, when it should have gone blank like every other secret-like field.
+2. **`metaWebhookVerifyToken` was rendered as a plain-text (`type="text"`) input, and had no "leave blank unchanged" hint.** **Fixed:** it is now `type="password"`, shows the same `(leave blank to keep unchanged)` hint and `configuredPlaceholder` text as the other three sensitive fields once a connection exists, and — per fix (1) — starts and ends every save cycle blank, exactly like the other three.
+
+This is a **UI-only, replacement-only-input treatment** of the field, not a change to how it is persisted: as documented in §6/§9, `metaWebhookVerifyToken` remains **plaintext** in the database, unchanged from the existing tenant-compatible convention `organizationWhatsApp.ts` already used before this task existed. No migration, no encryption, no persistence-layer change was made or is needed for this fix; the field was already excluded from every API response before this round (`sanitizePlatformConnection` already stripped it) and the manual-config completeness check (`isMetaManualConfigComplete`) was already unaffected by it either way.
+
+**Evidence-accuracy correction (this round):** the original §6/§9 wording described the encryption treatment of all four sensitive fields together without calling out that `metaWebhookVerifyToken` is the one exception that is not encrypted. §6 and §9 above have been corrected in place to state explicitly, per field: `metaAccessTokenEncrypted` → `encryptSecret`; `metaWebhookSecret`/`webhookSecret` → `encryptSecretTagged`; `metaWebhookVerifyToken` → existing tenant-compatible plaintext convention, never returned by the API, now UI-treated as sensitive/replacement-only. This correction does not change any code behavior — only the accuracy of this document.
+
+**Additional regression run (this round):** `organizationWhatsApp.ts` was modified by the original task's shared-helper extraction (§6), so `npm run test:messaging-connection-scope` — the tenant-isolation/role-scoping suite that exercises that exact route file — was re-run this round: **33 passed, 0 failed**, exit code 0 (see the updated table in §10). No regression.
+
+**Frontend test runner check (this round):** the repository has a frontend test runner (`npm run test:vitest` → `vitest run`), and sibling Platform Admin pages have dedicated suites (e.g. `src/pages/platform/__tests__/PlatformBackups.recovery.vitest.test.tsx`, `PlatformMigration.resume.vitest.test.tsx`). **No such test file exists for `PlatformWhatsApp.tsx`** (`src/pages/platform/__tests__/` contains no matching file, and no `*whatsapp*.test.*` file exists anywhere under `src/`). Stated explicitly, as required: there is nothing to run for this component's frontend behavior in this round, because no test for it exists — this task did not author one, since it was not asked to.
+
+**New HEAD SHA after this round:** see the top of this document / PR #487 — updated to the commit that includes this round's `PlatformWhatsApp.tsx` fix and this document's corrections.
+
+**Lifecycle after this round (unchanged from §16/original report):** `AGENT_COMPLETED=YES · TESTS_PASSED=YES · PR_OPENED=YES · MERGED=NO · MIGRATION_DEPLOYED=NO · APPLICATION_DEPLOYED=NO · PRODUCTION_VERIFIED=NO`. **DO NOT MERGE. DO NOT DEPLOY.**

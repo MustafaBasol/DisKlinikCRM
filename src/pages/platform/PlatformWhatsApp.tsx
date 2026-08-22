@@ -108,7 +108,7 @@ const PlatformWhatsApp: React.FC = () => {
         ? await api.put('/platform/whatsapp/meta-connection', payload)
         : await api.post('/platform/whatsapp/meta-connection', payload);
       setConnection(res.data.connection);
-      setForm((f) => ({ ...f, metaAccessTokenEncrypted: '', metaWebhookSecret: '', webhookSecret: '' }));
+      setForm((f) => ({ ...f, metaAccessTokenEncrypted: '', metaWebhookVerifyToken: '', metaWebhookSecret: '', webhookSecret: '' }));
     } catch (err: any) {
       setError(err.response?.data?.error ?? t('platform:whatsapp.errors.saveFailed'));
     } finally {
@@ -228,8 +228,9 @@ const PlatformWhatsApp: React.FC = () => {
                 className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 dark:text-gray-400">{t('platform:whatsapp.fields.metaWebhookVerifyToken')}</label>
-              <input type="text" value={form.metaWebhookVerifyToken} onChange={(e) => setForm((f) => ({ ...f, metaWebhookVerifyToken: e.target.value }))}
+              <label className="text-xs font-medium text-gray-600 dark:text-gray-400">{t('platform:whatsapp.fields.metaWebhookVerifyToken')} {connection && <span className="text-gray-400">({t('platform:whatsapp.leaveBlankUnchanged')})</span>}</label>
+              <input type="password" value={form.metaWebhookVerifyToken} onChange={(e) => setForm((f) => ({ ...f, metaWebhookVerifyToken: e.target.value }))}
+                placeholder={connection ? t('platform:whatsapp.configuredPlaceholder') : ''}
                 className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
