@@ -197,17 +197,25 @@ with_status_lock() {
   # directly against a real CI run: the prior revision's success path died
   # silently right after entering this subshell, with no error output at
   # all, because the abort happened before `fail()` or `return` ever ran).
+  echo "DEBUG wsl: before subshell" >&2
   (
+    echo "DEBUG wsl: in subshell, about to exec" >&2
     exec 8>"$STATUS_LOCK_FILE" 2>/dev/null || {
+      echo "DEBUG wsl: exec branch taken" >&2
       fail "cannot open status-write lock file '$STATUS_LOCK_FILE' — status not updated this run"
       exit 1
     }
+    echo "DEBUG wsl: exec ok, about to flock" >&2
     if ! flock -w 10 8; then
+      echo "DEBUG wsl: flock branch taken" >&2
       fail "could not acquire the status-write lock within 10s — status file left unchanged this run"
       exit 1
     fi
+    echo "DEBUG wsl: flock ok, running \$@ = $*" >&2
     "$@"
+    echo "DEBUG wsl: \$@ finished with rc=$?" >&2
   ) && rc=0 || rc=$?
+  echo "DEBUG wsl: after subshell, rc=$rc" >&2
   return "$rc"
 }
 
