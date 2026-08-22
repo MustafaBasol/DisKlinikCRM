@@ -29,6 +29,8 @@ import type {
   TemplateSendResult,
 } from './WhatsAppProvider.js';
 import { decryptSecret } from '../../utils/encryption.js';
+import { fetchWithTimeout } from '../../messaging/messagingHttp.js';
+import { classifyProviderHttpStatus, classifyMessagingError } from '../../messaging/messagingFailureClassification.js';
 
 const GRAPH_API_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
@@ -75,7 +77,7 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
     };
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -85,10 +87,18 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
       });
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
+        // F5-3 — the response body is deliberately NOT read into the returned
+        // error. It is the provider's own text and can echo the recipient's
+        // phone number or the message content; callers persist and log this
+        // string. The stable classification plus the numeric status is
+        // everything a retry decision or an operator actually needs.
+        const failure = classifyProviderHttpStatus(response.status, response.headers);
         return {
           success: false,
-          error: `Meta Graph API sendMessage failed with ${response.status}: ${errorText}`,
+          errorCode: failure.code,
+          httpStatus: response.status,
+          ...(failure.retryAfterMs !== undefined ? { retryAfterMs: failure.retryAfterMs } : {}),
+          error: `Meta Graph API sendMessage failed (${failure.code}, HTTP ${response.status}).`,
         };
       }
 
@@ -97,8 +107,14 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
       const externalMessageId = (messages?.[0]?.id as string) ?? null;
       return { success: true, externalMessageId };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { success: false, error: `Meta Graph API request error: ${msg}` };
+      // F5-3 — classified, not stringified. A network/timeout message can carry
+      // the endpoint and, through a proxy error, the recipient; the code cannot.
+      const failure = classifyMessagingError(err);
+      return {
+        success: false,
+        errorCode: failure.code,
+        error: `Meta Graph API request failed (${failure.code}).`,
+      };
     }
   }
 
@@ -121,15 +137,18 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
     const url = `${GRAPH_BASE}/${encodeURIComponent(phoneNumberId)}?fields=display_phone_number,verified_name`;
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
+        // F5-3 — a connection-test failure is shown to clinic staff. The
+        // provider body could echo their own credentials back at them, so the
+        // stable classification plus the numeric status is all that is exposed.
+        const failure = classifyProviderHttpStatus(response.status, response.headers);
         return {
           success: false,
-          message: `Meta Graph API test failed (${response.status}): ${errorText}`,
+          message: `Meta Graph API test failed (${failure.code}, HTTP ${response.status}).`,
         };
       }
 
@@ -215,7 +234,7 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
     };
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -225,11 +244,15 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
       });
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
+        // F5-3 — classified, never concatenated. See sendMessage above.
+        const failure = classifyProviderHttpStatus(response.status, response.headers);
         return {
           supported: true,
           success: false,
-          error: `Meta Graph API sendTemplateMessage failed (${response.status}): ${errorText}`,
+          errorCode: failure.code,
+          httpStatus: response.status,
+          ...(failure.retryAfterMs !== undefined ? { retryAfterMs: failure.retryAfterMs } : {}),
+          error: `Meta Graph API sendTemplateMessage failed (${failure.code}, HTTP ${response.status}).`,
         };
       }
 

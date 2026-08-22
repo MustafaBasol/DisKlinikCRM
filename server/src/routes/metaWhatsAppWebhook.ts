@@ -98,6 +98,9 @@ function getRawBody(req: Request): Buffer {
   return Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
 }
 
+import { createWebhookAckGate, type WebhookAckGate } from '../messaging/webhookAckGate.js';
+import { isDurableAckBeforeResponseEnabled } from '../messaging/messagingReliabilityConfig.js';
+
 function asJsonRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -107,12 +110,27 @@ function asJsonRecord(value: unknown): Record<string, unknown> | null {
  * Route an incoming parsed Meta webhook event to the correct clinic using the
  * existing clinic resolver + inbox logic. Mirrors the Evolution webhook flow.
  */
+/**
+ * F5-3 — `onDurablyAccepted` is invoked the instant the inbound ledger row is
+ * committed (or the message is recognised as a duplicate), i.e. the first
+ * moment at which losing this process would no longer lose the message.
+ *
+ * That is where the provider ACK belongs. Before F5-3 the 200 was sent at the
+ * top of the route, so the window between "provider believes we have it" and
+ * "we actually have it" contained a clinic-resolution query and an INSERT — and
+ * Meta never redelivers a message it has already had a 200 for.
+ *
+ * The callback is optional and, in legacy mode, already spent: the route sends
+ * its 200 up front exactly as before and this call is a no-op. That is what
+ * makes deploying this change behaviourally identical until the flag is on.
+ */
 async function routeIncomingMetaMessage(
   connection: { id: string; organizationId: string },
   phone: string,
   text: string,
   messageId: string | undefined,
   rawPayload: unknown,
+  onDurablyAccepted?: () => void,
 ): Promise<void> {
   const resolution = await resolveClinicForIncomingMessage(
     connection.id,
@@ -132,6 +150,11 @@ async function routeIncomingMetaMessage(
     fromPhone: phone,
     rawPayload: asJsonRecord(rawPayload),
   });
+
+  // Durably accepted (or provably a duplicate of something already accepted).
+  // Everything past this line is processing, and a crash here is recoverable by
+  // inboundEventRetryJob because the row exists.
+  onDurablyAccepted?.();
 
   if (inboundEvent.status === 'duplicate') {
     console.info('[meta-webhook] duplicate inbound message skipped', {
@@ -198,8 +221,15 @@ router.get('/whatsapp/meta/webhook', (req: Request, res: Response) => {
  * Resolves the connection by phone_number_id from the payload metadata.
  */
 router.post('/whatsapp/meta/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
-  // Always respond 200 quickly to Meta to prevent retries
-  res.status(200).json({ status: 'ok' });
+  // F5-3 — the response is answered through a gate so it goes out exactly once,
+  // whichever branch reaches it first.
+  //
+  // Legacy (flag off, the default): answer 200 immediately, exactly as before.
+  // Durable-ack (flag on): hold the answer until the inbound ledger row is
+  // committed, so a crash before that point returns 503 and Meta retries
+  // instead of the message being lost behind a 200 nobody can take back.
+  const gate = createWebhookAckGate(res);
+  if (!isDurableAckBeforeResponseEnabled()) gate.ack();
 
   try {
     const rawBody = getRawBody(req);
@@ -279,11 +309,20 @@ router.post('/whatsapp/meta/webhook', express.raw({ type: 'application/json' }),
         event.text,
         event.messageId,
         event.raw,
+        () => gate.ack(),
       );
     }
   } catch (err) {
-    // Log but do not re-throw — we already sent 200 to Meta
     console.error('[meta-webhook] global handler error:', safeErrorFields(err));
+    // Only reachable in durable-ack mode, and only when nothing has answered
+    // yet — i.e. the failure happened at or before durable acceptance. A 503
+    // makes Meta's own redelivery the backstop. In legacy mode the 200 is
+    // already out and this is a no-op, preserving today's behaviour exactly.
+    gate.fail('PROCESSING_FAILED_BEFORE_ACCEPTANCE');
+  } finally {
+    // Every early return above (malformed payload, unresolved connection,
+    // rejected signature, nothing to route) still owes the provider an answer.
+    gate.ack();
   }
 });
 
@@ -345,8 +384,9 @@ router.post(
   '/whatsapp/meta/:connectionId/webhook',
   express.raw({ type: 'application/json' }),
   async (req: Request, res: Response) => {
-    // Always respond 200 quickly
-    res.status(200).json({ status: 'ok' });
+    // See the global route above for why the answer goes through a gate.
+    const gate = createWebhookAckGate(res);
+    if (!isDurableAckBeforeResponseEnabled()) gate.ack();
 
     const connectionId = req.params['connectionId'] as string;
 
@@ -421,11 +461,15 @@ router.post(
           event.text,
           event.messageId,
           event.raw,
+          () => gate.ack(),
         );
       }
       // status_update events are logged but not yet persisted (future sprint)
     } catch (err) {
       console.error('[meta-webhook] connectionId handler error:', safeErrorFields(err));
+      gate.fail('PROCESSING_FAILED_BEFORE_ACCEPTANCE');
+    } finally {
+      gate.ack();
     }
   },
 );

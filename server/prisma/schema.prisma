@@ -2057,16 +2057,39 @@ model MessagingInboundEvent {
   /// Retry job'un kaç kez yeniden işlemeyi denediği (docs/45 Faz 2 #6)
   attempts               Int       @default(0)
   rawPayload             Json?
+  /// PRE-F5-3 rows carry a raw exception message here. As of F5-3 the writer
+  /// records a bounded, non-PII summary and puts the real classification in
+  /// `lastErrorCode`; this column is retained for the existing rows and is
+  /// NEVER surfaced by the DLQ view.
   errorMessage           String?
   processedAt            DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
+
+  /// F5-3 — when this event may next be retried. Exponential backoff with
+  /// jitter writes it. NULL preserves the pre-F5-3 meaning: eligible as soon
+  /// as the job's minimum-age floor has passed.
+  nextAttemptAt          DateTime?
+  /// F5-3 — stable MessagingFailureCode. Never a provider body, never PII.
+  /// This, not `errorMessage`, is what an operator and the metrics read.
+  lastErrorCode          String?
+  /// F5-3 — set when `status` becomes 'dead'. A terminal event is one nothing
+  /// will retry: the attempt ceiling, a permanent classification, an abandoned
+  /// retry window, or a channel with no re-delivery handler.
+  deadLetteredAt         DateTime?
+  /// F5-3 — replay audit. The full record goes to AuditLog; these make the
+  /// state visible without a join.
+  replayCount            Int       @default(0)
+  lastReplayedAt         DateTime?
+  lastReplayedBy         String?
 
   @@unique([channel, provider, connectionId, providerMessageId])
   @@index([organizationId, status, createdAt])
   @@index([clinicId, status, createdAt])
   @@index([channel, provider, providerMessageId])
   @@index([status, updatedAt])
+  /// F5-3 — the retry job's claim scan, and the oldest-pending-age metric.
+  @@index([status, nextAttemptAt])
 }
 
 /// Cron job'lar için paylaşımlı lease kilidi (docs/45 Faz 3 #9-10).

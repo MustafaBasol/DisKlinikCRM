@@ -13,7 +13,23 @@ export type SendMessagePayload = {
 export type SendMessageResult = {
   success: boolean;
   externalMessageId?: string | null;
+  /**
+   * Human-readable summary. F5-3: this is now built from a stable code and a
+   * numeric HTTP status ONLY — it never concatenates the provider's response
+   * body, which can echo the recipient's phone number or the message content
+   * and which callers persist and log.
+   */
   error?: string;
+  /**
+   * F5-3 — stable `MessagingFailureCode`. This, not `error`, is what a retry
+   * policy, a metric dimension or a dead-letter row should read. Typed as
+   * `string` here so `WhatsAppProvider.ts` stays a dependency-free contract.
+   */
+  errorCode?: string;
+  /** F5-3 — the provider's HTTP status, when there was one. Safe to log. */
+  httpStatus?: number;
+  /** F5-3 — provider-requested delay parsed from `Retry-After`. Never invented. */
+  retryAfterMs?: number;
 };
 
 export type TestConnectionResult = {
@@ -75,7 +91,14 @@ export type TemplateSendResult = {
   supported: boolean;
   success?: boolean;
   externalMessageId?: string | null;
+  /** F5-3 — built from a stable code and a numeric status only. Never a provider body. */
   error?: string;
+  /** F5-3 — stable `MessagingFailureCode`; this is what a retry policy should read. */
+  errorCode?: string;
+  /** F5-3 — the provider's HTTP status, when there was one. Safe to log. */
+  httpStatus?: number;
+  /** F5-3 — provider-requested delay parsed from `Retry-After`. Never invented. */
+  retryAfterMs?: number;
 };
 
 export interface WhatsAppProvider {

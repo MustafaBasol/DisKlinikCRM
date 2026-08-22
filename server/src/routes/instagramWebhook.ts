@@ -27,6 +27,8 @@ import {
   markInboundEventProcessed,
 } from '../services/messagingInboundIdempotency.js';
 import { processInstagramIncomingMessage } from '../services/instagram/instagramAiConversationProcessor.js';
+import { createWebhookAckGate } from '../messaging/webhookAckGate.js';
+import { isDurableAckBeforeResponseEnabled } from '../messaging/messagingReliabilityConfig.js';
 
 const router = express.Router();
 
@@ -386,7 +388,12 @@ router.post(
   '/instagram/webhook',
   express.raw({ type: 'application/json' }),
   async (req: Request, res: Response) => {
-    res.sendStatus(200);
+    // F5-3 — legacy (flag off, the default): answer 200 immediately, exactly as
+    // before. Durable-ack (flag on): hold the answer until the inbound ledger
+    // row is committed, so a failure before that point returns 503 and Meta
+    // redelivers instead of the message vanishing behind an irrevocable 200.
+    const gate = createWebhookAckGate(res, 'status');
+    if (!isDurableAckBeforeResponseEnabled()) gate.ack();
 
     try {
       const rawBody = getRawBody(req);
@@ -395,9 +402,13 @@ router.post(
         body,
         req.headers['x-hub-signature-256'] as string | undefined,
         rawBody,
+        () => gate.ack(),
       );
     } catch {
-      // Errors must not block the 200 response already sent.
+      gate.fail('PROCESSING_FAILED_BEFORE_ACCEPTANCE');
+    } finally {
+      // Every early return above still owes the provider an answer.
+      gate.ack();
     }
   },
 );
@@ -406,7 +417,9 @@ router.post(
   '/instagram/:connectionId/webhook',
   express.raw({ type: 'application/json' }),
   async (req: Request, res: Response) => {
-    res.sendStatus(200);
+    // See the global route above for why the answer goes through a gate.
+    const gate = createWebhookAckGate(res, 'status');
+    if (!isDurableAckBeforeResponseEnabled()) gate.ack();
 
     const connectionId = req.params['connectionId'] as string;
 
@@ -432,17 +445,26 @@ router.post(
       const sig = req.headers['x-hub-signature-256'] as string | undefined;
       if (!acceptsInstagramWebhookSignature(conn, sig, rawBody, 'connection')) return;
 
-      await processInstagramPayloadForConnection(conn, body);
+      await processInstagramPayloadForConnection(conn, body, () => gate.ack());
     } catch {
-      // Errors must not block the 200 response already sent.
+      gate.fail('PROCESSING_FAILED_BEFORE_ACCEPTANCE');
+    } finally {
+      gate.ack();
     }
   },
 );
 
+/**
+ * F5-3 — `onDurablyAccepted` fires the instant an inbound ledger row is
+ * committed (or the event is recognised as a duplicate). See
+ * `messaging/messagingReliabilityConfig.ts` for why the provider ACK belongs
+ * there rather than at the top of the route.
+ */
 async function handleInstagramWebhookPayload(
   body: unknown,
   signature: string | undefined,
   rawBody: Buffer,
+  onDurablyAccepted?: () => void,
 ): Promise<void> {
   const events = parseWebhook(body);
   if (events.length === 0) return;
@@ -458,13 +480,14 @@ async function handleInstagramWebhookPayload(
     if (!conn) continue;
     if (!acceptsInstagramWebhookSignature(conn, signature, rawBody, 'global')) continue;
 
-    await processInstagramEventForConnection(conn, event);
+    await processInstagramEventForConnection(conn, event, undefined, onDurablyAccepted);
   }
 }
 
 async function processInstagramPayloadForConnection(
   connection: InstagramWebhookConnection,
   body: unknown,
+  onDurablyAccepted?: () => void,
 ): Promise<void> {
   const events = parseWebhook(body);
 
@@ -472,7 +495,7 @@ async function processInstagramPayloadForConnection(
     if (event.eventType !== 'message') continue;
     if (!event.senderId) continue;
 
-    await processInstagramEventForConnection(connection, event);
+    await processInstagramEventForConnection(connection, event, undefined, onDurablyAccepted);
   }
 }
 
@@ -480,6 +503,7 @@ export async function processInstagramEventForConnection(
   connection: InstagramWebhookConnection,
   event: ParsedInstagramEvent,
   deps: InstagramWebhookProcessingDeps = defaultInstagramWebhookProcessingDeps,
+  onDurablyAccepted?: () => void,
 ): Promise<void> {
   if (!eventMatchesConnectionIdentifiers(event, connection)) {
     logInstagramResolutionFailure('identifier_mismatch', {
@@ -513,6 +537,10 @@ export async function processInstagramEventForConnection(
     toExternalId: event.recipientId ?? event.pageId ?? null,
     rawPayload: asJsonRecord(event.rawPayload),
   });
+
+  // Durably accepted (or provably a duplicate of something already accepted).
+  // Everything past this line is processing.
+  onDurablyAccepted?.();
 
   if (inboundEvent.status === 'duplicate') {
     console.info('[instagram-webhook] duplicate inbound message skipped', {

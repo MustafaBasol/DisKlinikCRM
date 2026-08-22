@@ -188,10 +188,36 @@ const REVIEW_MODEL_ACCESS: readonly ReviewModelAccessEntry[] = Object.freeze([
   },
   {
     file: 'server/src/jobs/inboundEventRetryJob.ts',
-    callSites: 3,
+    callSites: 5,
     mechanism: 'withJobLock',
     reason: 'background-job',
-    justification: 'Re-drives stuck messaging webhook envelopes across all connections.',
+    justification:
+      'Re-drives stuck messaging webhook envelopes across all connections. F5-3 added two sweeps ' +
+      '(retry-window-expired and unsupported-channel) that dead-letter events nothing would ever ' +
+      'retry; both are cross-tenant by definition, exactly like the retry scan itself.',
+  },
+  {
+    file: 'server/src/messaging/messagingInboundDlq.ts',
+    callSites: 9,
+    mechanism: 'runAsSystem',
+    reason: 'inbound-webhook-envelope',
+    justification:
+      'F5-3 terminal-state transition, dead-letter inspection and platform metrics over the inbound ' +
+      'ledger. Reuses the SAME reason messagingInboundIdempotency.ts already declares for this model ' +
+      '— no new system reason. System execution is what lets the row be read at all; tenant safety ' +
+      'comes from a REQUIRED organizationId predicate on every caller-facing function (the metrics ' +
+      'snapshot is deliberately platform-wide, and exposes only status/channel/provider counts).',
+  },
+  {
+    file: 'server/src/messaging/messagingInboundReplay.ts',
+    callSites: 2,
+    mechanism: 'runAsSystem',
+    reason: 'inbound-webhook-envelope',
+    justification:
+      'F5-3 authorized replay of a terminal inbound event. Same reason as the ledger writer, for the ' +
+      'same reason: the row may still have a null clinicId (routing never resolved). The caller must ' +
+      'pass an already-authorized organization + clinic scope, which is applied as a predicate on ' +
+      'the read and re-checked before any write.',
   },
   {
     file: 'server/src/services/externalCalendar/externalCalendarIdempotency.ts',
