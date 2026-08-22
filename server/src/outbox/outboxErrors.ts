@@ -32,6 +32,8 @@
  * content.
  */
 
+import { computeFullJitterBackoffMs } from '../utils/backoff.js';
+
 /**
  * Why a dispatch attempt failed. CLOSED SET — a consumer that needs a new
  * category adds it here in a reviewable diff, which is also the moment someone
@@ -187,14 +189,11 @@ export function computeBackoffMs(
   attemptCount: number,
   options?: { retryAfterMs?: number; random?: () => number },
 ): number {
-  const base = BASE_BACKOFF_MS[category];
-  const safeAttempt = Math.max(1, Math.floor(attemptCount));
-  // Cap the exponent before multiplying so a large attemptCount cannot
-  // overflow into Infinity.
-  const growth = 2 ** Math.min(safeAttempt - 1, 16);
-  const uncapped = Math.min(base * growth, MAX_BACKOFF_MS);
-  const rnd = options?.random ?? Math.random;
-  const jittered = Math.floor(uncapped * rnd());
-  const floor = Math.max(0, Math.floor(options?.retryAfterMs ?? 0));
-  return Math.min(Math.max(jittered, floor), MAX_BACKOFF_MS);
+  return computeFullJitterBackoffMs({
+    baseMs: BASE_BACKOFF_MS[category],
+    attempt: attemptCount,
+    maxMs: MAX_BACKOFF_MS,
+    ...(options?.retryAfterMs !== undefined ? { retryAfterMs: options.retryAfterMs } : {}),
+    ...(options?.random !== undefined ? { random: options.random } : {}),
+  });
 }

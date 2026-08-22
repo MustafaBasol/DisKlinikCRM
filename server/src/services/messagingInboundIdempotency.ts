@@ -1,6 +1,10 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { runAsSystem } from '../tenancy/tenantContext.js';
+import {
+  classifyMessagingError,
+  type MessagingFailureCode,
+} from '../messaging/messagingFailureClassification.js';
 
 /**
  * F3-2 — `MessagingInboundEvent` is one of the five models F3-1 classified
@@ -115,21 +119,68 @@ export const markInboundEventProcessed = async (eventId: string | null | undefin
   }));
 };
 
+/**
+ * F5-3 — record a failed attempt.
+ *
+ * WHAT CHANGED, AND WHY IT MATTERS
+ * --------------------------------
+ * This function used to persist `error.message.slice(0, 1000)` into
+ * `errorMessage`. For a provider failure that message is built by concatenating
+ * the provider's RAW RESPONSE BODY (see the pre-F5-3
+ * `Meta Graph API sendMessage failed with ${status}: ${errorText}` shape), and a
+ * provider body can echo the recipient's phone number or the message content
+ * back at us. So an operational column could end up holding communication
+ * content that nobody decided to retain, on a table an operator reads.
+ *
+ * Now the diagnosis is a **stable `MessagingFailureCode`** in `lastErrorCode`,
+ * and `errorMessage` is written with a fixed, code-derived string chosen by us —
+ * never provider text, never an exception message.
+ *
+ * The `unknown` overload is kept so existing callers do not have to change: an
+ * unclassified throw becomes `UNKNOWN`, which is retryable on the shortest
+ * budget. That is the fail-safe direction — an unclassified failure never
+ * becomes silently permanent.
+ */
+export type MarkInboundFailedInput =
+  | { code: MessagingFailureCode; nextAttemptAt?: Date | null }
+  | unknown;
+
 export const markInboundEventFailed = async (
   eventId: string | null | undefined,
-  error: unknown,
+  failure: MarkInboundFailedInput,
 ) => {
   if (!eventId) return null;
 
-  const message = error instanceof Error ? error.message : String(error);
+  const resolved = resolveFailureInput(failure);
+
   return asWebhookEnvelopeSystem(() => prisma.messagingInboundEvent.update({
     where: { id: eventId },
     data: {
       status: 'failed',
-      errorMessage: message.slice(0, 1000),
+      lastErrorCode: resolved.code,
+      // Fixed, code-derived text. Deliberately carries no provider content.
+      errorMessage: `Inbound processing failed (${resolved.code}).`,
+      ...(resolved.nextAttemptAt !== undefined ? { nextAttemptAt: resolved.nextAttemptAt } : {}),
     },
   }));
 };
+
+function resolveFailureInput(
+  failure: MarkInboundFailedInput,
+): { code: MessagingFailureCode; nextAttemptAt?: Date | null } {
+  if (
+    failure !== null &&
+    typeof failure === 'object' &&
+    typeof (failure as { code?: unknown }).code === 'string' &&
+    !(failure instanceof Error)
+  ) {
+    const typed = failure as { code: MessagingFailureCode; nextAttemptAt?: Date | null };
+    return typed.nextAttemptAt !== undefined
+      ? { code: typed.code, nextAttemptAt: typed.nextAttemptAt }
+      : { code: typed.code };
+  }
+  return { code: classifyMessagingError(failure).code };
+}
 
 export const MessagingInboundIdempotencyService = {
   createInboundEventOrDetectDuplicate,

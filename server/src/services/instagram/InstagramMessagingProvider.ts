@@ -15,6 +15,7 @@
  */
 
 import { decryptSecret } from '../../utils/encryption.js';
+import { fetchWithTimeout } from '../../messaging/messagingHttp.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -170,7 +171,7 @@ async function fetchMetaJson(
 
   console.info('[InstagramMeta] request', diagnosticBase);
 
-  const res = await fetch(url, init);
+  const res = await fetchWithTimeout(url, init);
   const body = await readMetaResponseBody(res);
 
   console.info('[InstagramMeta] response', {

@@ -19,6 +19,8 @@ import type {
 } from './WhatsAppProvider.js';
 import { decryptSecret } from '../../utils/encryption.js';
 import { getLegacyEvolutionConfig } from '../../utils/legacyWhatsApp.js';
+import { fetchWithTimeout } from '../../messaging/messagingHttp.js';
+import { classifyProviderHttpStatus, classifyMessagingError } from '../../messaging/messagingFailureClassification.js';
 
 const buildEvolutionSendTextUrl = (baseUrl: string, instanceName: string) =>
   `${baseUrl.replace(/\/$/, '')}/message/sendText/${encodeURIComponent(instanceName)}`;
@@ -83,17 +85,23 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
     }
 
     try {
-      const response = await fetch(buildEvolutionSendTextUrl(creds.baseUrl, creds.instanceName), {
+      const response = await fetchWithTimeout(buildEvolutionSendTextUrl(creds.baseUrl, creds.instanceName), {
         method: 'POST',
         headers: { apikey: creds.apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ number: payload.phone, text: payload.text }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        // F5-3 — the provider body is deliberately not read into the returned
+        // error. See MetaCloudWhatsAppProvider.sendMessage for the reasoning;
+        // this is the same self-hosted-proxy risk with the same consequence.
+        const failure = classifyProviderHttpStatus(response.status, response.headers);
         return {
           success: false,
-          error: `Evolution API sendText failed with ${response.status}: ${errorText}`,
+          errorCode: failure.code,
+          httpStatus: response.status,
+          ...(failure.retryAfterMs !== undefined ? { retryAfterMs: failure.retryAfterMs } : {}),
+          error: `Evolution API sendText failed (${failure.code}, HTTP ${response.status}).`,
         };
       }
 
@@ -101,8 +109,12 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
       const externalMessageId = (data as any)?.key?.id ?? null;
       return { success: true, externalMessageId };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { success: false, error: `Evolution API request error: ${msg}` };
+      const failure = classifyMessagingError(err);
+      return {
+        success: false,
+        errorCode: failure.code,
+        error: `Evolution API request failed (${failure.code}).`,
+      };
     }
   }
 
@@ -113,7 +125,7 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
     }
 
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         buildEvolutionFetchInstanceUrl(creds.baseUrl, creds.instanceName),
         { headers: { apikey: creds.apiKey } },
       );
@@ -168,7 +180,7 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
 
     for (const url of urlsToTry) {
       try {
-        const response = await fetch(url, { headers: { apikey: creds.apiKey } });
+        const response = await fetchWithTimeout(url, { headers: { apikey: creds.apiKey } });
 
         // 404 or 405 → this path doesn't exist on this deployment; try the next one
         if (response.status === 404 || response.status === 405) continue;
@@ -205,7 +217,7 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
     const creds = resolveCredentials(connection);
     if (!creds) return;
 
-    await fetch(buildEvolutionLogoutUrl(creds.baseUrl, creds.instanceName), {
+    await fetchWithTimeout(buildEvolutionLogoutUrl(creds.baseUrl, creds.instanceName), {
       method: 'DELETE',
       headers: { apikey: creds.apiKey },
     }).catch(() => {
