@@ -45,6 +45,7 @@ const PlatformPrivacy = React.lazy(() => import('./pages/platform/PlatformPrivac
 const PlatformBackups = React.lazy(() => import('./pages/platform/PlatformBackups'));
 const PlatformSecurityIncidents = React.lazy(() => import('./pages/platform/PlatformSecurityIncidents'));
 const PlatformExternalCalendar = React.lazy(() => import('./pages/platform/PlatformExternalCalendar'));
+const PlatformWhatsApp = React.lazy(() => import('./pages/platform/PlatformWhatsApp'));
 const PlatformMigration = React.lazy(() => import('./pages/platform/PlatformMigration'));
 const PlatformMigrationHistory = React.lazy(() => import('./pages/platform/PlatformMigrationHistory'));
 const BookingWidget = React.lazy(() => import('./pages/BookingWidget'));
@@ -222,6 +223,7 @@ const ProductApplication: React.FC = () => {
                 <Route path="backups" element={<PlatformBackups />} />
                 <Route path="security-incidents" element={<PlatformSecurityIncidents />} />
                 <Route path="external-calendar" element={<PlatformExternalCalendar />} />
+                <Route path="whatsapp" element={<PlatformWhatsApp />} />
                 <Route path="migration" element={<PlatformMigration />} />
                 <Route path="migration/history" element={<PlatformMigrationHistory />} />
               </Route>

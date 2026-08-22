@@ -870,6 +870,25 @@ export const TENANT_MODEL_CLASSIFICATION: readonly TenantModelEntry[] = Object.f
     futureSchemaWork: 'NONE',
   },
   {
+    model: 'PlatformWhatsAppConnection',
+    classification: 'PLATFORM_GLOBAL',
+    organizationIdField: null,
+    organizationIdNullable: false,
+    clinicIdField: null,
+    clinicIdNullable: false,
+    organizationDerivedVia: null,
+    parent: null,
+    guardMode: 'NO_TENANT_FILTER',
+    rls: 'NOT_APPLICABLE',
+    futureSchemaWork: 'NONE',
+    rationale:
+      'F3-WA-META-COEX-002B: the platform\'s own (NoraMedi-owned) Meta Cloud API WhatsApp ' +
+      'connection, singleton-enforced (CHECK(singleton = true) + UNIQUE(singleton)). No ' +
+      'organizationId/clinicId by design; mutated only through the platform-admin surface ' +
+      '(authenticatePlatformAdmin + csrfProtection(\'platform\')). Never read by the tenant ' +
+      'inbound webhook resolver, which queries only WhatsAppConnection.',
+  },
+  {
     model: 'WhatsAppInboxEntry',
     classification: 'ORGANIZATION_SCOPED_DIRECT',
     organizationIdField: 'organizationId',

@@ -73,6 +73,7 @@
       "backups": "Backups",
       "securityIncidents": "Security Incidents",
       "externalCalendar": "External Calendar",
+      "whatsapp": "Meta WhatsApp",
       "migration": "Data Migration"
     }
   },
@@ -147,6 +148,45 @@
         "blocked": "Blocked",
         "selectedProvider": "Selected provider"
       }
+    }
+  },
+  "whatsapp": {
+    "title": "Platform Meta WhatsApp Connection",
+    "subtitle": "NoraMedi's own Meta Cloud API WhatsApp connection, used for platform-level management — not a clinic's connection.",
+    "metaConnection": "Meta Cloud API Connection",
+    "status": {
+      "disconnected": "Disconnected",
+      "connecting": "Connecting",
+      "connected": "Connected",
+      "error": "Error"
+    },
+    "fields": {
+      "name": "Name",
+      "phoneNumber": "Phone Number",
+      "displayName": "Display Name",
+      "metaBusinessId": "Meta Business ID",
+      "metaWabaId": "WABA ID",
+      "metaPhoneNumberId": "Phone Number ID",
+      "metaAppId": "Meta App ID",
+      "metaWebhookVerifyToken": "Webhook Verify Token",
+      "metaAccessToken": "Access Token",
+      "metaWebhookSecret": "Meta Webhook Secret",
+      "webhookSecret": "Shared Webhook Secret"
+    },
+    "leaveBlankUnchanged": "leave blank to keep unchanged",
+    "configuredPlaceholder": "•••• configured",
+    "testConnection": "Test connection",
+    "disconnect": "Disconnect",
+    "disconnectConfirm": "Disconnect the platform Meta WhatsApp connection?",
+    "deleteConfirm": "Delete the platform Meta WhatsApp connection? This cannot be undone.",
+    "lastConnectedAt": "Last connected",
+    "lastError": "Last error",
+    "errors": {
+      "loadFailed": "Could not load the platform WhatsApp connection",
+      "saveFailed": "Failed to save the platform WhatsApp connection",
+      "testFailed": "Connection test failed",
+      "disconnectFailed": "Failed to disconnect",
+      "deleteFailed": "Failed to delete the connection"
     }
   },
   "externalCalendar": {

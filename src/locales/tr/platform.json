@@ -73,6 +73,7 @@
       "backups": "Yedekler",
       "securityIncidents": "Güvenlik Olayları",
       "externalCalendar": "Harici Takvim",
+      "whatsapp": "Meta WhatsApp",
       "migration": "Veri Aktarımı"
     }
   },
@@ -147,6 +148,45 @@
         "blocked": "Engellendi",
         "selectedProvider": "Seçilen sağlayıcı"
       }
+    }
+  },
+  "whatsapp": {
+    "title": "Platform Meta WhatsApp Bağlantısı",
+    "subtitle": "NoraMedi'nin kendi Meta Cloud API WhatsApp bağlantısı — bir klinik bağlantısı değildir, platform yönetimi için kullanılır.",
+    "metaConnection": "Meta Cloud API Bağlantısı",
+    "status": {
+      "disconnected": "Bağlı Değil",
+      "connecting": "Bağlanıyor",
+      "connected": "Bağlı",
+      "error": "Hata"
+    },
+    "fields": {
+      "name": "Ad",
+      "phoneNumber": "Telefon Numarası",
+      "displayName": "Görünen Ad",
+      "metaBusinessId": "Meta İşletme Kimliği",
+      "metaWabaId": "WABA Kimliği",
+      "metaPhoneNumberId": "Telefon Numarası Kimliği",
+      "metaAppId": "Meta Uygulama Kimliği",
+      "metaWebhookVerifyToken": "Webhook Doğrulama Anahtarı",
+      "metaAccessToken": "Erişim Anahtarı (Access Token)",
+      "metaWebhookSecret": "Meta Webhook Gizli Anahtarı",
+      "webhookSecret": "Paylaşılan Webhook Gizli Anahtarı"
+    },
+    "leaveBlankUnchanged": "değiştirmemek için boş bırakın",
+    "configuredPlaceholder": "•••• yapılandırıldı",
+    "testConnection": "Bağlantıyı test et",
+    "disconnect": "Bağlantıyı kes",
+    "disconnectConfirm": "Platform Meta WhatsApp bağlantısı kesilsin mi?",
+    "deleteConfirm": "Platform Meta WhatsApp bağlantısı silinsin mi? Bu işlem geri alınamaz.",
+    "lastConnectedAt": "Son bağlantı",
+    "lastError": "Son hata",
+    "errors": {
+      "loadFailed": "Platform WhatsApp bağlantısı yüklenemedi",
+      "saveFailed": "Platform WhatsApp bağlantısı kaydedilemedi",
+      "testFailed": "Bağlantı testi başarısız oldu",
+      "disconnectFailed": "Bağlantı kesilemedi",
+      "deleteFailed": "Bağlantı silinemedi"
     }
   },
   "externalCalendar": {

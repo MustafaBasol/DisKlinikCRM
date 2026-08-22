@@ -41,6 +41,8 @@ import {
   testWhatsAppConnection,
   getWhatsAppQrCode,
   disconnectWhatsAppConnection,
+  isMetaManualConfigComplete,
+  META_MANUAL_SETUP_ERROR,
 } from '../services/whatsapp/whatsappService.js';
 
 const router = express.Router();
@@ -93,23 +95,6 @@ const connectionCreateSchema = z.object({
 });
 
 const connectionUpdateSchema = connectionCreateSchema.partial();
-
-/**
- * Manual Meta Cloud API setup (this route, as opposed to the Embedded Signup
- * callback route) requires enough credential data to actually run a test —
- * otherwise the connection is saved in a state that can never succeed.
- */
-const META_MANUAL_SETUP_ERROR =
-  'Meta Cloud API manual setup requires Phone Number ID and Access Token. ' +
-  'Use "Connect with Meta" for automatic setup instead.';
-
-/** True when a Meta Cloud API manual configuration has enough data to be tested. */
-function isMetaManualConfigComplete(
-  phoneNumberId: string | null | undefined,
-  accessTokenPresent: boolean,
-): boolean {
-  return Boolean(phoneNumberId?.trim()) && accessTokenPresent;
-}
 
 // ─── Organization-level routes ────────────────────────────────────────────────
 

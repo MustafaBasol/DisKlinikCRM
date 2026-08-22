@@ -73,6 +73,7 @@
       "backups": "Sauvegardes",
       "securityIncidents": "Incidents de sécurité",
       "externalCalendar": "Calendrier externe",
+      "whatsapp": "Meta WhatsApp",
       "migration": "Migration de données"
     }
   },
@@ -147,6 +148,45 @@
         "blocked": "Bloqué",
         "selectedProvider": "Fournisseur sélectionné"
       }
+    }
+  },
+  "whatsapp": {
+    "title": "Connexion Meta WhatsApp de la plateforme",
+    "subtitle": "La propre connexion Meta Cloud API WhatsApp de NoraMedi, utilisée pour la gestion au niveau de la plateforme — pas une connexion de clinique.",
+    "metaConnection": "Connexion Meta Cloud API",
+    "status": {
+      "disconnected": "Déconnecté",
+      "connecting": "Connexion en cours",
+      "connected": "Connecté",
+      "error": "Erreur"
+    },
+    "fields": {
+      "name": "Nom",
+      "phoneNumber": "Numéro de téléphone",
+      "displayName": "Nom d'affichage",
+      "metaBusinessId": "ID Business Meta",
+      "metaWabaId": "ID WABA",
+      "metaPhoneNumberId": "ID du numéro de téléphone",
+      "metaAppId": "ID de l'application Meta",
+      "metaWebhookVerifyToken": "Jeton de vérification du webhook",
+      "metaAccessToken": "Jeton d'accès",
+      "metaWebhookSecret": "Secret du webhook Meta",
+      "webhookSecret": "Secret du webhook partagé"
+    },
+    "leaveBlankUnchanged": "laisser vide pour ne pas modifier",
+    "configuredPlaceholder": "•••• configuré",
+    "testConnection": "Tester la connexion",
+    "disconnect": "Déconnecter",
+    "disconnectConfirm": "Déconnecter la connexion Meta WhatsApp de la plateforme ?",
+    "deleteConfirm": "Supprimer la connexion Meta WhatsApp de la plateforme ? Cette action est irréversible.",
+    "lastConnectedAt": "Dernière connexion",
+    "lastError": "Dernière erreur",
+    "errors": {
+      "loadFailed": "Impossible de charger la connexion WhatsApp de la plateforme",
+      "saveFailed": "Échec de l'enregistrement de la connexion WhatsApp de la plateforme",
+      "testFailed": "Échec du test de connexion",
+      "disconnectFailed": "Échec de la déconnexion",
+      "deleteFailed": "Échec de la suppression de la connexion"
     }
   },
   "externalCalendar": {
