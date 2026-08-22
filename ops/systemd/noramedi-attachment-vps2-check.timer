@@ -1,0 +1,21 @@
+# noramedi-attachment-vps2-check.timer — F4-ATTACH-001-R1
+#
+# NOT INSTALLED ON PRODUCTION. See noramedi-attachment-vps2-check.service.
+#
+# Weekly, offset from pgBackRest's own weekly verify (Sunday 04:15, see
+# docs/program/runbooks/F4_RECOVERY_OPERATIONS.md §22.4d) so the two
+# off-host integrity checks do not compete for the VPS2 link at the same
+# moment.
+
+[Unit]
+Description=Run the NoraMedi attachment-vps2 repository check weekly (F4-ATTACH-001-R1)
+
+[Timer]
+OnCalendar=Sun *-*-* 05:00:00
+RandomizedDelaySec=300
+AccuracySec=5min
+Persistent=true
+Unit=noramedi-attachment-vps2-check.service
+
+[Install]
+WantedBy=timers.target

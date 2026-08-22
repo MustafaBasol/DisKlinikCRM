@@ -1,0 +1,55 @@
+# noramedi-attachment-vps2-check.service — F4-ATTACH-001-R1
+#
+# NOT INSTALLED ON PRODUCTION. See noramedi-attachment-vps2-backup.service for
+# the shared installation/provisioning prerequisites (VPS2 account, restic
+# repository, passphrase escrow) — this unit reuses the SAME
+# noramedi-attach-backup OS account and the SAME /etc/noramedi/
+# attachment-vps2-backup.env credentials file (RESTIC_REPOSITORY and
+# RESTIC_PASSWORD_FILE are identical for backup and check; only the ping URL
+# differs, see the script's own header).
+#
+# Installation (in addition to the backup unit's steps):
+#   install -o root -g root -m 0755 scripts/noramedi-attachment-vps2-check.sh \
+#           /usr/local/sbin/noramedi-attachment-vps2-check.sh
+#   install -o root -g root -m 0644 ops/systemd/noramedi-attachment-vps2-check.service \
+#           /etc/systemd/system/noramedi-attachment-vps2-check.service
+#   install -o root -g root -m 0644 ops/systemd/noramedi-attachment-vps2-check.timer \
+#           /etc/systemd/system/noramedi-attachment-vps2-check.timer
+#   systemctl daemon-reload
+#   systemctl enable --now noramedi-attachment-vps2-check.timer
+#
+# Rollback: systemctl disable --now noramedi-attachment-vps2-check.timer;
+# rm -f the two unit files; systemctl daemon-reload. Stops integrity
+# CHECKING only — it never runs `restic forget`/`prune` and has no delete
+# path against the repository or against VPS1.
+
+[Unit]
+Description=NoraMedi attachment VPS2 repository integrity check (F4-ATTACH-001-R1)
+Documentation=file:///var/www/noramedi/docs/program/evidence/F4-ATTACH-001-R1_VPS2_ENCRYPTED_SECONDARY_REPLICA_DISCOVERY_AND_PLAN.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=noramedi-attach-backup
+Group=noramedi-attach-backup
+EnvironmentFile=-/etc/noramedi/attachment-vps2-backup.env
+ExecStart=/usr/local/sbin/noramedi-attachment-vps2-check.sh
+TimeoutStartSec=4200
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+# check never reads primary storage at all (it only talks to the VPS2
+# repository via restic), so unlike the backup unit it needs no ACL against
+# /var/www/noramedi/server/uploads.
+ReadWritePaths=/var/lib/noramedi-attachment-vps2 /var/lib/noramedi
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+# noramedi-attachment-vps2-backup.timer — F4-ATTACH-001-R1
+#
+# NOT INSTALLED ON PRODUCTION. See noramedi-attachment-vps2-backup.service in
+# this same directory for installation commands and rollback.
+#
+# Runs the attachment-vps2 backup once a day, offset from every existing
+# backup window on this host so restic's read pass over `uploads/` does not
+# compete for disk/CPU with the pg_dump tier (03:15), pgBackRest repo1
+# (02:45) or repo2 (03:30) — see docs/program/runbooks/F4_RECOVERY_OPERATIONS.md
+# §22.4d for the current schedule those three occupy. 04:15 is free.
+#
+# Daily, not hourly: first-clinic upload volume is low and restic's content
+# deduplication makes a same-day re-run of an unchanged tree nearly free
+# regardless, but a network-backed SFTP snapshot still costs a real
+# connection setup and directory walk, and there is no requirement in this
+# task for sub-daily RPO on attachments (that requirement, if it ever exists,
+# belongs to a future review — see the discovery document §9's deferred list).
+
+[Unit]
+Description=Run the NoraMedi attachment-vps2 backup daily (F4-ATTACH-001-R1)
+
+[Timer]
+OnCalendar=*-*-* 04:15:00
+RandomizedDelaySec=120
+AccuracySec=1min
+Persistent=true
+Unit=noramedi-attachment-vps2-backup.service
+
+[Install]
+WantedBy=timers.target

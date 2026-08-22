@@ -4,6 +4,33 @@ Faz durumu: `TODO` · Son güncelleme: 2026-08-21 (**F4-2-R2 — `R-030-DB` kapa
 
 > **Faz durumu değişmedi.** F4-1A ve F4-FCR-001, sağlayıcıdan bağımsız ve ek (additive) depo-içi hazırlık adımlarıdır; F4'ün tamamlandığını, F4'e geçişin yetkilendirildiğini veya F3'ün kapandığını **iddia etmez**. F3 çıkış kapısı `NOT SATISFIED`, `F4_TRANSITION_AUTHORIZED = NO` olarak kalır ve `F3-C2-ERR-004` `BLOCKED_WAITING_IHS` durumundadır (bu görevlerle ilgisizdir).
 
+## F4-ATTACH-001-R1 — Hasta eki VPS2 şifreli ikincil kopyası: keşif ve uygulama planı
+
+`F4-ATTACH-001-R1_STATUS = PLAN_AND_SCRIPTS_PREPARED_NOT_ACTIVATED` · `AGENT_COMPLETED = YES`
+`PR_OPENED = YES` · `MERGED = NO` · `DEPLOYED = NO` · `PRODUCTION_VERIFIED = NO`
+`APPLICATION_CODE_CHANGED = NO` (`server/src/**`, `src/**` dokunulmadı) · `MIGRATION_REQUIRED = NO` · `MIGRATION_CREATED = NO`
+`R-030-FILES` durumu değişmedi (bu satır kendi kapanışını ilan etmiyor) · `PRODUCTION_MUTATION = NONE`
+
+Program sahibinin 2026-08-22 kararı (ClickUp `869enkxfd`): VPS1 yerel depolamasında yaşayan hasta eki dosyaları için — DICOM/CBCT'nin nihai object-storage mimarisi henüz kurulmadan önce — geçici, birinci-müşteri kapsamlı bir VPS2 güvenlik kopyası oluşturulacak. VPS1 **birincil** kalır; uygulama okuma/yazma yolu bu görevde **taşınmadı**. Bu, nihai imaging/DICOM yedek mimarisi **değildir** ve gelecekteki bağımsız üçüncü hata-alanı kopyasının **yerine geçmez**.
+
+**Keşif (Stage 1, doğrudan bu oturumda repodan doğrulandı):** `PatientAttachment.filePath` (`server/prisma/schema.prisma:1353-1373`) bir depolama anahtarıdır; yazma/okuma `server/src/services/fileStorage.ts`'nin `saveFile`/`openFileStream`/`deleteFile` fonksiyonlarından, `isRemoteStorageEnabled()` (`S3_BUCKET` ortam değişkeni) ile yerel disk/uzak S3 arasında geçiş yapar. Üç **ayrı** depolama ortam-değişkeni ailesi tespit edildi ve hiçbiri diğerini varsaymadı: `S3_BUCKET` (birincil, hasta ekleri dahil — üretimde ayarsız olduğu önceki `FILE_BACKUP_COVERAGE_001` kanıtından biliniyor, bu görev tarafından yeniden doğrulanmadı), `IMAGING_STORAGE_BACKEND`/`IMAGING_S3_*` (yalnızca `ImagingImage`, `F4-IMAGING-001-R6`), ve **dorman** `FILE_BACKUP_S3_*`/`fileBackupService.ts` (uygulama katmanında hazır ama `FILE_BACKUP_ENABLED=false` varsayılanıyla hiç etkinleştirilmemiş bir off-host yedek yolu — `FILE_BACKUP_COVERAGE_001.md`). `noramedi-minio` konteynerinin var olması hiçbir şekilde hasta ekleri için kullanıldığı anlamına **gelmiyor** — üçü de bunu doğrulanmış olarak reddediyor.
+
+**Mimari karar (Stage 3):** restic ile, VPS2'ye kısıtlı SFTP üzerinden şifreli/versiyonlanmış anlık görüntü deposu. Ham `rsync --delete` aynası **reddedildi** (görev talimatı gereği). Mevcut dorman `FILE_BACKUP_S3_*` uygulama kodu **da** seçilmedi — sebep vurgulanmalı: onun şifrelemesi yalnızca sağlayıcı-taraflı SSE'dir (anahtar VPS2/sağlayıcıda kalır), oysa görev **açıkça** istemci-taraflı şifrelemeyi ve anahtarın VPS2'de bulunmamasını tercih ediyor; restic bunu sıfır yeni uygulama koduyla, işletim-sistemi/ops katmanında sağlıyor. Bu aynı zamanda pgBackRest `repo2`'nin zaten kabul edilmiş Topoloji-C güven şeklini (depo host'u şifre TUTMAZ, birincil şifreler) — **tamamen ayrı** hesap/anahtar/depo ile — tekrarlıyor. Ayrıntılı A/B/C/D karşılaştırması ve her seçeneğin reddedilme gerekçesi: kanıt belgesi §3.
+
+**Teslim edilenler (hepsi şablon/plan — hiçbiri VPS1/VPS2'de kurulmadı):** `scripts/noramedi-attachment-vps2-{backup,check,restore-proof}.sh` (kilitli, zaman aşımılı, hiçbir dosya adı/hasta kimliği log'lamayan, sentetik geri yükleme kanıtı içeren), `scripts/noramedi-attachment-vps2.test.sh` (29 geçti / 0 başarısız / 2 atlandı — atlananlar bu geliştirme host'unda `flock` bulunmaması nedeniyle, CI `ubuntu-latest`'te çalışır, `F4-FCR-003`'ün `/proc/meminfo` emsaliyle aynı disiplin), `ops/systemd/noramedi-attachment-vps2-{backup,check,restore-proof}.{service,timer}` (her biri kendi başlığında "NOT INSTALLED ON PRODUCTION" uyarısı taşıyor), `ops/restic/noramedi-attachment-vps2.env.example` (gerçek sır değeri yok). `package.json`'a `test:shell:attachment-vps2` eklendi ve `test:shell` zincirine bağlandı; bu zincir `.github/workflows/ci-layers.yml`'de koşulsuz bir CI kapısı olduğundan yeni script'ler hem `bash -n` hem tam test paketiyle gerçek CI kapsamı kazandı.
+
+**Bulunan ve düzeltilen gerçek bir kusur:** Üç script'in ilk sürümü, `RESTIC_REPOSITORY`/`RESTIC_PASSWORD_FILE` kontrolü için bash'in `${VAR:?msg}` biçimini kullanıyordu — `set -e` altında etkileşimsiz kabukta bu biçim script'i **doğrudan çıkış 1 ile sonlandırır**, `||` dalı hiç çalışmaz; script'in kendi ayrı `PRECONDITION_EXIT_CODE` (3) değeri asla ulaşılamaz kalıyordu. Test paketinin kendisi bunu yakaladı (`exit=1`, beklenen `3`); düzeltme `noramedi-pgbackrest-backup.sh`'in zaten kullandığı `[[ -n "${VAR:-}" ]] ||` deyimine geçmek oldu.
+
+**Şema/migration:** Yok ve gerekmedi — `ImagingImage.storageBackend`'in aksine (o, aynı satırın zaman içinde farklı backend'lere yazılabilmesinden doğan gerçek bir okuma-zamanı belirsizliğini çözer), bu görevde VPS1 her satır için **koşulsuz** tek okuma/yazma backend'i olarak kalıyor — çözülecek bir yerleşim belirsizliği yok.
+
+**Eksik bırakılanlar, açıkça (Stage 11):** VPS2 hesabı/deposu **tedarik edilmedi**; hiçbir dosya VPS2'ye kopyalanmadı; yinelenen iş **etkin değil**; izleme/heartbeat **kurulmadı**; sentetik geri yükleme kanıtı gerçek altyapıya karşı **kanıtlanmadı** (yalnızca sahte `restic` ile birim testinde). Bunların tümü, program sahibinin/operatörün gerçek VPS1/VPS2 erişimini yetkilendireceği ayrı bir R2 aktivasyon turunun konusu — tıpkı `F4-FCR-003`'ün hazırlığı ile `F4-2-R1`'in aktivasyonu arasındaki ayrım gibi.
+
+**Ne YAPILMADI:** `server/src/**`/`src/**` altında hiçbir dosya değişmedi; `repo2`, GlitchTip, DICOM kimlik bilgileri **dokunulmadı**; `noramedi-minio` **kullanılmadı**; VPS1'deki hiçbir birincil dosya silinmedi/taşınmadı; hiçbir gerçek sır repoya/ClickUp'a/bu belgeye yazılmadı; üretime hiçbir erişim yapılmadı.
+
+Kanıt: [evidence/F4-ATTACH-001-R1_VPS2_ENCRYPTED_SECONDARY_REPLICA_DISCOVERY_AND_PLAN.md](../evidence/F4-ATTACH-001-R1_VPS2_ENCRYPTED_SECONDARY_REPLICA_DISCOVERY_AND_PLAN.md).
+
+---
+
 ## F4-2-R2 — `R-030-DB` kapanış doğrulaması: dört blokajın üçü kapandı, dördüncüsü hukukidir
 
 `F4-2-R2_STATUS = THREE_OF_FOUR_BLOCKERS_CLOSED` · `AGENT_COMPLETED = YES`

@@ -1,0 +1,26 @@
+# noramedi-attachment-vps2-restore-proof.timer — F4-ATTACH-001-R1
+#
+# NOT INSTALLED ON PRODUCTION. See noramedi-attachment-vps2-restore-proof.service.
+#
+# Monthly recurring rehearsal, on top of (not instead of) the one manual
+# pre-activation run recorded as this task's completion evidence — mirrors
+# the existing restoreRehearsalJob.ts / runFileBackupRestoreRehearsal
+# convention already used for the dormant FILE_BACKUP_* application-layer
+# path (see server/src/jobs/restoreRehearsalJob.ts): a backup that has only
+# ever been restore-tested once, at activation time, is a claim about the
+# past, not a standing guarantee — "restorable" can silently regress (an
+# expired credential, a changed VPS2 firewall rule, a corrupted repository
+# index) without a recurring, independent proof to catch it.
+
+[Unit]
+Description=Run the NoraMedi attachment-vps2 synthetic restore proof monthly (F4-ATTACH-001-R1)
+
+[Timer]
+OnCalendar=*-*-01 06:00:00
+RandomizedDelaySec=600
+AccuracySec=10min
+Persistent=true
+Unit=noramedi-attachment-vps2-restore-proof.service
+
+[Install]
+WantedBy=timers.target

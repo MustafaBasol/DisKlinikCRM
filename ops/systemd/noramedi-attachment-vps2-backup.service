@@ -1,0 +1,107 @@
+# noramedi-attachment-vps2-backup.service — F4-ATTACH-001-R1
+#
+# NOT INSTALLED ON PRODUCTION. This is a reviewed template only, prepared as
+# part of the discovery/plan task
+# docs/program/evidence/F4-ATTACH-001-R1_VPS2_ENCRYPTED_SECONDARY_REPLICA_DISCOVERY_AND_PLAN.md.
+# Installing and activating it is a SEPARATE, explicit, program-owner-approved
+# step — see that document's §8/§9 for the exact provisioning prerequisites
+# (dedicated VPS2 account/key, restic repository init, passphrase escrow)
+# that must exist before this unit can run successfully.
+#
+# Runs scripts/noramedi-attachment-vps2-backup.sh, which pushes an
+# incremental, client-side-encrypted restic snapshot of the VPS1
+# attachment/imaging `uploads/` tree to a dedicated, restricted repository on
+# VPS2. Primary storage (VPS1) is read-only from this unit's point of view —
+# it has no delete or write path against it.
+#
+# Runs as a DEDICATED, NON-ROOT service account (noramedi-attach-backup), not
+# root — unlike the pgBackRest status writer, this unit never needs to
+# `runuser` into another OS user, so it does not need the CAP_SETUID/
+# CAP_SETGID re-grant that unit requires (see that unit's own long comment on
+# why that combination is a known, silent trap). The account needs only
+# READ access to the primary uploads tree (group membership or a POSIX ACL —
+# an operator-provisioning step, not something this unit grants itself).
+#
+# Installation (execute deliberately, after VPS2 provisioning is complete —
+# see the discovery document §2/§4):
+#   useradd --system --no-create-home --shell /usr/sbin/nologin noramedi-attach-backup
+#   # grant read-only access to the primary uploads tree, e.g.:
+#   #   setfacl -R -m u:noramedi-attach-backup:rX /var/www/noramedi/server/uploads
+#   #   setfacl -R -d -m u:noramedi-attach-backup:rX /var/www/noramedi/server/uploads
+#   install -d -o noramedi-attach-backup -g noramedi-attach-backup -m 0750 /var/lib/noramedi-attachment-vps2
+#   install -d -o noramedi-attach-backup -g noramedi-attach-backup -m 0750 /var/lib/noramedi-attachment-vps2/cache
+#   install -d -o root -g noramedi-attach-backup -m 0770 /var/lib/noramedi   # shared with the status file (see below)
+#   install -o root -g root -m 0755 scripts/noramedi-attachment-vps2-backup.sh \
+#           /usr/local/sbin/noramedi-attachment-vps2-backup.sh
+#   install -o root -g root -m 0644 ops/systemd/noramedi-attachment-vps2-backup.service \
+#           /etc/systemd/system/noramedi-attachment-vps2-backup.service
+#   install -o root -g root -m 0644 ops/systemd/noramedi-attachment-vps2-backup.timer \
+#           /etc/systemd/system/noramedi-attachment-vps2-backup.timer
+#   install -o root -g noramedi-attach-backup -m 0640 <prepared env file> \
+#           /etc/noramedi/attachment-vps2-backup.env         # see
+#           ops/restic/noramedi-attachment-vps2.env.example — RESTIC_REPOSITORY
+#           and RESTIC_PASSWORD_FILE live here, never in this unit file
+#   systemctl daemon-reload
+#   systemctl enable --now noramedi-attachment-vps2-backup.timer
+#
+# Smoke test BEFORE enabling the timer (writes nothing, invokes nothing):
+#   sudo -u noramedi-attach-backup \
+#     env $(cat /etc/noramedi/attachment-vps2-backup.env | xargs) \
+#     /usr/local/sbin/noramedi-attachment-vps2-backup.sh --dry-run
+#
+# Rollback:
+#   systemctl disable --now noramedi-attachment-vps2-backup.timer
+#   rm -f /etc/systemd/system/noramedi-attachment-vps2-backup.{service,timer}
+#   systemctl daemon-reload
+# This stops the RECURRING copy job only. It does not delete anything already
+# written to the VPS2 repository and does not touch VPS1 primary storage —
+# see the discovery document §7 for the full rollback table, including the
+# separate, harder "revoke the VPS2 credential" step.
+
+[Unit]
+Description=NoraMedi attachment VPS2 encrypted secondary-copy backup (F4-ATTACH-001-R1)
+Documentation=file:///var/www/noramedi/docs/program/evidence/F4-ATTACH-001-R1_VPS2_ENCRYPTED_SECONDARY_REPLICA_DISCOVERY_AND_PLAN.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=noramedi-attach-backup
+Group=noramedi-attach-backup
+EnvironmentFile=-/etc/noramedi/attachment-vps2-backup.env
+ExecStart=/usr/local/sbin/noramedi-attachment-vps2-backup.sh
+
+# The script's own NORAMEDI_ATTACHMENT_VPS2_CMD_TIMEOUT (default 3600s) bounds
+# the restic call; this is the outer systemd bound and is intentionally
+# generous so a legitimate slow SFTP transfer is never killed mid-snapshot
+# (restic snapshots are all-or-nothing per run, so a mid-transfer kill simply
+# means the run failed — not a corrupt repository — but it should still be
+# rare, not routine).
+TimeoutStartSec=4200
+
+# Hardening. ProtectSystem=strict makes the filesystem read-only except for
+# ReadWritePaths below. Unlike the pgBackRest status writer, no
+# AmbientCapabilities are needed — this unit never calls runuser/su.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+# /var/www/noramedi/server/uploads is read via the POSIX ACL granted at
+# provisioning time, NOT via ReadWritePaths — this unit must never be able to
+# write to primary storage, so it is deliberately left off every
+# ReadWritePaths/ReadOnlyPaths list here; ProtectSystem=strict already makes
+# it read-only by default for a path this unit does not otherwise own, and
+# the ACL is what grants readability at all.
+ReadWritePaths=/var/lib/noramedi-attachment-vps2 /var/lib/noramedi
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# MemoryDenyWriteExecute intentionally omitted: this script shells out to
+# `node -e` to parse restic's --json output (no jq dependency anywhere in
+# this repository — same reasoning as the pgBackRest status writer), and
+# V8's JIT requires writable+executable mappings.
+
+[Install]
+WantedBy=multi-user.target
